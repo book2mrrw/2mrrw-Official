@@ -1,0 +1,141 @@
+"use client";
+
+import { useState } from "react";
+
+export default function Page() {
+  const [activeTab, setActiveTab] = useState("home");
+
+  // 🎵 SINGLES (updated price → $2.99)
+  const singles = [
+    {
+      title: "Hour Glass",
+      slug: "hour-glass",
+      cover: "/images/hourglass.jpg",
+      price: 2.99,
+    },
+    {
+      title: "W.2.D",
+      slug: "w2d",
+      cover: "/images/w2d.jpg",
+      price: 2.99,
+    },
+    {
+      title: "Artificial",
+      slug: "artificial",
+      cover: "/images/artificial.jpg",
+      price: 2.99,
+    },
+    {
+      title: "Turnt Me 2 Dis",
+      slug: "turnt-me-2-dis",
+      cover: "/images/turnt.jpg",
+      price: 2.99,
+    },
+  ];
+
+  // 💿 ALBUMS (Love Hz Vol.1 updated → $12.99)
+  const albums = [
+    {
+      title: "T.B.H.",
+      slug: "tbh",
+      cover: "/images/tbh.jpg",
+      price: 9.99,
+    },
+    {
+      title: "A.D.",
+      slug: "ad",
+      cover: "/images/ad.jpg",
+      price: 9.99,
+    },
+    {
+      title: "Love Hz Vol.1",
+      slug: "love-hz",
+      cover: "/images/lovehz.jpg",
+      price: 12.99,
+    },
+  ];
+
+  return (
+    <div style={{ padding: 20, color: "white", background: "#0a0a0a", minHeight: "100vh" }}>
+
+      {/* NAV */}
+      <div style={{ display: "flex", gap: 15, marginBottom: 30 }}>
+        {["home", "singles", "albums"].map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              padding: "10px 15px",
+              background: activeTab === tab ? "white" : "transparent",
+              color: activeTab === tab ? "black" : "white",
+              border: "1px solid white",
+              cursor: "pointer",
+            }}
+          >
+            {tab.toUpperCase()}
+          </button>
+        ))}
+      </div>
+
+      {/* HOME */}
+      {activeTab === "home" && (
+        <div>
+          <h1>Latest Singles</h1>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {singles.map((single) => (
+              <div key={single.slug} style={{ border: "1px solid #333", padding: 15 }}>
+                <h3>{single.title}</h3>
+                <p>${single.price}</p>
+              </div>
+            ))}
+          </div>
+
+          <h1 style={{ marginTop: 40 }}>Albums</h1>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {albums.map((album) => (
+              <div key={album.slug} style={{ border: "1px solid #333", padding: 15 }}>
+                <h3>{album.title}</h3>
+                <p>${album.price}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* SINGLES */}
+      {activeTab === "singles" && (
+        <div>
+          <h1>Singles</h1>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {singles.map((single) => (
+              <div key={single.slug} style={{ border: "1px solid #333", padding: 15 }}>
+                <h3>{single.title}</h3>
+                <p>${single.price}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ALBUMS */}
+      {activeTab === "albums" && (
+        <div>
+          <h1>Albums</h1>
+
+          <div style={{ display: "grid", gap: 10 }}>
+            {albums.map((album) => (
+              <div key={album.slug} style={{ border: "1px solid #333", padding: 15 }}>
+                <h3>{album.title}</h3>
+                <p>${album.price}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
