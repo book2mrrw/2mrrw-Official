@@ -1,0 +1,36 @@
+"use client";
+
+import { useParams } from "next/navigation";
+
+const albums = [
+  {
+    title: "T.B.H.",
+    slug: "tbh",
+    cover: "/images/tbh.jpg",
+    tracks: ["Glass Full","Up 2 Me","Unexpcted","All Yours","Locomotive","LEFT","Was Wrong","ArTiFICiaL"]
+  },
+  {
+    title: "A.D.",
+    slug: "ad",
+    cover: "/images/ad.jpg",
+    tracks: ["2mrrw's Ntro","Said N' Done","A.D.D","Perspective (2018)","Grand Scheme","A2B","Life Changes (2018)","Itself (2018)","Wastin Time","Like Me Or Not"]
+  }
+];
+
+export default function Page() {
+  const { slug } = useParams();
+  const album = albums.find((a) => a.slug === slug);
+
+  if (!album) return <div style={{ padding: 40 }}>Not found</div>;
+
+  return (
+    <div style={{ padding: 40 }}>
+      <img src={album.cover} style={{ width: 300 }} />
+      <h1>{album.title}</h1>
+
+      {album.tracks.map((t, i) => (
+        <p key={i}>{i + 1}. {t}</p>
+      ))}
+    </div>
+  );
+}

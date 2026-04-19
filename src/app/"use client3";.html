@@ -1,0 +1,201 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+
+export default function Page() {
+  const router = useRouter();
+
+  /* ===================== DATA ===================== /
+
+  const singles = [
+    { title: "Hour Glass", slug: "hour-glass", cover: "/images/hourglass.jpg" },
+    { title: "W.2.D", slug: "w2d", cover: "/images/w2d.jpg" },
+    { title: "Artificial", slug: "artificial", cover: "/images/artificial.jpg" },
+    { title: "Turnt Me 2 Dis", slug: "turnt-me-2-dis", cover: "/images/turnt.jpg" }
+  ];
+
+  const albums = [
+    {
+      title: "T.B.H.",
+      slug: "tbh",
+      cover: "/images/tbh.jpg",
+      date: "July 7, 2022",
+      meta: "8 tracks • 23m 37s",
+      tracks: [
+        "Glass Full",
+        "Up 2 Me",
+        "Unexpcted",
+        "All Yours",
+        "Locomotive",
+        "LEFT",
+        "Was Wrong",
+        "ArTiFICiaL"
+      ]
+    },
+    {
+      title: "A.D.",
+      slug: "ad",
+      cover: "/images/ad.jpg",
+      date: "March 24, 2024",
+      meta: "11 tracks • 35m 5s",
+      tracks: [
+        "2mrrw's Ntro",
+        "Said N' Done",
+        "A.D.D",
+        "Perspective (2018)",
+        "Grand Scheme",
+        "A2B",
+        "Life Changes (2018)",
+        "Itself (2018)",
+        "Wastin Time",
+        "Like Me Or Not"
+      ]
+    },
+    {
+      title: "Love Hz Vol.1",
+      slug: "love-hz",
+      cover: "/images/lovehz.jpg",
+      date: "August 2026",
+      meta: "6 tracks • 18m 18s",
+      tracks: [
+        "Roll Call",
+        "W.2.D",
+        "All Of It",
+        "Knock On Wood",
+        "Stayed 2 Long",
+        "Hour Glass"
+      ]
+    }
+  ];
+
+  const merch = [
+    { title: "Hoodie", price: 45 },
+    { title: "Shirt", price: 35 },
+    { title: "Beanie", price: 25 }
+  ];
+
+  / ===================== UI ===================== /
+
+  return (
+    <div style={{
+      display: "flex",
+      minHeight: "100vh",
+      background: "#000",
+      color: "#fff"
+    }}>
+
+      {/ ================= LEFT SIDE ================= /}
+      <div style={{ flex: 3 }}>
+
+        {/ HERO /}
+        <div style={{ height: "50vh", position: "relative" }}>
+          <video
+            src="/media/promo.mp4"
+            autoPlay
+            muted
+            loop
+            playsInline
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              filter: "brightness(0.5)"
+            }}
+          />
+          <div style={{ position: "absolute", bottom: 30, left: 30 }}>
+            <h1 style={{ fontSize: 48, margin: 0 }}>2mrrw</h1>
+            <p style={{ opacity: 0.7 }}>Music. Vision. Future.</p>
+          </div>
+        </div>
+
+        {/ SINGLES /}
+        <div style={{ padding: 30 }}>
+          <h2 style={{ marginBottom: 20 }}>Latest Singles</h2>
+
+          <div style={{ display: "flex", gap: 20, overflowX: "auto" }}>
+            {singles.map((s) => (
+              <div
+                key={s.slug}
+                onClick={() => router.push("/single/" + s.slug)}
+                style={{ minWidth: 220, cursor: "pointer" }}
+              >
+                <img src={s.cover} style={{ width: "100%", borderRadius: 12 }} />
+                <p>{s.title}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/ DIVIDER /}
+        <div style={{ height: 1, background: "rgba(255,255,255,0.08)", margin: "0 30px" }} />
+
+        {/ ALBUMS /}
+        <div style={{ padding: 30 }}>
+          <h2 style={{ marginBottom: 30 }}>Albums</h2>
+
+          {albums.map((album) => (
+            <div key={album.slug} style={{ marginBottom: 50 }}>
+
+              <div
+                style={{ display: "flex", gap: 20, cursor: "pointer" }}
+                onClick={() => router.push("/album/" + album.slug)}
+              >
+                <img src={album.cover} style={{ width: 140, borderRadius: 12 }} />
+
+                <div>
+                  <h3 style={{ margin: 0 }}>{album.title}</h3>
+                  <p style={{ opacity: 0.6 }}>{album.date}</p>
+                  <p style={{ opacity: 0.5 }}>{album.meta}</p>
+                </div>
+              </div>
+
+              {/ TRACKLIST /}
+              <div style={{ marginTop: 15 }}>
+                {album.tracks.map((track, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: "6px 0",
+                      borderBottom: "1px solid rgba(255,255,255,0.05)"
+                    }}
+                  >
+                    {i + 1}. {track}
+                  </div>
+                ))}
+              </div>
+
+            </div>
+          ))}
+        </div>
+
+      </div>
+
+      {/ ================= RIGHT PANEL ================= */}
+      <div style={{
+        flex: 1,
+        borderLeft: "1px solid rgba(255,255,255,0.08)",
+        padding: 20,
+        background: "#050505"
+      }}>
+        <h2>Shop</h2>
+
+        {merch.map((item, i) => (
+          <div key={i} style={{ marginBottom: 20 }}>
+            <p>{item.title}</p>
+            <button style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              border: "1px solid #333",
+              background: "transparent",
+              color: "white",
+              cursor: "pointer"
+            }}>
+              Buy ${item.price}
+            </button>
+          </div>
+        ))}
+      </div>
+
+    </div>
+  );
+}
