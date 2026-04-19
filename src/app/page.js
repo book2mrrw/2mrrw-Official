@@ -23,6 +23,7 @@ export default function Page() {
   const [checkoutError, setCheckoutError] = useState("");
   const [clientSecret, setClientSecret] = useState(null);
 
+<<<<<<< HEAD
   // ADDED: shows & blog state
   const [calMonth, setCalMonth] = useState(new Date().getMonth());
   const [calYear, setCalYear] = useState(new Date().getFullYear());
@@ -31,6 +32,8 @@ export default function Page() {
   const [blogComment, setBlogComment] = useState("");
   const [blogComments, setBlogComments] = useState({});
 
+=======
+>>>>>>> 01e26835f12a7a02e16176ee27f17cf667c227e1
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_user");
     if (stored) {
@@ -110,6 +113,7 @@ export default function Page() {
     { title: "2MRRW Hat", slug: "hat", cover: "/images/merch/hat.jpg", price: 24.99 },
   ];
 
+<<<<<<< HEAD
   // ADDED: shows data
   const shows = [
     { id: "show-1", title: "2MRRW Live – Dallas", venue: "House of Blues Dallas", date: "2026-05-10", time: "8:00 PM", price: 25.00, tickets: 50 },
@@ -126,6 +130,8 @@ export default function Page() {
     { id: "post-3", title: "Tour Prep: What Goes Into a Live Show", date: "February 28, 2026", author: "2MRRW", body: "People see the 90-minute set. They don't see the weeks of rehearsal, the production calls, the logistics of moving equipment across state lines. A live 2MRRW show is designed from the ground up — the lighting, the setlist order, the energy arc from opener to closer.\n\nWe treat every city like it's the only city. Dallas gets the same energy as NYC. That's the standard we hold ourselves to and always will." },
   ];
 
+=======
+>>>>>>> 01e26835f12a7a02e16176ee27f17cf667c227e1
   const addToCart = (item) => {
     setCart((prev) => [...prev, item]);
     setAddedFlash(item.slug);
@@ -240,6 +246,7 @@ export default function Page() {
     });
   };
 
+<<<<<<< HEAD
   // ADDED: calendar helpers
   const getDaysInMonth = (month, year) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (month, year) => new Date(year, month, 1).getDay();
@@ -271,6 +278,8 @@ export default function Page() {
     setBlogComment("");
   };
 
+=======
+>>>>>>> 01e26835f12a7a02e16176ee27f17cf667c227e1
   return (
     <>
       {/* EMAIL GATE OVERLAY */}
@@ -564,6 +573,7 @@ export default function Page() {
         </div>
       )}
 
+<<<<<<< HEAD
       {/* ADDED: TICKET MODAL */}
       {selectedEvent && (
         <div
@@ -627,6 +637,8 @@ export default function Page() {
         </div>
       )}
 
+=======
+>>>>>>> 01e26835f12a7a02e16176ee27f17cf667c227e1
       <div style={{ display: "flex", minHeight: "100vh", background: "#050505", color: "white" }}>
         <div style={{ flex: 3, padding: 30 }}>
 
@@ -709,7 +721,11 @@ export default function Page() {
             </button>
           </div>
 
+<<<<<<< HEAD
           {/* NAV — ADDED shows and blog */}
+=======
+          {/* NAV */}
+>>>>>>> 01e26835f12a7a02e16176ee27f17cf667c227e1
           <div style={{
             display: "flex",
             gap: 25,
@@ -717,10 +733,16 @@ export default function Page() {
             fontSize: 14,
             letterSpacing: 2,
             borderBottom: "1px solid #333",
+<<<<<<< HEAD
             paddingBottom: 10,
             flexWrap: "wrap",
           }}>
             {["home", "singles", "albums", "shop", "shows", "blog"].map((tab) => (
+=======
+            paddingBottom: 10
+          }}>
+            {["home", "singles", "albums", "shop"].map((tab) => (
+>>>>>>> 01e26835f12a7a02e16176ee27f17cf667c227e1
               <div
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -733,7 +755,11 @@ export default function Page() {
                   display: "inline-block"
                 }}
               >
+<<<<<<< HEAD
                 {tab === "shows" ? "SHOWS & EVENTS" : tab.toUpperCase()}
+=======
+                {tab.toUpperCase()}
+>>>>>>> 01e26835f12a7a02e16176ee27f17cf667c227e1
               </div>
             ))}
           </div>
@@ -808,6 +834,7 @@ export default function Page() {
             />
           )}
 
+<<<<<<< HEAD
           {/* ADDED: SHOWS & EVENTS TAB */}
           {activeTab === "shows" && (
             <>
@@ -959,6 +986,8 @@ export default function Page() {
             </>
           )}
 
+=======
+>>>>>>> 01e26835f12a7a02e16176ee27f17cf667c227e1
         </div>
 
         {/* CART */}
