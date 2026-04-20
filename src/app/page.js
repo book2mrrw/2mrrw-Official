@@ -67,7 +67,6 @@ const musicVideos = [
   { id: "mv-3", title: "W.2.D", youtubeId: "YOUR_YOUTUBE_ID_HERE", description: "Official Music Video" },
 ];
 
-// ── EXCLUSIVE ITEMS ───────────────────────────────────────────────────────────
 const exclusiveItems = [
   {
     id: "exc-card-tbh",
@@ -127,7 +126,6 @@ const exclusiveItems = [
   },
 ];
 
-// ── CIRCLE CURATED RESPONSES ──────────────────────────────────────────────────
 const circleResponses = [
   {
     id: "resp-1",
@@ -161,8 +159,32 @@ const circleResponses = [
   },
 ];
 
+// ── INNER CIRCLE BLOG POSTS ───────────────────────────────────────────────────
+const innerCirclePosts = [
+  {
+    id: "ic-1",
+    title: "Why I Almost Scrapped Love Hz Vol.1",
+    date: "April 10, 2026",
+    preview: "There was a version of this project that never would have seen the light. Here's what changed.",
+    body: "There was a point — around month 14 of making this album — where I deleted everything. The whole project folder. Emptied the trash. Gone.\n\nIt wasn't creative block. It was the opposite. I had too much. 22 songs and none of them felt like they belonged together. I was chasing something I couldn't name yet.\n\nWhat brought it back was stripping it down to 6 tracks and asking: which of these would I still stand behind in 10 years? The answer became Love Hz Vol.1. Not the version I planned. The version that survived.",
+  },
+  {
+    id: "ic-2",
+    title: "The Story Behind W.2.D",
+    date: "March 30, 2026",
+    preview: "This track wasn't written in a studio. It was written in a parking lot at 2am. Here's the full story.",
+    body: "W.2.D was written in the front seat of my car outside a gas station on I-20. It was 2am. I had my phone, a voice memo app, and about 40 minutes before I needed to be somewhere.\n\nThe whole thing came out in one sitting. Sometimes that happens. You stop trying to write and the song just falls out of you.\n\nI drove home, set up my mic, and recorded a demo that night. The version you're hearing is that demo, cleaned up. The urgency in it is real. That's not performance — that's actually what 2am sounds like.",
+  },
+  {
+    id: "ic-3",
+    title: "What the Collector Cards Actually Mean",
+    date: "March 18, 2026",
+    preview: "It's not merch. Here's the full vision behind the physical collector system and where it's going.",
+    body: "People keep calling the collector cards merch. They're not merch.\n\nMerch is a t-shirt. You wear it, it fades, you forget about it. A collector card is a record of presence. It says: I was here when this was being built. I believed before it was obvious.\n\nThe long-term vision is a tiered system where each card unlocks something real — early access, private sessions, input on creative decisions. The NFC chip on the (A.D.) card is the first version of that. It's going to go much further.\n\nIf you have one, hold it. You're not holding merch. You're holding a key.",
+  },
+];
+
 export default function Page() {
-  // ── EXISTING STATE (UNCHANGED) ────────────────────────────────────────────
   const [cart, setCart] = useState([]);
   const [activeTab, setActiveTab] = useState("home");
   const [addedFlash, setAddedFlash] = useState(null);
@@ -191,7 +213,6 @@ export default function Page() {
   const [blogComment, setBlogComment] = useState("");
   const [blogComments, setBlogComments] = useState({});
 
-  // ── NEW STATE ─────────────────────────────────────────────────────────────
   const [exclusiveModal, setExclusiveModal] = useState(null);
   const [circleQuestion, setCircleQuestion] = useState("");
   const [circleCategory, setCircleCategory] = useState("question");
@@ -206,7 +227,9 @@ export default function Page() {
   const [liveCountdown, setLiveCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [previewHover, setPreviewHover] = useState(false);
 
-  // ── EXISTING useEffects ───────────────────────────────────────────────────
+  // ── INNER CIRCLE BLOG STATE ───────────────────────────────────────────────
+  const [innerCirclePost, setInnerCirclePost] = useState(null);
+
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_user");
     if (stored) {
@@ -229,20 +252,16 @@ export default function Page() {
     return () => observer.disconnect();
   }, []);
 
-  // ── NEW useEffects ────────────────────────────────────────────────────────
-  // Load purchases from localStorage
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_purchases");
     if (stored) setMyPurchases(JSON.parse(stored));
   }, []);
 
-  // Load circle submissions from localStorage
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_circle");
     if (stored) setCircleSubmissions(JSON.parse(stored));
   }, []);
 
-  // Live countdown to next show (Dallas — May 10, 2026)
   useEffect(() => {
     const target = new Date("2026-05-10T20:00:00");
     const tick = () => {
@@ -261,7 +280,6 @@ export default function Page() {
     return () => clearInterval(interval);
   }, []);
 
-  // ── EXISTING DATA ─────────────────────────────────────────────────────────
   const singles = [
     { title: "Hour Glass", slug: "hour-glass", cover: "/images/singles/hourglass.jpg", price: 2.99, preview: "/audio/previews/hourglass-preview.mp3", full: "/audio/full/hourglass.mp3" },
     { title: "W.2.D", slug: "w2d", cover: "/images/singles/w2d.jpg", price: 2.99, preview: "/audio/previews/w2d-preview.mp3", full: "/audio/full/w2d.mp3" },
@@ -295,7 +313,6 @@ export default function Page() {
     { id: "post-3", title: "Tour Prep: What Goes Into a Live Show", date: "February 28, 2026", author: "2MRRW", body: "People see the 90-minute set. They don't see the weeks of rehearsal, the production calls, the logistics of moving equipment across state lines. A live 2MRRW show is designed from the ground up — the lighting, the setlist order, the energy arc from opener to closer.\n\nWe treat every city like it's the only city. Dallas gets the same energy as NYC. That's the standard we hold ourselves to and always will." },
   ];
 
-  // ── EXISTING FUNCTIONS (UNCHANGED) ────────────────────────────────────────
   const addToCart = (item) => {
     setCart((prev) => [...prev, item]);
     setAddedFlash(item.slug);
@@ -372,7 +389,6 @@ export default function Page() {
     }
   };
 
-  // Extended onSuccess — now also saves purchases to localStorage
   const handleCheckoutSuccess = () => {
     const newPurchases = [...myPurchases, ...cart.map(item => ({ ...item, purchasedAt: new Date().toISOString() }))];
     setMyPurchases(newPurchases);
@@ -420,7 +436,6 @@ export default function Page() {
     setBlogComment("");
   };
 
-  // ── NEW FUNCTIONS ─────────────────────────────────────────────────────────
   const handleCircleSubmit = () => {
     if (!circleQuestion.trim()) return;
     const name = currentUser ? currentUser.name : "Anonymous";
@@ -452,7 +467,7 @@ export default function Page() {
 
   const userStatus = getUserStatus();
 
-  // ── TABS (EXTENDED) ────────────────────────────────────────────────────────
+  // ── TABS — INNER CIRCLE ADDED ─────────────────────────────────────────────
   const tabs = [
     { id: "home", label: "HOME" },
     { id: "singles", label: "SINGLES" },
@@ -465,11 +480,12 @@ export default function Page() {
     { id: "blog", label: "BLOG" },
     { id: "vision", label: "VISION" },
     { id: "circle", label: "CIRCLE" },
+    { id: "innercircle", label: "INNER CIRCLE" },
     { id: "mymusic", label: "MY MUSIC" },
     { id: "account", label: "ACCOUNT" },
   ];
 
-  // ── CAROUSEL UI (IMPROVED — overlay play button) ──────────────────────────
+  // ── CAROUSEL UI (unchanged from original) ────────────────────────────────
   const CarouselUI = ({ large }) => (
     <div style={{
       display: "flex", alignItems: "center", gap: 20,
@@ -480,7 +496,6 @@ export default function Page() {
     }}>
       <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 360, height: 360, background: "radial-gradient(circle, rgba(0,255,255,0.04) 0%, transparent 70%)", pointerEvents: "none" }} />
 
-      {/* LEFT ARROW */}
       <button onClick={prevSingle}
         style={{ width: large ? 50 : 44, height: large ? 50 : 44, borderRadius: "50%", background: "rgba(255,255,255,0.04)", border: "1px solid #2a2a2a", color: "#555", fontSize: large ? 22 : 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s" }}
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#00ffff"; e.currentTarget.style.color = "#00ffff"; e.currentTarget.style.boxShadow = "0 0 10px rgba(0,255,255,0.3)"; }}
@@ -488,8 +503,8 @@ export default function Page() {
         ‹
       </button>
 
-      {/* COVER ART — with Apple Music-style overlay play button */}
-      <div style={{ flexShrink: 0, width: large ? 300 : 260, height: large ? 300 : 260, position: "relative" }}
+      {/* COVER ART — enlarged, with fade animation on change */}
+      <div style={{ flexShrink: 0, width: large ? 340 : 300, height: large ? 340 : 300, position: "relative" }}
         onMouseEnter={() => setPreviewHover(true)}
         onMouseLeave={() => setPreviewHover(false)}>
         <img
@@ -501,12 +516,12 @@ export default function Page() {
             boxShadow: large ? "0 10px 50px rgba(0,0,0,0.7)" : "0 8px 40px rgba(0,0,0,0.6)",
             transition: "filter 0.3s ease",
             filter: previewHover ? "brightness(0.55)" : "brightness(1)",
+            // ANIMATED TRANSITION: fade in on index change
             animation: animating
-              ? `slideOut${slideDir === "right" ? "Left" : "Right"} 0.32s ease forwards`
-              : `slideIn${slideDir === "right" ? "Right" : "Left"} 0.32s ease forwards`,
+              ? `fadeOut 0.32s ease forwards`
+              : `fadeInCover 0.4s ease forwards`,
           }}
         />
-        {/* Overlay play button — centered, Apple Music style */}
         <div
           onClick={() => setSelectedSingle(currentSingle)}
           style={{
@@ -533,7 +548,6 @@ export default function Page() {
         </div>
       </div>
 
-      {/* INFO */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: large ? 14 : 12 }}>
         <div
           key={`title-${singleIndex}`}
@@ -567,7 +581,6 @@ export default function Page() {
         </div>
       </div>
 
-      {/* RIGHT ARROW */}
       <button onClick={nextSingle}
         style={{ width: large ? 50 : 44, height: large ? 50 : 44, borderRadius: "50%", background: "rgba(255,255,255,0.04)", border: "1px solid #2a2a2a", color: "#555", fontSize: large ? 22 : 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s" }}
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#00ffff"; e.currentTarget.style.color = "#00ffff"; e.currentTarget.style.boxShadow = "0 0 10px rgba(0,255,255,0.3)"; }}
@@ -728,20 +741,16 @@ export default function Page() {
       <div style={{ display: "flex", minHeight: "100vh", background: "#050505", color: "white" }}>
         <div style={{ flex: 3, padding: 30 }}>
 
-          {/* HERO — z-index fixed so logo and socials never overlap */}
+          {/* HERO */}
           <div style={{ position: "relative", height: 380, marginBottom: 30, borderRadius: 20, overflow: "hidden", background: "black" }}>
             <video autoPlay muted loop playsInline style={{ position: "absolute", width: "100%", height: "100%", objectFit: "cover", opacity: 0.35, filter: "blur(1px)" }}>
               <source src="/videos/A2B.mp4" type="video/mp4" />
             </video>
             <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, black, transparent 60%)" }} />
             <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at center, transparent 30%, black 100%)" }} />
-
-            {/* 2MRRW logo — top-left, high z-index */}
             <div style={{ position: "absolute", top: 25, left: 25, zIndex: 10, fontSize: 42, fontWeight: 900, letterSpacing: 8, animation: "pulse 2.5s infinite", textShadow: "0 0 20px rgba(0,255,255,0.8)" }}>
               2MRRW
             </div>
-
-            {/* SOCIAL BAR — bottom right, z-index 10, won't overlap logo */}
             <div style={{ position: "absolute", bottom: 24, right: 25, display: "flex", gap: 16, alignItems: "center", zIndex: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
               {SOCIALS.map((social) => (
                 <a key={social.name} href={social.href} target="_blank" rel="noopener noreferrer" title={social.name}
@@ -785,11 +794,50 @@ export default function Page() {
             })}
           </div>
 
-          {/* HOME TAB */}
+          {/* HOME TAB — horizontal scroll row + spotlight carousel */}
           {activeTab === "home" && (
             <>
               <h2 className="section-heading">Latest Singles</h2>
+
+              {/* HORIZONTAL SCROLLING ROW */}
+              <div className="singles-row" style={{ display: "flex", gap: 18, overflowX: "auto", paddingBottom: 14, scrollSnapType: "x mandatory", marginBottom: 28 }}>
+                {singles.map((single, i) => (
+                  <div key={single.slug}
+                    onClick={() => setSelectedSingle(single)}
+                    style={{
+                      flexShrink: 0, width: 220, cursor: "pointer",
+                      scrollSnapAlign: "start",
+                      opacity: 0,
+                      animation: `fadeInUp 0.5s ease ${i * 0.09}s forwards`,
+                      background: "#0a0a0a", borderRadius: 14, overflow: "hidden",
+                      border: "1px solid #1a1a1a", transition: "border-color 0.25s, box-shadow 0.25s",
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#00ffff44"; e.currentTarget.style.boxShadow = "0 0 18px rgba(0,255,255,0.12)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1a1a1a"; e.currentTarget.style.boxShadow = "none"; }}>
+                    <img
+                      src={single.cover}
+                      style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block", transition: "filter 0.3s ease" }}
+                      onMouseEnter={(e) => { e.target.style.filter = "brightness(1.15)"; }}
+                      onMouseLeave={(e) => { e.target.style.filter = "brightness(1)"; }}
+                    />
+                    <div style={{ padding: "12px 14px 16px" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{single.title}</div>
+                      <div style={{ fontSize: 12, color: "#00ffff", fontWeight: 700, marginBottom: 10 }}>${single.price.toFixed(2)}</div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); addToCart(single); }}
+                        style={{ width: "100%", padding: "7px 0", fontSize: 11, background: "#1a1a1a", color: "white", border: "1px solid #2a2a2a", borderRadius: 7, cursor: "pointer", fontWeight: 600, transition: "0.2s" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#00ffff"; e.currentTarget.style.color = "#00ffff"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "white"; }}>
+                        + Cart
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* SPOTLIGHT CAROUSEL */}
               <CarouselUI large={false} />
+
               <div style={{ margin: "30px 0", height: 1, background: "#222" }} />
               <h2 className="section-heading" style={{ animationDelay: "0.15s" }}>Albums</h2>
               <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onSingleClick={setSelectedAlbum} />
@@ -804,15 +852,17 @@ export default function Page() {
             </>
           )}
 
+          {/* ALBUMS TAB */}
           {activeTab === "albums" && (
             <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onSingleClick={setSelectedAlbum} />
           )}
 
+          {/* SHOP TAB */}
           {activeTab === "shop" && (
             <Grid items={merch} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} />
           )}
 
-          {/* ── EXCLUSIVE TAB ─────────────────────────────────────────────── */}
+          {/* EXCLUSIVE TAB */}
           {activeTab === "exclusive" && (
             <>
               <h2 className="section-heading">Exclusive Drops</h2>
@@ -853,7 +903,6 @@ export default function Page() {
                 ))}
               </div>
 
-              {/* Collector Card System Info */}
               <div style={{ marginTop: 48, background: "linear-gradient(135deg, #0d0d0d, #111)", border: "1px solid #1e1e1e", borderRadius: 20, padding: 32 }}>
                 <div style={{ fontSize: 11, color: "#444", letterSpacing: 3, marginBottom: 14, textTransform: "uppercase" }}>About Collector Art Cards</div>
                 <div style={{ fontSize: 22, fontWeight: 900, letterSpacing: 1, marginBottom: 16, lineHeight: 1.3 }}>Not merch. Ownership.</div>
@@ -952,12 +1001,10 @@ export default function Page() {
             </>
           )}
 
-          {/* ── LIVE TAB ──────────────────────────────────────────────────── */}
+          {/* LIVE TAB */}
           {activeTab === "live" && (
             <>
               <h2 className="section-heading">Live</h2>
-
-              {/* Countdown to next show */}
               <div style={{ background: "linear-gradient(135deg, #080808, #0d0d0d)", border: "1px solid #1a1a1a", borderRadius: 20, padding: "36px 32px", marginBottom: 28, textAlign: "center" }}>
                 <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 6, textTransform: "uppercase" }}>Next Show</div>
                 <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>2MRRW Live – Dallas</div>
@@ -984,7 +1031,6 @@ export default function Page() {
                 </button>
               </div>
 
-              {/* Livestream placeholder */}
               <div style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 20, overflow: "hidden", marginBottom: 28 }}>
                 <div style={{ position: "relative", paddingBottom: "56.25%", background: "#050505" }}>
                   <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
@@ -1003,7 +1049,6 @@ export default function Page() {
                 </div>
               </div>
 
-              {/* All shows quick list */}
               <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 16, textTransform: "uppercase" }}>Full Tour Schedule</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {shows.map((show) => (
@@ -1077,12 +1122,10 @@ export default function Page() {
             </>
           )}
 
-          {/* ── VISION TAB ────────────────────────────────────────────────── */}
+          {/* VISION TAB */}
           {activeTab === "vision" && (
             <>
               <h2 className="section-heading">Vision</h2>
-
-              {/* Hero statement */}
               <div style={{ background: "linear-gradient(135deg, #080808, #0e0e0e)", border: "1px solid #1a1a1a", borderRadius: 24, padding: "48px 40px", marginBottom: 28, textAlign: "center", position: "relative", overflow: "hidden" }}>
                 <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at center, rgba(0,255,255,0.04) 0%, transparent 65%)", pointerEvents: "none" }} />
                 <div style={{ fontSize: 11, color: "#444", letterSpacing: 4, marginBottom: 20, textTransform: "uppercase" }}>The Name</div>
@@ -1093,8 +1136,6 @@ export default function Page() {
                   Tomorrow. Always possible.
                 </div>
               </div>
-
-              {/* Meaning sections */}
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                 {[
                   {
@@ -1120,8 +1161,6 @@ export default function Page() {
                   </div>
                 ))}
               </div>
-
-              {/* Final statement */}
               <div style={{ marginTop: 32, padding: "28px 30px", borderTop: "1px solid #1a1a1a", textAlign: "center" }}>
                 <div style={{ fontSize: 13, color: "#555", lineHeight: 2 }}>
                   You are not just a listener.<br />
@@ -1131,7 +1170,7 @@ export default function Page() {
             </>
           )}
 
-          {/* ── CIRCLE TAB ────────────────────────────────────────────────── */}
+          {/* CIRCLE TAB */}
           {activeTab === "circle" && (
             <>
               <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6 }}>
@@ -1145,8 +1184,6 @@ export default function Page() {
               <p style={{ fontSize: 13, color: "#444", marginBottom: 28, letterSpacing: 0.5, lineHeight: 1.8 }}>
                 This is not a comment section. It's a direct line. Ask 2MRRW anything. Share what the music means to you. Selected submissions receive an official response.
               </p>
-
-              {/* Submission Form */}
               <div style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 20, padding: 28, marginBottom: 32 }}>
                 <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 16, textTransform: "uppercase" }}>Ask 2MRRW</div>
                 <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
@@ -1179,14 +1216,11 @@ export default function Page() {
                   </div>
                 )}
               </div>
-
-              {/* Official Responses Archive */}
               <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 16, textTransform: "uppercase" }}>2MRRW Responses</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 36 }}>
                 {circleResponses.map((resp) => (
                   <div key={resp.id}
                     style={{ background: resp.highlight ? "linear-gradient(135deg, #0d0d0d, #111)" : "#0a0a0a", border: resp.highlight ? `1px solid ${resp.tagColor}33` : "1px solid #1a1a1a", borderRadius: 18, padding: 24, boxShadow: resp.highlight ? `0 0 30px ${resp.tagColor}10` : "none" }}>
-                    {/* Original question */}
                     <div style={{ marginBottom: 16 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                         <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#1a1a1a", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, color: "#555", fontWeight: 700 }}>
@@ -1199,7 +1233,6 @@ export default function Page() {
                       </div>
                       <div style={{ fontSize: 14, color: "#888", lineHeight: 1.7, fontStyle: "italic" }}>"{resp.question}"</div>
                     </div>
-                    {/* Artist response */}
                     <div style={{ borderTop: "1px solid #1a1a1a", paddingTop: 16 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                         <div style={{ fontSize: 11, fontWeight: 900, letterSpacing: 6, color: "white", textShadow: "0 0 10px rgba(0,255,255,0.5)" }}>2MRRW</div>
@@ -1212,8 +1245,6 @@ export default function Page() {
                   </div>
                 ))}
               </div>
-
-              {/* Status + Inner Circle system */}
               <div style={{ background: "linear-gradient(135deg, #0a0a14, #0d0d0d)", border: "1px solid #1a1a2a", borderRadius: 20, padding: "28px 30px" }}>
                 <div style={{ fontSize: 11, color: "#444", letterSpacing: 3, marginBottom: 16, textTransform: "uppercase" }}>Community Status</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
@@ -1239,7 +1270,72 @@ export default function Page() {
             </>
           )}
 
-          {/* ── MY MUSIC TAB ──────────────────────────────────────────────── */}
+          {/* ── INNER CIRCLE TAB ──────────────────────────────────────────── */}
+          {activeTab === "innercircle" && (
+            <>
+              {innerCirclePost ? (
+                <div>
+                  <button onClick={() => setInnerCirclePost(null)}
+                    style={{ background: "none", border: "none", color: "#a259ff", cursor: "pointer", fontSize: 13, marginBottom: 20, padding: 0, letterSpacing: 1 }}>
+                    ← BACK TO INNER CIRCLE
+                  </button>
+                  <div style={{ fontSize: 10, color: "#a259ff", letterSpacing: 3, marginBottom: 12, textTransform: "uppercase" }}>Inner Circle Exclusive</div>
+                  <h1 style={{ fontSize: 24, fontWeight: 900, marginBottom: 6, letterSpacing: 1 }}>{innerCirclePost.title}</h1>
+                  <div style={{ fontSize: 12, color: "#555", marginBottom: 28 }}>{innerCirclePost.date}</div>
+                  <div style={{ fontSize: 14, lineHeight: 1.9, color: "#ccc", whiteSpace: "pre-line" }}>{innerCirclePost.body}</div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 6 }}>
+                    <h2 className="section-heading" style={{ margin: 0 }}>Inner Circle</h2>
+                    {userStatus && (
+                      <div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 2, padding: "3px 10px", borderRadius: 20, background: "rgba(162,89,255,0.12)", color: "#a259ff", border: "1px solid rgba(162,89,255,0.3)" }}>
+                        {userStatus.label}
+                      </div>
+                    )}
+                  </div>
+                  <p style={{ fontSize: 13, color: "#444", marginBottom: 32, letterSpacing: 0.5, lineHeight: 1.8 }}>
+                    Exclusive posts for believers. This is where the real conversation lives. Behind the music, behind the decisions, behind the art.
+                  </p>
+
+                  {/* Header banner */}
+                  <div style={{ background: "linear-gradient(135deg, #0d0814, #0d0d0d)", border: "1px solid rgba(162,89,255,0.2)", borderRadius: 20, padding: "28px 30px", marginBottom: 28, position: "relative", overflow: "hidden" }}>
+                    <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at top left, rgba(162,89,255,0.06) 0%, transparent 60%)", pointerEvents: "none" }} />
+                    <div style={{ fontSize: 11, color: "#a259ff", letterSpacing: 3, marginBottom: 8, textTransform: "uppercase" }}>Direct from 2MRRW</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>The stories behind the music.</div>
+                    <div style={{ fontSize: 13, color: "#555", lineHeight: 1.8 }}>
+                      Not for everyone. Written for the people who actually listen. Every post is unfiltered — what actually happened, what it actually means.
+                    </div>
+                  </div>
+
+                  {/* Posts list */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    {innerCirclePosts.map((post, i) => (
+                      <div key={post.id}
+                        onClick={() => setInnerCirclePost(post)}
+                        style={{
+                          background: "#0a0a0a", border: "1px solid #1a1a1a",
+                          borderRadius: 16, padding: 24, cursor: "pointer",
+                          opacity: 0,
+                          animation: `fadeInUp 0.5s ease ${i * 0.1}s forwards`,
+                          transition: "border-color 0.25s, box-shadow 0.25s",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#a259ff55"; e.currentTarget.style.boxShadow = "0 0 20px rgba(162,89,255,0.1)"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1a1a1a"; e.currentTarget.style.boxShadow = "none"; }}>
+                        <div style={{ fontSize: 10, color: "#a259ff", letterSpacing: 3, marginBottom: 8, textTransform: "uppercase" }}>Inner Circle Exclusive</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 6, letterSpacing: 0.3 }}>{post.title}</div>
+                        <div style={{ fontSize: 11, color: "#555", marginBottom: 12 }}>{post.date}</div>
+                        <div style={{ fontSize: 13, color: "#666", lineHeight: 1.7 }}>{post.preview}</div>
+                        <div style={{ fontSize: 12, color: "#a259ff", marginTop: 16 }}>Read more →</div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* MY MUSIC TAB */}
           {activeTab === "mymusic" && (
             <>
               <h2 className="section-heading">My Music</h2>
@@ -1299,13 +1395,12 @@ export default function Page() {
             </>
           )}
 
-          {/* ── ACCOUNT TAB ───────────────────────────────────────────────── */}
+          {/* ACCOUNT TAB */}
           {activeTab === "account" && (
             <>
               <h2 className="section-heading">Account</h2>
               {currentUser ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                  {/* Profile card */}
                   <div style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 20, padding: 28 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 20 }}>
                       <div style={{ width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg, #00ffff22, #a259ff22)", border: "1px solid #333", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 900, color: "#00ffff" }}>
@@ -1334,14 +1429,12 @@ export default function Page() {
                       ))}
                     </div>
                   </div>
-
-                  {/* Quick links */}
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                     {[
                       { label: "My Music Library", tab: "mymusic", color: "#00ffff" },
                       { label: "Exclusive Drops", tab: "exclusive", color: "#a259ff" },
                       { label: "The Circle", tab: "circle", color: "#ff6b35" },
-                      { label: "Live Shows", tab: "live", color: "#00ffff" },
+                      { label: "Inner Circle", tab: "innercircle", color: "#a259ff" },
                     ].map((link) => (
                       <button key={link.tab} onClick={() => setActiveTab(link.tab)}
                         style={{ padding: "16px 18px", background: "#0a0a0a", border: `1px solid ${link.color}22`, borderRadius: 14, cursor: "pointer", textAlign: "left", color: link.color, fontSize: 13, fontWeight: 700, transition: "0.2s" }}
@@ -1351,8 +1444,6 @@ export default function Page() {
                       </button>
                     ))}
                   </div>
-
-                  {/* Sign out */}
                   <button
                     onClick={() => {
                       localStorage.removeItem("2mrrw_user");
@@ -1366,7 +1457,6 @@ export default function Page() {
                   </button>
                 </div>
               ) : (
-                /* Auth form — login / signup */
                 <div style={{ maxWidth: 400 }}>
                   <div style={{ display: "flex", gap: 8, marginBottom: 28 }}>
                     {["login", "signup"].map((mode) => (
@@ -1470,6 +1560,10 @@ export default function Page() {
           from { opacity: 1; }
           to { opacity: 0; }
         }
+        @keyframes fadeInCover {
+          from { opacity: 0; transform: scale(0.97); }
+          to { opacity: 1; transform: scale(1); }
+        }
         @keyframes slideInRight {
           from { opacity: 0; transform: translateX(60px); }
           to { opacity: 1; transform: translateX(0); }
@@ -1519,10 +1613,10 @@ export default function Page() {
   );
 }
 
-// ── GRID COMPONENT (improved: larger covers) ──────────────────────────────────
+// ── GRID COMPONENT — minmax increased to 260px for larger covers ──────────────
 function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onSingleClick }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(210px,1fr))", gap: 22 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 22 }}>
       {items.map((item) => (
         <div key={item.slug} style={{ position: "relative", background: "#0a0a0a", borderRadius: 16, overflow: "hidden", border: "1px solid #1a1a1a", transition: "0.25s" }}
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#2a2a2a"; }}
