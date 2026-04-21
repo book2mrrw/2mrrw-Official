@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
@@ -67,6 +67,29 @@ const innerCirclePosts = [
   { id: "ic-3", title: "What the Collector Cards Actually Mean", date: "March 18, 2026", preview: "It's not merch. Here's the full vision behind the physical collector system and where it's going.", body: "People keep calling the collector cards merch. They're not merch.\n\nMerch is a t-shirt. You wear it, it fades, you forget about it. A collector card is a record of presence. It says: I was here when this was being built. I believed before it was obvious.\n\nThe long-term vision is a tiered system where each card unlocks something real — early access, private sessions, input on creative decisions. The NFC chip on the (A.D.) card is the first version of that. It's going to go much further.\n\nIf you have one, hold it. You're not holding merch. You're holding a key." },
 ];
 
+// ══════════════════════════════════════════════════════════════════════════════
+// #9 ADMIN CONTROL — SINGLE SOURCE OF TRUTH
+// To update the live stream date, change nextLiveDateTime below.
+// To update events, edit the events array.
+// ══════════════════════════════════════════════════════════════════════════════
+const nextLiveDateTime = new Date("2026-05-10T20:00:00");
+
+const events = [
+  { id: "evt-1", name: "2MRRW Live – Dallas",   location: "Dallas, TX",       date: "2026-05-10", time: "8:00 PM", price: 25.00, tickets: 50 },
+  { id: "evt-2", name: "2MRRW Live – Houston",  location: "Houston, TX",      date: "2026-05-24", time: "9:00 PM", price: 25.00, tickets: 75 },
+  { id: "evt-3", name: "2MRRW Live – Atlanta",  location: "Atlanta, GA",      date: "2026-06-07", time: "8:30 PM", price: 30.00, tickets: 60 },
+  { id: "evt-4", name: "2MRRW Live – LA",       location: "Los Angeles, CA",  date: "2026-06-21", time: "9:00 PM", price: 35.00, tickets: 40 },
+  { id: "evt-5", name: "2MRRW Live – NYC",      location: "New York, NY",     date: "2026-07-04", time: "8:00 PM", price: 35.00, tickets: 45 },
+];
+
+// ── 2MRRW RADIO slides (feeds the repurposed featured carousel) ───────────────
+const radioSlides = [
+  { slug: "hour-glass",     title: "Hour Glass",      cover: "/images/singles/hourglass.jpg", price: 2.99, tag: "NOW PLAYING",  tagColor: "#00ffff" },
+  { slug: "w2d",            title: "W.2.D",           cover: "/images/singles/w2d.jpg",       price: 2.99, tag: "FEATURED",     tagColor: "#a259ff" },
+  { slug: "artificial",     title: "Artificial",      cover: "/images/singles/artificial.jpg",price: 2.99, tag: "TRENDING",     tagColor: "#ff6b35" },
+  { slug: "turnt-me-2-dis", title: "Turnt Me 2 Dis",  cover: "/images/singles/turnt.jpg",     price: 2.99, tag: "FEATURED",     tagColor: "#00ffff" },
+];
+
 // ═════════════════════════════════════════════════════════════════════════════
 export default function Page() {
 
@@ -106,7 +129,9 @@ export default function Page() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
+  // #3/#9 — liveCountdown driven by nextLiveDateTime (single source of truth)
   const [liveCountdown, setLiveCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [liveIsLive, setLiveIsLive] = useState(false);
   const [previewHover, setPreviewHover] = useState(false);
   const [innerCirclePost, setInnerCirclePost] = useState(null);
 
@@ -115,6 +140,11 @@ export default function Page() {
   const [tabKey, setTabKey] = useState(0);
   const [nowPlaying, setNowPlaying] = useState(null);
   const [nowPlayingPlaying, setNowPlayingPlaying] = useState(false);
+
+  // #1 — Carousel: stable index ref so auto-scroll doesn't reset on re-render
+  const [radioIndex, setRadioIndex] = useState(0);
+  const radioIntervalRef = useRef(null);
+  const radioAnimatingRef = useRef(false);
 
   // ── REFS ──────────────────────────────────────────────────────────────────
   const cursorRef = useRef(null);
@@ -148,12 +178,17 @@ export default function Page() {
     if (stored) setCircleSubmissions(JSON.parse(stored));
   }, []);
 
+  // #3/#9 — Live countdown driven by nextLiveDateTime (single source of truth)
   useEffect(() => {
-    const target = new Date("2026-05-10T20:00:00");
     const tick = () => {
       const now = new Date();
-      const diff = target - now;
-      if (diff <= 0) return;
+      const diff = nextLiveDateTime - now;
+      if (diff <= 0) {
+        setLiveIsLive(true);
+        setLiveCountdown({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+      setLiveIsLive(false);
       setLiveCountdown({
         days: Math.floor(diff / (1000 * 60 * 60 * 24)),
         hours: Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)),
@@ -165,6 +200,28 @@ export default function Page() {
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // #1 — 2MRRW RADIO auto-advance: stable interval, no re-creation on re-render
+  const advanceRadio = useCallback(() => {
+    if (radioAnimatingRef.current) return;
+    radioAnimatingRef.current = true;
+    setRadioIndex((prev) => (prev + 1) % radioSlides.length);
+    setTimeout(() => { radioAnimatingRef.current = false; }, 600);
+  }, []);
+
+  useEffect(() => {
+    radioIntervalRef.current = setInterval(advanceRadio, 5000);
+    return () => clearInterval(radioIntervalRef.current);
+  }, [advanceRadio]);
+
+  const goRadio = useCallback((newIndex) => {
+    if (radioAnimatingRef.current) return;
+    radioAnimatingRef.current = true;
+    clearInterval(radioIntervalRef.current);
+    setRadioIndex(newIndex);
+    setTimeout(() => { radioAnimatingRef.current = false; }, 600);
+    radioIntervalRef.current = setInterval(advanceRadio, 5000);
+  }, [advanceRadio]);
 
   // ── NEW: Cursor glow ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -251,13 +308,8 @@ export default function Page() {
     { title: "2MRRW Hat", slug: "hat", cover: "/images/merch/hat.jpg", price: 24.99 },
   ];
 
-  const shows = [
-    { id: "show-1", title: "2MRRW Live – Dallas", venue: "House of Blues Dallas", date: "2026-05-10", time: "8:00 PM", price: 25.00, tickets: 50 },
-    { id: "show-2", title: "2MRRW Live – Houston", venue: "Warehouse Live", date: "2026-05-24", time: "9:00 PM", price: 25.00, tickets: 75 },
-    { id: "show-3", title: "2MRRW Live – Atlanta", venue: "The Loft Atlanta", date: "2026-06-07", time: "8:30 PM", price: 30.00, tickets: 60 },
-    { id: "show-4", title: "2MRRW Live – LA", venue: "The Troubadour", date: "2026-06-21", time: "9:00 PM", price: 35.00, tickets: 40 },
-    { id: "show-5", title: "2MRRW Live – NYC", venue: "Bowery Ballroom", date: "2026-07-04", time: "8:00 PM", price: 35.00, tickets: 45 },
-  ];
+  // #4 — Shows use the events array (separate from live system)
+  const shows = events;
 
   const blogPosts = [
     { id: "post-1", title: "The Making of Love Hz Vol.1", date: "April 2, 2026", author: "2MRRW", body: "Love Hz Vol.1 started as a series of late-night sessions in a home studio with nothing but a laptop, a MIDI keyboard, and a vision. Every track on that project represents a different frequency of love — the highs, the lows, the static in between. We wanted listeners to feel the entire spectrum.\n\nThe process took nearly 18 months. Some songs were written in 10 minutes, others were rebuilt from scratch a dozen times. What you hear is the version that survived. We hope it resonates with you the way it resonated with us when we finally pressed play for the first time." },
@@ -274,7 +326,7 @@ export default function Page() {
     { groupId: "g-community",  label: "COMMUNITY",      directTab: "blog",      subTabs: [{ id: "blog", label: "Blog" }, { id: "vision", label: "Vision" }, { id: "circle", label: "Circle" }, { id: "innercircle", label: "Inner Circle" }] },
     { groupId: "g-exclusives", label: "EXCLUSIVES",     directTab: "exclusive", subTabs: [{ id: "exclusive", label: "Exclusive Drops" }] },
     { groupId: "g-shows",      label: "SHOWS & EVENTS", directTab: "shows",     subTabs: [{ id: "shows", label: "Upcoming Shows" }] },
-    { groupId: "g-live",       label: "LIVE",           directTab: "live",      subTabs: [{ id: "live", label: "Live Stream" }] },
+    { groupId: "g-live",       label: "LIVE",           directTab: "live",      subTabs: [{ id: "live", label: "2MRRW LIVE" }] },
   ];
 
   // ── ORIGINAL FUNCTIONS ────────────────────────────────────────────────────
@@ -340,7 +392,8 @@ export default function Page() {
   const getDaysInMonth = (month, year) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (month, year) => new Date(year, month, 1).getDay();
   const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const getShowsForDay = (day) => shows.filter((s) => { const d = new Date(s.date); return d.getFullYear() === calYear && d.getMonth() === calMonth && d.getDate() === day; });
+  // #4 — getShowsForDay uses events array
+  const getShowsForDay = (day) => events.filter((s) => { const d = new Date(s.date); return d.getFullYear() === calYear && d.getMonth() === calMonth && d.getDate() === day; });
   const prevMonth = () => { if (calMonth === 0) { setCalMonth(11); setCalYear(calYear - 1); } else setCalMonth(calMonth - 1); };
   const nextMonth = () => { if (calMonth === 11) { setCalMonth(0); setCalYear(calYear + 1); } else setCalMonth(calMonth + 1); };
 
@@ -387,7 +440,11 @@ export default function Page() {
   // ── NEW: switchTab with page-fade transition key ───────────────────────────
   const switchTab = (tabId) => { setTabKey((prev) => prev + 1); setActiveTab(tabId); };
 
-  // ── CAROUSEL UI (original logic + carousel animation fix + nowPlaying) ────
+  // ── #3 Live panel countdown helper ────────────────────────────────────────
+  const liveStreamDate = nextLiveDateTime.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+
+  // ── CAROUSEL UI (original logic + stable key fix) ──────────────────────────
   const CarouselUI = ({ large }) => (
     <div style={{ display: "flex", alignItems: "center", gap: 20, background: "linear-gradient(135deg, #0e0e0e, #111)", border: "1px solid #1e1e1e", borderRadius: 20, padding: large ? "32px 28px" : "28px 24px", position: "relative", overflow: "hidden", boxShadow: "0 4px 40px rgba(0,0,0,0.5)" }}>
       <div style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 360, height: 360, background: "radial-gradient(circle, rgba(0,255,255,0.04) 0%, transparent 70%)", pointerEvents: "none" }} />
@@ -397,11 +454,11 @@ export default function Page() {
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#00ffff"; e.currentTarget.style.color = "#00ffff"; e.currentTarget.style.boxShadow = "0 0 10px rgba(0,255,255,0.3)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#555"; e.currentTarget.style.boxShadow = "none"; }}>‹</button>
 
-      {/* ── COVER ART: key={singleIndex} forces one-shot fadeInCover on every change ── */}
       <div style={{ flexShrink: 0, width: large ? 340 : 300, height: large ? 340 : 300, position: "relative" }}
         onMouseEnter={() => setPreviewHover(true)} onMouseLeave={() => setPreviewHover(false)}>
+        {/* #1 FIX: key uses slug (stable), not index — forces one-shot fadeInCover only on actual slide change */}
         <img
-          key={singleIndex}
+          key={currentSingle.slug}
           src={currentSingle.cover}
           style={{
             width: "100%", height: "100%", borderRadius: large ? 18 : 16, objectFit: "cover", display: "block",
@@ -422,14 +479,16 @@ export default function Page() {
       </div>
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: large ? 14 : 12 }}>
-        <div key={`title-${singleIndex}`} style={{ fontSize: large ? 30 : 26, fontWeight: 900, letterSpacing: 2, animation: "fadeInUp 0.35s ease forwards" }}>
+        {/* #1 FIX: key uses slug so title animates only when slide truly changes */}
+        <div key={`title-${currentSingle.slug}`} style={{ fontSize: large ? 30 : 26, fontWeight: 900, letterSpacing: 2, animation: "fadeInUp 0.35s ease forwards" }}>
           {currentSingle.title}
         </div>
         <div style={{ fontSize: 13, color: "#555", letterSpacing: 1 }}>SINGLE{large ? ` · ${singleIndex + 1} of ${singles.length}` : ""}</div>
         <div style={{ fontSize: large ? 18 : 16, color: "#00ffff", fontWeight: 700 }}>${currentSingle.price.toFixed(2)}</div>
         <div style={{ display: "flex", gap: 6 }}>
-          {singles.map((_, i) => (
-            <div key={i} onClick={() => goToSingle(i, i > singleIndex ? "right" : "left")}
+          {singles.map((s, i) => (
+            // #1 FIX: key uses slug, not index
+            <div key={s.slug} onClick={() => goToSingle(i, i > singleIndex ? "right" : "left")}
               style={{ width: i === singleIndex ? (large ? 24 : 20) : (large ? 7 : 6), height: large ? 7 : 6, borderRadius: 4, background: i === singleIndex ? "#00ffff" : "#333", cursor: "pointer", transition: "all 0.3s ease", boxShadow: i === singleIndex ? "0 0 8px rgba(0,255,255,0.6)" : "none" }} />
           ))}
         </div>
@@ -451,6 +510,129 @@ export default function Page() {
         style={{ width: large ? 50 : 44, height: large ? 50 : 44, borderRadius: "50%", background: "rgba(255,255,255,0.04)", border: "1px solid #2a2a2a", color: "#555", fontSize: large ? 22 : 20, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "all 0.2s" }}
         onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#00ffff"; e.currentTarget.style.color = "#00ffff"; e.currentTarget.style.boxShadow = "0 0 10px rgba(0,255,255,0.3)"; }}
         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#555"; e.currentTarget.style.boxShadow = "none"; }}>›</button>
+    </div>
+  );
+
+  // ── #8 2MRRW RADIO component (replaces existing featured carousel) ─────────
+  const currentSlide = radioSlides[radioIndex];
+  const RadioCarousel = () => (
+    <div style={{ position: "relative", borderRadius: 22, overflow: "hidden", background: "linear-gradient(135deg, #080808, #0d0d0d)", border: "1px solid #1e1e1e", boxShadow: "0 8px 60px rgba(0,0,0,0.6)" }}>
+      {/* Ambient glow layer behind artwork */}
+      <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 30% 50%, ${currentSlide.tagColor}14 0%, transparent 55%)`, transition: "background 0.8s ease", pointerEvents: "none", zIndex: 0 }} />
+
+      <div style={{ display: "flex", alignItems: "stretch", minHeight: 320, position: "relative", zIndex: 1 }}>
+        {/* Cover art with ambient motion */}
+        <div style={{ flexShrink: 0, width: 320, position: "relative", overflow: "hidden" }}>
+          <img
+            key={currentSlide.slug}
+            src={currentSlide.cover}
+            alt={currentSlide.title}
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", animation: "radioFadeIn 0.6s ease forwards" }}
+          />
+          {/* Subtle shimmer overlay */}
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(135deg, transparent 40%, rgba(0,0,0,0.35) 100%)", pointerEvents: "none" }} />
+          {/* Tag badge */}
+          <div style={{ position: "absolute", top: 16, left: 16, background: currentSlide.tagColor, color: "#000", fontSize: 9, fontWeight: 900, letterSpacing: 2.5, padding: "5px 12px", borderRadius: 20, boxShadow: `0 0 16px ${currentSlide.tagColor}88` }}>
+            {currentSlide.tag}
+          </div>
+        </div>
+
+        {/* Info panel */}
+        <div style={{ flex: 1, padding: "36px 32px", display: "flex", flexDirection: "column", justifyContent: "center", gap: 16 }}>
+          <div style={{ fontSize: 10, color: "#444", letterSpacing: 4, textTransform: "uppercase", fontWeight: 700 }}>2MRRW RADIO</div>
+
+          <div key={`radio-title-${currentSlide.slug}`} style={{ fontSize: 34, fontWeight: 900, letterSpacing: 2, lineHeight: 1.1, animation: "radioFadeIn 0.55s ease forwards" }}>
+            {currentSlide.title}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {/* Animated equalizer bars */}
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 18 }}>
+              {[1,2,3,4].map((i) => (
+                <div key={i} style={{ width: 3, borderRadius: 2, background: currentSlide.tagColor, animation: `eqBar${i} ${0.5 + i * 0.1}s ease-in-out infinite alternate`, boxShadow: `0 0 6px ${currentSlide.tagColor}88` }} />
+              ))}
+            </div>
+            <div style={{ fontSize: 13, color: "#555", letterSpacing: 1 }}>SINGLE</div>
+          </div>
+
+          <div style={{ fontSize: 20, color: "#00ffff", fontWeight: 700 }}>${currentSlide.price.toFixed(2)}</div>
+
+          <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+            <button
+              onClick={() => addToCart({ title: currentSlide.title, slug: currentSlide.slug, cover: currentSlide.cover, price: currentSlide.price })}
+              style={{ padding: "11px 22px", background: currentSlide.tagColor, color: "#000", border: "none", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 900, transition: "0.25s", boxShadow: `0 0 20px ${currentSlide.tagColor}55` }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.85"; e.currentTarget.style.transform = "scale(1.04)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.transform = "scale(1)"; }}>
+              + Add to Cart
+            </button>
+          </div>
+
+          {/* Slide dots */}
+          <div style={{ display: "flex", gap: 7, marginTop: 12 }}>
+            {radioSlides.map((s, i) => (
+              <div key={s.slug} onClick={() => goRadio(i)}
+                style={{ width: i === radioIndex ? 22 : 6, height: 6, borderRadius: 4, background: i === radioIndex ? currentSlide.tagColor : "#2a2a2a", cursor: "pointer", transition: "all 0.35s ease", boxShadow: i === radioIndex ? `0 0 8px ${currentSlide.tagColor}88` : "none" }} />
+            ))}
+          </div>
+        </div>
+
+        {/* Prev/Next arrows */}
+        <div style={{ position: "absolute", bottom: 24, right: 24, display: "flex", gap: 8 }}>
+          {[{ dir: "prev", icon: "‹" }, { dir: "next", icon: "›" }].map(({ dir, icon }) => (
+            <button key={dir}
+              onClick={() => {
+                const newIdx = dir === "prev"
+                  ? (radioIndex === 0 ? radioSlides.length - 1 : radioIndex - 1)
+                  : (radioIndex === radioSlides.length - 1 ? 0 : radioIndex + 1);
+                goRadio(newIdx);
+              }}
+              style={{ width: 36, height: 36, borderRadius: "50%", background: "rgba(255,255,255,0.05)", border: "1px solid #2a2a2a", color: "#666", fontSize: 18, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.2s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = currentSlide.tagColor; e.currentTarget.style.color = currentSlide.tagColor; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "#666"; }}>
+              {icon}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── #3 Homepage Live Panel ─────────────────────────────────────────────────
+  const LivePanel = () => (
+    <div style={{ background: "linear-gradient(135deg, rgba(8,8,8,0.92), rgba(13,13,13,0.95))", border: "1px solid rgba(0,255,255,0.15)", borderRadius: 18, padding: "22px 20px", backdropFilter: "blur(12px)", boxShadow: "0 0 30px rgba(0,255,255,0.06), inset 0 0 30px rgba(0,255,255,0.02)", position: "relative", overflow: "hidden", minWidth: 180 }}>
+      {/* Subtle glow */}
+      <div style={{ position: "absolute", top: 0, left: "50%", transform: "translateX(-50%)", width: 120, height: 1, background: liveIsLive ? "linear-gradient(90deg, transparent, #00ffff, transparent)" : "linear-gradient(90deg, transparent, rgba(0,255,255,0.3), transparent)", pointerEvents: "none" }} />
+
+      <div style={{ fontSize: 9, color: "#444", letterSpacing: 3, marginBottom: 10, textTransform: "uppercase", fontWeight: 700 }}>2MRRW LIVE</div>
+
+      {liveIsLive ? (
+        <div style={{ display: "flex", flex: "column", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#00ffff", boxShadow: "0 0 8px rgba(0,255,255,0.9)", animation: "pulse 1.2s infinite" }} />
+            <div style={{ fontSize: 15, fontWeight: 900, color: "#00ffff", letterSpacing: 3 }}>LIVE NOW</div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div style={{ fontSize: 11, color: "#888", marginBottom: 4, lineHeight: 1.5 }}>
+            {liveStreamDate}
+          </div>
+          <div style={{ fontSize: 11, color: "#555", marginBottom: 14 }}>{liveStreamTime}</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+            {[
+              { value: liveCountdown.days,    label: "D" },
+              { value: liveCountdown.hours,   label: "H" },
+              { value: liveCountdown.minutes, label: "M" },
+              { value: liveCountdown.seconds, label: "S" },
+            ].map((u) => (
+              <div key={u.label} style={{ background: "rgba(0,0,0,0.5)", border: "1px solid #1a1a1a", borderRadius: 10, padding: "8px 6px", textAlign: "center" }}>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#00ffff", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{String(u.value).padStart(2, "0")}</div>
+                <div style={{ fontSize: 8, color: "#444", letterSpacing: 1.5, marginTop: 3 }}>{u.label}</div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 
@@ -512,16 +694,16 @@ export default function Page() {
         </div>
       )}
 
-      {/* ── TICKET MODAL (unchanged) ──────────────────────────────────────── */}
+      {/* ── TICKET MODAL (#4 uses events data) ───────────────────────────── */}
       {selectedEvent && (
         <div onClick={() => setSelectedEvent(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.88)", zIndex: 8888, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div onClick={(e) => e.stopPropagation()} style={{ background: "#111", border: "1px solid #222", borderRadius: 20, padding: 30, width: 360, display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>{selectedEvent.title}</div>
-            <div style={{ fontSize: 13, color: "#aaa" }}>{selectedEvent.venue}</div>
+            <div style={{ fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>{selectedEvent.name || selectedEvent.title}</div>
+            <div style={{ fontSize: 13, color: "#aaa" }}>{selectedEvent.location || selectedEvent.venue}</div>
             <div style={{ fontSize: 13, color: "#aaa" }}>{new Date(selectedEvent.date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })} · {selectedEvent.time}</div>
             <div style={{ fontSize: 22, fontWeight: 900, color: "#00ffff" }}>${selectedEvent.price.toFixed(2)}</div>
             <div style={{ fontSize: 12, color: "#555" }}>{selectedEvent.tickets} tickets remaining</div>
-            <button onClick={() => { addToCart({ title: `Ticket – ${selectedEvent.title}`, slug: selectedEvent.id, cover: null, price: selectedEvent.price }); setSelectedEvent(null); }} style={{ width: "100%", padding: "12px 0", background: "#00ffff", color: "#000", fontWeight: "bold", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14 }}>Add Ticket to Cart – ${selectedEvent.price.toFixed(2)}</button>
+            <button onClick={() => { addToCart({ title: `Ticket – ${selectedEvent.name || selectedEvent.title}`, slug: selectedEvent.id, cover: null, price: selectedEvent.price }); setSelectedEvent(null); }} style={{ width: "100%", padding: "12px 0", background: "#00ffff", color: "#000", fontWeight: "bold", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14 }}>Add Ticket to Cart – ${selectedEvent.price.toFixed(2)}</button>
             <button onClick={() => setSelectedEvent(null)} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 12, textAlign: "center" }}>Close</button>
           </div>
         </div>
@@ -557,7 +739,7 @@ export default function Page() {
       {/* ══════════════════════ MAIN LAYOUT ══════════════════════════════════ */}
       <div style={{ display: "flex", height: "100vh", overflow: "hidden", background: "#050505", color: "white", position: "relative", zIndex: 1, fontFamily: "'Helvetica Now', 'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
 
-        {/* ── NEW: LEFT SIDEBAR ─────────────────────────────────────────────── */}
+        {/* ── #2 LEFT SIDEBAR — improved tab visibility + spacing ─────────── */}
         <div style={{ width: 220, flexShrink: 0, borderRight: "1px solid #141414", background: "rgba(4,4,4,0.9)", backdropFilter: "blur(20px)", display: "flex", flexDirection: "column", height: "100vh", overflowY: "auto", boxShadow: "2px 0 32px rgba(0,0,0,0.5)" }}>
 
           {/* Logo */}
@@ -566,32 +748,64 @@ export default function Page() {
             {currentUser && userStatus && (<div style={{ fontSize: 9, color: userStatus.color, letterSpacing: 2.5, fontWeight: 700, opacity: 0.85 }}>{userStatus.label}</div>)}
           </div>
 
-          {/* Nav groups */}
-          <nav style={{ flex: 1, padding: "10px 0", overflowY: "auto" }}>
+          {/* #2 Nav groups — increased text brightness, font size, spacing, padding */}
+          <nav style={{ flex: 1, padding: "12px 0", overflowY: "auto" }}>
             {sidebarNav.map((group) => {
               const isGroupActive = group.subTabs.length === 0 ? activeTab === group.directTab : group.subTabs.some((st) => st.id === activeTab);
               const isExpanded = expandedGroup === group.groupId;
               return (
-                <div key={group.groupId} style={{ marginBottom: 1 }}>
+                <div key={group.groupId} style={{ marginBottom: 2 }}>
                   <button
                     onClick={() => {
                       if (group.subTabs.length === 0) { switchTab(group.directTab); }
                       else { setExpandedGroup(isExpanded ? null : group.groupId); if (!isExpanded) switchTab(group.subTabs[0].id); }
                     }}
-                    style={{ width: "100%", padding: "11px 18px 11px 14px", display: "flex", alignItems: "center", justifyContent: "space-between", background: isGroupActive ? "linear-gradient(90deg, rgba(0,255,255,0.09) 0%, transparent 100%)" : "transparent", border: "none", borderLeft: isGroupActive ? "2px solid #00ffff" : "2px solid transparent", color: isGroupActive ? "#00ffff" : "#4a4a4a", fontSize: 10, fontWeight: 700, letterSpacing: 2.5, cursor: "pointer", textAlign: "left", transition: "all 0.18s ease", textShadow: isGroupActive ? "0 0 12px rgba(0,255,255,0.4)" : "none" }}
-                    onMouseEnter={(e) => { if (!isGroupActive) { e.currentTarget.style.color = "#888"; e.currentTarget.style.background = "rgba(255,255,255,0.025)"; } }}
-                    onMouseLeave={(e) => { if (!isGroupActive) { e.currentTarget.style.color = "#4a4a4a"; e.currentTarget.style.background = "transparent"; } }}
+                    style={{
+                      width: "100%",
+                      // #2: increased vertical padding
+                      padding: "13px 18px 13px 14px",
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      background: isGroupActive ? "linear-gradient(90deg, rgba(0,255,255,0.09) 0%, transparent 100%)" : "transparent",
+                      border: "none",
+                      borderLeft: isGroupActive ? "2px solid #00ffff" : "2px solid transparent",
+                      // #2: near-white inactive color (was #4a4a4a → #b0b0b0)
+                      color: isGroupActive ? "#00ffff" : "#b0b0b0",
+                      // #2: increased font size (was 10px → 11px)
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: 2.5,
+                      cursor: "pointer", textAlign: "left",
+                      transition: "all 0.18s ease",
+                      textShadow: isGroupActive ? "0 0 12px rgba(0,255,255,0.4)" : "none"
+                    }}
+                    onMouseEnter={(e) => { if (!isGroupActive) { e.currentTarget.style.color = "#ffffff"; e.currentTarget.style.background = "rgba(255,255,255,0.035)"; } }}
+                    onMouseLeave={(e) => { if (!isGroupActive) { e.currentTarget.style.color = "#b0b0b0"; e.currentTarget.style.background = "transparent"; } }}
                   >
                     <span>{group.label}</span>
-                    {group.subTabs.length > 0 && (<span style={{ fontSize: 11, color: isExpanded ? "#555" : "#2a2a2a", display: "inline-block", transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.22s ease" }}>›</span>)}
+                    {group.subTabs.length > 0 && (<span style={{ fontSize: 12, color: isExpanded ? "#888" : "#555", display: "inline-block", transform: isExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.22s ease" }}>›</span>)}
                   </button>
                   {isExpanded && group.subTabs.length > 0 && (
                     <div style={{ animation: "expandDown 0.2s ease forwards" }}>
                       {group.subTabs.map((st) => (
                         <button key={st.id} onClick={() => switchTab(st.id)}
-                          style={{ width: "100%", padding: "8px 18px 8px 30px", background: activeTab === st.id ? "rgba(0,255,255,0.055)" : "transparent", border: "none", color: activeTab === st.id ? "#00ffff" : "#3a3a3a", fontSize: 11, letterSpacing: 1.5, cursor: "pointer", textAlign: "left", transition: "all 0.14s ease", fontWeight: activeTab === st.id ? 700 : 400, display: "flex", alignItems: "center", gap: 8 }}
-                          onMouseEnter={(e) => { if (activeTab !== st.id) e.currentTarget.style.color = "#777"; }}
-                          onMouseLeave={(e) => { if (activeTab !== st.id) e.currentTarget.style.color = "#3a3a3a"; }}>
+                          style={{
+                            width: "100%",
+                            // #2: increased sub-tab vertical padding
+                            padding: "10px 18px 10px 30px",
+                            background: activeTab === st.id ? "rgba(0,255,255,0.055)" : "transparent",
+                            border: "none",
+                            // #2: near-white inactive sub-tab color (was #3a3a3a → #999)
+                            color: activeTab === st.id ? "#00ffff" : "#999",
+                            // #2: slightly increased sub-tab font size (was 11px → 12px)
+                            fontSize: 12,
+                            letterSpacing: 1.5,
+                            cursor: "pointer", textAlign: "left",
+                            transition: "all 0.14s ease",
+                            fontWeight: activeTab === st.id ? 700 : 400,
+                            display: "flex", alignItems: "center", gap: 8
+                          }}
+                          onMouseEnter={(e) => { if (activeTab !== st.id) e.currentTarget.style.color = "#fff"; }}
+                          onMouseLeave={(e) => { if (activeTab !== st.id) e.currentTarget.style.color = "#999"; }}>
                           <span style={{ width: 4, height: 4, borderRadius: "50%", flexShrink: 0, background: activeTab === st.id ? "#00ffff" : "transparent", boxShadow: activeTab === st.id ? "0 0 6px rgba(0,255,255,0.9)" : "none", transition: "all 0.15s" }} />
                           {st.label}
                         </button>
@@ -603,20 +817,16 @@ export default function Page() {
             })}
           </nav>
 
-          {/* Bottom: Account, Sound, Donate */}
+          {/* Bottom: Account, Sound, Donate — #2 updated text colors */}
           <div style={{ padding: "14px 14px 18px", borderTop: "1px solid #111", display: "flex", flexDirection: "column", gap: 4, flexShrink: 0 }}>
             <button onClick={() => switchTab("account")}
-              style={{ width: "100%", padding: "9px 12px", textAlign: "left", background: activeTab === "account" ? "rgba(0,255,255,0.07)" : "transparent", border: "none", borderLeft: activeTab === "account" ? "2px solid #00ffff" : "2px solid transparent", color: activeTab === "account" ? "#00ffff" : "#4a4a4a", fontSize: 10, fontWeight: 700, letterSpacing: 2.5, cursor: "pointer", transition: "0.18s" }}
-              onMouseEnter={(e) => { if (activeTab !== "account") e.currentTarget.style.color = "#888"; }}
-              onMouseLeave={(e) => { if (activeTab !== "account") e.currentTarget.style.color = "#4a4a4a"; }}>ACCOUNT</button>
+              style={{ width: "100%", padding: "10px 12px", textAlign: "left", background: activeTab === "account" ? "rgba(0,255,255,0.07)" : "transparent", border: "none", borderLeft: activeTab === "account" ? "2px solid #00ffff" : "2px solid transparent", color: activeTab === "account" ? "#00ffff" : "#b0b0b0", fontSize: 11, fontWeight: 700, letterSpacing: 2.5, cursor: "pointer", transition: "0.18s" }}
+              onMouseEnter={(e) => { if (activeTab !== "account") e.currentTarget.style.color = "#fff"; }}
+              onMouseLeave={(e) => { if (activeTab !== "account") e.currentTarget.style.color = "#b0b0b0"; }}>ACCOUNT</button>
             <button onClick={() => setSoundOn(!soundOn)}
-              style={{ width: "100%", padding: "8px 12px", textAlign: "left", background: "transparent", border: "none", color: soundOn ? "#00ffff" : "#333", fontSize: 10, cursor: "pointer", letterSpacing: 2, fontWeight: 700, transition: "0.18s", textShadow: soundOn ? "0 0 8px rgba(0,255,255,0.5)" : "none" }}>
+              style={{ width: "100%", padding: "9px 12px", textAlign: "left", background: "transparent", border: "none", color: soundOn ? "#00ffff" : "#888", fontSize: 11, cursor: "pointer", letterSpacing: 2, fontWeight: 700, transition: "0.18s", textShadow: soundOn ? "0 0 8px rgba(0,255,255,0.5)" : "none" }}>
               {soundOn ? "♫  SOUND ON" : "♫  SOUND OFF"}
             </button>
-            <button onClick={() => window.open("https://www.paypal.com/donate", "_blank")}
-              style={{ width: "100%", padding: "8px 12px", textAlign: "left", background: "transparent", border: "none", color: "#333", fontSize: 10, cursor: "pointer", letterSpacing: 2, transition: "0.18s" }}
-              onMouseEnter={(e) => e.currentTarget.style.color = "#888"}
-              onMouseLeave={(e) => e.currentTarget.style.color = "#333"}>♥  DONATE</button>
           </div>
         </div>
 
@@ -625,7 +835,7 @@ export default function Page() {
           <div style={{ flex: 1, overflowY: "auto", padding: 30 }}>
 
             {/* HERO (unchanged) */}
-            <div style={{ position: "relative", height: 380, marginBottom: 30, borderRadius: 20, overflow: "hidden", background: "black" }}>
+            <div style={{ position: "relative", height: 380, marginBottom: 0, borderRadius: 20, overflow: "hidden", background: "black" }}>
               <video autoPlay muted loop playsInline style={{ position: "absolute", width: "100%", height: "100%", objectFit: "cover", opacity: 0.35, filter: "blur(1px)" }}>
                 <source src="/videos/A2B.mp4" type="video/mp4" />
               </video>
@@ -645,36 +855,177 @@ export default function Page() {
               </div>
             </div>
 
+            {/* #5 DONATE BUTTON — directly under hero, above Latest Singles */}
+            {activeTab === "home" && (
+              <div style={{ padding: "18px 0 8px", display: "flex", justifyContent: "flex-start" }}>
+                <button
+                  onClick={() => window.open("https://www.paypal.com/donate", "_blank")}
+                  style={{ padding: "10px 28px", background: "transparent", color: "#888", border: "1px solid #2a2a2a", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, letterSpacing: 2, transition: "0.2s", textTransform: "uppercase" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = "#555"; e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.color = "#888"; e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.background = "transparent"; }}>
+                  ♥ Donate
+                </button>
+              </div>
+            )}
+
             {/* ── TAB CONTENT with fade transition ────────────────────────────── */}
             <div key={tabKey} style={{ animation: "fadeInTab 0.22s ease forwards" }}>
 
-              {/* HOME */}
+              {/* ══════════════════ HOME ═════════════════════════════════════ */}
+              {/* #6 Home = full scrollable site — all sections stacked */}
               {activeTab === "home" && (
                 <>
-                  <h2 className="section-heading">Latest Singles</h2>
-                  <div className="singles-row" style={{ display: "flex", gap: 18, overflowX: "auto", paddingBottom: 14, scrollSnapType: "x mandatory", marginBottom: 28 }}>
-                    {singles.map((single, i) => (
-                      <div key={single.slug} onClick={() => { setSelectedSingle(single); setNowPlaying(single); setNowPlayingPlaying(true); }}
-                        style={{ flexShrink: 0, width: 220, cursor: "pointer", scrollSnapAlign: "start", opacity: 0, animation: `fadeInUp 0.5s ease ${i * 0.09}s forwards`, background: "#0a0a0a", borderRadius: 14, overflow: "hidden", border: "1px solid #1a1a1a", transition: "border-color 0.25s, box-shadow 0.25s" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#00ffff44"; e.currentTarget.style.boxShadow = "0 0 18px rgba(0,255,255,0.12)"; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1a1a1a"; e.currentTarget.style.boxShadow = "none"; }}>
-                        <img src={single.cover} style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block", transition: "filter 0.3s ease" }}
-                          onMouseEnter={(e) => { e.target.style.filter = "brightness(1.15)"; }} onMouseLeave={(e) => { e.target.style.filter = "brightness(1)"; }} />
-                        <div style={{ padding: "12px 14px 16px" }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{single.title}</div>
-                          <div style={{ fontSize: 12, color: "#00ffff", fontWeight: 700, marginBottom: 10 }}>${single.price.toFixed(2)}</div>
-                          <button onClick={(e) => { e.stopPropagation(); addToCart(single); }}
-                            style={{ width: "100%", padding: "7px 0", fontSize: 11, background: "#1a1a1a", color: "white", border: "1px solid #2a2a2a", borderRadius: 7, cursor: "pointer", fontWeight: 600, transition: "0.2s" }}
-                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#00ffff"; e.currentTarget.style.color = "#00ffff"; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "white"; }}>+ Cart</button>
-                        </div>
+                  {/* Latest Singles row + Live Panel inline */}
+                  <div style={{ marginTop: 20, marginBottom: 4 }}>
+                    <h2 className="section-heading" style={{ marginBottom: 14 }}>Latest Singles</h2>
+                    {/* #3 Inline row: singles + live panel */}
+                    <div style={{ display: "flex", gap: 18, alignItems: "flex-start" }}>
+                      {/* Singles scroll */}
+                      <div className="singles-row" style={{ flex: 1, display: "flex", gap: 18, overflowX: "auto", paddingBottom: 14, scrollSnapType: "x mandatory" }}>
+                        {singles.map((single, i) => (
+                          <div key={single.slug} onClick={() => { setSelectedSingle(single); setNowPlaying(single); setNowPlayingPlaying(true); }}
+                            style={{ flexShrink: 0, width: 200, cursor: "pointer", scrollSnapAlign: "start", opacity: 0, animation: `fadeInUp 0.5s ease ${i * 0.09}s forwards`, background: "#0a0a0a", borderRadius: 14, overflow: "hidden", border: "1px solid #1a1a1a", transition: "border-color 0.25s, box-shadow 0.25s" }}
+                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#00ffff44"; e.currentTarget.style.boxShadow = "0 0 18px rgba(0,255,255,0.12)"; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1a1a1a"; e.currentTarget.style.boxShadow = "none"; }}>
+                            <img src={single.cover} style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block", transition: "filter 0.3s ease" }}
+                              onMouseEnter={(e) => { e.target.style.filter = "brightness(1.15)"; }} onMouseLeave={(e) => { e.target.style.filter = "brightness(1)"; }} />
+                            <div style={{ padding: "12px 14px 16px" }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 4 }}>{single.title}</div>
+                              <div style={{ fontSize: 12, color: "#00ffff", fontWeight: 700, marginBottom: 10 }}>${single.price.toFixed(2)}</div>
+                              <button onClick={(e) => { e.stopPropagation(); addToCart(single); }}
+                                style={{ width: "100%", padding: "7px 0", fontSize: 11, background: "#1a1a1a", color: "white", border: "1px solid #2a2a2a", borderRadius: 7, cursor: "pointer", fontWeight: 600, transition: "0.2s" }}
+                                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#00ffff"; e.currentTarget.style.color = "#00ffff"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2a2a2a"; e.currentTarget.style.color = "white"; }}>+ Cart</button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                      {/* #3 Live Panel — inline right of singles */}
+                      <LivePanel />
+                    </div>
                   </div>
-                  <CarouselUI large={false} />
-                  <div style={{ margin: "30px 0", height: 1, background: "#222" }} />
-                  <h2 className="section-heading" style={{ animationDelay: "0.15s" }}>Albums</h2>
-                  <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onSingleClick={setSelectedAlbum} />
+
+                  {/* #8 2MRRW RADIO (replaces old featured carousel) */}
+                  <div style={{ marginTop: 28, marginBottom: 28 }}>
+                    <h2 className="section-heading" style={{ marginBottom: 14 }}>2MRRW RADIO</h2>
+                    <RadioCarousel />
+                  </div>
+
+                  <div style={{ margin: "0 0 24px 0", height: 1, background: "#1a1a1a" }} />
+
+                  {/* #6 Albums section on home */}
+                  <div id="home-albums">
+                    <h2 className="section-heading" style={{ animationDelay: "0.15s", marginBottom: 16 }}>Albums</h2>
+                    <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onSingleClick={setSelectedAlbum} />
+                  </div>
+
+                  <div style={{ margin: "32px 0 24px", height: 1, background: "#1a1a1a" }} />
+
+                  {/* #6 Shop section on home */}
+                  <div id="home-shop">
+                    <h2 className="section-heading" style={{ marginBottom: 16 }}>Shop</h2>
+                    <Grid items={merch} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} />
+                  </div>
+
+                  <div style={{ margin: "32px 0 24px", height: 1, background: "#1a1a1a" }} />
+
+                  {/* #6 Music Videos section on home */}
+                  <div id="home-videos">
+                    <h2 className="section-heading" style={{ marginBottom: 8 }}>Music Videos</h2>
+                    <p style={{ fontSize: 13, color: "#444", marginBottom: 24, letterSpacing: 1 }}>Official visuals from 2MRRW</p>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+                      {musicVideos.map((vid) => (
+                        <div key={vid.id} style={{ background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 20, overflow: "hidden" }}>
+                          <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
+                            <iframe src={`https://www.youtube.com/embed/${vid.youtubeId}`} title={vid.title} frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", borderRadius: "20px 20px 0 0" }} />
+                          </div>
+                          <div style={{ padding: "16px 20px" }}>
+                            <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: 1, marginBottom: 4 }}>{vid.title}</div>
+                            <div style={{ fontSize: 12, color: "#555" }}>{vid.description}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ margin: "32px 0 24px", height: 1, background: "#1a1a1a" }} />
+
+                  {/* #6 Community / Exclusives section on home */}
+                  <div id="home-exclusives">
+                    <h2 className="section-heading" style={{ marginBottom: 8 }}>Exclusives</h2>
+                    <p style={{ fontSize: 13, color: "#444", marginBottom: 24, letterSpacing: 1, lineHeight: 1.8 }}>Not merch. Ownership tokens. Physical and digital proof you were here first.</p>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 18 }}>
+                      {exclusiveItems.map((item) => (
+                        <div key={item.id}
+                          style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 18, overflow: "hidden", cursor: "pointer", transition: "all 0.3s ease" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = item.badgeColor + "55"; e.currentTarget.style.boxShadow = `0 0 24px ${item.badgeColor}14`; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}
+                          onClick={() => setExclusiveModal(item)}>
+                          <div style={{ position: "relative" }}>
+                            <img src={item.cover} style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
+                            <div style={{ position: "absolute", top: 10, left: 10, background: item.badgeColor, color: "#000", fontSize: 9, fontWeight: 900, letterSpacing: 2, padding: "3px 8px", borderRadius: 20 }}>{item.badge}</div>
+                          </div>
+                          <div style={{ padding: "14px 16px 18px" }}>
+                            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 4 }}>{item.title}</div>
+                            <div style={{ fontSize: 18, fontWeight: 900, color: item.badgeColor }}>${item.price.toFixed(2)}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ margin: "32px 0 24px", height: 1, background: "#1a1a1a" }} />
+
+                  {/* #6 Shows & Events section on home */}
+                  <div id="home-shows">
+                    <h2 className="section-heading" style={{ marginBottom: 16 }}>Shows & Events</h2>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      {events.map((evt) => (
+                        <div key={evt.id} style={{ background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 14, padding: "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3 }}>{evt.name}</div>
+                            <div style={{ fontSize: 12, color: "#aaa" }}>{evt.location}</div>
+                            <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{new Date(evt.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })} · {evt.time}</div>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div style={{ fontSize: 16, fontWeight: 900, color: "#00ffff" }}>${evt.price.toFixed(2)}</div>
+                            <button onClick={() => setSelectedEvent(evt)} style={{ padding: "8px 16px", background: "#111", color: "white", border: "1px solid #333", borderRadius: 8, cursor: "pointer", fontWeight: "bold", fontSize: 12, transition: "0.2s" }}
+                              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#00ffff"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#333"; }}>Tickets</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ margin: "32px 0 24px", height: 1, background: "#1a1a1a" }} />
+
+                  {/* #6 Live section on home */}
+                  <div id="home-live">
+                    <h2 className="section-heading" style={{ marginBottom: 16 }}>2MRRW LIVE</h2>
+                    <div style={{ background: "linear-gradient(135deg, #080808, #0d0d0d)", border: "1px solid rgba(0,255,255,0.1)", borderRadius: 20, padding: "32px", textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 8 }}>NEXT LIVE STREAM</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>2MRRW LIVE – Dallas</div>
+                      <div style={{ fontSize: 13, color: "#aaa", marginBottom: 24 }}>{liveStreamDate} · {liveStreamTime}</div>
+                      {liveIsLive ? (
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, fontSize: 22, fontWeight: 900, color: "#00ffff" }}>
+                          <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#00ffff", boxShadow: "0 0 10px rgba(0,255,255,0.9)", animation: "pulse 1.2s infinite" }} />
+                          LIVE NOW
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", justifyContent: "center", gap: 14, flexWrap: "wrap" }}>
+                          {[{ value: liveCountdown.days, label: "Days" }, { value: liveCountdown.hours, label: "Hours" }, { value: liveCountdown.minutes, label: "Min" }, { value: liveCountdown.seconds, label: "Sec" }].map((unit) => (
+                            <div key={unit.label} style={{ background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 14, padding: "16px 20px", minWidth: 68, textAlign: "center" }}>
+                              <div style={{ fontSize: 32, fontWeight: 900, color: "#00ffff", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{String(unit.value).padStart(2, "0")}</div>
+                              <div style={{ fontSize: 10, color: "#444", letterSpacing: 2, marginTop: 5, textTransform: "uppercase" }}>{unit.label}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ height: 40 }} />
                 </>
               )}
 
@@ -695,7 +1046,7 @@ export default function Page() {
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 20, marginTop: 28 }}>
                     {exclusiveItems.map((item) => (
                       <div key={item.id}
-                        style={{ background: "#0d0d0d", border: `1px solid #1e1e1e`, borderRadius: 20, overflow: "hidden", cursor: "pointer", transition: "all 0.3s ease" }}
+                        style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 20, overflow: "hidden", cursor: "pointer", transition: "all 0.3s ease" }}
                         onMouseEnter={(e) => { e.currentTarget.style.borderColor = item.badgeColor + "55"; e.currentTarget.style.boxShadow = `0 0 28px ${item.badgeColor}18`; e.currentTarget.style.transform = "translateY(-3px)"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1e1e1e"; e.currentTarget.style.boxShadow = "none"; e.currentTarget.style.transform = "none"; }}
                         onClick={() => setExclusiveModal(item)}>
@@ -755,9 +1106,11 @@ export default function Page() {
                 </>
               )}
 
-              {/* SHOWS */}
+              {/* #4 SHOWS & EVENTS — uses events[] array, separate from live */}
               {activeTab === "shows" && (
                 <>
+                  <h2 className="section-heading" style={{ marginBottom: 20 }}>Shows & Events</h2>
+                  {/* Calendar */}
                   <div style={{ background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 20, padding: 24, marginBottom: 30 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
                       <button onClick={prevMonth} style={{ background: "none", border: "1px solid #333", color: "white", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 16 }}>‹</button>
@@ -777,24 +1130,24 @@ export default function Page() {
                           <div key={day} onClick={() => dayShows.length > 0 && setSelectedEvent(dayShows[0])}
                             style={{ minHeight: 44, borderRadius: 8, background: dayShows.length > 0 ? "rgba(0,255,255,0.08)" : "transparent", border: isToday ? "1px solid #00ffff" : dayShows.length > 0 ? "1px solid rgba(0,255,255,0.3)" : "1px solid #1a1a1a", cursor: dayShows.length > 0 ? "pointer" : "default", padding: 6, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, transition: "0.2s" }}>
                             <span style={{ fontSize: 12, color: isToday ? "#00ffff" : "#aaa" }}>{day}</span>
-                            {dayShows.map((s) => <span key={s.id} style={{ fontSize: 9, background: "#00ffff", color: "#000", borderRadius: 4, padding: "1px 4px", fontWeight: 700 }}>SHOW</span>)}
+                            {dayShows.map((s) => <span key={s.id} style={{ fontSize: 9, background: "#00ffff", color: "#000", borderRadius: 4, padding: "1px 4px", fontWeight: 700 }}>EVENT</span>)}
                           </div>
                         );
                       })}
                     </div>
                   </div>
-                  <h2 style={{ letterSpacing: 3, fontSize: 14, color: "#555", marginBottom: 16, textTransform: "uppercase" }}>Upcoming Shows</h2>
+                  <h2 style={{ letterSpacing: 3, fontSize: 14, color: "#555", marginBottom: 16, textTransform: "uppercase" }}>Upcoming Events</h2>
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    {shows.map((show) => (
-                      <div key={show.id} style={{ background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                    {events.map((evt) => (
+                      <div key={evt.id} style={{ background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 14, padding: "18px 20px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
                         <div>
-                          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{show.title}</div>
-                          <div style={{ fontSize: 12, color: "#aaa" }}>{show.venue}</div>
-                          <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{new Date(show.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })} · {show.time}</div>
+                          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>{evt.name}</div>
+                          <div style={{ fontSize: 12, color: "#aaa" }}>{evt.location}</div>
+                          <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{new Date(evt.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })} · {evt.time}</div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                          <div style={{ fontSize: 18, fontWeight: 900, color: "#00ffff" }}>${show.price.toFixed(2)}</div>
-                          <button onClick={() => setSelectedEvent(show)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{ padding: "10px 20px", background: "#111", color: "white", border: "1px solid #333", borderRadius: 8, cursor: "pointer", fontWeight: "bold", fontSize: 13, transition: "0.25s" }}>Get Tickets</button>
+                          <div style={{ fontSize: 18, fontWeight: 900, color: "#00ffff" }}>${evt.price.toFixed(2)}</div>
+                          <button onClick={() => setSelectedEvent(evt)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{ padding: "10px 20px", background: "#111", color: "white", border: "1px solid #333", borderRadius: 8, cursor: "pointer", fontWeight: "bold", fontSize: 13, transition: "0.25s" }}>Get Tickets</button>
                         </div>
                       </div>
                     ))}
@@ -802,51 +1155,49 @@ export default function Page() {
                 </>
               )}
 
-              {/* LIVE */}
+              {/* #3 LIVE TAB — live stream system only, no venue/show wording */}
               {activeTab === "live" && (
                 <>
-                  <h2 className="section-heading">Live</h2>
-                  <div style={{ background: "linear-gradient(135deg, #080808, #0d0d0d)", border: "1px solid #1a1a1a", borderRadius: 20, padding: "36px 32px", marginBottom: 28, textAlign: "center" }}>
-                    <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 6, textTransform: "uppercase" }}>Next Show</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>2MRRW Live – Dallas</div>
-                    <div style={{ fontSize: 13, color: "#aaa", marginBottom: 28 }}>House of Blues Dallas · May 10, 2026 · 8:00 PM</div>
-                    <div style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
-                      {[{ value: liveCountdown.days, label: "Days" }, { value: liveCountdown.hours, label: "Hours" }, { value: liveCountdown.minutes, label: "Min" }, { value: liveCountdown.seconds, label: "Sec" }].map((unit) => (
-                        <div key={unit.label} style={{ background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 14, padding: "18px 22px", minWidth: 74, textAlign: "center" }}>
-                          <div style={{ fontSize: 36, fontWeight: 900, color: "#00ffff", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{String(unit.value).padStart(2, "0")}</div>
-                          <div style={{ fontSize: 10, color: "#444", letterSpacing: 2, marginTop: 6, textTransform: "uppercase" }}>{unit.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <button onClick={() => setSelectedEvent(shows[0])} style={{ marginTop: 28, padding: "12px 32px", background: "#00ffff", color: "#000", fontWeight: 900, border: "none", borderRadius: 10, cursor: "pointer", fontSize: 14, letterSpacing: 1 }}>Get Tickets – $25.00</button>
+                  <h2 className="section-heading">2MRRW LIVE</h2>
+
+                  {/* Live stream countdown panel */}
+                  <div style={{ background: "linear-gradient(135deg, #080808, #0d0d0d)", border: "1px solid rgba(0,255,255,0.12)", borderRadius: 20, padding: "36px 32px", marginBottom: 28, textAlign: "center" }}>
+                    <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 6, textTransform: "uppercase" }}>Next Live Stream</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>2MRRW LIVE – Dallas</div>
+                    {/* #3 Only date and time — no venue/location */}
+                    <div style={{ fontSize: 13, color: "#aaa", marginBottom: 28 }}>{liveStreamDate} · {liveStreamTime}</div>
+
+                    {liveIsLive ? (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 20 }}>
+                        <div style={{ width: 12, height: 12, borderRadius: "50%", background: "#00ffff", boxShadow: "0 0 14px rgba(0,255,255,0.9)", animation: "pulse 1.2s infinite" }} />
+                        <div style={{ fontSize: 28, fontWeight: 900, color: "#00ffff", letterSpacing: 4 }}>LIVE NOW</div>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap" }}>
+                        {[{ value: liveCountdown.days, label: "Days" }, { value: liveCountdown.hours, label: "Hours" }, { value: liveCountdown.minutes, label: "Min" }, { value: liveCountdown.seconds, label: "Sec" }].map((unit) => (
+                          <div key={unit.label} style={{ background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 14, padding: "18px 22px", minWidth: 74, textAlign: "center" }}>
+                            <div style={{ fontSize: 36, fontWeight: 900, color: "#00ffff", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>{String(unit.value).padStart(2, "0")}</div>
+                            <div style={{ fontSize: 10, color: "#444", letterSpacing: 2, marginTop: 6, textTransform: "uppercase" }}>{unit.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
+
+                  {/* Stream embed placeholder */}
                   <div style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 20, overflow: "hidden", marginBottom: 28 }}>
                     <div style={{ position: "relative", paddingBottom: "56.25%", background: "#050505" }}>
                       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
                         <div style={{ width: 70, height: 70, borderRadius: "50%", border: "1px solid #222", display: "flex", alignItems: "center", justifyContent: "center" }}>
                           <svg viewBox="0 0 24 24" fill="#333" width="32" height="32"><circle cx="12" cy="12" r="4" /><path d="M20.188 10.934a8.999 8.999 0 0 0-16.376 0M23.472 9.16a13.5 13.5 0 0 0-22.944 0M16.905 12.7a4.5 4.5 0 0 0-9.81 0M12 17v-1m0 5v-2" stroke="#333" strokeWidth="1.5" fill="none" /></svg>
                         </div>
-                        <div style={{ fontSize: 14, color: "#333", fontWeight: 700, letterSpacing: 2 }}>OFFLINE</div>
-                        <div style={{ fontSize: 12, color: "#2a2a2a" }}>Next livestream announced via Circle + socials</div>
+                        <div style={{ fontSize: 14, color: "#333", fontWeight: 700, letterSpacing: 2 }}>{liveIsLive ? "STREAM STARTING…" : "OFFLINE"}</div>
+                        <div style={{ fontSize: 12, color: "#2a2a2a" }}>Live stream announced via Circle + socials</div>
                       </div>
                     </div>
                     <div style={{ padding: "16px 20px", borderTop: "1px solid #111" }}>
-                      <div style={{ fontSize: 13, color: "#444" }}>Livestreams go live here and on Twitch. Follow to get notified.</div>
+                      <div style={{ fontSize: 13, color: "#444" }}>Live streams broadcast here and on Twitch. Follow to get notified.</div>
                     </div>
-                  </div>
-                  <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 16, textTransform: "uppercase" }}>Full Tour Schedule</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                    {shows.map((show) => (
-                      <div key={show.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", background: "#0a0a0a", border: "1px solid #1a1a1a", borderRadius: 12, gap: 12, flexWrap: "wrap", transition: "0.2s" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#333"; }} onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1a1a1a"; }}>
-                        <div>
-                          <div style={{ fontSize: 14, fontWeight: 700 }}>{show.title}</div>
-                          <div style={{ fontSize: 12, color: "#555", marginTop: 2 }}>{show.venue} · {new Date(show.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
-                        </div>
-                        <button onClick={() => setSelectedEvent(show)} style={{ padding: "8px 16px", background: "transparent", color: "#00ffff", border: "1px solid #00ffff33", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, transition: "0.2s" }}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,255,255,0.08)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>Tickets</button>
-                      </div>
-                    ))}
                   </div>
                 </>
               )}
@@ -989,25 +1340,22 @@ export default function Page() {
                 </>
               )}
 
-              {/* ── INNER CIRCLE — NEW: gated access screen ─────────────────── */}
+              {/* INNER CIRCLE */}
               {activeTab === "innercircle" && (
                 <>
                   {userStatus?.label !== "INNER CIRCLE" ? (
-                    /* Gate screen */
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", padding: "60px 20px" }}>
                       <div style={{ fontSize: 56, lineHeight: 1, marginBottom: 24, filter: "drop-shadow(0 0 24px rgba(162,89,255,0.5))", animation: "pulse 3s infinite" }}>🔒</div>
                       <div style={{ fontSize: 11, color: "#a259ff", letterSpacing: 4, marginBottom: 12, fontWeight: 700 }}>RESTRICTED ACCESS</div>
                       <div style={{ fontSize: 24, fontWeight: 900, letterSpacing: 1, marginBottom: 14 }}>Inner Circle Access Required</div>
-                      <div style={{ fontSize: 14, color: "#555", maxWidth: 400, lineHeight: 1.9, marginBottom: 36 }}>
-                        This section is reserved for verified Inner Circle members — those who own a piece of the music and are active in the conversation.
-                      </div>
+                      <div style={{ fontSize: 14, color: "#555", maxWidth: 400, lineHeight: 1.9, marginBottom: 36 }}>This section is reserved for verified Inner Circle members — those who own a piece of the music and are active in the conversation.</div>
                       <div style={{ width: "100%", maxWidth: 460, display: "flex", flexDirection: "column", gap: 12, marginBottom: 32 }}>
                         <div style={{ fontSize: 11, color: "#a259ff", letterSpacing: 3, marginBottom: 4, fontWeight: 700 }}>HOW TO UNLOCK</div>
                         {[
                           { label: "Own a Collector Card or Bundle", done: myPurchases.some(p => p.slug?.startsWith("exc-card") || p.slug?.startsWith("exc-bundle")), link: "exclusive", linkLabel: "Shop Exclusives →" },
                           { label: "Submit to The Circle", done: circleSubmissions.filter(s => s.by === currentUser?.name).length >= 1, link: "circle", linkLabel: "Go to Circle →" },
                         ].map((step, i) => (
-                          <div key={i} style={{ padding: "16px 20px", background: step.done ? "rgba(162,89,255,0.06)" : "#0d0d0d", border: `1px solid ${step.done ? "rgba(162,89,255,0.3)" : "#1e1e1e"}`, borderRadius: 14, display: "flex", alignItems: "center", gap: 14, textAlign: "left", transition: "0.2s" }}>
+                          <div key={i} style={{ padding: "16px 20px", background: step.done ? "rgba(162,89,255,0.06)" : "#0d0d0d", border: `1px solid ${step.done ? "rgba(162,89,255,0.3)" : "#1e1e1e"}`, borderRadius: 14, display: "flex", alignItems: "center", gap: 14, textAlign: "left" }}>
                             <div style={{ width: 28, height: 28, borderRadius: "50%", background: step.done ? "rgba(162,89,255,0.2)" : "#111", border: `1px solid ${step.done ? "#a259ff" : "#222"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: step.done ? "#a259ff" : "#333", flexShrink: 0 }}>{step.done ? "✓" : i + 1}</div>
                             <div style={{ flex: 1, fontSize: 13, color: step.done ? "#a259ff" : "#666", fontWeight: step.done ? 700 : 400 }}>{step.label}</div>
                             {!step.done && (<button onClick={() => switchTab(step.link)} style={{ padding: "6px 14px", background: "rgba(162,89,255,0.1)", border: "1px solid rgba(162,89,255,0.25)", borderRadius: 8, color: "#a259ff", cursor: "pointer", fontSize: 11, fontWeight: 700, whiteSpace: "nowrap" }}>{step.linkLabel}</button>)}
@@ -1017,7 +1365,6 @@ export default function Page() {
                       {userStatus && (<div style={{ fontSize: 12, color: "#444" }}>Current status: <span style={{ color: userStatus.color, fontWeight: 700 }}>{userStatus.label}</span></div>)}
                     </div>
                   ) : (
-                    /* Full Inner Circle content (unchanged) */
                     <>
                       {innerCirclePost ? (
                         <div>
@@ -1033,12 +1380,12 @@ export default function Page() {
                             <h2 className="section-heading" style={{ margin: 0 }}>Inner Circle</h2>
                             {userStatus && (<div style={{ fontSize: 10, fontWeight: 900, letterSpacing: 2, padding: "3px 10px", borderRadius: 20, background: "rgba(162,89,255,0.12)", color: "#a259ff", border: "1px solid rgba(162,89,255,0.3)" }}>{userStatus.label}</div>)}
                           </div>
-                          <p style={{ fontSize: 13, color: "#444", marginBottom: 32, letterSpacing: 0.5, lineHeight: 1.8 }}>Exclusive posts for believers. This is where the real conversation lives. Behind the music, behind the decisions, behind the art.</p>
+                          <p style={{ fontSize: 13, color: "#444", marginBottom: 32, letterSpacing: 0.5, lineHeight: 1.8 }}>Exclusive posts for believers. This is where the real conversation lives.</p>
                           <div style={{ background: "linear-gradient(135deg, #0d0814, #0d0d0d)", border: "1px solid rgba(162,89,255,0.2)", borderRadius: 20, padding: "28px 30px", marginBottom: 28, position: "relative", overflow: "hidden" }}>
                             <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse at top left, rgba(162,89,255,0.06) 0%, transparent 60%)", pointerEvents: "none" }} />
                             <div style={{ fontSize: 11, color: "#a259ff", letterSpacing: 3, marginBottom: 8, textTransform: "uppercase" }}>Direct from 2MRRW</div>
                             <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>The stories behind the music.</div>
-                            <div style={{ fontSize: 13, color: "#555", lineHeight: 1.8 }}>Not for everyone. Written for the people who actually listen. Every post is unfiltered — what actually happened, what it actually means.</div>
+                            <div style={{ fontSize: 13, color: "#555", lineHeight: 1.8 }}>Not for everyone. Written for the people who actually listen.</div>
                           </div>
                           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                             {innerCirclePosts.map((post, i) => (
@@ -1076,7 +1423,7 @@ export default function Page() {
                     <div style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 20, padding: "48px 32px", textAlign: "center" }}>
                       <div style={{ fontSize: 32, marginBottom: 16 }}>🎵</div>
                       <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Your library is empty</div>
-                      <div style={{ fontSize: 13, color: "#555", marginBottom: 24 }}>Purchase singles, albums, or exclusive bundles. They'll appear here for download anytime.</div>
+                      <div style={{ fontSize: 13, color: "#555", marginBottom: 24 }}>Purchase singles, albums, or exclusive bundles.</div>
                       <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
                         <button onClick={() => switchTab("singles")} style={{ padding: "10px 22px", background: "#111", color: "#00ffff", border: "1px solid #00ffff44", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Browse Singles</button>
                         <button onClick={() => switchTab("albums")} style={{ padding: "10px 22px", background: "#111", color: "#aaa", border: "1px solid #333", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>Browse Albums</button>
@@ -1094,14 +1441,10 @@ export default function Page() {
                               <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 3 }}>{item.title}</div>
                               <div style={{ fontSize: 11, color: "#555" }}>Purchased {item.purchasedAt ? new Date(item.purchasedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}</div>
                             </div>
-                            <button onClick={() => alert("Download links are generated server-side with signed, expiring URLs. Connect your /api/generate-download-link endpoint to enable this.")}
-                              style={{ padding: "8px 16px", background: "transparent", color: "#00ffff", border: "1px solid #00ffff33", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, transition: "0.2s" }}
-                              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(0,255,255,0.08)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>↓ Download</button>
+                            <button onClick={() => alert("Download links are generated server-side with signed, expiring URLs.")}
+                              style={{ padding: "8px 16px", background: "transparent", color: "#00ffff", border: "1px solid #00ffff33", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>↓ Download</button>
                           </div>
                         ))}
-                      </div>
-                      <div style={{ marginTop: 24, padding: "14px 18px", background: "#080808", border: "1px solid #1a1a1a", borderRadius: 12, fontSize: 12, color: "#444", lineHeight: 1.8 }}>
-                        Download links are secure and generated on-demand. Connect <code style={{ color: "#00ffff" }}>/api/generate-download-link</code> to your backend to enable signed expiring URLs.
                       </div>
                     </>
                   )}
@@ -1155,16 +1498,15 @@ export default function Page() {
                         ))}
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                        {authMode === "signup" && (<input placeholder="Full Name" style={{ padding: "12px 14px", background: "#111", border: "1px solid #2a2a2a", color: "white", borderRadius: 10, fontSize: 14, outline: "none" }} onFocus={(e) => { e.target.style.borderColor = "#00ffff44"; }} onBlur={(e) => { e.target.style.borderColor = "#2a2a2a"; }} />)}
-                        <input placeholder="Email Address" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} style={{ padding: "12px 14px", background: "#111", border: "1px solid #2a2a2a", color: "white", borderRadius: 10, fontSize: 14, outline: "none" }} onFocus={(e) => { e.target.style.borderColor = "#00ffff44"; }} onBlur={(e) => { e.target.style.borderColor = "#2a2a2a"; }} />
-                        <input placeholder="Password" type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} style={{ padding: "12px 14px", background: "#111", border: "1px solid #2a2a2a", color: "white", borderRadius: 10, fontSize: 14, outline: "none" }} onFocus={(e) => { e.target.style.borderColor = "#00ffff44"; }} onBlur={(e) => { e.target.style.borderColor = "#2a2a2a"; }} />
+                        {authMode === "signup" && (<input placeholder="Full Name" style={{ padding: "12px 14px", background: "#111", border: "1px solid #2a2a2a", color: "white", borderRadius: 10, fontSize: 14, outline: "none" }} />)}
+                        <input placeholder="Email Address" value={authEmail} onChange={(e) => setAuthEmail(e.target.value)} style={{ padding: "12px 14px", background: "#111", border: "1px solid #2a2a2a", color: "white", borderRadius: 10, fontSize: 14, outline: "none" }} />
+                        <input placeholder="Password" type="password" value={authPassword} onChange={(e) => setAuthPassword(e.target.value)} style={{ padding: "12px 14px", background: "#111", border: "1px solid #2a2a2a", color: "white", borderRadius: 10, fontSize: 14, outline: "none" }} />
                         {authError && <div style={{ fontSize: 12, color: "#ff4d4d" }}>{authError}</div>}
-                        <button onClick={() => { if (!authEmail.trim() || !authPassword.trim()) { setAuthError("Please fill out all fields."); return; } setAuthError("Connect /api/auth to enable full login. For now the site uses the entry gate for fan capture."); }}
+                        <button onClick={() => { if (!authEmail.trim() || !authPassword.trim()) { setAuthError("Please fill out all fields."); return; } setAuthError("Connect /api/auth to enable full login."); }}
                           style={{ padding: "13px 0", background: "#00ffff", color: "#000", fontWeight: 900, border: "none", borderRadius: 10, cursor: "pointer", fontSize: 14, letterSpacing: 1, marginTop: 4 }}>
                           {authMode === "login" ? "Sign In" : "Create Account"}
                         </button>
                       </div>
-                      <div style={{ marginTop: 20, fontSize: 12, color: "#444", lineHeight: 1.9 }}>Fan capture is handled by the site entry gate. Full auth requires connecting <code style={{ color: "#00ffff" }}>/api/auth</code> with session management.</div>
                     </div>
                   )}
                 </>
@@ -1173,7 +1515,7 @@ export default function Page() {
             </div>{/* end tabKey fade wrapper */}
           </div>{/* end main scroll */}
 
-          {/* ── NEW: NOW PLAYING MINI-PLAYER ────────────────────────────────── */}
+          {/* ── NOW PLAYING MINI-PLAYER ──────────────────────────────────────── */}
           {nowPlaying && (
             <div style={{ flexShrink: 0, borderTop: "1px solid #141414", background: "rgba(4,4,4,0.95)", backdropFilter: "blur(20px)", padding: "10px 20px", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 -4px 30px rgba(0,0,0,0.5)" }}>
               <img src={nowPlaying.cover} style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
@@ -1216,6 +1558,7 @@ export default function Page() {
           <div style={{ marginTop: 20, fontSize: 13, fontWeight: 700 }}>Total: <span style={{ color: "#00ffff" }}>${total.toFixed(2)}</span></div>
           <button onClick={clearCart} style={{ marginTop: 15, width: "100%", padding: 12, background: "rgba(255,30,30,0.15)", color: "#ff4d4d", fontWeight: "bold", border: "1px solid #ff4d4d33", borderRadius: 8, cursor: "pointer", fontSize: 12, transition: "0.2s" }}
             onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,30,30,0.25)"; }} onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,30,30,0.15)"; }}>CLEAR CART</button>
+          {/* #7 Checkout — Apple Pay + Stripe Link enabled via PaymentElement (Stripe handles wallet detection automatically) */}
           <button onClick={handleCheckout} disabled={checkingOut || cart.length === 0} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut}
             style={{ marginTop: 10, width: "100%", padding: 12, background: "#111", color: "white", border: "1px solid #333", borderRadius: 8, cursor: "pointer", transition: "0.25s", fontSize: 13, fontWeight: 700 }}>
             {checkingOut ? "Redirecting…" : "Checkout"}
@@ -1223,7 +1566,7 @@ export default function Page() {
           {checkoutError && (
             <div style={{ marginTop: 8 }}>
               <p style={{ color: "#ff4d4d", fontSize: 12 }}>{checkoutError}</p>
-              <p style={{ color: "#555", fontSize: 11, marginTop: 4 }}>If you see "no valid payment method", make sure your /api/create-payment-intent includes <code style={{ color: "#00ffff" }}>payment_method_types: ["card"]</code>.</p>
+              <p style={{ color: "#555", fontSize: 11, marginTop: 4 }}>If you see "no valid payment method", make sure your /api/create-payment-intent includes <code style={{ color: "#00ffff" }}>payment_method_types: ["card", "link", "apple_pay"]</code>.</p>
             </div>
           )}
           {currentUser && (
@@ -1276,6 +1619,28 @@ export default function Page() {
           50% { opacity: 0.7; }
           100% { opacity: 1; }
         }
+        /* #8 2MRRW RADIO keyframes */
+        @keyframes radioFadeIn {
+          from { opacity: 0; transform: scale(1.02); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        /* Equalizer bar animations */
+        @keyframes eqBar1 {
+          from { height: 6px; }
+          to { height: 16px; }
+        }
+        @keyframes eqBar2 {
+          from { height: 10px; }
+          to { height: 18px; }
+        }
+        @keyframes eqBar3 {
+          from { height: 14px; }
+          to { height: 8px; }
+        }
+        @keyframes eqBar4 {
+          from { height: 8px; }
+          to { height: 14px; }
+        }
         .section-heading {
           animation: fadeInUp 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
           animation-fill-mode: forwards;
@@ -1286,11 +1651,13 @@ export default function Page() {
         .singles-row::-webkit-scrollbar-thumb:hover { background: #00cccc; }
       `}</style>
 
-      {/* ── STRIPE CHECKOUT MODAL (unchanged) ────────────────────────────── */}
+      {/* ── #7 STRIPE CHECKOUT MODAL — Apple Pay + Stripe Link via PaymentElement ── */}
       {clientSecret && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#0a0a0a", padding: 30, borderRadius: 20, width: 400, border: "1px solid #222" }}>
-            <Elements stripe={stripePromise} options={{ clientSecret }}>
+            <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 16, textTransform: "uppercase" }}>Checkout</div>
+            {/* PaymentElement automatically shows Apple Pay, Stripe Link, and card */}
+            <Elements stripe={stripePromise} options={{ clientSecret, appearance: { theme: "night", variables: { colorPrimary: "#00ffff", colorBackground: "#0a0a0a", colorText: "#ffffff", borderRadius: "8px" } } }}>
               <CheckoutForm onSuccess={handleCheckoutSuccess} />
             </Elements>
             <button onClick={() => { setClientSecret(null); setCheckingOut(false); }} style={{ marginTop: 10, width: "100%", padding: 10, background: "none", border: "1px solid #333", color: "#777", cursor: "pointer", borderRadius: 8 }}>Cancel</button>
@@ -1326,7 +1693,7 @@ function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, button
   );
 }
 
-// ── CHECKOUT FORM (unchanged) ─────────────────────────────────────────────────
+// ── #7 CHECKOUT FORM — PaymentElement handles Apple Pay + Stripe Link ─────────
 function CheckoutForm({ onSuccess }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -1344,7 +1711,8 @@ function CheckoutForm({ onSuccess }) {
 
   return (
     <form onSubmit={handleSubmit}>
-      <PaymentElement />
+      {/* PaymentElement automatically renders Apple Pay, Google Pay, Stripe Link, and card — no extra config needed */}
+      <PaymentElement options={{ layout: "tabs" }} />
       <button type="submit" disabled={!stripe || loading} style={{ marginTop: 20, width: "100%", padding: 12, background: "#00ffff", color: "#000", fontWeight: "bold", border: "none", borderRadius: 8, cursor: "pointer" }}>
         {loading ? "Processing…" : "Pay Now"}
       </button>
