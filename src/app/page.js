@@ -1565,71 +1565,218 @@ export default function Page() {
       </div>
 
      {/* ══ MOBILE UI ═══════════════════════════════════════════════════════════ */}
-{isMobile&&(
+{isMobile && (
   <>
     {/* Floating cart button */}
-    <button onClick={()=>setMobileCartOpen(true)}
-      style={{position:"fixed",bottom:76,right:16,zIndex:6800,width:50,height:50,borderRadius:"50%",background:"#00ffff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(0,255,255,0.45)",flexShrink:0}}>
-      <svg viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" width="20" height="20"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-      {cart.length>0&&(
-        <div style={{position:"absolute",top:-4,right:-4,width:20,height:20,borderRadius:"50%",background:"#ff4d4d",color:"white",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{cart.length}</div>
+    <button
+      onClick={() => setMobileCartOpen(true)}
+      style={{
+        position: "fixed",
+        bottom: 76,
+        right: 16,
+        zIndex: 6800,
+        width: 50,
+        height: 50,
+        borderRadius: "50%",
+        background: "#00ffff",
+        border: "none",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: "0 4px 20px rgba(0,255,255,0.45)",
+        flexShrink: 0
+      }}
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" width="20" height="20">
+        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+        <line x1="3" y1="6" x2="21" y2="6" />
+        <path d="M16 10a4 4 0 01-8 0" />
+      </svg>
+
+      {cart.length > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            top: -4,
+            right: -4,
+            width: 20,
+            height: 20,
+            borderRadius: "50%",
+            background: "#ff4d4d",
+            color: "white",
+            fontSize: 10,
+            fontWeight: 900,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center"
+          }}
+        >
+          {cart.length}
+        </div>
       )}
     </button>
 
     {/* Bottom nav bar */}
-    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:6700,background:"rgba(4,4,4,0.97)",backdropFilter:"blur(20px)",borderTop:"1px solid #1a1a1a",display:"flex",alignItems:"center",justifyContent:"space-around",padding:"6px 0 14px",height:62}}>
+    <div
+      style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 6700,
+        background: "rgba(4,4,4,0.97)",
+        backdropFilter: "blur(20px)",
+        borderTop: "1px solid #1a1a1a",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-around",
+        padding: "6px 0 14px",
+        height: 62
+      }}
+    >
       {[
-        {id:"home",    label:"Home",   icon:"⌂"},
-        {id:"singles", label:"Music",  icon:"♫"},
-        {id:"shop",    label:"Shop",   icon:"◎"},
-        {id:"videos",  label:"Videos", icon:"▶"},
-        {id:"shows",   label:"Shows",  icon:"✦"},
-      ].map((tab)=>(
-        <button key={tab.id} onClick={()=>switchTab(tab.id)}
-          style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:activeTab===tab.id?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",borderRadius:8,transition:"color 0.2s",textShadow:activeTab===tab.id?"0 0 10px rgba(0,255,255,0.6)":"none",minWidth:44,minHeight:44,justifyContent:"center"}}>
-          <span style={{fontSize:17,lineHeight:1}}>{tab.icon}</span>
+        { id: "home", label: "Home", icon: "⌂" },
+        { id: "singles", label: "Music", icon: "♫" },
+        { id: "shop", label: "Shop", icon: "◎" },
+        { id: "videos", label: "Videos", icon: "▶" },
+        { id: "shows", label: "Shows", icon: "✦" }
+      ].map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => switchTab(tab.id)}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: 3,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            color: activeTab === tab.id ? "#00ffff" : "#555",
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            padding: "4px 8px",
+            borderRadius: 8,
+            transition: "color 0.2s",
+            textShadow:
+              activeTab === tab.id
+                ? "0 0 10px rgba(0,255,255,0.6)"
+                : "none",
+            minWidth: 44,
+            minHeight: 44,
+            justifyContent: "center"
+          }}
+        >
+          <span style={{ fontSize: 17, lineHeight: 1 }}>{tab.icon}</span>
           <span>{tab.label}</span>
         </button>
       ))}
-      <button onClick={()=>setMobileNavOpen(true)}
-        style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",minWidth:44,minHeight:44,justifyContent:"center"}}>
-        <span style={{fontSize:17,lineHeight:1}}>≡</span>
+
+      <button
+        onClick={() => setMobileNavOpen(true)}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 3,
+          background: "none",
+          border: "none",
+          cursor: "pointer",
+          color: "#555",
+          fontSize: 9,
+          fontWeight: 700,
+          letterSpacing: 0.5,
+          padding: "4px 8px",
+          minWidth: 44,
+          minHeight: 44,
+          justifyContent: "center"
+        }}
+      >
+        <span style={{ fontSize: 17, lineHeight: 1 }}>≡</span>
         <span>More</span>
       </button>
     </div>
 
-    {/* Mobile nav drawer (More) */}
-    {mobileNavOpen&&(
-      <div onClick={()=>setMobileNavOpen(false)}
-        style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
-        <div onClick={(e)=>e.stopPropagation()}
-          style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:32,border:"1px solid #1e1e1e",maxHeight:"80vh",overflowY:"auto"}}>
-          <div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 16px"}}/>
+    {/* Mobile nav drawer */}
+    {mobileNavOpen && (
+      <div
+        onClick={() => setMobileNavOpen(false)}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.75)",
+          zIndex: 8100,
+          display: "flex",
+          alignItems: "flex-end"
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: "100%",
+            background: "#0a0a0a",
+            borderRadius: "20px 20px 0 0",
+            paddingBottom: 32,
+            border: "1px solid #1e1e1e",
+            maxHeight: "80vh",
+            overflowY: "auto"
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 4,
+              borderRadius: 2,
+              background: "#333",
+              margin: "14px auto 16px"
+            }}
+          />
 
-          {currentUser&&userStatus&&(
-            <div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}>
-              <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>
-                {currentUser.name[0].toUpperCase()}
-              </div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:13,fontWeight:700,color:"white"}}>{currentUser.name}</div>
-                <div style={{fontSize:9,color:userStatus.color,fontWeight:700,letterSpacing:1}}>{userStatus.label}</div>
-              </div>
-            </div>
-          )}
-
-          {sidebarNav.map((group)=>(
+          {sidebarNav.map((group) => (
             <div key={group.groupId}>
-              <button onClick={()=>switchTab(group.directTab)}
-                style={{width:"100%",padding:"13px 24px",background:"none",border:"none",color:activeTab===group.directTab||group.subTabs.some(st=>st.id===activeTab)?"#00ffff":"#ccc",fontSize:13,fontWeight:700,letterSpacing:2,textAlign:"left",cursor:"pointer",textTransform:"uppercase",transition:"color 0.2s"}}>
+              <button
+                onClick={() => switchTab(group.directTab)}
+                style={{
+                  width: "100%",
+                  padding: "13px 24px",
+                  background: "none",
+                  border: "none",
+                  color:
+                    activeTab === group.directTab ||
+                    group.subTabs.some((st) => st.id === activeTab)
+                      ? "#00ffff"
+                      : "#ccc",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  letterSpacing: 2,
+                  textAlign: "left",
+                  cursor: "pointer",
+                  textTransform: "uppercase"
+                }}
+              >
                 {group.label}
               </button>
 
-              {group.subTabs.length>0&&(
-                <div style={{paddingLeft:16,paddingBottom:4}}>
-                  {group.subTabs.map((st)=>(
-                    <button key={st.id} onClick={()=>switchTab(st.id)}
-                      style={{width:"100%",padding:"9px 24px",background:"none",border:"none",color:activeTab===st.id?"#00ffff":"#666",fontSize:12,textAlign:"left",cursor:"pointer",letterSpacing:1,transition:"color 0.2s"}}>
+              {group.subTabs.length > 0 && (
+                <div style={{ paddingLeft: 16, paddingBottom: 4 }}>
+                  {group.subTabs.map((st) => (
+                    <button
+                      key={st.id}
+                      onClick={() => switchTab(st.id)}
+                      style={{
+                        width: "100%",
+                        padding: "9px 24px",
+                        background: "none",
+                        border: "none",
+                        color:
+                          activeTab === st.id ? "#00ffff" : "#666",
+                        fontSize: 12,
+                        textAlign: "left",
+                        cursor: "pointer"
+                      }}
+                    >
                       {st.label}
                     </button>
                   ))}
@@ -1637,66 +1784,63 @@ export default function Page() {
               )}
             </div>
           ))}
-
-          <div style={{padding:"14px 24px",borderTop:"1px solid #111",marginTop:4,display:"flex",flexDirection:"column",gap:10}}>
-            <button onClick={()=>switchTab("account")}
-              style={{width:"100%",padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1}}>
-              My Account
-            </button>
-
-            <button onClick={()=>setSoundOn(!soundOn)}
-              style={{width:"100%",padding:"11px 0",background:"transparent",color:soundOn?"#00ffff":"#666",fontWeight:700,border:"1px solid #2a2a2a",borderRadius:10,cursor:"pointer",fontSize:13,letterSpacing:1}}>
-              {soundOn?"♫ Sound On":"♫ Sound Off"}
-            </button>
-          </div>
         </div>
       </div>
     )}
 
     {/* Mobile cart drawer */}
-    {mobileCartOpen&&(
-      <div onClick={()=>setMobileCartOpen(false)}
-        style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
-        <div onClick={(e)=>e.stopPropagation()}
-          style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",padding:"0 0 32px",border:"1px solid #1e1e1e",maxHeight:"82vh",overflowY:"auto"}}>
-          <div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 0"}}/>
+    {mobileCartOpen && (
+      <div
+        onClick={() => setMobileCartOpen(false)}
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.75)",
+          zIndex: 8100,
+          display: "flex",
+          alignItems: "flex-end"
+        }}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            width: "100%",
+            background: "#0a0a0a",
+            borderRadius: "20px 20px 0 0",
+            padding: "0 0 32px",
+            border: "1px solid #1e1e1e",
+            maxHeight: "82vh",
+            overflowY: "auto"
+          }}
+        >
+          <div
+            style={{
+              width: 36,
+              height: 4,
+              borderRadius: 2,
+              background: "#333",
+              margin: "14px auto 0"
+            }}
+          />
 
-          <div style={{padding:"16px 20px 0"}}>
-            <h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>
-              Cart {cart.length>0&&`(${cart.length})`}
+          <div style={{ padding: "16px 20px 0" }}>
+            <h3
+              style={{
+                fontSize: 12,
+                letterSpacing: 3,
+                color: "#555",
+                marginBottom: 16,
+                textTransform: "uppercase"
+              }}
+            >
+              Cart {cart.length > 0 && `(${cart.length})`}
             </h3>
           </div>
-
-          {cart.length===0&&<p style={{opacity:0.4,fontSize:13,padding:"0 20px 20px"}}>Your cart is empty.</p>}
-
-          <div style={{padding:"0 20px"}}>
-            {cart.map((item,i)=>(
-              <div key={i} style={{marginBottom:10,display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
-                {item.cover&&<img src={item.cover} style={{width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}
-                <span style={{fontSize:13,flex:1,lineHeight:1.4}}>{item.title}<br/><span style={{color:"#00ffff",fontSize:12}}>${item.price.toFixed(2)}</span></span>
-                <button onClick={()=>removeFromCart(i)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button>
-              </div>
-            ))}
-          </div>
-
-          {cart.length>0&&(
-            <div style={{padding:"16px 20px 0",display:"flex",flexDirection:"column",gap:10}}>
-              <div style={{fontSize:15,fontWeight:700,color:"white"}}>
-                Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span>
-              </div>
-
-              <button onClick={handleCheckout} disabled={checkingOut}
-                style={{width:"100%",padding:"14px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:15}}>
-                {checkingOut?"Redirecting…":"Checkout"}
-              </button>
-
-              <button onClick={()=>{clearCart();setMobileCartOpen(false);}}
-                style={{width:"100%",padding:"12px 0",background:"transparent",color:"#ff4d4d",border:"1px solid #ff4d4d33",borderRadius:10,cursor:"pointer",fontSize:13}}>
-                Clear Cart
-              </button>
-            </div>
-          )}
-
+        </div>
+      </div>
+    )}
+  </>
+)}
           {checkoutError&&<p style={{color:"#ff4d4d",fontSize:12,padding:"10px 20px 0"}}>{checkoutError}</p>}
 
           <div style={{padding:"12px 20px 0"}}>
