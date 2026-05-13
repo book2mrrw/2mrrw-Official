@@ -1790,56 +1790,60 @@ export default function Page() {
 
     {/* Mobile cart drawer */}
     {mobileCartOpen && (
-      <div
-        onClick={() => setMobileCartOpen(false)}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.75)",
-          zIndex: 8100,
-          display: "flex",
-          alignItems: "flex-end"
-        }}
-      >
-        <div
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            width: "100%",
-            background: "#0a0a0a",
-            borderRadius: "20px 20px 0 0",
-            padding: "0 0 32px",
-            border: "1px solid #1e1e1e",
-            maxHeight: "82vh",
-            overflowY: "auto"
-          }}
-        >
-          <div
-            style={{
-              width: 36,
-              height: 4,
-              borderRadius: 2,
-              background: "#333",
-              margin: "14px auto 0"
-            }}
-          />
+  <div
+    onClick={() => setMobileCartOpen(false)}
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.75)",
+      zIndex: 8100,
+      display: "flex",
+      alignItems: "flex-end"
+    }}
+  >
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        width: "100%",
+        background: "#0a0a0a",
+        borderRadius: "20px 20px 0 0",
+        padding: "0 0 32px",
+        border: "1px solid #1e1e1e",
+        maxHeight: "82vh",
+        overflowY: "auto"
+      }}
+    >
+      <div
+        style={{
+          width: 36,
+          height: 4,
+          borderRadius: 2,
+          background: "#333",
+          margin: "14px auto 0"
+        }}
+      />
 
-          <div style={{ padding: "16px 20px 0" }}>
-            <h3
-              style={{
-                fontSize: 12,
-                letterSpacing: 3,
-                color: "#555",
-                marginBottom: 16,
-                textTransform: "uppercase"
-              }}
-            >
-              Cart {cart.length > 0 && `(${cart.length})`}
-            </h3>
-          </div>
-        </div>
-      </div>
-    )}
-  </>
+      <div style={{ padding: "16px 20px 0" }}>
+        <h3
+          style={{
+            fontSize: 12,
+            letterSpacing: 3,
+            color: "#555",
+            marginBottom: 16,
+            textTransform: "uppercase"
+          }}
+        >
+          Cart {cart.length > 0 && `(${cart.length})`}
+        </h3>
+
+        {cart.length === 0 && (
+          <p style={{ opacity: 0.4, fontSize: 13 }}>
+            Your cart is empty.
+          </p>
+        )}
+      </div>
+    </div>
+  </div>
 )}
           {checkoutError&&<p style={{color:"#ff4d4d",fontSize:12,padding:"10px 20px 0"}}>{checkoutError}</p>}
 
