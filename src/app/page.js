@@ -1823,25 +1823,13 @@ export default function Page() {
         }}
       />
 
-      <div style={{ padding: "16px 20px 0" }}>
-        <h3
-          style={{
-            fontSize: 12,
-            letterSpacing: 3,
-            color: "#555",
-            marginBottom: 16,
-            textTransform: "uppercase"
-          }}
-        >
-          Cart {cart.length > 0 && `(${cart.length})`}
-        </h3>
-
-        {cart.length === 0 && (
-          <p style={{ opacity: 0.4, fontSize: 13 }}>
-            Your cart is empty.
-          </p>
-        )}
+      <div>
+        {/* KEEP YOUR CONTENT HERE (cart items, buttons, etc.) */}
       </div>
+
+      <button>
+        Close
+      </button>
     </div>
   </div>
 )}
