@@ -1023,28 +1023,7 @@ export default function Page() {
                             <div style={{fontSize:isMobile?16:20,fontWeight:900,color:item.badgeColor}}>${item.price.toFixed(2)}</div>
                             {!isMobile&&<button onClick={(e)=>{e.stopPropagation();setExclusiveModal(item);}} style={{padding:"8px 16px",background:"transparent",color:item.badgeColor,border:`1px solid ${item.badgeColor}66`,borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,transition:"0.2s"}} onMouseEnter={(e)=>{e.currentTarget.style.background=item.badgeColor+"22";}} onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";}}>View Drop</button>}
                           </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{marginTop:48,background:"linear-gradient(135deg,#0d0d0d,#111)",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:32}}>
-                    <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:14,textTransform:"uppercase"}}>About Collector Art Cards</div>
-                    <div style={{fontSize:isMobile?18:22,fontWeight:900,letterSpacing:1,marginBottom:16,lineHeight:1.3}}>Not merch. Ownership.</div>
-                    <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(200px,1fr))",gap:isMobile?12:20}}>
-                      {[{icon:"🃏",title:"Physical Card",desc:"350–600gsm thick stock. Matte soft-touch finish."},{icon:"✍️",title:"Hand-Signed",desc:"Personal message from 2MRRW. Individually signed and numbered."},{icon:"📱",title:"QR + NFC",desc:"Scan to access your music. Select cards include NFC chip."},{icon:"🔒",title:"Scarcity Built In",desc:"First Edition, numbered drops. Once gone, gone."}].map((f)=>(
-                        <div key={f.title} style={{padding:isMobile?"14px":"18px 20px",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a"}}>
-                          <div style={{fontSize:22,marginBottom:6}}>{f.icon}</div>
-                          <div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{f.title}</div>
-                          <div style={{fontSize:isMobile?11:12,color:"#555",lineHeight:1.6}}>{f.desc}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* VIDEOS */}
-{/* VIDEOS */}
+            {/* VIDEOS */}
 {activeTab==="videos"&&(
   <>
     <h2 className="section-heading">Music Videos</h2>
@@ -1124,6 +1103,27 @@ export default function Page() {
     </div>
   </>
 )}
+            </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{marginTop:48,background:"linear-gradient(135deg,#0d0d0d,#111)",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:32}}>
+                    <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:14,textTransform:"uppercase"}}>About Collector Art Cards</div>
+                    <div style={{fontSize:isMobile?18:22,fontWeight:900,letterSpacing:1,marginBottom:16,lineHeight:1.3}}>Not merch. Ownership.</div>
+                    <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(200px,1fr))",gap:isMobile?12:20}}>
+                      {[{icon:"🃏",title:"Physical Card",desc:"350–600gsm thick stock. Matte soft-touch finish."},{icon:"✍️",title:"Hand-Signed",desc:"Personal message from 2MRRW. Individually signed and numbered."},{icon:"📱",title:"QR + NFC",desc:"Scan to access your music. Select cards include NFC chip."},{icon:"🔒",title:"Scarcity Built In",desc:"First Edition, numbered drops. Once gone, gone."}].map((f)=>(
+                        <div key={f.title} style={{padding:isMobile?"14px":"18px 20px",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a"}}>
+                          <div style={{fontSize:22,marginBottom:6}}>{f.icon}</div>
+                          <div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{f.title}</div>
+                          <div style={{fontSize:isMobile?11:12,color:"#555",lineHeight:1.6}}>{f.desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* VIDEOS */}
 
               {/* SHOWS */}
               {activeTab==="shows"&&(
@@ -1564,213 +1564,209 @@ export default function Page() {
         )}
       </div>
 
-      {/* ══ MOBILE UI ═══════════════════════════════════════════════════════════ */}
-      {isMobile&&(
-        <>
-          {/* Floating cart button */}
-          <button onClick={()=>setMobileCartOpen(true)}
-            style={{position:"fixed",bottom:76,right:16,zIndex:6800,width:50,height:50,borderRadius:"50%",background:"#00ffff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(0,255,255,0.45)",flexShrink:0}}>
-            <svg viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" width="20" height="20"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-            {cart.length>0&&(
-              <div style={{position:"absolute",top:-4,right:-4,width:20,height:20,borderRadius:"50%",background:"#ff4d4d",color:"white",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{cart.length}</div>
-            )}
-          </button>
+     {/* ══ MOBILE UI ═══════════════════════════════════════════════════════════ */}
+{isMobile&&(
+  <>
+    {/* Floating cart button */}
+    <button onClick={()=>setMobileCartOpen(true)}
+      style={{position:"fixed",bottom:76,right:16,zIndex:6800,width:50,height:50,borderRadius:"50%",background:"#00ffff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(0,255,255,0.45)",flexShrink:0}}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" width="20" height="20"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+      {cart.length>0&&(
+        <div style={{position:"absolute",top:-4,right:-4,width:20,height:20,borderRadius:"50%",background:"#ff4d4d",color:"white",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{cart.length}</div>
+      )}
+    </button>
 
-          {/* Bottom nav bar */}
-          <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:6700,background:"rgba(4,4,4,0.97)",backdropFilter:"blur(20px)",borderTop:"1px solid #1a1a1a",display:"flex",alignItems:"center",justifyContent:"space-around",padding:"6px 0 14px",height:62}}>
-            {[
-              {id:"home",    label:"Home",   icon:"⌂"},
-              {id:"singles", label:"Music",  icon:"♫"},
-              {id:"shop",    label:"Shop",   icon:"◎"},
-              {id:"videos",  label:"Videos", icon:"▶"},
-              {id:"shows",   label:"Shows",  icon:"✦"},
-            ].map((tab)=>(
-              <button key={tab.id} onClick={()=>switchTab(tab.id)}
-                style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:activeTab===tab.id?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",borderRadius:8,transition:"color 0.2s",textShadow:activeTab===tab.id?"0 0 10px rgba(0,255,255,0.6)":"none",minWidth:44,minHeight:44,justifyContent:"center"}}>
-                <span style={{fontSize:17,lineHeight:1}}>{tab.icon}</span>
-                <span>{tab.label}</span>
-              </button>
-            ))}
-            <button onClick={()=>setMobileNavOpen(true)}
-              style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",minWidth:44,minHeight:44,justifyContent:"center"}}>
-              <span style={{fontSize:17,lineHeight:1}}>≡</span>
-              <span>More</span>
-            </button>
-          </div>
+    {/* Bottom nav bar */}
+    <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:6700,background:"rgba(4,4,4,0.97)",backdropFilter:"blur(20px)",borderTop:"1px solid #1a1a1a",display:"flex",alignItems:"center",justifyContent:"space-around",padding:"6px 0 14px",height:62}}>
+      {[
+        {id:"home",    label:"Home",   icon:"⌂"},
+        {id:"singles", label:"Music",  icon:"♫"},
+        {id:"shop",    label:"Shop",   icon:"◎"},
+        {id:"videos",  label:"Videos", icon:"▶"},
+        {id:"shows",   label:"Shows",  icon:"✦"},
+      ].map((tab)=>(
+        <button key={tab.id} onClick={()=>switchTab(tab.id)}
+          style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:activeTab===tab.id?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",borderRadius:8,transition:"color 0.2s",textShadow:activeTab===tab.id?"0 0 10px rgba(0,255,255,0.6)":"none",minWidth:44,minHeight:44,justifyContent:"center"}}>
+          <span style={{fontSize:17,lineHeight:1}}>{tab.icon}</span>
+          <span>{tab.label}</span>
+        </button>
+      ))}
+      <button onClick={()=>setMobileNavOpen(true)}
+        style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",minWidth:44,minHeight:44,justifyContent:"center"}}>
+        <span style={{fontSize:17,lineHeight:1}}>≡</span>
+        <span>More</span>
+      </button>
+    </div>
 
-          {/* Mobile nav drawer (More) */}
-          {mobileNavOpen&&(
-            <div onClick={()=>setMobileNavOpen(false)}
-              style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
-              <div onClick={(e)=>e.stopPropagation()}
-                style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:32,border:"1px solid #1e1e1e",maxHeight:"80vh",overflowY:"auto"}}>
-                <div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 16px"}}/>
-                {/* User badge */}
-                {currentUser&&userStatus&&(
-                  <div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>{currentUser.name[0].toUpperCase()}</div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:13,fontWeight:700,color:"white"}}>{currentUser.name}</div>
-                      <div style={{fontSize:9,color:userStatus.color,fontWeight:700,letterSpacing:1}}>{userStatus.label}</div>
-                    </div>
-                  </div>
-                )}
-                {sidebarNav.map((group)=>(
-                  <div key={group.groupId}>
-                    <button onClick={()=>switchTab(group.directTab)}
-                      style={{width:"100%",padding:"13px 24px",background:"none",border:"none",color:activeTab===group.directTab||group.subTabs.some(st=>st.id===activeTab)?"#00ffff":"#ccc",fontSize:13,fontWeight:700,letterSpacing:2,textAlign:"left",cursor:"pointer",textTransform:"uppercase",transition:"color 0.2s"}}>
-                      {group.label}
-                    </button>
-                    {group.subTabs.length>0&&(
-                      <div style={{paddingLeft:16,paddingBottom:4}}>
-                        {group.subTabs.map((st)=>(
-                          <button key={st.id} onClick={()=>switchTab(st.id)}
-                            style={{width:"100%",padding:"9px 24px",background:"none",border:"none",color:activeTab===st.id?"#00ffff":"#666",fontSize:12,textAlign:"left",cursor:"pointer",letterSpacing:1,transition:"color 0.2s"}}>
-                            {st.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                <div style={{padding:"14px 24px",borderTop:"1px solid #111",marginTop:4,display:"flex",flexDirection:"column",gap:10}}>
-                  <button onClick={()=>switchTab("account")}
-                    style={{width:"100%",padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1}}>
-                    My Account
-                  </button>
-                  <button onClick={()=>setSoundOn(!soundOn)}
-                    style={{width:"100%",padding:"11px 0",background:"transparent",color:soundOn?"#00ffff":"#666",fontWeight:700,border:"1px solid #2a2a2a",borderRadius:10,cursor:"pointer",fontSize:13,letterSpacing:1}}>
-                    {soundOn?"♫ Sound On":"♫ Sound Off"}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+    {/* Mobile nav drawer (More) */}
+    {mobileNavOpen&&(
+      <div onClick={()=>setMobileNavOpen(false)}
+        style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
+        <div onClick={(e)=>e.stopPropagation()}
+          style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:32,border:"1px solid #1e1e1e",maxHeight:"80vh",overflowY:"auto"}}>
+          <div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 16px"}}/>
 
-          {/* Mobile cart drawer */}
-          {mobileCartOpen&&(
-            <div onClick={()=>setMobileCartOpen(false)}
-              style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
-              <div onClick={(e)=>e.stopPropagation()}
-                style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",padding:"0 0 32px",border:"1px solid #1e1e1e",maxHeight:"82vh",overflowY:"auto"}}>
-                <div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 0"}}/>
-                <div style={{padding:"16px 20px 0"}}>
-                  <h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Cart {cart.length>0&&`(${cart.length})`}</h3>
-                </div>
-                {cart.length===0&&<p style={{opacity:0.4,fontSize:13,padding:"0 20px 20px"}}>Your cart is empty.</p>}
-                <div style={{padding:"0 20px"}}>
-                  {cart.map((item,i)=>(
-                    <div key={i} style={{marginBottom:10,display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
-                      {item.cover&&<img src={item.cover} style={{width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}
-                      <span style={{fontSize:13,flex:1,lineHeight:1.4}}>{item.title}<br/><span style={{color:"#00ffff",fontSize:12}}>${item.price.toFixed(2)}</span></span>
-                      <button onClick={()=>removeFromCart(i)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button>
-                    </div>
-                  ))}
-                </div>
-                {cart.length>0&&(
-                  <div style={{padding:"16px 20px 0",display:"flex",flexDirection:"column",gap:10}}>
-                    <div style={{fontSize:15,fontWeight:700,color:"white"}}>Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span></div>
-                    <button onClick={handleCheckout} disabled={checkingOut}
-                      style={{width:"100%",padding:"14px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:15}}>
-                      {checkingOut?"Redirecting…":"Checkout"}
-                    </button>
-                    <button onClick={()=>{clearCart();setMobileCartOpen(false);}}
-                      style={{width:"100%",padding:"12px 0",background:"transparent",color:"#ff4d4d",border:"1px solid #ff4d4d33",borderRadius:10,cursor:"pointer",fontSize:13}}>
-                      Clear Cart
-                    </button>
-                  </div>
-                )}
-                {checkoutError&&<p style={{color:"#ff4d4d",fontSize:12,padding:"10px 20px 0"}}>{checkoutError}</p>}
-                <div style={{padding:"12px 20px 0"}}>
-                  <button onClick={()=>setMobileCartOpen(false)}
-                    style={{width:"100%",padding:"12px 0",background:"none",border:"1px solid #1e1e1e",color:"#555",cursor:"pointer",fontSize:13,borderRadius:10}}>
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+          {currentUser&&userStatus&&(
+            <div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>
+                {currentUser.name[0].toUpperCase()}
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:700,color:"white"}}>{currentUser.name}</div>
+                <div style={{fontSize:9,color:userStatus.color,fontWeight:700,letterSpacing:1}}>{userStatus.label}</div>
+              </div>
+            </div>
+          )}
 
-      {/* CSS KEYFRAMES */}
-      <style jsx>{`
-        /* FIX #1 — lock html/body against horizontal drift on mobile.
-           Internal scroll rows (singles-row etc.) are unaffected because
-           they set overflowX:auto on their own elements. */
-        html, body {
-          max-width: 100vw;
-          overflow-x: hidden;
-        }
-        *, *::before, *::after {
-          box-sizing: border-box;
-        }
-        @keyframes pulse        { 0%{transform:scale(1);opacity:1}    50%{transform:scale(1.05);opacity:0.85} 100%{transform:scale(1);opacity:1} }
-        @keyframes fadeInUp     { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes fadeOut      { from{opacity:1} to{opacity:0} }
-        @keyframes fadeInCover  { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:scale(1)} }
-        @keyframes fadeInTab    { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes expandDown   { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes slideInRight { from{opacity:0;transform:translateX(60px)} to{opacity:1;transform:translateX(0)} }
-        @keyframes slideInLeft  { from{opacity:0;transform:translateX(-60px)} to{opacity:1;transform:translateX(0)} }
-        @keyframes countPulse   { 0%{opacity:1} 50%{opacity:0.7} 100%{opacity:1} }
-        @keyframes flowIdlePulse{ 0%{opacity:0.4} 50%{opacity:0.9} 100%{opacity:0.4} }
-        @keyframes flowIdleDot  { 0%{opacity:0.15;transform:scale(0.8)} 50%{opacity:0.7;transform:scale(1.2)} 100%{opacity:0.15;transform:scale(0.8)} }
-        @keyframes eqBar1 { from{height:6px}  to{height:16px} }
-        @keyframes eqBar2 { from{height:10px} to{height:18px} }
-        @keyframes eqBar3 { from{height:14px} to{height:8px}  }
-        @keyframes eqBar4 { from{height:8px}  to{height:14px} }
-        .section-heading { animation:fadeInUp 0.9s cubic-bezier(0.22,1,0.36,1) both; animation-fill-mode:forwards; }
-        .singles-row::-webkit-scrollbar       { height:4px; }
-        .singles-row::-webkit-scrollbar-track { background:#111; border-radius:4px; }
-        .singles-row::-webkit-scrollbar-thumb { background:#00ffff; border-radius:4px; }
-        .singles-row::-webkit-scrollbar-thumb:hover { background:#00cccc; }
-      `}</style>
+          {sidebarNav.map((group)=>(
+            <div key={group.groupId}>
+              <button onClick={()=>switchTab(group.directTab)}
+                style={{width:"100%",padding:"13px 24px",background:"none",border:"none",color:activeTab===group.directTab||group.subTabs.some(st=>st.id===activeTab)?"#00ffff":"#ccc",fontSize:13,fontWeight:700,letterSpacing:2,textAlign:"left",cursor:"pointer",textTransform:"uppercase",transition:"color 0.2s"}}>
+                {group.label}
+              </button>
 
-      {/* STRIPE MODAL */}
-      {clientSecret&&(
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
-          <div style={{background:"#0a0a0a",padding:isMobile?20:30,borderRadius:20,width:isMobile?"100%":400,maxWidth:isMobile?"calc(100vw - 32px)":"none",border:"1px solid #222"}}>
-            <div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Checkout</div>
-            <Elements stripe={stripePromise} options={{clientSecret,appearance:{theme:"night",variables:{colorPrimary:"#00ffff",colorBackground:"#0a0a0a",colorText:"#ffffff",borderRadius:"8px"}}}}>
-              <CheckoutForm onSuccess={handleCheckoutSuccess}/>
-            </Elements>
-            <button onClick={()=>{setClientSecret(null);setCheckingOut(false);}} style={{marginTop:10,width:"100%",padding:10,background:"none",border:"1px solid #333",color:"#777",cursor:"pointer",borderRadius:8}}>Cancel</button>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
+              {group.subTabs.length>0&&(
+                <div style={{paddingLeft:16,paddingBottom:4}}>
+                  {group.subTabs.map((st)=>(
+                    <button key={st.id} onClick={()=>switchTab(st.id)}
+                      style={{width:"100%",padding:"9px 24px",background:"none",border:"none",color:activeTab===st.id?"#00ffff":"#666",fontSize:12,textAlign:"left",cursor:"pointer",letterSpacing:1,transition:"color 0.2s"}}>
+                      {st.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
 
-// ── GRID — mobile-aware ───────────────────────────────────────────────────────
-function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onSingleClick, isMobile }) {
-  return (
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(260px,1fr))",gap:isMobile?12:22}}>
-      {items.map((item)=>(
-        <div key={item.slug}
-          style={{position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}}
-          onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#2a2a2a";}}
-          onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1a1a1a";}}>
-          <img src={item.cover}
-            onClick={()=>onSingleClick?onSingleClick(item):null}
-            onMouseEnter={hoverIn}
-            onMouseLeave={hoverOut}
-            style={{width:"100%",aspectRatio:"1/1",height:"auto",cursor:"pointer",transition:"transform 0.3s ease,filter 0.3s ease,box-shadow 0.3s ease",objectFit:"cover",display:"block"}}/>
-          <div style={{padding:isMobile?"10px 10px 14px":"14px 16px 18px"}}>
-            <div style={{fontSize:isMobile?12:14,fontWeight:700,marginBottom:4,lineHeight:1.3}}>{item.title}</div>
-            {item.date&&<div style={{fontSize:isMobile?9:11,color:"#444",marginBottom:6,letterSpacing:1}}>{item.date}</div>}
-            <div style={{fontSize:isMobile?12:13,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${item.price.toFixed(2)}</div>
-            <button onClick={()=>addToCart(item)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut}
-              style={{width:"100%",padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600}}>
-              Add to Cart
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
+          <div style={{padding:"14px 24px",borderTop:"1px solid #111",marginTop:4,display:"flex",flexDirection:"column",gap:10}}>
+            <button onClick={()=>switchTab("account")}
+              style={{width:"100%",padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1}}>
+              My Account
+            </button>
+
+            <button onClick={()=>setSoundOn(!soundOn)}
+              style={{width:"100%",padding:"11px 0",background:"transparent",color:soundOn?"#00ffff":"#666",fontWeight:700,border:"1px solid #2a2a2a",borderRadius:10,cursor:"pointer",fontSize:13,letterSpacing:1}}>
+              {soundOn?"♫ Sound On":"♫ Sound Off"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Mobile cart drawer */}
+    {mobileCartOpen&&(
+      <div onClick={()=>setMobileCartOpen(false)}
+        style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
+        <div onClick={(e)=>e.stopPropagation()}
+          style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",padding:"0 0 32px",border:"1px solid #1e1e1e",maxHeight:"82vh",overflowY:"auto"}}>
+          <div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 0"}}/>
+
+          <div style={{padding:"16px 20px 0"}}>
+            <h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>
+              Cart {cart.length>0&&`(${cart.length})`}
+            </h3>
+          </div>
+
+          {cart.length===0&&<p style={{opacity:0.4,fontSize:13,padding:"0 20px 20px"}}>Your cart is empty.</p>}
+
+          <div style={{padding:"0 20px"}}>
+            {cart.map((item,i)=>(
+              <div key={i} style={{marginBottom:10,display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
+                {item.cover&&<img src={item.cover} style={{width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}
+                <span style={{fontSize:13,flex:1,lineHeight:1.4}}>{item.title}<br/><span style={{color:"#00ffff",fontSize:12}}>${item.price.toFixed(2)}</span></span>
+                <button onClick={()=>removeFromCart(i)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button>
+              </div>
+            ))}
+          </div>
+
+          {cart.length>0&&(
+            <div style={{padding:"16px 20px 0",display:"flex",flexDirection:"column",gap:10}}>
+              <div style={{fontSize:15,fontWeight:700,color:"white"}}>
+                Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span>
+              </div>
+
+              <button onClick={handleCheckout} disabled={checkingOut}
+                style={{width:"100%",padding:"14px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:15}}>
+                {checkingOut?"Redirecting…":"Checkout"}
+              </button>
+
+              <button onClick={()=>{clearCart();setMobileCartOpen(false);}}
+                style={{width:"100%",padding:"12px 0",background:"transparent",color:"#ff4d4d",border:"1px solid #ff4d4d33",borderRadius:10,cursor:"pointer",fontSize:13}}>
+                Clear Cart
+              </button>
+            </div>
+          )}
+
+          {checkoutError&&<p style={{color:"#ff4d4d",fontSize:12,padding:"10px 20px 0"}}>{checkoutError}</p>}
+
+          <div style={{padding:"12px 20px 0"}}>
+            <button onClick={()=>setMobileCartOpen(false)}
+              style={{width:"100%",padding:"12px 0",background:"none",border:"1px solid #1e1e1e",color:"#555",cursor:"pointer",fontSize:13,borderRadius:10}}>
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
+)}
+
+{/* CSS KEYFRAMES */}
+<style jsx>{`
+  /* FIX — safe mobile overflow (prevents scroll breakage) */
+  html, body {
+    width: 100%;
+    overflow-x: hidden;
+  }
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
+
+  /* CRITICAL MOBILE ROW FIX (Singles + Albums) */
+  @media (max-width: 768px) {
+    .singles-row,
+    .albums-row {
+      display: flex !important;
+      flex-wrap: nowrap !important;
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      gap: 12px;
+      padding-bottom: 10px;
+    }
+
+    .singles-row > *,
+    .albums-row > * {
+      flex: 0 0 auto !important;
+    }
+  }
+
+  @keyframes pulse { 0%{transform:scale(1);opacity:1} 50%{transform:scale(1.05);opacity:0.85} 100%{transform:scale(1);opacity:1} }
+  @keyframes fadeInUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeOut { from{opacity:1} to{opacity:0} }
+  @keyframes fadeInCover { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:scale(1)} }
+  @keyframes fadeInTab { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes expandDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes slideInRight { from{opacity:0;transform:translateX(60px)} to{opacity:1;transform:translateX(0)} }
+  @keyframes slideInLeft { from{opacity:0;transform:translateX(-60px)} to{opacity:1;transform:translateX(0)} }
+  @keyframes countPulse { 0%{opacity:1} 50%{opacity:0.7} 100%{opacity:1} }
+  @keyframes flowIdlePulse { 0%{opacity:0.4} 50%{opacity:0.9} 100%{opacity:0.4} }
+  @keyframes flowIdleDot { 0%{opacity:0.15;transform:scale(0.8)} 50%{opacity:0.7;transform:scale(1.2)} 100%{opacity:0.15;transform:scale(0.8)} }
+  @keyframes eqBar1 { from{height:6px} to{height:16px} }
+  @keyframes eqBar2 { from{height:10px} to{height:18px} }
+  @keyframes eqBar3 { from{height:14px} to{height:8px} }
+  @keyframes eqBar4 { from{height:8px} to{height:14px} }
+
+  .section-heading {
+    animation: fadeInUp 0.9s cubic-bezier(0.22,1,0.36,1) both;
+    animation-fill-mode: forwards;
+  }
+
+  .singles-row::-webkit-scrollbar { height:4px; }
+  .singles-row::-webkit-scrollbar-track { background:#111; border-radius:4px; }
+  .singles-row::-webkit-scrollbar-thumb { background:#00ffff; border-radius:4px; }
+  .singles-row::-webkit-scrollbar-thumb:hover { background:#00cccc; }
+`}</style>
 
 // ── CHECKOUT FORM ─────────────────────────────────────────────────────────────
 function CheckoutForm({ onSuccess }) {
