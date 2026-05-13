@@ -16,9 +16,24 @@ const SOCIALS = [
 
 // ── MUSIC VIDEOS ──────────────────────────────────────────────────────────────
 const musicVideos = [
-  { id: "mv-1", title: "A2B",        youtubeId: "YOUR_YOUTUBE_ID_HERE", description: "Official Music Video" },
-  { id: "mv-2", title: "Hour Glass", youtubeId: "YOUR_YOUTUBE_ID_HERE", description: "Official Music Video" },
-  { id: "mv-3", title: "W.2.D",      youtubeId: "YOUR_YOUTUBE_ID_HERE", description: "Official Music Video" },
+  {
+    id: "mv-2",
+    title: "Hour Glass",
+    youtubeId: "tv_aS-hJ880",
+    description: "Official Music Video"
+  },
+  {
+    id: "mv-1",
+    title: "A2B",
+    youtubeId: "kPITYHMVeXM",
+    description: "Official Music Video"
+  },
+  {
+    id: "mv-3",
+    title: "W.2.D",
+    youtubeId: "jsrA1SL3_GU",
+    description: "Official Music Video"
+  }
 ];
 
 // ── EXCLUSIVE ITEMS ───────────────────────────────────────────────────────────
@@ -67,6 +82,7 @@ export default function Page() {
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
   const [activeTab, setActiveTab]                 = useState("home");
+  const [activeVideo, setActiveVideo] = useState(null);
   const [addedFlash, setAddedFlash]               = useState(null);
   const [soundOn, setSoundOn]                     = useState(false);
   const [selectedSingle, setSelectedSingle]       = useState(null);
@@ -1028,25 +1044,187 @@ export default function Page() {
               )}
 
               {/* VIDEOS */}
-              {activeTab==="videos"&&(
-                <>
-                  <h2 className="section-heading">Music Videos</h2>
-                  <p style={{fontSize:13,color:"#444",marginBottom:28,letterSpacing:1}}>Official visuals from 2MRRW</p>
-                  <div style={{display:"flex",flexDirection:"column",gap:32}}>
-                    {musicVideos.map((vid)=>(
-                      <div key={vid.id} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden"}}>
-                        <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
-                          <iframe src={`https://www.youtube.com/embed/${vid.youtubeId}`} title={vid.title} frameBorder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowFullScreen style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",borderRadius:"20px 20px 0 0"}}/>
-                        </div>
-                        <div style={{padding:"16px 20px"}}>
-                          <div style={{fontSize:17,fontWeight:800,letterSpacing:1,marginBottom:4}}>{vid.title}</div>
-                          <div style={{fontSize:12,color:"#555"}}>{vid.description}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
+{activeTab==="videos"&&(
+
+  <>
+
+    <h2 className="section-heading">Music Videos</h2>
+
+    <p style={{fontSize:13,color:"#444",marginBottom:28,letterSpacing:1}}>
+
+      Click any video to watch in full screen
+
+    </p>
+
+    <div style={{display:"flex",flexDirection:"column",gap:32}}>
+
+      {musicVideos.map((vid)=>(
+
+        <div
+
+          key={vid.id}
+
+          style={{
+
+            background:"#0e0e0e",
+
+            border:"1px solid #1e1e1e",
+
+            borderRadius:20,
+
+            overflow:"hidden",
+
+            cursor:"pointer"
+
+          }}
+
+          onClick={() => setActiveVideo(vid.youtubeId)}
+
+        >
+
+          {/* thumbnail instead of loading iframe */}
+
+          <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
+
+            <img
+
+              src={`https://img.youtube.com/vi/${vid.youtubeId}/hqdefault.jpg`}
+
+              alt={vid.title}
+
+              style={{
+
+                position:"absolute",
+
+                top:0,
+
+                left:0,
+
+                width:"100%",
+
+                height:"100%",
+
+                objectFit:"cover"
+
+              }}
+
+            />
+
+          </div>
+
+          <div style={{padding:"16px 20px"}}>
+
+            <div style={{
+
+              fontSize:17,
+
+              fontWeight:800,
+
+              letterSpacing:1,
+
+              marginBottom:4
+
+            }}>
+
+              {vid.title}
+
+            </div>
+
+            <div style={{fontSize:12,color:"#555"}}>
+
+              {vid.description}
+
+            </div>
+
+          </div>
+
+        </div>
+
+      ))}
+
+    </div>
+
+  </>
+
+)}
+
+{/* 🔥 MODAL PLAYER (INSERTED PROPERLY HERE) */}
+
+{activeVideo && (
+
+  <div
+
+    onClick={() => setActiveVideo(null)}
+
+    style={{
+
+      position: "fixed",
+
+      top: 0,
+
+      left: 0,
+
+      width: "100vw",
+
+      height: "100vh",
+
+      background: "rgba(0,0,0,0.9)",
+
+      display: "flex",
+
+      alignItems: "center",
+
+      justifyContent: "center",
+
+      zIndex: 9999
+
+    }}
+
+  >
+
+    <div
+
+      onClick={(e) => e.stopPropagation()}
+
+      style={{
+
+        width: "90%",
+
+        maxWidth: 900,
+
+        aspectRatio: "16/9",
+
+        background: "#000",
+
+        borderRadius: 16,
+
+        overflow: "hidden"
+
+      }}
+
+    >
+
+      <iframe
+
+        src={`https://www.youtube.com/embed/${activeVideo}?autoplay=1&mute=1&rel=0`}
+
+        title="Video Player"
+
+        frameBorder="0"
+
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+
+        allowFullScreen
+
+        style={{ width: "100%", height: "100%" }}
+
+      />
+
+    </div>
+
+  </div>
+
+)}
 
               {/* SHOWS */}
               {activeTab==="shows"&&(
