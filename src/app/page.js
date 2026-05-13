@@ -112,7 +112,7 @@ export default function Page() {
   const [flowConversionActive, setFlowConversionActive] = useState(false);
 
   // ── MOBILE STATE ──────────────────────────────────────────────────────────
-  const [isMobile, setIsMobile]           = useState(false);
+  const [isMobile, setIsMobile]             = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen]   = useState(false);
 
@@ -266,11 +266,22 @@ export default function Page() {
   const buttonHoverIn  = (e) => { e.currentTarget.style.boxShadow="0 0 14px rgba(0,255,255,0.8)"; e.currentTarget.style.borderColor="#00ffff"; };
   const buttonHoverOut = (e) => { e.currentTarget.style.boxShadow="none"; e.currentTarget.style.borderColor="#333"; };
 
+  // ── FIX #2 — AUTOPLAY ON CLICK ────────────────────────────────────────────
+  // Play is triggered directly inside the user-gesture context (before setState
+  // flushes) so browsers allow it without requiring a second tap.
+  // The existing nowPlaying useEffect still handles the now-playing bar sync.
   const openSingleModal = (single) => {
     if (nowPlayingAudioRef.current) nowPlayingAudioRef.current.pause();
     setNowPlayingPlaying(false);
     setSelectedSingle(single);
     setNowPlaying(single);
+    // Autoplay: set src and call play() here while still inside the gesture event
+    if (nowPlayingAudioRef.current) {
+      nowPlayingAudioRef.current.src = single.preview;
+      nowPlayingAudioRef.current.play()
+        .then(() => { setNowPlayingPlaying(true); })
+        .catch(() => { setNowPlayingPlaying(false); });
+    }
   };
 
   const handleGateSubmit = async () => {
@@ -708,7 +719,10 @@ export default function Page() {
       )}
 
       {/* ══════════════════════ MAIN LAYOUT ═══════════════════════════════════ */}
-      <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
+      {/* FIX #1 — maxWidth + overflowX prevent the entire page from drifting
+          horizontally on mobile. Internal scroll rows are unaffected because
+          they use overflowX:"auto" on their own containers. */}
+      <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
 
         {/* LEFT SIDEBAR — desktop only */}
         {!isMobile&&(
@@ -756,8 +770,8 @@ export default function Page() {
         )}
 
         {/* MAIN AREA */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-          <div style={{flex:1,overflowY:"auto",padding:isMobile?"16px 14px 100px":30,WebkitOverflowScrolling:"touch"}}>
+        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
+          <div style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:isMobile?"16px 14px 100px":30,WebkitOverflowScrolling:"touch"}}>
 
             {/* HERO */}
             <div style={{position:"relative",height:isMobile?200:380,marginBottom:0,borderRadius:isMobile?14:20,overflow:"hidden",background:"black"}}>
@@ -1604,6 +1618,16 @@ export default function Page() {
 
       {/* CSS KEYFRAMES */}
       <style jsx>{`
+        /* FIX #1 — lock html/body against horizontal drift on mobile.
+           Internal scroll rows (singles-row etc.) are unaffected because
+           they set overflowX:auto on their own elements. */
+        html, body {
+          max-width: 100vw;
+          overflow-x: hidden;
+        }
+        *, *::before, *::after {
+          box-sizing: border-box;
+        }
         @keyframes pulse        { 0%{transform:scale(1);opacity:1}    50%{transform:scale(1.05);opacity:0.85} 100%{transform:scale(1);opacity:1} }
         @keyframes fadeInUp     { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
         @keyframes fadeOut      { from{opacity:1} to{opacity:0} }
