@@ -1564,467 +1564,474 @@ export default function Page() {
         )}
       </div>
 
-     {/* ══ MOBILE UI ═══════════════════════════════════════════════════════════ */}
-{isMobile && (
-  <>
-    {/* Floating cart button */}
-    <button
-      onClick={() => setMobileCartOpen(true)}
-      style={{
-        position: "fixed",
-        bottom: 76,
-        right: 16,
-        zIndex: 6800,
-        width: 50,
-        height: 50,
-        borderRadius: "50%",
-        background: "#00ffff",
-        border: "none",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        boxShadow: "0 4px 20px rgba(0,255,255,0.45)",
-        flexShrink: 0
-      }}
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" width="20" height="20">
-        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-        <line x1="3" y1="6" x2="21" y2="6" />
-        <path d="M16 10a4 4 0 01-8 0" />
-      </svg>
-
-      {cart.length > 0 && (
-        <div
-          style={{
-            position: "absolute",
-            top: -4,
-            right: -4,
-            width: 20,
-            height: 20,
-            borderRadius: "50%",
-            background: "#ff4d4d",
-            color: "white",
-            fontSize: 10,
-            fontWeight: 900,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          {cart.length}
-        </div>
-      )}
-    </button>
-
-    {/* Bottom nav bar */}
-    <div
-      style={{
-        position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
-        zIndex: 6700,
-        background: "rgba(4,4,4,0.97)",
-        backdropFilter: "blur(20px)",
-        borderTop: "1px solid #1a1a1a",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-around",
-        padding: "6px 0 14px",
-        height: 62
-      }}
-    >
-      {[
-        { id: "home", label: "Home", icon: "⌂" },
-        { id: "singles", label: "Music", icon: "♫" },
-        { id: "shop", label: "Shop", icon: "◎" },
-        { id: "videos", label: "Videos", icon: "▶" },
-        { id: "shows", label: "Shows", icon: "✦" }
-      ].map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => switchTab(tab.id)}
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            gap: 3,
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            color: activeTab === tab.id ? "#00ffff" : "#555",
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: 0.5,
-            padding: "4px 8px",
-            borderRadius: 8,
-            transition: "color 0.2s",
-            textShadow:
-              activeTab === tab.id
-                ? "0 0 10px rgba(0,255,255,0.6)"
-                : "none",
-            minWidth: 44,
-            minHeight: 44,
-            justifyContent: "center"
-          }}
-        >
-          <span style={{ fontSize: 17, lineHeight: 1 }}>{tab.icon}</span>
-          <span>{tab.label}</span>
-        </button>
-      ))}
-
-      <button
-        onClick={() => setMobileNavOpen(true)}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          gap: 3,
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          color: "#555",
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: 0.5,
-          padding: "4px 8px",
-          minWidth: 44,
-          minHeight: 44,
-          justifyContent: "center"
-        }}
-      >
-        <span style={{ fontSize: 17, lineHeight: 1 }}>≡</span>
-        <span>More</span>
-      </button>
-    </div>
-
-    {/* Mobile nav drawer */}
-    {mobileNavOpen && (
-      <div
-        onClick={() => setMobileNavOpen(false)}
-        style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.75)",
-          zIndex: 8100,
-          display: "flex",
-          alignItems: "flex-end"
-        }}
-      >
-        <div
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            width: "100%",
-            background: "#0a0a0a",
-            borderRadius: "20px 20px 0 0",
-            paddingBottom: 32,
-            border: "1px solid #1e1e1e",
-            maxHeight: "80vh",
-            overflowY: "auto"
-          }}
-        >
-          <div
-            style={{
-              width: 36,
-              height: 4,
-              borderRadius: 2,
-              background: "#333",
-              margin: "14px auto 16px"
-            }}
-          />
-
-          {sidebarNav.map((group) => (
-            <div key={group.groupId}>
-              <button
-                onClick={() => switchTab(group.directTab)}
-                style={{
-                  width: "100%",
-                  padding: "13px 24px",
-                  background: "none",
-                  border: "none",
-                  color:
-                    activeTab === group.directTab ||
-                    group.subTabs.some((st) => st.id === activeTab)
-                      ? "#00ffff"
-                      : "#ccc",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  letterSpacing: 2,
-                  textAlign: "left",
-                  cursor: "pointer",
-                  textTransform: "uppercase"
-                }}
-              >
-                {group.label}
-              </button>
-
-              {group.subTabs.length > 0 && (
-                <div style={{ paddingLeft: 16, paddingBottom: 4 }}>
-                  {group.subTabs.map((st) => (
-                    <button
-                      key={st.id}
-                      onClick={() => switchTab(st.id)}
-                      style={{
-                        width: "100%",
-                        padding: "9px 24px",
-                        background: "none",
-                        border: "none",
-                        color:
-                          activeTab === st.id ? "#00ffff" : "#666",
-                        fontSize: 12,
-                        textAlign: "left",
-                        cursor: "pointer"
-                      }}
-                    >
-                      {st.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-    )}
-
-    {/* Mobile cart drawer */}
-  {/* Mobile cart drawer */}
-{mobileCartOpen && (
-  <div
-    onClick={() => setMobileCartOpen(false)}
-    style={{
-      position: "fixed",
-      inset: 0,
-      background: "rgba(0,0,0,0.75)",
-      zIndex: 8100,
-      display: "flex",
-      alignItems: "flex-end"
-    }}
-  >
-    <div
-      onClick={(e) => e.stopPropagation()}
-      style={{
-        width: "100%",
-        background: "#0a0a0a",
-        borderRadius: "20px 20px 0 0",
-        padding: "0 0 32px",
-        border: "1px solid #1e1e1e",
-        maxHeight: "82vh",
-        overflowY: "auto"
-      }}
-    >
-      <div
-        style={{
-          width: 36,
-          height: 4,
-          borderRadius: 2,
-          background: "#333",
-          margin: "14px auto 0"
-        }}
-      />
-
-      {/* Cart items */}
-      <div style={{ padding: "16px 20px 0" }}>
-        {cart.length === 0 ? (
-          <p style={{ color: "#555", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
-            Your cart is empty
-          </p>
-        ) : (
-          cart.map((item, i) => (
-            <div
-              key={i}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "12px 0",
-                borderBottom: "1px solid #1a1a1a"
-              }}
-            >
-              {item.image && (
-                <img
-                  src={item.image}
-                  alt={item.name}
-                  style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6 }}
-                />
-              )}
-              <div style={{ flex: 1 }}>
-                <div style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>{item.name}</div>
-                {item.size && (
-                  <div style={{ color: "#555", fontSize: 11, marginTop: 2 }}>Size: {item.size}</div>
-                )}
-              </div>
-              <div style={{ color: "#00ffff", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
-                ${(item.price / 100).toFixed(2)}
-              </div>
-              <button
-                onClick={() => removeFromCart(i)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#555",
-                  fontSize: 18,
-                  cursor: "pointer",
-                  padding: "0 4px",
-                  lineHeight: 1
-                }}
-              >
-                ×
-              </button>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Checkout error */}
-      {checkoutError && (
-        <p style={{ color: "#ff4d4d", fontSize: 12, padding: "10px 20px 0" }}>
-          {checkoutError}
-        </p>
-      )}
-
-      {/* Checkout + Close buttons */}
-      {cart.length > 0 && (
-        <div style={{ padding: "16px 20px 0" }}>
-          <button
-            onClick={handleCheckout}
-            style={{
-              width: "100%",
-              padding: "14px 0",
-              background: "#00ffff",
-              border: "none",
-              color: "#000",
-              fontSize: 13,
-              fontWeight: 900,
-              borderRadius: 10,
-              cursor: "pointer",
-              letterSpacing: 1,
-              marginBottom: 10
-            }}
-          >
-            CHECKOUT
-          </button>
-        </div>
-      )}
-
-      <div style={{ padding: "8px 20px 0" }}>
+{/* ══ MOBILE UI ═══════════════════════════════════════════════════════════ */}
+    {isMobile && (
+      <>
+        {/* Floating cart button */}
         <button
-          onClick={() => setMobileCartOpen(false)}
+          onClick={() => setMobileCartOpen(true)}
           style={{
-            width: "100%",
-            padding: "12px 0",
-            background: "none",
-            border: "1px solid #1e1e1e",
-            color: "#555",
+            position: "fixed",
+            bottom: 76,
+            right: 16,
+            zIndex: 6800,
+            width: 50,
+            height: 50,
+            borderRadius: "50%",
+            background: "#00ffff",
+            border: "none",
             cursor: "pointer",
-            fontSize: 13,
-            borderRadius: 10
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 4px 20px rgba(0,255,255,0.45)",
+            flexShrink: 0
           }}
         >
-          Close
+          <svg viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" width="20" height="20">
+            <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <path d="M16 10a4 4 0 01-8 0" />
+          </svg>
+
+          {cart.length > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                top: -4,
+                right: -4,
+                width: 20,
+                height: 20,
+                borderRadius: "50%",
+                background: "#ff4d4d",
+                color: "white",
+                fontSize: 10,
+                fontWeight: 900,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }}
+            >
+              {cart.length}
+            </div>
+          )}
         </button>
-      </div>
 
-    </div>
-  </div>
-)} 
+        {/* Bottom nav bar */}
+        <div
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            zIndex: 6700,
+            background: "rgba(4,4,4,0.97)",
+            backdropFilter: "blur(20px)",
+            borderTop: "1px solid #1a1a1a",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-around",
+            padding: "6px 0 14px",
+            height: 62
+          }}
+        >
+          {[
+            { id: "home", label: "Home", icon: "⌂" },
+            { id: "singles", label: "Music", icon: "♫" },
+            { id: "shop", label: "Shop", icon: "◎" },
+            { id: "videos", label: "Videos", icon: "▶" },
+            { id: "shows", label: "Shows", icon: "✦" }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => switchTab(tab.id)}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 3,
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: activeTab === tab.id ? "#00ffff" : "#555",
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: 0.5,
+                padding: "4px 8px",
+                borderRadius: 8,
+                transition: "color 0.2s",
+                textShadow: activeTab === tab.id ? "0 0 10px rgba(0,255,255,0.6)" : "none",
+                minWidth: 44,
+                minHeight: 44,
+                justifyContent: "center"
+              }}
+            >
+              <span style={{ fontSize: 17, lineHeight: 1 }}>{tab.icon}</span>
+              <span>{tab.label}</span>
+            </button>
+          ))}
 
+          <button
+            onClick={() => setMobileNavOpen(true)}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 3,
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "#555",
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: 0.5,
+              padding: "4px 8px",
+              minWidth: 44,
+              minHeight: 44,
+              justifyContent: "center"
+            }}
+          >
+            <span style={{ fontSize: 17, lineHeight: 1 }}>≡</span>
+            <span>More</span>
+          </button>
+        </div>
+
+        {/* Mobile nav drawer */}
+        {mobileNavOpen && (
+          <div
+            onClick={() => setMobileNavOpen(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.75)",
+              zIndex: 8100,
+              display: "flex",
+              alignItems: "flex-end"
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                background: "#0a0a0a",
+                borderRadius: "20px 20px 0 0",
+                paddingBottom: 32,
+                border: "1px solid #1e1e1e",
+                maxHeight: "80vh",
+                overflowY: "auto"
+              }}
+            >
+              <div
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: 2,
+                  background: "#333",
+                  margin: "14px auto 16px"
+                }}
+              />
+
+              {sidebarNav.map((group) => (
+                <div key={group.groupId}>
+                  <button
+                    onClick={() => switchTab(group.directTab)}
+                    style={{
+                      width: "100%",
+                      padding: "13px 24px",
+                      background: "none",
+                      border: "none",
+                      color:
+                        activeTab === group.directTab ||
+                        group.subTabs.some((st) => st.id === activeTab)
+                          ? "#00ffff"
+                          : "#ccc",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      letterSpacing: 2,
+                      textAlign: "left",
+                      cursor: "pointer",
+                      textTransform: "uppercase"
+                    }}
+                  >
+                    {group.label}
+                  </button>
+
+                  {group.subTabs.length > 0 && (
+                    <div style={{ paddingLeft: 16, paddingBottom: 4 }}>
+                      {group.subTabs.map((st) => (
+                        <button
+                          key={st.id}
+                          onClick={() => switchTab(st.id)}
+                          style={{
+                            width: "100%",
+                            padding: "9px 24px",
+                            background: "none",
+                            border: "none",
+                            color: activeTab === st.id ? "#00ffff" : "#666",
+                            fontSize: 12,
+                            textAlign: "left",
+                            cursor: "pointer"
+                          }}
+                        >
+                          {st.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Mobile cart drawer */}
+        {mobileCartOpen && (
+          <div
+            onClick={() => setMobileCartOpen(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.75)",
+              zIndex: 8100,
+              display: "flex",
+              alignItems: "flex-end"
+            }}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                width: "100%",
+                background: "#0a0a0a",
+                borderRadius: "20px 20px 0 0",
+                padding: "0 0 32px",
+                border: "1px solid #1e1e1e",
+                maxHeight: "82vh",
+                overflowY: "auto"
+              }}
+            >
+              <div
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: 2,
+                  background: "#333",
+                  margin: "14px auto 0"
+                }}
+              />
+
+              {/* Cart items */}
+              <div style={{ padding: "16px 20px 0" }}>
+                {cart.length === 0 ? (
+                  <p style={{ color: "#555", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
+                    Your cart is empty
+                  </p>
+                ) : (
+                  cart.map((item, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: "12px 0",
+                        borderBottom: "1px solid #1a1a1a"
+                      }}
+                    >
+                      {item.image && (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6 }}
+                        />
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>{item.name}</div>
+                        {item.size && (
+                          <div style={{ color: "#555", fontSize: 11, marginTop: 2 }}>Size: {item.size}</div>
+                        )}
+                      </div>
+                      <div style={{ color: "#00ffff", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
+                        ${(item.price / 100).toFixed(2)}
+                      </div>
+                      <button
+                        onClick={() => removeFromCart(i)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#555",
+                          fontSize: 18,
+                          cursor: "pointer",
+                          padding: "0 4px",
+                          lineHeight: 1
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Checkout error */}
+              {checkoutError && (
+                <p style={{ color: "#ff4d4d", fontSize: 12, padding: "10px 20px 0" }}>
+                  {checkoutError}
+                </p>
+              )}
+
+              {/* Checkout button */}
+              {cart.length > 0 && (
+                <div style={{ padding: "16px 20px 0" }}>
+                  <button
+                    onClick={handleCheckout}
+                    style={{
+                      width: "100%",
+                      padding: "14px 0",
+                      background: "#00ffff",
+                      border: "none",
+                      color: "#000",
+                      fontSize: 13,
+                      fontWeight: 900,
+                      borderRadius: 10,
+                      cursor: "pointer",
+                      letterSpacing: 1,
+                      marginBottom: 10
+                    }}
+                  >
+                    CHECKOUT
+                  </button>
+                </div>
+              )}
+
+              <div style={{ padding: "8px 20px 0" }}>
+                <button
+                  onClick={() => setMobileCartOpen(false)}
+                  style={{
+                    width: "100%",
+                    padding: "12px 0",
+                    background: "none",
+                    border: "1px solid #1e1e1e",
+                    color: "#555",
+                    cursor: "pointer",
+                    fontSize: 13,
+                    borderRadius: 10
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 {/* CSS KEYFRAMES */}
-<style jsx>{`
-  /* Safe mobile overflow — clip prevents page-level horizontal scroll
-     without killing overflow-x:auto on child scroll rails */
-  html, body {
-    width: 100%;
-    overflow-x: clip;
-  }
+        <style jsx>{`
+          html, body {
+            width: 100%;
+            overflow-x: clip;
+          }
 
-  *, *::before, *::after {
-    box-sizing: border-box;
-  }
+          *, *::before, *::after {
+            box-sizing: border-box;
+          }
 
-  /* ── MOBILE HORIZONTAL SCROLL RAILS ─────────────────────────── */
-  @media (max-width: 768px) {
-    .singles-row,
-    .albums-row {
-      display: flex !important;
-      flex-wrap: nowrap !important;
-      overflow-x: auto !important;
-      -webkit-overflow-scrolling: touch !important;
-      scroll-snap-type: x mandatory !important;
-      overscroll-behavior-x: contain !important;
-      gap: 12px !important;
-      padding-bottom: 10px !important;
-      /* Prevent the rail itself from shrinking into the page */
-      width: 100% !important;
-      min-width: 0 !important;
-    }
+          @media (max-width: 768px) {
+            .singles-row,
+            .albums-row {
+              display: flex !important;
+              flex-wrap: nowrap !important;
+              overflow-x: auto !important;
+              -webkit-overflow-scrolling: touch !important;
+              scroll-snap-type: x mandatory !important;
+              overscroll-behavior-x: contain !important;
+              gap: 12px !important;
+              padding-bottom: 10px !important;
+              width: 100% !important;
+              min-width: 0 !important;
+            }
 
-    .singles-row > *,
-    .albums-row > * {
-      flex: 0 0 160px !important;
-      width: 160px !important;
-      min-width: 0 !important;
-      scroll-snap-align: start !important;
-    }
-  }
+            .singles-row > *,
+            .albums-row > * {
+              flex: 0 0 160px !important;
+              width: 160px !important;
+              min-width: 0 !important;
+              scroll-snap-align: start !important;
+            }
+          }
 
-  /* ── SCROLLBAR STYLING ───────────────────────────────────────── */
-  .singles-row::-webkit-scrollbar,
-  .albums-row::-webkit-scrollbar { height: 4px; }
+          .singles-row::-webkit-scrollbar,
+          .albums-row::-webkit-scrollbar { height: 4px; }
 
-  .singles-row::-webkit-scrollbar-track,
-  .albums-row::-webkit-scrollbar-track { background: #111; border-radius: 4px; }
+          .singles-row::-webkit-scrollbar-track,
+          .albums-row::-webkit-scrollbar-track { background: #111; border-radius: 4px; }
 
-  .singles-row::-webkit-scrollbar-thumb,
-  .albums-row::-webkit-scrollbar-thumb { background: #00ffff; border-radius: 4px; }
+          .singles-row::-webkit-scrollbar-thumb,
+          .albums-row::-webkit-scrollbar-thumb { background: #00ffff; border-radius: 4px; }
 
-  .singles-row::-webkit-scrollbar-thumb:hover,
-  .albums-row::-webkit-scrollbar-thumb:hover { background: #00cccc; }
+          .singles-row::-webkit-scrollbar-thumb:hover,
+          .albums-row::-webkit-scrollbar-thumb:hover { background: #00cccc; }
 
-  /* ── KEYFRAMES ───────────────────────────────────────────────── */
-  @keyframes pulse { 0%{transform:scale(1);opacity:1} 50%{transform:scale(1.05);opacity:0.85} 100%{transform:scale(1);opacity:1} }
-  @keyframes fadeInUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes fadeOut { from{opacity:1} to{opacity:0} }
-  @keyframes fadeInCover { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:scale(1)} }
-  @keyframes fadeInTab { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes expandDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes slideInRight { from{opacity:0;transform:translateX(60px)} to{opacity:1;transform:translateX(0)} }
-  @keyframes slideInLeft { from{opacity:0;transform:translateX(-60px)} to{opacity:1;transform:translateX(0)} }
-  @keyframes countPulse { 0%{opacity:1} 50%{opacity:0.7} 100%{opacity:1} }
-  @keyframes flowIdlePulse { 0%{opacity:0.4} 50%{opacity:0.9} 100%{opacity:0.4} }
-  @keyframes flowIdleDot { 0%{opacity:0.15;transform:scale(0.8)} 50%{opacity:0.7;transform:scale(1.2)} 100%{opacity:0.15;transform:scale(0.8)} }
-  @keyframes eqBar1 { from{height:6px} to{height:16px} }
-  @keyframes eqBar2 { from{height:10px} to{height:18px} }
-  @keyframes eqBar3 { from{height:14px} to{height:8px} }
-  @keyframes eqBar4 { from{height:8px} to{height:14px} }
+          @keyframes pulse { 0%{transform:scale(1);opacity:1} 50%{transform:scale(1.05);opacity:0.85} 100%{transform:scale(1);opacity:1} }
+          @keyframes fadeInUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
+          @keyframes fadeOut { from{opacity:1} to{opacity:0} }
+          @keyframes fadeInCover { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:scale(1)} }
+          @keyframes fadeInTab { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+          @keyframes expandDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+          @keyframes slideInRight { from{opacity:0;transform:translateX(60px)} to{opacity:1;transform:translateX(0)} }
+          @keyframes slideInLeft { from{opacity:0;transform:translateX(-60px)} to{opacity:1;transform:translateX(0)} }
+          @keyframes countPulse { 0%{opacity:1} 50%{opacity:0.7} 100%{opacity:1} }
+          @keyframes flowIdlePulse { 0%{opacity:0.4} 50%{opacity:0.9} 100%{opacity:0.4} }
+          @keyframes flowIdleDot { 0%{opacity:0.15;transform:scale(0.8)} 50%{opacity:0.7;transform:scale(1.2)} 100%{opacity:0.15;transform:scale(0.8)} }
+          @keyframes eqBar1 { from{height:6px} to{height:16px} }
+          @keyframes eqBar2 { from{height:10px} to{height:18px} }
+          @keyframes eqBar3 { from{height:14px} to{height:8px} }
+          @keyframes eqBar4 { from{height:8px} to{height:14px} }
 
-  .section-heading {
-    animation: fadeInUp 0.9s cubic-bezier(0.22,1,0.36,1) both;
-    animation-fill-mode: forwards;
-  }
-`}</style>
- ── CHECKOUT FORM ─────────────────────────────────────────────────────────────
+          .section-heading {
+            animation: fadeInUp 0.9s cubic-bezier(0.22,1,0.36,1) both;
+            animation-fill-mode: forwards;
+          }
+        `}</style>
+      </>
+    )}
+  );
+}
+
+// ── CHECKOUT FORM ──────────────────────────────────────────────────────────
 function CheckoutForm({ onSuccess }) {
   const stripe   = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!stripe||!elements) return;
-    setLoading(true); setError("");
-    const result = await stripe.confirmPayment({elements,redirect:"if_required"});
-    if (result.error) { setError(result.error.message||"Payment failed. Please try a different card."); setLoading(false); }
-    else { onSuccess(); }
+    if (!stripe || !elements) return;
+    setLoading(true);
+    setError("");
+    const result = await stripe.confirmPayment({ elements, redirect: "if_required" });
+    if (result.error) {
+      setError(result.error.message || "Payment failed. Please try a different card.");
+      setLoading(false);
+    } else {
+      onSuccess();
+    }
   };
+
   return (
     <form onSubmit={handleSubmit}>
-      <PaymentElement options={{layout:"tabs"}}/>
-      <button type="submit" disabled={!stripe||loading} style={{marginTop:20,width:"100%",padding:12,background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer"}}>
-        {loading?"Processing…":"Pay Now"}
+      <PaymentElement options={{ layout: "tabs" }} />
+      <button
+        type="submit"
+        disabled={!stripe || loading}
+        style={{
+          marginTop: 20, width: "100%", padding: 12,
+          background: "#00ffff", color: "#000", fontWeight: "bold",
+          border: "none", borderRadius: 8, cursor: "pointer"
+        }}
+      >
+        {loading ? "Processing…" : "Pay Now"}
       </button>
-      {error&&<p style={{color:"#ff4d4d",fontSize:12,marginTop:10}}>{error}</p>}
+      {error && <p style={{ color: "#ff4d4d", fontSize: 12, marginTop: 10 }}>{error}</p>}
     </form>
   );
 }
