@@ -16,24 +16,9 @@ const SOCIALS = [
 
 // ── MUSIC VIDEOS ──────────────────────────────────────────────────────────────
 const musicVideos = [
-  {
-    id: "mv-1",
-    title: "Hour Glass",
-    youtubeId: "tv_aS-hJ880",
-    description: "Official Music Video"
-  },
-  {
-    id: "mv-2",
-    title: "A2B",
-    youtubeId: "kPITYHMVeXM",
-    description: "Official Music Video"
-  },
-  {
-    id: "mv-3",
-    title: "W.2.D",
-    youtubeId: "jsrA1SL3_GU",
-    description: "Official Music Video"
-  }
+  { id: "mv-1", title: "Hour Glass", youtubeId: "tv_aS-hJ880", description: "Official Music Video" },
+  { id: "mv-2", title: "A2B",        youtubeId: "kPITYHMVeXM", description: "Official Music Video" },
+  { id: "mv-3", title: "W.2.D",      youtubeId: "jsrA1SL3_GU", description: "Official Music Video" }
 ];
 
 // ── EXCLUSIVE ITEMS ───────────────────────────────────────────────────────────
@@ -82,7 +67,7 @@ export default function Page() {
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
   const [activeTab, setActiveTab]                 = useState("home");
-  const [activeVideo, setActiveVideo] = useState("tv_aS-hJ880"); // default = Hour Glass
+  const [activeVideo, setActiveVideo]             = useState("tv_aS-hJ880");
   const [addedFlash, setAddedFlash]               = useState(null);
   const [soundOn, setSoundOn]                     = useState(false);
   const [selectedSingle, setSelectedSingle]       = useState(null);
@@ -137,10 +122,11 @@ export default function Page() {
   const cursorTrailRef     = useRef(null);
   const nowPlayingAudioRef = useRef(null);
   const ambientRefs        = useRef({});
+  const ytPlayerRef        = useRef(null);
+  const ytIframeRef        = useRef(null);
 
   // ── EFFECTS ───────────────────────────────────────────────────────────────
 
-  // Mobile detection — single resize listener, empty deps = no loop
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
@@ -174,7 +160,19 @@ export default function Page() {
     if (stored) setCircleSubmissions(JSON.parse(stored));
   }, []);
 
-  // Live countdown
+  // FIX: Cart persistence — load on mount
+  useEffect(() => {
+    const stored = localStorage.getItem("2mrrw_cart");
+    if (stored) {
+      try { setCart(JSON.parse(stored)); } catch {}
+    }
+  }, []);
+
+  // FIX: Cart persistence — save on every change
+  useEffect(() => {
+    localStorage.setItem("2mrrw_cart", JSON.stringify(cart));
+  }, [cart]);
+
   useEffect(() => {
     const tick = () => {
       const now  = new Date();
@@ -193,7 +191,6 @@ export default function Page() {
     return () => clearInterval(id);
   }, []);
 
-  // Cursor glow trail — desktop only
   useEffect(() => {
     const move = (e) => {
       if (cursorRef.current)      { cursorRef.current.style.left=e.clientX+"px"; cursorRef.current.style.top=e.clientY+"px"; }
@@ -203,7 +200,6 @@ export default function Page() {
     return () => window.removeEventListener("mousemove", move);
   }, []);
 
-  // Ambient sound
   useEffect(() => {
     const ambientPaths = {
       shop:"shop",blog:"community",vision:"community",circle:"community",
@@ -220,13 +216,11 @@ export default function Page() {
     return () => { Object.values(ambientRefs.current).forEach((a) => { try { a.pause(); } catch {} }); };
   }, [activeTab, soundOn]);
 
-  // Sync sidebar group
   useEffect(() => {
     const map = { home:"g-home",singles:"g-music",albums:"g-music",mymusic:"g-music",shop:"g-shop",videos:"g-videos",blog:"g-community",vision:"g-community",circle:"g-community",innercircle:"g-community",exclusive:"g-exclusives",shows:"g-shows",live:"g-live" };
     if (map[activeTab]) setExpandedGroup(map[activeTab]);
   }, [activeTab]);
 
-  // Now Playing sync
   useEffect(() => {
     if (!nowPlaying) return;
     if (nowPlayingAudioRef.current) {
@@ -235,15 +229,83 @@ export default function Page() {
     }
   }, [nowPlaying]);
 
-  // goRadio — clean setter only
+  // FIX: Reset Hourglass when entering Videos tab
+  useEffect(() => {
+    if (activeTab === "videos") setActiveVideo("tv_aS-hJ880");
+  }, [activeTab]);
+
+  // FIX: YouTube IFrame API — autoplay with sound + auto-advance Hourglass → A2B
+  useEffect(() => {
+    if (activeTab !== "videos") {
+      if (ytPlayerRef.current) {
+        try { ytPlayerRef.current.destroy(); } catch {}
+        ytPlayerRef.current = null;
+      }
+      return;
+    }
+
+    const initPlayer = () => {
+      if (!window.YT || !window.YT.Player || !ytIframeRef.current) return;
+      if (ytPlayerRef.current) {
+        try { ytPlayerRef.current.destroy(); } catch {}
+      }
+      ytPlayerRef.current = new window.YT.Player(ytIframeRef.current, {
+        events: {
+          onReady: (e) => {
+            try {
+              e.target.unMute();
+              e.target.setVolume(80);
+              e.target.playVideo();
+            } catch {}
+          },
+          onStateChange: (e) => {
+            if (e.data === 0 && activeVideo !== "kPITYHMVeXM") {
+              setActiveVideo("kPITYHMVeXM");
+            }
+          }
+        }
+      });
+    };
+
+    if (!window.YT || !window.YT.Player) {
+      if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+        const tag = document.createElement("script");
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.body.appendChild(tag);
+      }
+      window.onYouTubeIframeAPIReady = initPlayer;
+      const poll = setInterval(() => {
+        if (window.YT && window.YT.Player) {
+          clearInterval(poll);
+          initPlayer();
+        }
+      }, 200);
+      setTimeout(() => clearInterval(poll), 5000);
+    } else {
+      initPlayer();
+    }
+
+    return () => {
+      if (ytPlayerRef.current) {
+        try { ytPlayerRef.current.destroy(); } catch {}
+        ytPlayerRef.current = null;
+      }
+    };
+  }, [activeTab, activeVideo]);
+
   const goRadio = useCallback((newIndex) => { setRadioIndex(newIndex); }, []);
 
   // ── DATA ──────────────────────────────────────────────────────────────────
   const singles = [
-    { title:"Hour Glass",    slug:"hour-glass",    cover:"/images/singles/hourglass.jpg", price:2.99, preview:"/audio/previews/hourglass-preview.mp3",  full:"/audio/full/hourglass.mp3" },
-    { title:"W.2.D",         slug:"w2d",           cover:"/images/singles/w2d.jpg",       price:2.99, preview:"/audio/previews/w2d-preview.mp3",         full:"/audio/full/w2d.mp3" },
-    { title:"Artificial",    slug:"artificial",    cover:"/images/singles/artificial.jpg",price:2.99, preview:"/audio/previews/artificial-preview.mp3",  full:"/audio/full/artificial.mp3" },
-    { title:"Turnt Me 2 Dis",slug:"turnt-me-2-dis",cover:"/images/singles/turnt.jpg",     price:2.99, preview:"/audio/previews/turntme2dis-preview.mp3", full:"/audio/full/turntme2dis.mp3" },
+    { title:"Hour Glass",     slug:"hour-glass",     cover:"/images/singles/hourglass.jpg", price:2.99, preview:"/audio/previews/hourglass-preview.mp3",   full:"/audio/full/hourglass.mp3" },
+    { title:"W: Da Guys",     slug:"w-da-guys",      cover:"/images/singles/wdaguys.jpg",   price:2.99, preview:"/audio/previews/wdaguys-preview.mp3",     full:"/audio/full/wdaguys.mp3" },
+    { title:"W.2.D",          slug:"w2d",            cover:"/images/singles/w2d.jpg",       price:2.99, preview:"/audio/previews/w2d-preview.mp3",         full:"/audio/full/w2d.mp3" },
+    { title:"Artificial",     slug:"artificial",     cover:"/images/singles/artificial.jpg",price:2.99, preview:"/audio/previews/artificial-preview.mp3",  full:"/audio/full/artificial.mp3" },
+    { title:"Turnt Me 2 Dis", slug:"turnt-me-2-dis", cover:"/images/singles/turnt.jpg",     price:2.99, preview:"/audio/previews/turntme2dis-preview.mp3", full:"/audio/full/turntme2dis.mp3" },
+  ];
+  const features = [
+    { title:"I Don't Believe You", slug:"i-dont-believe-you", cover:"/images/features/idbu.jpg",   price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/idbu-preview.mp3" },
+    { title:"2 Heavy",             slug:"2-heavy",            cover:"/images/features/2heavy.jpg", price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/2heavy-preview.mp3" },
   ];
   const albums = [
     { title:"T.B.H.",       slug:"tbh",     cover:"/images/albums/tbh.jpg",    price:9.99,  date:"July 7, 2022",   vinyl:47.99, tracks:["Glass Full","Up 2 Me","Unexpcted","All Yours","Locomotive","LEFT","Was Wrong","ArTiFICiaL"] },
@@ -251,9 +313,10 @@ export default function Page() {
     { title:"Love Hz Vol.1", slug:"love-hz", cover:"/images/albums/lovehz.jpg", price:12.99, date:"August 2026",    vinyl:47.99, tracks:["Roll Call","W.2.D","All Of It","Knock On Wood","Stayed 2 Long","Hour Glass"] },
   ];
   const merch = [
-    { title:"2MRRW Hoodie", slug:"hoodie", cover:"/images/merch/hoodie.jpg", price:59.99 },
-    { title:"2MRRW T-Shirt",slug:"shirt",  cover:"/images/merch/shirt.jpg",  price:29.99 },
-    { title:"2MRRW Hat",    slug:"hat",    cover:"/images/merch/hat.jpg",    price:24.99 },
+    { title:"TOMORROW HOODIE", slug:"tomorrow-hoodie", cover:"/images/merch/tomorrow-hoodie.jpg", price:64.99 },
+    { title:"2MRRW HOODIE",    slug:"hoodie",          cover:"/images/merch/hoodie.jpg",          price:59.99 },
+    { title:"2MRRW T-SHIRT",   slug:"shirt",           cover:"/images/merch/shirt.jpg",           price:29.99 },
+    { title:"2MRRW HAT",       slug:"hat",             cover:"/images/merch/hat.jpg",             price:24.99 },
   ];
   const blogPosts = [
     { id:"post-1", title:"The Making of Love Hz Vol.1",         date:"April 2, 2026",      author:"2MRRW", body:"Love Hz Vol.1 started as a series of late-night sessions in a home studio with nothing but a laptop, a MIDI keyboard, and a vision. Every track on that project represents a different frequency of love — the highs, the lows, the static in between. We wanted listeners to feel the entire spectrum.\n\nThe process took nearly 18 months. Some songs were written in 10 minutes, others were rebuilt from scratch a dozen times. What you hear is the version that survived. We hope it resonates with you the way it resonated with us when we finally pressed play for the first time." },
@@ -282,16 +345,11 @@ export default function Page() {
   const buttonHoverIn  = (e) => { e.currentTarget.style.boxShadow="0 0 14px rgba(0,255,255,0.8)"; e.currentTarget.style.borderColor="#00ffff"; };
   const buttonHoverOut = (e) => { e.currentTarget.style.boxShadow="none"; e.currentTarget.style.borderColor="#333"; };
 
-  // ── FIX #2 — AUTOPLAY ON CLICK ────────────────────────────────────────────
-  // Play is triggered directly inside the user-gesture context (before setState
-  // flushes) so browsers allow it without requiring a second tap.
-  // The existing nowPlaying useEffect still handles the now-playing bar sync.
   const openSingleModal = (single) => {
     if (nowPlayingAudioRef.current) nowPlayingAudioRef.current.pause();
     setNowPlayingPlaying(false);
     setSelectedSingle(single);
     setNowPlaying(single);
-    // Autoplay: set src and call play() here while still inside the gesture event
     if (nowPlayingAudioRef.current) {
       nowPlayingAudioRef.current.src = single.preview;
       nowPlayingAudioRef.current.play()
@@ -403,7 +461,6 @@ export default function Page() {
           {activeFlowMode==="nowplaying"?"NOW PLAYING":activeFlowMode==="conversion"?"ACQUIRE":"STANDBY"}
         </div>
       </div>
-      {/* IDLE */}
       <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="idle"?1:0,pointerEvents:activeFlowMode==="idle"?"auto":"none",transition:"opacity 0.6s ease",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,gap:18,textAlign:"center"}}>
         <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 40% 55%,rgba(0,255,255,0.03) 0%,transparent 65%)",pointerEvents:"none"}}/>
         <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:20}}>
@@ -414,7 +471,6 @@ export default function Page() {
           <div style={{fontSize:8,color:"#1c1c1c",letterSpacing:5,textTransform:"uppercase",fontWeight:700}}>ARTIST PRESENCE</div>
         </div>
       </div>
-      {/* NOW PLAYING */}
       <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="nowplaying"?1:0,pointerEvents:activeFlowMode==="nowplaying"?"auto":"none",transition:"opacity 0.6s ease"}}>
         <div style={{position:"absolute",inset:0,overflow:"hidden"}}>
           <img src={currentSlide.cover} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"blur(32px) brightness(0.18) saturate(1.6)",transform:"scale(1.15)",transition:"all 0.9s ease"}}/>
@@ -430,7 +486,6 @@ export default function Page() {
           <div style={{marginTop:4,padding:"4px 14px",background:currentSlide.tagColor+"18",border:`1px solid ${currentSlide.tagColor}30`,borderRadius:20,fontSize:10,fontWeight:700,color:currentSlide.tagColor,letterSpacing:1.5}}>{currentSlide.tag}</div>
         </div>
       </div>
-      {/* CONVERSION */}
       <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="conversion"?1:0,pointerEvents:activeFlowMode==="conversion"?"auto":"none",transition:"opacity 0.45s ease"}}>
         <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 50% 45%,${currentSlide.tagColor}16 0%,transparent 60%)`,pointerEvents:"none"}}/>
         <div style={{position:"absolute",inset:0,zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px",gap:12,textAlign:"center"}}>
@@ -493,7 +548,6 @@ export default function Page() {
     }}>
       <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:360,height:360,background:"radial-gradient(circle,rgba(0,255,255,0.04) 0%,transparent 70%)",pointerEvents:"none"}}/>
 
-      {/* MOBILE: arrow + image row */}
       {isMobile?(
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <button onClick={prevSingle}
@@ -514,14 +568,12 @@ export default function Page() {
             style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.06)",border:"1px solid #2a2a2a",color:"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>›</button>
         </div>
       ):(
-        /* DESKTOP: left arrow */
         <button onClick={prevSingle}
           style={{width:large?50:44,height:large?50:44,borderRadius:"50%",background:"rgba(255,255,255,0.04)",border:"1px solid #2a2a2a",color:"#555",fontSize:large?22:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}
           onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";e.currentTarget.style.boxShadow="0 0 10px rgba(0,255,255,0.3)";}}
           onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#555";e.currentTarget.style.boxShadow="none";}}>‹</button>
       )}
 
-      {/* DESKTOP: album art in center */}
       {!isMobile&&(
         <div style={{flexShrink:0,width:large?340:300,height:large?340:300,position:"relative"}}
           onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
@@ -537,19 +589,16 @@ export default function Page() {
         </div>
       )}
 
-      {/* Info block */}
       <div style={{flex:1,display:"flex",flexDirection:"column",gap:isMobile?10:large?14:12}}>
         <div key={`title-${currentSingle.slug}`} style={{fontSize:isMobile?22:large?30:26,fontWeight:900,letterSpacing:2,animation:"fadeInUp 0.35s ease forwards"}}>{currentSingle.title}</div>
         <div style={{fontSize:13,color:"#555",letterSpacing:1}}>SINGLE{large&&!isMobile?` · ${singleIndex+1} of ${singles.length}`:""}</div>
         <div style={{fontSize:isMobile?16:large?18:16,color:"#00ffff",fontWeight:700}}>${currentSingle.price.toFixed(2)}</div>
-        {/* Dots */}
         <div style={{display:"flex",gap:6}}>
           {singles.map((s,i)=>(
             <div key={s.slug} onClick={()=>goToSingle(i,i>singleIndex?"right":"left")}
               style={{width:i===singleIndex?(isMobile?20:large?24:20):(isMobile?6:large?7:6),height:isMobile?6:large?7:6,borderRadius:4,background:i===singleIndex?"#00ffff":"#333",cursor:"pointer",transition:"all 0.3s ease",boxShadow:i===singleIndex?"0 0 8px rgba(0,255,255,0.6)":"none"}}/>
           ))}
         </div>
-        {/* Buttons */}
         <div style={{display:"flex",gap:10,marginTop:isMobile?4:large?8:6,flexWrap:"wrap"}}>
           <button onClick={()=>addToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut}
             style={{padding:isMobile?"12px 0":large?"11px 20px":"10px 18px",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold",transition:"0.25s",width:isMobile?"100%":"auto"}}>
@@ -564,7 +613,6 @@ export default function Page() {
         </div>
       </div>
 
-      {/* DESKTOP: right arrow */}
       {!isMobile&&(
         <button onClick={nextSingle}
           style={{width:large?50:44,height:large?50:44,borderRadius:"50%",background:"rgba(255,255,255,0.04)",border:"1px solid #2a2a2a",color:"#555",fontSize:large?22:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}
@@ -583,14 +631,12 @@ export default function Page() {
       <div style={{position:"relative",borderRadius:22,overflow:"hidden",background:"linear-gradient(135deg,#080808,#0d0d0d)",border:"1px solid #1e1e1e",boxShadow:"0 8px 60px rgba(0,0,0,0.6)",height:"100%"}}>
         <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 30% 50%,${currentSlide.tagColor}10 0%,transparent 55%)`,pointerEvents:"none",zIndex:0}}/>
         <div style={{display:"flex",alignItems:"stretch",minHeight:isMobile?180:320,position:"relative",zIndex:1}}>
-          {/* Cover art */}
           <div style={{flexShrink:0,width:coverW,position:"relative",overflow:"hidden"}}>
             <img key={currentSlide.slug} src={currentSlide.cover} alt={currentSlide.title}
               style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
             <div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,transparent 40%,rgba(0,0,0,0.35) 100%)",pointerEvents:"none"}}/>
             <div style={{position:"absolute",top:12,left:12,background:currentSlide.tagColor,color:"#000",fontSize:8,fontWeight:900,letterSpacing:2,padding:"4px 10px",borderRadius:20,boxShadow:`0 0 16px ${currentSlide.tagColor}88`}}>{currentSlide.tag}</div>
           </div>
-          {/* Info */}
           <div style={{flex:1,padding:infoPad,display:"flex",flexDirection:"column",justifyContent:"center",gap:isMobile?8:14}}>
             <div style={{fontSize:10,color:"#444",letterSpacing:4,textTransform:"uppercase",fontWeight:700}}>2MRRW RADIO</div>
             <div style={{fontSize:titleSize,fontWeight:900,letterSpacing:2,lineHeight:1.1}}>{currentSlide.title}</div>
@@ -610,7 +656,6 @@ export default function Page() {
                 + Add to Cart
               </button>
             </div>
-            {/* Dots */}
             <div style={{display:"flex",gap:7,marginTop:isMobile?4:10}}>
               {radioSlides.map((s,i)=>(
                 <div key={s.slug} onClick={()=>goRadio(i)}
@@ -618,7 +663,6 @@ export default function Page() {
               ))}
             </div>
           </div>
-          {/* Arrows */}
           <div style={{position:"absolute",bottom:isMobile?12:24,right:isMobile?12:24,display:"flex",gap:8}}>
             {[{dir:"prev",icon:"‹"},{dir:"next",icon:"›"}].map(({dir,icon})=>(
               <button key={dir}
@@ -635,14 +679,60 @@ export default function Page() {
     );
   };
 
+  // ── FEATURES RAIL (reusable) ──────────────────────────────────────────────
+  const FeaturesRail = () => (
+    <div
+      className="features-row"
+      style={{
+        display:"flex",
+        flexWrap:"nowrap",
+        overflowX:"auto",
+        WebkitOverflowScrolling:"touch",
+        scrollSnapType:"x mandatory",
+        overscrollBehaviorX:"contain",
+        gap:isMobile?12:18,
+        paddingBottom:14
+      }}
+    >
+      {features.map((feat,i)=>(
+        <div key={feat.slug}
+          style={{
+            flex:"0 0 auto",
+            width:isMobile?160:220,
+            scrollSnapAlign:"start",
+            background:"#0a0a0a",
+            borderRadius:14,
+            border:"1px solid #1a1a1a",
+            cursor:"pointer",
+            opacity:0,
+            animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,
+            transition:"border-color 0.25s"
+          }}
+          onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#a259ff55";}}
+          onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1a1a1a";}}
+        >
+          <img src={feat.cover}
+            style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",display:"block",borderRadius:"13px 13px 0 0"}}/>
+          <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
+            <div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{feat.title}</div>
+            <div style={{fontSize:10,color:"#a259ff",fontWeight:700,letterSpacing:1.5,marginBottom:6}}>{feat.featuring}</div>
+            <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${feat.price.toFixed(2)}</div>
+            <button onClick={(e)=>{e.stopPropagation();addToCart(feat);}}
+              style={{width:"100%",padding:"7px 0",fontSize:11,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",borderRadius:7,cursor:"pointer",fontWeight:600,transition:"0.2s"}}
+              onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#a259ff";e.currentTarget.style.color="#a259ff";}}
+              onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="white";}}>+ Cart</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   // ═════════════════════════════════════════════════════════════════════════
   return (
     <>
-      {/* Cursor — hidden on mobile (touch devices have no cursor) */}
       <div ref={cursorRef} style={{position:"fixed",width:28,height:28,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.22) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99999,mixBlendMode:"screen",transition:"left 0.045s linear,top 0.045s linear",display:isMobile?"none":undefined}}/>
       <div ref={cursorTrailRef} style={{position:"fixed",width:16,height:16,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.10) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99998,mixBlendMode:"screen",transition:"left 0.18s ease,top 0.18s ease",display:isMobile?"none":undefined}}/>
 
-      {/* Global ambient depth */}
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(circle at 18% 18%,rgba(0,255,255,0.026) 0%,transparent 55%),radial-gradient(circle at 82% 80%,rgba(162,89,255,0.018) 0%,transparent 52%)"}}/>
       <audio ref={nowPlayingAudioRef} style={{display:"none"}}/>
 
@@ -735,12 +825,8 @@ export default function Page() {
       )}
 
       {/* ══════════════════════ MAIN LAYOUT ═══════════════════════════════════ */}
-      {/* FIX #1 — maxWidth + overflowX prevent the entire page from drifting
-          horizontally on mobile. Internal scroll rows are unaffected because
-          they use overflowX:"auto" on their own containers. */}
       <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
 
-        {/* LEFT SIDEBAR — desktop only */}
         {!isMobile&&(
           <div style={{width:220,flexShrink:0,borderRight:"1px solid #141414",background:"rgba(4,4,4,0.9)",backdropFilter:"blur(20px)",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto",boxShadow:"2px 0 32px rgba(0,0,0,0.5)"}}>
             <div style={{padding:"22px 18px 18px",borderBottom:"1px solid #111",flexShrink:0}}>
@@ -810,7 +896,6 @@ export default function Page() {
               </div>
             </div>
 
-            {/* DONATE */}
             {activeTab==="home"&&(
               <div style={{padding:"18px 0 8px",display:"flex",justifyContent:"flex-start"}}>
                 <button onClick={()=>window.open("https://www.paypal.com/donate","_blank")}
@@ -820,21 +905,19 @@ export default function Page() {
               </div>
             )}
 
-            {/* TAB CONTENT */}
             <div key={tabKey} style={{animation:"fadeInTab 0.22s ease forwards"}}>
 
               {/* ══ HOME ══ */}
               {activeTab==="home"&&(
                 <>
-                  {/* Latest Singles + Live Panel */}
                   <div style={{marginTop:20,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Latest Singles</h2>
                     <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:18,alignItems:"flex-start"}}>
-                      <div className="singles-row" style={{flex:1,display:"flex",gap:isMobile?12:18,overflowX:"auto",paddingBottom:14,scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch"}}>
+                      <div className="singles-row" style={{flex:1,display:"flex",gap:isMobile?12:18,overflowX:"auto",paddingBottom:14,scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch",overscrollBehaviorX:"contain",flexWrap:"nowrap",width:"100%",minWidth:0}}>
                         {singles.map((single,i)=>(
                           <div key={single.slug}
                             onClick={()=>openSingleModal(single)}
-                            style={{flexShrink:0,width:isMobile?160:200,cursor:"pointer",scrollSnapAlign:"start",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",transition:"border-color 0.25s"}}
+                            style={{flex:"0 0 auto",width:isMobile?160:200,cursor:"pointer",scrollSnapAlign:"start",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",transition:"border-color 0.25s"}}
                             onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#00ffff1a";}}
                             onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1a1a1a";}}>
                             <img src={single.cover}
@@ -852,10 +935,8 @@ export default function Page() {
                           </div>
                         ))}
                       </div>
-                      {/* LivePanel: desktop only inline, mobile shown below */}
                       {!isMobile&&<LivePanel/>}
                     </div>
-                    {/* Mobile: Live Panel full-width below */}
                     {isMobile&&(
                       <div style={{marginTop:14}}>
                         <div style={{background:"linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",border:"1px solid rgba(0,255,255,0.15)",borderRadius:16,padding:"20px 18px",backdropFilter:"blur(12px)"}}>
@@ -880,14 +961,18 @@ export default function Page() {
                     )}
                   </div>
 
+                  {/* FEATURES */}
+                  <div style={{marginTop:28,marginBottom:4}}>
+                    <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
+                    <FeaturesRail/>
+                  </div>
+
                   {/* 2MRRW RADIO */}
                   <div style={{marginTop:28,marginBottom:28}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>2MRRW RADIO</h2>
                     {isMobile?(
-                      /* Mobile: radio full width, no FlowState */
                       <RadioCarousel narrow={false}/>
                     ):(
-                      /* Desktop: radio + FlowState side by side */
                       <div style={{display:"flex",gap:16,alignItems:"stretch",minHeight:320}}>
                         <div style={{flex:"0 0 55%",minWidth:0}}><RadioCarousel narrow/></div>
                         <FlowState/>
@@ -992,7 +1077,17 @@ export default function Page() {
               )}
 
               {/* SINGLES */}
-              {activeTab==="singles"&&(<><h2 className="section-heading">Singles</h2><CarouselUI large={!isMobile}/></>)}
+              {activeTab==="singles"&&(
+                <>
+                  <h2 className="section-heading">Singles</h2>
+                  <CarouselUI large={!isMobile}/>
+
+                  <div style={{marginTop:36,marginBottom:4}}>
+                    <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
+                    <FeaturesRail/>
+                  </div>
+                </>
+              )}
 
               {/* ALBUMS */}
               {activeTab==="albums"&&<Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onSingleClick={setSelectedAlbum} isMobile={isMobile}/>}
@@ -1044,92 +1139,80 @@ export default function Page() {
               )}
 
               {/* VIDEOS */}
-{/* VIDEOS */}
-{activeTab==="videos"&&(
-  <>
-    <h2 className="section-heading">Music Videos</h2>
-    <p style={{fontSize:13,color:"#444",marginBottom:20,letterSpacing:1}}>
-      Featured release + latest visuals
-    </p>
+              {activeTab==="videos"&&(
+                <>
+                  <h2 className="section-heading">Music Videos</h2>
+                  <p style={{fontSize:13,color:"#444",marginBottom:20,letterSpacing:1}}>
+                    Featured release + latest visuals
+                  </p>
 
-    {/* HERO FEATURED VIDEO */}
-    <div style={{
-      background:"#0e0e0e",
-      border:"1px solid #1e1e1e",
-      borderRadius:20,
-      overflow:"hidden",
-      marginBottom:28
-    }}>
-      <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
-        <iframe
-          src={`https://www.youtube.com/embed/${activeVideo}?autoplay=1&mute=1&rel=0`}
-          title="Featured Video"
-          frameBorder="0"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-          style={{
-            position:"absolute",
-            top:0,
-            left:0,
-            width:"100%",
-            height:"100%"
-          }}
-        />
-      </div>
-    </div>
+                  <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden",marginBottom:28}}>
+                    <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
+                      <iframe
+                        ref={ytIframeRef}
+                        key={activeVideo}
+                        src={`https://www.youtube.com/embed/${activeVideo}?autoplay=1&enablejsapi=1&rel=0&playsinline=1`}
+                        title="Featured Video"
+                        frameBorder="0"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        style={{position:"absolute",top:0,left:0,width:"100%",height:"100%"}}
+                      />
+                    </div>
+                  </div>
 
-    {/* GRID OF OTHER VIDEOS */}
-    <div style={{
-      display:"grid",
-      gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",
-      gap:16
-    }}>
-      {musicVideos.map((vid)=>(
-        <div
-          key={vid.id}
-          onClick={() => setActiveVideo(vid.youtubeId)}
-          style={{
-            background:"#0e0e0e",
-            border:"1px solid #1e1e1e",
-            borderRadius:14,
-            overflow:"hidden",
-            cursor:"pointer",
-            transition:"0.2s"
-          }}
-        >
-          <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
-            <img
-              src={`https://img.youtube.com/vi/${vid.youtubeId}/hqdefault.jpg`}
-              style={{
-                position:"absolute",
-                top:0,
-                left:0,
-                width:"100%",
-                height:"100%",
-                objectFit:"cover"
-              }}
-            />
-          </div>
-
-          <div style={{padding:"10px 12px"}}>
-            <div style={{fontSize:13,fontWeight:700}}>
-              {vid.title}
-            </div>
-            <div style={{fontSize:11,color:"#666"}}>
-              {vid.description}
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  </>
-)}
+                  <div
+                    className={isMobile ? "videos-row" : ""}
+                    style={isMobile ? {
+                      display:"flex",
+                      flexWrap:"nowrap",
+                      overflowX:"auto",
+                      WebkitOverflowScrolling:"touch",
+                      scrollSnapType:"x mandatory",
+                      overscrollBehaviorX:"contain",
+                      gap:12,
+                      paddingBottom:10
+                    } : {
+                      display:"grid",
+                      gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",
+                      gap:16
+                    }}
+                  >
+                    {musicVideos.map((vid)=>(
+                      <div
+                        key={vid.id}
+                        onClick={()=>setActiveVideo(vid.youtubeId)}
+                        style={{
+                          ...(isMobile ? {flex:"0 0 220px", width:220, scrollSnapAlign:"start"} : {}),
+                          background:"#0e0e0e",
+                          border:`1px solid ${activeVideo===vid.youtubeId?"#00ffff44":"#1e1e1e"}`,
+                          borderRadius:14,
+                          overflow:"hidden",
+                          cursor:"pointer",
+                          transition:"0.2s"
+                        }}
+                      >
+                        <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
+                          <img
+                            src={`https://img.youtube.com/vi/${vid.youtubeId}/hqdefault.jpg`}
+                            alt={vid.title}
+                            style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"cover"}}
+                          />
+                        </div>
+                        <div style={{padding:"10px 12px"}}>
+                          <div style={{fontSize:13,fontWeight:700}}>{vid.title}</div>
+                          <div style={{fontSize:11,color:"#666"}}>{vid.description}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
               {/* SHOWS */}
               {activeTab==="shows"&&(
                 <>
                   <h2 className="section-heading" style={{marginBottom:20}}>Shows & Events</h2>
-                  {/* Calendar — hidden on mobile for simplicity, just list */}
                   {!isMobile&&(
                     <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,padding:24,marginBottom:30}}>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
@@ -1605,7 +1688,6 @@ export default function Page() {
               <div onClick={(e)=>e.stopPropagation()}
                 style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:32,border:"1px solid #1e1e1e",maxHeight:"80vh",overflowY:"auto"}}>
                 <div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 16px"}}/>
-                {/* User badge */}
                 {currentUser&&userStatus&&(
                   <div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}>
                     <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>{currentUser.name[0].toUpperCase()}</div>
@@ -1693,18 +1775,64 @@ export default function Page() {
         </>
       )}
 
-      {/* CSS KEYFRAMES */}
+      {/* CSS KEYFRAMES + MOBILE SCROLL RAILS */}
       <style jsx>{`
-        /* FIX #1 — lock html/body against horizontal drift on mobile.
-           Internal scroll rows (singles-row etc.) are unaffected because
-           they set overflowX:auto on their own elements. */
         html, body {
-          max-width: 100vw;
-          overflow-x: hidden;
+          width: 100%;
+          overflow-x: clip;
         }
         *, *::before, *::after {
           box-sizing: border-box;
         }
+
+        /* ── MOBILE HORIZONTAL SCROLL RAILS ─────────────────────────── */
+        @media (max-width: 768px) {
+          .singles-row,
+          .albums-row,
+          .features-row,
+          .products-row,
+          .videos-row {
+            display: flex !important;
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            scroll-snap-type: x mandatory !important;
+            overscroll-behavior-x: contain !important;
+            gap: 12px !important;
+            padding-bottom: 10px !important;
+          }
+          .singles-row > *,
+          .albums-row > *,
+          .features-row > *,
+          .products-row > *,
+          .videos-row > * {
+            flex: 0 0 auto !important;
+            scroll-snap-align: start !important;
+          }
+        }
+
+        /* ── SCROLLBAR STYLING ───────────────────────────────────────── */
+        .singles-row::-webkit-scrollbar,
+        .albums-row::-webkit-scrollbar,
+        .features-row::-webkit-scrollbar,
+        .products-row::-webkit-scrollbar,
+        .videos-row::-webkit-scrollbar { height: 4px; }
+        .singles-row::-webkit-scrollbar-track,
+        .albums-row::-webkit-scrollbar-track,
+        .features-row::-webkit-scrollbar-track,
+        .products-row::-webkit-scrollbar-track,
+        .videos-row::-webkit-scrollbar-track { background: #111; border-radius: 4px; }
+        .singles-row::-webkit-scrollbar-thumb,
+        .albums-row::-webkit-scrollbar-thumb,
+        .features-row::-webkit-scrollbar-thumb,
+        .products-row::-webkit-scrollbar-thumb,
+        .videos-row::-webkit-scrollbar-thumb { background: #00ffff; border-radius: 4px; }
+        .singles-row::-webkit-scrollbar-thumb:hover,
+        .albums-row::-webkit-scrollbar-thumb:hover,
+        .features-row::-webkit-scrollbar-thumb:hover,
+        .products-row::-webkit-scrollbar-thumb:hover,
+        .videos-row::-webkit-scrollbar-thumb:hover { background: #00cccc; }
+
         @keyframes pulse        { 0%{transform:scale(1);opacity:1}    50%{transform:scale(1.05);opacity:0.85} 100%{transform:scale(1);opacity:1} }
         @keyframes fadeInUp     { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
         @keyframes fadeOut      { from{opacity:1} to{opacity:0} }
@@ -1721,10 +1849,6 @@ export default function Page() {
         @keyframes eqBar3 { from{height:14px} to{height:8px}  }
         @keyframes eqBar4 { from{height:8px}  to{height:14px} }
         .section-heading { animation:fadeInUp 0.9s cubic-bezier(0.22,1,0.36,1) both; animation-fill-mode:forwards; }
-        .singles-row::-webkit-scrollbar       { height:4px; }
-        .singles-row::-webkit-scrollbar-track { background:#111; border-radius:4px; }
-        .singles-row::-webkit-scrollbar-thumb { background:#00ffff; border-radius:4px; }
-        .singles-row::-webkit-scrollbar-thumb:hover { background:#00cccc; }
       `}</style>
 
       {/* STRIPE MODAL */}
@@ -1743,13 +1867,38 @@ export default function Page() {
   );
 }
 
-// ── GRID — mobile-aware ───────────────────────────────────────────────────────
+// ── GRID — mobile-aware horizontal rail ───────────────────────────────────────
 function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onSingleClick, isMobile }) {
+  const containerStyle = isMobile
+    ? {
+        display:"flex",
+        flexWrap:"nowrap",
+        overflowX:"auto",
+        WebkitOverflowScrolling:"touch",
+        scrollSnapType:"x mandatory",
+        overscrollBehaviorX:"contain",
+        gap:12,
+        paddingBottom:10
+      }
+    : {
+        display:"grid",
+        gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",
+        gap:22
+      };
+
   return (
-    <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(260px,1fr))",gap:isMobile?12:22}}>
+    <div className={isMobile ? `${type}-row` : ""} style={containerStyle}>
       {items.map((item)=>(
         <div key={item.slug}
-          style={{position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}}
+          style={{
+            ...(isMobile ? {flex:"0 0 160px", width:160, scrollSnapAlign:"start"} : {}),
+            position:"relative",
+            background:"#0a0a0a",
+            borderRadius:isMobile?12:16,
+            overflow:"hidden",
+            border:"1px solid #1a1a1a",
+            transition:"border-color 0.25s"
+          }}
           onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#2a2a2a";}}
           onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1a1a1a";}}>
           <img src={item.cover}
