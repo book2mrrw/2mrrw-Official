@@ -17,13 +17,13 @@ const SOCIALS = [
 // ── MUSIC VIDEOS ──────────────────────────────────────────────────────────────
 const musicVideos = [
   {
-    id: "mv-2",
+    id: "mv-1",
     title: "Hour Glass",
     youtubeId: "tv_aS-hJ880",
     description: "Official Music Video"
   },
   {
-    id: "mv-1",
+    id: "mv-2",
     title: "A2B",
     youtubeId: "kPITYHMVeXM",
     description: "Official Music Video"
@@ -82,7 +82,7 @@ export default function Page() {
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
   const [activeTab, setActiveTab]                 = useState("home");
-  const [activeVideo, setActiveVideo] = useState(null);
+  const [activeVideo, setActiveVideo] = useState("tv_aS-hJ880"); // default = Hour Glass
   const [addedFlash, setAddedFlash]               = useState(null);
   const [soundOn, setSoundOn]                     = useState(false);
   const [selectedSingle, setSelectedSingle]       = useState(null);
@@ -1044,186 +1044,85 @@ export default function Page() {
               )}
 
               {/* VIDEOS */}
+{/* VIDEOS */}
 {activeTab==="videos"&&(
-
   <>
-
     <h2 className="section-heading">Music Videos</h2>
-
-    <p style={{fontSize:13,color:"#444",marginBottom:28,letterSpacing:1}}>
-
-      Click any video to watch in full screen
-
+    <p style={{fontSize:13,color:"#444",marginBottom:20,letterSpacing:1}}>
+      Featured release + latest visuals
     </p>
 
-    <div style={{display:"flex",flexDirection:"column",gap:32}}>
-
-      {musicVideos.map((vid)=>(
-
-        <div
-
-          key={vid.id}
-
+    {/* HERO FEATURED VIDEO */}
+    <div style={{
+      background:"#0e0e0e",
+      border:"1px solid #1e1e1e",
+      borderRadius:20,
+      overflow:"hidden",
+      marginBottom:28
+    }}>
+      <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
+        <iframe
+          src={`https://www.youtube.com/embed/${activeVideo}?autoplay=1&mute=1&rel=0`}
+          title="Featured Video"
+          frameBorder="0"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
           style={{
-
-            background:"#0e0e0e",
-
-            border:"1px solid #1e1e1e",
-
-            borderRadius:20,
-
-            overflow:"hidden",
-
-            cursor:"pointer"
-
+            position:"absolute",
+            top:0,
+            left:0,
+            width:"100%",
+            height:"100%"
           }}
+        />
+      </div>
+    </div>
 
+    {/* GRID OF OTHER VIDEOS */}
+    <div style={{
+      display:"grid",
+      gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",
+      gap:16
+    }}>
+      {musicVideos.map((vid)=>(
+        <div
+          key={vid.id}
           onClick={() => setActiveVideo(vid.youtubeId)}
-
+          style={{
+            background:"#0e0e0e",
+            border:"1px solid #1e1e1e",
+            borderRadius:14,
+            overflow:"hidden",
+            cursor:"pointer",
+            transition:"0.2s"
+          }}
         >
-
-          {/* thumbnail instead of loading iframe */}
-
           <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
-
             <img
-
               src={`https://img.youtube.com/vi/${vid.youtubeId}/hqdefault.jpg`}
-
-              alt={vid.title}
-
               style={{
-
                 position:"absolute",
-
                 top:0,
-
                 left:0,
-
                 width:"100%",
-
                 height:"100%",
-
                 objectFit:"cover"
-
               }}
-
             />
-
           </div>
 
-          <div style={{padding:"16px 20px"}}>
-
-            <div style={{
-
-              fontSize:17,
-
-              fontWeight:800,
-
-              letterSpacing:1,
-
-              marginBottom:4
-
-            }}>
-
+          <div style={{padding:"10px 12px"}}>
+            <div style={{fontSize:13,fontWeight:700}}>
               {vid.title}
-
             </div>
-
-            <div style={{fontSize:12,color:"#555"}}>
-
+            <div style={{fontSize:11,color:"#666"}}>
               {vid.description}
-
             </div>
-
           </div>
-
         </div>
-
       ))}
-
     </div>
-
   </>
-
-)}
-
-{/* 🔥 MODAL PLAYER (INSERTED PROPERLY HERE) */}
-
-{activeVideo && (
-
-  <div
-
-    onClick={() => setActiveVideo(null)}
-
-    style={{
-
-      position: "fixed",
-
-      top: 0,
-
-      left: 0,
-
-      width: "100vw",
-
-      height: "100vh",
-
-      background: "rgba(0,0,0,0.9)",
-
-      display: "flex",
-
-      alignItems: "center",
-
-      justifyContent: "center",
-
-      zIndex: 9999
-
-    }}
-
-  >
-
-    <div
-
-      onClick={(e) => e.stopPropagation()}
-
-      style={{
-
-        width: "90%",
-
-        maxWidth: 900,
-
-        aspectRatio: "16/9",
-
-        background: "#000",
-
-        borderRadius: 16,
-
-        overflow: "hidden"
-
-      }}
-
-    >
-
-      <iframe
-
-        src={`https://www.youtube.com/embed/${activeVideo}?autoplay=1&mute=1&rel=0`}
-
-        title="Video Player"
-
-        frameBorder="0"
-
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-
-        allowFullScreen
-
-        style={{ width: "100%", height: "100%" }}
-
-      />
-
-    </div>
-
-  </div>
-
 )}
 
               {/* SHOWS */}
