@@ -1789,7 +1789,8 @@ export default function Page() {
     )}
 
     {/* Mobile cart drawer */}
-    {mobileCartOpen && (
+  {/* Mobile cart drawer */}
+{mobileCartOpen && (
   <div
     onClick={() => setMobileCartOpen(false)}
     style={{
@@ -1823,88 +1824,187 @@ export default function Page() {
         }}
       />
 
-      <div>
-        {/* KEEP YOUR CONTENT HERE (cart items, buttons, etc.) */}
+      {/* Cart items */}
+      <div style={{ padding: "16px 20px 0" }}>
+        {cart.length === 0 ? (
+          <p style={{ color: "#555", fontSize: 13, textAlign: "center", padding: "24px 0" }}>
+            Your cart is empty
+          </p>
+        ) : (
+          cart.map((item, i) => (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 0",
+                borderBottom: "1px solid #1a1a1a"
+              }}
+            >
+              {item.image && (
+                <img
+                  src={item.image}
+                  alt={item.name}
+                  style={{ width: 48, height: 48, objectFit: "cover", borderRadius: 6 }}
+                />
+              )}
+              <div style={{ flex: 1 }}>
+                <div style={{ color: "#fff", fontSize: 13, fontWeight: 700 }}>{item.name}</div>
+                {item.size && (
+                  <div style={{ color: "#555", fontSize: 11, marginTop: 2 }}>Size: {item.size}</div>
+                )}
+              </div>
+              <div style={{ color: "#00ffff", fontSize: 13, fontWeight: 700, whiteSpace: "nowrap" }}>
+                ${(item.price / 100).toFixed(2)}
+              </div>
+              <button
+                onClick={() => removeFromCart(i)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#555",
+                  fontSize: 18,
+                  cursor: "pointer",
+                  padding: "0 4px",
+                  lineHeight: 1
+                }}
+              >
+                ×
+              </button>
+            </div>
+          ))
+        )}
       </div>
 
-      <button>
-        Close
-      </button>
+      {/* Checkout error */}
+      {checkoutError && (
+        <p style={{ color: "#ff4d4d", fontSize: 12, padding: "10px 20px 0" }}>
+          {checkoutError}
+        </p>
+      )}
+
+      {/* Checkout + Close buttons */}
+      {cart.length > 0 && (
+        <div style={{ padding: "16px 20px 0" }}>
+          <button
+            onClick={handleCheckout}
+            style={{
+              width: "100%",
+              padding: "14px 0",
+              background: "#00ffff",
+              border: "none",
+              color: "#000",
+              fontSize: 13,
+              fontWeight: 900,
+              borderRadius: 10,
+              cursor: "pointer",
+              letterSpacing: 1,
+              marginBottom: 10
+            }}
+          >
+            CHECKOUT
+          </button>
+        </div>
+      )}
+
+      <div style={{ padding: "8px 20px 0" }}>
+        <button
+          onClick={() => setMobileCartOpen(false)}
+          style={{
+            width: "100%",
+            padding: "12px 0",
+            background: "none",
+            border: "1px solid #1e1e1e",
+            color: "#555",
+            cursor: "pointer",
+            fontSize: 13,
+            borderRadius: 10
+          }}
+        >
+          Close
+        </button>
+      </div>
+
     </div>
   </div>
-)}
-          {checkoutError&&<p style={{color:"#ff4d4d",fontSize:12,padding:"10px 20px 0"}}>{checkoutError}</p>}
-
-          <div style={{padding:"12px 20px 0"}}>
-            <button onClick={()=>setMobileCartOpen(false)}
-              style={{width:"100%",padding:"12px 0",background:"none",border:"1px solid #1e1e1e",color:"#555",cursor:"pointer",fontSize:13,borderRadius:10}}>
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
-  </>
-)}
+)} 
 
 {/* CSS KEYFRAMES */}
 <style jsx>{`
-  /* FIX — safe mobile overflow (prevents scroll breakage) */
-  html, body {
-    width: 100%;
-    overflow-x: hidden;
-  }
+  /* Safe mobile overflow — clip prevents page-level horizontal scroll
+     without killing overflow-x:auto on child scroll rails */
+  html, body {
+    width: 100%;
+    overflow-x: clip;
+  }
 
-  *, *::before, *::after {
-    box-sizing: border-box;
-  }
+  *, *::before, *::after {
+    box-sizing: border-box;
+  }
 
-  /* CRITICAL MOBILE ROW FIX (Singles + Albums) */
-  @media (max-width: 768px) {
-    .singles-row,
-    .albums-row {
-      display: flex !important;
-      flex-wrap: nowrap !important;
-      overflow-x: auto !important;
-      -webkit-overflow-scrolling: touch !important;
-      gap: 12px;
-      padding-bottom: 10px;
-    }
+  /* ── MOBILE HORIZONTAL SCROLL RAILS ─────────────────────────── */
+  @media (max-width: 768px) {
+    .singles-row,
+    .albums-row {
+      display: flex !important;
+      flex-wrap: nowrap !important;
+      overflow-x: auto !important;
+      -webkit-overflow-scrolling: touch !important;
+      scroll-snap-type: x mandatory !important;
+      overscroll-behavior-x: contain !important;
+      gap: 12px !important;
+      padding-bottom: 10px !important;
+      /* Prevent the rail itself from shrinking into the page */
+      width: 100% !important;
+      min-width: 0 !important;
+    }
 
-    .singles-row > *,
-    .albums-row > * {
-      flex: 0 0 auto !important;
-    }
-  }
+    .singles-row > *,
+    .albums-row > * {
+      flex: 0 0 160px !important;
+      width: 160px !important;
+      min-width: 0 !important;
+      scroll-snap-align: start !important;
+    }
+  }
 
-  @keyframes pulse { 0%{transform:scale(1);opacity:1} 50%{transform:scale(1.05);opacity:0.85} 100%{transform:scale(1);opacity:1} }
-  @keyframes fadeInUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes fadeOut { from{opacity:1} to{opacity:0} }
-  @keyframes fadeInCover { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:scale(1)} }
-  @keyframes fadeInTab { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes expandDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
-  @keyframes slideInRight { from{opacity:0;transform:translateX(60px)} to{opacity:1;transform:translateX(0)} }
-  @keyframes slideInLeft { from{opacity:0;transform:translateX(-60px)} to{opacity:1;transform:translateX(0)} }
-  @keyframes countPulse { 0%{opacity:1} 50%{opacity:0.7} 100%{opacity:1} }
-  @keyframes flowIdlePulse { 0%{opacity:0.4} 50%{opacity:0.9} 100%{opacity:0.4} }
-  @keyframes flowIdleDot { 0%{opacity:0.15;transform:scale(0.8)} 50%{opacity:0.7;transform:scale(1.2)} 100%{opacity:0.15;transform:scale(0.8)} }
-  @keyframes eqBar1 { from{height:6px} to{height:16px} }
-  @keyframes eqBar2 { from{height:10px} to{height:18px} }
-  @keyframes eqBar3 { from{height:14px} to{height:8px} }
-  @keyframes eqBar4 { from{height:8px} to{height:14px} }
+  /* ── SCROLLBAR STYLING ───────────────────────────────────────── */
+  .singles-row::-webkit-scrollbar,
+  .albums-row::-webkit-scrollbar { height: 4px; }
 
-  .section-heading {
-    animation: fadeInUp 0.9s cubic-bezier(0.22,1,0.36,1) both;
-    animation-fill-mode: forwards;
-  }
+  .singles-row::-webkit-scrollbar-track,
+  .albums-row::-webkit-scrollbar-track { background: #111; border-radius: 4px; }
 
-  .singles-row::-webkit-scrollbar { height:4px; }
-  .singles-row::-webkit-scrollbar-track { background:#111; border-radius:4px; }
-  .singles-row::-webkit-scrollbar-thumb { background:#00ffff; border-radius:4px; }
-  .singles-row::-webkit-scrollbar-thumb:hover { background:#00cccc; }
+  .singles-row::-webkit-scrollbar-thumb,
+  .albums-row::-webkit-scrollbar-thumb { background: #00ffff; border-radius: 4px; }
+
+  .singles-row::-webkit-scrollbar-thumb:hover,
+  .albums-row::-webkit-scrollbar-thumb:hover { background: #00cccc; }
+
+  /* ── KEYFRAMES ───────────────────────────────────────────────── */
+  @keyframes pulse { 0%{transform:scale(1);opacity:1} 50%{transform:scale(1.05);opacity:0.85} 100%{transform:scale(1);opacity:1} }
+  @keyframes fadeInUp { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes fadeOut { from{opacity:1} to{opacity:0} }
+  @keyframes fadeInCover { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:scale(1)} }
+  @keyframes fadeInTab { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes expandDown { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
+  @keyframes slideInRight { from{opacity:0;transform:translateX(60px)} to{opacity:1;transform:translateX(0)} }
+  @keyframes slideInLeft { from{opacity:0;transform:translateX(-60px)} to{opacity:1;transform:translateX(0)} }
+  @keyframes countPulse { 0%{opacity:1} 50%{opacity:0.7} 100%{opacity:1} }
+  @keyframes flowIdlePulse { 0%{opacity:0.4} 50%{opacity:0.9} 100%{opacity:0.4} }
+  @keyframes flowIdleDot { 0%{opacity:0.15;transform:scale(0.8)} 50%{opacity:0.7;transform:scale(1.2)} 100%{opacity:0.15;transform:scale(0.8)} }
+  @keyframes eqBar1 { from{height:6px} to{height:16px} }
+  @keyframes eqBar2 { from{height:10px} to{height:18px} }
+  @keyframes eqBar3 { from{height:14px} to{height:8px} }
+  @keyframes eqBar4 { from{height:8px} to{height:14px} }
+
+  .section-heading {
+    animation: fadeInUp 0.9s cubic-bezier(0.22,1,0.36,1) both;
+    animation-fill-mode: forwards;
+  }
 `}</style>
-
-// ── CHECKOUT FORM ─────────────────────────────────────────────────────────────
+ ── CHECKOUT FORM ─────────────────────────────────────────────────────────────
 function CheckoutForm({ onSuccess }) {
   const stripe   = useStripe();
   const elements = useElements();
