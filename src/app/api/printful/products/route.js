@@ -8,11 +8,25 @@ export async function GET() {
 
     const data = await res.json();
 
-    const products = (data.result || []).map((p) => ({
-      id: p.id,
-      name: p.name,
-      thumbnail: p.thumbnail_url,
-    }));
+ const result = data.result;
+
+// normalize safely
+let products = [];
+
+if (Array.isArray(result)) {
+  products = result;
+} else if (Array.isArray(result?.sync_products)) {
+  products = result.sync_products;
+} else if (Array.isArray(result?.items)) {
+  products = result.items;
+} else {
+  products = [];
+}
+
+return Response.json({
+  success: true,
+  products
+});
 
     return Response.json({
       success: true,
