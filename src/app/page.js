@@ -61,6 +61,28 @@ const radioSlides = [
   { slug:"turnt-me-2-dis", title:"Turnt Me 2 Dis", cover:"/images/singles/turnt.jpg",     price:2.99, tag:"FEATURED",    tagColor:"#00ffff" },
 ];
 
+// ── FEATURES — FIX #2: moved to module scope so FeaturesRail never remounts ──
+const features = [
+  {
+    title:"I Don't Believe You",
+    slug:"i-dont-believe-you",
+    cover:"/images/features/idbu.jpg",
+    price:2.99,
+    featuring:"FT. 2MRRW",
+    preview:"/audio/previews/i-dont-believe-you-preview.wav",
+    fullSong:"/audio/full/i-dont-believe-you.wav"
+  },
+  {
+    title:"2 Heavy",
+    slug:"2-heavy",
+    cover:"/images/features/2heavy.jpg",
+    price:2.99,
+    featuring:"FT. 2MRRW",
+    preview:"/audio/previews/2-heavy-preview.wav",
+    fullSong:"/audio/full/2-heavy.wav"
+  },
+];
+
 // ═════════════════════════════════════════════════════════════════════════════
 export default function Page() {
 
@@ -111,7 +133,7 @@ export default function Page() {
   const [nowPlayingPlaying, setNowPlayingPlaying] = useState(false);
   const [radioIndex, setRadioIndex]               = useState(0);
   const [flowConversionActive, setFlowConversionActive] = useState(false);
-  const [printfulProducts, setPrintfulProducts] = useState([]);
+  const [printfulProducts, setPrintfulProducts]   = useState([]);
   // ── MOBILE STATE ──────────────────────────────────────────────────────────
   const [isMobile, setIsMobile]             = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
@@ -127,28 +149,35 @@ export default function Page() {
 
   // ── EFFECTS ───────────────────────────────────────────────────────────────
 
-useEffect(() => {
-  const check = () => setIsMobile(window.innerWidth < 768);
-  check();
-  window.addEventListener("resize", check);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
-  return () => window.removeEventListener("resize", check);
-}, []);
-
-useEffect(() => {
-  fetch("/api/printful/products")
-    .then((res) => res.json())
-    .then((data) => {
-      console.log("PRINTFUL DATA:", data);
-
-      if (data.success) {
-        setPrintfulProducts(data.products || []);
-      }
-    })
-    .catch((err) => {
-      console.error("PRINTFUL FETCH ERROR:", err);
-    });
-}, []);
+  // FIX #1a: Normalize Printful field names so Grid can render title/cover/price/slug
+  useEffect(() => {
+    fetch("/api/printful/products")
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("PRINTFUL DATA:", data);
+        if (data.success) {
+          const normalized = (data.products || []).map((p) => ({
+            slug:  p.slug  || String(p.id),
+            title: p.title || p.name,
+            cover: p.cover || p.thumbnail_url || p.image || null,
+            price: typeof p.price === "number"
+              ? p.price
+              : parseFloat(p.retail_price ?? p.price ?? 0),
+          }));
+          setPrintfulProducts(normalized);
+        }
+      })
+      .catch((err) => {
+        console.error("PRINTFUL FETCH ERROR:", err);
+      });
+  }, []);
 
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_user");
@@ -176,7 +205,6 @@ useEffect(() => {
     if (stored) setCircleSubmissions(JSON.parse(stored));
   }, []);
 
-  // FIX: Cart persistence — load on mount
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_cart");
     if (stored) {
@@ -184,7 +212,6 @@ useEffect(() => {
     }
   }, []);
 
-  // FIX: Cart persistence — save on every change
   useEffect(() => {
     localStorage.setItem("2mrrw_cart", JSON.stringify(cart));
   }, [cart]);
@@ -237,20 +264,21 @@ useEffect(() => {
     if (map[activeTab]) setExpandedGroup(map[activeTab]);
   }, [activeTab]);
 
+  // FIX #3: nowPlaying effect — owns the full play flow, no race condition
   useEffect(() => {
-    if (!nowPlaying) return;
-    if (nowPlayingAudioRef.current) {
-      nowPlayingAudioRef.current.src = nowPlaying.preview;
-      if (nowPlayingPlaying) nowPlayingAudioRef.current.play().catch(()=>{});
-    }
+    if (!nowPlaying || !nowPlayingAudioRef.current) return;
+    const audio = nowPlayingAudioRef.current;
+    audio.pause();
+    audio.src = nowPlaying.preview;
+    audio.play()
+      .then(() => setNowPlayingPlaying(true))
+      .catch(() => setNowPlayingPlaying(false));
   }, [nowPlaying]);
 
-  // FIX: Reset Hourglass when entering Videos tab
   useEffect(() => {
     if (activeTab === "videos") setActiveVideo("tv_aS-hJ880");
   }, [activeTab]);
 
-  // FIX: YouTube IFrame API — autoplay with sound + auto-advance Hourglass → A2B
   useEffect(() => {
     if (activeTab !== "videos") {
       if (ytPlayerRef.current) {
@@ -319,38 +347,12 @@ useEffect(() => {
     { title:"Artificial",     slug:"artificial",     cover:"/images/singles/artificial.jpg",price:2.99, preview:"/audio/previews/artificial-preview.mp3",  full:"/audio/full/artificial.mp3" },
     { title:"Turnt Me 2 Dis", slug:"turnt-me-2-dis", cover:"/images/singles/turnt.jpg",     price:2.99, preview:"/audio/previews/turntme2dis-preview.mp3", full:"/audio/full/turntme2dis.mp3" },
   ];
-  const features = [
-  {
-    title:"I Don't Believe You",
-    slug:"i-dont-believe-you",
-    cover:"/images/features/idbu.jpg",
-    price:2.99,
-    featuring:"FT. 2MRRW",
-
-    preview:"/audio/previews/i-dont-believe-you-preview.wav",
-
-    fullSong:"/audio/full/i-dont-believe-you.wav"
-  },
-
-  {
-    title:"2 Heavy",
-    slug:"2-heavy",
-    cover:"/images/features/2heavy.jpg",
-    price:2.99,
-    featuring:"FT. 2MRRW",
-
-    preview:"/audio/previews/2-heavy-preview.wav",
-
-    fullSong:"/audio/full/2-heavy.wav"
-  },
-];
   const albums = [
     { title:"T.B.H.",       slug:"tbh",     cover:"/images/albums/tbh.jpg",    price:9.99,  date:"July 7, 2022",   vinyl:47.99, tracks:["Glass Full","Up 2 Me","Unexpcted","All Yours","Locomotive","LEFT","Was Wrong","ArTiFICiaL"] },
     { title:"(A.D)",         slug:"ad",      cover:"/images/albums/ad.jpg",     price:9.99,  date:"March 24, 2024", vinyl:47.99, tracks:["2mrrw's Ntro","Said N' Done","A.D.D","Perspective (2018)","Grand Scheme","A2B","Life Changes (2018)","Itself (2018)","Wastin Time","Like Me Or Not"] },
     { title:"Love Hz Vol.1", slug:"love-hz", cover:"/images/albums/lovehz.jpg", price:12.99, date:"August 2026",    vinyl:47.99, tracks:["Roll Call","W.2.D","All Of It","Knock On Wood","Stayed 2 Long","Hour Glass"] },
   ];
   const merch = [
-
     { title:"2MRRW HOODIE",    slug:"hoodie",          cover:"/images/merch/hoodie.jpg",          price:59.99 },
     { title:"2MRRW T-SHIRT",   slug:"shirt",           cover:"/images/merch/shirt.jpg",           price:29.99 },
     { title:"2MRRW HAT",       slug:"hat",             cover:"/images/merch/hat.jpg",             price:24.99 },
@@ -382,17 +384,10 @@ useEffect(() => {
   const buttonHoverIn  = (e) => { e.currentTarget.style.boxShadow="0 0 14px rgba(0,255,255,0.8)"; e.currentTarget.style.borderColor="#00ffff"; };
   const buttonHoverOut = (e) => { e.currentTarget.style.boxShadow="none"; e.currentTarget.style.borderColor="#333"; };
 
+  // FIX #3: openSingleModal just sets state — useEffect owns src + play
   const openSingleModal = (single) => {
-    if (nowPlayingAudioRef.current) nowPlayingAudioRef.current.pause();
-    setNowPlayingPlaying(false);
     setSelectedSingle(single);
     setNowPlaying(single);
-    if (nowPlayingAudioRef.current) {
-      nowPlayingAudioRef.current.src = single.preview;
-      nowPlayingAudioRef.current.play()
-        .then(() => { setNowPlayingPlaying(true); })
-        .catch(() => { setNowPlayingPlaying(false); });
-    }
   };
 
   const handleGateSubmit = async () => {
@@ -716,54 +711,6 @@ useEffect(() => {
     );
   };
 
-  // ── FEATURES RAIL (reusable) ──────────────────────────────────────────────
-  const FeaturesRail = () => (
-    <div
-      className="features-row"
-      style={{
-        display:"flex",
-        flexWrap:"nowrap",
-        overflowX:"auto",
-        WebkitOverflowScrolling:"touch",
-        scrollSnapType:"x mandatory",
-        overscrollBehaviorX:"contain",
-        gap:isMobile?12:18,
-        paddingBottom:14
-      }}
-    >
-      {features.map((feat,i)=>(
-        <div key={feat.slug}
-          style={{
-            flex:"0 0 auto",
-            width:isMobile?160:220,
-            scrollSnapAlign:"start",
-            background:"#0a0a0a",
-            borderRadius:14,
-            border:"1px solid #1a1a1a",
-            cursor:"pointer",
-            opacity:0,
-            animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,
-            transition:"border-color 0.25s"
-          }}
-          onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#a259ff55";}}
-          onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1a1a1a";}}
-        >
-          <img src={feat.cover}
-            style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",display:"block",borderRadius:"13px 13px 0 0"}}/>
-          <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
-            <div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{feat.title}</div>
-            <div style={{fontSize:10,color:"#a259ff",fontWeight:700,letterSpacing:1.5,marginBottom:6}}>{feat.featuring}</div>
-            <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${feat.price.toFixed(2)}</div>
-            <button onClick={(e)=>{e.stopPropagation();addToCart(feat);}}
-              style={{width:"100%",padding:"7px 0",fontSize:11,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",borderRadius:7,cursor:"pointer",fontWeight:600,transition:"0.2s"}}
-              onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#a259ff";e.currentTarget.style.color="#a259ff";}}
-              onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="white";}}>+ Cart</button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-
   // ═════════════════════════════════════════════════════════════════════════
   return (
     <>
@@ -998,10 +945,15 @@ useEffect(() => {
                     )}
                   </div>
 
-                  {/* FEATURES */}
+                  {/* FEATURES — FIX #2: pass props, stable reference outside Page */}
                   <div style={{marginTop:28,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail/>
+                    <FeaturesRail
+                      features={features}
+                      isMobile={isMobile}
+                      addToCart={addToCart}
+                      onPlay={(feat) => setNowPlaying(feat)}
+                    />
                   </div>
 
                   {/* 2MRRW RADIO */}
@@ -1023,10 +975,13 @@ useEffect(() => {
                     <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onSingleClick={setSelectedAlbum} isMobile={isMobile}/>
                   </div>
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
+
+                  {/* FIX #1b: home tab Shop section now uses printfulProducts */}
                   <div id="home-shop">
                     <h2 className="section-heading" style={{marginBottom:16}}>Shop</h2>
-                    <Grid items={merch} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} isMobile={isMobile}/>
+                    <Grid items={printfulProducts} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} isMobile={isMobile}/>
                   </div>
+
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
                   <div id="home-videos">
                     <h2 className="section-heading" style={{marginBottom:8}}>Music Videos</h2>
@@ -1118,10 +1073,15 @@ useEffect(() => {
                 <>
                   <h2 className="section-heading">Singles</h2>
                   <CarouselUI large={!isMobile}/>
-
+                  {/* FEATURES — FIX #2: pass props, stable reference outside Page */}
                   <div style={{marginTop:36,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail/>
+                    <FeaturesRail
+                      features={features}
+                      isMobile={isMobile}
+                      addToCart={addToCart}
+                      onPlay={(feat) => setNowPlaying(feat)}
+                    />
                   </div>
                 </>
               )}
@@ -1129,19 +1089,19 @@ useEffect(() => {
               {/* ALBUMS */}
               {activeTab==="albums"&&<Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onSingleClick={setSelectedAlbum} isMobile={isMobile}/>}
 
-              {/* SHOP */}
-             {activeTab==="shop" && (
-  <Grid
-    items={printfulProducts}
-    type="products"
-    addToCart={addToCart}
-    hoverIn={hoverIn}
-    hoverOut={hoverOut}
-    buttonHoverIn={buttonHoverIn}
-    buttonHoverOut={buttonHoverOut}
-    isMobile={isMobile}
-  />
-)}
+              {/* SHOP — FIX #1b: uses printfulProducts (already correct in your original) */}
+              {activeTab==="shop"&&(
+                <Grid
+                  items={printfulProducts}
+                  type="products"
+                  addToCart={addToCart}
+                  hoverIn={hoverIn}
+                  hoverOut={hoverOut}
+                  buttonHoverIn={buttonHoverIn}
+                  buttonHoverOut={buttonHoverOut}
+                  isMobile={isMobile}
+                />
+              )}
 
               {/* EXCLUSIVE */}
               {activeTab==="exclusive"&&(
@@ -1193,7 +1153,6 @@ useEffect(() => {
                   <p style={{fontSize:13,color:"#444",marginBottom:20,letterSpacing:1}}>
                     Featured release + latest visuals
                   </p>
-
                   <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden",marginBottom:28}}>
                     <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
                       <iframe
@@ -1208,7 +1167,6 @@ useEffect(() => {
                       />
                     </div>
                   </div>
-
                   <div
                     className={isMobile ? "videos-row" : ""}
                     style={isMobile ? {
@@ -1647,9 +1605,9 @@ useEffect(() => {
               <img src={nowPlaying.cover} style={{width:36,height:36,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.title}</div>
-                <div style={{fontSize:10,color:"#555",letterSpacing:1}}>SINGLE · PREVIEW</div>
+                <div style={{fontSize:10,color:"#555",letterSpacing:1}}>PREVIEW</div>
               </div>
-              <button onClick={()=>{if(!nowPlayingAudioRef.current)return;if(nowPlayingPlaying){nowPlayingAudioRef.current.pause();setNowPlayingPlaying(false);}else{nowPlayingAudioRef.current.src=nowPlaying.preview;nowPlayingAudioRef.current.play().catch(()=>{});setNowPlayingPlaying(true);}}}
+              <button onClick={()=>{if(!nowPlayingAudioRef.current)return;if(nowPlayingPlaying){nowPlayingAudioRef.current.pause();setNowPlayingPlaying(false);}else{nowPlayingAudioRef.current.play().catch(()=>{});setNowPlayingPlaying(true);}}}
                 style={{width:36,height:36,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
                 {nowPlayingPlaying
                   ?<svg viewBox="0 0 24 24" fill="#000" width="14" height="14"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
@@ -1729,7 +1687,7 @@ useEffect(() => {
             </button>
           </div>
 
-          {/* Mobile nav drawer (More) */}
+          {/* Mobile nav drawer */}
           {mobileNavOpen&&(
             <div onClick={()=>setMobileNavOpen(false)}
               style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
@@ -1833,7 +1791,6 @@ useEffect(() => {
           box-sizing: border-box;
         }
 
-        /* ── MOBILE HORIZONTAL SCROLL RAILS ─────────────────────────── */
         @media (max-width: 768px) {
           .singles-row,
           .albums-row,
@@ -1859,7 +1816,6 @@ useEffect(() => {
           }
         }
 
-        /* ── SCROLLBAR STYLING ───────────────────────────────────────── */
         .singles-row::-webkit-scrollbar,
         .albums-row::-webkit-scrollbar,
         .features-row::-webkit-scrollbar,
@@ -1912,6 +1868,59 @@ useEffect(() => {
         </div>
       )}
     </>
+  );
+}
+
+// ── FEATURES RAIL — FIX #2: defined OUTSIDE Page so it never remounts ─────────
+// Receives props instead of closing over Page's scope.
+// onPlay(feat) → sets nowPlaying in Page → useEffect plays audio instantly.
+function FeaturesRail({ features, isMobile, addToCart, onPlay }) {
+  return (
+    <div
+      className="features-row"
+      style={{
+        display:"flex",
+        flexWrap:"nowrap",
+        overflowX:"auto",
+        WebkitOverflowScrolling:"touch",
+        scrollSnapType:"x mandatory",
+        overscrollBehaviorX:"contain",
+        gap:isMobile?12:18,
+        paddingBottom:14
+      }}
+    >
+      {features.map((feat,i)=>(
+        <div key={feat.slug}
+          onClick={()=>onPlay(feat)}
+          style={{
+            flex:"0 0 auto",
+            width:isMobile?160:220,
+            scrollSnapAlign:"start",
+            background:"#0a0a0a",
+            borderRadius:14,
+            border:"1px solid #1a1a1a",
+            cursor:"pointer",
+            opacity:0,
+            animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,
+            transition:"border-color 0.25s"
+          }}
+          onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#a259ff55";}}
+          onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1a1a1a";}}
+        >
+          <img src={feat.cover}
+            style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",display:"block",borderRadius:"13px 13px 0 0"}}/>
+          <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
+            <div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{feat.title}</div>
+            <div style={{fontSize:10,color:"#a259ff",fontWeight:700,letterSpacing:1.5,marginBottom:6}}>{feat.featuring}</div>
+            <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${feat.price.toFixed(2)}</div>
+            <button onClick={(e)=>{e.stopPropagation();addToCart(feat);}}
+              style={{width:"100%",padding:"7px 0",fontSize:11,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",borderRadius:7,cursor:"pointer",fontWeight:600,transition:"0.2s"}}
+              onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#a259ff";e.currentTarget.style.color="#a259ff";}}
+              onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="white";}}>+ Cart</button>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
