@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
@@ -29,14 +29,12 @@ const musicVideos = [
   { id:"mv-3", title:"W.2.D",      youtubeId:"jsrA1SL3_GU", description:"Official Music Video" },
 ];
 
-// ── EXCLUSIVE ITEMS
-// BRIEF §9: A.D. card uses /images/albums/ad.jpg, title "2MRRW: (A.D)"
-// BRIEF §8: stock values are REAL maximums — decremented only by purchases
+// ── EXCLUSIVE ITEMS ───────────────────────────────────────────────────────────
 const REAL_INVENTORY = {
-  "exc-card-tbh":      100,  // T.B.H Collector Art Card — 100 total
-  "exc-card-ad":       50,   // 2MRRW: (A.D) Collector Card — 50 total
-  "exc-bundle-lovehz": null, // unlimited
-  "exc-signed-vinyl":  null, // configurable — null = owner sets via VAULT_VINYL_STOCK env
+  "exc-card-tbh":      100,
+  "exc-card-ad":       50,
+  "exc-bundle-lovehz": null,
+  "exc-signed-vinyl":  null,
 };
 
 const exclusiveItemsBase = [
@@ -88,7 +86,6 @@ const singles = [
   { title:"Turnt Me 2 Dis", slug:"turnt-me-2-dis", cover:"/images/singles/turnt.jpg",     price:2.99, preview:"/audio/previews/turntme2dis-preview.mp3" },
 ];
 
-// BRIEF §9: A.D. normalized — title "(A.D)", cover /images/albums/ad.jpg
 const albums = [
   { title:"T.B.H.",        slug:"tbh",     cover:"/images/albums/tbh.jpg",    price:9.99,  date:"July 7, 2022",   vinyl:47.99, tracks:["Glass Full","Up 2 Me","Unexpcted","All Yours","Locomotive","LEFT","Was Wrong","ArTiFICiaL"] },
   { title:"(A.D)",         slug:"ad",      cover:"/images/albums/ad.jpg",     price:9.99,  date:"March 24, 2024", vinyl:47.99, tracks:["2mrrw's Ntro","Said N' Done","A.D.D","Perspective (2018)","Grand Scheme","A2B","Life Changes (2018)","Itself (2018)","Wastin Time","Like Me Or Not"] },
@@ -101,28 +98,22 @@ const fallbackMerch = [
   { title:"2MRRW HAT",     slug:"hat",    cover:"/images/merch/hat.jpg",    price:24.99 },
 ];
 
-// ── INVENTORY HELPERS (BRIEF §8) ─────────────────────────────────────────────
-// Reads/writes real purchase-based stock from localStorage key "2mrrw_inventory"
-// Stock only decreases when a purchase completes — never randomized.
+// ── INVENTORY HELPERS ─────────────────────────────────────────────────────────
 function loadInventory() {
   try {
     const stored = localStorage.getItem("2mrrw_inventory");
     if (stored) return JSON.parse(stored);
   } catch {}
-  // First run: initialize from REAL_INVENTORY maximums
   const initial = {};
-  Object.entries(REAL_INVENTORY).forEach(([slug, max]) => {
-    initial[slug] = max; // null = unlimited
-  });
+  Object.entries(REAL_INVENTORY).forEach(([slug, max]) => { initial[slug] = max; });
   return initial;
 }
 function saveInventory(inv) {
   try { localStorage.setItem("2mrrw_inventory", JSON.stringify(inv)); } catch {}
 }
-// Decrement after a successful purchase; skip if unlimited (null)
 function decrementInventory(inv, slug) {
   if (!(slug in inv)) return inv;
-  if (inv[slug] === null) return inv; // unlimited
+  if (inv[slug] === null) return inv;
   if (inv[slug] <= 0) return inv;
   const next = { ...inv, [slug]: inv[slug] - 1 };
   saveInventory(next);
@@ -130,14 +121,263 @@ function decrementInventory(inv, slug) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// ── AUDIO VISUALS SECTION — extracted OUTSIDE Page to prevent remounting ─────
+// ── This is the critical fix: defining this inside Page caused React to treat ─
+// ── it as a new component type on every render, forcing full iframe reloads. ──
+// ══════════════════════════════════════════════════════════════════════════════
+const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile }) {
+  // Own its state — not owned by Page, so parent re-renders never affect this
+  const [featuredId, setFeaturedId] = useState(musicVideos[0].youtubeId);
+  // Tracks whether section has scrolled into view (for autoplay trigger)
+  const [hasEntered, setHasEntered] = useState(false);
+  const sectionRef = useRef(null);
+
+  const featuredVid = useMemo(
+    () => musicVideos.find(v => v.youtubeId === featuredId) || musicVideos[0],
+    [featuredId]
+  );
+
+  // Intersection Observer — fires ONCE when section enters viewport.
+  // Disconnects immediately after triggering to avoid any loop.
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setHasEntered(true);
+          obs.disconnect(); // fire once, then stop observing
+        }
+      },
+      { threshold: 0.25 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []); // empty deps — runs once on mount only
+
+  // Stable select handler — won't change reference across renders
+  const handleSelect = useCallback((id) => {
+    setFeaturedId(id);
+  }, []);
+
+  // Build src once per (featuredId, hasEntered) combo.
+  // The iframe key={featuredId} ensures a clean remount on video switch.
+  // Before entering viewport: no autoplay (placeholder shown instead).
+  // After entering viewport: iframe mounts with autoplay=1&mute=1.
+  const iframeSrc = useMemo(
+    () => `https://www.youtube.com/embed/${featuredId}?rel=0&playsinline=1&autoplay=1&mute=1`,
+    [featuredId]
+  );
+
+  return (
+    <div ref={sectionRef}>
+      {/* Section header */}
+      <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:isMobile?12:20,marginTop:isMobile?24:32}}>
+        <h2 className="section-heading" style={{margin:0,fontSize:isMobile?17:22}}>Audio Visuals</h2>
+        <span style={{fontSize:10,color:"#333",letterSpacing:3,textTransform:"uppercase",fontWeight:700}}>Official Visuals</span>
+      </div>
+
+      {isMobile ? (
+        // ── MOBILE: one featured player + horizontal queue strip ─────────────
+        <div style={{display:"flex",flexDirection:"column",gap:14}}>
+          {/* Primary featured video */}
+          <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:16,overflow:"hidden"}}>
+            <div style={{position:"relative",paddingBottom:"56.25%",height:0,background:"#000"}}>
+              {hasEntered ? (
+                <iframe
+                  key={featuredId}
+                  src={iframeSrc}
+                  title={featuredVid.title}
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}}
+                />
+              ) : (
+                // Placeholder thumbnail until scrolled into view — zero iframe overhead
+                <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",cursor:"pointer"}} onClick={() => setHasEntered(true)}>
+                  <img
+                    src={`https://img.youtube.com/vi/${featuredId}/mqdefault.jpg`}
+                    alt={featuredVid.title}
+                    style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
+                  />
+                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.35)"}}>
+                    <div style={{width:52,height:52,borderRadius:"50%",background:"rgba(0,0,0,0.7)",border:"2px solid rgba(255,255,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                      <svg viewBox="0 0 24 24" fill="white" width="22" height="22" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div style={{padding:"12px 14px"}}>
+              <div style={{fontSize:14,fontWeight:800,letterSpacing:1}}>{featuredVid.title}</div>
+              <div style={{fontSize:11,color:"#555",marginTop:3}}>{featuredVid.description}</div>
+            </div>
+          </div>
+
+          {/* Queue strip — thumbnail cards, tap to switch featured */}
+          <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:6,scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch"}}>
+            {musicVideos.map(vid => {
+              const isActive = featuredId === vid.youtubeId;
+              return (
+                <div
+                  key={vid.id}
+                  onClick={() => handleSelect(vid.youtubeId)}
+                  style={{
+                    flex:"0 0 auto",
+                    width:140,
+                    scrollSnapAlign:"start",
+                    background:"#0e0e0e",
+                    border:`1px solid ${isActive ? "#00ffff55" : "#1e1e1e"}`,
+                    borderRadius:12,
+                    overflow:"hidden",
+                    cursor:"pointer",
+                    transition:"border-color 0.2s, box-shadow 0.2s",
+                    boxShadow:isActive ? "0 0 12px rgba(0,255,255,0.18)" : "none",
+                  }}
+                >
+                  <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
+                    <img
+                      src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
+                      alt={vid.title}
+                      style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"cover"}}
+                    />
+                    {isActive && (
+                      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.45)"}}>
+                        <div style={{width:28,height:28,borderRadius:"50%",background:"#00ffff",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          <svg viewBox="0 0 24 24" fill="#000" width="12" height="12"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{padding:"8px 10px"}}>
+                    <div style={{fontSize:11,fontWeight:700,lineHeight:1.3,color:isActive ? "#00ffff" : "white"}}>{vid.title}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        // ── DESKTOP: cinematic featured player + queue sidebar ────────────────
+        <div style={{display:"flex",gap:20,alignItems:"flex-start"}}>
+          {/* Primary featured player — takes remaining width */}
+          <div style={{flex:"1 1 0",minWidth:0,background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.5)"}}>
+            <div style={{position:"relative",paddingBottom:"56.25%",height:0,background:"#000"}}>
+              {hasEntered ? (
+                <iframe
+                  key={featuredId}
+                  src={iframeSrc}
+                  title={featuredVid.title}
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}}
+                />
+              ) : (
+                // Placeholder until in-viewport
+                <div
+                  style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",cursor:"pointer"}}
+                  onClick={() => setHasEntered(true)}
+                >
+                  <img
+                    src={`https://img.youtube.com/vi/${featuredId}/maxresdefault.jpg`}
+                    alt={featuredVid.title}
+                    style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
+                    onError={e => { e.currentTarget.src = `https://img.youtube.com/vi/${featuredId}/mqdefault.jpg`; }}
+                  />
+                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.3)"}}>
+                    <div style={{width:72,height:72,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"2px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform 0.2s"}} onMouseEnter={e=>e.currentTarget.style.transform="scale(1.1)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
+                      <svg viewBox="0 0 24 24" fill="white" width="32" height="32" style={{marginLeft:4}}><path d="M8 5v14l11-7z"/></svg>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            <div style={{padding:"16px 20px"}}>
+              <div style={{fontSize:17,fontWeight:800,letterSpacing:1,marginBottom:4}}>{featuredVid.title}</div>
+              <div style={{fontSize:12,color:"#555"}}>{featuredVid.description}</div>
+            </div>
+          </div>
+
+          {/* Queue sidebar — compact cinematic cards */}
+          <div style={{width:236,flexShrink:0,display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{fontSize:9,color:"#2a2a2a",letterSpacing:3,textTransform:"uppercase",fontWeight:700,marginBottom:2}}>Up Next</div>
+            {musicVideos.map(vid => {
+              const isActive = featuredId === vid.youtubeId;
+              return (
+                <div
+                  key={vid.id}
+                  onClick={() => handleSelect(vid.youtubeId)}
+                  style={{
+                    background:isActive ? "#111" : "#0a0a0a",
+                    border:`1px solid ${isActive ? "rgba(0,255,255,0.3)" : "#1a1a1a"}`,
+                    borderRadius:14,
+                    overflow:"hidden",
+                    cursor:"pointer",
+                    transition:"all 0.2s",
+                    boxShadow:isActive ? "0 0 18px rgba(0,255,255,0.1)" : "none",
+                  }}
+                  onMouseEnter={e => {
+                    if (!isActive) { e.currentTarget.style.borderColor = "rgba(0,255,255,0.2)"; e.currentTarget.style.background = "#0e0e0e"; }
+                  }}
+                  onMouseLeave={e => {
+                    if (!isActive) { e.currentTarget.style.borderColor = "#1a1a1a"; e.currentTarget.style.background = "#0a0a0a"; }
+                  }}
+                >
+                  <div style={{display:"flex",gap:10,padding:10,alignItems:"center"}}>
+                    {/* Thumbnail */}
+                    <div style={{position:"relative",width:90,height:50,borderRadius:8,overflow:"hidden",flexShrink:0}}>
+                      <img
+                        src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
+                        alt={vid.title}
+                        style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
+                      />
+                      {isActive && (
+                        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.5)"}}>
+                          <svg viewBox="0 0 24 24" fill="#00ffff" width="16" height="16"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
+                        </div>
+                      )}
+                      {!isActive && (
+                        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0)",transition:"background 0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(0,0,0,0.4)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0)"}>
+                          <svg viewBox="0 0 24 24" fill="rgba(255,255,255,0)" width="16" height="16" style={{transition:"fill 0.2s"}} onMouseEnter={e=>e.currentTarget.style.fill="white"} onMouseLeave={e=>e.currentTarget.style.fill="rgba(255,255,255,0)"}><path d="M8 5v14l11-7z"/></svg>
+                        </div>
+                      )}
+                    </div>
+                    {/* Info */}
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{
+                        fontSize:12,
+                        fontWeight:700,
+                        color:isActive ? "#00ffff" : "white",
+                        lineHeight:1.3,
+                        overflow:"hidden",
+                        textOverflow:"ellipsis",
+                        whiteSpace:"nowrap",
+                      }}>{vid.title}</div>
+                      <div style={{fontSize:10,color:"#444",marginTop:2,lineHeight:1.3}}>{vid.description}</div>
+                      {isActive && (
+                        <div style={{fontSize:8,color:"#00ffff",letterSpacing:2.5,marginTop:4,fontWeight:700,textTransform:"uppercase"}}>Now Playing</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
 
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
-  // BRIEF §1/#2/#7 — desktop tab ids updated; "exclusive" → "vault", "videos" removed as top-level
-  // BRIEF §3: music sub-tabs are "singles","albums","mymusic"
   const [activeTab, setActiveTab]                 = useState("home");
-  const [musicSubTab, setMusicSubTab]             = useState("singles"); // §3
+  const [musicSubTab, setMusicSubTab]             = useState("singles");
   const [activeVideo, setActiveVideo]             = useState("tv_aS-hJ880");
   const [addedFlash, setAddedFlash]               = useState(null);
   const [soundOn, setSoundOn]                     = useState(false);
@@ -184,10 +424,7 @@ export default function Page() {
   const [printfulLoading, setPrintfulLoading]     = useState(true);
   const [audioCurrentTime, setAudioCurrentTime]   = useState(0);
   const [audioDuration, setAudioDuration]         = useState(0);
-  // BRIEF §8: real inventory state
   const [inventory, setInventory]                 = useState({});
-  // §5: Audio Visuals featured video state (inside Singles sub-tab)
-  const [avFeaturedVideo, setAvFeaturedVideo]     = useState(musicVideos[0].youtubeId);
   const [isMobile, setIsMobile]                   = useState(false);
   const [mobileCartOpen, setMobileCartOpen]       = useState(false);
   const [mobileNavOpen, setMobileNavOpen]         = useState(false);
@@ -208,7 +445,6 @@ export default function Page() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // BRIEF §8: Load inventory from localStorage (real purchase-based)
   useEffect(() => {
     setInventory(loadInventory());
   }, []);
@@ -316,7 +552,6 @@ export default function Page() {
     return () => { Object.values(ambientRefs.current).forEach(a => { try { a.pause(); } catch {} }); };
   }, [activeTab, soundOn]);
 
-  // BRIEF §1: updated group map — vault replaces exclusive, no standalone videos group
   useEffect(() => {
     const map = {
       home:"g-home",
@@ -342,8 +577,6 @@ export default function Page() {
       .catch(() => setNowPlayingPlaying(false));
   }, [nowPlaying]);
 
-  // Videos tab removed — Audio Visuals now lives in Singles sub-tab (§4)
-  // Keep YT player logic for the live tab embed only
   useEffect(() => {
     if (activeTab !== "live") {
       if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch {} ytPlayerRef.current = null; }
@@ -414,18 +647,14 @@ export default function Page() {
     } catch (err) { setCheckoutError(`Network error: ${err.message}`); setCheckingOut(false); }
   };
 
-  // BRIEF §8: on purchase success, decrement inventory for exclusive items
   const handleCheckoutSuccess = () => {
     const purchasedItems = cart.map(item => ({ ...item, purchasedAt: new Date().toISOString() }));
     const np = [...myPurchases, ...purchasedItems];
     setMyPurchases(np);
     localStorage.setItem("2mrrw_purchases", JSON.stringify(np));
-    // Decrement inventory for any exclusive items purchased
     let inv = { ...inventory };
     cart.forEach(item => {
-      if (item.slug in REAL_INVENTORY) {
-        inv = decrementInventory(inv, item.slug);
-      }
+      if (item.slug in REAL_INVENTORY) { inv = decrementInventory(inv, item.slug); }
     });
     setInventory(inv);
     setClientSecret(null); setCheckingOut(false); clearCart();
@@ -477,10 +706,8 @@ export default function Page() {
   const currentSlide   = radioSlides[radioIndex];
   const activeFlowMode = flowConversionActive ? "conversion" : nowPlaying ? "nowplaying" : "idle";
 
-  // BRIEF §8: merge inventory into exclusive items — no fake numbers
   const exclusiveItems = exclusiveItemsBase.map(item => ({
     ...item,
-    // stock: use real inventory value; null = unlimited (show no count)
     stock: inventory[item.slug] !== undefined ? inventory[item.slug] : REAL_INVENTORY[item.slug],
   }));
 
@@ -490,8 +717,6 @@ export default function Page() {
     { id:"post-3", title:"Tour Prep: What Goes Into a Live Show", date:"February 28, 2026", author:"2MRRW", body:"People see the 90-minute set. They don't see the weeks of rehearsal, the production calls, the logistics of moving equipment across state lines. A live 2MRRW show is designed from the ground up — the lighting, the setlist order, the energy arc from opener to closer.\n\nWe treat every city like it's the only city. Dallas gets the same energy as NYC. That's the standard we hold ourselves to and always will." },
   ];
 
-  // BRIEF §1: Desktop sidebar — "Vault" replaces "Exclusives", no standalone Videos tab
-  // BRIEF §2: Music Videos live in Music → Singles (Audio Visuals section)
   const sidebarNav = [
     { groupId:"g-home",      label:"HOME",           directTab:"home",    subTabs:[] },
     { groupId:"g-music",     label:"MUSIC",          directTab:"singles", subTabs:[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mymusic",label:"My Music"}] },
@@ -600,138 +825,12 @@ export default function Page() {
     );
   };
 
-  // ── BRIEF §4/#5: Audio Visuals section component ──────────────────────────
-  // Desktop: cinematic presentation preserved
-  // Mobile: ONE primary featured video + smaller queue beneath
-  const AudioVisualsSection = () => {
-    const featuredVid = musicVideos.find(v => v.youtubeId === avFeaturedVideo) || musicVideos[0];
-    return (
-      <div>
-        <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:isMobile?12:20,marginTop:isMobile?24:32}}>
-          <h2 className="section-heading" style={{margin:0,fontSize:isMobile?17:22}}>Audio Visuals</h2>
-          <span style={{fontSize:10,color:"#333",letterSpacing:3,textTransform:"uppercase",fontWeight:700}}>Official Visuals</span>
-        </div>
-
-        {isMobile ? (
-          // Mobile: featured embed + queue strip (BRIEF §5)
-          <div style={{display:"flex",flexDirection:"column",gap:14}}>
-            {/* Primary featured video */}
-            <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:16,overflow:"hidden"}}>
-              <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
-                <iframe
-                  key={avFeaturedVideo}
-                  src={`https://www.youtube.com/embed/${avFeaturedVideo}?rel=0&playsinline=1`}
-                  title={featuredVid.title}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  style={{position:"absolute",top:0,left:0,width:"100%",height:"100%"}}
-                />
-              </div>
-              <div style={{padding:"12px 14px"}}>
-                <div style={{fontSize:14,fontWeight:800,letterSpacing:1}}>{featuredVid.title}</div>
-                <div style={{fontSize:11,color:"#555",marginTop:3}}>{featuredVid.description}</div>
-              </div>
-            </div>
-
-            {/* Queue strip — thumbnail cards, tap to switch */}
-            <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:6,scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch"}}>
-              {musicVideos.map(vid => (
-                <div
-                  key={vid.id}
-                  onClick={() => setAvFeaturedVideo(vid.youtubeId)}
-                  style={{
-                    flex:"0 0 auto",
-                    width:140,
-                    scrollSnapAlign:"start",
-                    background:"#0e0e0e",
-                    border:`1px solid ${avFeaturedVideo===vid.youtubeId?"#00ffff55":"#1e1e1e"}`,
-                    borderRadius:12,
-                    overflow:"hidden",
-                    cursor:"pointer",
-                    transition:"border-color 0.2s",
-                    boxShadow:avFeaturedVideo===vid.youtubeId?"0 0 12px rgba(0,255,255,0.18)":"none",
-                  }}
-                >
-                  <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
-                    <img src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`} alt={vid.title} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"cover"}}/>
-                    {avFeaturedVideo===vid.youtubeId && (
-                      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.45)"}}>
-                        <div style={{width:28,height:28,borderRadius:"50%",background:"#00ffff",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                          <svg viewBox="0 0 24 24" fill="#000" width="12" height="12"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div style={{padding:"8px 10px"}}>
-                    <div style={{fontSize:11,fontWeight:700,lineHeight:1.3,color:avFeaturedVideo===vid.youtubeId?"#00ffff":"white"}}>{vid.title}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          // Desktop: cinematic full embeds (preserved)
-          <div style={{display:"flex",flexDirection:"column",gap:28}}>
-            {musicVideos.map(vid => (
-              <div key={vid.id} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden"}}>
-                <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
-                  <iframe
-                    src={`https://www.youtube.com/embed/${vid.youtubeId}`}
-                    title={vid.title}
-                    frameBorder="0"
-                    allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture"
-                    allowFullScreen
-                    style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",borderRadius:"20px 20px 0 0"}}
-                  />
-                </div>
-                <div style={{padding:"16px 20px"}}>
-                  <div style={{fontSize:17,fontWeight:800,letterSpacing:1,marginBottom:4}}>{vid.title}</div>
-                  <div style={{fontSize:12,color:"#555"}}>{vid.description}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // ── BRIEF §8: stock display helper (never fake)
+  // ── BRIEF §8: stock display helper
   const stockLabel = (item) => {
-    if (item.stock === null || item.stock === undefined) return null; // unlimited — show nothing
+    if (item.stock === null || item.stock === undefined) return null;
     if (item.stock <= 0) return "SOLD OUT";
     return `${item.stock} remaining`;
   };
-
-  // ── MOBILE MUSIC SUB-TAB PILL RENDERER ────────────────────────────────────
-  const MusicSubTabs = () => (
-    <div style={{display:"flex",gap:8,marginBottom:20,overflowX:"auto",paddingBottom:2}}>
-      {["singles","albums","mymusic"].map(sub => (
-        <button
-          key={sub}
-          onClick={() => switchMusicSubTab(sub)}
-          style={{
-            flexShrink:0,
-            padding:"7px 16px",
-            background:musicSubTab===sub?"rgba(0,255,255,0.12)":"transparent",
-            border:`1px solid ${musicSubTab===sub?"#00ffff":"#2a2a2a"}`,
-            borderRadius:20,
-            color:musicSubTab===sub?"#00ffff":"#666",
-            fontSize:11,
-            fontWeight:700,
-            letterSpacing:1.5,
-            cursor:"pointer",
-            textTransform:"uppercase",
-            transition:"all 0.2s",
-            whiteSpace:"nowrap",
-          }}
-        >
-          {sub === "mymusic" ? "My Music" : sub.charAt(0).toUpperCase() + sub.slice(1)}
-        </button>
-      ))}
-    </div>
-  );
 
   // ═══════════════════════════════════════════════════════════════════════════
   return (
@@ -819,7 +918,7 @@ export default function Page() {
         </div>
       )}
 
-      {/* ── EXCLUSIVE / VAULT MODAL (BRIEF §8: real stock display) ── */}
+      {/* ── EXCLUSIVE / VAULT MODAL ── */}
       {exclusiveModal && (
         <div onClick={()=>setExclusiveModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:20}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#0d0d0d",border:`1px solid ${exclusiveModal.badgeColor}33`,borderRadius:24,padding:isMobile?20:32,width:isMobile?"100%":380,maxWidth:isMobile?"calc(100vw - 32px)":"none",maxHeight:"88vh",overflowY:"auto",display:"flex",flexDirection:"column",gap:16,boxShadow:`0 0 60px ${exclusiveModal.badgeColor}22`}}>
@@ -834,7 +933,6 @@ export default function Page() {
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4}}>
               <div>
                 <div style={{fontSize:26,fontWeight:900,color:exclusiveModal.badgeColor}}>${exclusiveModal.price.toFixed(2)}</div>
-                {/* BRIEF §8: only show stock if not unlimited, never fake */}
                 {exclusiveModal.stock !== null && exclusiveModal.stock !== undefined && (
                   <div style={{fontSize:11,color:exclusiveModal.stock<=0?"#ff4d4d":"#555",marginTop:2}}>
                     {exclusiveModal.stock<=0?"SOLD OUT":`${exclusiveModal.stock} remaining`}
@@ -861,7 +959,7 @@ export default function Page() {
       {/* ══════════════════════ MAIN LAYOUT ═══════════════════════════════════ */}
       <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
 
-        {/* ── DESKTOP SIDEBAR (BRIEF §1) ── */}
+        {/* ── DESKTOP SIDEBAR ── */}
         {!isMobile && (
           <div style={{width:220,flexShrink:0,borderRight:"1px solid #141414",background:"rgba(4,4,4,0.9)",backdropFilter:"blur(20px)",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto",boxShadow:"2px 0 32px rgba(0,0,0,0.5)"}}>
             <div style={{padding:"22px 18px 18px",borderBottom:"1px solid #111",flexShrink:0}}>
@@ -920,7 +1018,7 @@ export default function Page() {
 
             <div key={tabKey} style={{animation:"fadeInTab 0.22s ease forwards"}}>
 
-              {/* ══ HOME (BRIEF §2: order = Singles → Features → Radio → Albums → Audio Visuals → Shop → Exclusives → Shows → Live) ══ */}
+              {/* ══ HOME ══ */}
               {activeTab==="home" && (
                 <>
                   {/* Latest Singles */}
@@ -975,9 +1073,9 @@ export default function Page() {
                     <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile}/>
                   </div>
 
-                  {/* BRIEF §2: Audio Visuals section — AFTER albums, BEFORE shop, renamed from "Music Videos" */}
+                  {/* Audio Visuals — stable extracted component, receives isMobile as prop only */}
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
-                  <AudioVisualsSection/>
+                  <AudioVisualsSection isMobile={isMobile}/>
 
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
 
@@ -994,7 +1092,7 @@ export default function Page() {
 
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
 
-                  {/* Vault / Exclusives preview (renamed §7) */}
+                  {/* Vault */}
                   <div id="home-vault">
                     <h2 className="section-heading" style={{marginBottom:8}}>Vault</h2>
                     <p style={{fontSize:13,color:"#444",marginBottom:24,letterSpacing:1,lineHeight:1.8}}>Not merch. Ownership tokens. Physical and digital proof you were here first.</p>
@@ -1005,7 +1103,6 @@ export default function Page() {
                           <div style={{padding:isMobile?"10px 12px 14px":"14px 16px 18px"}}>
                             <div style={{fontSize:isMobile?11:13,fontWeight:800,marginBottom:4,lineHeight:1.3}}>{item.title}</div>
                             <div style={{fontSize:isMobile?15:18,fontWeight:900,color:item.badgeColor}}>${item.price.toFixed(2)}</div>
-                            {/* BRIEF §8: real stock, never fake */}
                             {item.stock !== null && item.stock !== undefined && (
                               <div style={{fontSize:10,color:item.stock<=0?"#ff4d4d":"#444",marginTop:4}}>{stockLabel(item)}</div>
                             )}
@@ -1047,10 +1144,9 @@ export default function Page() {
                 </>
               )}
 
-              {/* ══ MUSIC TAB — BRIEF §3: Singles / Albums / My Music sub-tabs ══ */}
+              {/* ══ MUSIC TAB ══ */}
               {(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic") && (
                 <>
-                  {/* Music sub-tab pills */}
                   <div style={{marginTop:8,marginBottom:0}}>
                     <div style={{display:"flex",gap:0,borderBottom:"1px solid #1a1a1a",marginBottom:24}}>
                       {[
@@ -1065,10 +1161,9 @@ export default function Page() {
                     </div>
                   </div>
 
-                  {/* ── SINGLES sub-tab (BRIEF §4) ── */}
+                  {/* ── SINGLES sub-tab ── */}
                   {activeTab==="singles" && (
                     <>
-                      {/* §4.1: Search bar */}
                       <div style={{marginBottom:20}}>
                         <div style={{position:"relative"}}>
                           <input
@@ -1081,18 +1176,16 @@ export default function Page() {
                         </div>
                       </div>
 
-                      {/* §4.2: Singles section */}
                       <h2 className="section-heading" style={{marginBottom:14}}>Singles</h2>
                       <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} singleIndex={singleIndex} singles={singles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} openSingleModal={openSingleModal} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut}/>
 
-                      {/* §4.3: Features section */}
                       <div style={{marginTop:32,marginBottom:4}}>
                         <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
                         <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)}/>
                       </div>
 
-                      {/* §4.4: Audio Visuals section — videos live here now */}
-                      <AudioVisualsSection/>
+                      {/* AudioVisualsSection — stable component, safe to render here */}
+                      <AudioVisualsSection isMobile={isMobile}/>
                     </>
                   )}
 
@@ -1104,7 +1197,7 @@ export default function Page() {
                     </>
                   )}
 
-                  {/* ── MY MUSIC sub-tab (BRIEF §6: cleaner, no Browse Singles/Albums buttons) ── */}
+                  {/* ── MY MUSIC sub-tab ── */}
                   {activeTab==="mymusic" && (
                     <>
                       <h2 className="section-heading">My Music</h2>
@@ -1119,10 +1212,7 @@ export default function Page() {
                         <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"48px 32px",textAlign:"center"}}>
                           <div style={{fontSize:32,marginBottom:16}}>🎵</div>
                           <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Your library is empty</div>
-                          <div style={{fontSize:13,color:"#555",marginBottom:24,lineHeight:1.7}}>
-                            Purchase singles, albums, or exclusive drops to start your collection.
-                          </div>
-                          {/* BRIEF §6: no "Browse Singles" / "Browse Albums" labels — use contextual actions */}
+                          <div style={{fontSize:13,color:"#555",marginBottom:24,lineHeight:1.7}}>Purchase singles, albums, or exclusive drops to start your collection.</div>
                           <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
                             <button onClick={()=>switchTab("singles")} style={{padding:"10px 22px",background:"#111",color:"#00ffff",border:"1px solid #00ffff44",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Discover Singles</button>
                             <button onClick={()=>switchTab("vault")} style={{padding:"10px 22px",background:"#111",color:"#a259ff",border:"1px solid #a259ff44",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Vault Drops</button>
@@ -1131,7 +1221,6 @@ export default function Page() {
                       ) : (
                         <>
                           <div style={{fontSize:13,color:"#555",marginBottom:24}}>{myPurchases.length} item{myPurchases.length!==1?"s":""} in your library · {currentUser.name}</div>
-                          {/* Owned content */}
                           <div style={{fontSize:11,color:"#555",letterSpacing:2,marginBottom:12,textTransform:"uppercase"}}>Owned Content</div>
                           <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:32}}>
                             {myPurchases.filter(p=>!p.slug?.startsWith("exc-")).map((item,i)=>(
@@ -1142,7 +1231,6 @@ export default function Page() {
                               </div>
                             ))}
                           </div>
-                          {/* Collectibles owned */}
                           {myPurchases.some(p=>p.slug?.startsWith("exc-")) && (
                             <>
                               <div style={{fontSize:11,color:"#555",letterSpacing:2,marginBottom:12,textTransform:"uppercase"}}>Collectibles</div>
@@ -1177,7 +1265,7 @@ export default function Page() {
                 </>
               )}
 
-              {/* ══ VAULT (BRIEF §7: renamed from "Exclusive", keeps all existing content) ══ */}
+              {/* ══ VAULT ══ */}
               {activeTab==="vault" && (
                 <>
                   <h2 className="section-heading">Exclusive Drops</h2>
@@ -1188,7 +1276,6 @@ export default function Page() {
                         <div style={{position:"relative"}}>
                           <img src={item.cover} style={{width:"100%",height:isMobile?120:200,objectFit:"cover",display:"block"}}/>
                           <div style={{position:"absolute",top:10,left:10,background:item.badgeColor,color:"#000",fontSize:8,fontWeight:900,letterSpacing:1.5,padding:"3px 8px",borderRadius:20}}>{item.badge}</div>
-                          {/* BRIEF §8: real stock display on card, never fake */}
                           {!isMobile && item.stock !== null && item.stock !== undefined && (
                             <div style={{position:"absolute",top:12,right:12,background:"rgba(0,0,0,0.75)",color:item.stock<=0?"#ff4d4d":"#fff",fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:10,backdropFilter:"blur(4px)"}}>{item.stock<=0?"SOLD OUT":`${item.stock} left`}</div>
                           )}
@@ -1510,7 +1597,7 @@ export default function Page() {
         )}
       </div>
 
-      {/* ── MOBILE UI (BRIEF §10: Home / Music / Shop / Vault / Shows + More) ── */}
+      {/* ── MOBILE UI ── */}
       {isMobile && (
         <>
           <button onClick={()=>setMobileCartOpen(true)} style={{position:"fixed",bottom:76,right:16,zIndex:6800,width:50,height:50,borderRadius:"50%",background:"#00ffff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(0,255,255,0.45)",flexShrink:0}}>
@@ -1518,7 +1605,6 @@ export default function Page() {
             {cart.length>0 && <div style={{position:"absolute",top:-4,right:-4,width:20,height:20,borderRadius:"50%",background:"#ff4d4d",color:"white",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{cart.length}</div>}
           </button>
 
-          {/* BRIEF §10: Primary tabs = Home / Music / Shop / Vault / Shows. Videos REMOVED. */}
           <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:6700,background:"rgba(4,4,4,0.97)",backdropFilter:"blur(20px)",borderTop:"1px solid #1a1a1a",display:"flex",alignItems:"center",justifyContent:"space-around",padding:"6px 0 14px",height:62}}>
             {[
               {id:"home",    label:"Home",  icon:"⌂"},
@@ -1527,7 +1613,7 @@ export default function Page() {
               {id:"vault",   label:"Vault", icon:"◈"},
               {id:"shows",   label:"Shows", icon:"✦"},
             ].map(tab=>(
-              <button key={tab.id} onClick={()=>switchTab(tab.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:(activeTab===tab.id||( tab.id==="singles"&&(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic")))?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",borderRadius:8,transition:"color 0.2s",textShadow:(activeTab===tab.id||(tab.id==="singles"&&(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic")))?"0 0 10px rgba(0,255,255,0.6)":"none",minWidth:44,minHeight:44,justifyContent:"center"}}>
+              <button key={tab.id} onClick={()=>switchTab(tab.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:(activeTab===tab.id||(tab.id==="singles"&&(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic")))?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",borderRadius:8,transition:"color 0.2s",textShadow:(activeTab===tab.id||(tab.id==="singles"&&(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic")))?"0 0 10px rgba(0,255,255,0.6)":"none",minWidth:44,minHeight:44,justifyContent:"center"}}>
                 <span style={{fontSize:17,lineHeight:1}}>{tab.icon}</span><span>{tab.label}</span>
               </button>
             ))}
