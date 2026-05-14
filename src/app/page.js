@@ -127,9 +127,12 @@ export default function Page() {
 
   // ── EFFECTS ───────────────────────────────────────────────────────────────
 
- useEffect(() => {
+useEffect(() => {
   const check = () => setIsMobile(window.innerWidth < 768);
-  ...
+  check();
+  window.addEventListener("resize", check);
+
+  return () => window.removeEventListener("resize", check);
 }, []);
 
 useEffect(() => {
