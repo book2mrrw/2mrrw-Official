@@ -121,53 +121,86 @@ function decrementInventory(inv, slug) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ── AUDIO VISUALS SECTION — extracted OUTSIDE Page to prevent remounting ─────
-// ── This is the critical fix: defining this inside Page caused React to treat ─
-// ── it as a new component type on every render, forcing full iframe reloads. ──
+// ── AUDIO VISUALS SECTION ────────────────────────────────────────────────────
+//
+// AUDIO FOCUS LOGIC:
+//   • When this section scrolls into primary view (≥50% visible on mobile,
+//     ≥40% on desktop), it fires onAudioVisualsFocused() — which stops the
+//     preview player in the parent — then mounts the iframe with autoplay=1
+//     and mute=0 so the video plays WITH sound immediately.
+//   • The observer uses a "primary focus" threshold (0.5 mobile / 0.4 desktop)
+//     so it only triggers when the section is the dominant content on screen,
+//     not just barely peeking into view.
+//   • The observer fires once per mount and disconnects, preventing loops.
+//   • If the user clicks the placeholder thumbnail before scrolling, we also
+//     fire onAudioVisualsFocused so preview audio stops cleanly.
 // ══════════════════════════════════════════════════════════════════════════════
-const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile }) {
-  // Own its state — not owned by Page, so parent re-renders never affect this
+const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudioVisualsFocused }) {
   const [featuredId, setFeaturedId] = useState(musicVideos[0].youtubeId);
-  // Tracks whether section has scrolled into view (for autoplay trigger)
+  // hasEntered: true once section is in primary focus → iframe mounts with sound
   const [hasEntered, setHasEntered] = useState(false);
   const sectionRef = useRef(null);
+  // Track whether we've already fired the focus callback to avoid repeat calls
+  const firedFocusRef = useRef(false);
 
   const featuredVid = useMemo(
     () => musicVideos.find(v => v.youtubeId === featuredId) || musicVideos[0],
     [featuredId]
   );
 
-  // Intersection Observer — fires ONCE when section enters viewport.
-  // Disconnects immediately after triggering to avoid any loop.
+  // Called when Audio Visuals takes primary focus — stops preview audio
+  // and marks that the iframe should now play with sound.
+  const triggerFocus = useCallback(() => {
+    if (!firedFocusRef.current) {
+      firedFocusRef.current = true;
+      if (typeof onAudioVisualsFocused === "function") {
+        onAudioVisualsFocused();
+      }
+    }
+    setHasEntered(true);
+  }, [onAudioVisualsFocused]);
+
+  // IntersectionObserver — watches for the section becoming the primary
+  // visible content. Threshold is higher than a simple "entered viewport"
+  // check so it only triggers when this section is clearly the focus area.
+  // Disconnects after first trigger to avoid any loop or re-firing.
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
+
+    // Use a higher threshold on mobile (0.5) since the viewport is narrow
+    // and the section fills more of the screen; desktop uses 0.4.
+    const threshold = isMobile ? 0.5 : 0.4;
+
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          setHasEntered(true);
-          obs.disconnect(); // fire once, then stop observing
+          triggerFocus();
+          obs.disconnect(); // fire once only — no aggressive loop
         }
       },
-      { threshold: 0.25 }
+      { threshold }
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, []); // empty deps — runs once on mount only
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — runs once on mount only
 
-  // Stable select handler — won't change reference across renders
   const handleSelect = useCallback((id) => {
     setFeaturedId(id);
   }, []);
 
-  // Build src once per (featuredId, hasEntered) combo.
-  // The iframe key={featuredId} ensures a clean remount on video switch.
-  // Before entering viewport: no autoplay (placeholder shown instead).
-  // After entering viewport: iframe mounts with autoplay=1&mute=1.
+  // iframe src: autoplay=1, mute=0 — plays with sound when mounted.
+  // key={featuredId} forces a clean iframe remount on video switch.
   const iframeSrc = useMemo(
-    () => `https://www.youtube.com/embed/${featuredId}?rel=0&playsinline=1&autoplay=1&mute=1`,
+    () => `https://www.youtube.com/embed/${featuredId}?rel=0&playsinline=1&autoplay=1&mute=0`,
     [featuredId]
   );
+
+  // Placeholder click handler — user tapped before scrolling into focus
+  const handlePlaceholderClick = useCallback(() => {
+    triggerFocus();
+  }, [triggerFocus]);
 
   return (
     <div ref={sectionRef}>
@@ -194,8 +227,8 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile }) {
                   style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}}
                 />
               ) : (
-                // Placeholder thumbnail until scrolled into view — zero iframe overhead
-                <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",cursor:"pointer"}} onClick={() => setHasEntered(true)}>
+                // Placeholder thumbnail until section reaches primary focus
+                <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",cursor:"pointer"}} onClick={handlePlaceholderClick}>
                   <img
                     src={`https://img.youtube.com/vi/${featuredId}/mqdefault.jpg`}
                     alt={featuredVid.title}
@@ -261,7 +294,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile }) {
       ) : (
         // ── DESKTOP: cinematic featured player + queue sidebar ────────────────
         <div style={{display:"flex",gap:20,alignItems:"flex-start"}}>
-          {/* Primary featured player — takes remaining width */}
+          {/* Primary featured player */}
           <div style={{flex:"1 1 0",minWidth:0,background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.5)"}}>
             <div style={{position:"relative",paddingBottom:"56.25%",height:0,background:"#000"}}>
               {hasEntered ? (
@@ -275,10 +308,10 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile }) {
                   style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}}
                 />
               ) : (
-                // Placeholder until in-viewport
+                // Placeholder until in primary focus
                 <div
                   style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",cursor:"pointer"}}
-                  onClick={() => setHasEntered(true)}
+                  onClick={handlePlaceholderClick}
                 >
                   <img
                     src={`https://img.youtube.com/vi/${featuredId}/maxresdefault.jpg`}
@@ -300,7 +333,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile }) {
             </div>
           </div>
 
-          {/* Queue sidebar — compact cinematic cards */}
+          {/* Queue sidebar */}
           <div style={{width:236,flexShrink:0,display:"flex",flexDirection:"column",gap:10}}>
             <div style={{fontSize:9,color:"#2a2a2a",letterSpacing:3,textTransform:"uppercase",fontWeight:700,marginBottom:2}}>Up Next</div>
             {musicVideos.map(vid => {
@@ -326,7 +359,6 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile }) {
                   }}
                 >
                   <div style={{display:"flex",gap:10,padding:10,alignItems:"center"}}>
-                    {/* Thumbnail */}
                     <div style={{position:"relative",width:90,height:50,borderRadius:8,overflow:"hidden",flexShrink:0}}>
                       <img
                         src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
@@ -344,7 +376,6 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile }) {
                         </div>
                       )}
                     </div>
-                    {/* Info */}
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{
                         fontSize:12,
@@ -436,6 +467,17 @@ export default function Page() {
   const ambientRefs        = useRef({});
   const ytPlayerRef        = useRef(null);
   const ytIframeRef        = useRef(null);
+
+  // ── AUDIO FOCUS HANDLER ───────────────────────────────────────────────────
+  // Called by AudioVisualsSection when it becomes the primary visible section.
+  // Pauses the preview player so there's no audio overlap.
+  const handleAudioVisualsFocused = useCallback(() => {
+    const audio = nowPlayingAudioRef.current;
+    if (audio && !audio.paused) {
+      audio.pause();
+      setNowPlayingPlaying(false);
+    }
+  }, []);
 
   // ── EFFECTS ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1073,9 +1115,9 @@ export default function Page() {
                     <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile}/>
                   </div>
 
-                  {/* Audio Visuals — stable extracted component, receives isMobile as prop only */}
+                  {/* Audio Visuals — passes handleAudioVisualsFocused to stop preview on focus */}
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
-                  <AudioVisualsSection isMobile={isMobile}/>
+                  <AudioVisualsSection isMobile={isMobile} onAudioVisualsFocused={handleAudioVisualsFocused}/>
 
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
 
@@ -1184,8 +1226,8 @@ export default function Page() {
                         <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)}/>
                       </div>
 
-                      {/* AudioVisualsSection — stable component, safe to render here */}
-                      <AudioVisualsSection isMobile={isMobile}/>
+                      {/* AudioVisualsSection — Music tab, same audio focus logic */}
+                      <AudioVisualsSection isMobile={isMobile} onAudioVisualsFocused={handleAudioVisualsFocused}/>
                     </>
                   )}
 
