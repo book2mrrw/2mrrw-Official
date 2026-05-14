@@ -1,49 +1,57 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+const formatTime = (s) => {
+  if (!s || isNaN(s) || !isFinite(s)) return "0:00";
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, "0")}`;
+};
+
 // ── SOCIALS ───────────────────────────────────────────────────────────────────
 const SOCIALS = [
-  { name: "YouTube",   href: "https://youtube.com/@callme2mrrw?si=Bwvli5p7hhvED7eq",                    svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" /></svg>) },
-  { name: "Instagram", href: "https://www.instagram.com/callme2mrrw?igsh=MXMwdzNiZGE5NTJwaw==",          svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z" /></svg>) },
-  { name: "TikTok",    href: "https://tiktok.com/@thareal2mrrw",                                          svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" /></svg>) },
-  { name: "Twitch",    href: "https://twitch.tv/callme2mrrw",                                             svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z" /></svg>) },
-  { name: "X",         href: "https://x.com/callme2mrrw",                                                svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.747l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>) },
-  { name: "Patreon",   href: "https://patreon.com/2mrrw",                                                 svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M0 .48v23.04h4.22V.48zm15.385 0c-4.764 0-8.641 3.88-8.641 8.65 0 4.755 3.877 8.623 8.641 8.623 4.75 0 8.615-3.868 8.615-8.623C24 4.36 20.136.48 15.385.48z" /></svg>) },
+  { name: "YouTube",   href: "https://youtube.com/@callme2mrrw?si=Bwvli5p7hhvED7eq",                   svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>) },
+  { name: "Instagram", href: "https://www.instagram.com/callme2mrrw?igsh=MXMwdzNiZGE5NTJwaw==",         svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>) },
+  { name: "TikTok",    href: "https://tiktok.com/@thareal2mrrw",                                         svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>) },
+  { name: "Twitch",    href: "https://twitch.tv/callme2mrrw",                                            svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>) },
+  { name: "X",         href: "https://x.com/callme2mrrw",                                               svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.747l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>) },
+  { name: "Patreon",   href: "https://patreon.com/2mrrw",                                                svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M0 .48v23.04h4.22V.48zm15.385 0c-4.764 0-8.641 3.88-8.641 8.65 0 4.755 3.877 8.623 8.641 8.623 4.75 0 8.615-3.868 8.615-8.623C24 4.36 20.136.48 15.385.48z"/></svg>) },
 ];
 
 // ── MUSIC VIDEOS ──────────────────────────────────────────────────────────────
 const musicVideos = [
-  { id: "mv-1", title: "Hour Glass", youtubeId: "tv_aS-hJ880", description: "Official Music Video" },
-  { id: "mv-2", title: "A2B",        youtubeId: "kPITYHMVeXM", description: "Official Music Video" },
-  { id: "mv-3", title: "W.2.D",      youtubeId: "jsrA1SL3_GU", description: "Official Music Video" }
+  { id:"mv-1", title:"Hour Glass", youtubeId:"tv_aS-hJ880", description:"Official Music Video" },
+  { id:"mv-2", title:"A2B",        youtubeId:"kPITYHMVeXM", description:"Official Music Video" },
+  { id:"mv-3", title:"W.2.D",      youtubeId:"jsrA1SL3_GU", description:"Official Music Video" },
 ];
 
-// ── EXCLUSIVE ITEMS ───────────────────────────────────────────────────────────
+// ── EXCLUSIVE ITEMS — FIX #5: all A.D. covers use /images/albums/ad.jpg ──────
 const exclusiveItems = [
-  { id:"exc-card-tbh",     title:"T.B.H. Collector Art Card",    subtitle:"First Edition · #/100",           type:"collector-card", cover:"/images/albums/tbh.jpg",    price:89.99,  description:"4×6 premium matte card, 400gsm thick stock. Hand-signed with a personal message. QR code links directly to the T.B.H. digital album. Ships in an acrylic display case.",                                               features:["Hand-signed by 2MRRW","QR code → digital album access","400gsm soft-touch matte finish","Acrylic display case included","Numbered 1 of 100"], stock:23, badge:"FIRST EDITION",  badgeColor:"#00ffff", slug:"exc-card-tbh" },
-  { id:"exc-card-ad",      title:"(A.D.) Collector Art Card",    subtitle:"Early Supporter Series · #/50",   type:"collector-card", cover:"/images/albums/ad.jpg",     price:99.99,  description:"5×5 premium card with embedded NFC chip. Tap your phone to unlock exclusive fan content. Hand-signed. Ships in a magnetic enclosure. Limited to 50 pieces worldwide.",                                                    features:["NFC chip — tap to open exclusive portal","Hand-signed by 2MRRW","500gsm with magnetic enclosure","Numbered 1 of 50","Inner Circle access granted"],       stock:11, badge:"EARLY SUPPORTER",badgeColor:"#ff6b35", slug:"exc-card-ad" },
-  { id:"exc-bundle-lovehz",title:"Love Hz Vol.1 Launch Bundle",  subtitle:"Collector Bundle · Launch Edition",type:"bundle",        cover:"/images/albums/lovehz.jpg", price:149.99, description:"Full digital album + collector art card + hand-signed lyric sheet. Exclusive to launch supporters. This is ownership. Not just music.",                                                                                     features:["Digital album — instant download","Collector art card (numbered)","Hand-signed lyric sheet","Early listener credit","Inner Circle badge unlocked"],        stock:7,  badge:"LAUNCH BUNDLE",  badgeColor:"#a259ff", slug:"exc-bundle-lovehz" },
-  { id:"exc-signed-vinyl",  title:"Signed Vinyl — T.B.H.",       subtitle:"Hand-Signed · Limited Press",     type:"vinyl",         cover:"/images/albums/tbh.jpg",    price:74.99,  description:"T.B.H. on wax, hand-signed on the sleeve. Limited press. This is the record you pull out and show people. The one that started it.",                                                                                      features:["Hand-signed sleeve by 2MRRW","Limited press run","Ships in protective sleeve","Certificate of authenticity","Collector-grade packaging"],                  stock:14, badge:"SIGNED",          badgeColor:"#00ffff", slug:"exc-signed-vinyl" },
+  { id:"exc-card-tbh",     title:"T.B.H. Collector Art Card",   subtitle:"First Edition · #/100",           type:"collector-card", cover:"/images/albums/tbh.jpg",    price:89.99,  description:"4×6 premium matte card, 400gsm thick stock. Hand-signed with a personal message. QR code links directly to the T.B.H. digital album. Ships in an acrylic display case.",                                            features:["Hand-signed by 2MRRW","QR code → digital album access","400gsm soft-touch matte finish","Acrylic display case included","Numbered 1 of 100"], stock:23, badge:"FIRST EDITION",  badgeColor:"#00ffff", slug:"exc-card-tbh" },
+  { id:"exc-card-ad",      title:"(A.D) Collector Art Card",    subtitle:"Early Supporter Series · #/50",   type:"collector-card", cover:"/images/albums/ad.jpg",     price:99.99,  description:"5×5 premium card with embedded NFC chip. Tap your phone to unlock exclusive fan content. Hand-signed. Ships in a magnetic enclosure. Limited to 50 pieces worldwide.",                                                 features:["NFC chip — tap to open exclusive portal","Hand-signed by 2MRRW","500gsm with magnetic enclosure","Numbered 1 of 50","Inner Circle access granted"],       stock:11, badge:"EARLY SUPPORTER",badgeColor:"#ff6b35", slug:"exc-card-ad" },
+  { id:"exc-bundle-lovehz",title:"Love Hz Vol.1 Launch Bundle", subtitle:"Collector Bundle · Launch Edition",type:"bundle",         cover:"/images/albums/lovehz.jpg", price:149.99, description:"Full digital album + collector art card + hand-signed lyric sheet. Exclusive to launch supporters. This is ownership. Not just music.",                                                                                  features:["Digital album — instant download","Collector art card (numbered)","Hand-signed lyric sheet","Early listener credit","Inner Circle badge unlocked"],        stock:7,  badge:"LAUNCH BUNDLE",  badgeColor:"#a259ff", slug:"exc-bundle-lovehz" },
+  { id:"exc-signed-vinyl",  title:"Signed Vinyl — T.B.H.",      subtitle:"Hand-Signed · Limited Press",     type:"vinyl",          cover:"/images/albums/tbh.jpg",    price:74.99,  description:"T.B.H. on wax, hand-signed on the sleeve. Limited press. This is the record you pull out and show people. The one that started it.",                                                                                   features:["Hand-signed sleeve by 2MRRW","Limited press run","Ships in protective sleeve","Certificate of authenticity","Collector-grade packaging"],                  stock:14, badge:"SIGNED",          badgeColor:"#00ffff", slug:"exc-signed-vinyl" },
 ];
 
 // ── CIRCLE RESPONSES ──────────────────────────────────────────────────────────
 const circleResponses = [
-  { id:"resp-1", question:"What does 2MRRW actually mean to you personally?",                              questionBy:"EarlyFan_J",    questionTime:"March 15, 2026", response:"It means tomorrow is always possible. No matter how heavy today gets, you hold on because tomorrow is a blank page. That's the whole movement — not optimism, just possibility.", tag:"VISIONARY PICK",      tagColor:"#a259ff", highlight:true  },
-  { id:"resp-2", question:"How do you decide which songs make the album vs. which stay unreleased?",       questionBy:"Listener_K",    questionTime:"March 28, 2026", response:"The ones that make it are the ones that still hurt when I listen back. If I can hear it and feel nothing — it's not ready for you. If it still cuts, it's real enough to share.",        tag:"FEATURED",            tagColor:"#00ffff", highlight:false },
-  { id:"resp-3", question:"Will there be a Love Hz Vol.2?",                                                questionBy:"Collector_001", questionTime:"April 5, 2026",  response:"Already working on it. Vol.1 was the introduction to the frequency. Vol.2 is what happens when the signal locks in. You'll feel the difference.",                               tag:"COMMUNITY HIGHLIGHT", tagColor:"#ff6b35", highlight:false },
+  { id:"resp-1", question:"What does 2MRRW actually mean to you personally?",                             questionBy:"EarlyFan_J",    questionTime:"March 15, 2026", response:"It means tomorrow is always possible. No matter how heavy today gets, you hold on because tomorrow is a blank page. That's the whole movement — not optimism, just possibility.", tag:"VISIONARY PICK",      tagColor:"#a259ff", highlight:true  },
+  { id:"resp-2", question:"How do you decide which songs make the album vs. which stay unreleased?",      questionBy:"Listener_K",    questionTime:"March 28, 2026", response:"The ones that make it are the ones that still hurt when I listen back. If I can hear it and feel nothing — it's not ready for you. If it still cuts, it's real enough to share.",        tag:"FEATURED",            tagColor:"#00ffff", highlight:false },
+  { id:"resp-3", question:"Will there be a Love Hz Vol.2?",                                               questionBy:"Collector_001", questionTime:"April 5, 2026",  response:"Already working on it. Vol.1 was the introduction to the frequency. Vol.2 is what happens when the signal locks in. You'll feel the difference.",                               tag:"COMMUNITY HIGHLIGHT", tagColor:"#ff6b35", highlight:false },
 ];
 
 // ── INNER CIRCLE POSTS ────────────────────────────────────────────────────────
 const innerCirclePosts = [
   { id:"ic-1", title:"Why I Almost Scrapped Love Hz Vol.1",   date:"April 10, 2026",  preview:"There was a version of this project that never would have seen the light. Here's what changed.",       body:"There was a point — around month 14 of making this album — where I deleted everything. The whole project folder. Emptied the trash. Gone.\n\nIt wasn't creative block. It was the opposite. I had too much. 22 songs and none of them felt like they belonged together. I was chasing something I couldn't name yet.\n\nWhat brought it back was stripping it down to 6 tracks and asking: which of these would I still stand behind in 10 years? The answer became Love Hz Vol.1. Not the version I planned. The version that survived." },
   { id:"ic-2", title:"The Story Behind W.2.D",                date:"March 30, 2026",  preview:"This track wasn't written in a studio. It was written in a parking lot at 2am. Here's the full story.", body:"W.2.D was written in the front seat of my car outside a gas station on I-20. It was 2am. I had my phone, a voice memo app, and about 40 minutes before I needed to be somewhere.\n\nThe whole thing came out in one sitting. Sometimes that happens. You stop trying to write and the song just falls out of you.\n\nI drove home, set up my mic, and recorded a demo that night. The version you're hearing is that demo, cleaned up. The urgency in it is real. That's not performance — that's actually what 2am sounds like." },
-  { id:"ic-3", title:"What the Collector Cards Actually Mean", date:"March 18, 2026",  preview:"It's not merch. Here's the full vision behind the physical collector system and where it's going.",   body:"People keep calling the collector cards merch. They're not merch.\n\nMerch is a t-shirt. You wear it, it fades, you forget about it. A collector card is a record of presence. It says: I was here when this was being built. I believed before it was obvious.\n\nThe long-term vision is a tiered system where each card unlocks something real — early access, private sessions, input on creative decisions. The NFC chip on the (A.D.) card is the first version of that. It's going to go much further.\n\nIf you have one, hold it. You're not holding merch. You're holding a key." },
+  { id:"ic-3", title:"What the Collector Cards Actually Mean", date:"March 18, 2026",  preview:"It's not merch. Here's the full vision behind the physical collector system and where it's going.",   body:"People keep calling the collector cards merch. They're not merch.\n\nMerch is a t-shirt. You wear it, it fades, you forget about it. A collector card is a record of presence. It says: I was here when this was being built. I believed before it was obvious.\n\nThe long-term vision is a tiered system where each card unlocks something real — early access, private sessions, input on creative decisions. The NFC chip on the (A.D) card is the first version of that. It's going to go much further.\n\nIf you have one, hold it. You're not holding merch. You're holding a key." },
 ];
 
-// ── ADMIN CONTROL ─────────────────────────────────────────────────────────────
+// ── CONSTANTS ─────────────────────────────────────────────────────────────────
 const nextLiveDateTime = new Date("2026-05-10T20:00:00");
 const events = [
   { id:"evt-1", name:"2MRRW Live – Dallas",  location:"Dallas, TX",      date:"2026-05-10", time:"8:00 PM", price:25.00, tickets:50 },
@@ -52,8 +60,6 @@ const events = [
   { id:"evt-4", name:"2MRRW Live – LA",      location:"Los Angeles, CA", date:"2026-06-21", time:"9:00 PM", price:35.00, tickets:40 },
   { id:"evt-5", name:"2MRRW Live – NYC",     location:"New York, NY",    date:"2026-07-04", time:"8:00 PM", price:35.00, tickets:45 },
 ];
-
-// ── RADIO SLIDES ──────────────────────────────────────────────────────────────
 const radioSlides = [
   { slug:"hour-glass",     title:"Hour Glass",     cover:"/images/singles/hourglass.jpg", price:2.99, tag:"NOW PLAYING", tagColor:"#00ffff" },
   { slug:"w2d",            title:"W.2.D",          cover:"/images/singles/w2d.jpg",       price:2.99, tag:"FEATURED",    tagColor:"#a259ff" },
@@ -61,26 +67,31 @@ const radioSlides = [
   { slug:"turnt-me-2-dis", title:"Turnt Me 2 Dis", cover:"/images/singles/turnt.jpg",     price:2.99, tag:"FEATURED",    tagColor:"#00ffff" },
 ];
 
-// ── FEATURES — FIX #2: moved to module scope so FeaturesRail never remounts ──
+// FIX #1 + #2: module-scope arrays so CarouselUI/FeaturesRail never remount
 const features = [
-  {
-    title:"I Don't Believe You",
-    slug:"i-dont-believe-you",
-    cover:"/images/features/idbu.jpg",
-    price:2.99,
-    featuring:"FT. 2MRRW",
-    preview:"/audio/previews/i-dont-believe-you-preview.wav",
-    fullSong:"/audio/full/i-dont-believe-you.wav"
-  },
-  {
-    title:"2 Heavy",
-    slug:"2-heavy",
-    cover:"/images/features/2heavy.jpg",
-    price:2.99,
-    featuring:"FT. 2MRRW",
-    preview:"/audio/previews/2-heavy-preview.wav",
-    fullSong:"/audio/full/2-heavy.wav"
-  },
+  { title:"I Don't Believe You", slug:"i-dont-believe-you", cover:"/images/features/idbu.jpg",   price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/i-dont-believe-you-preview.wav" },
+  { title:"2 Heavy",             slug:"2-heavy",            cover:"/images/features/2heavy.jpg", price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/2-heavy-preview.wav" },
+];
+const singles = [
+  { title:"Hour Glass",     slug:"hour-glass",     cover:"/images/singles/hourglass.jpg", price:2.99, preview:"/audio/previews/hourglass-preview.mp3" },
+  { title:"W: Da Guys",     slug:"w-da-guys",      cover:"/images/singles/wdaguys.jpg",   price:2.99, preview:"/audio/previews/wdaguys-preview.mp3" },
+  { title:"W.2.D",          slug:"w2d",            cover:"/images/singles/w2d.jpg",       price:2.99, preview:"/audio/previews/w2d-preview.mp3" },
+  { title:"Artificial",     slug:"artificial",     cover:"/images/singles/artificial.jpg",price:2.99, preview:"/audio/previews/artificial-preview.mp3" },
+  { title:"Turnt Me 2 Dis", slug:"turnt-me-2-dis", cover:"/images/singles/turnt.jpg",     price:2.99, preview:"/audio/previews/turntme2dis-preview.mp3" },
+];
+
+// FIX #5: A.D. title normalized, cover path confirmed /images/albums/ad.jpg
+const albums = [
+  { title:"T.B.H.",        slug:"tbh",     cover:"/images/albums/tbh.jpg",    price:9.99,  date:"July 7, 2022",   vinyl:47.99, tracks:["Glass Full","Up 2 Me","Unexpcted","All Yours","Locomotive","LEFT","Was Wrong","ArTiFICiaL"] },
+  { title:"(A.D)",         slug:"ad",      cover:"/images/albums/ad.jpg",     price:9.99,  date:"March 24, 2024", vinyl:47.99, tracks:["2mrrw's Ntro","Said N' Done","A.D.D","Perspective (2018)","Grand Scheme","A2B","Life Changes (2018)","Itself (2018)","Wastin Time","Like Me Or Not"] },
+  { title:"Love Hz Vol.1", slug:"love-hz", cover:"/images/albums/lovehz.jpg", price:12.99, date:"August 2026",    vinyl:47.99, tracks:["Roll Call","W.2.D","All Of It","Knock On Wood","Stayed 2 Long","Hour Glass"] },
+];
+
+// FIX #4: fallback merch shown when Printful returns empty
+const fallbackMerch = [
+  { title:"2MRRW HOODIE",  slug:"hoodie", cover:"/images/merch/hoodie.jpg", price:59.99 },
+  { title:"2MRRW T-SHIRT", slug:"shirt",  cover:"/images/merch/shirt.jpg",  price:29.99 },
+  { title:"2MRRW HAT",     slug:"hat",    cover:"/images/merch/hat.jpg",    price:24.99 },
 ];
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -117,7 +128,6 @@ export default function Page() {
   const [circleCategory, setCircleCategory]       = useState("question");
   const [circleSubmissions, setCircleSubmissions] = useState([]);
   const [circleSubmitted, setCircleSubmitted]     = useState(false);
-  const [circleFilter, setCircleFilter]           = useState("all");
   const [myPurchases, setMyPurchases]             = useState([]);
   const [authMode, setAuthMode]                   = useState("login");
   const [authEmail, setAuthEmail]                 = useState("");
@@ -125,7 +135,6 @@ export default function Page() {
   const [authError, setAuthError]                 = useState("");
   const [liveCountdown, setLiveCountdown]         = useState({ days:0, hours:0, minutes:0, seconds:0 });
   const [liveIsLive, setLiveIsLive]               = useState(false);
-  const [previewHover, setPreviewHover]           = useState(false);
   const [innerCirclePost, setInnerCirclePost]     = useState(null);
   const [expandedGroup, setExpandedGroup]         = useState("g-home");
   const [tabKey, setTabKey]                       = useState(0);
@@ -133,9 +142,14 @@ export default function Page() {
   const [nowPlayingPlaying, setNowPlayingPlaying] = useState(false);
   const [radioIndex, setRadioIndex]               = useState(0);
   const [flowConversionActive, setFlowConversionActive] = useState(false);
+  // FIX #4: Printful state
   const [printfulProducts, setPrintfulProducts]   = useState([]);
-  // ── MOBILE STATE ──────────────────────────────────────────────────────────
-  const [isMobile, setIsMobile]             = useState(false);
+  const [printfulLoading, setPrintfulLoading]     = useState(true);
+  // FIX #2: audio progress
+  const [audioCurrentTime, setAudioCurrentTime]   = useState(0);
+  const [audioDuration, setAudioDuration]         = useState(0);
+  // mobile
+  const [isMobile, setIsMobile]       = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen]   = useState(false);
 
@@ -148,7 +162,6 @@ export default function Page() {
   const ytIframeRef        = useRef(null);
 
   // ── EFFECTS ───────────────────────────────────────────────────────────────
-
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
     check();
@@ -156,43 +169,54 @@ export default function Page() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // FIX #1a: Normalize Printful field names so Grid can render title/cover/price/slug
+  // FIX #2: audio progress listeners — mount once on stable ref
   useEffect(() => {
+    const audio = nowPlayingAudioRef.current;
+    if (!audio) return;
+    const onTime     = () => setAudioCurrentTime(audio.currentTime);
+    const onDuration = () => setAudioDuration(isFinite(audio.duration) ? audio.duration : 0);
+    const onEnded    = () => { setNowPlayingPlaying(false); setAudioCurrentTime(0); };
+    const onReset    = () => { setAudioCurrentTime(0); setAudioDuration(0); };
+    audio.addEventListener("timeupdate",     onTime);
+    audio.addEventListener("durationchange", onDuration);
+    audio.addEventListener("loadedmetadata", onDuration);
+    audio.addEventListener("ended",          onEnded);
+    audio.addEventListener("emptied",        onReset);
+    return () => {
+      audio.removeEventListener("timeupdate",     onTime);
+      audio.removeEventListener("durationchange", onDuration);
+      audio.removeEventListener("loadedmetadata", onDuration);
+      audio.removeEventListener("ended",          onEnded);
+      audio.removeEventListener("emptied",        onReset);
+    };
+  }, []);
+
+  // FIX #4: Printful fetch — normalize field names, loading flag, fallback-safe
+  useEffect(() => {
+    setPrintfulLoading(true);
     fetch("/api/printful/products")
-      .then((res) => res.json())
-      .then((data) => {
+      .then(r => r.json())
+      .then(data => {
         console.log("PRINTFUL DATA:", data);
-        if (data.success) {
-          const normalized = (data.products || []).map((p) => ({
+        if (data.success && Array.isArray(data.products) && data.products.length > 0) {
+          const normalized = data.products.map(p => ({
             slug:  p.slug  || String(p.id),
-            title: p.title || p.name,
-            cover: p.cover || p.thumbnail_url || p.image || null,
+            title: p.title || p.name || "Untitled",
+            cover: p.cover || p.thumbnail_url || p.preview_url || p.image || null,
             price: typeof p.price === "number"
               ? p.price
-              : parseFloat(p.retail_price ?? p.price ?? 0),
+              : parseFloat(p.retail_price ?? p.variants?.[0]?.retail_price ?? 0),
           }));
           setPrintfulProducts(normalized);
         }
       })
-      .catch((err) => {
-        console.error("PRINTFUL FETCH ERROR:", err);
-      });
+      .catch(err => console.error("PRINTFUL FETCH ERROR:", err))
+      .finally(() => setPrintfulLoading(false));
   }, []);
 
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_user");
     if (stored) { setCurrentUser(JSON.parse(stored)); setGateSubmitted(true); }
-  }, []);
-
-  useEffect(() => {
-    const els = document.querySelectorAll(".fade-on-scroll");
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((e) => {
-        if (e.isIntersecting) { e.target.style.opacity=1; e.target.style.transform="translateY(0px)"; }
-      });
-    });
-    els.forEach((el) => observer.observe(el));
-    return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
@@ -207,9 +231,7 @@ export default function Page() {
 
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_cart");
-    if (stored) {
-      try { setCart(JSON.parse(stored)); } catch {}
-    }
+    if (stored) { try { setCart(JSON.parse(stored)); } catch {} }
   }, []);
 
   useEffect(() => {
@@ -218,15 +240,14 @@ export default function Page() {
 
   useEffect(() => {
     const tick = () => {
-      const now  = new Date();
-      const diff = nextLiveDateTime - now;
+      const diff = nextLiveDateTime - new Date();
       if (diff <= 0) { setLiveIsLive(true); setLiveCountdown({days:0,hours:0,minutes:0,seconds:0}); return; }
       setLiveIsLive(false);
       setLiveCountdown({
-        days:    Math.floor(diff/(1000*60*60*24)),
-        hours:   Math.floor((diff%(1000*60*60*24))/(1000*60*60)),
-        minutes: Math.floor((diff%(1000*60*60))/(1000*60)),
-        seconds: Math.floor((diff%(1000*60))/1000),
+        days:    Math.floor(diff / (1000*60*60*24)),
+        hours:   Math.floor((diff % (1000*60*60*24)) / (1000*60*60)),
+        minutes: Math.floor((diff % (1000*60*60)) / (1000*60)),
+        seconds: Math.floor((diff % (1000*60)) / 1000),
       });
     };
     tick();
@@ -235,28 +256,23 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    const move = (e) => {
-      if (cursorRef.current)      { cursorRef.current.style.left=e.clientX+"px"; cursorRef.current.style.top=e.clientY+"px"; }
-      if (cursorTrailRef.current) { cursorTrailRef.current.style.left=e.clientX+"px"; cursorTrailRef.current.style.top=e.clientY+"px"; }
+    const move = e => {
+      if (cursorRef.current)      { cursorRef.current.style.left = e.clientX+"px"; cursorRef.current.style.top = e.clientY+"px"; }
+      if (cursorTrailRef.current) { cursorTrailRef.current.style.left = e.clientX+"px"; cursorTrailRef.current.style.top = e.clientY+"px"; }
     };
     window.addEventListener("mousemove", move);
     return () => window.removeEventListener("mousemove", move);
   }, []);
 
   useEffect(() => {
-    const ambientPaths = {
-      shop:"shop",blog:"community",vision:"community",circle:"community",
-      innercircle:"community",videos:"videos",shows:"shows",live:"live",exclusive:"exclusive",
-    };
-    Object.values(ambientRefs.current).forEach((a) => { try { a.pause(); } catch {} });
-    if (soundOn && ambientPaths[activeTab]) {
-      const src = `/audio/ambient/${ambientPaths[activeTab]}.mp3`;
-      if (!ambientRefs.current[src]) {
-        try { const a=new Audio(src); a.loop=true; a.volume=0.07; ambientRefs.current[src]=a; } catch {}
-      }
+    const paths = { shop:"shop", blog:"community", vision:"community", circle:"community", innercircle:"community", videos:"videos", shows:"shows", live:"live", exclusive:"exclusive" };
+    Object.values(ambientRefs.current).forEach(a => { try { a.pause(); } catch {} });
+    if (soundOn && paths[activeTab]) {
+      const src = `/audio/ambient/${paths[activeTab]}.mp3`;
+      if (!ambientRefs.current[src]) { try { const a=new Audio(src); a.loop=true; a.volume=0.07; ambientRefs.current[src]=a; } catch {} }
       if (ambientRefs.current[src]) ambientRefs.current[src].play().catch(()=>{});
     }
-    return () => { Object.values(ambientRefs.current).forEach((a) => { try { a.pause(); } catch {} }); };
+    return () => { Object.values(ambientRefs.current).forEach(a => { try { a.pause(); } catch {} }); };
   }, [activeTab, soundOn]);
 
   useEffect(() => {
@@ -264,11 +280,13 @@ export default function Page() {
     if (map[activeTab]) setExpandedGroup(map[activeTab]);
   }, [activeTab]);
 
-  // FIX #3: nowPlaying effect — owns the full play flow, no race condition
+  // FIX #2/#3: nowPlaying effect owns full play flow — no race condition
   useEffect(() => {
     if (!nowPlaying || !nowPlayingAudioRef.current) return;
     const audio = nowPlayingAudioRef.current;
     audio.pause();
+    setAudioCurrentTime(0);
+    setAudioDuration(0);
     audio.src = nowPlaying.preview;
     audio.play()
       .then(() => setNowPlayingPlaying(true))
@@ -281,86 +299,149 @@ export default function Page() {
 
   useEffect(() => {
     if (activeTab !== "videos") {
-      if (ytPlayerRef.current) {
-        try { ytPlayerRef.current.destroy(); } catch {}
-        ytPlayerRef.current = null;
-      }
+      if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch {} ytPlayerRef.current = null; }
       return;
     }
-
     const initPlayer = () => {
       if (!window.YT || !window.YT.Player || !ytIframeRef.current) return;
-      if (ytPlayerRef.current) {
-        try { ytPlayerRef.current.destroy(); } catch {}
-      }
+      if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch {} }
       ytPlayerRef.current = new window.YT.Player(ytIframeRef.current, {
         events: {
-          onReady: (e) => {
-            try {
-              e.target.unMute();
-              e.target.setVolume(80);
-              e.target.playVideo();
-            } catch {}
-          },
-          onStateChange: (e) => {
-            if (e.data === 0 && activeVideo !== "kPITYHMVeXM") {
-              setActiveVideo("kPITYHMVeXM");
-            }
-          }
-        }
+          onReady: e => { try { e.target.unMute(); e.target.setVolume(80); e.target.playVideo(); } catch {} },
+          onStateChange: e => { if (e.data === 0 && activeVideo !== "kPITYHMVeXM") setActiveVideo("kPITYHMVeXM"); },
+        },
       });
     };
-
     if (!window.YT || !window.YT.Player) {
       if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
-        const tag = document.createElement("script");
-        tag.src = "https://www.youtube.com/iframe_api";
-        document.body.appendChild(tag);
+        const tag = document.createElement("script"); tag.src = "https://www.youtube.com/iframe_api"; document.body.appendChild(tag);
       }
       window.onYouTubeIframeAPIReady = initPlayer;
-      const poll = setInterval(() => {
-        if (window.YT && window.YT.Player) {
-          clearInterval(poll);
-          initPlayer();
-        }
-      }, 200);
+      const poll = setInterval(() => { if (window.YT && window.YT.Player) { clearInterval(poll); initPlayer(); } }, 200);
       setTimeout(() => clearInterval(poll), 5000);
-    } else {
-      initPlayer();
-    }
-
-    return () => {
-      if (ytPlayerRef.current) {
-        try { ytPlayerRef.current.destroy(); } catch {}
-        ytPlayerRef.current = null;
-      }
-    };
+    } else { initPlayer(); }
+    return () => { if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch {} ytPlayerRef.current = null; } };
   }, [activeTab, activeVideo]);
 
-  const goRadio = useCallback((newIndex) => { setRadioIndex(newIndex); }, []);
+  const goRadio = useCallback(i => setRadioIndex(i), []);
 
-  // ── DATA ──────────────────────────────────────────────────────────────────
-  const singles = [
-    { title:"Hour Glass",     slug:"hour-glass",     cover:"/images/singles/hourglass.jpg", price:2.99, preview:"/audio/previews/hourglass-preview.mp3",   full:"/audio/full/hourglass.mp3" },
-    { title:"W: Da Guys",     slug:"w-da-guys",      cover:"/images/singles/wdaguys.jpg",   price:2.99, preview:"/audio/previews/wdaguys-preview.mp3",     full:"/audio/full/wdaguys.mp3" },
-    { title:"W.2.D",          slug:"w2d",            cover:"/images/singles/w2d.jpg",       price:2.99, preview:"/audio/previews/w2d-preview.mp3",         full:"/audio/full/w2d.mp3" },
-    { title:"Artificial",     slug:"artificial",     cover:"/images/singles/artificial.jpg",price:2.99, preview:"/audio/previews/artificial-preview.mp3",  full:"/audio/full/artificial.mp3" },
-    { title:"Turnt Me 2 Dis", slug:"turnt-me-2-dis", cover:"/images/singles/turnt.jpg",     price:2.99, preview:"/audio/previews/turntme2dis-preview.mp3", full:"/audio/full/turntme2dis.mp3" },
-  ];
-  const albums = [
-    { title:"T.B.H.",       slug:"tbh",     cover:"/images/albums/tbh.jpg",    price:9.99,  date:"July 7, 2022",   vinyl:47.99, tracks:["Glass Full","Up 2 Me","Unexpcted","All Yours","Locomotive","LEFT","Was Wrong","ArTiFICiaL"] },
-    { title:"(A.D)",         slug:"ad",      cover:"/images/albums/ad.jpg",     price:9.99,  date:"March 24, 2024", vinyl:47.99, tracks:["2mrrw's Ntro","Said N' Done","A.D.D","Perspective (2018)","Grand Scheme","A2B","Life Changes (2018)","Itself (2018)","Wastin Time","Like Me Or Not"] },
-    { title:"Love Hz Vol.1", slug:"love-hz", cover:"/images/albums/lovehz.jpg", price:12.99, date:"August 2026",    vinyl:47.99, tracks:["Roll Call","W.2.D","All Of It","Knock On Wood","Stayed 2 Long","Hour Glass"] },
-  ];
-  const merch = [
-    { title:"2MRRW HOODIE",    slug:"hoodie",          cover:"/images/merch/hoodie.jpg",          price:59.99 },
-    { title:"2MRRW T-SHIRT",   slug:"shirt",           cover:"/images/merch/shirt.jpg",           price:29.99 },
-    { title:"2MRRW HAT",       slug:"hat",             cover:"/images/merch/hat.jpg",             price:24.99 },
-  ];
+  // ── HELPERS ───────────────────────────────────────────────────────────────
+  const addToCart      = useCallback(item => { setCart(p => [...p, item]); setAddedFlash(item.slug); setTimeout(() => setAddedFlash(null), 400); }, []);
+  const clearCart      = () => setCart([]);
+  const removeFromCart = idx => setCart(p => p.filter((_, i) => i !== idx));
+  const total          = cart.reduce((s, item) => s + item.price, 0);
+
+  const hoverIn       = useCallback(e => { e.currentTarget.style.transform="scale(1.08)"; e.currentTarget.style.filter="brightness(1.15)"; e.currentTarget.style.boxShadow="0 0 18px rgba(0,255,255,0.6)"; }, []);
+  const hoverOut      = useCallback(e => { e.currentTarget.style.transform="scale(1)";    e.currentTarget.style.filter="brightness(1)";    e.currentTarget.style.boxShadow="none"; }, []);
+  const buttonHoverIn = useCallback(e => { e.currentTarget.style.boxShadow="0 0 14px rgba(0,255,255,0.8)"; e.currentTarget.style.borderColor="#00ffff"; }, []);
+  const buttonHoverOut= useCallback(e => { e.currentTarget.style.boxShadow="none"; e.currentTarget.style.borderColor="#333"; }, []);
+
+  // FIX #1: stable callbacks for carousel — no recreation each render
+  const goToSingle = useCallback((newIndex, direction) => {
+    setAnimating(cur => {
+      if (cur) return cur;
+      setTimeout(() => { setSingleIndex(newIndex); setAnimating(false); }, 320);
+      setSlideDir(direction);
+      return true;
+    });
+  }, []);
+  const prevSingle    = useCallback(() => goToSingle(singleIndex === 0 ? singles.length-1 : singleIndex-1, "left"),  [goToSingle, singleIndex]);
+  const nextSingle    = useCallback(() => goToSingle(singleIndex === singles.length-1 ? 0 : singleIndex+1, "right"), [goToSingle, singleIndex]);
+  const currentSingle = useMemo(() => singles[singleIndex], [singleIndex]);
+  const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
+
+  // FIX #2/#3: openSingleModal — just sets state; useEffect owns src+play
+  const openSingleModal = useCallback(single => { setSelectedSingle(single); setNowPlaying(single); }, []);
+
+  // FIX #2: seek handler for progress bar clicks
+  const seekTo = useCallback(e => {
+    if (!nowPlayingAudioRef.current || !audioDuration) return;
+    const rect  = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    nowPlayingAudioRef.current.currentTime = ratio * audioDuration;
+  }, [audioDuration]);
+
+  const handleGateSubmit = async () => {
+    if (!gateName.trim() || !gatePhone.trim() || !gateEmail.trim()) { setGateError("Please fill out all fields."); return; }
+    setGateError("");
+    try {
+      const res  = await fetch("/api/register-user", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ name:gateName, phone:gatePhone, email:gateEmail }) });
+      const data = await res.json();
+      if (!res.ok) { setGateError(data.error || "Something went wrong."); return; }
+      const user = { id:data.id, name:gateName, phone:gatePhone, email:gateEmail };
+      localStorage.setItem("2mrrw_user", JSON.stringify(user));
+      setCurrentUser(user); setGateSubmitted(true);
+    } catch { setGateError("Network error. Please try again."); }
+  };
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    setCheckingOut(true); setCheckoutError("");
+    try {
+      const res  = await fetch("/api/create-payment-intent", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ cart }) });
+      const data = await res.json();
+      if (!res.ok)            { setCheckoutError(data.error || data.message || "Checkout failed."); setCheckingOut(false); return; }
+      if (!data.clientSecret) { setCheckoutError("No client secret returned.");                     setCheckingOut(false); return; }
+      setClientSecret(data.clientSecret);
+    } catch (err) { setCheckoutError(`Network error: ${err.message}`); setCheckingOut(false); }
+  };
+  const handleCheckoutSuccess = () => {
+    const np = [...myPurchases, ...cart.map(item => ({ ...item, purchasedAt: new Date().toISOString() }))];
+    setMyPurchases(np); localStorage.setItem("2mrrw_purchases", JSON.stringify(np));
+    setClientSecret(null); setCheckingOut(false); clearCart();
+    if (isMobile) setMobileCartOpen(false);
+  };
+
+  const getDaysInMonth     = (m, y) => new Date(y, m+1, 0).getDate();
+  const getFirstDayOfMonth = (m, y) => new Date(y, m, 1).getDay();
+  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const getShowsForDay = day => events.filter(s => { const d=new Date(s.date); return d.getFullYear()===calYear && d.getMonth()===calMonth && d.getDate()===day; });
+  const prevMonth = () => { if (calMonth===0) { setCalMonth(11); setCalYear(calYear-1); } else setCalMonth(calMonth-1); };
+  const nextMonth = () => { if (calMonth===11) { setCalMonth(0); setCalYear(calYear+1); } else setCalMonth(calMonth+1); };
+
+  const handleAddComment = postId => {
+    if (!blogComment.trim()) return;
+    const name = currentUser ? currentUser.name : "Anonymous";
+    setBlogComments(p => ({ ...p, [postId]: [...(p[postId]||[]), { name, text:blogComment, time:new Date().toLocaleString() }] }));
+    setBlogComment("");
+  };
+  const handleCircleSubmit = () => {
+    if (!circleQuestion.trim()) return;
+    const name = currentUser ? currentUser.name : "Anonymous";
+    const sub  = { id:`sub-${Date.now()}`, text:circleQuestion, category:circleCategory, by:name, time:new Date().toLocaleString() };
+    const upd  = [sub, ...circleSubmissions];
+    setCircleSubmissions(upd); localStorage.setItem("2mrrw_circle", JSON.stringify(upd));
+    setCircleQuestion(""); setCircleSubmitted(true); setTimeout(() => setCircleSubmitted(false), 3500);
+  };
+
+  const getUserStatus = () => {
+    if (!currentUser) return null;
+    const hasCollector = myPurchases.some(p => p.slug?.startsWith("exc-card"));
+    const hasBundle    = myPurchases.some(p => p.slug?.startsWith("exc-bundle"));
+    const subs         = circleSubmissions.filter(s => s.by === currentUser.name).length;
+    if ((hasCollector||hasBundle) && subs >= 1) return { label:"INNER CIRCLE",   color:"#a259ff", glow:"rgba(162,89,255,0.5)" };
+    if  (hasCollector||hasBundle)               return { label:"COLLECTOR",       color:"#ff6b35", glow:"rgba(255,107,53,0.5)" };
+    if  (subs >= 3)                             return { label:"VISIONARY",       color:"#00ffff", glow:"rgba(0,255,255,0.5)" };
+    return { label:"EARLY SUPPORTER", color:"#aaa", glow:"rgba(170,170,170,0.3)" };
+  };
+  const userStatus = getUserStatus();
+
+  const switchTab = tabId => { setTabKey(p => p+1); setActiveTab(tabId); if (isMobile) setMobileNavOpen(false); };
+
+  // FIX #4: resolved shop items
+  const shopItems     = printfulProducts.length > 0 ? printfulProducts : fallbackMerch;
+  const shopIsFallback= !printfulLoading && printfulProducts.length === 0;
+
+  const liveStreamDate = nextLiveDateTime.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
+  const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
+  const currentSlide   = radioSlides[radioIndex];
+  const activeFlowMode = flowConversionActive ? "conversion" : nowPlaying ? "nowplaying" : "idle";
+
+  // blog posts inline (depend on nothing module-level)
   const blogPosts = [
-    { id:"post-1", title:"The Making of Love Hz Vol.1",         date:"April 2, 2026",      author:"2MRRW", body:"Love Hz Vol.1 started as a series of late-night sessions in a home studio with nothing but a laptop, a MIDI keyboard, and a vision. Every track on that project represents a different frequency of love — the highs, the lows, the static in between. We wanted listeners to feel the entire spectrum.\n\nThe process took nearly 18 months. Some songs were written in 10 minutes, others were rebuilt from scratch a dozen times. What you hear is the version that survived. We hope it resonates with you the way it resonated with us when we finally pressed play for the first time." },
-    { id:"post-2", title:"Why We Started 2MRRW",                date:"March 15, 2026",     author:"2MRRW", body:"2MRRW was never supposed to be a brand. It started as a reminder — tomorrow is always possible. No matter what today looks like, tomorrow holds something different.\n\nWe put that energy into every record, every show, every piece of merch. It's not just a name on a hoodie. It's a mindset we live by and want to share with everyone who connects with the music." },
-    { id:"post-3", title:"Tour Prep: What Goes Into a Live Show",date:"February 28, 2026", author:"2MRRW", body:"People see the 90-minute set. They don't see the weeks of rehearsal, the production calls, the logistics of moving equipment across state lines. A live 2MRRW show is designed from the ground up — the lighting, the setlist order, the energy arc from opener to closer.\n\nWe treat every city like it's the only city. Dallas gets the same energy as NYC. That's the standard we hold ourselves to and always will." },
+    { id:"post-1", title:"The Making of Love Hz Vol.1",          date:"April 2, 2026",      author:"2MRRW", body:"Love Hz Vol.1 started as a series of late-night sessions in a home studio with nothing but a laptop, a MIDI keyboard, and a vision. Every track on that project represents a different frequency of love — the highs, the lows, the static in between. We wanted listeners to feel the entire spectrum.\n\nThe process took nearly 18 months. Some songs were written in 10 minutes, others were rebuilt from scratch a dozen times. What you hear is the version that survived. We hope it resonates with you the way it resonated with us when we finally pressed play for the first time." },
+    { id:"post-2", title:"Why We Started 2MRRW",                 date:"March 15, 2026",     author:"2MRRW", body:"2MRRW was never supposed to be a brand. It started as a reminder — tomorrow is always possible. No matter what today looks like, tomorrow holds something different.\n\nWe put that energy into every record, every show, every piece of merch. It's not just a name on a hoodie. It's a mindset we live by and want to share with everyone who connects with the music." },
+    { id:"post-3", title:"Tour Prep: What Goes Into a Live Show", date:"February 28, 2026", author:"2MRRW", body:"People see the 90-minute set. They don't see the weeks of rehearsal, the production calls, the logistics of moving equipment across state lines. A live 2MRRW show is designed from the ground up — the lighting, the setlist order, the energy arc from opener to closer.\n\nWe treat every city like it's the only city. Dallas gets the same energy as NYC. That's the standard we hold ourselves to and always will." },
   ];
   const sidebarNav = [
     { groupId:"g-home",       label:"HOME",           directTab:"home",      subTabs:[] },
@@ -373,299 +454,79 @@ export default function Page() {
     { groupId:"g-live",       label:"LIVE",           directTab:"live",      subTabs:[{id:"live",label:"2MRRW LIVE"}] },
   ];
 
-  // ── HELPERS ───────────────────────────────────────────────────────────────
-  const addToCart      = (item) => { setCart((p)=>[...p,item]); setAddedFlash(item.slug); setTimeout(()=>setAddedFlash(null),400); };
-  const clearCart      = () => setCart([]);
-  const removeFromCart = (idx) => setCart((p)=>p.filter((_,i)=>i!==idx));
-  const total          = cart.reduce((s,item)=>s+item.price,0);
-
-  const hoverIn        = (e) => { e.currentTarget.style.transform="scale(1.08)"; e.currentTarget.style.filter="brightness(1.15)"; e.currentTarget.style.boxShadow="0 0 18px rgba(0,255,255,0.6)"; };
-  const hoverOut       = (e) => { e.currentTarget.style.transform="scale(1)";    e.currentTarget.style.filter="brightness(1)";    e.currentTarget.style.boxShadow="none"; };
-  const buttonHoverIn  = (e) => { e.currentTarget.style.boxShadow="0 0 14px rgba(0,255,255,0.8)"; e.currentTarget.style.borderColor="#00ffff"; };
-  const buttonHoverOut = (e) => { e.currentTarget.style.boxShadow="none"; e.currentTarget.style.borderColor="#333"; };
-
-  // FIX #3: openSingleModal just sets state — useEffect owns src + play
-  const openSingleModal = (single) => {
-    setSelectedSingle(single);
-    setNowPlaying(single);
-  };
-
-  const handleGateSubmit = async () => {
-    if (!gateName.trim()||!gatePhone.trim()||!gateEmail.trim()) { setGateError("Please fill out all fields."); return; }
-    setGateError("");
-    try {
-      const res  = await fetch("/api/register-user",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:gateName,phone:gatePhone,email:gateEmail})});
-      const data = await res.json();
-      if (!res.ok) { setGateError(data.error||"Something went wrong."); return; }
-      const user = {id:data.id,name:gateName,phone:gatePhone,email:gateEmail};
-      localStorage.setItem("2mrrw_user",JSON.stringify(user));
-      setCurrentUser(user); setGateSubmitted(true);
-    } catch { setGateError("Network error. Please try again."); }
-  };
-  const handleGateKeyDown = (e) => { if (e.key==="Enter") handleGateSubmit(); };
-
-  const handleCheckout = async () => {
-    if (cart.length===0) return;
-    setCheckingOut(true); setCheckoutError("");
-    try {
-      const res  = await fetch("/api/create-payment-intent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({cart})});
-      const data = await res.json();
-      if (!res.ok)           { setCheckoutError(data.error||data.message||"Checkout failed."); setCheckingOut(false); return; }
-      if (!data.clientSecret){ setCheckoutError("No client secret returned.");                 setCheckingOut(false); return; }
-      setClientSecret(data.clientSecret);
-    } catch (err) { setCheckoutError(`Network error: ${err.message}`); setCheckingOut(false); }
-  };
-  const handleCheckoutSuccess = () => {
-    const np = [...myPurchases,...cart.map(item=>({...item,purchasedAt:new Date().toISOString()}))];
-    setMyPurchases(np); localStorage.setItem("2mrrw_purchases",JSON.stringify(np));
-    setClientSecret(null); setCheckingOut(false); clearCart();
-    if (isMobile) setMobileCartOpen(false);
-  };
-  const addVinylToCart = (single) => addToCart({title:`${single.title} – Vinyl`,slug:`${single.slug}-vinyl`,cover:single.cover,price:47.99});
-
-  const goToSingle = (newIndex, direction) => {
-    if (animating) return;
-    setAnimating(true); setSlideDir(direction);
-    setTimeout(()=>{ setSingleIndex(newIndex); setAnimating(false); },320);
-  };
-  const prevSingle    = () => goToSingle(singleIndex===0?singles.length-1:singleIndex-1,"left");
-  const nextSingle    = () => goToSingle(singleIndex===singles.length-1?0:singleIndex+1,"right");
-  const currentSingle = singles[singleIndex];
-
-  const getDaysInMonth     = (m,y) => new Date(y,m+1,0).getDate();
-  const getFirstDayOfMonth = (m,y) => new Date(y,m,1).getDay();
-  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const getShowsForDay = (day) => events.filter((s)=>{ const d=new Date(s.date); return d.getFullYear()===calYear&&d.getMonth()===calMonth&&d.getDate()===day; });
-  const prevMonth = () => { if(calMonth===0){setCalMonth(11);setCalYear(calYear-1);}else setCalMonth(calMonth-1); };
-  const nextMonth = () => { if(calMonth===11){setCalMonth(0);setCalYear(calYear+1);}else setCalMonth(calMonth+1); };
-
-  const handleAddComment = (postId) => {
-    if (!blogComment.trim()) return;
-    const name = currentUser?currentUser.name:"Anonymous";
-    setBlogComments((p)=>({...p,[postId]:[...(p[postId]||[]),{name,text:blogComment,time:new Date().toLocaleString()}]}));
-    setBlogComment("");
-  };
-  const handleCircleSubmit = () => {
-    if (!circleQuestion.trim()) return;
-    const name = currentUser?currentUser.name:"Anonymous";
-    const sub  = {id:`sub-${Date.now()}`,text:circleQuestion,category:circleCategory,by:name,time:new Date().toLocaleString()};
-    const updated = [sub,...circleSubmissions];
-    setCircleSubmissions(updated); localStorage.setItem("2mrrw_circle",JSON.stringify(updated));
-    setCircleQuestion(""); setCircleSubmitted(true); setTimeout(()=>setCircleSubmitted(false),3500);
-  };
-  const getUserStatus = () => {
-    if (!currentUser) return null;
-    const hasCollector = myPurchases.some(p=>p.slug&&p.slug.startsWith("exc-card"));
-    const hasBundle    = myPurchases.some(p=>p.slug&&p.slug.startsWith("exc-bundle"));
-    const subs         = circleSubmissions.filter(s=>s.by===currentUser.name).length;
-    if ((hasCollector||hasBundle)&&subs>=1) return {label:"INNER CIRCLE",  color:"#a259ff",glow:"rgba(162,89,255,0.5)"};
-    if  (hasCollector||hasBundle)           return {label:"COLLECTOR",      color:"#ff6b35",glow:"rgba(255,107,53,0.5)"};
-    if  (subs>=3)                           return {label:"VISIONARY",      color:"#00ffff",glow:"rgba(0,255,255,0.5)"};
-    return {label:"EARLY SUPPORTER",color:"#aaa",glow:"rgba(170,170,170,0.3)"};
-  };
-  const userStatus = getUserStatus();
-
-  const switchTab = (tabId) => {
-    setTabKey((p)=>p+1);
-    setActiveTab(tabId);
-    if (isMobile) setMobileNavOpen(false);
-  };
-
-  const liveStreamDate = nextLiveDateTime.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
-  const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
-
-  // ── FLOW STATE ────────────────────────────────────────────────────────────
-  const currentSlide   = radioSlides[radioIndex];
-  const activeFlowMode = flowConversionActive?"conversion":nowPlaying?"nowplaying":"idle";
-
-  // ── FLOW STATE COMPONENT ──────────────────────────────────────────────────
+  // ── INLINE COMPONENTS (need local closure state) ──────────────────────────
   const FlowState = () => (
-    <div style={{
-      flex:1,minWidth:0,position:"relative",borderRadius:22,overflow:"hidden",
-      background:"linear-gradient(160deg,#060606 0%,#0a0808 100%)",
-      border:`1px solid ${activeFlowMode==="conversion"?currentSlide.tagColor+"50":activeFlowMode==="nowplaying"?currentSlide.tagColor+"28":"#161616"}`,
-      boxShadow:activeFlowMode==="conversion"?`0 0 40px ${currentSlide.tagColor}20`:activeFlowMode==="nowplaying"?`0 0 50px ${currentSlide.tagColor}12,inset 0 0 40px ${currentSlide.tagColor}06`:"none",
-      transition:"border-color 0.7s ease,box-shadow 0.7s ease",minHeight:320,
-    }}>
+    <div style={{flex:1,minWidth:0,position:"relative",borderRadius:22,overflow:"hidden",background:"linear-gradient(160deg,#060606 0%,#0a0808 100%)",border:`1px solid ${activeFlowMode==="conversion"?currentSlide.tagColor+"50":activeFlowMode==="nowplaying"?currentSlide.tagColor+"28":"#161616"}`,boxShadow:activeFlowMode==="conversion"?`0 0 40px ${currentSlide.tagColor}20`:activeFlowMode==="nowplaying"?`0 0 50px ${currentSlide.tagColor}12`:"none",transition:"border-color 0.7s,box-shadow 0.7s",minHeight:320}}>
       <div style={{position:"absolute",top:14,left:16,right:16,zIndex:20,display:"flex",alignItems:"center",justifyContent:"space-between",pointerEvents:"none"}}>
         <div style={{fontSize:7,fontWeight:900,letterSpacing:3.5,color:"#222",textTransform:"uppercase"}}>FLOW STATE</div>
-        <div style={{fontSize:7,fontWeight:900,letterSpacing:2.5,textTransform:"uppercase",color:activeFlowMode!=="idle"?currentSlide.tagColor:"#1e1e1e",transition:"color 0.5s ease"}}>
-          {activeFlowMode==="nowplaying"?"NOW PLAYING":activeFlowMode==="conversion"?"ACQUIRE":"STANDBY"}
-        </div>
+        <div style={{fontSize:7,fontWeight:900,letterSpacing:2.5,textTransform:"uppercase",color:activeFlowMode!=="idle"?currentSlide.tagColor:"#1e1e1e",transition:"color 0.5s"}}>{activeFlowMode==="nowplaying"?"NOW PLAYING":activeFlowMode==="conversion"?"ACQUIRE":"STANDBY"}</div>
       </div>
-      <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="idle"?1:0,pointerEvents:activeFlowMode==="idle"?"auto":"none",transition:"opacity 0.6s ease",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,gap:18,textAlign:"center"}}>
+      {/* IDLE */}
+      <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="idle"?1:0,pointerEvents:activeFlowMode==="idle"?"auto":"none",transition:"opacity 0.6s",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,gap:18,textAlign:"center"}}>
         <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 40% 55%,rgba(0,255,255,0.03) 0%,transparent 65%)",pointerEvents:"none"}}/>
         <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:20}}>
-          <div style={{fontSize:40,fontWeight:900,letterSpacing:10,color:"rgba(255,255,255,0.055)",animation:"flowIdlePulse 5s ease-in-out infinite",textShadow:"0 0 60px rgba(0,255,255,0.08)",lineHeight:1}}>2MRRW</div>
-          <div style={{display:"flex",gap:6}}>
-            {[0,1,2].map((i)=>(<div key={i} style={{width:5,height:5,borderRadius:"50%",background:"rgba(0,255,255,0.18)",animation:`flowIdleDot 2.4s ease-in-out ${i*0.5}s infinite`}}/>))}
-          </div>
+          <div style={{fontSize:40,fontWeight:900,letterSpacing:10,color:"rgba(255,255,255,0.055)",animation:"flowIdlePulse 5s ease-in-out infinite",lineHeight:1}}>2MRRW</div>
+          <div style={{display:"flex",gap:6}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:"50%",background:"rgba(0,255,255,0.18)",animation:`flowIdleDot 2.4s ease-in-out ${i*0.5}s infinite`}}/>)}</div>
           <div style={{fontSize:8,color:"#1c1c1c",letterSpacing:5,textTransform:"uppercase",fontWeight:700}}>ARTIST PRESENCE</div>
         </div>
       </div>
-      <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="nowplaying"?1:0,pointerEvents:activeFlowMode==="nowplaying"?"auto":"none",transition:"opacity 0.6s ease"}}>
-        <div style={{position:"absolute",inset:0,overflow:"hidden"}}>
-          <img src={currentSlide.cover} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"blur(32px) brightness(0.18) saturate(1.6)",transform:"scale(1.15)",transition:"all 0.9s ease"}}/>
-        </div>
-        <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 50% 40%,${currentSlide.tagColor}20 0%,transparent 65%)`,transition:"background 0.9s ease",pointerEvents:"none"}}/>
+      {/* NOW PLAYING */}
+      <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="nowplaying"?1:0,pointerEvents:activeFlowMode==="nowplaying"?"auto":"none",transition:"opacity 0.6s"}}>
+        <div style={{position:"absolute",inset:0,overflow:"hidden"}}><img src={currentSlide.cover} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"blur(32px) brightness(0.18) saturate(1.6)",transform:"scale(1.15)",transition:"all 0.9s"}}/></div>
+        <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 50% 40%,${currentSlide.tagColor}20 0%,transparent 65%)`,transition:"background 0.9s",pointerEvents:"none"}}/>
         <div style={{position:"absolute",inset:0,zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"28px 20px",gap:14,textAlign:"center"}}>
-          <img src={currentSlide.cover} alt={currentSlide.title} style={{width:88,height:88,borderRadius:12,objectFit:"cover",boxShadow:`0 8px 32px ${currentSlide.tagColor}55,0 0 0 1px ${currentSlide.tagColor}22`,transition:"all 0.7s ease"}}/>
+          <img src={currentSlide.cover} alt={currentSlide.title} style={{width:88,height:88,borderRadius:12,objectFit:"cover",boxShadow:`0 8px 32px ${currentSlide.tagColor}55`,transition:"all 0.7s"}}/>
           <div style={{fontSize:16,fontWeight:900,letterSpacing:2,lineHeight:1.2,color:"#fff"}}>{currentSlide.title}</div>
           <div style={{fontSize:9,color:currentSlide.tagColor,letterSpacing:4,fontWeight:700,textTransform:"uppercase",opacity:0.85}}>NOW PLAYING</div>
-          <div style={{display:"flex",alignItems:"flex-end",gap:3,height:22}}>
-            {[1,2,3,4,5].map((i)=>(<div key={i} style={{width:3,borderRadius:2,background:currentSlide.tagColor,animation:`eqBar${(i-1)%4+1} ${0.38+i*0.09}s ease-in-out infinite alternate`,boxShadow:`0 0 8px ${currentSlide.tagColor}88`}}/>))}
-          </div>
+          <div style={{display:"flex",alignItems:"flex-end",gap:3,height:22}}>{[1,2,3,4,5].map(i=><div key={i} style={{width:3,borderRadius:2,background:currentSlide.tagColor,animation:`eqBar${(i-1)%4+1} ${0.38+i*0.09}s ease-in-out infinite alternate`,boxShadow:`0 0 8px ${currentSlide.tagColor}88`}}/>)}</div>
           <div style={{marginTop:4,padding:"4px 14px",background:currentSlide.tagColor+"18",border:`1px solid ${currentSlide.tagColor}30`,borderRadius:20,fontSize:10,fontWeight:700,color:currentSlide.tagColor,letterSpacing:1.5}}>{currentSlide.tag}</div>
         </div>
       </div>
-      <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="conversion"?1:0,pointerEvents:activeFlowMode==="conversion"?"auto":"none",transition:"opacity 0.45s ease"}}>
+      {/* CONVERSION */}
+      <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="conversion"?1:0,pointerEvents:activeFlowMode==="conversion"?"auto":"none",transition:"opacity 0.45s"}}>
         <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 50% 45%,${currentSlide.tagColor}16 0%,transparent 60%)`,pointerEvents:"none"}}/>
         <div style={{position:"absolute",inset:0,zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px",gap:12,textAlign:"center"}}>
           <div style={{fontSize:9,color:currentSlide.tagColor,letterSpacing:4,fontWeight:900,textTransform:"uppercase"}}>OWN THIS TRACK</div>
           <img src={currentSlide.cover} alt={currentSlide.title} style={{width:72,height:72,borderRadius:10,objectFit:"cover",boxShadow:`0 6px 24px ${currentSlide.tagColor}55`}}/>
           <div style={{fontSize:18,fontWeight:900,letterSpacing:1,color:"#fff",lineHeight:1.2}}>{currentSlide.title}</div>
           <div style={{fontSize:26,fontWeight:900,color:currentSlide.tagColor,letterSpacing:1,lineHeight:1}}>${currentSlide.price.toFixed(2)}</div>
-          <button onClick={()=>addToCart({title:currentSlide.title,slug:currentSlide.slug,cover:currentSlide.cover,price:currentSlide.price})}
-            style={{padding:"11px 28px",background:currentSlide.tagColor,color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:13,letterSpacing:1,boxShadow:`0 0 28px ${currentSlide.tagColor}50`,transition:"opacity 0.2s,transform 0.2s"}}
-            onMouseEnter={(e)=>{e.currentTarget.style.opacity="0.85";e.currentTarget.style.transform="scale(1.04)";}}
-            onMouseLeave={(e)=>{e.currentTarget.style.opacity="1";e.currentTarget.style.transform="scale(1)";}}>
-            Add to Cart
-          </button>
+          <button onClick={()=>addToCart({title:currentSlide.title,slug:currentSlide.slug,cover:currentSlide.cover,price:currentSlide.price})} style={{padding:"11px 28px",background:currentSlide.tagColor,color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:13,letterSpacing:1,boxShadow:`0 0 28px ${currentSlide.tagColor}50`,transition:"opacity 0.2s,transform 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.opacity="0.85";e.currentTarget.style.transform="scale(1.04)";}} onMouseLeave={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.transform="scale(1)";}}>Add to Cart</button>
           <div style={{fontSize:10,color:"#444",letterSpacing:1,marginTop:2}}>Digital download · Instant access</div>
         </div>
       </div>
     </div>
   );
 
-  // ── LIVE PANEL ────────────────────────────────────────────────────────────
   const LivePanel = () => (
-    <div style={{background:"linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",border:"1px solid rgba(0,255,255,0.15)",borderRadius:18,padding:"28px 26px",backdropFilter:"blur(12px)",boxShadow:"0 0 30px rgba(0,255,255,0.06),inset 0 0 30px rgba(0,255,255,0.02)",position:"relative",overflow:"hidden",minWidth:220,width:248,flexShrink:0}}>
-      <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:120,height:1,background:liveIsLive?"linear-gradient(90deg,transparent,#00ffff,transparent)":"linear-gradient(90deg,transparent,rgba(0,255,255,0.3),transparent)",pointerEvents:"none"}}/>
+    <div style={{background:"linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",border:"1px solid rgba(0,255,255,0.15)",borderRadius:18,padding:"28px 26px",backdropFilter:"blur(12px)",boxShadow:"0 0 30px rgba(0,255,255,0.06)",position:"relative",overflow:"hidden",minWidth:220,width:248,flexShrink:0}}>
+      <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:120,height:1,background:"linear-gradient(90deg,transparent,rgba(0,255,255,0.3),transparent)",pointerEvents:"none"}}/>
       <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:12,textTransform:"uppercase",fontWeight:700}}>2MRRW LIVE</div>
-      {liveIsLive?(
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{width:10,height:10,borderRadius:"50%",background:"#00ffff",boxShadow:"0 0 10px rgba(0,255,255,0.9)",animation:"pulse 1.2s infinite"}}/>
-          <div style={{fontSize:20,fontWeight:900,color:"#00ffff",letterSpacing:3}}>LIVE NOW</div>
-        </div>
-      ):(
-        <>
-          <div style={{fontSize:14,color:"#888",marginBottom:4,lineHeight:1.5}}>{liveStreamDate}</div>
-          <div style={{fontSize:12,color:"#555",marginBottom:16}}>{liveStreamTime}</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-            {[{value:liveCountdown.days,label:"D"},{value:liveCountdown.hours,label:"H"},{value:liveCountdown.minutes,label:"M"},{value:liveCountdown.seconds,label:"S"}].map((u)=>(
-              <div key={u.label} style={{background:"rgba(0,0,0,0.5)",border:"1px solid #1a1a1a",borderRadius:12,padding:"11px 8px",textAlign:"center"}}>
-                <div style={{fontSize:28,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(u.value).padStart(2,"0")}</div>
-                <div style={{fontSize:10,color:"#444",letterSpacing:1.5,marginTop:4}}>{u.label}</div>
-              </div>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
-  );
-
-  // ── CAROUSEL UI — MOBILE RESPONSIVE ──────────────────────────────────────
-  const CarouselUI = ({ large }) => (
-    <div style={{
-      display:"flex",
-      flexDirection:isMobile?"column":"row",
-      alignItems:isMobile?"stretch":"center",
-      gap:isMobile?16:20,
-      background:"linear-gradient(135deg,#0e0e0e,#111)",
-      border:"1px solid #1e1e1e",
-      borderRadius:isMobile?16:20,
-      padding:isMobile?"20px 16px":large?"32px 28px":"28px 24px",
-      position:"relative",overflow:"hidden",
-      boxShadow:"0 4px 40px rgba(0,0,0,0.5)"
-    }}>
-      <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:360,height:360,background:"radial-gradient(circle,rgba(0,255,255,0.04) 0%,transparent 70%)",pointerEvents:"none"}}/>
-
-      {isMobile?(
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <button onClick={prevSingle}
-            style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.06)",border:"1px solid #2a2a2a",color:"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>‹</button>
-          <div style={{flex:1,position:"relative",aspectRatio:"1/1"}}
-            onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
-            <img key={currentSingle.slug} src={currentSingle.cover}
-              style={{width:"100%",height:"100%",borderRadius:14,objectFit:"cover",display:"block",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",transition:"filter 0.3s ease",filter:previewHover?"brightness(0.55)":"brightness(1)",animation:"fadeInCover 0.4s ease forwards"}}/>
-            <div onClick={()=>openSingleModal(currentSingle)}
-              style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,borderRadius:14,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s ease"}}>
-              <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(8px)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                <svg viewBox="0 0 24 24" fill="white" width="24" height="24" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg>
-              </div>
-              <div style={{fontSize:11,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>Preview</div>
+      {liveIsLive ? (
+        <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,borderRadius:"50%",background:"#00ffff",boxShadow:"0 0 10px rgba(0,255,255,0.9)",animation:"pulse 1.2s infinite"}}/><div style={{fontSize:20,fontWeight:900,color:"#00ffff",letterSpacing:3}}>LIVE NOW</div></div>
+      ) : (
+        <><div style={{fontSize:14,color:"#888",marginBottom:4}}>{liveStreamDate}</div><div style={{fontSize:12,color:"#555",marginBottom:16}}>{liveStreamTime}</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {[{v:liveCountdown.days,l:"D"},{v:liveCountdown.hours,l:"H"},{v:liveCountdown.minutes,l:"M"},{v:liveCountdown.seconds,l:"S"}].map(u=>(
+            <div key={u.l} style={{background:"rgba(0,0,0,0.5)",border:"1px solid #1a1a1a",borderRadius:12,padding:"11px 8px",textAlign:"center"}}>
+              <div style={{fontSize:28,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(u.v).padStart(2,"0")}</div>
+              <div style={{fontSize:10,color:"#444",letterSpacing:1.5,marginTop:4}}>{u.l}</div>
             </div>
-          </div>
-          <button onClick={nextSingle}
-            style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.06)",border:"1px solid #2a2a2a",color:"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>›</button>
-        </div>
-      ):(
-        <button onClick={prevSingle}
-          style={{width:large?50:44,height:large?50:44,borderRadius:"50%",background:"rgba(255,255,255,0.04)",border:"1px solid #2a2a2a",color:"#555",fontSize:large?22:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}
-          onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";e.currentTarget.style.boxShadow="0 0 10px rgba(0,255,255,0.3)";}}
-          onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#555";e.currentTarget.style.boxShadow="none";}}>‹</button>
-      )}
-
-      {!isMobile&&(
-        <div style={{flexShrink:0,width:large?340:300,height:large?340:300,position:"relative"}}
-          onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
-          <img key={currentSingle.slug} src={currentSingle.cover}
-            style={{width:"100%",height:"100%",borderRadius:large?18:16,objectFit:"cover",display:"block",boxShadow:large?"0 10px 50px rgba(0,0,0,0.7)":"0 8px 40px rgba(0,0,0,0.6)",transition:"filter 0.3s ease",filter:previewHover?"brightness(0.55)":"brightness(1)",animation:"fadeInCover 0.4s ease forwards"}}/>
-          <div onClick={()=>openSingleModal(currentSingle)}
-            style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,borderRadius:large?18:16,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s ease"}}>
-            <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(0,0,0,0.55)",backdropFilter:"blur(8px)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 30px rgba(0,0,0,0.5)"}}>
-              <svg viewBox="0 0 24 24" fill="white" width="28" height="28" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg>
-            </div>
-            <div style={{fontSize:12,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>Preview</div>
-          </div>
-        </div>
-      )}
-
-      <div style={{flex:1,display:"flex",flexDirection:"column",gap:isMobile?10:large?14:12}}>
-        <div key={`title-${currentSingle.slug}`} style={{fontSize:isMobile?22:large?30:26,fontWeight:900,letterSpacing:2,animation:"fadeInUp 0.35s ease forwards"}}>{currentSingle.title}</div>
-        <div style={{fontSize:13,color:"#555",letterSpacing:1}}>SINGLE{large&&!isMobile?` · ${singleIndex+1} of ${singles.length}`:""}</div>
-        <div style={{fontSize:isMobile?16:large?18:16,color:"#00ffff",fontWeight:700}}>${currentSingle.price.toFixed(2)}</div>
-        <div style={{display:"flex",gap:6}}>
-          {singles.map((s,i)=>(
-            <div key={s.slug} onClick={()=>goToSingle(i,i>singleIndex?"right":"left")}
-              style={{width:i===singleIndex?(isMobile?20:large?24:20):(isMobile?6:large?7:6),height:isMobile?6:large?7:6,borderRadius:4,background:i===singleIndex?"#00ffff":"#333",cursor:"pointer",transition:"all 0.3s ease",boxShadow:i===singleIndex?"0 0 8px rgba(0,255,255,0.6)":"none"}}/>
           ))}
-        </div>
-        <div style={{display:"flex",gap:10,marginTop:isMobile?4:large?8:6,flexWrap:"wrap"}}>
-          <button onClick={()=>addToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut}
-            style={{padding:isMobile?"12px 0":large?"11px 20px":"10px 18px",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold",transition:"0.25s",width:isMobile?"100%":"auto"}}>
-            + Add to Cart
-          </button>
-          {(large||isMobile)&&(
-            <button onClick={()=>addVinylToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut}
-              style={{padding:isMobile?"12px 0":"11px 20px",background:"#0a0a0a",color:"#aaa",border:"1px solid #2a2a2a",borderRadius:8,cursor:"pointer",fontSize:13,transition:"0.25s",width:isMobile?"100%":"auto"}}>
-              + Vinyl $47.99
-            </button>
-          )}
-        </div>
-      </div>
-
-      {!isMobile&&(
-        <button onClick={nextSingle}
-          style={{width:large?50:44,height:large?50:44,borderRadius:"50%",background:"rgba(255,255,255,0.04)",border:"1px solid #2a2a2a",color:"#555",fontSize:large?22:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}}
-          onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";e.currentTarget.style.boxShadow="0 0 10px rgba(0,255,255,0.3)";}}
-          onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#555";e.currentTarget.style.boxShadow="none";}}>›</button>
+        </div></>
       )}
     </div>
   );
 
-  // ── RADIO CAROUSEL ────────────────────────────────────────────────────────
   const RadioCarousel = ({ narrow=false }) => {
-    const coverW    = isMobile?120:narrow?200:320;
-    const infoPad   = isMobile?"20px 16px":narrow?"28px 22px":"36px 32px";
-    const titleSize = isMobile?18:narrow?24:34;
+    const coverW    = isMobile ? 120 : narrow ? 200 : 320;
+    const infoPad   = isMobile ? "20px 16px" : narrow ? "28px 22px" : "36px 32px";
+    const titleSize = isMobile ? 18 : narrow ? 24 : 34;
     return (
       <div style={{position:"relative",borderRadius:22,overflow:"hidden",background:"linear-gradient(135deg,#080808,#0d0d0d)",border:"1px solid #1e1e1e",boxShadow:"0 8px 60px rgba(0,0,0,0.6)",height:"100%"}}>
         <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 30% 50%,${currentSlide.tagColor}10 0%,transparent 55%)`,pointerEvents:"none",zIndex:0}}/>
         <div style={{display:"flex",alignItems:"stretch",minHeight:isMobile?180:320,position:"relative",zIndex:1}}>
           <div style={{flexShrink:0,width:coverW,position:"relative",overflow:"hidden"}}>
-            <img key={currentSlide.slug} src={currentSlide.cover} alt={currentSlide.title}
-              style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
+            <img key={currentSlide.slug} src={currentSlide.cover} alt={currentSlide.title} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
             <div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,transparent 40%,rgba(0,0,0,0.35) 100%)",pointerEvents:"none"}}/>
             <div style={{position:"absolute",top:12,left:12,background:currentSlide.tagColor,color:"#000",fontSize:8,fontWeight:900,letterSpacing:2,padding:"4px 10px",borderRadius:20,boxShadow:`0 0 16px ${currentSlide.tagColor}88`}}>{currentSlide.tag}</div>
           </div>
@@ -673,37 +534,20 @@ export default function Page() {
             <div style={{fontSize:10,color:"#444",letterSpacing:4,textTransform:"uppercase",fontWeight:700}}>2MRRW RADIO</div>
             <div style={{fontSize:titleSize,fontWeight:900,letterSpacing:2,lineHeight:1.1}}>{currentSlide.title}</div>
             <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{display:"flex",alignItems:"flex-end",gap:3,height:18}}>
-                {[10,16,8,14].map((h,i)=>(<div key={i} style={{width:3,height:h,borderRadius:2,background:currentSlide.tagColor,boxShadow:`0 0 6px ${currentSlide.tagColor}88`}}/>))}
-              </div>
+              <div style={{display:"flex",alignItems:"flex-end",gap:3,height:18}}>{[10,16,8,14].map((h,i)=><div key={i} style={{width:3,height:h,borderRadius:2,background:currentSlide.tagColor,boxShadow:`0 0 6px ${currentSlide.tagColor}88`}}/>)}</div>
               <div style={{fontSize:13,color:"#555",letterSpacing:1}}>SINGLE</div>
             </div>
             <div style={{fontSize:isMobile?16:20,color:"#00ffff",fontWeight:700}}>${currentSlide.price.toFixed(2)}</div>
             <div style={{display:"flex",gap:10,marginTop:4}}>
-              <button
-                onClick={()=>addToCart({title:currentSlide.title,slug:currentSlide.slug,cover:currentSlide.cover,price:currentSlide.price})}
-                onMouseEnter={(e)=>{ e.currentTarget.style.opacity="0.85"; e.currentTarget.style.transform="scale(1.04)"; setFlowConversionActive(true); }}
-                onMouseLeave={(e)=>{ e.currentTarget.style.opacity="1";    e.currentTarget.style.transform="scale(1)";    setFlowConversionActive(false); }}
-                style={{padding:isMobile?"10px 16px":"11px 22px",background:currentSlide.tagColor,color:"#000",border:"none",borderRadius:10,cursor:"pointer",fontSize:isMobile?12:13,fontWeight:900,transition:"0.25s",boxShadow:`0 0 20px ${currentSlide.tagColor}55`}}>
-                + Add to Cart
-              </button>
+              <button onClick={()=>addToCart({title:currentSlide.title,slug:currentSlide.slug,cover:currentSlide.cover,price:currentSlide.price})} onMouseEnter={e=>{e.currentTarget.style.opacity="0.85";e.currentTarget.style.transform="scale(1.04)";setFlowConversionActive(true);}} onMouseLeave={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.transform="scale(1)";setFlowConversionActive(false);}} style={{padding:isMobile?"10px 16px":"11px 22px",background:currentSlide.tagColor,color:"#000",border:"none",borderRadius:10,cursor:"pointer",fontSize:isMobile?12:13,fontWeight:900,transition:"0.25s",boxShadow:`0 0 20px ${currentSlide.tagColor}55`}}>+ Add to Cart</button>
             </div>
             <div style={{display:"flex",gap:7,marginTop:isMobile?4:10}}>
-              {radioSlides.map((s,i)=>(
-                <div key={s.slug} onClick={()=>goRadio(i)}
-                  style={{width:i===radioIndex?22:6,height:6,borderRadius:4,background:i===radioIndex?currentSlide.tagColor:"#2a2a2a",cursor:"pointer",transition:"all 0.3s ease",boxShadow:i===radioIndex?`0 0 8px ${currentSlide.tagColor}88`:"none"}}/>
-              ))}
+              {radioSlides.map((s,i)=><div key={s.slug} onClick={()=>goRadio(i)} style={{width:i===radioIndex?22:6,height:6,borderRadius:4,background:i===radioIndex?currentSlide.tagColor:"#2a2a2a",cursor:"pointer",transition:"all 0.3s",boxShadow:i===radioIndex?`0 0 8px ${currentSlide.tagColor}88`:"none"}}/>)}
             </div>
           </div>
           <div style={{position:"absolute",bottom:isMobile?12:24,right:isMobile?12:24,display:"flex",gap:8}}>
-            {[{dir:"prev",icon:"‹"},{dir:"next",icon:"›"}].map(({dir,icon})=>(
-              <button key={dir}
-                onClick={()=>{const ni=dir==="prev"?(radioIndex===0?radioSlides.length-1:radioIndex-1):(radioIndex===radioSlides.length-1?0:radioIndex+1);goRadio(ni);}}
-                style={{width:isMobile?32:36,height:isMobile?32:36,borderRadius:"50%",background:"rgba(255,255,255,0.05)",border:"1px solid #2a2a2a",color:"#666",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s"}}
-                onMouseEnter={(e)=>{e.currentTarget.style.borderColor=currentSlide.tagColor;e.currentTarget.style.color=currentSlide.tagColor;}}
-                onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#666";}}>
-                {icon}
-              </button>
+            {[{d:"prev",icon:"‹"},{d:"next",icon:"›"}].map(({d,icon})=>(
+              <button key={d} onClick={()=>{const ni=d==="prev"?(radioIndex===0?radioSlides.length-1:radioIndex-1):(radioIndex===radioSlides.length-1?0:radioIndex+1);goRadio(ni);}} style={{width:isMobile?32:36,height:isMobile?32:36,borderRadius:"50%",background:"rgba(255,255,255,0.05)",border:"1px solid #2a2a2a",color:"#666",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=currentSlide.tagColor;e.currentTarget.style.color=currentSlide.tagColor;}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#666";}}>{icon}</button>
             ))}
           </div>
         </div>
@@ -716,31 +560,50 @@ export default function Page() {
     <>
       <div ref={cursorRef} style={{position:"fixed",width:28,height:28,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.22) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99999,mixBlendMode:"screen",transition:"left 0.045s linear,top 0.045s linear",display:isMobile?"none":undefined}}/>
       <div ref={cursorTrailRef} style={{position:"fixed",width:16,height:16,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.10) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99998,mixBlendMode:"screen",transition:"left 0.18s ease,top 0.18s ease",display:isMobile?"none":undefined}}/>
-
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(circle at 18% 18%,rgba(0,255,255,0.026) 0%,transparent 55%),radial-gradient(circle at 82% 80%,rgba(162,89,255,0.018) 0%,transparent 52%)"}}/>
       <audio ref={nowPlayingAudioRef} style={{display:"none"}}/>
 
-      {/* EMAIL GATE */}
-      {!gateSubmitted&&(
+      {/* ── GATE ── */}
+      {!gateSubmitted && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:30}}>
           <div style={{fontSize:28,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 20px rgba(0,255,255,0.8)"}}>2MRRW</div>
           <p style={{color:"#aaa",marginBottom:10,textAlign:"center"}}>Enter your info to access the site</p>
-          <input placeholder="Full Name"     value={gateName}  onChange={(e)=>setGateName(e.target.value)}  onKeyDown={handleGateKeyDown} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
-          <input placeholder="Phone Number"  value={gatePhone} onChange={(e)=>setGatePhone(e.target.value)} onKeyDown={handleGateKeyDown} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
-          <input placeholder="Email Address" value={gateEmail} onChange={(e)=>setGateEmail(e.target.value)} onKeyDown={handleGateKeyDown} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
-          {gateError&&<p style={{color:"red",fontSize:13}}>{gateError}</p>}
+          <input placeholder="Full Name"     value={gateName}  onChange={e=>setGateName(e.target.value)}  onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
+          <input placeholder="Phone Number"  value={gatePhone} onChange={e=>setGatePhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
+          <input placeholder="Email Address" value={gateEmail} onChange={e=>setGateEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
+          {gateError && <p style={{color:"red",fontSize:13}}>{gateError}</p>}
           <button onClick={handleGateSubmit} style={{width:"min(280px,90vw)",padding:"12px 0",background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer",fontSize:14}}>Enter Site</button>
         </div>
       )}
 
-      {/* SINGLE MODAL */}
-      {selectedSingle&&(
+      {/* ── SINGLE MODAL — FIX #2: custom progress player, not frozen <audio controls> ── */}
+      {selectedSingle && (
         <div onClick={()=>setSelectedSingle(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
-          <div onClick={(e)=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:isMobile?20:30,width:isMobile?"100%":340,maxWidth:isMobile?"calc(100vw - 32px)":"none",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:isMobile?20:30,width:isMobile?"100%":340,maxWidth:isMobile?"calc(100vw - 32px)":"none",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
             <img src={selectedSingle.cover} style={{width:isMobile?160:200,height:isMobile?160:200,borderRadius:14,objectFit:"cover"}}/>
             <div style={{fontSize:18,fontWeight:700}}>{selectedSingle.title}</div>
-            <div style={{fontSize:13,opacity:0.5}}>${selectedSingle.price.toFixed(2)}</div>
-            <audio controls style={{width:"100%",marginTop:4}} src={selectedSingle.preview}/>
+            <div style={{fontSize:13,opacity:0.5}}>SINGLE PREVIEW · ${selectedSingle.price.toFixed(2)}</div>
+
+            {/* Custom audio player replacing frozen <audio controls> */}
+            <div style={{width:"100%"}}>
+              <div onClick={seekTo} style={{width:"100%",height:5,background:"#1e1e1e",borderRadius:3,cursor:"pointer",marginBottom:8,position:"relative"}}>
+                <div style={{width:audioDuration ? `${(audioCurrentTime/audioDuration)*100}%` : "0%",height:"100%",background:"#00ffff",borderRadius:3,transition:"width 0.1s linear",boxShadow:"0 0 6px rgba(0,255,255,0.5)"}}/>
+              </div>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+                <span style={{fontSize:11,color:"#555",fontVariantNumeric:"tabular-nums",minWidth:34}}>{formatTime(audioCurrentTime)}</span>
+                <button onClick={()=>{
+                  if (!nowPlayingAudioRef.current) return;
+                  if (nowPlayingPlaying) { nowPlayingAudioRef.current.pause(); setNowPlayingPlaying(false); }
+                  else { nowPlayingAudioRef.current.play().catch(()=>{}); setNowPlayingPlaying(true); }
+                }} style={{width:44,height:44,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,boxShadow:"0 0 16px rgba(0,255,255,0.4)"}}>
+                  {nowPlayingPlaying
+                    ? <svg viewBox="0 0 24 24" fill="#000" width="16" height="16"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
+                    : <svg viewBox="0 0 24 24" fill="#000" width="16" height="16" style={{marginLeft:2}}><path d="M8 5v14l11-7z"/></svg>}
+                </button>
+                <span style={{fontSize:11,color:"#555",fontVariantNumeric:"tabular-nums",minWidth:34,textAlign:"right"}}>{formatTime(audioDuration)}</span>
+              </div>
+            </div>
+
             <button onClick={()=>{addToCart(selectedSingle);setSelectedSingle(null);}} style={{width:"100%",padding:"10px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontSize:13}}>Add to Cart – ${selectedSingle.price.toFixed(2)}</button>
             <button onClick={()=>{addVinylToCart(selectedSingle);setSelectedSingle(null);}} style={{width:"100%",padding:"10px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – $47.99 (Optional)</button>
             <button onClick={()=>setSelectedSingle(null)} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,marginTop:4}}>Close</button>
@@ -748,16 +611,16 @@ export default function Page() {
         </div>
       )}
 
-      {/* ALBUM MODAL */}
-      {selectedAlbum&&(
+      {/* ── ALBUM MODAL ── */}
+      {selectedAlbum && (
         <div onClick={()=>setSelectedAlbum(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
-          <div onClick={(e)=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:"22px 26px",width:isMobile?"100%":320,maxWidth:isMobile?"calc(100vw - 32px)":"none",maxHeight:"80vh",overflowY:"auto",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:"22px 26px",width:isMobile?"100%":320,maxWidth:isMobile?"calc(100vw - 32px)":"none",maxHeight:"80vh",overflowY:"auto",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
             <img src={selectedAlbum.cover} style={{width:130,height:130,borderRadius:10,objectFit:"cover"}}/>
             <div style={{fontSize:17,fontWeight:900,letterSpacing:2,textAlign:"center"}}>{selectedAlbum.title}</div>
             <div style={{fontSize:11,opacity:0.4,letterSpacing:1}}>{selectedAlbum.date}</div>
             <div style={{width:"100%",marginTop:4}}>
               <div style={{fontSize:10,letterSpacing:2,opacity:0.4,marginBottom:8,textTransform:"uppercase"}}>Track Listing</div>
-              {selectedAlbum.tracks.map((track,i)=>(<div key={i} style={{padding:"6px 0",fontSize:13,borderBottom:"1px solid #1a1a1a",color:"white"}}>{i+1}. {track}</div>))}
+              {selectedAlbum.tracks.map((t,i)=><div key={i} style={{padding:"6px 0",fontSize:13,borderBottom:"1px solid #1a1a1a",color:"white"}}>{i+1}. {t}</div>)}
             </div>
             <button onClick={()=>{addToCart(selectedAlbum);setSelectedAlbum(null);}} style={{width:"100%",padding:"10px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontSize:13,marginTop:6}}>Add to Cart – ${selectedAlbum.price.toFixed(2)}</button>
             <button onClick={()=>{addToCart({title:`${selectedAlbum.title} – Vinyl`,slug:`${selectedAlbum.slug}-vinyl`,cover:selectedAlbum.cover,price:selectedAlbum.vinyl});setSelectedAlbum(null);}} style={{width:"100%",padding:"10px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – ${selectedAlbum.vinyl.toFixed(2)} (Optional)</button>
@@ -766,41 +629,35 @@ export default function Page() {
         </div>
       )}
 
-      {/* TICKET MODAL */}
-      {selectedEvent&&(
+      {/* ── TICKET MODAL ── */}
+      {selectedEvent && (
         <div onClick={()=>setSelectedEvent(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
-          <div onClick={(e)=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:30,width:isMobile?"100%":360,maxWidth:isMobile?"calc(100vw - 32px)":"none",display:"flex",flexDirection:"column",gap:14}}>
-            <div style={{fontSize:20,fontWeight:800,letterSpacing:2}}>{selectedEvent.name||selectedEvent.title}</div>
-            <div style={{fontSize:13,color:"#aaa"}}>{selectedEvent.location||selectedEvent.venue}</div>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:30,width:isMobile?"100%":360,maxWidth:isMobile?"calc(100vw - 32px)":"none",display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{fontSize:20,fontWeight:800,letterSpacing:2}}>{selectedEvent.name}</div>
+            <div style={{fontSize:13,color:"#aaa"}}>{selectedEvent.location}</div>
             <div style={{fontSize:13,color:"#aaa"}}>{new Date(selectedEvent.date).toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})} · {selectedEvent.time}</div>
             <div style={{fontSize:22,fontWeight:900,color:"#00ffff"}}>${selectedEvent.price.toFixed(2)}</div>
             <div style={{fontSize:12,color:"#555"}}>{selectedEvent.tickets} tickets remaining</div>
-            <button onClick={()=>{addToCart({title:`Ticket – ${selectedEvent.name||selectedEvent.title}`,slug:selectedEvent.id,cover:null,price:selectedEvent.price});setSelectedEvent(null);}} style={{width:"100%",padding:"12px 0",background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer",fontSize:14}}>Add Ticket to Cart – ${selectedEvent.price.toFixed(2)}</button>
+            <button onClick={()=>{addToCart({title:`Ticket – ${selectedEvent.name}`,slug:selectedEvent.id,cover:null,price:selectedEvent.price});setSelectedEvent(null);}} style={{width:"100%",padding:"12px 0",background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer",fontSize:14}}>Add Ticket to Cart – ${selectedEvent.price.toFixed(2)}</button>
             <button onClick={()=>setSelectedEvent(null)} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,textAlign:"center"}}>Close</button>
           </div>
         </div>
       )}
 
-      {/* EXCLUSIVE MODAL */}
-      {exclusiveModal&&(
+      {/* ── EXCLUSIVE MODAL ── */}
+      {exclusiveModal && (
         <div onClick={()=>setExclusiveModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:20}}>
-          <div onClick={(e)=>e.stopPropagation()} style={{background:"#0d0d0d",border:`1px solid ${exclusiveModal.badgeColor}33`,borderRadius:24,padding:isMobile?20:32,width:isMobile?"100%":380,maxWidth:isMobile?"calc(100vw - 32px)":"none",maxHeight:"88vh",overflowY:"auto",display:"flex",flexDirection:"column",gap:16,boxShadow:`0 0 60px ${exclusiveModal.badgeColor}22`}}>
-            <div style={{position:"relative"}}>
-              <img src={exclusiveModal.cover} style={{width:"100%",height:200,borderRadius:14,objectFit:"cover",display:"block"}}/>
-              <div style={{position:"absolute",top:12,left:12,background:exclusiveModal.badgeColor,color:"#000",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 10px",borderRadius:20}}>{exclusiveModal.badge}</div>
-            </div>
+          <div onClick={e=>e.stopPropagation()} style={{background:"#0d0d0d",border:`1px solid ${exclusiveModal.badgeColor}33`,borderRadius:24,padding:isMobile?20:32,width:isMobile?"100%":380,maxWidth:isMobile?"calc(100vw - 32px)":"none",maxHeight:"88vh",overflowY:"auto",display:"flex",flexDirection:"column",gap:16,boxShadow:`0 0 60px ${exclusiveModal.badgeColor}22`}}>
+            <div style={{position:"relative"}}><img src={exclusiveModal.cover} style={{width:"100%",height:200,borderRadius:14,objectFit:"cover",display:"block"}}/><div style={{position:"absolute",top:12,left:12,background:exclusiveModal.badgeColor,color:"#000",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 10px",borderRadius:20}}>{exclusiveModal.badge}</div></div>
             <div style={{fontSize:20,fontWeight:900,letterSpacing:1}}>{exclusiveModal.title}</div>
             <div style={{fontSize:12,color:"#555",letterSpacing:1}}>{exclusiveModal.subtitle}</div>
             <div style={{fontSize:13,color:"#999",lineHeight:1.8}}>{exclusiveModal.description}</div>
             <div style={{borderTop:"1px solid #1e1e1e",paddingTop:16}}>
               <div style={{fontSize:11,color:"#555",letterSpacing:2,marginBottom:10,textTransform:"uppercase"}}>What's Included</div>
-              {exclusiveModal.features.map((f,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",fontSize:13,color:"#ccc",borderBottom:"1px solid #111"}}><span style={{color:exclusiveModal.badgeColor,fontSize:16,lineHeight:1}}>✓</span> {f}</div>))}
+              {exclusiveModal.features.map((f,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",fontSize:13,color:"#ccc",borderBottom:"1px solid #111"}}><span style={{color:exclusiveModal.badgeColor,fontSize:16,lineHeight:1}}>✓</span> {f}</div>)}
             </div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4}}>
-              <div>
-                <div style={{fontSize:26,fontWeight:900,color:exclusiveModal.badgeColor}}>${exclusiveModal.price.toFixed(2)}</div>
-                <div style={{fontSize:11,color:"#555",marginTop:2}}>{exclusiveModal.stock} remaining</div>
-              </div>
+              <div><div style={{fontSize:26,fontWeight:900,color:exclusiveModal.badgeColor}}>${exclusiveModal.price.toFixed(2)}</div><div style={{fontSize:11,color:"#555",marginTop:2}}>{exclusiveModal.stock} remaining</div></div>
               <button onClick={()=>{addToCart({title:exclusiveModal.title,slug:exclusiveModal.slug,cover:exclusiveModal.cover,price:exclusiveModal.price});setExclusiveModal(null);}} style={{padding:"12px 24px",background:exclusiveModal.badgeColor,color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1}}>Add to Cart</button>
             </div>
             <button onClick={()=>setExclusiveModal(null)} style={{background:"none",border:"none",color:"#444",cursor:"pointer",fontSize:12,textAlign:"center"}}>Close</button>
@@ -811,33 +668,27 @@ export default function Page() {
       {/* ══════════════════════ MAIN LAYOUT ═══════════════════════════════════ */}
       <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
 
-        {!isMobile&&(
+        {/* ── SIDEBAR ── */}
+        {!isMobile && (
           <div style={{width:220,flexShrink:0,borderRight:"1px solid #141414",background:"rgba(4,4,4,0.9)",backdropFilter:"blur(20px)",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto",boxShadow:"2px 0 32px rgba(0,0,0,0.5)"}}>
             <div style={{padding:"22px 18px 18px",borderBottom:"1px solid #111",flexShrink:0}}>
               <div style={{fontSize:20,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 24px rgba(0,255,255,0.45)",marginBottom:4}}>2MRRW</div>
-              {currentUser&&userStatus&&<div style={{fontSize:9,color:userStatus.color,letterSpacing:2.5,fontWeight:700,opacity:0.85}}>{userStatus.label}</div>}
+              {currentUser && userStatus && <div style={{fontSize:9,color:userStatus.color,letterSpacing:2.5,fontWeight:700,opacity:0.85}}>{userStatus.label}</div>}
             </div>
             <nav style={{flex:1,padding:"12px 0",overflowY:"auto"}}>
-              {sidebarNav.map((group)=>{
-                const isGroupActive = group.subTabs.length===0?activeTab===group.directTab:group.subTabs.some((st)=>st.id===activeTab);
-                const isExpanded    = expandedGroup===group.groupId;
+              {sidebarNav.map(group => {
+                const isGroupActive = group.subTabs.length===0 ? activeTab===group.directTab : group.subTabs.some(st=>st.id===activeTab);
+                const isExpanded    = expandedGroup === group.groupId;
                 return (
                   <div key={group.groupId} style={{marginBottom:2}}>
-                    <button
-                      onClick={()=>{ if(group.subTabs.length===0){switchTab(group.directTab);}else{setExpandedGroup(isExpanded?null:group.groupId);if(!isExpanded)switchTab(group.subTabs[0].id);} }}
-                      style={{width:"100%",padding:"13px 18px 13px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",background:isGroupActive?"linear-gradient(90deg,rgba(0,255,255,0.09) 0%,transparent 100%)":"transparent",border:"none",borderLeft:isGroupActive?"2px solid #00ffff":"2px solid transparent",color:isGroupActive?"#00ffff":"#b0b0b0",fontSize:11,fontWeight:700,letterSpacing:2.5,cursor:"pointer",textAlign:"left",transition:"all 0.18s ease",textShadow:isGroupActive?"0 0 12px rgba(0,255,255,0.4)":"none"}}
-                      onMouseEnter={(e)=>{if(!isGroupActive){e.currentTarget.style.color="#ffffff";e.currentTarget.style.background="rgba(255,255,255,0.035)";}}}
-                      onMouseLeave={(e)=>{if(!isGroupActive){e.currentTarget.style.color="#b0b0b0";e.currentTarget.style.background="transparent";}}}>
+                    <button onClick={()=>{ if(group.subTabs.length===0){switchTab(group.directTab);}else{setExpandedGroup(isExpanded?null:group.groupId);if(!isExpanded)switchTab(group.subTabs[0].id);}}} style={{width:"100%",padding:"13px 18px 13px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",background:isGroupActive?"linear-gradient(90deg,rgba(0,255,255,0.09) 0%,transparent 100%)":"transparent",border:"none",borderLeft:isGroupActive?"2px solid #00ffff":"2px solid transparent",color:isGroupActive?"#00ffff":"#b0b0b0",fontSize:11,fontWeight:700,letterSpacing:2.5,cursor:"pointer",textAlign:"left",transition:"all 0.18s",textShadow:isGroupActive?"0 0 12px rgba(0,255,255,0.4)":"none"}} onMouseEnter={e=>{if(!isGroupActive){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.035)";}}} onMouseLeave={e=>{if(!isGroupActive){e.currentTarget.style.color="#b0b0b0";e.currentTarget.style.background="transparent";}}}>
                       <span>{group.label}</span>
-                      {group.subTabs.length>0&&<span style={{fontSize:12,color:isExpanded?"#888":"#555",display:"inline-block",transform:isExpanded?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.22s ease"}}>›</span>}
+                      {group.subTabs.length>0 && <span style={{fontSize:12,color:isExpanded?"#888":"#555",display:"inline-block",transform:isExpanded?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.22s"}}>›</span>}
                     </button>
-                    {isExpanded&&group.subTabs.length>0&&(
+                    {isExpanded && group.subTabs.length>0 && (
                       <div style={{animation:"expandDown 0.2s ease forwards"}}>
-                        {group.subTabs.map((st)=>(
-                          <button key={st.id} onClick={()=>switchTab(st.id)}
-                            style={{width:"100%",padding:"10px 18px 10px 30px",background:activeTab===st.id?"rgba(0,255,255,0.055)":"transparent",border:"none",color:activeTab===st.id?"#00ffff":"#999",fontSize:12,letterSpacing:1.5,cursor:"pointer",textAlign:"left",transition:"all 0.14s ease",fontWeight:activeTab===st.id?700:400,display:"flex",alignItems:"center",gap:8}}
-                            onMouseEnter={(e)=>{if(activeTab!==st.id)e.currentTarget.style.color="#fff";}}
-                            onMouseLeave={(e)=>{if(activeTab!==st.id)e.currentTarget.style.color="#999";}}>
+                        {group.subTabs.map(st=>(
+                          <button key={st.id} onClick={()=>switchTab(st.id)} style={{width:"100%",padding:"10px 18px 10px 30px",background:activeTab===st.id?"rgba(0,255,255,0.055)":"transparent",border:"none",color:activeTab===st.id?"#00ffff":"#999",fontSize:12,letterSpacing:1.5,cursor:"pointer",textAlign:"left",transition:"all 0.14s",fontWeight:activeTab===st.id?700:400,display:"flex",alignItems:"center",gap:8}} onMouseEnter={e=>{if(activeTab!==st.id)e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{if(activeTab!==st.id)e.currentTarget.style.color="#999";}}>
                             <span style={{width:4,height:4,borderRadius:"50%",flexShrink:0,background:activeTab===st.id?"#00ffff":"transparent",boxShadow:activeTab===st.id?"0 0 6px rgba(0,255,255,0.9)":"none",transition:"all 0.15s"}}/>
                             {st.label}
                           </button>
@@ -849,13 +700,13 @@ export default function Page() {
               })}
             </nav>
             <div style={{padding:"14px 14px 18px",borderTop:"1px solid #111",display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
-              <button onClick={()=>switchTab("account")} style={{width:"100%",padding:"10px 12px",textAlign:"left",background:activeTab==="account"?"rgba(0,255,255,0.07)":"transparent",border:"none",borderLeft:activeTab==="account"?"2px solid #00ffff":"2px solid transparent",color:activeTab==="account"?"#00ffff":"#b0b0b0",fontSize:11,fontWeight:700,letterSpacing:2.5,cursor:"pointer",transition:"0.18s"}} onMouseEnter={(e)=>{if(activeTab!=="account")e.currentTarget.style.color="#fff";}} onMouseLeave={(e)=>{if(activeTab!=="account")e.currentTarget.style.color="#b0b0b0";}}>ACCOUNT</button>
+              <button onClick={()=>switchTab("account")} style={{width:"100%",padding:"10px 12px",textAlign:"left",background:activeTab==="account"?"rgba(0,255,255,0.07)":"transparent",border:"none",borderLeft:activeTab==="account"?"2px solid #00ffff":"2px solid transparent",color:activeTab==="account"?"#00ffff":"#b0b0b0",fontSize:11,fontWeight:700,letterSpacing:2.5,cursor:"pointer",transition:"0.18s"}} onMouseEnter={e=>{if(activeTab!=="account")e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{if(activeTab!=="account")e.currentTarget.style.color="#b0b0b0";}}>ACCOUNT</button>
               <button onClick={()=>setSoundOn(!soundOn)} style={{width:"100%",padding:"9px 12px",textAlign:"left",background:"transparent",border:"none",color:soundOn?"#00ffff":"#888",fontSize:11,cursor:"pointer",letterSpacing:2,fontWeight:700,transition:"0.18s",textShadow:soundOn?"0 0 8px rgba(0,255,255,0.5)":"none"}}>{soundOn?"♫  SOUND ON":"♫  SOUND OFF"}</button>
             </div>
           </div>
         )}
 
-        {/* MAIN AREA */}
+        {/* ── MAIN AREA ── */}
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
           <div style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:isMobile?"16px 14px 100px":30,WebkitOverflowScrolling:"touch"}}>
 
@@ -866,102 +717,53 @@ export default function Page() {
               </video>
               <div style={{position:"absolute",inset:0,background:"linear-gradient(to top,black,transparent 60%)"}}/>
               <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at center,transparent 30%,black 100%)"}}/>
-              <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.12)"}}/>
               <div style={{position:"absolute",top:isMobile?16:25,left:isMobile?16:25,zIndex:10,fontSize:isMobile?28:42,fontWeight:900,letterSpacing:isMobile?5:8,animation:"pulse 2.5s infinite",textShadow:"0 0 20px rgba(0,255,255,0.8)"}}>2MRRW</div>
               <div style={{position:"absolute",bottom:isMobile?14:24,right:isMobile?14:25,display:"flex",gap:isMobile?12:16,alignItems:"center",zIndex:10,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                {SOCIALS.map((social)=>(
-                  <a key={social.name} href={social.href} target="_blank" rel="noopener noreferrer" title={social.name}
-                    style={{color:"rgba(255,255,255,0.65)",transition:"transform 0.2s ease,color 0.2s ease,filter 0.2s ease",display:"flex",alignItems:"center",textDecoration:"none"}}
-                    onMouseEnter={(e)=>{e.currentTarget.style.transform="scale(1.5)";e.currentTarget.style.color="#00ffff";e.currentTarget.style.filter="drop-shadow(0 0 6px rgba(0,255,255,0.8))";}}
-                    onMouseLeave={(e)=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.color="rgba(255,255,255,0.65)";e.currentTarget.style.filter="none";}}>
-                    {social.svg}
-                  </a>
-                ))}
+                {SOCIALS.map(s=><a key={s.name} href={s.href} target="_blank" rel="noopener noreferrer" title={s.name} style={{color:"rgba(255,255,255,0.65)",transition:"transform 0.2s,color 0.2s,filter 0.2s",display:"flex",alignItems:"center",textDecoration:"none"}} onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.5)";e.currentTarget.style.color="#00ffff";e.currentTarget.style.filter="drop-shadow(0 0 6px rgba(0,255,255,0.8))";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.color="rgba(255,255,255,0.65)";e.currentTarget.style.filter="none";}}>{s.svg}</a>)}
               </div>
             </div>
 
-            {activeTab==="home"&&(
-              <div style={{padding:"18px 0 8px",display:"flex",justifyContent:"flex-start"}}>
-                <button onClick={()=>window.open("https://www.paypal.com/donate","_blank")}
-                  style={{padding:"10px 28px",background:"transparent",color:"#888",border:"1px solid #2a2a2a",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:2,transition:"0.2s",textTransform:"uppercase"}}
-                  onMouseEnter={(e)=>{e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#555";e.currentTarget.style.background="rgba(255,255,255,0.04)";}}
-                  onMouseLeave={(e)=>{e.currentTarget.style.color="#888";e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.background="transparent";}}>♥ Donate</button>
-              </div>
-            )}
+            {activeTab==="home" && <div style={{padding:"18px 0 8px",display:"flex",justifyContent:"flex-start"}}><button onClick={()=>window.open("https://www.paypal.com/donate","_blank")} style={{padding:"10px 28px",background:"transparent",color:"#888",border:"1px solid #2a2a2a",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:2,transition:"0.2s",textTransform:"uppercase"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#555";e.currentTarget.style.background="rgba(255,255,255,0.04)";}} onMouseLeave={e=>{e.currentTarget.style.color="#888";e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.background="transparent";}}>♥ Donate</button></div>}
 
             <div key={tabKey} style={{animation:"fadeInTab 0.22s ease forwards"}}>
 
               {/* ══ HOME ══ */}
-              {activeTab==="home"&&(
+              {activeTab==="home" && (
                 <>
                   <div style={{marginTop:20,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Latest Singles</h2>
                     <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:18,alignItems:"flex-start"}}>
                       <div className="singles-row" style={{flex:1,display:"flex",gap:isMobile?12:18,overflowX:"auto",paddingBottom:14,scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch",overscrollBehaviorX:"contain",flexWrap:"nowrap",width:"100%",minWidth:0}}>
                         {singles.map((single,i)=>(
-                          <div key={single.slug}
-                            onClick={()=>openSingleModal(single)}
-                            style={{flex:"0 0 auto",width:isMobile?160:200,cursor:"pointer",scrollSnapAlign:"start",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",transition:"border-color 0.25s"}}
-                            onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#00ffff1a";}}
-                            onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1a1a1a";}}>
-                            <img src={single.cover}
-                              style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",display:"block",borderRadius:"13px 13px 0 0",transition:"transform 0.3s ease,filter 0.3s ease,box-shadow 0.3s ease"}}
-                              onMouseEnter={(e)=>{e.currentTarget.style.transform="scale(1.06)";e.currentTarget.style.filter="brightness(1.14)";e.currentTarget.style.boxShadow="0 0 22px rgba(0,255,255,0.55)";}}
-                              onMouseLeave={(e)=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.filter="brightness(1)";e.currentTarget.style.boxShadow="none";}}/>
-                            <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px",borderRadius:"0 0 13px 13px"}}>
+                          <div key={single.slug} onClick={()=>openSingleModal(single)} style={{flex:"0 0 auto",width:isMobile?160:200,cursor:"pointer",scrollSnapAlign:"start",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#00ffff1a"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
+                            <img src={single.cover} style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",display:"block",borderRadius:"13px 13px 0 0",transition:"transform 0.3s,filter 0.3s,box-shadow 0.3s"}} onMouseEnter={hoverIn} onMouseLeave={hoverOut}/>
+                            <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
                               <div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{single.title}</div>
                               <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${single.price.toFixed(2)}</div>
-                              <button onClick={(e)=>{e.stopPropagation();addToCart(single);}}
-                                style={{width:"100%",padding:"7px 0",fontSize:11,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",borderRadius:7,cursor:"pointer",fontWeight:600,transition:"0.2s"}}
-                                onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";}}
-                                onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="white";}}>+ Cart</button>
+                              <button onClick={e=>{e.stopPropagation();addToCart(single);}} style={{width:"100%",padding:"7px 0",fontSize:11,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",borderRadius:7,cursor:"pointer",fontWeight:600,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="white";}}>+ Cart</button>
                             </div>
                           </div>
                         ))}
                       </div>
-                      {!isMobile&&<LivePanel/>}
+                      {!isMobile && <LivePanel/>}
                     </div>
-                    {isMobile&&(
-                      <div style={{marginTop:14}}>
-                        <div style={{background:"linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",border:"1px solid rgba(0,255,255,0.15)",borderRadius:16,padding:"20px 18px",backdropFilter:"blur(12px)"}}>
-                          <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:10,textTransform:"uppercase",fontWeight:700}}>2MRRW LIVE</div>
-                          {liveIsLive?(
-                            <div style={{display:"flex",alignItems:"center",gap:8}}>
-                              <div style={{width:10,height:10,borderRadius:"50%",background:"#00ffff",boxShadow:"0 0 10px rgba(0,255,255,0.9)",animation:"pulse 1.2s infinite"}}/>
-                              <div style={{fontSize:20,fontWeight:900,color:"#00ffff",letterSpacing:3}}>LIVE NOW</div>
-                            </div>
-                          ):(
-                            <div style={{display:"flex",gap:8}}>
-                              {[{value:liveCountdown.days,label:"D"},{value:liveCountdown.hours,label:"H"},{value:liveCountdown.minutes,label:"M"},{value:liveCountdown.seconds,label:"S"}].map((u)=>(
-                                <div key={u.label} style={{flex:1,background:"rgba(0,0,0,0.5)",border:"1px solid #1a1a1a",borderRadius:10,padding:"10px 4px",textAlign:"center"}}>
-                                  <div style={{fontSize:22,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(u.value).padStart(2,"0")}</div>
-                                  <div style={{fontSize:9,color:"#444",letterSpacing:1.5,marginTop:3}}>{u.label}</div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                    {isMobile && (
+                      <div style={{marginTop:14,background:"linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",border:"1px solid rgba(0,255,255,0.15)",borderRadius:16,padding:"20px 18px",backdropFilter:"blur(12px)"}}>
+                        <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:10,textTransform:"uppercase",fontWeight:700}}>2MRRW LIVE</div>
+                        {liveIsLive ? <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,borderRadius:"50%",background:"#00ffff",animation:"pulse 1.2s infinite"}}/><div style={{fontSize:20,fontWeight:900,color:"#00ffff",letterSpacing:3}}>LIVE NOW</div></div>
+                          : <div style={{display:"flex",gap:8}}>{[{v:liveCountdown.days,l:"D"},{v:liveCountdown.hours,l:"H"},{v:liveCountdown.minutes,l:"M"},{v:liveCountdown.seconds,l:"S"}].map(u=><div key={u.l} style={{flex:1,background:"rgba(0,0,0,0.5)",border:"1px solid #1a1a1a",borderRadius:10,padding:"10px 4px",textAlign:"center"}}><div style={{fontSize:22,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(u.v).padStart(2,"0")}</div><div style={{fontSize:9,color:"#444",letterSpacing:1.5,marginTop:3}}>{u.l}</div></div>)}</div>}
                       </div>
                     )}
                   </div>
 
-                  {/* FEATURES — FIX #2: pass props, stable reference outside Page */}
                   <div style={{marginTop:28,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail
-                      features={features}
-                      isMobile={isMobile}
-                      addToCart={addToCart}
-                      onPlay={(feat) => setNowPlaying(feat)}
-                    />
+                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)}/>
                   </div>
 
-                  {/* 2MRRW RADIO */}
                   <div style={{marginTop:28,marginBottom:28}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>2MRRW RADIO</h2>
-                    {isMobile?(
-                      <RadioCarousel narrow={false}/>
-                    ):(
+                    {isMobile ? <RadioCarousel/> : (
                       <div style={{display:"flex",gap:16,alignItems:"stretch",minHeight:320}}>
                         <div style={{flex:"0 0 55%",minWidth:0}}><RadioCarousel narrow/></div>
                         <FlowState/>
@@ -969,33 +771,30 @@ export default function Page() {
                     )}
                   </div>
 
-                  <div style={{margin:"0 0 24px 0",height:1,background:"#1a1a1a"}}/>
+                  <div style={{margin:"0 0 24px",height:1,background:"#1a1a1a"}}/>
                   <div id="home-albums">
-                    <h2 className="section-heading" style={{animationDelay:"0.15s",marginBottom:16}}>Albums</h2>
-                    <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onSingleClick={setSelectedAlbum} isMobile={isMobile}/>
+                    <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
+                    <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile}/>
                   </div>
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
-
-                  {/* FIX #1b: home tab Shop section now uses printfulProducts */}
                   <div id="home-shop">
                     <h2 className="section-heading" style={{marginBottom:16}}>Shop</h2>
-                    <Grid items={printfulProducts} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} isMobile={isMobile}/>
+                    {printfulLoading ? <div style={{padding:"32px 0",textAlign:"center",fontSize:13,color:"#333",letterSpacing:2}}>Loading products…</div> : (
+                      <>
+                        {shopIsFallback && <div style={{fontSize:11,color:"#333",letterSpacing:1,marginBottom:16}}>Store coming soon — preview below</div>}
+                        <Grid items={shopItems} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} isMobile={isMobile}/>
+                      </>
+                    )}
                   </div>
-
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
                   <div id="home-videos">
                     <h2 className="section-heading" style={{marginBottom:8}}>Music Videos</h2>
                     <p style={{fontSize:13,color:"#444",marginBottom:24,letterSpacing:1}}>Official visuals from 2MRRW</p>
                     <div style={{display:"flex",flexDirection:"column",gap:32}}>
-                      {musicVideos.map((vid)=>(
+                      {musicVideos.map(vid=>(
                         <div key={vid.id} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden"}}>
-                          <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
-                            <iframe src={`https://www.youtube.com/embed/${vid.youtubeId}`} title={vid.title} frameBorder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowFullScreen style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",borderRadius:"20px 20px 0 0"}}/>
-                          </div>
-                          <div style={{padding:"16px 20px"}}>
-                            <div style={{fontSize:17,fontWeight:800,letterSpacing:1,marginBottom:4}}>{vid.title}</div>
-                            <div style={{fontSize:12,color:"#555"}}>{vid.description}</div>
-                          </div>
+                          <div style={{position:"relative",paddingBottom:"56.25%",height:0}}><iframe src={`https://www.youtube.com/embed/${vid.youtubeId}`} title={vid.title} frameBorder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowFullScreen style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",borderRadius:"20px 20px 0 0"}}/></div>
+                          <div style={{padding:"16px 20px"}}><div style={{fontSize:17,fontWeight:800,letterSpacing:1,marginBottom:4}}>{vid.title}</div><div style={{fontSize:12,color:"#555"}}>{vid.description}</div></div>
                         </div>
                       ))}
                     </div>
@@ -1005,19 +804,10 @@ export default function Page() {
                     <h2 className="section-heading" style={{marginBottom:8}}>Exclusives</h2>
                     <p style={{fontSize:13,color:"#444",marginBottom:24,letterSpacing:1,lineHeight:1.8}}>Not merch. Ownership tokens. Physical and digital proof you were here first.</p>
                     <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(220px,1fr))",gap:isMobile?12:18}}>
-                      {exclusiveItems.map((item)=>(
-                        <div key={item.id} style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:isMobile?14:18,overflow:"hidden",cursor:"pointer",transition:"all 0.3s ease"}}
-                          onMouseEnter={(e)=>{e.currentTarget.style.borderColor=item.badgeColor+"55";e.currentTarget.style.boxShadow=`0 0 24px ${item.badgeColor}14`;e.currentTarget.style.transform="translateY(-2px)";}}
-                          onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1e1e1e";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}}
-                          onClick={()=>setExclusiveModal(item)}>
-                          <div style={{position:"relative"}}>
-                            <img src={item.cover} style={{width:"100%",height:isMobile?120:160,objectFit:"cover",display:"block"}}/>
-                            <div style={{position:"absolute",top:8,left:8,background:item.badgeColor,color:"#000",fontSize:8,fontWeight:900,letterSpacing:1.5,padding:"3px 7px",borderRadius:20}}>{item.badge}</div>
-                          </div>
-                          <div style={{padding:isMobile?"10px 12px 14px":"14px 16px 18px"}}>
-                            <div style={{fontSize:isMobile?11:13,fontWeight:800,marginBottom:4,lineHeight:1.3}}>{item.title}</div>
-                            <div style={{fontSize:isMobile?15:18,fontWeight:900,color:item.badgeColor}}>${item.price.toFixed(2)}</div>
-                          </div>
+                      {exclusiveItems.map(item=>(
+                        <div key={item.id} style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:isMobile?14:18,overflow:"hidden",cursor:"pointer",transition:"all 0.3s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=item.badgeColor+"55";e.currentTarget.style.boxShadow=`0 0 24px ${item.badgeColor}14`;e.currentTarget.style.transform="translateY(-2px)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1e1e1e";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}} onClick={()=>setExclusiveModal(item)}>
+                          <div style={{position:"relative"}}><img src={item.cover} style={{width:"100%",height:isMobile?120:160,objectFit:"cover",display:"block"}}/><div style={{position:"absolute",top:8,left:8,background:item.badgeColor,color:"#000",fontSize:8,fontWeight:900,letterSpacing:1.5,padding:"3px 7px",borderRadius:20}}>{item.badge}</div></div>
+                          <div style={{padding:isMobile?"10px 12px 14px":"14px 16px 18px"}}><div style={{fontSize:isMobile?11:13,fontWeight:800,marginBottom:4,lineHeight:1.3}}>{item.title}</div><div style={{fontSize:isMobile?15:18,fontWeight:900,color:item.badgeColor}}>${item.price.toFixed(2)}</div></div>
                         </div>
                       ))}
                     </div>
@@ -1026,17 +816,10 @@ export default function Page() {
                   <div id="home-shows">
                     <h2 className="section-heading" style={{marginBottom:16}}>Shows & Events</h2>
                     <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                      {events.map((evt)=>(
-                        <div key={evt.id} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?"14px 14px":"16px 18px",display:"flex",alignItems:isMobile?"flex-start":"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{fontWeight:700,fontSize:isMobile?13:14,marginBottom:3}}>{evt.name}</div>
-                            <div style={{fontSize:12,color:"#aaa"}}>{evt.location}</div>
-                            <div style={{fontSize:11,color:"#555",marginTop:2}}>{new Date(evt.date).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})} · {evt.time}</div>
-                          </div>
-                          <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <div style={{fontSize:15,fontWeight:900,color:"#00ffff"}}>${evt.price.toFixed(2)}</div>
-                            <button onClick={()=>setSelectedEvent(evt)} style={{padding:"8px 14px",background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontWeight:"bold",fontSize:12,transition:"0.2s"}} onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#00ffff";}} onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#333";}}>Tickets</button>
-                          </div>
+                      {events.map(evt=>(
+                        <div key={evt.id} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?"14px":"16px 18px",display:"flex",alignItems:isMobile?"flex-start":"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:isMobile?13:14,marginBottom:3}}>{evt.name}</div><div style={{fontSize:12,color:"#aaa"}}>{evt.location}</div><div style={{fontSize:11,color:"#555",marginTop:2}}>{new Date(evt.date).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})} · {evt.time}</div></div>
+                          <div style={{display:"flex",alignItems:"center",gap:10}}><div style={{fontSize:15,fontWeight:900,color:"#00ffff"}}>${evt.price.toFixed(2)}</div><button onClick={()=>setSelectedEvent(evt)} style={{padding:"8px 14px",background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontWeight:"bold",fontSize:12,transition:"0.2s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#00ffff"} onMouseLeave={e=>e.currentTarget.style.borderColor="#333"}>Tickets</button></div>
                         </div>
                       ))}
                     </div>
@@ -1048,85 +831,52 @@ export default function Page() {
                       <div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:8}}>NEXT LIVE STREAM</div>
                       <div style={{fontSize:isMobile?16:20,fontWeight:800,marginBottom:4}}>2MRRW LIVE – Dallas</div>
                       <div style={{fontSize:13,color:"#aaa",marginBottom:24}}>{liveStreamDate} · {liveStreamTime}</div>
-                      {liveIsLive?(
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontSize:22,fontWeight:900,color:"#00ffff"}}>
-                          <div style={{width:10,height:10,borderRadius:"50%",background:"#00ffff",boxShadow:"0 0 10px rgba(0,255,255,0.9)",animation:"pulse 1.2s infinite"}}/>LIVE NOW
-                        </div>
-                      ):(
-                        <div style={{display:"flex",justifyContent:"center",gap:isMobile?8:14,flexWrap:"wrap"}}>
-                          {[{value:liveCountdown.days,label:"Days"},{value:liveCountdown.hours,label:"Hours"},{value:liveCountdown.minutes,label:"Min"},{value:liveCountdown.seconds,label:"Sec"}].map((unit)=>(
-                            <div key={unit.label} style={{background:"#0a0a0a",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?"12px 10px":"16px 20px",minWidth:isMobile?52:68,textAlign:"center"}}>
-                              <div style={{fontSize:isMobile?24:32,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(unit.value).padStart(2,"0")}</div>
-                              <div style={{fontSize:9,color:"#444",letterSpacing:2,marginTop:5,textTransform:"uppercase"}}>{unit.label}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      {liveIsLive ? <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontSize:22,fontWeight:900,color:"#00ffff"}}><div style={{width:10,height:10,borderRadius:"50%",background:"#00ffff",animation:"pulse 1.2s infinite"}}/>LIVE NOW</div>
+                        : <div style={{display:"flex",justifyContent:"center",gap:isMobile?8:14,flexWrap:"wrap"}}>{[{v:liveCountdown.days,l:"Days"},{v:liveCountdown.hours,l:"Hours"},{v:liveCountdown.minutes,l:"Min"},{v:liveCountdown.seconds,l:"Sec"}].map(u=><div key={u.l} style={{background:"#0a0a0a",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?"12px 10px":"16px 20px",minWidth:isMobile?52:68,textAlign:"center"}}><div style={{fontSize:isMobile?24:32,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(u.v).padStart(2,"0")}</div><div style={{fontSize:9,color:"#444",letterSpacing:2,marginTop:5,textTransform:"uppercase"}}>{u.l}</div></div>)}</div>}
                     </div>
                   </div>
                   <div style={{height:40}}/>
                 </>
               )}
 
-              {/* SINGLES */}
-              {activeTab==="singles"&&(
+              {/* ══ SINGLES — FIX #1: CarouselUI is external stable component ══ */}
+              {activeTab==="singles" && (
                 <>
                   <h2 className="section-heading">Singles</h2>
-                  <CarouselUI large={!isMobile}/>
-                  {/* FEATURES — FIX #2: pass props, stable reference outside Page */}
+                  <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} singleIndex={singleIndex} singles={singles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} openSingleModal={openSingleModal} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut}/>
                   <div style={{marginTop:36,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail
-                      features={features}
-                      isMobile={isMobile}
-                      addToCart={addToCart}
-                      onPlay={(feat) => setNowPlaying(feat)}
-                    />
+                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)}/>
                   </div>
                 </>
               )}
 
-              {/* ALBUMS */}
-              {activeTab==="albums"&&<Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onSingleClick={setSelectedAlbum} isMobile={isMobile}/>}
+              {/* ══ ALBUMS ══ */}
+              {activeTab==="albums" && <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile}/>}
 
-              {/* SHOP — FIX #1b: uses printfulProducts (already correct in your original) */}
-              {activeTab==="shop"&&(
-                <Grid
-                  items={printfulProducts}
-                  type="products"
-                  addToCart={addToCart}
-                  hoverIn={hoverIn}
-                  hoverOut={hoverOut}
-                  buttonHoverIn={buttonHoverIn}
-                  buttonHoverOut={buttonHoverOut}
-                  isMobile={isMobile}
-                />
+              {/* ══ SHOP — FIX #4 ══ */}
+              {activeTab==="shop" && (
+                <>
+                  <h2 className="section-heading" style={{marginBottom:16}}>Merch</h2>
+                  {printfulLoading ? <div style={{padding:"60px 0",textAlign:"center",fontSize:13,color:"#333",letterSpacing:2}}>Loading products…</div> : (
+                    <>
+                      {shopIsFallback && <div style={{marginBottom:20,padding:"12px 16px",background:"rgba(255,255,255,0.02)",border:"1px solid #1a1a1a",borderRadius:10,fontSize:11,color:"#444",letterSpacing:1,lineHeight:1.7}}>Store inventory is syncing. Showing preview items — check back soon for the full Printful catalog.</div>}
+                      <Grid items={shopItems} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} isMobile={isMobile}/>
+                    </>
+                  )}
+                </>
               )}
 
-              {/* EXCLUSIVE */}
-              {activeTab==="exclusive"&&(
+              {/* ══ EXCLUSIVE ══ */}
+              {activeTab==="exclusive" && (
                 <>
                   <h2 className="section-heading">Exclusive Drops</h2>
                   <p style={{fontSize:13,color:"#444",marginBottom:8,letterSpacing:1,lineHeight:1.8}}>This is not merch. These are ownership tokens. Physical and digital proof that you were here first.</p>
                   <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(260px,1fr))",gap:isMobile?12:20,marginTop:28}}>
-                    {exclusiveItems.map((item)=>(
-                      <div key={item.id} style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:isMobile?14:20,overflow:"hidden",cursor:"pointer",transition:"all 0.3s ease"}}
-                        onMouseEnter={(e)=>{e.currentTarget.style.borderColor=item.badgeColor+"55";e.currentTarget.style.boxShadow=`0 0 28px ${item.badgeColor}18`;e.currentTarget.style.transform="translateY(-3px)";}}
-                        onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1e1e1e";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}}
-                        onClick={()=>setExclusiveModal(item)}>
-                        <div style={{position:"relative"}}>
-                          <img src={item.cover} style={{width:"100%",height:isMobile?120:200,objectFit:"cover",display:"block"}}/>
-                          <div style={{position:"absolute",top:10,left:10,background:item.badgeColor,color:"#000",fontSize:8,fontWeight:900,letterSpacing:1.5,padding:"3px 8px",borderRadius:20}}>{item.badge}</div>
-                          {!isMobile&&<div style={{position:"absolute",top:12,right:12,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:10,backdropFilter:"blur(4px)"}}>{item.stock} left</div>}
-                        </div>
-                        <div style={{padding:isMobile?"10px 12px 14px":"16px 18px 20px"}}>
-                          <div style={{fontSize:isMobile?12:15,fontWeight:800,marginBottom:4,letterSpacing:0.5,lineHeight:1.3}}>{item.title}</div>
-                          {!isMobile&&<div style={{fontSize:11,color:"#555",letterSpacing:1,marginBottom:12}}>{item.subtitle}</div>}
-                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:isMobile?6:0}}>
-                            <div style={{fontSize:isMobile?16:20,fontWeight:900,color:item.badgeColor}}>${item.price.toFixed(2)}</div>
-                            {!isMobile&&<button onClick={(e)=>{e.stopPropagation();setExclusiveModal(item);}} style={{padding:"8px 16px",background:"transparent",color:item.badgeColor,border:`1px solid ${item.badgeColor}66`,borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,transition:"0.2s"}} onMouseEnter={(e)=>{e.currentTarget.style.background=item.badgeColor+"22";}} onMouseLeave={(e)=>{e.currentTarget.style.background="transparent";}}>View Drop</button>}
-                          </div>
-                        </div>
+                    {exclusiveItems.map(item=>(
+                      <div key={item.id} style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:isMobile?14:20,overflow:"hidden",cursor:"pointer",transition:"all 0.3s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=item.badgeColor+"55";e.currentTarget.style.boxShadow=`0 0 28px ${item.badgeColor}18`;e.currentTarget.style.transform="translateY(-3px)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1e1e1e";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}} onClick={()=>setExclusiveModal(item)}>
+                        <div style={{position:"relative"}}><img src={item.cover} style={{width:"100%",height:isMobile?120:200,objectFit:"cover",display:"block"}}/><div style={{position:"absolute",top:10,left:10,background:item.badgeColor,color:"#000",fontSize:8,fontWeight:900,letterSpacing:1.5,padding:"3px 8px",borderRadius:20}}>{item.badge}</div>{!isMobile&&<div style={{position:"absolute",top:12,right:12,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:10,backdropFilter:"blur(4px)"}}>{item.stock} left</div>}</div>
+                        <div style={{padding:isMobile?"10px 12px 14px":"16px 18px 20px"}}><div style={{fontSize:isMobile?12:15,fontWeight:800,marginBottom:4,lineHeight:1.3}}>{item.title}</div>{!isMobile&&<div style={{fontSize:11,color:"#555",letterSpacing:1,marginBottom:12}}>{item.subtitle}</div>}<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:isMobile?6:0}}><div style={{fontSize:isMobile?16:20,fontWeight:900,color:item.badgeColor}}>${item.price.toFixed(2)}</div>{!isMobile&&<button onClick={e=>{e.stopPropagation();setExclusiveModal(item);}} style={{padding:"8px 16px",background:"transparent",color:item.badgeColor,border:`1px solid ${item.badgeColor}66`,borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>e.currentTarget.style.background=item.badgeColor+"22"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>View Drop</button>}</div></div>
                       </div>
                     ))}
                   </div>
@@ -1134,181 +884,97 @@ export default function Page() {
                     <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:14,textTransform:"uppercase"}}>About Collector Art Cards</div>
                     <div style={{fontSize:isMobile?18:22,fontWeight:900,letterSpacing:1,marginBottom:16,lineHeight:1.3}}>Not merch. Ownership.</div>
                     <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(200px,1fr))",gap:isMobile?12:20}}>
-                      {[{icon:"🃏",title:"Physical Card",desc:"350–600gsm thick stock. Matte soft-touch finish."},{icon:"✍️",title:"Hand-Signed",desc:"Personal message from 2MRRW. Individually signed and numbered."},{icon:"📱",title:"QR + NFC",desc:"Scan to access your music. Select cards include NFC chip."},{icon:"🔒",title:"Scarcity Built In",desc:"First Edition, numbered drops. Once gone, gone."}].map((f)=>(
-                        <div key={f.title} style={{padding:isMobile?"14px":"18px 20px",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a"}}>
-                          <div style={{fontSize:22,marginBottom:6}}>{f.icon}</div>
-                          <div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{f.title}</div>
-                          <div style={{fontSize:isMobile?11:12,color:"#555",lineHeight:1.6}}>{f.desc}</div>
-                        </div>
+                      {[{icon:"🃏",title:"Physical Card",desc:"350–600gsm thick stock. Matte soft-touch finish."},{icon:"✍️",title:"Hand-Signed",desc:"Personal message from 2MRRW. Individually signed and numbered."},{icon:"📱",title:"QR + NFC",desc:"Scan to access your music. Select cards include NFC chip."},{icon:"🔒",title:"Scarcity Built In",desc:"First Edition, numbered drops. Once gone, gone."}].map(f=>(
+                        <div key={f.title} style={{padding:isMobile?"14px":"18px 20px",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a"}}><div style={{fontSize:22,marginBottom:6}}>{f.icon}</div><div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{f.title}</div><div style={{fontSize:isMobile?11:12,color:"#555",lineHeight:1.6}}>{f.desc}</div></div>
                       ))}
                     </div>
                   </div>
                 </>
               )}
 
-              {/* VIDEOS */}
-              {activeTab==="videos"&&(
+              {/* ══ VIDEOS ══ */}
+              {activeTab==="videos" && (
                 <>
                   <h2 className="section-heading">Music Videos</h2>
-                  <p style={{fontSize:13,color:"#444",marginBottom:20,letterSpacing:1}}>
-                    Featured release + latest visuals
-                  </p>
+                  <p style={{fontSize:13,color:"#444",marginBottom:20,letterSpacing:1}}>Featured release + latest visuals</p>
                   <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden",marginBottom:28}}>
                     <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
-                      <iframe
-                        ref={ytIframeRef}
-                        key={activeVideo}
-                        src={`https://www.youtube.com/embed/${activeVideo}?autoplay=1&enablejsapi=1&rel=0&playsinline=1`}
-                        title="Featured Video"
-                        frameBorder="0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                        allowFullScreen
-                        style={{position:"absolute",top:0,left:0,width:"100%",height:"100%"}}
-                      />
+                      <iframe ref={ytIframeRef} key={activeVideo} src={`https://www.youtube.com/embed/${activeVideo}?autoplay=1&enablejsapi=1&rel=0&playsinline=1`} title="Featured Video" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen style={{position:"absolute",top:0,left:0,width:"100%",height:"100%"}}/>
                     </div>
                   </div>
-                  <div
-                    className={isMobile ? "videos-row" : ""}
-                    style={isMobile ? {
-                      display:"flex",
-                      flexWrap:"nowrap",
-                      overflowX:"auto",
-                      WebkitOverflowScrolling:"touch",
-                      scrollSnapType:"x mandatory",
-                      overscrollBehaviorX:"contain",
-                      gap:12,
-                      paddingBottom:10
-                    } : {
-                      display:"grid",
-                      gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",
-                      gap:16
-                    }}
-                  >
-                    {musicVideos.map((vid)=>(
-                      <div
-                        key={vid.id}
-                        onClick={()=>setActiveVideo(vid.youtubeId)}
-                        style={{
-                          ...(isMobile ? {flex:"0 0 220px", width:220, scrollSnapAlign:"start"} : {}),
-                          background:"#0e0e0e",
-                          border:`1px solid ${activeVideo===vid.youtubeId?"#00ffff44":"#1e1e1e"}`,
-                          borderRadius:14,
-                          overflow:"hidden",
-                          cursor:"pointer",
-                          transition:"0.2s"
-                        }}
-                      >
-                        <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
-                          <img
-                            src={`https://img.youtube.com/vi/${vid.youtubeId}/hqdefault.jpg`}
-                            alt={vid.title}
-                            style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"cover"}}
-                          />
-                        </div>
-                        <div style={{padding:"10px 12px"}}>
-                          <div style={{fontSize:13,fontWeight:700}}>{vid.title}</div>
-                          <div style={{fontSize:11,color:"#666"}}>{vid.description}</div>
-                        </div>
+                  <div className={isMobile?"videos-row":""} style={isMobile?{display:"flex",flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollSnapType:"x mandatory",overscrollBehaviorX:"contain",gap:12,paddingBottom:10}:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:16}}>
+                    {musicVideos.map(vid=>(
+                      <div key={vid.id} onClick={()=>setActiveVideo(vid.youtubeId)} style={{...(isMobile?{flex:"0 0 220px",width:220,scrollSnapAlign:"start"}:{}),background:"#0e0e0e",border:`1px solid ${activeVideo===vid.youtubeId?"#00ffff44":"#1e1e1e"}`,borderRadius:14,overflow:"hidden",cursor:"pointer",transition:"0.2s"}}>
+                        <div style={{position:"relative",paddingBottom:"56.25%",height:0}}><img src={`https://img.youtube.com/vi/${vid.youtubeId}/hqdefault.jpg`} alt={vid.title} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"cover"}}/></div>
+                        <div style={{padding:"10px 12px"}}><div style={{fontSize:13,fontWeight:700}}>{vid.title}</div><div style={{fontSize:11,color:"#666"}}>{vid.description}</div></div>
                       </div>
                     ))}
                   </div>
                 </>
               )}
 
-              {/* SHOWS */}
-              {activeTab==="shows"&&(
+              {/* ══ SHOWS ══ */}
+              {activeTab==="shows" && (
                 <>
                   <h2 className="section-heading" style={{marginBottom:20}}>Shows & Events</h2>
-                  {!isMobile&&(
+                  {!isMobile && (
                     <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,padding:24,marginBottom:30}}>
                       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
                         <button onClick={prevMonth} style={{background:"none",border:"1px solid #333",color:"white",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontSize:16}}>‹</button>
                         <div style={{fontSize:18,fontWeight:700,letterSpacing:3}}>{monthNames[calMonth]} {calYear}</div>
                         <button onClick={nextMonth} style={{background:"none",border:"1px solid #333",color:"white",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontSize:16}}>›</button>
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
-                        {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((d)=>(<div key={d} style={{textAlign:"center",fontSize:11,color:"#555",paddingBottom:6}}>{d}</div>))}
-                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=><div key={d} style={{textAlign:"center",fontSize:11,color:"#555",paddingBottom:6}}>{d}</div>)}</div>
                       <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
                         {Array.from({length:getFirstDayOfMonth(calMonth,calYear)}).map((_,i)=><div key={`e-${i}`}/>)}
                         {Array.from({length:getDaysInMonth(calMonth,calYear)}).map((_,i)=>{
                           const day=i+1; const dayShows=getShowsForDay(day);
-                          const isToday=new Date().getDate()===day&&new Date().getMonth()===calMonth&&new Date().getFullYear()===calYear;
-                          return (
-                            <div key={day} onClick={()=>dayShows.length>0&&setSelectedEvent(dayShows[0])}
-                              style={{minHeight:44,borderRadius:8,background:dayShows.length>0?"rgba(0,255,255,0.08)":"transparent",border:isToday?"1px solid #00ffff":dayShows.length>0?"1px solid rgba(0,255,255,0.3)":"1px solid #1a1a1a",cursor:dayShows.length>0?"pointer":"default",padding:6,display:"flex",flexDirection:"column",alignItems:"center",gap:3,transition:"0.2s"}}>
-                              <span style={{fontSize:12,color:isToday?"#00ffff":"#aaa"}}>{day}</span>
-                              {dayShows.map((s)=><span key={s.id} style={{fontSize:9,background:"#00ffff",color:"#000",borderRadius:4,padding:"1px 4px",fontWeight:700}}>EVENT</span>)}
-                            </div>
-                          );
+                          const isToday=new Date().getDate()===day && new Date().getMonth()===calMonth && new Date().getFullYear()===calYear;
+                          return <div key={day} onClick={()=>dayShows.length>0&&setSelectedEvent(dayShows[0])} style={{minHeight:44,borderRadius:8,background:dayShows.length>0?"rgba(0,255,255,0.08)":"transparent",border:isToday?"1px solid #00ffff":dayShows.length>0?"1px solid rgba(0,255,255,0.3)":"1px solid #1a1a1a",cursor:dayShows.length>0?"pointer":"default",padding:6,display:"flex",flexDirection:"column",alignItems:"center",gap:3,transition:"0.2s"}}><span style={{fontSize:12,color:isToday?"#00ffff":"#aaa"}}>{day}</span>{dayShows.map(s=><span key={s.id} style={{fontSize:9,background:"#00ffff",color:"#000",borderRadius:4,padding:"1px 4px",fontWeight:700}}>EVENT</span>)}</div>;
                         })}
                       </div>
                     </div>
                   )}
                   <h2 style={{letterSpacing:3,fontSize:14,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Upcoming Events</h2>
                   <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                    {events.map((evt)=>(
+                    {events.map(evt=>(
                       <div key={evt.id} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?"14px":"18px 20px",display:"flex",alignItems:isMobile?"flex-start":"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontWeight:700,fontSize:isMobile?13:15,marginBottom:4}}>{evt.name}</div>
-                          <div style={{fontSize:12,color:"#aaa"}}>{evt.location}</div>
-                          <div style={{fontSize:11,color:"#555",marginTop:2}}>{new Date(evt.date).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})} · {evt.time}</div>
-                        </div>
-                        <div style={{display:"flex",alignItems:"center",gap:isMobile?10:14}}>
-                          <div style={{fontSize:isMobile?15:18,fontWeight:900,color:"#00ffff"}}>${evt.price.toFixed(2)}</div>
-                          <button onClick={()=>setSelectedEvent(evt)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"9px 14px":"10px 20px",background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontWeight:"bold",fontSize:isMobile?12:13,transition:"0.25s"}}>Get Tickets</button>
-                        </div>
+                        <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:isMobile?13:15,marginBottom:4}}>{evt.name}</div><div style={{fontSize:12,color:"#aaa"}}>{evt.location}</div><div style={{fontSize:11,color:"#555",marginTop:2}}>{new Date(evt.date).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})} · {evt.time}</div></div>
+                        <div style={{display:"flex",alignItems:"center",gap:isMobile?10:14}}><div style={{fontSize:isMobile?15:18,fontWeight:900,color:"#00ffff"}}>${evt.price.toFixed(2)}</div><button onClick={()=>setSelectedEvent(evt)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"9px 14px":"10px 20px",background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontWeight:"bold",fontSize:isMobile?12:13,transition:"0.25s"}}>Get Tickets</button></div>
                       </div>
                     ))}
                   </div>
                 </>
               )}
 
-              {/* LIVE */}
-              {activeTab==="live"&&(
+              {/* ══ LIVE ══ */}
+              {activeTab==="live" && (
                 <>
                   <h2 className="section-heading">2MRRW LIVE</h2>
                   <div style={{background:"linear-gradient(135deg,#080808,#0d0d0d)",border:"1px solid rgba(0,255,255,0.12)",borderRadius:20,padding:isMobile?"20px 16px":"36px 32px",marginBottom:28,textAlign:"center"}}>
                     <div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:6,textTransform:"uppercase"}}>Next Live Stream</div>
                     <div style={{fontSize:isMobile?17:22,fontWeight:800,marginBottom:4}}>2MRRW LIVE – Dallas</div>
                     <div style={{fontSize:13,color:"#aaa",marginBottom:28}}>{liveStreamDate} · {liveStreamTime}</div>
-                    {liveIsLive?(
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:20}}>
-                        <div style={{width:12,height:12,borderRadius:"50%",background:"#00ffff",boxShadow:"0 0 14px rgba(0,255,255,0.9)",animation:"pulse 1.2s infinite"}}/>
-                        <div style={{fontSize:28,fontWeight:900,color:"#00ffff",letterSpacing:4}}>LIVE NOW</div>
-                      </div>
-                    ):(
-                      <div style={{display:"flex",justifyContent:"center",gap:isMobile?8:16,flexWrap:"wrap"}}>
-                        {[{value:liveCountdown.days,label:"Days"},{value:liveCountdown.hours,label:"Hours"},{value:liveCountdown.minutes,label:"Min"},{value:liveCountdown.seconds,label:"Sec"}].map((unit)=>(
-                          <div key={unit.label} style={{background:"#0a0a0a",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?"12px 10px":"18px 22px",minWidth:isMobile?52:74,textAlign:"center"}}>
-                            <div style={{fontSize:isMobile?26:36,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(unit.value).padStart(2,"0")}</div>
-                            <div style={{fontSize:9,color:"#444",letterSpacing:2,marginTop:6,textTransform:"uppercase"}}>{unit.label}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {liveIsLive ? <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:20}}><div style={{width:12,height:12,borderRadius:"50%",background:"#00ffff",boxShadow:"0 0 14px rgba(0,255,255,0.9)",animation:"pulse 1.2s infinite"}}/><div style={{fontSize:28,fontWeight:900,color:"#00ffff",letterSpacing:4}}>LIVE NOW</div></div>
+                      : <div style={{display:"flex",justifyContent:"center",gap:isMobile?8:16,flexWrap:"wrap"}}>{[{v:liveCountdown.days,l:"Days"},{v:liveCountdown.hours,l:"Hours"},{v:liveCountdown.minutes,l:"Min"},{v:liveCountdown.seconds,l:"Sec"}].map(u=><div key={u.l} style={{background:"#0a0a0a",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?"12px 10px":"18px 22px",minWidth:isMobile?52:74,textAlign:"center"}}><div style={{fontSize:isMobile?26:36,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(u.v).padStart(2,"0")}</div><div style={{fontSize:9,color:"#444",letterSpacing:2,marginTop:6,textTransform:"uppercase"}}>{u.l}</div></div>)}</div>}
                   </div>
                   <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden",marginBottom:28}}>
                     <div style={{position:"relative",paddingBottom:"56.25%",background:"#050505"}}>
                       <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-                        <div style={{width:70,height:70,borderRadius:"50%",border:"1px solid #222",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                          <svg viewBox="0 0 24 24" fill="#333" width="32" height="32"><circle cx="12" cy="12" r="4"/><path d="M20.188 10.934a8.999 8.999 0 0 0-16.376 0M23.472 9.16a13.5 13.5 0 0 0-22.944 0M16.905 12.7a4.5 4.5 0 0 0-9.81 0M12 17v-1m0 5v-2" stroke="#333" strokeWidth="1.5" fill="none"/></svg>
-                        </div>
+                        <div style={{width:70,height:70,borderRadius:"50%",border:"1px solid #222",display:"flex",alignItems:"center",justifyContent:"center"}}><svg viewBox="0 0 24 24" fill="#333" width="32" height="32"><circle cx="12" cy="12" r="4"/><path d="M20.188 10.934a8.999 8.999 0 0 0-16.376 0M23.472 9.16a13.5 13.5 0 0 0-22.944 0M16.905 12.7a4.5 4.5 0 0 0-9.81 0M12 17v-1m0 5v-2" stroke="#333" strokeWidth="1.5" fill="none"/></svg></div>
                         <div style={{fontSize:14,color:"#333",fontWeight:700,letterSpacing:2}}>{liveIsLive?"STREAM STARTING…":"OFFLINE"}</div>
                         <div style={{fontSize:12,color:"#2a2a2a"}}>Live stream announced via Circle + socials</div>
                       </div>
                     </div>
-                    <div style={{padding:"16px 20px",borderTop:"1px solid #111"}}>
-                      <div style={{fontSize:13,color:"#444"}}>Live streams broadcast here and on Twitch. Follow to get notified.</div>
-                    </div>
+                    <div style={{padding:"16px 20px",borderTop:"1px solid #111"}}><div style={{fontSize:13,color:"#444"}}>Live streams broadcast here and on Twitch. Follow to get notified.</div></div>
                   </div>
                 </>
               )}
 
-              {/* BLOG */}
-              {activeTab==="blog"&&(
+              {/* ══ BLOG ══ */}
+              {activeTab==="blog" && (
                 <>
-                  {blogPost?(
+                  {blogPost ? (
                     <div>
                       <button onClick={()=>setBlogPost(null)} style={{background:"none",border:"none",color:"#00ffff",cursor:"pointer",fontSize:13,marginBottom:20,padding:0,letterSpacing:1}}>← BACK TO BLOG</button>
                       <h1 style={{fontSize:isMobile?20:24,fontWeight:900,marginBottom:6,letterSpacing:1}}>{blogPost.title}</h1>
@@ -1316,29 +982,20 @@ export default function Page() {
                       <div style={{fontSize:14,lineHeight:1.9,color:"#ccc",whiteSpace:"pre-line",marginBottom:40}}>{blogPost.body}</div>
                       <div style={{borderTop:"1px solid #1e1e1e",paddingTop:24}}>
                         <h3 style={{fontSize:13,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Comments</h3>
-                        {(blogComments[blogPost.id]||[]).length===0&&<p style={{fontSize:13,color:"#444",marginBottom:20}}>No comments yet. Be the first.</p>}
-                        {(blogComments[blogPost.id]||[]).map((c,i)=>(
-                          <div key={i} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:10,padding:"12px 16px",marginBottom:10}}>
-                            <div style={{fontSize:12,fontWeight:700,color:"#00ffff",marginBottom:4}}>{c.name}</div>
-                            <div style={{fontSize:13,color:"#ccc"}}>{c.text}</div>
-                            <div style={{fontSize:10,color:"#444",marginTop:6}}>{c.time}</div>
-                          </div>
-                        ))}
+                        {(blogComments[blogPost.id]||[]).length===0 && <p style={{fontSize:13,color:"#444",marginBottom:20}}>No comments yet. Be the first.</p>}
+                        {(blogComments[blogPost.id]||[]).map((c,i)=><div key={i} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:10,padding:"12px 16px",marginBottom:10}}><div style={{fontSize:12,fontWeight:700,color:"#00ffff",marginBottom:4}}>{c.name}</div><div style={{fontSize:13,color:"#ccc"}}>{c.text}</div><div style={{fontSize:10,color:"#444",marginTop:6}}>{c.time}</div></div>)}
                         <div style={{display:"flex",gap:10,marginTop:16}}>
-                          <input placeholder="Leave a comment…" value={blogComment} onChange={(e)=>setBlogComment(e.target.value)} onKeyDown={(e)=>e.key==="Enter"&&handleAddComment(blogPost.id)} style={{flex:1,padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:13}}/>
+                          <input placeholder="Leave a comment…" value={blogComment} onChange={e=>setBlogComment(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleAddComment(blogPost.id)} style={{flex:1,padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:13}}/>
                           <button onClick={()=>handleAddComment(blogPost.id)} style={{padding:"10px 18px",background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer",fontSize:13}}>Post</button>
                         </div>
                       </div>
                     </div>
-                  ):(
+                  ) : (
                     <>
                       <h2 className="section-heading" style={{marginBottom:24}}>Community Blog</h2>
                       <div style={{display:"flex",flexDirection:"column",gap:20}}>
-                        {blogPosts.map((post)=>(
-                          <div key={post.id} onClick={()=>setBlogPost(post)}
-                            style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?18:24,cursor:"pointer",transition:"0.25s"}}
-                            onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.boxShadow="0 0 16px rgba(0,255,255,0.1)";}}
-                            onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1e1e1e";e.currentTarget.style.boxShadow="none";}}>
+                        {blogPosts.map(post=>(
+                          <div key={post.id} onClick={()=>setBlogPost(post)} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?18:24,cursor:"pointer",transition:"0.25s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.boxShadow="0 0 16px rgba(0,255,255,0.1)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1e1e1e";e.currentTarget.style.boxShadow="none";}}>
                             <div style={{fontSize:isMobile?15:18,fontWeight:800,marginBottom:6}}>{post.title}</div>
                             <div style={{fontSize:11,color:"#555",marginBottom:12}}>{post.date} · by {post.author}</div>
                             <div style={{fontSize:13,color:"#777",lineHeight:1.7}}>{post.body.slice(0,160)}…</div>
@@ -1352,8 +1009,8 @@ export default function Page() {
                 </>
               )}
 
-              {/* VISION */}
-              {activeTab==="vision"&&(
+              {/* ══ VISION ══ */}
+              {activeTab==="vision" && (
                 <>
                   <h2 className="section-heading">Vision</h2>
                   <div style={{background:"linear-gradient(135deg,#080808,#0e0e0e)",border:"1px solid #1a1a1a",borderRadius:24,padding:isMobile?"28px 20px":"48px 40px",marginBottom:28,textAlign:"center",position:"relative",overflow:"hidden"}}>
@@ -1363,87 +1020,59 @@ export default function Page() {
                     <div style={{fontSize:16,color:"#777",letterSpacing:2,fontStyle:"italic"}}>Tomorrow. Always possible.</div>
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:20}}>
-                    {[{label:"The Name",heading:"What 2MRRW Means",body:"2MRRW started as a reminder, not a brand. A reminder that no matter how hard today is, tomorrow is a blank page. You get to start again. The number 2 is intentional — it's shorthand for the second chance, the next version, the one that gets it right.\n\nEvery record, every show, every piece of merch carries that forward. If you're listening, you're part of the movement."},{label:"The Music",heading:"Artist Philosophy",body:"Music is not background noise. It's a conversation. 2MRRW makes music that holds something real — real emotion, real experience, real questions. Not manufactured for playlists. Built for people who feel deeply.\n\nThe goal is never to chase what's popular. The goal is to make something that still means something in 10 years. That's the standard every project is held to."},{label:"The Mission",heading:"What This Is Building",body:"This is not a streaming play. This is an ecosystem. Direct-to-fan. Artist-owned. Built on trust between creator and believer.\n\nThe music is the entry point. The community is the foundation. The collector system is the bridge between listening and belonging. Every piece is connected. Every purchase, every comment, every ticket is a step deeper into something that's being built in real time.\n\nListeners come and go. Fans stay. Believers build the movement."}].map((section,i)=>(
+                    {[{label:"The Name",heading:"What 2MRRW Means",body:"2MRRW started as a reminder, not a brand. A reminder that no matter how hard today is, tomorrow is a blank page. You get to start again. The number 2 is intentional — it's shorthand for the second chance, the next version, the one that gets it right.\n\nEvery record, every show, every piece of merch carries that forward. If you're listening, you're part of the movement."},{label:"The Music",heading:"Artist Philosophy",body:"Music is not background noise. It's a conversation. 2MRRW makes music that holds something real — real emotion, real experience, real questions. Not manufactured for playlists. Built for people who feel deeply.\n\nThe goal is never to chase what's popular. The goal is to make something that still means something in 10 years. That's the standard every project is held to."},{label:"The Mission",heading:"What This Is Building",body:"This is not a streaming play. This is an ecosystem. Direct-to-fan. Artist-owned. Built on trust between creator and believer.\n\nThe music is the entry point. The community is the foundation. The collector system is the bridge between listening and belonging. Every piece is connected. Every purchase, every comment, every ticket is a step deeper into something that's being built in real time.\n\nListeners come and go. Fans stay. Believers build the movement."}].map((s,i)=>(
                       <div key={i} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:18,padding:isMobile?"20px":"28px 30px"}}>
-                        <div style={{fontSize:10,color:"#444",letterSpacing:3,marginBottom:10,textTransform:"uppercase"}}>{section.label}</div>
-                        <div style={{fontSize:isMobile?17:20,fontWeight:800,marginBottom:16,letterSpacing:0.5}}>{section.heading}</div>
-                        <div style={{fontSize:14,color:"#888",lineHeight:2,whiteSpace:"pre-line"}}>{section.body}</div>
+                        <div style={{fontSize:10,color:"#444",letterSpacing:3,marginBottom:10,textTransform:"uppercase"}}>{s.label}</div>
+                        <div style={{fontSize:isMobile?17:20,fontWeight:800,marginBottom:16,letterSpacing:0.5}}>{s.heading}</div>
+                        <div style={{fontSize:14,color:"#888",lineHeight:2,whiteSpace:"pre-line"}}>{s.body}</div>
                       </div>
                     ))}
                   </div>
-                  <div style={{marginTop:32,padding:"28px 30px",borderTop:"1px solid #1a1a1a",textAlign:"center"}}>
-                    <div style={{fontSize:13,color:"#555",lineHeight:2}}>You are not just a listener.<br/><span style={{color:"#00ffff",fontWeight:700}}>You are early.</span></div>
-                  </div>
+                  <div style={{marginTop:32,padding:"28px 30px",borderTop:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:13,color:"#555",lineHeight:2}}>You are not just a listener.<br/><span style={{color:"#00ffff",fontWeight:700}}>You are early.</span></div></div>
                 </>
               )}
 
-              {/* CIRCLE */}
-              {activeTab==="circle"&&(
+              {/* ══ CIRCLE ══ */}
+              {activeTab==="circle" && (
                 <>
                   <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:6,flexWrap:"wrap"}}>
                     <h2 className="section-heading" style={{margin:0}}>The Circle</h2>
-                    {userStatus&&<div style={{fontSize:10,fontWeight:900,letterSpacing:2,padding:"3px 10px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`,boxShadow:`0 0 10px ${userStatus.glow}`}}>{userStatus.label}</div>}
+                    {userStatus && <div style={{fontSize:10,fontWeight:900,letterSpacing:2,padding:"3px 10px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`,boxShadow:`0 0 10px ${userStatus.glow}`}}>{userStatus.label}</div>}
                   </div>
-                  <p style={{fontSize:13,color:"#444",marginBottom:28,letterSpacing:0.5,lineHeight:1.8}}>This is not a comment section. It's a direct line. Ask 2MRRW anything. Share what the music means to you. Selected submissions receive an official response.</p>
+                  <p style={{fontSize:13,color:"#444",marginBottom:28,lineHeight:1.8}}>This is not a comment section. It's a direct line. Ask 2MRRW anything. Share what the music means to you. Selected submissions receive an official response.</p>
                   <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:28,marginBottom:32}}>
                     <div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Ask 2MRRW</div>
-                    <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-                      {["question","thought","feedback","message"].map((cat)=>(
-                        <button key={cat} onClick={()=>setCircleCategory(cat)} style={{padding:"6px 12px",fontSize:11,fontWeight:700,letterSpacing:1,cursor:"pointer",border:circleCategory===cat?"1px solid #00ffff":"1px solid #2a2a2a",borderRadius:20,background:circleCategory===cat?"rgba(0,255,255,0.1)":"transparent",color:circleCategory===cat?"#00ffff":"#555",textTransform:"uppercase",transition:"0.2s"}}>{cat}</button>
-                      ))}
-                    </div>
-                    <textarea placeholder="Write your question or message…" value={circleQuestion} onChange={(e)=>setCircleQuestion(e.target.value)} rows={4} style={{width:"100%",padding:"12px 14px",background:"#0a0a0a",border:"1px solid #2a2a2a",color:"white",borderRadius:12,fontSize:14,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",lineHeight:1.7}}/>
+                    <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>{["question","thought","feedback","message"].map(cat=><button key={cat} onClick={()=>setCircleCategory(cat)} style={{padding:"6px 12px",fontSize:11,fontWeight:700,letterSpacing:1,cursor:"pointer",border:circleCategory===cat?"1px solid #00ffff":"1px solid #2a2a2a",borderRadius:20,background:circleCategory===cat?"rgba(0,255,255,0.1)":"transparent",color:circleCategory===cat?"#00ffff":"#555",textTransform:"uppercase",transition:"0.2s"}}>{cat}</button>)}</div>
+                    <textarea placeholder="Write your question or message…" value={circleQuestion} onChange={e=>setCircleQuestion(e.target.value)} rows={4} style={{width:"100%",padding:"12px 14px",background:"#0a0a0a",border:"1px solid #2a2a2a",color:"white",borderRadius:12,fontSize:14,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",lineHeight:1.7}}/>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:12,flexWrap:"wrap",gap:8}}>
                       <div style={{fontSize:12,color:"#444"}}>{currentUser?`Posting as ${currentUser.name}`:"Posting anonymously"}</div>
                       <button onClick={handleCircleSubmit} style={{padding:"10px 24px",background:circleSubmitted?"#1a3a1a":"#00ffff",color:circleSubmitted?"#00ff88":"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:13,transition:"0.3s",letterSpacing:1}}>{circleSubmitted?"✓ Submitted":"Submit"}</button>
                     </div>
-                    {circleSubmitted&&<div style={{marginTop:12,fontSize:12,color:"#00ff88",letterSpacing:0.5}}>Your message was received. If selected, 2MRRW will respond here in the archive.</div>}
+                    {circleSubmitted && <div style={{marginTop:12,fontSize:12,color:"#00ff88"}}>Your message was received. If selected, 2MRRW will respond here in the archive.</div>}
                   </div>
                   <div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>2MRRW Responses</div>
                   <div style={{display:"flex",flexDirection:"column",gap:16,marginBottom:36}}>
-                    {circleResponses.map((resp)=>(
+                    {circleResponses.map(resp=>(
                       <div key={resp.id} style={{background:resp.highlight?"linear-gradient(135deg,#0d0d0d,#111)":"#0a0a0a",border:resp.highlight?`1px solid ${resp.tagColor}33`:"1px solid #1a1a1a",borderRadius:18,padding:isMobile?18:24,boxShadow:resp.highlight?`0 0 30px ${resp.tagColor}10`:"none"}}>
-                        <div style={{marginBottom:16}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                            <div style={{width:28,height:28,borderRadius:"50%",background:"#1a1a1a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#555",fontWeight:700,flexShrink:0}}>{resp.questionBy[0]}</div>
-                            <div><div style={{fontSize:12,fontWeight:700,color:"#aaa"}}>{resp.questionBy}</div><div style={{fontSize:10,color:"#444"}}>{resp.questionTime}</div></div>
-                          </div>
-                          <div style={{fontSize:14,color:"#888",lineHeight:1.7,fontStyle:"italic"}}>"{resp.question}"</div>
-                        </div>
-                        <div style={{borderTop:"1px solid #1a1a1a",paddingTop:16}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-                            <div style={{fontSize:11,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 10px rgba(0,255,255,0.5)"}}>2MRRW</div>
-                            <div style={{fontSize:10,fontWeight:900,letterSpacing:1,padding:"2px 8px",borderRadius:10,background:resp.tagColor+"22",color:resp.tagColor,border:`1px solid ${resp.tagColor}44`}}>{resp.tag}</div>
-                          </div>
-                          <div style={{fontSize:14,color:"#ccc",lineHeight:1.9}}>{resp.response}</div>
-                        </div>
+                        <div style={{marginBottom:16}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><div style={{width:28,height:28,borderRadius:"50%",background:"#1a1a1a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#555",fontWeight:700,flexShrink:0}}>{resp.questionBy[0]}</div><div><div style={{fontSize:12,fontWeight:700,color:"#aaa"}}>{resp.questionBy}</div><div style={{fontSize:10,color:"#444"}}>{resp.questionTime}</div></div></div><div style={{fontSize:14,color:"#888",lineHeight:1.7,fontStyle:"italic"}}>"{resp.question}"</div></div>
+                        <div style={{borderTop:"1px solid #1a1a1a",paddingTop:16}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><div style={{fontSize:11,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 10px rgba(0,255,255,0.5)"}}>2MRRW</div><div style={{fontSize:10,fontWeight:900,letterSpacing:1,padding:"2px 8px",borderRadius:10,background:resp.tagColor+"22",color:resp.tagColor,border:`1px solid ${resp.tagColor}44`}}>{resp.tag}</div></div><div style={{fontSize:14,color:"#ccc",lineHeight:1.9}}>{resp.response}</div></div>
                       </div>
                     ))}
                   </div>
                   <div style={{background:"linear-gradient(135deg,#0a0a14,#0d0d0d)",border:"1px solid #1a1a2a",borderRadius:20,padding:isMobile?"20px":"28px 30px"}}>
                     <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Community Status</div>
                     <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
-                      {[{label:"EARLY SUPPORTER",color:"#aaa",desc:"Joined the ecosystem early."},{label:"COLLECTOR",color:"#ff6b35",desc:"Purchased a collector card or bundle."},{label:"VISIONARY",color:"#00ffff",desc:"3+ Circle submissions."},{label:"INNER CIRCLE",color:"#a259ff",desc:"Collector + Circle member."}].map((s)=>(
-                        <div key={s.label} style={{padding:"14px",background:"#080808",borderRadius:14,border:`1px solid ${s.color}22`}}>
-                          <div style={{fontSize:9,fontWeight:900,letterSpacing:2,color:s.color,marginBottom:6}}>{s.label}</div>
-                          <div style={{fontSize:11,color:"#555",lineHeight:1.6}}>{s.desc}</div>
-                        </div>
-                      ))}
+                      {[{label:"EARLY SUPPORTER",color:"#aaa",desc:"Joined the ecosystem early."},{label:"COLLECTOR",color:"#ff6b35",desc:"Purchased a collector card or bundle."},{label:"VISIONARY",color:"#00ffff",desc:"3+ Circle submissions."},{label:"INNER CIRCLE",color:"#a259ff",desc:"Collector + Circle member."}].map(s=><div key={s.label} style={{padding:"14px",background:"#080808",borderRadius:14,border:`1px solid ${s.color}22`}}><div style={{fontSize:9,fontWeight:900,letterSpacing:2,color:s.color,marginBottom:6}}>{s.label}</div><div style={{fontSize:11,color:"#555",lineHeight:1.6}}>{s.desc}</div></div>)}
                     </div>
-                    {userStatus&&(
-                      <div style={{marginTop:20,padding:"14px 18px",background:userStatus.glow+"10",borderRadius:12,border:`1px solid ${userStatus.color}33`,display:"flex",alignItems:"center",gap:12}}>
-                        <div style={{fontSize:10,color:"#555"}}>Your status:</div>
-                        <div style={{fontSize:11,fontWeight:900,letterSpacing:2,color:userStatus.color}}>{userStatus.label}</div>
-                      </div>
-                    )}
+                    {userStatus && <div style={{marginTop:20,padding:"14px 18px",background:userStatus.glow+"10",borderRadius:12,border:`1px solid ${userStatus.color}33`,display:"flex",alignItems:"center",gap:12}}><div style={{fontSize:10,color:"#555"}}>Your status:</div><div style={{fontSize:11,fontWeight:900,letterSpacing:2,color:userStatus.color}}>{userStatus.label}</div></div>}
                   </div>
                 </>
               )}
 
-              {/* INNER CIRCLE */}
-              {activeTab==="innercircle"&&(
+              {/* ══ INNER CIRCLE ══ */}
+              {activeTab==="innercircle" && (
                 <>
-                  {userStatus?.label!=="INNER CIRCLE"?(
+                  {userStatus?.label !== "INNER CIRCLE" ? (
                     <div style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",padding:isMobile?"40px 16px":"60px 20px"}}>
                       <div style={{fontSize:56,lineHeight:1,marginBottom:24,filter:"drop-shadow(0 0 24px rgba(162,89,255,0.5))",animation:"pulse 3s infinite"}}>🔒</div>
                       <div style={{fontSize:11,color:"#a259ff",letterSpacing:4,marginBottom:12,fontWeight:700}}>RESTRICTED ACCESS</div>
@@ -1455,15 +1084,15 @@ export default function Page() {
                           <div key={i} style={{padding:"16px 20px",background:step.done?"rgba(162,89,255,0.06)":"#0d0d0d",border:`1px solid ${step.done?"rgba(162,89,255,0.3)":"#1e1e1e"}`,borderRadius:14,display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
                             <div style={{width:28,height:28,borderRadius:"50%",background:step.done?"rgba(162,89,255,0.2)":"#111",border:`1px solid ${step.done?"#a259ff":"#222"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:step.done?"#a259ff":"#333",flexShrink:0}}>{step.done?"✓":i+1}</div>
                             <div style={{flex:1,fontSize:13,color:step.done?"#a259ff":"#666",fontWeight:step.done?700:400}}>{step.label}</div>
-                            {!step.done&&<button onClick={()=>switchTab(step.link)} style={{padding:"6px 14px",background:"rgba(162,89,255,0.1)",border:"1px solid rgba(162,89,255,0.25)",borderRadius:8,color:"#a259ff",cursor:"pointer",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{step.linkLabel}</button>}
+                            {!step.done && <button onClick={()=>switchTab(step.link)} style={{padding:"6px 14px",background:"rgba(162,89,255,0.1)",border:"1px solid rgba(162,89,255,0.25)",borderRadius:8,color:"#a259ff",cursor:"pointer",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>{step.linkLabel}</button>}
                           </div>
                         ))}
                       </div>
-                      {userStatus&&<div style={{fontSize:12,color:"#444"}}>Current status: <span style={{color:userStatus.color,fontWeight:700}}>{userStatus.label}</span></div>}
+                      {userStatus && <div style={{fontSize:12,color:"#444"}}>Current status: <span style={{color:userStatus.color,fontWeight:700}}>{userStatus.label}</span></div>}
                     </div>
-                  ):(
+                  ) : (
                     <>
-                      {innerCirclePost?(
+                      {innerCirclePost ? (
                         <div>
                           <button onClick={()=>setInnerCirclePost(null)} style={{background:"none",border:"none",color:"#a259ff",cursor:"pointer",fontSize:13,marginBottom:20,padding:0,letterSpacing:1}}>← BACK TO INNER CIRCLE</button>
                           <div style={{fontSize:10,color:"#a259ff",letterSpacing:3,marginBottom:12,textTransform:"uppercase"}}>Inner Circle Exclusive</div>
@@ -1471,13 +1100,10 @@ export default function Page() {
                           <div style={{fontSize:12,color:"#555",marginBottom:28}}>{innerCirclePost.date}</div>
                           <div style={{fontSize:14,lineHeight:1.9,color:"#ccc",whiteSpace:"pre-line"}}>{innerCirclePost.body}</div>
                         </div>
-                      ):(
+                      ) : (
                         <>
-                          <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:6,flexWrap:"wrap"}}>
-                            <h2 className="section-heading" style={{margin:0}}>Inner Circle</h2>
-                            {userStatus&&<div style={{fontSize:10,fontWeight:900,letterSpacing:2,padding:"3px 10px",borderRadius:20,background:"rgba(162,89,255,0.12)",color:"#a259ff",border:"1px solid rgba(162,89,255,0.3)"}}>{userStatus.label}</div>}
-                          </div>
-                          <p style={{fontSize:13,color:"#444",marginBottom:32,letterSpacing:0.5,lineHeight:1.8}}>Exclusive posts for believers. This is where the real conversation lives.</p>
+                          <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:6,flexWrap:"wrap"}}><h2 className="section-heading" style={{margin:0}}>Inner Circle</h2>{userStatus&&<div style={{fontSize:10,fontWeight:900,letterSpacing:2,padding:"3px 10px",borderRadius:20,background:"rgba(162,89,255,0.12)",color:"#a259ff",border:"1px solid rgba(162,89,255,0.3)"}}>{userStatus.label}</div>}</div>
+                          <p style={{fontSize:13,color:"#444",marginBottom:32,lineHeight:1.8}}>Exclusive posts for believers. This is where the real conversation lives.</p>
                           <div style={{background:"linear-gradient(135deg,#0d0814,#0d0d0d)",border:"1px solid rgba(162,89,255,0.2)",borderRadius:20,padding:isMobile?"20px":"28px 30px",marginBottom:28,position:"relative",overflow:"hidden"}}>
                             <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at top left,rgba(162,89,255,0.06) 0%,transparent 60%)",pointerEvents:"none"}}/>
                             <div style={{fontSize:11,color:"#a259ff",letterSpacing:3,marginBottom:8,textTransform:"uppercase"}}>Direct from 2MRRW</div>
@@ -1486,12 +1112,9 @@ export default function Page() {
                           </div>
                           <div style={{display:"flex",flexDirection:"column",gap:18}}>
                             {innerCirclePosts.map((post,i)=>(
-                              <div key={post.id} onClick={()=>setInnerCirclePost(post)}
-                                style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:16,padding:isMobile?18:24,cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.1}s forwards`,transition:"border-color 0.25s,box-shadow 0.25s"}}
-                                onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#a259ff55";e.currentTarget.style.boxShadow="0 0 20px rgba(162,89,255,0.1)";}}
-                                onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1a1a1a";e.currentTarget.style.boxShadow="none";}}>
+                              <div key={post.id} onClick={()=>setInnerCirclePost(post)} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:16,padding:isMobile?18:24,cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.1}s forwards`,transition:"border-color 0.25s,box-shadow 0.25s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#a259ff55";e.currentTarget.style.boxShadow="0 0 20px rgba(162,89,255,0.1)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a1a1a";e.currentTarget.style.boxShadow="none";}}>
                                 <div style={{fontSize:10,color:"#a259ff",letterSpacing:3,marginBottom:8,textTransform:"uppercase"}}>Inner Circle Exclusive</div>
-                                <div style={{fontSize:isMobile?15:18,fontWeight:800,marginBottom:6,letterSpacing:0.3}}>{post.title}</div>
+                                <div style={{fontSize:isMobile?15:18,fontWeight:800,marginBottom:6}}>{post.title}</div>
                                 <div style={{fontSize:11,color:"#555",marginBottom:12}}>{post.date}</div>
                                 <div style={{fontSize:13,color:"#666",lineHeight:1.7}}>{post.preview}</div>
                                 <div style={{fontSize:12,color:"#a259ff",marginTop:16}}>Read more →</div>
@@ -1505,90 +1128,37 @@ export default function Page() {
                 </>
               )}
 
-              {/* MY MUSIC */}
-              {activeTab==="mymusic"&&(
+              {/* ══ MY MUSIC ══ */}
+              {activeTab==="mymusic" && (
                 <>
                   <h2 className="section-heading">My Music</h2>
-                  {!currentUser?(
-                    <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"48px 32px",textAlign:"center"}}>
-                      <div style={{fontSize:32,marginBottom:16}}>🔒</div>
-                      <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Sign in to access your library</div>
-                      <div style={{fontSize:13,color:"#555",marginBottom:24}}>Your purchased music, downloads, and exclusive content all live here.</div>
-                      <button onClick={()=>switchTab("account")} style={{padding:"12px 28px",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14}}>Go to Account</button>
-                    </div>
-                  ):myPurchases.length===0?(
-                    <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"48px 32px",textAlign:"center"}}>
-                      <div style={{fontSize:32,marginBottom:16}}>🎵</div>
-                      <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Your library is empty</div>
-                      <div style={{fontSize:13,color:"#555",marginBottom:24}}>Purchase singles, albums, or exclusive bundles.</div>
-                      <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
-                        <button onClick={()=>switchTab("singles")}   style={{padding:"10px 22px",background:"#111",color:"#00ffff",border:"1px solid #00ffff44",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Browse Singles</button>
-                        <button onClick={()=>switchTab("albums")}    style={{padding:"10px 22px",background:"#111",color:"#aaa",   border:"1px solid #333",      borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Browse Albums</button>
-                        <button onClick={()=>switchTab("exclusive")} style={{padding:"10px 22px",background:"#111",color:"#a259ff",border:"1px solid #a259ff44",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Exclusive Drops</button>
-                      </div>
-                    </div>
-                  ):(
-                    <>
-                      <div style={{fontSize:13,color:"#555",marginBottom:24}}>{myPurchases.length} item{myPurchases.length!==1?"s":""} in your library · Signed in as {currentUser.name}</div>
-                      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                        {myPurchases.map((item,i)=>(
-                          <div key={i} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:14,padding:"16px 20px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
-                            {item.cover&&<img src={item.cover} style={{width:52,height:52,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}
-                            <div style={{flex:1,minWidth:140}}>
-                              <div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{item.title}</div>
-                              <div style={{fontSize:11,color:"#555"}}>Purchased {item.purchasedAt?new Date(item.purchasedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}</div>
-                            </div>
-                            <button onClick={()=>alert("Download links are generated server-side with signed, expiring URLs.")} style={{padding:"8px 16px",background:"transparent",color:"#00ffff",border:"1px solid #00ffff33",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700}}>↓ Download</button>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
+                  {!currentUser ? <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"48px 32px",textAlign:"center"}}><div style={{fontSize:32,marginBottom:16}}>🔒</div><div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Sign in to access your library</div><div style={{fontSize:13,color:"#555",marginBottom:24}}>Your purchased music, downloads, and exclusive content all live here.</div><button onClick={()=>switchTab("account")} style={{padding:"12px 28px",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14}}>Go to Account</button></div>
+                  : myPurchases.length===0 ? <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"48px 32px",textAlign:"center"}}><div style={{fontSize:32,marginBottom:16}}>🎵</div><div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Your library is empty</div><div style={{fontSize:13,color:"#555",marginBottom:24}}>Purchase singles, albums, or exclusive bundles.</div><div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}><button onClick={()=>switchTab("singles")} style={{padding:"10px 22px",background:"#111",color:"#00ffff",border:"1px solid #00ffff44",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Browse Singles</button><button onClick={()=>switchTab("albums")} style={{padding:"10px 22px",background:"#111",color:"#aaa",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Browse Albums</button><button onClick={()=>switchTab("exclusive")} style={{padding:"10px 22px",background:"#111",color:"#a259ff",border:"1px solid #a259ff44",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Exclusive Drops</button></div></div>
+                  : <><div style={{fontSize:13,color:"#555",marginBottom:24}}>{myPurchases.length} item{myPurchases.length!==1?"s":""} in your library · Signed in as {currentUser.name}</div><div style={{display:"flex",flexDirection:"column",gap:12}}>{myPurchases.map((item,i)=><div key={i} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:14,padding:"16px 20px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>{item.cover&&<img src={item.cover} style={{width:52,height:52,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}<div style={{flex:1,minWidth:140}}><div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{item.title}</div><div style={{fontSize:11,color:"#555"}}>Purchased {item.purchasedAt?new Date(item.purchasedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}</div></div><button onClick={()=>alert("Download links are generated server-side with signed, expiring URLs.")} style={{padding:"8px 16px",background:"transparent",color:"#00ffff",border:"1px solid #00ffff33",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700}}>↓ Download</button></div>)}</div></>}
                 </>
               )}
 
-              {/* ACCOUNT */}
-              {activeTab==="account"&&(
+              {/* ══ ACCOUNT ══ */}
+              {activeTab==="account" && (
                 <>
                   <h2 className="section-heading">Account</h2>
-                  {currentUser?(
+                  {currentUser ? (
                     <div style={{display:"flex",flexDirection:"column",gap:20}}>
                       <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:28}}>
-                        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}>
-                          <div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{currentUser.name[0].toUpperCase()}</div>
-                          <div><div style={{fontSize:18,fontWeight:800}}>{currentUser.name}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{currentUser.email}</div></div>
-                          {userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`}}>{userStatus.label}</div>}
-                        </div>
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-                          {[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===currentUser.name).length},{label:"Member Since",value:"2026"}].map((stat)=>(
-                            <div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}>
-                              <div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div>
-                              <div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div>
-                            </div>
-                          ))}
-                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{currentUser.name[0].toUpperCase()}</div><div><div style={{fontSize:18,fontWeight:800}}>{currentUser.name}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{currentUser.email}</div></div>{userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`}}>{userStatus.label}</div>}</div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===currentUser.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                        {[{label:"My Music Library",tab:"mymusic",color:"#00ffff"},{label:"Exclusive Drops",tab:"exclusive",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map((link)=>(
-                          <button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px 14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={(e)=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={(e)=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>
-                            {link.label} →
-                          </button>
-                        ))}
-                      </div>
-                      <button onClick={()=>{localStorage.removeItem("2mrrw_user");setCurrentUser(null);setGateSubmitted(false);}} style={{padding:"12px 0",background:"transparent",color:"#444",border:"1px solid #1e1e1e",borderRadius:10,cursor:"pointer",fontSize:13,width:"100%",transition:"0.2s"}} onMouseEnter={(e)=>{e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#333";}} onMouseLeave={(e)=>{e.currentTarget.style.color="#444";e.currentTarget.style.borderColor="#1e1e1e";}}>Sign Out</button>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Music Library",tab:"mymusic",color:"#00ffff"},{label:"Exclusive Drops",tab:"exclusive",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
+                      <button onClick={()=>{localStorage.removeItem("2mrrw_user");setCurrentUser(null);setGateSubmitted(false);}} style={{padding:"12px 0",background:"transparent",color:"#444",border:"1px solid #1e1e1e",borderRadius:10,cursor:"pointer",fontSize:13,width:"100%",transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#333";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";e.currentTarget.style.borderColor="#1e1e1e";}}>Sign Out</button>
                     </div>
-                  ):(
+                  ) : (
                     <div style={{maxWidth:400}}>
-                      <div style={{display:"flex",gap:8,marginBottom:28}}>
-                        {["login","signup"].map((mode)=>(
-                          <button key={mode} onClick={()=>{setAuthMode(mode);setAuthError("");}} style={{flex:1,padding:"10px 0",fontSize:12,fontWeight:700,letterSpacing:2,cursor:"pointer",border:authMode===mode?"1px solid #00ffff":"1px solid #2a2a2a",borderRadius:10,background:authMode===mode?"rgba(0,255,255,0.1)":"transparent",color:authMode===mode?"#00ffff":"#555",textTransform:"uppercase",transition:"0.2s"}}>{mode==="login"?"Sign In":"Create Account"}</button>
-                        ))}
-                      </div>
+                      <div style={{display:"flex",gap:8,marginBottom:28}}>{["login","signup"].map(mode=><button key={mode} onClick={()=>{setAuthMode(mode);setAuthError("");}} style={{flex:1,padding:"10px 0",fontSize:12,fontWeight:700,letterSpacing:2,cursor:"pointer",border:authMode===mode?"1px solid #00ffff":"1px solid #2a2a2a",borderRadius:10,background:authMode===mode?"rgba(0,255,255,0.1)":"transparent",color:authMode===mode?"#00ffff":"#555",textTransform:"uppercase",transition:"0.2s"}}>{mode==="login"?"Sign In":"Create Account"}</button>)}</div>
                       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                        {authMode==="signup"&&<input placeholder="Full Name" style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>}
-                        <input placeholder="Email Address" value={authEmail} onChange={(e)=>setAuthEmail(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
-                        <input placeholder="Password" type="password" value={authPassword} onChange={(e)=>setAuthPassword(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
-                        {authError&&<div style={{fontSize:12,color:"#ff4d4d"}}>{authError}</div>}
+                        {authMode==="signup" && <input placeholder="Full Name" style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>}
+                        <input placeholder="Email Address" value={authEmail} onChange={e=>setAuthEmail(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
+                        <input placeholder="Password" type="password" value={authPassword} onChange={e=>setAuthPassword(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
+                        {authError && <div style={{fontSize:12,color:"#ff4d4d"}}>{authError}</div>}
                         <button onClick={()=>{if(!authEmail.trim()||!authPassword.trim()){setAuthError("Please fill out all fields.");return;}setAuthError("Connect /api/auth to enable full login.");}} style={{padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1,marginTop:4}}>{authMode==="login"?"Sign In":"Create Account"}</button>
                       </div>
                     </div>
@@ -1597,266 +1167,135 @@ export default function Page() {
               )}
 
             </div>{/* end tabKey */}
-          </div>{/* end scroll */}
+          </div>{/* end scroll area */}
 
-          {/* NOW PLAYING BAR */}
-          {nowPlaying&&(
-            <div style={{flexShrink:0,borderTop:"1px solid #141414",background:"rgba(4,4,4,0.95)",backdropFilter:"blur(20px)",padding:isMobile?"8px 14px":"10px 20px",display:"flex",alignItems:"center",gap:14,boxShadow:"0 -4px 30px rgba(0,0,0,0.5)",zIndex:isMobile?6500:1,marginBottom:isMobile?60:0}}>
-              <img src={nowPlaying.cover} style={{width:36,height:36,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.title}</div>
-                <div style={{fontSize:10,color:"#555",letterSpacing:1}}>PREVIEW</div>
+          {/* ── FIX #2/#3: NOW PLAYING BAR with real progress ── */}
+          {nowPlaying && (
+            <div style={{flexShrink:0,borderTop:"1px solid #141414",background:"rgba(4,4,4,0.97)",backdropFilter:"blur(20px)",zIndex:isMobile?6500:1,marginBottom:isMobile?60:0}}>
+              {/* seekable progress stripe */}
+              <div onClick={seekTo} style={{width:"100%",height:3,background:"#111",cursor:"pointer",position:"relative"}}>
+                <div style={{width:audioDuration?`${(audioCurrentTime/audioDuration)*100}%`:"0%",height:"100%",background:"#00ffff",transition:"width 0.1s linear",boxShadow:"0 0 4px rgba(0,255,255,0.5)"}}/>
               </div>
-              <button onClick={()=>{if(!nowPlayingAudioRef.current)return;if(nowPlayingPlaying){nowPlayingAudioRef.current.pause();setNowPlayingPlaying(false);}else{nowPlayingAudioRef.current.play().catch(()=>{});setNowPlayingPlaying(true);}}}
-                style={{width:36,height:36,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
-                {nowPlayingPlaying
-                  ?<svg viewBox="0 0 24 24" fill="#000" width="14" height="14"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
-                  :<svg viewBox="0 0 24 24" fill="#000" width="14" height="14" style={{marginLeft:2}}><path d="M8 5v14l11-7z"/></svg>}
-              </button>
-              <button onClick={()=>{setNowPlaying(null);setNowPlayingPlaying(false);if(nowPlayingAudioRef.current)nowPlayingAudioRef.current.pause();}}
-                style={{background:"none",border:"none",color:"#444",cursor:"pointer",fontSize:18,lineHeight:1,flexShrink:0}}>×</button>
+              <div style={{padding:isMobile?"8px 14px":"10px 20px",display:"flex",alignItems:"center",gap:14,boxShadow:"0 -4px 30px rgba(0,0,0,0.5)"}}>
+                <img src={nowPlaying.cover} style={{width:36,height:36,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.title}</div>
+                  <div style={{fontSize:10,color:"#555",letterSpacing:1,fontVariantNumeric:"tabular-nums"}}>{formatTime(audioCurrentTime)} / {formatTime(audioDuration)}</div>
+                </div>
+                <button onClick={()=>{
+                  if (!nowPlayingAudioRef.current) return;
+                  if (nowPlayingPlaying) { nowPlayingAudioRef.current.pause(); setNowPlayingPlaying(false); }
+                  else { nowPlayingAudioRef.current.play().catch(()=>{}); setNowPlayingPlaying(true); }
+                }} style={{width:36,height:36,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                  {nowPlayingPlaying
+                    ? <svg viewBox="0 0 24 24" fill="#000" width="14" height="14"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
+                    : <svg viewBox="0 0 24 24" fill="#000" width="14" height="14" style={{marginLeft:2}}><path d="M8 5v14l11-7z"/></svg>}
+                </button>
+                <button onClick={()=>{setNowPlaying(null);setNowPlayingPlaying(false);if(nowPlayingAudioRef.current)nowPlayingAudioRef.current.pause();}} style={{background:"none",border:"none",color:"#444",cursor:"pointer",fontSize:18,lineHeight:1,flexShrink:0}}>×</button>
+              </div>
             </div>
           )}
         </div>
 
-        {/* CART SIDEBAR — desktop only */}
-        {!isMobile&&(
+        {/* ── CART SIDEBAR (desktop) ── */}
+        {!isMobile && (
           <div style={{width:240,flexShrink:0,borderLeft:"1px solid #222",padding:25,overflowY:"auto",background:"rgba(4,4,4,0.8)",backdropFilter:"blur(12px)"}}>
             <h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Cart</h3>
-            {cart.length===0&&<p style={{opacity:0.4,fontSize:13}}>Empty</p>}
+            {cart.length===0 && <p style={{opacity:0.4,fontSize:13}}>Empty</p>}
             {cart.map((item,i)=>(
               <div key={i} style={{marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-                {item.cover&&<img src={item.cover} style={{width:36,height:36,borderRadius:6,objectFit:"cover"}}/>}
+                {item.cover && <img src={item.cover} style={{width:36,height:36,borderRadius:6,objectFit:"cover"}}/>}
                 <span style={{fontSize:12,flex:1,lineHeight:1.4}}>{item.title}<br/><span style={{color:"#00ffff",fontSize:11}}>${item.price.toFixed(2)}</span></span>
-                <button onClick={()=>removeFromCart(i)}
-                  onMouseEnter={(e)=>{e.currentTarget.style.color="#fff";e.currentTarget.style.textShadow="0 0 8px rgba(255,255,255,0.8)";}}
-                  onMouseLeave={(e)=>{e.currentTarget.style.color="#666";e.currentTarget.style.textShadow="none";}}
-                  style={{background:"none",border:"none",color:"#666",fontSize:16,cursor:"pointer",marginLeft:"auto",transition:"0.2s"}}>×</button>
+                <button onClick={()=>removeFromCart(i)} onMouseEnter={e=>e.currentTarget.style.color="#fff"} onMouseLeave={e=>e.currentTarget.style.color="#666"} style={{background:"none",border:"none",color:"#666",fontSize:16,cursor:"pointer",marginLeft:"auto",transition:"0.2s"}}>×</button>
               </div>
             ))}
             <div style={{marginTop:20,fontSize:13,fontWeight:700}}>Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span></div>
-            <button onClick={clearCart} style={{marginTop:15,width:"100%",padding:12,background:"rgba(255,30,30,0.15)",color:"#ff4d4d",fontWeight:"bold",border:"1px solid #ff4d4d33",borderRadius:8,cursor:"pointer",fontSize:12,transition:"0.2s"}} onMouseEnter={(e)=>{e.currentTarget.style.background="rgba(255,30,30,0.25)";}} onMouseLeave={(e)=>{e.currentTarget.style.background="rgba(255,30,30,0.15)";}}>CLEAR CART</button>
+            <button onClick={clearCart} style={{marginTop:15,width:"100%",padding:12,background:"rgba(255,30,30,0.15)",color:"#ff4d4d",fontWeight:"bold",border:"1px solid #ff4d4d33",borderRadius:8,cursor:"pointer",fontSize:12,transition:"0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,30,30,0.25)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,30,30,0.15)"}>CLEAR CART</button>
             <button onClick={handleCheckout} disabled={checkingOut||cart.length===0} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{marginTop:10,width:"100%",padding:12,background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",transition:"0.25s",fontSize:13,fontWeight:700}}>{checkingOut?"Redirecting…":"Checkout"}</button>
-            {checkoutError&&(
-              <div style={{marginTop:8}}>
-                <p style={{color:"#ff4d4d",fontSize:12}}>{checkoutError}</p>
-                <p style={{color:"#555",fontSize:11,marginTop:4}}>If you see "no valid payment method", make sure your /api/create-payment-intent includes <code style={{color:"#00ffff"}}>payment_method_types: ["card","link","apple_pay"]</code>.</p>
-              </div>
-            )}
-            {currentUser&&(
-              <div>
-                <p style={{fontSize:11,color:"#555",marginTop:12,textAlign:"center"}}>Signed in as {currentUser.name}</p>
-                {userStatus&&<div style={{marginTop:6,textAlign:"center",fontSize:10,fontWeight:900,letterSpacing:1,color:userStatus.color}}>{userStatus.label}</div>}
-              </div>
-            )}
+            {checkoutError && <div style={{marginTop:8}}><p style={{color:"#ff4d4d",fontSize:12}}>{checkoutError}</p><p style={{color:"#555",fontSize:11,marginTop:4}}>If you see "no valid payment method", add <code style={{color:"#00ffff"}}>payment_method_types: ["card"]</code> to your intent.</p></div>}
+            {currentUser && <div><p style={{fontSize:11,color:"#555",marginTop:12,textAlign:"center"}}>Signed in as {currentUser.name}</p>{userStatus&&<div style={{marginTop:6,textAlign:"center",fontSize:10,fontWeight:900,letterSpacing:1,color:userStatus.color}}>{userStatus.label}</div>}</div>}
           </div>
         )}
       </div>
 
-      {/* ══ MOBILE UI ═══════════════════════════════════════════════════════════ */}
-      {isMobile&&(
+      {/* ── MOBILE UI ── */}
+      {isMobile && (
         <>
-          {/* Floating cart button */}
-          <button onClick={()=>setMobileCartOpen(true)}
-            style={{position:"fixed",bottom:76,right:16,zIndex:6800,width:50,height:50,borderRadius:"50%",background:"#00ffff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(0,255,255,0.45)",flexShrink:0}}>
+          <button onClick={()=>setMobileCartOpen(true)} style={{position:"fixed",bottom:76,right:16,zIndex:6800,width:50,height:50,borderRadius:"50%",background:"#00ffff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(0,255,255,0.45)",flexShrink:0}}>
             <svg viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" width="20" height="20"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-            {cart.length>0&&(
-              <div style={{position:"absolute",top:-4,right:-4,width:20,height:20,borderRadius:"50%",background:"#ff4d4d",color:"white",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{cart.length}</div>
-            )}
+            {cart.length>0 && <div style={{position:"absolute",top:-4,right:-4,width:20,height:20,borderRadius:"50%",background:"#ff4d4d",color:"white",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{cart.length}</div>}
           </button>
-
-          {/* Bottom nav bar */}
           <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:6700,background:"rgba(4,4,4,0.97)",backdropFilter:"blur(20px)",borderTop:"1px solid #1a1a1a",display:"flex",alignItems:"center",justifyContent:"space-around",padding:"6px 0 14px",height:62}}>
-            {[
-              {id:"home",    label:"Home",   icon:"⌂"},
-              {id:"singles", label:"Music",  icon:"♫"},
-              {id:"shop",    label:"Shop",   icon:"◎"},
-              {id:"videos",  label:"Videos", icon:"▶"},
-              {id:"shows",   label:"Shows",  icon:"✦"},
-            ].map((tab)=>(
-              <button key={tab.id} onClick={()=>switchTab(tab.id)}
-                style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:activeTab===tab.id?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",borderRadius:8,transition:"color 0.2s",textShadow:activeTab===tab.id?"0 0 10px rgba(0,255,255,0.6)":"none",minWidth:44,minHeight:44,justifyContent:"center"}}>
-                <span style={{fontSize:17,lineHeight:1}}>{tab.icon}</span>
-                <span>{tab.label}</span>
+            {[{id:"home",label:"Home",icon:"⌂"},{id:"singles",label:"Music",icon:"♫"},{id:"shop",label:"Shop",icon:"◎"},{id:"videos",label:"Videos",icon:"▶"},{id:"shows",label:"Shows",icon:"✦"}].map(tab=>(
+              <button key={tab.id} onClick={()=>switchTab(tab.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:activeTab===tab.id?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",borderRadius:8,transition:"color 0.2s",textShadow:activeTab===tab.id?"0 0 10px rgba(0,255,255,0.6)":"none",minWidth:44,minHeight:44,justifyContent:"center"}}>
+                <span style={{fontSize:17,lineHeight:1}}>{tab.icon}</span><span>{tab.label}</span>
               </button>
             ))}
-            <button onClick={()=>setMobileNavOpen(true)}
-              style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",minWidth:44,minHeight:44,justifyContent:"center"}}>
-              <span style={{fontSize:17,lineHeight:1}}>≡</span>
-              <span>More</span>
+            <button onClick={()=>setMobileNavOpen(true)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:"#555",fontSize:9,fontWeight:700,padding:"4px 8px",minWidth:44,minHeight:44,justifyContent:"center"}}>
+              <span style={{fontSize:17,lineHeight:1}}>≡</span><span>More</span>
             </button>
           </div>
-
-          {/* Mobile nav drawer */}
-          {mobileNavOpen&&(
-            <div onClick={()=>setMobileNavOpen(false)}
-              style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
-              <div onClick={(e)=>e.stopPropagation()}
-                style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:32,border:"1px solid #1e1e1e",maxHeight:"80vh",overflowY:"auto"}}>
+          {mobileNavOpen && (
+            <div onClick={()=>setMobileNavOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
+              <div onClick={e=>e.stopPropagation()} style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:32,border:"1px solid #1e1e1e",maxHeight:"80vh",overflowY:"auto"}}>
                 <div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 16px"}}/>
-                {currentUser&&userStatus&&(
-                  <div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}>
-                    <div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>{currentUser.name[0].toUpperCase()}</div>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:13,fontWeight:700,color:"white"}}>{currentUser.name}</div>
-                      <div style={{fontSize:9,color:userStatus.color,fontWeight:700,letterSpacing:1}}>{userStatus.label}</div>
-                    </div>
-                  </div>
-                )}
-                {sidebarNav.map((group)=>(
+                {currentUser&&userStatus&&<div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}><div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>{currentUser.name[0].toUpperCase()}</div><div><div style={{fontSize:13,fontWeight:700,color:"white"}}>{currentUser.name}</div><div style={{fontSize:9,color:userStatus.color,fontWeight:700,letterSpacing:1}}>{userStatus.label}</div></div></div>}
+                {sidebarNav.map(group=>(
                   <div key={group.groupId}>
-                    <button onClick={()=>switchTab(group.directTab)}
-                      style={{width:"100%",padding:"13px 24px",background:"none",border:"none",color:activeTab===group.directTab||group.subTabs.some(st=>st.id===activeTab)?"#00ffff":"#ccc",fontSize:13,fontWeight:700,letterSpacing:2,textAlign:"left",cursor:"pointer",textTransform:"uppercase",transition:"color 0.2s"}}>
-                      {group.label}
-                    </button>
-                    {group.subTabs.length>0&&(
-                      <div style={{paddingLeft:16,paddingBottom:4}}>
-                        {group.subTabs.map((st)=>(
-                          <button key={st.id} onClick={()=>switchTab(st.id)}
-                            style={{width:"100%",padding:"9px 24px",background:"none",border:"none",color:activeTab===st.id?"#00ffff":"#666",fontSize:12,textAlign:"left",cursor:"pointer",letterSpacing:1,transition:"color 0.2s"}}>
-                            {st.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    <button onClick={()=>switchTab(group.directTab)} style={{width:"100%",padding:"13px 24px",background:"none",border:"none",color:activeTab===group.directTab||group.subTabs.some(st=>st.id===activeTab)?"#00ffff":"#ccc",fontSize:13,fontWeight:700,letterSpacing:2,textAlign:"left",cursor:"pointer",textTransform:"uppercase",transition:"color 0.2s"}}>{group.label}</button>
+                    {group.subTabs.length>0 && <div style={{paddingLeft:16,paddingBottom:4}}>{group.subTabs.map(st=><button key={st.id} onClick={()=>switchTab(st.id)} style={{width:"100%",padding:"9px 24px",background:"none",border:"none",color:activeTab===st.id?"#00ffff":"#666",fontSize:12,textAlign:"left",cursor:"pointer",letterSpacing:1,transition:"color 0.2s"}}>{st.label}</button>)}</div>}
                   </div>
                 ))}
                 <div style={{padding:"14px 24px",borderTop:"1px solid #111",marginTop:4,display:"flex",flexDirection:"column",gap:10}}>
-                  <button onClick={()=>switchTab("account")}
-                    style={{width:"100%",padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1}}>
-                    My Account
-                  </button>
-                  <button onClick={()=>setSoundOn(!soundOn)}
-                    style={{width:"100%",padding:"11px 0",background:"transparent",color:soundOn?"#00ffff":"#666",fontWeight:700,border:"1px solid #2a2a2a",borderRadius:10,cursor:"pointer",fontSize:13,letterSpacing:1}}>
-                    {soundOn?"♫ Sound On":"♫ Sound Off"}
-                  </button>
+                  <button onClick={()=>switchTab("account")} style={{width:"100%",padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1}}>My Account</button>
+                  <button onClick={()=>setSoundOn(!soundOn)} style={{width:"100%",padding:"11px 0",background:"transparent",color:soundOn?"#00ffff":"#666",fontWeight:700,border:"1px solid #2a2a2a",borderRadius:10,cursor:"pointer",fontSize:13,letterSpacing:1}}>{soundOn?"♫ Sound On":"♫ Sound Off"}</button>
                 </div>
               </div>
             </div>
           )}
-
-          {/* Mobile cart drawer */}
-          {mobileCartOpen&&(
-            <div onClick={()=>setMobileCartOpen(false)}
-              style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
-              <div onClick={(e)=>e.stopPropagation()}
-                style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",padding:"0 0 32px",border:"1px solid #1e1e1e",maxHeight:"82vh",overflowY:"auto"}}>
+          {mobileCartOpen && (
+            <div onClick={()=>setMobileCartOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
+              <div onClick={e=>e.stopPropagation()} style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",padding:"0 0 32px",border:"1px solid #1e1e1e",maxHeight:"82vh",overflowY:"auto"}}>
                 <div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 0"}}/>
-                <div style={{padding:"16px 20px 0"}}>
-                  <h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Cart {cart.length>0&&`(${cart.length})`}</h3>
-                </div>
-                {cart.length===0&&<p style={{opacity:0.4,fontSize:13,padding:"0 20px 20px"}}>Your cart is empty.</p>}
-                <div style={{padding:"0 20px"}}>
-                  {cart.map((item,i)=>(
-                    <div key={i} style={{marginBottom:10,display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>
-                      {item.cover&&<img src={item.cover} style={{width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}
-                      <span style={{fontSize:13,flex:1,lineHeight:1.4}}>{item.title}<br/><span style={{color:"#00ffff",fontSize:12}}>${item.price.toFixed(2)}</span></span>
-                      <button onClick={()=>removeFromCart(i)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button>
-                    </div>
-                  ))}
-                </div>
-                {cart.length>0&&(
-                  <div style={{padding:"16px 20px 0",display:"flex",flexDirection:"column",gap:10}}>
-                    <div style={{fontSize:15,fontWeight:700,color:"white"}}>Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span></div>
-                    <button onClick={handleCheckout} disabled={checkingOut}
-                      style={{width:"100%",padding:"14px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:15}}>
-                      {checkingOut?"Redirecting…":"Checkout"}
-                    </button>
-                    <button onClick={()=>{clearCart();setMobileCartOpen(false);}}
-                      style={{width:"100%",padding:"12px 0",background:"transparent",color:"#ff4d4d",border:"1px solid #ff4d4d33",borderRadius:10,cursor:"pointer",fontSize:13}}>
-                      Clear Cart
-                    </button>
-                  </div>
-                )}
-                {checkoutError&&<p style={{color:"#ff4d4d",fontSize:12,padding:"10px 20px 0"}}>{checkoutError}</p>}
-                <div style={{padding:"12px 20px 0"}}>
-                  <button onClick={()=>setMobileCartOpen(false)}
-                    style={{width:"100%",padding:"12px 0",background:"none",border:"1px solid #1e1e1e",color:"#555",cursor:"pointer",fontSize:13,borderRadius:10}}>
-                    Close
-                  </button>
-                </div>
+                <div style={{padding:"16px 20px 0"}}><h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Cart {cart.length>0&&`(${cart.length})`}</h3></div>
+                {cart.length===0 && <p style={{opacity:0.4,fontSize:13,padding:"0 20px 20px"}}>Your cart is empty.</p>}
+                <div style={{padding:"0 20px"}}>{cart.map((item,i)=><div key={i} style={{marginBottom:10,display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>{item.cover&&<img src={item.cover} style={{width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}<span style={{fontSize:13,flex:1,lineHeight:1.4}}>{item.title}<br/><span style={{color:"#00ffff",fontSize:12}}>${item.price.toFixed(2)}</span></span><button onClick={()=>removeFromCart(i)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button></div>)}</div>
+                {cart.length>0 && <div style={{padding:"16px 20px 0",display:"flex",flexDirection:"column",gap:10}}><div style={{fontSize:15,fontWeight:700}}>Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span></div><button onClick={handleCheckout} disabled={checkingOut} style={{width:"100%",padding:"14px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:15}}>{checkingOut?"Redirecting…":"Checkout"}</button><button onClick={()=>{clearCart();setMobileCartOpen(false);}} style={{width:"100%",padding:"12px 0",background:"transparent",color:"#ff4d4d",border:"1px solid #ff4d4d33",borderRadius:10,cursor:"pointer",fontSize:13}}>Clear Cart</button></div>}
+                {checkoutError && <p style={{color:"#ff4d4d",fontSize:12,padding:"10px 20px 0"}}>{checkoutError}</p>}
+                <div style={{padding:"12px 20px 0"}}><button onClick={()=>setMobileCartOpen(false)} style={{width:"100%",padding:"12px 0",background:"none",border:"1px solid #1e1e1e",color:"#555",cursor:"pointer",fontSize:13,borderRadius:10}}>Close</button></div>
               </div>
             </div>
           )}
         </>
       )}
 
-      {/* CSS KEYFRAMES + MOBILE SCROLL RAILS */}
+      {/* ── CSS ── */}
       <style jsx>{`
-        html, body {
-          width: 100%;
-          overflow-x: clip;
+        html,body{width:100%;overflow-x:clip;}
+        *,*::before,*::after{box-sizing:border-box;}
+        @media(max-width:768px){
+          .singles-row,.albums-row,.features-row,.products-row,.videos-row{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scroll-snap-type:x mandatory!important;overscroll-behavior-x:contain!important;gap:12px!important;padding-bottom:10px!important;}
+          .singles-row>*,.albums-row>*,.features-row>*,.products-row>*,.videos-row>*{flex:0 0 auto!important;scroll-snap-align:start!important;}
         }
-        *, *::before, *::after {
-          box-sizing: border-box;
-        }
-
-        @media (max-width: 768px) {
-          .singles-row,
-          .albums-row,
-          .features-row,
-          .products-row,
-          .videos-row {
-            display: flex !important;
-            flex-wrap: nowrap !important;
-            overflow-x: auto !important;
-            -webkit-overflow-scrolling: touch !important;
-            scroll-snap-type: x mandatory !important;
-            overscroll-behavior-x: contain !important;
-            gap: 12px !important;
-            padding-bottom: 10px !important;
-          }
-          .singles-row > *,
-          .albums-row > *,
-          .features-row > *,
-          .products-row > *,
-          .videos-row > * {
-            flex: 0 0 auto !important;
-            scroll-snap-align: start !important;
-          }
-        }
-
-        .singles-row::-webkit-scrollbar,
-        .albums-row::-webkit-scrollbar,
-        .features-row::-webkit-scrollbar,
-        .products-row::-webkit-scrollbar,
-        .videos-row::-webkit-scrollbar { height: 4px; }
-        .singles-row::-webkit-scrollbar-track,
-        .albums-row::-webkit-scrollbar-track,
-        .features-row::-webkit-scrollbar-track,
-        .products-row::-webkit-scrollbar-track,
-        .videos-row::-webkit-scrollbar-track { background: #111; border-radius: 4px; }
-        .singles-row::-webkit-scrollbar-thumb,
-        .albums-row::-webkit-scrollbar-thumb,
-        .features-row::-webkit-scrollbar-thumb,
-        .products-row::-webkit-scrollbar-thumb,
-        .videos-row::-webkit-scrollbar-thumb { background: #00ffff; border-radius: 4px; }
-        .singles-row::-webkit-scrollbar-thumb:hover,
-        .albums-row::-webkit-scrollbar-thumb:hover,
-        .features-row::-webkit-scrollbar-thumb:hover,
-        .products-row::-webkit-scrollbar-thumb:hover,
-        .videos-row::-webkit-scrollbar-thumb:hover { background: #00cccc; }
-
-        @keyframes pulse        { 0%{transform:scale(1);opacity:1}    50%{transform:scale(1.05);opacity:0.85} 100%{transform:scale(1);opacity:1} }
-        @keyframes fadeInUp     { from{opacity:0;transform:translateY(22px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes fadeOut      { from{opacity:1} to{opacity:0} }
-        @keyframes fadeInCover  { from{opacity:0;transform:scale(0.97)} to{opacity:1;transform:scale(1)} }
-        @keyframes fadeInTab    { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes expandDown   { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes slideInRight { from{opacity:0;transform:translateX(60px)} to{opacity:1;transform:translateX(0)} }
-        @keyframes slideInLeft  { from{opacity:0;transform:translateX(-60px)} to{opacity:1;transform:translateX(0)} }
-        @keyframes countPulse   { 0%{opacity:1} 50%{opacity:0.7} 100%{opacity:1} }
-        @keyframes flowIdlePulse{ 0%{opacity:0.4} 50%{opacity:0.9} 100%{opacity:0.4} }
-        @keyframes flowIdleDot  { 0%{opacity:0.15;transform:scale(0.8)} 50%{opacity:0.7;transform:scale(1.2)} 100%{opacity:0.15;transform:scale(0.8)} }
-        @keyframes eqBar1 { from{height:6px}  to{height:16px} }
-        @keyframes eqBar2 { from{height:10px} to{height:18px} }
-        @keyframes eqBar3 { from{height:14px} to{height:8px}  }
-        @keyframes eqBar4 { from{height:8px}  to{height:14px} }
-        .section-heading { animation:fadeInUp 0.9s cubic-bezier(0.22,1,0.36,1) both; animation-fill-mode:forwards; }
+        .singles-row::-webkit-scrollbar,.albums-row::-webkit-scrollbar,.features-row::-webkit-scrollbar,.products-row::-webkit-scrollbar,.videos-row::-webkit-scrollbar{height:4px;}
+        .singles-row::-webkit-scrollbar-track,.albums-row::-webkit-scrollbar-track,.features-row::-webkit-scrollbar-track,.products-row::-webkit-scrollbar-track,.videos-row::-webkit-scrollbar-track{background:#111;border-radius:4px;}
+        .singles-row::-webkit-scrollbar-thumb,.albums-row::-webkit-scrollbar-thumb,.features-row::-webkit-scrollbar-thumb,.products-row::-webkit-scrollbar-thumb,.videos-row::-webkit-scrollbar-thumb{background:#00ffff;border-radius:4px;}
+        @keyframes pulse{0%{transform:scale(1);opacity:1}50%{transform:scale(1.05);opacity:.85}100%{transform:scale(1);opacity:1}}
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes fadeInCover{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+        @keyframes fadeInTab{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes expandDown{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes flowIdlePulse{0%{opacity:.4}50%{opacity:.9}100%{opacity:.4}}
+        @keyframes flowIdleDot{0%{opacity:.15;transform:scale(.8)}50%{opacity:.7;transform:scale(1.2)}100%{opacity:.15;transform:scale(.8)}}
+        @keyframes eqBar1{from{height:6px}to{height:16px}}
+        @keyframes eqBar2{from{height:10px}to{height:18px}}
+        @keyframes eqBar3{from{height:14px}to{height:8px}}
+        @keyframes eqBar4{from{height:8px}to{height:14px}}
+        .section-heading{animation:fadeInUp .9s cubic-bezier(.22,1,.36,1) both;animation-fill-mode:forwards;}
       `}</style>
 
-      {/* STRIPE MODAL */}
-      {clientSecret&&(
+      {/* ── STRIPE MODAL ── */}
+      {clientSecret && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
           <div style={{background:"#0a0a0a",padding:isMobile?20:30,borderRadius:20,width:isMobile?"100%":400,maxWidth:isMobile?"calc(100vw - 32px)":"none",border:"1px solid #222"}}>
             <div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Checkout</div>
@@ -1871,52 +1310,66 @@ export default function Page() {
   );
 }
 
-// ── FEATURES RAIL — FIX #2: defined OUTSIDE Page so it never remounts ─────────
-// Receives props instead of closing over Page's scope.
-// onPlay(feat) → sets nowPlaying in Page → useEffect plays audio instantly.
+// ── CAROUSEL UI — FIX #1: outside Page → never remounts on countdown ticks ───
+// previewHover lives here as local state so Page never re-renders on hover
+function CarouselUI({ large, isMobile, currentSingle, singleIndex, singles, prevSingle, nextSingle, goToSingle, openSingleModal, addToCart, addVinylToCart, buttonHoverIn, buttonHoverOut }) {
+  const [previewHover, setPreviewHover] = useState(false);
+  return (
+    <div style={{display:"flex",flexDirection:isMobile?"column":"row",alignItems:isMobile?"stretch":"center",gap:isMobile?16:20,background:"linear-gradient(135deg,#0e0e0e,#111)",border:"1px solid #1e1e1e",borderRadius:isMobile?16:20,padding:isMobile?"20px 16px":large?"32px 28px":"28px 24px",position:"relative",overflow:"hidden",boxShadow:"0 4px 40px rgba(0,0,0,0.5)"}}>
+      <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:360,height:360,background:"radial-gradient(circle,rgba(0,255,255,0.04) 0%,transparent 70%)",pointerEvents:"none"}}/>
+      {isMobile ? (
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <button onClick={prevSingle} style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.06)",border:"1px solid #2a2a2a",color:"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>‹</button>
+          <div style={{flex:1,position:"relative",aspectRatio:"1/1"}} onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
+            <img key={currentSingle.slug} src={currentSingle.cover} style={{width:"100%",height:"100%",borderRadius:14,objectFit:"cover",display:"block",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",transition:"filter 0.3s",filter:previewHover?"brightness(0.55)":"brightness(1)",animation:"fadeInCover 0.4s ease forwards"}}/>
+            <div onClick={()=>openSingleModal(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,borderRadius:14,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
+              <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(8px)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg viewBox="0 0 24 24" fill="white" width="24" height="24" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg></div>
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>Preview</div>
+            </div>
+          </div>
+          <button onClick={nextSingle} style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.06)",border:"1px solid #2a2a2a",color:"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>›</button>
+        </div>
+      ) : (
+        <button onClick={prevSingle} style={{width:large?50:44,height:large?50:44,borderRadius:"50%",background:"rgba(255,255,255,0.04)",border:"1px solid #2a2a2a",color:"#555",fontSize:large?22:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";e.currentTarget.style.boxShadow="0 0 10px rgba(0,255,255,0.3)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#555";e.currentTarget.style.boxShadow="none";}}>‹</button>
+      )}
+      {!isMobile && (
+        <div style={{flexShrink:0,width:large?340:300,height:large?340:300,position:"relative"}} onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
+          <img key={currentSingle.slug} src={currentSingle.cover} style={{width:"100%",height:"100%",borderRadius:large?18:16,objectFit:"cover",display:"block",boxShadow:large?"0 10px 50px rgba(0,0,0,0.7)":"0 8px 40px rgba(0,0,0,0.6)",transition:"filter 0.3s",filter:previewHover?"brightness(0.55)":"brightness(1)",animation:"fadeInCover 0.4s ease forwards"}}/>
+          <div onClick={()=>openSingleModal(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,borderRadius:large?18:16,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
+            <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(0,0,0,0.55)",backdropFilter:"blur(8px)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 30px rgba(0,0,0,0.5)"}}><svg viewBox="0 0 24 24" fill="white" width="28" height="28" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg></div>
+            <div style={{fontSize:12,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>Preview</div>
+          </div>
+        </div>
+      )}
+      <div style={{flex:1,display:"flex",flexDirection:"column",gap:isMobile?10:large?14:12}}>
+        <div key={`title-${currentSingle.slug}`} style={{fontSize:isMobile?22:large?30:26,fontWeight:900,letterSpacing:2,animation:"fadeInUp 0.35s ease forwards"}}>{currentSingle.title}</div>
+        <div style={{fontSize:13,color:"#555",letterSpacing:1}}>SINGLE{large&&!isMobile?` · ${singleIndex+1} of ${singles.length}`:""}</div>
+        <div style={{fontSize:isMobile?16:large?18:16,color:"#00ffff",fontWeight:700}}>${currentSingle.price.toFixed(2)}</div>
+        <div style={{display:"flex",gap:6}}>
+          {singles.map((s,i)=><div key={s.slug} onClick={()=>goToSingle(i,i>singleIndex?"right":"left")} style={{width:i===singleIndex?(isMobile?20:large?24:20):(isMobile?6:large?7:6),height:isMobile?6:large?7:6,borderRadius:4,background:i===singleIndex?"#00ffff":"#333",cursor:"pointer",transition:"all 0.3s",boxShadow:i===singleIndex?"0 0 8px rgba(0,255,255,0.6)":"none"}}/>)}
+        </div>
+        <div style={{display:"flex",gap:10,marginTop:isMobile?4:large?8:6,flexWrap:"wrap"}}>
+          <button onClick={()=>addToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"12px 0":large?"11px 20px":"10px 18px",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold",transition:"0.25s",width:isMobile?"100%":"auto"}}>+ Add to Cart</button>
+          {(large||isMobile) && <button onClick={()=>addVinylToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"12px 0":"11px 20px",background:"#0a0a0a",color:"#aaa",border:"1px solid #2a2a2a",borderRadius:8,cursor:"pointer",fontSize:13,transition:"0.25s",width:isMobile?"100%":"auto"}}>+ Vinyl $47.99</button>}
+        </div>
+      </div>
+      {!isMobile && <button onClick={nextSingle} style={{width:large?50:44,height:large?50:44,borderRadius:"50%",background:"rgba(255,255,255,0.04)",border:"1px solid #2a2a2a",color:"#555",fontSize:large?22:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";e.currentTarget.style.boxShadow="0 0 10px rgba(0,255,255,0.3)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#555";e.currentTarget.style.boxShadow="none";}}>›</button>}
+    </div>
+  );
+}
+
+// ── FEATURES RAIL — outside Page, stable ─────────────────────────────────────
 function FeaturesRail({ features, isMobile, addToCart, onPlay }) {
   return (
-    <div
-      className="features-row"
-      style={{
-        display:"flex",
-        flexWrap:"nowrap",
-        overflowX:"auto",
-        WebkitOverflowScrolling:"touch",
-        scrollSnapType:"x mandatory",
-        overscrollBehaviorX:"contain",
-        gap:isMobile?12:18,
-        paddingBottom:14
-      }}
-    >
+    <div className="features-row" style={{display:"flex",flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollSnapType:"x mandatory",overscrollBehaviorX:"contain",gap:isMobile?12:18,paddingBottom:14}}>
       {features.map((feat,i)=>(
-        <div key={feat.slug}
-          onClick={()=>onPlay(feat)}
-          style={{
-            flex:"0 0 auto",
-            width:isMobile?160:220,
-            scrollSnapAlign:"start",
-            background:"#0a0a0a",
-            borderRadius:14,
-            border:"1px solid #1a1a1a",
-            cursor:"pointer",
-            opacity:0,
-            animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,
-            transition:"border-color 0.25s"
-          }}
-          onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#a259ff55";}}
-          onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1a1a1a";}}
-        >
-          <img src={feat.cover}
-            style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",display:"block",borderRadius:"13px 13px 0 0"}}/>
+        <div key={feat.slug} onClick={()=>onPlay(feat)} style={{flex:"0 0 auto",width:isMobile?160:220,scrollSnapAlign:"start",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#a259ff55"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
+          <img src={feat.cover} style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",display:"block",borderRadius:"13px 13px 0 0"}}/>
           <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
             <div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{feat.title}</div>
             <div style={{fontSize:10,color:"#a259ff",fontWeight:700,letterSpacing:1.5,marginBottom:6}}>{feat.featuring}</div>
             <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${feat.price.toFixed(2)}</div>
-            <button onClick={(e)=>{e.stopPropagation();addToCart(feat);}}
-              style={{width:"100%",padding:"7px 0",fontSize:11,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",borderRadius:7,cursor:"pointer",fontWeight:600,transition:"0.2s"}}
-              onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#a259ff";e.currentTarget.style.color="#a259ff";}}
-              onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="white";}}>+ Cart</button>
+            <button onClick={e=>{e.stopPropagation();addToCart(feat);}} style={{width:"100%",padding:"7px 0",fontSize:11,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",borderRadius:7,cursor:"pointer",fontWeight:600,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#a259ff";e.currentTarget.style.color="#a259ff";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="white";}}>+ Cart</button>
           </div>
         </div>
       ))}
@@ -1924,53 +1377,22 @@ function FeaturesRail({ features, isMobile, addToCart, onPlay }) {
   );
 }
 
-// ── GRID — mobile-aware horizontal rail ───────────────────────────────────────
-function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onSingleClick, isMobile }) {
+// ── GRID ──────────────────────────────────────────────────────────────────────
+function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, isMobile }) {
+  if (!items || items.length === 0) return null;
   const containerStyle = isMobile
-    ? {
-        display:"flex",
-        flexWrap:"nowrap",
-        overflowX:"auto",
-        WebkitOverflowScrolling:"touch",
-        scrollSnapType:"x mandatory",
-        overscrollBehaviorX:"contain",
-        gap:12,
-        paddingBottom:10
-      }
-    : {
-        display:"grid",
-        gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))",
-        gap:22
-      };
-
+    ? { display:"flex", flexWrap:"nowrap", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollSnapType:"x mandatory", overscrollBehaviorX:"contain", gap:12, paddingBottom:10 }
+    : { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:22 };
   return (
-    <div className={isMobile ? `${type}-row` : ""} style={containerStyle}>
-      {items.map((item)=>(
-        <div key={item.slug}
-          style={{
-            ...(isMobile ? {flex:"0 0 160px", width:160, scrollSnapAlign:"start"} : {}),
-            position:"relative",
-            background:"#0a0a0a",
-            borderRadius:isMobile?12:16,
-            overflow:"hidden",
-            border:"1px solid #1a1a1a",
-            transition:"border-color 0.25s"
-          }}
-          onMouseEnter={(e)=>{e.currentTarget.style.borderColor="#2a2a2a";}}
-          onMouseLeave={(e)=>{e.currentTarget.style.borderColor="#1a1a1a";}}>
-          <img src={item.cover}
-            onClick={()=>onSingleClick?onSingleClick(item):null}
-            onMouseEnter={hoverIn}
-            onMouseLeave={hoverOut}
-            style={{width:"100%",aspectRatio:"1/1",height:"auto",cursor:"pointer",transition:"transform 0.3s ease,filter 0.3s ease,box-shadow 0.3s ease",objectFit:"cover",display:"block"}}/>
+    <div className={isMobile?`${type}-row`:""} style={containerStyle}>
+      {items.map(item=>(
+        <div key={item.slug} style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
+          <img src={item.cover} onClick={()=>onCardClick?.(item)} onMouseEnter={hoverIn} onMouseLeave={hoverOut} style={{width:"100%",aspectRatio:"1/1",height:"auto",cursor:"pointer",transition:"transform 0.3s,filter 0.3s,box-shadow 0.3s",objectFit:"cover",display:"block"}}/>
           <div style={{padding:isMobile?"10px 10px 14px":"14px 16px 18px"}}>
             <div style={{fontSize:isMobile?12:14,fontWeight:700,marginBottom:4,lineHeight:1.3}}>{item.title}</div>
-            {item.date&&<div style={{fontSize:isMobile?9:11,color:"#444",marginBottom:6,letterSpacing:1}}>{item.date}</div>}
+            {item.date && <div style={{fontSize:isMobile?9:11,color:"#444",marginBottom:6,letterSpacing:1}}>{item.date}</div>}
             <div style={{fontSize:isMobile?12:13,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${item.price.toFixed(2)}</div>
-            <button onClick={()=>addToCart(item)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut}
-              style={{width:"100%",padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600}}>
-              Add to Cart
-            </button>
+            <button onClick={()=>addToCart(item)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{width:"100%",padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600}}>Add to Cart</button>
           </div>
         </div>
       ))}
@@ -1984,21 +1406,19 @@ function CheckoutForm({ onSuccess }) {
   const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
-  const handleSubmit = async (e) => {
+  const handleSubmit = async e => {
     e.preventDefault();
-    if (!stripe||!elements) return;
+    if (!stripe || !elements) return;
     setLoading(true); setError("");
-    const result = await stripe.confirmPayment({elements,redirect:"if_required"});
-    if (result.error) { setError(result.error.message||"Payment failed. Please try a different card."); setLoading(false); }
+    const result = await stripe.confirmPayment({ elements, redirect:"if_required" });
+    if (result.error) { setError(result.error.message || "Payment failed."); setLoading(false); }
     else { onSuccess(); }
   };
   return (
     <form onSubmit={handleSubmit}>
       <PaymentElement options={{layout:"tabs"}}/>
-      <button type="submit" disabled={!stripe||loading} style={{marginTop:20,width:"100%",padding:12,background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer"}}>
-        {loading?"Processing…":"Pay Now"}
-      </button>
-      {error&&<p style={{color:"#ff4d4d",fontSize:12,marginTop:10}}>{error}</p>}
+      <button type="submit" disabled={!stripe||loading} style={{marginTop:20,width:"100%",padding:12,background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer"}}>{loading?"Processing…":"Pay Now"}</button>
+      {error && <p style={{color:"#ff4d4d",fontSize:12,marginTop:10}}>{error}</p>}
     </form>
   );
 }
