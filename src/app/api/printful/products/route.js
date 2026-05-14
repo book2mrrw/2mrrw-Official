@@ -8,34 +8,27 @@ export async function GET() {
 
     const data = await res.json();
 
- const result = data.result;
+    console.log("PRINTFUL RAW:", data);
 
-// normalize safely
-let products = [];
+    const rawProducts = data.result || [];
 
-if (Array.isArray(result)) {
-  products = result;
-} else if (Array.isArray(result?.sync_products)) {
-  products = result.sync_products;
-} else if (Array.isArray(result?.items)) {
-  products = result.items;
-} else {
-  products = [];
-}
-
-return Response.json({
-  success: true,
-  products
-});
+    const products = rawProducts.map((item) => ({
+      id: item.id,
+      title: item.name,
+      cover: item.thumbnail_url,
+      price: item.retail_price || 0,
+    }));
 
     return Response.json({
       success: true,
       products,
     });
+
   } catch (err) {
     return Response.json({
       success: false,
       error: err.message,
+      products: [],
     });
   }
 }
