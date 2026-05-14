@@ -334,7 +334,7 @@ export default function Page() {
     { title:"Love Hz Vol.1", slug:"love-hz", cover:"/images/albums/lovehz.jpg", price:12.99, date:"August 2026",    vinyl:47.99, tracks:["Roll Call","W.2.D","All Of It","Knock On Wood","Stayed 2 Long","Hour Glass"] },
   ];
   const merch = [
-    { title:"TOMORROW HOODIE", slug:"tomorrow-hoodie", cover:"/images/merch/tomorrow-hoodie.jpg", price:64.99 },
+
     { title:"2MRRW HOODIE",    slug:"hoodie",          cover:"/images/merch/hoodie.jpg",          price:59.99 },
     { title:"2MRRW T-SHIRT",   slug:"shirt",           cover:"/images/merch/shirt.jpg",           price:29.99 },
     { title:"2MRRW HAT",       slug:"hat",             cover:"/images/merch/hat.jpg",             price:24.99 },
