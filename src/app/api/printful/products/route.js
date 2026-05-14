@@ -1,3 +1,3 @@
 export async function GET() {
-  return Response.json({ ok: true, route: "products works" });
+  return Response.json({ debug: "products route hit" });
 }
