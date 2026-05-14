@@ -111,7 +111,7 @@ export default function Page() {
   const [nowPlayingPlaying, setNowPlayingPlaying] = useState(false);
   const [radioIndex, setRadioIndex]               = useState(0);
   const [flowConversionActive, setFlowConversionActive] = useState(false);
-
+  const [printfulProducts, setPrintfulProducts] = useState([]);
   // ── MOBILE STATE ──────────────────────────────────────────────────────────
   const [isMobile, setIsMobile]             = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
@@ -1114,7 +1114,18 @@ export default function Page() {
               {activeTab==="albums"&&<Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onSingleClick={setSelectedAlbum} isMobile={isMobile}/>}
 
               {/* SHOP */}
-              {activeTab==="shop"&&<Grid items={merch} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} isMobile={isMobile}/>}
+             {activeTab==="shop" && (
+  <Grid
+    items={printfulProducts}
+    type="products"
+    addToCart={addToCart}
+    hoverIn={hoverIn}
+    hoverOut={hoverOut}
+    buttonHoverIn={buttonHoverIn}
+    buttonHoverOut={buttonHoverOut}
+    isMobile={isMobile}
+  />
+)}
 
               {/* EXCLUSIVE */}
               {activeTab==="exclusive"&&(
