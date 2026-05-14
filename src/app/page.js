@@ -127,12 +127,25 @@ export default function Page() {
 
   // ── EFFECTS ───────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
+ useEffect(() => {
+  const check = () => setIsMobile(window.innerWidth < 768);
+  ...
+}, []);
+
+useEffect(() => {
+  fetch("/api/printful/products")
+    .then((res) => res.json())
+    .then((data) => {
+      console.log("PRINTFUL DATA:", data);
+
+      if (data.success) {
+        setPrintfulProducts(data.products || []);
+      }
+    })
+    .catch((err) => {
+      console.error("PRINTFUL FETCH ERROR:", err);
+    });
+}, []);
 
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_user");
