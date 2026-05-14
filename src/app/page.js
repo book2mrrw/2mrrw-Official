@@ -304,9 +304,30 @@ export default function Page() {
     { title:"Turnt Me 2 Dis", slug:"turnt-me-2-dis", cover:"/images/singles/turnt.jpg",     price:2.99, preview:"/audio/previews/turntme2dis-preview.mp3", full:"/audio/full/turntme2dis.mp3" },
   ];
   const features = [
-    { title:"I Don't Believe You", slug:"i-dont-believe-you", cover:"/images/features/idbu.jpg",   price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/idbu-preview.mp3" },
-    { title:"2 Heavy",             slug:"2-heavy",            cover:"/images/features/2heavy.jpg", price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/2heavy-preview.mp3" },
-  ];
+  {
+    title:"I Don't Believe You",
+    slug:"i-dont-believe-you",
+    cover:"/images/features/idbu.jpg",
+    price:2.99,
+    featuring:"FT. 2MRRW",
+
+    preview:"/audio/previews/i-dont-believe-you-preview.wav",
+
+    fullSong:"/audio/full/i-dont-believe-you.wav"
+  },
+
+  {
+    title:"2 Heavy",
+    slug:"2-heavy",
+    cover:"/images/features/2heavy.jpg",
+    price:2.99,
+    featuring:"FT. 2MRRW",
+
+    preview:"/audio/previews/2-heavy-preview.wav",
+
+    fullSong:"/audio/full/2-heavy.wav"
+  },
+];
   const albums = [
     { title:"T.B.H.",       slug:"tbh",     cover:"/images/albums/tbh.jpg",    price:9.99,  date:"July 7, 2022",   vinyl:47.99, tracks:["Glass Full","Up 2 Me","Unexpcted","All Yours","Locomotive","LEFT","Was Wrong","ArTiFICiaL"] },
     { title:"(A.D)",         slug:"ad",      cover:"/images/albums/ad.jpg",     price:9.99,  date:"March 24, 2024", vinyl:47.99, tracks:["2mrrw's Ntro","Said N' Done","A.D.D","Perspective (2018)","Grand Scheme","A2B","Life Changes (2018)","Itself (2018)","Wastin Time","Like Me Or Not"] },
