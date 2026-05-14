@@ -14,41 +14,50 @@ const formatTime = (s) => {
 
 // ── SOCIALS ───────────────────────────────────────────────────────────────────
 const SOCIALS = [
-  { name: "YouTube",   href: "https://youtube.com/@callme2mrrw?si=Bwvli5p7hhvED7eq",                   svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>) },
-  { name: "Instagram", href: "https://www.instagram.com/callme2mrrw?igsh=MXMwdzNiZGE5NTJwaw==",         svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>) },
-  { name: "TikTok",    href: "https://tiktok.com/@thareal2mrrw",                                         svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>) },
-  { name: "Twitch",    href: "https://twitch.tv/callme2mrrw",                                            svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>) },
-  { name: "X",         href: "https://x.com/callme2mrrw",                                               svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.747l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>) },
-  { name: "Patreon",   href: "https://patreon.com/2mrrw",                                                svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M0 .48v23.04h4.22V.48zm15.385 0c-4.764 0-8.641 3.88-8.641 8.65 0 4.755 3.877 8.623 8.641 8.623 4.75 0 8.615-3.868 8.615-8.623C24 4.36 20.136.48 15.385.48z"/></svg>) },
+  { name: "YouTube",   href: "https://youtube.com/@callme2mrrw?si=Bwvli5p7hhvED7eq",                svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>) },
+  { name: "Instagram", href: "https://www.instagram.com/callme2mrrw?igsh=MXMwdzNiZGE5NTJwaw==",      svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>) },
+  { name: "TikTok",    href: "https://tiktok.com/@thareal2mrrw",                                      svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>) },
+  { name: "Twitch",    href: "https://twitch.tv/callme2mrrw",                                         svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>) },
+  { name: "X",         href: "https://x.com/callme2mrrw",                                            svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.747l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>) },
+  { name: "Patreon",   href: "https://patreon.com/2mrrw",                                             svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M0 .48v23.04h4.22V.48zm15.385 0c-4.764 0-8.641 3.88-8.641 8.65 0 4.755 3.877 8.623 8.641 8.623 4.75 0 8.615-3.868 8.615-8.623C24 4.36 20.136.48 15.385.48z"/></svg>) },
 ];
 
-// ── MUSIC VIDEOS ──────────────────────────────────────────────────────────────
+// ── AUDIO VISUALS (music videos) ─────────────────────────────────────────────
 const musicVideos = [
   { id:"mv-1", title:"Hour Glass", youtubeId:"tv_aS-hJ880", description:"Official Music Video" },
   { id:"mv-2", title:"A2B",        youtubeId:"kPITYHMVeXM", description:"Official Music Video" },
   { id:"mv-3", title:"W.2.D",      youtubeId:"jsrA1SL3_GU", description:"Official Music Video" },
 ];
 
-// ── EXCLUSIVE ITEMS — FIX #5: all A.D. covers use /images/albums/ad.jpg ──────
-const exclusiveItems = [
-  { id:"exc-card-tbh",     title:"T.B.H. Collector Art Card",   subtitle:"First Edition · #/100",           type:"collector-card", cover:"/images/albums/tbh.jpg",    price:89.99,  description:"4×6 premium matte card, 400gsm thick stock. Hand-signed with a personal message. QR code links directly to the T.B.H. digital album. Ships in an acrylic display case.",                                            features:["Hand-signed by 2MRRW","QR code → digital album access","400gsm soft-touch matte finish","Acrylic display case included","Numbered 1 of 100"], stock:23, badge:"FIRST EDITION",  badgeColor:"#00ffff", slug:"exc-card-tbh" },
-  { id:"exc-card-ad",      title:"(A.D) Collector Art Card",    subtitle:"Early Supporter Series · #/50",   type:"collector-card", cover:"/images/albums/ad.jpg",     price:99.99,  description:"5×5 premium card with embedded NFC chip. Tap your phone to unlock exclusive fan content. Hand-signed. Ships in a magnetic enclosure. Limited to 50 pieces worldwide.",                                                 features:["NFC chip — tap to open exclusive portal","Hand-signed by 2MRRW","500gsm with magnetic enclosure","Numbered 1 of 50","Inner Circle access granted"],       stock:11, badge:"EARLY SUPPORTER",badgeColor:"#ff6b35", slug:"exc-card-ad" },
-  { id:"exc-bundle-lovehz",title:"Love Hz Vol.1 Launch Bundle", subtitle:"Collector Bundle · Launch Edition",type:"bundle",         cover:"/images/albums/lovehz.jpg", price:149.99, description:"Full digital album + collector art card + hand-signed lyric sheet. Exclusive to launch supporters. This is ownership. Not just music.",                                                                                  features:["Digital album — instant download","Collector art card (numbered)","Hand-signed lyric sheet","Early listener credit","Inner Circle badge unlocked"],        stock:7,  badge:"LAUNCH BUNDLE",  badgeColor:"#a259ff", slug:"exc-bundle-lovehz" },
-  { id:"exc-signed-vinyl",  title:"Signed Vinyl — T.B.H.",      subtitle:"Hand-Signed · Limited Press",     type:"vinyl",          cover:"/images/albums/tbh.jpg",    price:74.99,  description:"T.B.H. on wax, hand-signed on the sleeve. Limited press. This is the record you pull out and show people. The one that started it.",                                                                                   features:["Hand-signed sleeve by 2MRRW","Limited press run","Ships in protective sleeve","Certificate of authenticity","Collector-grade packaging"],                  stock:14, badge:"SIGNED",          badgeColor:"#00ffff", slug:"exc-signed-vinyl" },
+// ── EXCLUSIVE ITEMS
+// BRIEF §9: A.D. card uses /images/albums/ad.jpg, title "2MRRW: (A.D)"
+// BRIEF §8: stock values are REAL maximums — decremented only by purchases
+const REAL_INVENTORY = {
+  "exc-card-tbh":      100,  // T.B.H Collector Art Card — 100 total
+  "exc-card-ad":       50,   // 2MRRW: (A.D) Collector Card — 50 total
+  "exc-bundle-lovehz": null, // unlimited
+  "exc-signed-vinyl":  null, // configurable — null = owner sets via VAULT_VINYL_STOCK env
+};
+
+const exclusiveItemsBase = [
+  { id:"exc-card-tbh",     title:"T.B.H. Collector Art Card",   subtitle:"First Edition · #/100",            type:"collector-card", cover:"/images/albums/tbh.jpg",    price:89.99,  description:"4×6 premium matte card, 400gsm thick stock. Hand-signed with a personal message. QR code links directly to the T.B.H. digital album. Ships in an acrylic display case.",                                         features:["Hand-signed by 2MRRW","QR code → digital album access","400gsm soft-touch matte finish","Acrylic display case included","Numbered 1 of 100"], badge:"FIRST EDITION",  badgeColor:"#00ffff", slug:"exc-card-tbh" },
+  { id:"exc-card-ad",      title:"2MRRW: (A.D) Collector Card", subtitle:"Early Supporter Series · #/50",    type:"collector-card", cover:"/images/albums/ad.jpg",     price:99.99,  description:"5×5 premium card with embedded NFC chip. Tap your phone to unlock exclusive fan content. Hand-signed. Ships in a magnetic enclosure. Limited to 50 pieces worldwide.",                                              features:["NFC chip — tap to open exclusive portal","Hand-signed by 2MRRW","500gsm with magnetic enclosure","Numbered 1 of 50","Inner Circle access granted"],       badge:"EARLY SUPPORTER",badgeColor:"#ff6b35", slug:"exc-card-ad" },
+  { id:"exc-bundle-lovehz",title:"Love Hz Vol.1 Launch Bundle", subtitle:"Collector Bundle · Launch Edition", type:"bundle",         cover:"/images/albums/lovehz.jpg", price:149.99, description:"Full digital album + collector art card + hand-signed lyric sheet. Exclusive to launch supporters. This is ownership. Not just music.",                                                                               features:["Digital album — instant download","Collector art card (numbered)","Hand-signed lyric sheet","Early listener credit","Inner Circle badge unlocked"],        badge:"LAUNCH BUNDLE",  badgeColor:"#a259ff", slug:"exc-bundle-lovehz" },
+  { id:"exc-signed-vinyl",  title:"Signed Vinyl — T.B.H.",      subtitle:"Hand-Signed · Limited Press",      type:"vinyl",          cover:"/images/albums/tbh.jpg",    price:74.99,  description:"T.B.H. on wax, hand-signed on the sleeve. Limited press. This is the record you pull out and show people. The one that started it.",                                                                                features:["Hand-signed sleeve by 2MRRW","Limited press run","Ships in protective sleeve","Certificate of authenticity","Collector-grade packaging"],                  badge:"SIGNED",          badgeColor:"#00ffff", slug:"exc-signed-vinyl" },
 ];
 
 // ── CIRCLE RESPONSES ──────────────────────────────────────────────────────────
 const circleResponses = [
-  { id:"resp-1", question:"What does 2MRRW actually mean to you personally?",                             questionBy:"EarlyFan_J",    questionTime:"March 15, 2026", response:"It means tomorrow is always possible. No matter how heavy today gets, you hold on because tomorrow is a blank page. That's the whole movement — not optimism, just possibility.", tag:"VISIONARY PICK",      tagColor:"#a259ff", highlight:true  },
-  { id:"resp-2", question:"How do you decide which songs make the album vs. which stay unreleased?",      questionBy:"Listener_K",    questionTime:"March 28, 2026", response:"The ones that make it are the ones that still hurt when I listen back. If I can hear it and feel nothing — it's not ready for you. If it still cuts, it's real enough to share.",        tag:"FEATURED",            tagColor:"#00ffff", highlight:false },
-  { id:"resp-3", question:"Will there be a Love Hz Vol.2?",                                               questionBy:"Collector_001", questionTime:"April 5, 2026",  response:"Already working on it. Vol.1 was the introduction to the frequency. Vol.2 is what happens when the signal locks in. You'll feel the difference.",                               tag:"COMMUNITY HIGHLIGHT", tagColor:"#ff6b35", highlight:false },
+  { id:"resp-1", question:"What does 2MRRW actually mean to you personally?",                            questionBy:"EarlyFan_J",    questionTime:"March 15, 2026", response:"It means tomorrow is always possible. No matter how heavy today gets, you hold on because tomorrow is a blank page. That's the whole movement — not optimism, just possibility.", tag:"VISIONARY PICK",      tagColor:"#a259ff", highlight:true  },
+  { id:"resp-2", question:"How do you decide which songs make the album vs. which stay unreleased?",     questionBy:"Listener_K",    questionTime:"March 28, 2026", response:"The ones that make it are the ones that still hurt when I listen back. If I can hear it and feel nothing — it's not ready for you. If it still cuts, it's real enough to share.",        tag:"FEATURED",            tagColor:"#00ffff", highlight:false },
+  { id:"resp-3", question:"Will there be a Love Hz Vol.2?",                                              questionBy:"Collector_001", questionTime:"April 5, 2026",  response:"Already working on it. Vol.1 was the introduction to the frequency. Vol.2 is what happens when the signal locks in. You'll feel the difference.",                               tag:"COMMUNITY HIGHLIGHT", tagColor:"#ff6b35", highlight:false },
 ];
 
 // ── INNER CIRCLE POSTS ────────────────────────────────────────────────────────
 const innerCirclePosts = [
   { id:"ic-1", title:"Why I Almost Scrapped Love Hz Vol.1",   date:"April 10, 2026",  preview:"There was a version of this project that never would have seen the light. Here's what changed.",       body:"There was a point — around month 14 of making this album — where I deleted everything. The whole project folder. Emptied the trash. Gone.\n\nIt wasn't creative block. It was the opposite. I had too much. 22 songs and none of them felt like they belonged together. I was chasing something I couldn't name yet.\n\nWhat brought it back was stripping it down to 6 tracks and asking: which of these would I still stand behind in 10 years? The answer became Love Hz Vol.1. Not the version I planned. The version that survived." },
   { id:"ic-2", title:"The Story Behind W.2.D",                date:"March 30, 2026",  preview:"This track wasn't written in a studio. It was written in a parking lot at 2am. Here's the full story.", body:"W.2.D was written in the front seat of my car outside a gas station on I-20. It was 2am. I had my phone, a voice memo app, and about 40 minutes before I needed to be somewhere.\n\nThe whole thing came out in one sitting. Sometimes that happens. You stop trying to write and the song just falls out of you.\n\nI drove home, set up my mic, and recorded a demo that night. The version you're hearing is that demo, cleaned up. The urgency in it is real. That's not performance — that's actually what 2am sounds like." },
-  { id:"ic-3", title:"What the Collector Cards Actually Mean", date:"March 18, 2026",  preview:"It's not merch. Here's the full vision behind the physical collector system and where it's going.",   body:"People keep calling the collector cards merch. They're not merch.\n\nMerch is a t-shirt. You wear it, it fades, you forget about it. A collector card is a record of presence. It says: I was here when this was being built. I believed before it was obvious.\n\nThe long-term vision is a tiered system where each card unlocks something real — early access, private sessions, input on creative decisions. The NFC chip on the (A.D) card is the first version of that. It's going to go much further.\n\nIf you have one, hold it. You're not holding merch. You're holding a key." },
+  { id:"ic-3", title:"What the Collector Cards Actually Mean", date:"March 18, 2026",  preview:"It's not merch. Here's the full vision behind the physical collector system and where it's going.",   body:"People keep calling the collector cards merch. They're not merch.\n\nMerch is a t-shirt. You wear it, it fades, you forget about it. A collector card is a record of presence. It says: I was here when this was being built. I believed before it was obvious.\n\nThe long-term vision is a tiered system where each card unlocks something real — early access, private sessions, input on creative decisions. The NFC chip on the 2MRRW: (A.D) card is the first version of that. It's going to go much further.\n\nIf you have one, hold it. You're not holding merch. You're holding a key." },
 ];
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
@@ -67,7 +76,6 @@ const radioSlides = [
   { slug:"turnt-me-2-dis", title:"Turnt Me 2 Dis", cover:"/images/singles/turnt.jpg",     price:2.99, tag:"FEATURED",    tagColor:"#00ffff" },
 ];
 
-// FIX #1 + #2: module-scope arrays so CarouselUI/FeaturesRail never remount
 const features = [
   { title:"I Don't Believe You", slug:"i-dont-believe-you", cover:"/images/features/idbu.jpg",   price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/i-dont-believe-you-preview.wav" },
   { title:"2 Heavy",             slug:"2-heavy",            cover:"/images/features/2heavy.jpg", price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/2-heavy-preview.wav" },
@@ -80,26 +88,56 @@ const singles = [
   { title:"Turnt Me 2 Dis", slug:"turnt-me-2-dis", cover:"/images/singles/turnt.jpg",     price:2.99, preview:"/audio/previews/turntme2dis-preview.mp3" },
 ];
 
-// FIX #5: A.D. title normalized, cover path confirmed /images/albums/ad.jpg
+// BRIEF §9: A.D. normalized — title "(A.D)", cover /images/albums/ad.jpg
 const albums = [
   { title:"T.B.H.",        slug:"tbh",     cover:"/images/albums/tbh.jpg",    price:9.99,  date:"July 7, 2022",   vinyl:47.99, tracks:["Glass Full","Up 2 Me","Unexpcted","All Yours","Locomotive","LEFT","Was Wrong","ArTiFICiaL"] },
   { title:"(A.D)",         slug:"ad",      cover:"/images/albums/ad.jpg",     price:9.99,  date:"March 24, 2024", vinyl:47.99, tracks:["2mrrw's Ntro","Said N' Done","A.D.D","Perspective (2018)","Grand Scheme","A2B","Life Changes (2018)","Itself (2018)","Wastin Time","Like Me Or Not"] },
   { title:"Love Hz Vol.1", slug:"love-hz", cover:"/images/albums/lovehz.jpg", price:12.99, date:"August 2026",    vinyl:47.99, tracks:["Roll Call","W.2.D","All Of It","Knock On Wood","Stayed 2 Long","Hour Glass"] },
 ];
 
-// FIX #4: fallback merch shown when Printful returns empty
 const fallbackMerch = [
   { title:"2MRRW HOODIE",  slug:"hoodie", cover:"/images/merch/hoodie.jpg", price:59.99 },
   { title:"2MRRW T-SHIRT", slug:"shirt",  cover:"/images/merch/shirt.jpg",  price:29.99 },
   { title:"2MRRW HAT",     slug:"hat",    cover:"/images/merch/hat.jpg",    price:24.99 },
 ];
 
-// ═════════════════════════════════════════════════════════════════════════════
+// ── INVENTORY HELPERS (BRIEF §8) ─────────────────────────────────────────────
+// Reads/writes real purchase-based stock from localStorage key "2mrrw_inventory"
+// Stock only decreases when a purchase completes — never randomized.
+function loadInventory() {
+  try {
+    const stored = localStorage.getItem("2mrrw_inventory");
+    if (stored) return JSON.parse(stored);
+  } catch {}
+  // First run: initialize from REAL_INVENTORY maximums
+  const initial = {};
+  Object.entries(REAL_INVENTORY).forEach(([slug, max]) => {
+    initial[slug] = max; // null = unlimited
+  });
+  return initial;
+}
+function saveInventory(inv) {
+  try { localStorage.setItem("2mrrw_inventory", JSON.stringify(inv)); } catch {}
+}
+// Decrement after a successful purchase; skip if unlimited (null)
+function decrementInventory(inv, slug) {
+  if (!(slug in inv)) return inv;
+  if (inv[slug] === null) return inv; // unlimited
+  if (inv[slug] <= 0) return inv;
+  const next = { ...inv, [slug]: inv[slug] - 1 };
+  saveInventory(next);
+  return next;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
 
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
+  // BRIEF §1/#2/#7 — desktop tab ids updated; "exclusive" → "vault", "videos" removed as top-level
+  // BRIEF §3: music sub-tabs are "singles","albums","mymusic"
   const [activeTab, setActiveTab]                 = useState("home");
+  const [musicSubTab, setMusicSubTab]             = useState("singles"); // §3
   const [activeVideo, setActiveVideo]             = useState("tv_aS-hJ880");
   const [addedFlash, setAddedFlash]               = useState(null);
   const [soundOn, setSoundOn]                     = useState(false);
@@ -142,16 +180,17 @@ export default function Page() {
   const [nowPlayingPlaying, setNowPlayingPlaying] = useState(false);
   const [radioIndex, setRadioIndex]               = useState(0);
   const [flowConversionActive, setFlowConversionActive] = useState(false);
-  // FIX #4: Printful state
   const [printfulProducts, setPrintfulProducts]   = useState([]);
   const [printfulLoading, setPrintfulLoading]     = useState(true);
-  // FIX #2: audio progress
   const [audioCurrentTime, setAudioCurrentTime]   = useState(0);
   const [audioDuration, setAudioDuration]         = useState(0);
-  // mobile
-  const [isMobile, setIsMobile]       = useState(false);
-  const [mobileCartOpen, setMobileCartOpen] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen]   = useState(false);
+  // BRIEF §8: real inventory state
+  const [inventory, setInventory]                 = useState({});
+  // §5: Audio Visuals featured video state (inside Singles sub-tab)
+  const [avFeaturedVideo, setAvFeaturedVideo]     = useState(musicVideos[0].youtubeId);
+  const [isMobile, setIsMobile]                   = useState(false);
+  const [mobileCartOpen, setMobileCartOpen]       = useState(false);
+  const [mobileNavOpen, setMobileNavOpen]         = useState(false);
 
   // ── REFS ──────────────────────────────────────────────────────────────────
   const cursorRef          = useRef(null);
@@ -169,7 +208,11 @@ export default function Page() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  // FIX #2: audio progress listeners — mount once on stable ref
+  // BRIEF §8: Load inventory from localStorage (real purchase-based)
+  useEffect(() => {
+    setInventory(loadInventory());
+  }, []);
+
   useEffect(() => {
     const audio = nowPlayingAudioRef.current;
     if (!audio) return;
@@ -191,13 +234,11 @@ export default function Page() {
     };
   }, []);
 
-  // FIX #4: Printful fetch — normalize field names, loading flag, fallback-safe
   useEffect(() => {
     setPrintfulLoading(true);
     fetch("/api/printful/products")
       .then(r => r.json())
       .then(data => {
-        console.log("PRINTFUL DATA:", data);
         if (data.success && Array.isArray(data.products) && data.products.length > 0) {
           const normalized = data.products.map(p => ({
             slug:  p.slug  || String(p.id),
@@ -265,7 +306,7 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    const paths = { shop:"shop", blog:"community", vision:"community", circle:"community", innercircle:"community", videos:"videos", shows:"shows", live:"live", exclusive:"exclusive" };
+    const paths = { shop:"shop", blog:"community", vision:"community", circle:"community", innercircle:"community", shows:"shows", live:"live", vault:"exclusive" };
     Object.values(ambientRefs.current).forEach(a => { try { a.pause(); } catch {} });
     if (soundOn && paths[activeTab]) {
       const src = `/audio/ambient/${paths[activeTab]}.mp3`;
@@ -275,12 +316,20 @@ export default function Page() {
     return () => { Object.values(ambientRefs.current).forEach(a => { try { a.pause(); } catch {} }); };
   }, [activeTab, soundOn]);
 
+  // BRIEF §1: updated group map — vault replaces exclusive, no standalone videos group
   useEffect(() => {
-    const map = { home:"g-home",singles:"g-music",albums:"g-music",mymusic:"g-music",shop:"g-shop",videos:"g-videos",blog:"g-community",vision:"g-community",circle:"g-community",innercircle:"g-community",exclusive:"g-exclusives",shows:"g-shows",live:"g-live" };
+    const map = {
+      home:"g-home",
+      singles:"g-music",albums:"g-music",mymusic:"g-music",
+      shop:"g-shop",
+      blog:"g-community",vision:"g-community",circle:"g-community",innercircle:"g-community",
+      vault:"g-vault",
+      shows:"g-shows",
+      live:"g-live",
+    };
     if (map[activeTab]) setExpandedGroup(map[activeTab]);
   }, [activeTab]);
 
-  // FIX #2/#3: nowPlaying effect owns full play flow — no race condition
   useEffect(() => {
     if (!nowPlaying || !nowPlayingAudioRef.current) return;
     const audio = nowPlayingAudioRef.current;
@@ -293,40 +342,22 @@ export default function Page() {
       .catch(() => setNowPlayingPlaying(false));
   }, [nowPlaying]);
 
+  // Videos tab removed — Audio Visuals now lives in Singles sub-tab (§4)
+  // Keep YT player logic for the live tab embed only
   useEffect(() => {
-    if (activeTab === "videos") setActiveVideo("tv_aS-hJ880");
-  }, [activeTab]);
-
-  useEffect(() => {
-    if (activeTab !== "videos") {
+    if (activeTab !== "live") {
       if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch {} ytPlayerRef.current = null; }
-      return;
     }
-    const initPlayer = () => {
-      if (!window.YT || !window.YT.Player || !ytIframeRef.current) return;
-      if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch {} }
-      ytPlayerRef.current = new window.YT.Player(ytIframeRef.current, {
-        events: {
-          onReady: e => { try { e.target.unMute(); e.target.setVolume(80); e.target.playVideo(); } catch {} },
-          onStateChange: e => { if (e.data === 0 && activeVideo !== "kPITYHMVeXM") setActiveVideo("kPITYHMVeXM"); },
-        },
-      });
-    };
-    if (!window.YT || !window.YT.Player) {
-      if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
-        const tag = document.createElement("script"); tag.src = "https://www.youtube.com/iframe_api"; document.body.appendChild(tag);
-      }
-      window.onYouTubeIframeAPIReady = initPlayer;
-      const poll = setInterval(() => { if (window.YT && window.YT.Player) { clearInterval(poll); initPlayer(); } }, 200);
-      setTimeout(() => clearInterval(poll), 5000);
-    } else { initPlayer(); }
-    return () => { if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch {} ytPlayerRef.current = null; } };
-  }, [activeTab, activeVideo]);
+  }, [activeTab]);
 
   const goRadio = useCallback(i => setRadioIndex(i), []);
 
   // ── HELPERS ───────────────────────────────────────────────────────────────
-  const addToCart      = useCallback(item => { setCart(p => [...p, item]); setAddedFlash(item.slug); setTimeout(() => setAddedFlash(null), 400); }, []);
+  const addToCart      = useCallback(item => {
+    setCart(p => [...p, item]);
+    setAddedFlash(item.slug);
+    setTimeout(() => setAddedFlash(null), 400);
+  }, []);
   const clearCart      = () => setCart([]);
   const removeFromCart = idx => setCart(p => p.filter((_, i) => i !== idx));
   const total          = cart.reduce((s, item) => s + item.price, 0);
@@ -336,7 +367,6 @@ export default function Page() {
   const buttonHoverIn = useCallback(e => { e.currentTarget.style.boxShadow="0 0 14px rgba(0,255,255,0.8)"; e.currentTarget.style.borderColor="#00ffff"; }, []);
   const buttonHoverOut= useCallback(e => { e.currentTarget.style.boxShadow="none"; e.currentTarget.style.borderColor="#333"; }, []);
 
-  // FIX #1: stable callbacks for carousel — no recreation each render
   const goToSingle = useCallback((newIndex, direction) => {
     setAnimating(cur => {
       if (cur) return cur;
@@ -350,10 +380,8 @@ export default function Page() {
   const currentSingle = useMemo(() => singles[singleIndex], [singleIndex]);
   const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
 
-  // FIX #2/#3: openSingleModal — just sets state; useEffect owns src+play
   const openSingleModal = useCallback(single => { setSelectedSingle(single); setNowPlaying(single); }, []);
 
-  // FIX #2: seek handler for progress bar clicks
   const seekTo = useCallback(e => {
     if (!nowPlayingAudioRef.current || !audioDuration) return;
     const rect  = e.currentTarget.getBoundingClientRect();
@@ -385,9 +413,21 @@ export default function Page() {
       setClientSecret(data.clientSecret);
     } catch (err) { setCheckoutError(`Network error: ${err.message}`); setCheckingOut(false); }
   };
+
+  // BRIEF §8: on purchase success, decrement inventory for exclusive items
   const handleCheckoutSuccess = () => {
-    const np = [...myPurchases, ...cart.map(item => ({ ...item, purchasedAt: new Date().toISOString() }))];
-    setMyPurchases(np); localStorage.setItem("2mrrw_purchases", JSON.stringify(np));
+    const purchasedItems = cart.map(item => ({ ...item, purchasedAt: new Date().toISOString() }));
+    const np = [...myPurchases, ...purchasedItems];
+    setMyPurchases(np);
+    localStorage.setItem("2mrrw_purchases", JSON.stringify(np));
+    // Decrement inventory for any exclusive items purchased
+    let inv = { ...inventory };
+    cart.forEach(item => {
+      if (item.slug in REAL_INVENTORY) {
+        inv = decrementInventory(inv, item.slug);
+      }
+    });
+    setInventory(inv);
     setClientSecret(null); setCheckingOut(false); clearCart();
     if (isMobile) setMobileCartOpen(false);
   };
@@ -427,41 +467,48 @@ export default function Page() {
   const userStatus = getUserStatus();
 
   const switchTab = tabId => { setTabKey(p => p+1); setActiveTab(tabId); if (isMobile) setMobileNavOpen(false); };
+  const switchMusicSubTab = sub => { setMusicSubTab(sub); setTabKey(p => p+1); };
 
-  // FIX #4: resolved shop items
-  const shopItems     = printfulProducts.length > 0 ? printfulProducts : fallbackMerch;
-  const shopIsFallback= !printfulLoading && printfulProducts.length === 0;
+  const shopItems      = printfulProducts.length > 0 ? printfulProducts : fallbackMerch;
+  const shopIsFallback = !printfulLoading && printfulProducts.length === 0;
 
   const liveStreamDate = nextLiveDateTime.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
   const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
   const currentSlide   = radioSlides[radioIndex];
   const activeFlowMode = flowConversionActive ? "conversion" : nowPlaying ? "nowplaying" : "idle";
 
-  // blog posts inline (depend on nothing module-level)
+  // BRIEF §8: merge inventory into exclusive items — no fake numbers
+  const exclusiveItems = exclusiveItemsBase.map(item => ({
+    ...item,
+    // stock: use real inventory value; null = unlimited (show no count)
+    stock: inventory[item.slug] !== undefined ? inventory[item.slug] : REAL_INVENTORY[item.slug],
+  }));
+
   const blogPosts = [
     { id:"post-1", title:"The Making of Love Hz Vol.1",          date:"April 2, 2026",      author:"2MRRW", body:"Love Hz Vol.1 started as a series of late-night sessions in a home studio with nothing but a laptop, a MIDI keyboard, and a vision. Every track on that project represents a different frequency of love — the highs, the lows, the static in between. We wanted listeners to feel the entire spectrum.\n\nThe process took nearly 18 months. Some songs were written in 10 minutes, others were rebuilt from scratch a dozen times. What you hear is the version that survived. We hope it resonates with you the way it resonated with us when we finally pressed play for the first time." },
     { id:"post-2", title:"Why We Started 2MRRW",                 date:"March 15, 2026",     author:"2MRRW", body:"2MRRW was never supposed to be a brand. It started as a reminder — tomorrow is always possible. No matter what today looks like, tomorrow holds something different.\n\nWe put that energy into every record, every show, every piece of merch. It's not just a name on a hoodie. It's a mindset we live by and want to share with everyone who connects with the music." },
     { id:"post-3", title:"Tour Prep: What Goes Into a Live Show", date:"February 28, 2026", author:"2MRRW", body:"People see the 90-minute set. They don't see the weeks of rehearsal, the production calls, the logistics of moving equipment across state lines. A live 2MRRW show is designed from the ground up — the lighting, the setlist order, the energy arc from opener to closer.\n\nWe treat every city like it's the only city. Dallas gets the same energy as NYC. That's the standard we hold ourselves to and always will." },
   ];
+
+  // BRIEF §1: Desktop sidebar — "Vault" replaces "Exclusives", no standalone Videos tab
+  // BRIEF §2: Music Videos live in Music → Singles (Audio Visuals section)
   const sidebarNav = [
-    { groupId:"g-home",       label:"HOME",           directTab:"home",      subTabs:[] },
-    { groupId:"g-music",      label:"MUSIC",          directTab:"singles",   subTabs:[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mymusic",label:"My Music"}] },
-    { groupId:"g-shop",       label:"SHOP",           directTab:"shop",      subTabs:[{id:"shop",label:"Merch"}] },
-    { groupId:"g-videos",     label:"MUSIC VIDEOS",   directTab:"videos",    subTabs:[{id:"videos",label:"All Videos"}] },
-    { groupId:"g-community",  label:"COMMUNITY",      directTab:"blog",      subTabs:[{id:"blog",label:"Blog"},{id:"vision",label:"Vision"},{id:"circle",label:"Circle"},{id:"innercircle",label:"Inner Circle"}] },
-    { groupId:"g-exclusives", label:"EXCLUSIVES",     directTab:"exclusive", subTabs:[{id:"exclusive",label:"Exclusive Drops"}] },
-    { groupId:"g-shows",      label:"SHOWS & EVENTS", directTab:"shows",     subTabs:[{id:"shows",label:"Upcoming Shows"}] },
-    { groupId:"g-live",       label:"LIVE",           directTab:"live",      subTabs:[{id:"live",label:"2MRRW LIVE"}] },
+    { groupId:"g-home",      label:"HOME",           directTab:"home",    subTabs:[] },
+    { groupId:"g-music",     label:"MUSIC",          directTab:"singles", subTabs:[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mymusic",label:"My Music"}] },
+    { groupId:"g-shop",      label:"SHOP",           directTab:"shop",    subTabs:[{id:"shop",label:"Merch"}] },
+    { groupId:"g-community", label:"COMMUNITY",      directTab:"blog",    subTabs:[{id:"blog",label:"Blog"},{id:"vision",label:"Vision"},{id:"circle",label:"Circle"},{id:"innercircle",label:"Inner Circle"}] },
+    { groupId:"g-vault",     label:"VAULT",          directTab:"vault",   subTabs:[{id:"vault",label:"Exclusive Drops"}] },
+    { groupId:"g-shows",     label:"SHOWS & EVENTS", directTab:"shows",   subTabs:[{id:"shows",label:"Upcoming Shows"}] },
+    { groupId:"g-live",      label:"2MRRW LIVE",     directTab:"live",    subTabs:[{id:"live",label:"Stream"}] },
   ];
 
-  // ── INLINE COMPONENTS (need local closure state) ──────────────────────────
+  // ── INLINE COMPONENTS ─────────────────────────────────────────────────────
   const FlowState = () => (
     <div style={{flex:1,minWidth:0,position:"relative",borderRadius:22,overflow:"hidden",background:"linear-gradient(160deg,#060606 0%,#0a0808 100%)",border:`1px solid ${activeFlowMode==="conversion"?currentSlide.tagColor+"50":activeFlowMode==="nowplaying"?currentSlide.tagColor+"28":"#161616"}`,boxShadow:activeFlowMode==="conversion"?`0 0 40px ${currentSlide.tagColor}20`:activeFlowMode==="nowplaying"?`0 0 50px ${currentSlide.tagColor}12`:"none",transition:"border-color 0.7s,box-shadow 0.7s",minHeight:320}}>
       <div style={{position:"absolute",top:14,left:16,right:16,zIndex:20,display:"flex",alignItems:"center",justifyContent:"space-between",pointerEvents:"none"}}>
         <div style={{fontSize:7,fontWeight:900,letterSpacing:3.5,color:"#222",textTransform:"uppercase"}}>FLOW STATE</div>
         <div style={{fontSize:7,fontWeight:900,letterSpacing:2.5,textTransform:"uppercase",color:activeFlowMode!=="idle"?currentSlide.tagColor:"#1e1e1e",transition:"color 0.5s"}}>{activeFlowMode==="nowplaying"?"NOW PLAYING":activeFlowMode==="conversion"?"ACQUIRE":"STANDBY"}</div>
       </div>
-      {/* IDLE */}
       <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="idle"?1:0,pointerEvents:activeFlowMode==="idle"?"auto":"none",transition:"opacity 0.6s",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,gap:18,textAlign:"center"}}>
         <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 40% 55%,rgba(0,255,255,0.03) 0%,transparent 65%)",pointerEvents:"none"}}/>
         <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:20}}>
@@ -470,7 +517,6 @@ export default function Page() {
           <div style={{fontSize:8,color:"#1c1c1c",letterSpacing:5,textTransform:"uppercase",fontWeight:700}}>ARTIST PRESENCE</div>
         </div>
       </div>
-      {/* NOW PLAYING */}
       <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="nowplaying"?1:0,pointerEvents:activeFlowMode==="nowplaying"?"auto":"none",transition:"opacity 0.6s"}}>
         <div style={{position:"absolute",inset:0,overflow:"hidden"}}><img src={currentSlide.cover} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"blur(32px) brightness(0.18) saturate(1.6)",transform:"scale(1.15)",transition:"all 0.9s"}}/></div>
         <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 50% 40%,${currentSlide.tagColor}20 0%,transparent 65%)`,transition:"background 0.9s",pointerEvents:"none"}}/>
@@ -482,7 +528,6 @@ export default function Page() {
           <div style={{marginTop:4,padding:"4px 14px",background:currentSlide.tagColor+"18",border:`1px solid ${currentSlide.tagColor}30`,borderRadius:20,fontSize:10,fontWeight:700,color:currentSlide.tagColor,letterSpacing:1.5}}>{currentSlide.tag}</div>
         </div>
       </div>
-      {/* CONVERSION */}
       <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="conversion"?1:0,pointerEvents:activeFlowMode==="conversion"?"auto":"none",transition:"opacity 0.45s"}}>
         <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 50% 45%,${currentSlide.tagColor}16 0%,transparent 60%)`,pointerEvents:"none"}}/>
         <div style={{position:"absolute",inset:0,zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px",gap:12,textAlign:"center"}}>
@@ -555,7 +600,140 @@ export default function Page() {
     );
   };
 
-  // ═════════════════════════════════════════════════════════════════════════
+  // ── BRIEF §4/#5: Audio Visuals section component ──────────────────────────
+  // Desktop: cinematic presentation preserved
+  // Mobile: ONE primary featured video + smaller queue beneath
+  const AudioVisualsSection = () => {
+    const featuredVid = musicVideos.find(v => v.youtubeId === avFeaturedVideo) || musicVideos[0];
+    return (
+      <div>
+        <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:isMobile?12:20,marginTop:isMobile?24:32}}>
+          <h2 className="section-heading" style={{margin:0,fontSize:isMobile?17:22}}>Audio Visuals</h2>
+          <span style={{fontSize:10,color:"#333",letterSpacing:3,textTransform:"uppercase",fontWeight:700}}>Official Visuals</span>
+        </div>
+
+        {isMobile ? (
+          // Mobile: featured embed + queue strip (BRIEF §5)
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+            {/* Primary featured video */}
+            <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:16,overflow:"hidden"}}>
+              <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
+                <iframe
+                  key={avFeaturedVideo}
+                  src={`https://www.youtube.com/embed/${avFeaturedVideo}?rel=0&playsinline=1`}
+                  title={featuredVid.title}
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                  style={{position:"absolute",top:0,left:0,width:"100%",height:"100%"}}
+                />
+              </div>
+              <div style={{padding:"12px 14px"}}>
+                <div style={{fontSize:14,fontWeight:800,letterSpacing:1}}>{featuredVid.title}</div>
+                <div style={{fontSize:11,color:"#555",marginTop:3}}>{featuredVid.description}</div>
+              </div>
+            </div>
+
+            {/* Queue strip — thumbnail cards, tap to switch */}
+            <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:6,scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch"}}>
+              {musicVideos.map(vid => (
+                <div
+                  key={vid.id}
+                  onClick={() => setAvFeaturedVideo(vid.youtubeId)}
+                  style={{
+                    flex:"0 0 auto",
+                    width:140,
+                    scrollSnapAlign:"start",
+                    background:"#0e0e0e",
+                    border:`1px solid ${avFeaturedVideo===vid.youtubeId?"#00ffff55":"#1e1e1e"}`,
+                    borderRadius:12,
+                    overflow:"hidden",
+                    cursor:"pointer",
+                    transition:"border-color 0.2s",
+                    boxShadow:avFeaturedVideo===vid.youtubeId?"0 0 12px rgba(0,255,255,0.18)":"none",
+                  }}
+                >
+                  <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
+                    <img src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`} alt={vid.title} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"cover"}}/>
+                    {avFeaturedVideo===vid.youtubeId && (
+                      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.45)"}}>
+                        <div style={{width:28,height:28,borderRadius:"50%",background:"#00ffff",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          <svg viewBox="0 0 24 24" fill="#000" width="12" height="12"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{padding:"8px 10px"}}>
+                    <div style={{fontSize:11,fontWeight:700,lineHeight:1.3,color:avFeaturedVideo===vid.youtubeId?"#00ffff":"white"}}>{vid.title}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          // Desktop: cinematic full embeds (preserved)
+          <div style={{display:"flex",flexDirection:"column",gap:28}}>
+            {musicVideos.map(vid => (
+              <div key={vid.id} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden"}}>
+                <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
+                  <iframe
+                    src={`https://www.youtube.com/embed/${vid.youtubeId}`}
+                    title={vid.title}
+                    frameBorder="0"
+                    allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture"
+                    allowFullScreen
+                    style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",borderRadius:"20px 20px 0 0"}}
+                  />
+                </div>
+                <div style={{padding:"16px 20px"}}>
+                  <div style={{fontSize:17,fontWeight:800,letterSpacing:1,marginBottom:4}}>{vid.title}</div>
+                  <div style={{fontSize:12,color:"#555"}}>{vid.description}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── BRIEF §8: stock display helper (never fake)
+  const stockLabel = (item) => {
+    if (item.stock === null || item.stock === undefined) return null; // unlimited — show nothing
+    if (item.stock <= 0) return "SOLD OUT";
+    return `${item.stock} remaining`;
+  };
+
+  // ── MOBILE MUSIC SUB-TAB PILL RENDERER ────────────────────────────────────
+  const MusicSubTabs = () => (
+    <div style={{display:"flex",gap:8,marginBottom:20,overflowX:"auto",paddingBottom:2}}>
+      {["singles","albums","mymusic"].map(sub => (
+        <button
+          key={sub}
+          onClick={() => switchMusicSubTab(sub)}
+          style={{
+            flexShrink:0,
+            padding:"7px 16px",
+            background:musicSubTab===sub?"rgba(0,255,255,0.12)":"transparent",
+            border:`1px solid ${musicSubTab===sub?"#00ffff":"#2a2a2a"}`,
+            borderRadius:20,
+            color:musicSubTab===sub?"#00ffff":"#666",
+            fontSize:11,
+            fontWeight:700,
+            letterSpacing:1.5,
+            cursor:"pointer",
+            textTransform:"uppercase",
+            transition:"all 0.2s",
+            whiteSpace:"nowrap",
+          }}
+        >
+          {sub === "mymusic" ? "My Music" : sub.charAt(0).toUpperCase() + sub.slice(1)}
+        </button>
+      ))}
+    </div>
+  );
+
+  // ═══════════════════════════════════════════════════════════════════════════
   return (
     <>
       <div ref={cursorRef} style={{position:"fixed",width:28,height:28,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.22) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99999,mixBlendMode:"screen",transition:"left 0.045s linear,top 0.045s linear",display:isMobile?"none":undefined}}/>
@@ -576,18 +754,16 @@ export default function Page() {
         </div>
       )}
 
-      {/* ── SINGLE MODAL — FIX #2: custom progress player, not frozen <audio controls> ── */}
+      {/* ── SINGLE MODAL ── */}
       {selectedSingle && (
         <div onClick={()=>setSelectedSingle(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:isMobile?20:30,width:isMobile?"100%":340,maxWidth:isMobile?"calc(100vw - 32px)":"none",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
             <img src={selectedSingle.cover} style={{width:isMobile?160:200,height:isMobile?160:200,borderRadius:14,objectFit:"cover"}}/>
             <div style={{fontSize:18,fontWeight:700}}>{selectedSingle.title}</div>
             <div style={{fontSize:13,opacity:0.5}}>SINGLE PREVIEW · ${selectedSingle.price.toFixed(2)}</div>
-
-            {/* Custom audio player replacing frozen <audio controls> */}
             <div style={{width:"100%"}}>
               <div onClick={seekTo} style={{width:"100%",height:5,background:"#1e1e1e",borderRadius:3,cursor:"pointer",marginBottom:8,position:"relative"}}>
-                <div style={{width:audioDuration ? `${(audioCurrentTime/audioDuration)*100}%` : "0%",height:"100%",background:"#00ffff",borderRadius:3,transition:"width 0.1s linear",boxShadow:"0 0 6px rgba(0,255,255,0.5)"}}/>
+                <div style={{width:audioDuration?`${(audioCurrentTime/audioDuration)*100}%`:"0%",height:"100%",background:"#00ffff",borderRadius:3,transition:"width 0.1s linear",boxShadow:"0 0 6px rgba(0,255,255,0.5)"}}/>
               </div>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
                 <span style={{fontSize:11,color:"#555",fontVariantNumeric:"tabular-nums",minWidth:34}}>{formatTime(audioCurrentTime)}</span>
@@ -603,7 +779,6 @@ export default function Page() {
                 <span style={{fontSize:11,color:"#555",fontVariantNumeric:"tabular-nums",minWidth:34,textAlign:"right"}}>{formatTime(audioDuration)}</span>
               </div>
             </div>
-
             <button onClick={()=>{addToCart(selectedSingle);setSelectedSingle(null);}} style={{width:"100%",padding:"10px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontSize:13}}>Add to Cart – ${selectedSingle.price.toFixed(2)}</button>
             <button onClick={()=>{addVinylToCart(selectedSingle);setSelectedSingle(null);}} style={{width:"100%",padding:"10px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – $47.99 (Optional)</button>
             <button onClick={()=>setSelectedSingle(null)} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,marginTop:4}}>Close</button>
@@ -644,7 +819,7 @@ export default function Page() {
         </div>
       )}
 
-      {/* ── EXCLUSIVE MODAL ── */}
+      {/* ── EXCLUSIVE / VAULT MODAL (BRIEF §8: real stock display) ── */}
       {exclusiveModal && (
         <div onClick={()=>setExclusiveModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:20}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#0d0d0d",border:`1px solid ${exclusiveModal.badgeColor}33`,borderRadius:24,padding:isMobile?20:32,width:isMobile?"100%":380,maxWidth:isMobile?"calc(100vw - 32px)":"none",maxHeight:"88vh",overflowY:"auto",display:"flex",flexDirection:"column",gap:16,boxShadow:`0 0 60px ${exclusiveModal.badgeColor}22`}}>
@@ -657,8 +832,26 @@ export default function Page() {
               {exclusiveModal.features.map((f,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",fontSize:13,color:"#ccc",borderBottom:"1px solid #111"}}><span style={{color:exclusiveModal.badgeColor,fontSize:16,lineHeight:1}}>✓</span> {f}</div>)}
             </div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4}}>
-              <div><div style={{fontSize:26,fontWeight:900,color:exclusiveModal.badgeColor}}>${exclusiveModal.price.toFixed(2)}</div><div style={{fontSize:11,color:"#555",marginTop:2}}>{exclusiveModal.stock} remaining</div></div>
-              <button onClick={()=>{addToCart({title:exclusiveModal.title,slug:exclusiveModal.slug,cover:exclusiveModal.cover,price:exclusiveModal.price});setExclusiveModal(null);}} style={{padding:"12px 24px",background:exclusiveModal.badgeColor,color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1}}>Add to Cart</button>
+              <div>
+                <div style={{fontSize:26,fontWeight:900,color:exclusiveModal.badgeColor}}>${exclusiveModal.price.toFixed(2)}</div>
+                {/* BRIEF §8: only show stock if not unlimited, never fake */}
+                {exclusiveModal.stock !== null && exclusiveModal.stock !== undefined && (
+                  <div style={{fontSize:11,color:exclusiveModal.stock<=0?"#ff4d4d":"#555",marginTop:2}}>
+                    {exclusiveModal.stock<=0?"SOLD OUT":`${exclusiveModal.stock} remaining`}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={()=>{
+                  if (exclusiveModal.stock !== null && exclusiveModal.stock <= 0) return;
+                  addToCart({title:exclusiveModal.title,slug:exclusiveModal.slug,cover:exclusiveModal.cover,price:exclusiveModal.price});
+                  setExclusiveModal(null);
+                }}
+                disabled={exclusiveModal.stock !== null && exclusiveModal.stock <= 0}
+                style={{padding:"12px 24px",background:exclusiveModal.stock<=0?"#222":exclusiveModal.badgeColor,color:exclusiveModal.stock<=0?"#555":"#000",fontWeight:900,border:"none",borderRadius:10,cursor:exclusiveModal.stock<=0?"not-allowed":"pointer",fontSize:14,letterSpacing:1,transition:"opacity 0.2s"}}
+              >
+                {exclusiveModal.stock!==null&&exclusiveModal.stock<=0?"Sold Out":"Add to Cart"}
+              </button>
             </div>
             <button onClick={()=>setExclusiveModal(null)} style={{background:"none",border:"none",color:"#444",cursor:"pointer",fontSize:12,textAlign:"center"}}>Close</button>
           </div>
@@ -668,7 +861,7 @@ export default function Page() {
       {/* ══════════════════════ MAIN LAYOUT ═══════════════════════════════════ */}
       <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
 
-        {/* ── SIDEBAR ── */}
+        {/* ── DESKTOP SIDEBAR (BRIEF §1) ── */}
         {!isMobile && (
           <div style={{width:220,flexShrink:0,borderRight:"1px solid #141414",background:"rgba(4,4,4,0.9)",backdropFilter:"blur(20px)",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto",boxShadow:"2px 0 32px rgba(0,0,0,0.5)"}}>
             <div style={{padding:"22px 18px 18px",borderBottom:"1px solid #111",flexShrink:0}}>
@@ -727,9 +920,10 @@ export default function Page() {
 
             <div key={tabKey} style={{animation:"fadeInTab 0.22s ease forwards"}}>
 
-              {/* ══ HOME ══ */}
+              {/* ══ HOME (BRIEF §2: order = Singles → Features → Radio → Albums → Audio Visuals → Shop → Exclusives → Shows → Live) ══ */}
               {activeTab==="home" && (
                 <>
+                  {/* Latest Singles */}
                   <div style={{marginTop:20,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Latest Singles</h2>
                     <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:18,alignItems:"flex-start"}}>
@@ -756,11 +950,13 @@ export default function Page() {
                     )}
                   </div>
 
+                  {/* Features */}
                   <div style={{marginTop:28,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
                     <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)}/>
                   </div>
 
+                  {/* Radio */}
                   <div style={{marginTop:28,marginBottom:28}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>2MRRW RADIO</h2>
                     {isMobile ? <RadioCarousel/> : (
@@ -772,11 +968,20 @@ export default function Page() {
                   </div>
 
                   <div style={{margin:"0 0 24px",height:1,background:"#1a1a1a"}}/>
+
+                  {/* Albums */}
                   <div id="home-albums">
                     <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
                     <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile}/>
                   </div>
+
+                  {/* BRIEF §2: Audio Visuals section — AFTER albums, BEFORE shop, renamed from "Music Videos" */}
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
+                  <AudioVisualsSection/>
+
+                  <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
+
+                  {/* Shop */}
                   <div id="home-shop">
                     <h2 className="section-heading" style={{marginBottom:16}}>Shop</h2>
                     {printfulLoading ? <div style={{padding:"32px 0",textAlign:"center",fontSize:13,color:"#333",letterSpacing:2}}>Loading products…</div> : (
@@ -786,33 +991,33 @@ export default function Page() {
                       </>
                     )}
                   </div>
+
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
-                  <div id="home-videos">
-                    <h2 className="section-heading" style={{marginBottom:8}}>Music Videos</h2>
-                    <p style={{fontSize:13,color:"#444",marginBottom:24,letterSpacing:1}}>Official visuals from 2MRRW</p>
-                    <div style={{display:"flex",flexDirection:"column",gap:32}}>
-                      {musicVideos.map(vid=>(
-                        <div key={vid.id} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden"}}>
-                          <div style={{position:"relative",paddingBottom:"56.25%",height:0}}><iframe src={`https://www.youtube.com/embed/${vid.youtubeId}`} title={vid.title} frameBorder="0" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowFullScreen style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",borderRadius:"20px 20px 0 0"}}/></div>
-                          <div style={{padding:"16px 20px"}}><div style={{fontSize:17,fontWeight:800,letterSpacing:1,marginBottom:4}}>{vid.title}</div><div style={{fontSize:12,color:"#555"}}>{vid.description}</div></div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
-                  <div id="home-exclusives">
-                    <h2 className="section-heading" style={{marginBottom:8}}>Exclusives</h2>
+
+                  {/* Vault / Exclusives preview (renamed §7) */}
+                  <div id="home-vault">
+                    <h2 className="section-heading" style={{marginBottom:8}}>Vault</h2>
                     <p style={{fontSize:13,color:"#444",marginBottom:24,letterSpacing:1,lineHeight:1.8}}>Not merch. Ownership tokens. Physical and digital proof you were here first.</p>
                     <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(220px,1fr))",gap:isMobile?12:18}}>
                       {exclusiveItems.map(item=>(
                         <div key={item.id} style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:isMobile?14:18,overflow:"hidden",cursor:"pointer",transition:"all 0.3s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=item.badgeColor+"55";e.currentTarget.style.boxShadow=`0 0 24px ${item.badgeColor}14`;e.currentTarget.style.transform="translateY(-2px)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1e1e1e";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}} onClick={()=>setExclusiveModal(item)}>
                           <div style={{position:"relative"}}><img src={item.cover} style={{width:"100%",height:isMobile?120:160,objectFit:"cover",display:"block"}}/><div style={{position:"absolute",top:8,left:8,background:item.badgeColor,color:"#000",fontSize:8,fontWeight:900,letterSpacing:1.5,padding:"3px 7px",borderRadius:20}}>{item.badge}</div></div>
-                          <div style={{padding:isMobile?"10px 12px 14px":"14px 16px 18px"}}><div style={{fontSize:isMobile?11:13,fontWeight:800,marginBottom:4,lineHeight:1.3}}>{item.title}</div><div style={{fontSize:isMobile?15:18,fontWeight:900,color:item.badgeColor}}>${item.price.toFixed(2)}</div></div>
+                          <div style={{padding:isMobile?"10px 12px 14px":"14px 16px 18px"}}>
+                            <div style={{fontSize:isMobile?11:13,fontWeight:800,marginBottom:4,lineHeight:1.3}}>{item.title}</div>
+                            <div style={{fontSize:isMobile?15:18,fontWeight:900,color:item.badgeColor}}>${item.price.toFixed(2)}</div>
+                            {/* BRIEF §8: real stock, never fake */}
+                            {item.stock !== null && item.stock !== undefined && (
+                              <div style={{fontSize:10,color:item.stock<=0?"#ff4d4d":"#444",marginTop:4}}>{stockLabel(item)}</div>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
                   </div>
+
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
+
+                  {/* Shows */}
                   <div id="home-shows">
                     <h2 className="section-heading" style={{marginBottom:16}}>Shows & Events</h2>
                     <div style={{display:"flex",flexDirection:"column",gap:12}}>
@@ -824,7 +1029,10 @@ export default function Page() {
                       ))}
                     </div>
                   </div>
+
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
+
+                  {/* Live */}
                   <div id="home-live">
                     <h2 className="section-heading" style={{marginBottom:16}}>2MRRW LIVE</h2>
                     <div style={{background:"linear-gradient(135deg,#080808,#0d0d0d)",border:"1px solid rgba(0,255,255,0.1)",borderRadius:20,padding:isMobile?"20px 16px":"32px",textAlign:"center"}}>
@@ -839,22 +1047,124 @@ export default function Page() {
                 </>
               )}
 
-              {/* ══ SINGLES — FIX #1: CarouselUI is external stable component ══ */}
-              {activeTab==="singles" && (
+              {/* ══ MUSIC TAB — BRIEF §3: Singles / Albums / My Music sub-tabs ══ */}
+              {(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic") && (
                 <>
-                  <h2 className="section-heading">Singles</h2>
-                  <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} singleIndex={singleIndex} singles={singles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} openSingleModal={openSingleModal} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut}/>
-                  <div style={{marginTop:36,marginBottom:4}}>
-                    <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)}/>
+                  {/* Music sub-tab pills */}
+                  <div style={{marginTop:8,marginBottom:0}}>
+                    <div style={{display:"flex",gap:0,borderBottom:"1px solid #1a1a1a",marginBottom:24}}>
+                      {[
+                        {id:"singles",label:"Singles"},
+                        {id:"albums", label:"Albums"},
+                        {id:"mymusic",label:"My Music"},
+                      ].map(sub=>(
+                        <button key={sub.id} onClick={()=>switchTab(sub.id)} style={{padding:isMobile?"11px 16px":"12px 22px",background:"none",border:"none",borderBottom:activeTab===sub.id?"2px solid #00ffff":"2px solid transparent",color:activeTab===sub.id?"#00ffff":"#555",fontSize:isMobile?12:13,fontWeight:700,letterSpacing:1.5,cursor:"pointer",transition:"all 0.18s",textTransform:"uppercase",marginBottom:-1}}>
+                          {sub.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
+
+                  {/* ── SINGLES sub-tab (BRIEF §4) ── */}
+                  {activeTab==="singles" && (
+                    <>
+                      {/* §4.1: Search bar */}
+                      <div style={{marginBottom:20}}>
+                        <div style={{position:"relative"}}>
+                          <input
+                            placeholder="Search singles…"
+                            style={{width:"100%",padding:"11px 14px 11px 38px",background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:10,color:"white",fontSize:13,outline:"none",boxSizing:"border-box",transition:"border-color 0.2s"}}
+                            onFocus={e=>e.currentTarget.style.borderColor="#00ffff33"}
+                            onBlur={e=>e.currentTarget.style.borderColor="#1e1e1e"}
+                          />
+                          <svg style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",opacity:0.3}} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                        </div>
+                      </div>
+
+                      {/* §4.2: Singles section */}
+                      <h2 className="section-heading" style={{marginBottom:14}}>Singles</h2>
+                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} singleIndex={singleIndex} singles={singles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} openSingleModal={openSingleModal} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut}/>
+
+                      {/* §4.3: Features section */}
+                      <div style={{marginTop:32,marginBottom:4}}>
+                        <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
+                        <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)}/>
+                      </div>
+
+                      {/* §4.4: Audio Visuals section — videos live here now */}
+                      <AudioVisualsSection/>
+                    </>
+                  )}
+
+                  {/* ── ALBUMS sub-tab ── */}
+                  {activeTab==="albums" && (
+                    <>
+                      <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
+                      <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile}/>
+                    </>
+                  )}
+
+                  {/* ── MY MUSIC sub-tab (BRIEF §6: cleaner, no Browse Singles/Albums buttons) ── */}
+                  {activeTab==="mymusic" && (
+                    <>
+                      <h2 className="section-heading">My Music</h2>
+                      {!currentUser ? (
+                        <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"48px 32px",textAlign:"center"}}>
+                          <div style={{fontSize:32,marginBottom:16}}>🔒</div>
+                          <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Sign in to access your library</div>
+                          <div style={{fontSize:13,color:"#555",marginBottom:24}}>Your purchased music, downloads, and exclusive content all live here.</div>
+                          <button onClick={()=>switchTab("account")} style={{padding:"12px 28px",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14}}>Go to Account</button>
+                        </div>
+                      ) : myPurchases.length===0 ? (
+                        <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"48px 32px",textAlign:"center"}}>
+                          <div style={{fontSize:32,marginBottom:16}}>🎵</div>
+                          <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Your library is empty</div>
+                          <div style={{fontSize:13,color:"#555",marginBottom:24,lineHeight:1.7}}>
+                            Purchase singles, albums, or exclusive drops to start your collection.
+                          </div>
+                          {/* BRIEF §6: no "Browse Singles" / "Browse Albums" labels — use contextual actions */}
+                          <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
+                            <button onClick={()=>switchTab("singles")} style={{padding:"10px 22px",background:"#111",color:"#00ffff",border:"1px solid #00ffff44",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Discover Singles</button>
+                            <button onClick={()=>switchTab("vault")} style={{padding:"10px 22px",background:"#111",color:"#a259ff",border:"1px solid #a259ff44",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Vault Drops</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{fontSize:13,color:"#555",marginBottom:24}}>{myPurchases.length} item{myPurchases.length!==1?"s":""} in your library · {currentUser.name}</div>
+                          {/* Owned content */}
+                          <div style={{fontSize:11,color:"#555",letterSpacing:2,marginBottom:12,textTransform:"uppercase"}}>Owned Content</div>
+                          <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:32}}>
+                            {myPurchases.filter(p=>!p.slug?.startsWith("exc-")).map((item,i)=>(
+                              <div key={i} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+                                {item.cover&&<img src={item.cover} style={{width:48,height:48,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}
+                                <div style={{flex:1,minWidth:120}}><div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{item.title}</div><div style={{fontSize:11,color:"#555"}}>Purchased {item.purchasedAt?new Date(item.purchasedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}</div></div>
+                                <button onClick={()=>alert("Download links are generated server-side with signed, expiring URLs.")} style={{padding:"8px 16px",background:"transparent",color:"#00ffff",border:"1px solid #00ffff33",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700}}>↓ Download</button>
+                              </div>
+                            ))}
+                          </div>
+                          {/* Collectibles owned */}
+                          {myPurchases.some(p=>p.slug?.startsWith("exc-")) && (
+                            <>
+                              <div style={{fontSize:11,color:"#555",letterSpacing:2,marginBottom:12,textTransform:"uppercase"}}>Collectibles</div>
+                              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                                {myPurchases.filter(p=>p.slug?.startsWith("exc-")).map((item,i)=>(
+                                  <div key={i} style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
+                                    {item.cover&&<img src={item.cover} style={{width:48,height:48,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}
+                                    <div style={{flex:1,minWidth:120}}><div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{item.title}</div><div style={{fontSize:11,color:"#555"}}>Purchased {item.purchasedAt?new Date(item.purchasedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}</div></div>
+                                    <div style={{fontSize:11,color:"#a259ff",fontWeight:700,letterSpacing:1}}>COLLECTIBLE</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
                 </>
               )}
 
-              {/* ══ ALBUMS ══ */}
-              {activeTab==="albums" && <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile}/>}
-
-              {/* ══ SHOP — FIX #4 ══ */}
+              {/* ══ SHOP ══ */}
               {activeTab==="shop" && (
                 <>
                   <h2 className="section-heading" style={{marginBottom:16}}>Merch</h2>
@@ -867,16 +1177,30 @@ export default function Page() {
                 </>
               )}
 
-              {/* ══ EXCLUSIVE ══ */}
-              {activeTab==="exclusive" && (
+              {/* ══ VAULT (BRIEF §7: renamed from "Exclusive", keeps all existing content) ══ */}
+              {activeTab==="vault" && (
                 <>
                   <h2 className="section-heading">Exclusive Drops</h2>
                   <p style={{fontSize:13,color:"#444",marginBottom:8,letterSpacing:1,lineHeight:1.8}}>This is not merch. These are ownership tokens. Physical and digital proof that you were here first.</p>
                   <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(260px,1fr))",gap:isMobile?12:20,marginTop:28}}>
                     {exclusiveItems.map(item=>(
                       <div key={item.id} style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:isMobile?14:20,overflow:"hidden",cursor:"pointer",transition:"all 0.3s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=item.badgeColor+"55";e.currentTarget.style.boxShadow=`0 0 28px ${item.badgeColor}18`;e.currentTarget.style.transform="translateY(-3px)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1e1e1e";e.currentTarget.style.boxShadow="none";e.currentTarget.style.transform="none";}} onClick={()=>setExclusiveModal(item)}>
-                        <div style={{position:"relative"}}><img src={item.cover} style={{width:"100%",height:isMobile?120:200,objectFit:"cover",display:"block"}}/><div style={{position:"absolute",top:10,left:10,background:item.badgeColor,color:"#000",fontSize:8,fontWeight:900,letterSpacing:1.5,padding:"3px 8px",borderRadius:20}}>{item.badge}</div>{!isMobile&&<div style={{position:"absolute",top:12,right:12,background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:10,backdropFilter:"blur(4px)"}}>{item.stock} left</div>}</div>
-                        <div style={{padding:isMobile?"10px 12px 14px":"16px 18px 20px"}}><div style={{fontSize:isMobile?12:15,fontWeight:800,marginBottom:4,lineHeight:1.3}}>{item.title}</div>{!isMobile&&<div style={{fontSize:11,color:"#555",letterSpacing:1,marginBottom:12}}>{item.subtitle}</div>}<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:isMobile?6:0}}><div style={{fontSize:isMobile?16:20,fontWeight:900,color:item.badgeColor}}>${item.price.toFixed(2)}</div>{!isMobile&&<button onClick={e=>{e.stopPropagation();setExclusiveModal(item);}} style={{padding:"8px 16px",background:"transparent",color:item.badgeColor,border:`1px solid ${item.badgeColor}66`,borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>e.currentTarget.style.background=item.badgeColor+"22"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>View Drop</button>}</div></div>
+                        <div style={{position:"relative"}}>
+                          <img src={item.cover} style={{width:"100%",height:isMobile?120:200,objectFit:"cover",display:"block"}}/>
+                          <div style={{position:"absolute",top:10,left:10,background:item.badgeColor,color:"#000",fontSize:8,fontWeight:900,letterSpacing:1.5,padding:"3px 8px",borderRadius:20}}>{item.badge}</div>
+                          {/* BRIEF §8: real stock display on card, never fake */}
+                          {!isMobile && item.stock !== null && item.stock !== undefined && (
+                            <div style={{position:"absolute",top:12,right:12,background:"rgba(0,0,0,0.75)",color:item.stock<=0?"#ff4d4d":"#fff",fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:10,backdropFilter:"blur(4px)"}}>{item.stock<=0?"SOLD OUT":`${item.stock} left`}</div>
+                          )}
+                        </div>
+                        <div style={{padding:isMobile?"10px 12px 14px":"16px 18px 20px"}}>
+                          <div style={{fontSize:isMobile?12:15,fontWeight:800,marginBottom:4,lineHeight:1.3}}>{item.title}</div>
+                          {!isMobile&&<div style={{fontSize:11,color:"#555",letterSpacing:1,marginBottom:12}}>{item.subtitle}</div>}
+                          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:isMobile?6:0}}>
+                            <div style={{fontSize:isMobile?16:20,fontWeight:900,color:item.badgeColor}}>${item.price.toFixed(2)}</div>
+                            {!isMobile&&<button onClick={e=>{e.stopPropagation();setExclusiveModal(item);}} style={{padding:"8px 16px",background:"transparent",color:item.badgeColor,border:`1px solid ${item.badgeColor}66`,borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>e.currentTarget.style.background=item.badgeColor+"22"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>View Drop</button>}
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -884,31 +1208,10 @@ export default function Page() {
                     <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:14,textTransform:"uppercase"}}>About Collector Art Cards</div>
                     <div style={{fontSize:isMobile?18:22,fontWeight:900,letterSpacing:1,marginBottom:16,lineHeight:1.3}}>Not merch. Ownership.</div>
                     <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(200px,1fr))",gap:isMobile?12:20}}>
-                      {[{icon:"🃏",title:"Physical Card",desc:"350–600gsm thick stock. Matte soft-touch finish."},{icon:"✍️",title:"Hand-Signed",desc:"Personal message from 2MRRW. Individually signed and numbered."},{icon:"📱",title:"QR + NFC",desc:"Scan to access your music. Select cards include NFC chip."},{icon:"🔒",title:"Scarcity Built In",desc:"First Edition, numbered drops. Once gone, gone."}].map(f=>(
+                      {[{icon:"🃏",title:"Physical Card",desc:"350–600gsm thick stock. Matte soft-touch finish."},{icon:"✍️",title:"Hand-Signed",desc:"Personal message from 2MRRW. Individually signed and numbered."},{icon:"📱",title:"QR + NFC",desc:"Scan to access your music. Select cards include NFC chip."},{icon:"🔒",title:"Scarcity Built In",desc:"Real, numbered drops. Once gone, gone."}].map(f=>(
                         <div key={f.title} style={{padding:isMobile?"14px":"18px 20px",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a"}}><div style={{fontSize:22,marginBottom:6}}>{f.icon}</div><div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{f.title}</div><div style={{fontSize:isMobile?11:12,color:"#555",lineHeight:1.6}}>{f.desc}</div></div>
                       ))}
                     </div>
-                  </div>
-                </>
-              )}
-
-              {/* ══ VIDEOS ══ */}
-              {activeTab==="videos" && (
-                <>
-                  <h2 className="section-heading">Music Videos</h2>
-                  <p style={{fontSize:13,color:"#444",marginBottom:20,letterSpacing:1}}>Featured release + latest visuals</p>
-                  <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden",marginBottom:28}}>
-                    <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
-                      <iframe ref={ytIframeRef} key={activeVideo} src={`https://www.youtube.com/embed/${activeVideo}?autoplay=1&enablejsapi=1&rel=0&playsinline=1`} title="Featured Video" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen style={{position:"absolute",top:0,left:0,width:"100%",height:"100%"}}/>
-                    </div>
-                  </div>
-                  <div className={isMobile?"videos-row":""} style={isMobile?{display:"flex",flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollSnapType:"x mandatory",overscrollBehaviorX:"contain",gap:12,paddingBottom:10}:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:16}}>
-                    {musicVideos.map(vid=>(
-                      <div key={vid.id} onClick={()=>setActiveVideo(vid.youtubeId)} style={{...(isMobile?{flex:"0 0 220px",width:220,scrollSnapAlign:"start"}:{}),background:"#0e0e0e",border:`1px solid ${activeVideo===vid.youtubeId?"#00ffff44":"#1e1e1e"}`,borderRadius:14,overflow:"hidden",cursor:"pointer",transition:"0.2s"}}>
-                        <div style={{position:"relative",paddingBottom:"56.25%",height:0}}><img src={`https://img.youtube.com/vi/${vid.youtubeId}/hqdefault.jpg`} alt={vid.title} style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"cover"}}/></div>
-                        <div style={{padding:"10px 12px"}}><div style={{fontSize:13,fontWeight:700}}>{vid.title}</div><div style={{fontSize:11,color:"#666"}}>{vid.description}</div></div>
-                      </div>
-                    ))}
                   </div>
                 </>
               )}
@@ -963,7 +1266,7 @@ export default function Page() {
                       <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
                         <div style={{width:70,height:70,borderRadius:"50%",border:"1px solid #222",display:"flex",alignItems:"center",justifyContent:"center"}}><svg viewBox="0 0 24 24" fill="#333" width="32" height="32"><circle cx="12" cy="12" r="4"/><path d="M20.188 10.934a8.999 8.999 0 0 0-16.376 0M23.472 9.16a13.5 13.5 0 0 0-22.944 0M16.905 12.7a4.5 4.5 0 0 0-9.81 0M12 17v-1m0 5v-2" stroke="#333" strokeWidth="1.5" fill="none"/></svg></div>
                         <div style={{fontSize:14,color:"#333",fontWeight:700,letterSpacing:2}}>{liveIsLive?"STREAM STARTING…":"OFFLINE"}</div>
-                        <div style={{fontSize:12,color:"#2a2a2a"}}>Live stream announced via Circle + socials</div>
+                        <div style={{fontSize:12,color:"#2a2a2a"}}>Live streams announced via Circle + socials</div>
                       </div>
                     </div>
                     <div style={{padding:"16px 20px",borderTop:"1px solid #111"}}><div style={{fontSize:13,color:"#444"}}>Live streams broadcast here and on Twitch. Follow to get notified.</div></div>
@@ -1080,7 +1383,7 @@ export default function Page() {
                       <div style={{fontSize:14,color:"#555",maxWidth:400,lineHeight:1.9,marginBottom:36}}>This section is reserved for verified Inner Circle members — those who own a piece of the music and are active in the conversation.</div>
                       <div style={{width:"100%",maxWidth:460,display:"flex",flexDirection:"column",gap:12,marginBottom:32}}>
                         <div style={{fontSize:11,color:"#a259ff",letterSpacing:3,marginBottom:4,fontWeight:700}}>HOW TO UNLOCK</div>
-                        {[{label:"Own a Collector Card or Bundle",done:myPurchases.some(p=>p.slug?.startsWith("exc-card")||p.slug?.startsWith("exc-bundle")),link:"exclusive",linkLabel:"Shop Exclusives →"},{label:"Submit to The Circle",done:circleSubmissions.filter(s=>s.by===currentUser?.name).length>=1,link:"circle",linkLabel:"Go to Circle →"}].map((step,i)=>(
+                        {[{label:"Own a Collector Card or Bundle",done:myPurchases.some(p=>p.slug?.startsWith("exc-card")||p.slug?.startsWith("exc-bundle")),link:"vault",linkLabel:"Shop Vault →"},{label:"Submit to The Circle",done:circleSubmissions.filter(s=>s.by===currentUser?.name).length>=1,link:"circle",linkLabel:"Go to Circle →"}].map((step,i)=>(
                           <div key={i} style={{padding:"16px 20px",background:step.done?"rgba(162,89,255,0.06)":"#0d0d0d",border:`1px solid ${step.done?"rgba(162,89,255,0.3)":"#1e1e1e"}`,borderRadius:14,display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
                             <div style={{width:28,height:28,borderRadius:"50%",background:step.done?"rgba(162,89,255,0.2)":"#111",border:`1px solid ${step.done?"#a259ff":"#222"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:step.done?"#a259ff":"#333",flexShrink:0}}>{step.done?"✓":i+1}</div>
                             <div style={{flex:1,fontSize:13,color:step.done?"#a259ff":"#666",fontWeight:step.done?700:400}}>{step.label}</div>
@@ -1128,16 +1431,6 @@ export default function Page() {
                 </>
               )}
 
-              {/* ══ MY MUSIC ══ */}
-              {activeTab==="mymusic" && (
-                <>
-                  <h2 className="section-heading">My Music</h2>
-                  {!currentUser ? <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"48px 32px",textAlign:"center"}}><div style={{fontSize:32,marginBottom:16}}>🔒</div><div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Sign in to access your library</div><div style={{fontSize:13,color:"#555",marginBottom:24}}>Your purchased music, downloads, and exclusive content all live here.</div><button onClick={()=>switchTab("account")} style={{padding:"12px 28px",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14}}>Go to Account</button></div>
-                  : myPurchases.length===0 ? <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"48px 32px",textAlign:"center"}}><div style={{fontSize:32,marginBottom:16}}>🎵</div><div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Your library is empty</div><div style={{fontSize:13,color:"#555",marginBottom:24}}>Purchase singles, albums, or exclusive bundles.</div><div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}><button onClick={()=>switchTab("singles")} style={{padding:"10px 22px",background:"#111",color:"#00ffff",border:"1px solid #00ffff44",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Browse Singles</button><button onClick={()=>switchTab("albums")} style={{padding:"10px 22px",background:"#111",color:"#aaa",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Browse Albums</button><button onClick={()=>switchTab("exclusive")} style={{padding:"10px 22px",background:"#111",color:"#a259ff",border:"1px solid #a259ff44",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:700}}>Exclusive Drops</button></div></div>
-                  : <><div style={{fontSize:13,color:"#555",marginBottom:24}}>{myPurchases.length} item{myPurchases.length!==1?"s":""} in your library · Signed in as {currentUser.name}</div><div style={{display:"flex",flexDirection:"column",gap:12}}>{myPurchases.map((item,i)=><div key={i} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:14,padding:"16px 20px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>{item.cover&&<img src={item.cover} style={{width:52,height:52,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}<div style={{flex:1,minWidth:140}}><div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{item.title}</div><div style={{fontSize:11,color:"#555"}}>Purchased {item.purchasedAt?new Date(item.purchasedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}</div></div><button onClick={()=>alert("Download links are generated server-side with signed, expiring URLs.")} style={{padding:"8px 16px",background:"transparent",color:"#00ffff",border:"1px solid #00ffff33",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700}}>↓ Download</button></div>)}</div></>}
-                </>
-              )}
-
               {/* ══ ACCOUNT ══ */}
               {activeTab==="account" && (
                 <>
@@ -1148,7 +1441,7 @@ export default function Page() {
                         <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{currentUser.name[0].toUpperCase()}</div><div><div style={{fontSize:18,fontWeight:800}}>{currentUser.name}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{currentUser.email}</div></div>{userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`}}>{userStatus.label}</div>}</div>
                         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===currentUser.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Music Library",tab:"mymusic",color:"#00ffff"},{label:"Exclusive Drops",tab:"exclusive",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Music Library",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
                       <button onClick={()=>{localStorage.removeItem("2mrrw_user");setCurrentUser(null);setGateSubmitted(false);}} style={{padding:"12px 0",background:"transparent",color:"#444",border:"1px solid #1e1e1e",borderRadius:10,cursor:"pointer",fontSize:13,width:"100%",transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#333";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";e.currentTarget.style.borderColor="#1e1e1e";}}>Sign Out</button>
                     </div>
                   ) : (
@@ -1169,10 +1462,9 @@ export default function Page() {
             </div>{/* end tabKey */}
           </div>{/* end scroll area */}
 
-          {/* ── FIX #2/#3: NOW PLAYING BAR with real progress ── */}
+          {/* ── NOW PLAYING BAR ── */}
           {nowPlaying && (
             <div style={{flexShrink:0,borderTop:"1px solid #141414",background:"rgba(4,4,4,0.97)",backdropFilter:"blur(20px)",zIndex:isMobile?6500:1,marginBottom:isMobile?60:0}}>
-              {/* seekable progress stripe */}
               <div onClick={seekTo} style={{width:"100%",height:3,background:"#111",cursor:"pointer",position:"relative"}}>
                 <div style={{width:audioDuration?`${(audioCurrentTime/audioDuration)*100}%`:"0%",height:"100%",background:"#00ffff",transition:"width 0.1s linear",boxShadow:"0 0 4px rgba(0,255,255,0.5)"}}/>
               </div>
@@ -1197,7 +1489,7 @@ export default function Page() {
           )}
         </div>
 
-        {/* ── CART SIDEBAR (desktop) ── */}
+        {/* ── DESKTOP CART SIDEBAR ── */}
         {!isMobile && (
           <div style={{width:240,flexShrink:0,borderLeft:"1px solid #222",padding:25,overflowY:"auto",background:"rgba(4,4,4,0.8)",backdropFilter:"blur(12px)"}}>
             <h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Cart</h3>
@@ -1212,22 +1504,30 @@ export default function Page() {
             <div style={{marginTop:20,fontSize:13,fontWeight:700}}>Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span></div>
             <button onClick={clearCart} style={{marginTop:15,width:"100%",padding:12,background:"rgba(255,30,30,0.15)",color:"#ff4d4d",fontWeight:"bold",border:"1px solid #ff4d4d33",borderRadius:8,cursor:"pointer",fontSize:12,transition:"0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,30,30,0.25)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,30,30,0.15)"}>CLEAR CART</button>
             <button onClick={handleCheckout} disabled={checkingOut||cart.length===0} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{marginTop:10,width:"100%",padding:12,background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",transition:"0.25s",fontSize:13,fontWeight:700}}>{checkingOut?"Redirecting…":"Checkout"}</button>
-            {checkoutError && <div style={{marginTop:8}}><p style={{color:"#ff4d4d",fontSize:12}}>{checkoutError}</p><p style={{color:"#555",fontSize:11,marginTop:4}}>If you see "no valid payment method", add <code style={{color:"#00ffff"}}>payment_method_types: ["card"]</code> to your intent.</p></div>}
+            {checkoutError && <div style={{marginTop:8}}><p style={{color:"#ff4d4d",fontSize:12}}>{checkoutError}</p></div>}
             {currentUser && <div><p style={{fontSize:11,color:"#555",marginTop:12,textAlign:"center"}}>Signed in as {currentUser.name}</p>{userStatus&&<div style={{marginTop:6,textAlign:"center",fontSize:10,fontWeight:900,letterSpacing:1,color:userStatus.color}}>{userStatus.label}</div>}</div>}
           </div>
         )}
       </div>
 
-      {/* ── MOBILE UI ── */}
+      {/* ── MOBILE UI (BRIEF §10: Home / Music / Shop / Vault / Shows + More) ── */}
       {isMobile && (
         <>
           <button onClick={()=>setMobileCartOpen(true)} style={{position:"fixed",bottom:76,right:16,zIndex:6800,width:50,height:50,borderRadius:"50%",background:"#00ffff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(0,255,255,0.45)",flexShrink:0}}>
             <svg viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" width="20" height="20"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
             {cart.length>0 && <div style={{position:"absolute",top:-4,right:-4,width:20,height:20,borderRadius:"50%",background:"#ff4d4d",color:"white",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{cart.length}</div>}
           </button>
+
+          {/* BRIEF §10: Primary tabs = Home / Music / Shop / Vault / Shows. Videos REMOVED. */}
           <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:6700,background:"rgba(4,4,4,0.97)",backdropFilter:"blur(20px)",borderTop:"1px solid #1a1a1a",display:"flex",alignItems:"center",justifyContent:"space-around",padding:"6px 0 14px",height:62}}>
-            {[{id:"home",label:"Home",icon:"⌂"},{id:"singles",label:"Music",icon:"♫"},{id:"shop",label:"Shop",icon:"◎"},{id:"videos",label:"Videos",icon:"▶"},{id:"shows",label:"Shows",icon:"✦"}].map(tab=>(
-              <button key={tab.id} onClick={()=>switchTab(tab.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:activeTab===tab.id?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",borderRadius:8,transition:"color 0.2s",textShadow:activeTab===tab.id?"0 0 10px rgba(0,255,255,0.6)":"none",minWidth:44,minHeight:44,justifyContent:"center"}}>
+            {[
+              {id:"home",    label:"Home",  icon:"⌂"},
+              {id:"singles", label:"Music", icon:"♫"},
+              {id:"shop",    label:"Shop",  icon:"◎"},
+              {id:"vault",   label:"Vault", icon:"◈"},
+              {id:"shows",   label:"Shows", icon:"✦"},
+            ].map(tab=>(
+              <button key={tab.id} onClick={()=>switchTab(tab.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:(activeTab===tab.id||( tab.id==="singles"&&(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic")))?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",borderRadius:8,transition:"color 0.2s",textShadow:(activeTab===tab.id||(tab.id==="singles"&&(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic")))?"0 0 10px rgba(0,255,255,0.6)":"none",minWidth:44,minHeight:44,justifyContent:"center"}}>
                 <span style={{fontSize:17,lineHeight:1}}>{tab.icon}</span><span>{tab.label}</span>
               </button>
             ))}
@@ -1235,6 +1535,7 @@ export default function Page() {
               <span style={{fontSize:17,lineHeight:1}}>≡</span><span>More</span>
             </button>
           </div>
+
           {mobileNavOpen && (
             <div onClick={()=>setMobileNavOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
               <div onClick={e=>e.stopPropagation()} style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:32,border:"1px solid #1e1e1e",maxHeight:"80vh",overflowY:"auto"}}>
@@ -1253,6 +1554,7 @@ export default function Page() {
               </div>
             </div>
           )}
+
           {mobileCartOpen && (
             <div onClick={()=>setMobileCartOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
               <div onClick={e=>e.stopPropagation()} style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",padding:"0 0 32px",border:"1px solid #1e1e1e",maxHeight:"82vh",overflowY:"auto"}}>
@@ -1310,8 +1612,7 @@ export default function Page() {
   );
 }
 
-// ── CAROUSEL UI — FIX #1: outside Page → never remounts on countdown ticks ───
-// previewHover lives here as local state so Page never re-renders on hover
+// ── CAROUSEL UI ───────────────────────────────────────────────────────────────
 function CarouselUI({ large, isMobile, currentSingle, singleIndex, singles, prevSingle, nextSingle, goToSingle, openSingleModal, addToCart, addVinylToCart, buttonHoverIn, buttonHoverOut }) {
   const [previewHover, setPreviewHover] = useState(false);
   return (
@@ -1358,7 +1659,7 @@ function CarouselUI({ large, isMobile, currentSingle, singleIndex, singles, prev
   );
 }
 
-// ── FEATURES RAIL — outside Page, stable ─────────────────────────────────────
+// ── FEATURES RAIL ─────────────────────────────────────────────────────────────
 function FeaturesRail({ features, isMobile, addToCart, onPlay }) {
   return (
     <div className="features-row" style={{display:"flex",flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollSnapType:"x mandatory",overscrollBehaviorX:"contain",gap:isMobile?12:18,paddingBottom:14}}>
