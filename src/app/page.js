@@ -157,19 +157,10 @@ function decrementInventory(inv, slug) {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ── AUDIO VISUALS SECTION ────────────────────────────────────────────────────
-//
-// FIX SUMMARY (3 changes from original):
-//   1. Added iframeRef to send postMessage commands to the YouTube iframe.
-//   2. Added &enablejsapi=1 to iframeSrc so postMessage commands work.
-//   3. Replaced obs.disconnect()-inside-callback with a stable enter/exit
-//      observer that pauses the video when scrolled away and resumes on
-//      re-entry — fixing audio continuing offscreen.
-// ══════════════════════════════════════════════════════════════════════════════
 const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudioVisualsFocused }) {
   const [featuredId, setFeaturedId] = useState(musicVideos[0].youtubeId);
   const [hasEntered, setHasEntered] = useState(false);
   const sectionRef = useRef(null);
-  // ── FIX 1: ref for the active YouTube iframe so we can send postMessage ──
   const iframeRef = useRef(null);
   const firedFocusRef = useRef(false);
 
@@ -188,15 +179,12 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
     setHasEntered(true);
   }, [onAudioVisualsFocused]);
 
-  // ── FIX 3: stable viewport-aware observer — no disconnect inside callback ──
-  // Tracks enter/exit so video pauses when scrolled away and resumes on re-entry.
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
     const threshold = isMobile ? 0.5 : 0.4;
     let hasBeenInView = false;
 
-    // Helper: send a YouTube iframe API command via postMessage
     const sendCmd = (cmd) => {
       try {
         iframeRef.current?.contentWindow?.postMessage(
@@ -209,14 +197,12 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          triggerFocus(); // first entry: mount iframe with autoplay + stop preview audio
+          triggerFocus();
           if (hasBeenInView) {
-            // Re-entering after scroll-away: resume playback
             sendCmd("playVideo");
           }
           hasBeenInView = true;
         } else if (hasBeenInView) {
-          // Scrolled away: pause so audio doesn't continue offscreen
           sendCmd("pauseVideo");
         }
       },
@@ -224,15 +210,14 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
     );
 
     obs.observe(el);
-    return () => obs.disconnect(); // only disconnect on unmount
+    return () => obs.disconnect();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // runs once on mount; iframeRef is stable
+  }, []);
 
   const handleSelect = useCallback((id) => {
     setFeaturedId(id);
   }, []);
 
-  // ── FIX 2: enablejsapi=1 added so postMessage pause/play commands work ──
   const iframeSrc = useMemo(
     () => `https://www.youtube.com/embed/${featuredId}?rel=0&playsinline=1&autoplay=1&mute=0&enablejsapi=1`,
     [featuredId]
@@ -244,22 +229,19 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 
   return (
     <div ref={sectionRef}>
-      {/* Section header */}
       <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:isMobile?12:20,marginTop:isMobile?24:32}}>
         <h2 className="section-heading" style={{margin:0,fontSize:isMobile?17:22}}>Audio Visuals</h2>
         <span style={{fontSize:10,color:"#333",letterSpacing:3,textTransform:"uppercase",fontWeight:700}}>Official Visuals</span>
       </div>
 
       {isMobile ? (
-        // ── MOBILE: one featured player + horizontal queue strip ─────────────
         <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          {/* Primary featured video */}
           <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:16,overflow:"hidden"}}>
             <div style={{position:"relative",paddingBottom:"56.25%",height:0,background:"#000"}}>
               {hasEntered ? (
                 <iframe
                   key={featuredId}
-                  ref={iframeRef} // ── FIX 1: attach ref ──
+                  ref={iframeRef}
                   src={iframeSrc}
                   title={featuredVid.title}
                   frameBorder="0"
@@ -288,7 +270,6 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
             </div>
           </div>
 
-          {/* Queue strip */}
           <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:6,scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch"}}>
             {musicVideos.map(vid => {
               const isActive = featuredId === vid.youtubeId;
@@ -332,15 +313,13 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
           </div>
         </div>
       ) : (
-        // ── DESKTOP: cinematic featured player + queue sidebar ────────────────
         <div style={{display:"flex",gap:20,alignItems:"flex-start"}}>
-          {/* Primary featured player */}
           <div style={{flex:"1 1 0",minWidth:0,background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.5)"}}>
             <div style={{position:"relative",paddingBottom:"56.25%",height:0,background:"#000"}}>
               {hasEntered ? (
                 <iframe
                   key={featuredId}
-                  ref={iframeRef} // ── FIX 1: attach ref ──
+                  ref={iframeRef}
                   src={iframeSrc}
                   title={featuredVid.title}
                   frameBorder="0"
@@ -373,7 +352,6 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
             </div>
           </div>
 
-          {/* Queue sidebar */}
           <div style={{width:236,flexShrink:0,display:"flex",flexDirection:"column",gap:10}}>
             <div style={{fontSize:9,color:"#2a2a2a",letterSpacing:3,textTransform:"uppercase",fontWeight:700,marginBottom:2}}>Up Next</div>
             {musicVideos.map(vid => {
@@ -507,6 +485,11 @@ export default function Page() {
   const ambientRefs        = useRef({});
   const ytPlayerRef        = useRef(null);
   const ytIframeRef        = useRef(null);
+
+  // ── MODAL AUDIO REF ───────────────────────────────────────────────────────
+  // FIX: Dedicated ref for the modal preview audio so it autoplays independently
+  // of the now-playing bar audio element.
+  const modalAudioRef = useRef(null);
 
   // ── AUDIO FOCUS HANDLER ───────────────────────────────────────────────────
   const handleAudioVisualsFocused = useCallback(() => {
@@ -663,6 +646,30 @@ export default function Page() {
     }
   }, [activeTab]);
 
+  // ── FIX: Modal audio autoplay ─────────────────────────────────────────────
+  // When a single modal opens, immediately start playing the preview audio.
+  // On close (selectedSingle === null), pause and reset the modal audio.
+  useEffect(() => {
+    const audio = modalAudioRef.current;
+    if (!audio) return;
+
+    if (selectedSingle) {
+      // Stop now-playing bar so two tracks don't play at once
+      if (nowPlayingAudioRef.current && !nowPlayingAudioRef.current.paused) {
+        nowPlayingAudioRef.current.pause();
+        setNowPlayingPlaying(false);
+      }
+      audio.src = selectedSingle.preview;
+      audio.currentTime = 0;
+      // play() returns a Promise; catch silently for autoplay policy blocks
+      audio.play().catch(() => {});
+    } else {
+      // Modal closed — stop modal audio
+      audio.pause();
+      audio.src = "";
+    }
+  }, [selectedSingle]);
+
   const goRadio = useCallback(i => setRadioIndex(i), []);
 
   // ── HELPERS ───────────────────────────────────────────────────────────────
@@ -693,7 +700,8 @@ export default function Page() {
   const currentSingle = useMemo(() => singles[singleIndex], [singleIndex]);
   const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
 
-  const openSingleModal = useCallback(single => { setSelectedSingle(single); setNowPlaying(single); }, []);
+  // FIX: openSingleModal no longer calls setNowPlaying — modal handles its own audio via modalAudioRef
+  const openSingleModal = useCallback(single => { setSelectedSingle(single); }, []);
 
   const seekTo = useCallback(e => {
     if (!nowPlayingAudioRef.current || !audioDuration) return;
@@ -918,6 +926,8 @@ export default function Page() {
       <div ref={cursorTrailRef} style={{position:"fixed",width:16,height:16,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.10) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99998,mixBlendMode:"screen",transition:"left 0.18s ease,top 0.18s ease",display:isMobile?"none":undefined}}/>
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(circle at 18% 18%,rgba(0,255,255,0.026) 0%,transparent 55%),radial-gradient(circle at 82% 80%,rgba(162,89,255,0.018) 0%,transparent 52%)"}}/>
       <audio ref={nowPlayingAudioRef} style={{display:"none"}}/>
+      {/* FIX: Dedicated hidden audio element for modal preview autoplay */}
+      <audio ref={modalAudioRef} style={{display:"none"}}/>
 
       {/* ── GATE ── */}
       {!gateSubmitted && (
@@ -938,18 +948,25 @@ export default function Page() {
           <div onClick={e=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:isMobile?20:30,width:isMobile?"100%":340,maxWidth:isMobile?"calc(100vw - 32px)":"none",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
 
             {/*
-              ── FIX: Modal cover — replaced <img> with <video> ──
-              key={selectedSingle.slug} forces a clean remount on every new single
-              so the video src updates correctly and doesn't play the previous single.
+              FIX 1: <video> now has src={selectedSingle.video} directly on the element,
+              NOT only inside a <source> child. Safari requires the src attribute on
+              the <video> tag itself for reliable autoplay.
+
+              FIX 2: preload="auto" so the video is immediately buffered on modal open.
+
+              FIX 3: key={selectedSingle.slug} forces a clean remount on each new single
+              so the video resets correctly without playing the previous single's content.
+
               pointerEvents:"none" keeps click-to-close working on the backdrop.
             */}
             <video
               key={selectedSingle.slug}
+              src={selectedSingle.video}
               autoPlay
               muted
               loop
               playsInline
-              preload="metadata"
+              preload="auto"
               style={{
                 width:isMobile?160:200,
                 height:isMobile?160:200,
@@ -958,36 +975,23 @@ export default function Page() {
                 display:"block",
                 pointerEvents:"none",
               }}
-            >
-              <source src={selectedSingle.video} type="video/mp4"/>
-              {/* Fallback if video fails */}
-              <img
-                src={selectedSingle.cover}
-                alt={selectedSingle.title}
-                style={{width:isMobile?160:200,height:isMobile?160:200,borderRadius:14,objectFit:"cover"}}
-              />
-            </video>
+            />
 
             <div style={{fontSize:18,fontWeight:700}}>{selectedSingle.title}</div>
             <div style={{fontSize:13,opacity:0.5}}>SINGLE PREVIEW · ${selectedSingle.price.toFixed(2)}</div>
+
+            {/*
+              FIX: Modal audio player now drives modalAudioRef (the dedicated hidden
+              audio element) instead of nowPlayingAudioRef. This keeps the now-playing
+              bar state clean and lets modal audio autoplay independently.
+            */}
             <div style={{width:"100%"}}>
-              <div onClick={seekTo} style={{width:"100%",height:5,background:"#1e1e1e",borderRadius:3,cursor:"pointer",marginBottom:8,position:"relative"}}>
-                <div style={{width:audioDuration?`${(audioCurrentTime/audioDuration)*100}%`:"0%",height:"100%",background:"#00ffff",borderRadius:3,transition:"width 0.1s linear",boxShadow:"0 0 6px rgba(0,255,255,0.5)"}}/>
-              </div>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
-                <span style={{fontSize:11,color:"#555",fontVariantNumeric:"tabular-nums",minWidth:34}}>{formatTime(audioCurrentTime)}</span>
-                <button onClick={()=>{
-                  if (!nowPlayingAudioRef.current) return;
-                  if (nowPlayingPlaying) { nowPlayingAudioRef.current.pause(); setNowPlayingPlaying(false); }
-                  else { nowPlayingAudioRef.current.play().catch(()=>{}); setNowPlayingPlaying(true); }
-                }} style={{width:44,height:44,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,boxShadow:"0 0 16px rgba(0,255,255,0.4)"}}>
-                  {nowPlayingPlaying
-                    ? <svg viewBox="0 0 24 24" fill="#000" width="16" height="16"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
-                    : <svg viewBox="0 0 24 24" fill="#000" width="16" height="16" style={{marginLeft:2}}><path d="M8 5v14l11-7z"/></svg>}
-                </button>
-                <span style={{fontSize:11,color:"#555",fontVariantNumeric:"tabular-nums",minWidth:34,textAlign:"right"}}>{formatTime(audioDuration)}</span>
-              </div>
+              <ModalAudioPlayer
+                audioRef={modalAudioRef}
+                isMobile={isMobile}
+              />
             </div>
+
             <button onClick={()=>{addToCart(selectedSingle);setSelectedSingle(null);}} style={{width:"100%",padding:"10px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontSize:13}}>Add to Cart – ${selectedSingle.price.toFixed(2)}</button>
             <button onClick={()=>{addVinylToCart(selectedSingle);setSelectedSingle(null);}} style={{width:"100%",padding:"10px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – $47.99 (Optional)</button>
             <button onClick={()=>setSelectedSingle(null)} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,marginTop:4}}>Close</button>
@@ -1113,9 +1117,19 @@ export default function Page() {
 
             {/* HERO */}
             <div style={{position:"relative",height:isMobile?200:380,marginBottom:0,borderRadius:isMobile?14:20,overflow:"hidden",background:"black"}}>
-              <video autoPlay muted loop playsInline style={{position:"absolute",width:"100%",height:"100%",objectFit:"cover",opacity:0.35,filter:"blur(1px)"}}>
-                <source src="/videos/A2B.mp4" type="video/mp4"/>
-              </video>
+              {/*
+                FIX: Hero video also uses src directly on <video> (not only <source>)
+                for Safari compatibility. preload="auto" ensures it loads immediately.
+              */}
+              <video
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                src="/videos/A2B.mp4"
+                style={{position:"absolute",width:"100%",height:"100%",objectFit:"cover",opacity:0.35,filter:"blur(1px)"}}
+              />
               <div style={{position:"absolute",inset:0,background:"linear-gradient(to top,black,transparent 60%)"}}/>
               <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at center,transparent 30%,black 100%)"}}/>
               <div style={{position:"absolute",top:isMobile?16:25,left:isMobile?16:25,zIndex:10,fontSize:isMobile?28:42,fontWeight:900,letterSpacing:isMobile?5:8,animation:"pulse 2.5s infinite",textShadow:"0 0 20px rgba(0,255,255,0.8)"}}>2MRRW</div>
@@ -1167,50 +1181,58 @@ export default function Page() {
                               background:"#0a0a0a",
                               borderRadius:14,
                               border:"1px solid #1a1a1a",
-                              transition:"border-color 0.25s",
+                              // FIX: transition includes box-shadow so glow applies to the card container
+                              transition:"border-color 0.25s, box-shadow 0.25s",
                               position:"relative",
                             }}
-                            // ── FIX: hover proxied to parent since video has pointerEvents:none ──
                             onMouseEnter={e=>{
-                              e.currentTarget.style.borderColor="#00ffff1a";
+                              // FIX: glow applied to card container (not the video element inside)
+                              // so it's always visible regardless of overflow clipping
+                              e.currentTarget.style.borderColor="#00ffff33";
+                              e.currentTarget.style.boxShadow="0 0 18px rgba(0,255,255,0.35)";
                               const vid=e.currentTarget.querySelector("video");
-                              if(vid) hoverIn({currentTarget:vid});
+                              if(vid){vid.style.transform="scale(1.05)";vid.style.filter="brightness(1.12)";}
                             }}
                             onMouseLeave={e=>{
                               e.currentTarget.style.borderColor="#1a1a1a";
+                              e.currentTarget.style.boxShadow="none";
                               const vid=e.currentTarget.querySelector("video");
-                              if(vid) hoverOut({currentTarget:vid});
+                              if(vid){vid.style.transform="scale(1)";vid.style.filter="brightness(1)";}
                             }}
                           >
                             {/*
-                              ── FIX: video element ──
-                              1. <source type="video/mp4"> — required for Safari codec negotiation
-                              2. pointerEvents:"none" — stops video eating clicks so modal opens correctly
-                              3. <img> fallback inside <video> — graceful degradation
+                              FIX 1: src is set directly on <video> — NOT only inside <source>.
+                              Safari requires src on the <video> element for autoplay to work.
+
+                              FIX 2: preload="auto" — videos load immediately on page render,
+                              not lazily. This guarantees animation is running when the page loads.
+
+                              FIX 3: No <source> child needed when src is on <video> directly.
+                              The type hint is still supplied via the `type` attribute on <video>
+                              is not standard, so we rely on the browser sniffing .mp4 extension.
+
+                              FIX 4: pointerEvents:"none" — stops video intercepting clicks so
+                              the card's onClick (modal open) fires correctly.
+
+                              FIX 5: transition on transform/filter for smooth hover scale.
                             */}
                             <video
+                              src={single.video}
                               autoPlay
                               muted
                               loop
                               playsInline
-                              preload="metadata"
+                              preload="auto"
                               style={{
                                 width:"100%",
                                 aspectRatio:"1/1",
                                 objectFit:"cover",
                                 display:"block",
                                 borderRadius:"13px 13px 0 0",
-                                transition:"transform 0.3s,filter 0.3s,box-shadow 0.3s",
+                                transition:"transform 0.3s, filter 0.3s",
                                 pointerEvents:"none",
                               }}
-                            >
-                              <source src={single.video} type="video/mp4"/>
-                              <img
-                                src={single.cover}
-                                alt={single.title}
-                                style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",display:"block",borderRadius:"13px 13px 0 0"}}
-                              />
-                            </video>
+                            />
 
                             <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
                               <div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>
@@ -1931,6 +1953,93 @@ export default function Page() {
         </div>
       )}
     </>
+  );
+}
+
+// ── MODAL AUDIO PLAYER ────────────────────────────────────────────────────────
+// FIX: Separate component that reads directly from the shared modalAudioRef.
+// Tracks its own playing/time state independently of the now-playing bar.
+function ModalAudioPlayer({ audioRef, isMobile }) {
+  const [playing, setPlaying]       = useState(false);
+  const [current, setCurrent]       = useState(0);
+  const [duration, setDuration]     = useState(0);
+
+  useEffect(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    const onPlay     = () => setPlaying(true);
+    const onPause    = () => setPlaying(false);
+    const onTime     = () => setCurrent(audio.currentTime);
+    const onDuration = () => setDuration(isFinite(audio.duration) ? audio.duration : 0);
+    const onEnded    = () => { setPlaying(false); setCurrent(0); };
+    const onLoaded   = () => setDuration(isFinite(audio.duration) ? audio.duration : 0);
+
+    audio.addEventListener("play",            onPlay);
+    audio.addEventListener("pause",           onPause);
+    audio.addEventListener("timeupdate",      onTime);
+    audio.addEventListener("durationchange",  onDuration);
+    audio.addEventListener("loadedmetadata",  onLoaded);
+    audio.addEventListener("ended",           onEnded);
+
+    // Sync initial state in case audio already started (autoplay fired before mount)
+    if (!audio.paused) setPlaying(true);
+    if (isFinite(audio.duration)) setDuration(audio.duration);
+
+    return () => {
+      audio.removeEventListener("play",           onPlay);
+      audio.removeEventListener("pause",          onPause);
+      audio.removeEventListener("timeupdate",     onTime);
+      audio.removeEventListener("durationchange", onDuration);
+      audio.removeEventListener("loadedmetadata", onLoaded);
+      audio.removeEventListener("ended",          onEnded);
+    };
+  }, [audioRef]);
+
+  const seekTo = (e) => {
+    const audio = audioRef.current;
+    if (!audio || !duration) return;
+    const rect  = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    audio.currentTime = ratio * duration;
+  };
+
+  const togglePlay = () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    if (playing) { audio.pause(); }
+    else { audio.play().catch(() => {}); }
+  };
+
+  return (
+    <div style={{width:"100%"}}>
+      <div
+        onClick={seekTo}
+        style={{width:"100%",height:5,background:"#1e1e1e",borderRadius:3,cursor:"pointer",marginBottom:8,position:"relative"}}
+      >
+        <div style={{
+          width: duration ? `${(current / duration) * 100}%` : "0%",
+          height:"100%",
+          background:"#00ffff",
+          borderRadius:3,
+          transition:"width 0.1s linear",
+          boxShadow:"0 0 6px rgba(0,255,255,0.5)"
+        }}/>
+      </div>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12}}>
+        <span style={{fontSize:11,color:"#555",fontVariantNumeric:"tabular-nums",minWidth:34}}>{formatTime(current)}</span>
+        <button
+          onClick={togglePlay}
+          style={{width:44,height:44,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,boxShadow:"0 0 16px rgba(0,255,255,0.4)"}}
+        >
+          {playing
+            ? <svg viewBox="0 0 24 24" fill="#000" width="16" height="16"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
+            : <svg viewBox="0 0 24 24" fill="#000" width="16" height="16" style={{marginLeft:2}}><path d="M8 5v14l11-7z"/></svg>
+          }
+        </button>
+        <span style={{fontSize:11,color:"#555",fontVariantNumeric:"tabular-nums",minWidth:34,textAlign:"right"}}>{formatTime(duration)}</span>
+      </div>
+    </div>
   );
 }
 
