@@ -11,7 +11,8 @@
   "dependencies": {
     "@stripe/react-stripe-js": "^6.2.0",
     "@stripe/stripe-js": "^9.2.0",
-    "@supabase/supabase-js": "^2.103.3",
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.105.4",
     "framer-motion": "^12.38.0",
     "next": "16.2.4",
     "qrcode.react": "^4.2.0",

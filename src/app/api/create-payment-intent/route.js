@@ -1,55 +1,54 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+import { createClient } from "@/lib/supabase/server";
+import { getStripe } from "@/lib/commerce/stripe";
+import { resolveCartLines } from "@/lib/commerce/resolve-cart";
+import { getOwnedSlugs } from "@/lib/commerce/entitlements";
 
 export async function POST(req) {
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Sign in to checkout" }, { status: 401 });
+    }
+
     const { cart } = await req.json();
+    const lines = await resolveCartLines(cart);
+    const owned = await getOwnedSlugs(user.id);
+    const purchasable = lines.filter((l) => !owned.has(l.slug));
 
-    // Validate cart
-    if (!cart || !Array.isArray(cart) || cart.length === 0) {
-      return NextResponse.json(
-        { error: "Cart is empty or invalid" },
-        { status: 400 }
-      );
+    if (purchasable.length === 0) {
+      return NextResponse.json({ error: "You already own everything in your cart" }, { status: 400 });
     }
 
-    // Calculate total (in cents)
-    const amount = Math.round(
-      cart.reduce((sum, item) => {
-        const price = Number(item.price) || 0;
-        return sum + price;
-      }, 0) * 100
-    );
-
+    const amount = purchasable.reduce((sum, l) => sum + l.price_cents, 0);
     if (amount <= 0) {
-      return NextResponse.json(
-        { error: "Invalid payment amount" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Invalid payment amount" }, { status: 400 });
     }
 
-    // Create PaymentIntent (FIXED)
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: amount,
+    const items = purchasable.map((l) => ({
+      slug: l.slug,
+      title: l.title,
+      price: l.price_cents / 100,
+      cover: l.cover_url,
+      type: l.product_type === "merch" ? "merch" : "digital",
+    }));
+
+    const paymentIntent = await getStripe().paymentIntents.create({
+      amount,
       currency: "usd",
       payment_method_types: ["card"],
       metadata: {
-        items: JSON.stringify(cart),
+        user_id: user.id,
+        slugs: JSON.stringify(purchasable.map((l) => l.slug)),
+        items: JSON.stringify(items),
       },
     });
 
-    return NextResponse.json({
-      clientSecret: paymentIntent.client_secret,
-    });
-
+    return NextResponse.json({ clientSecret: paymentIntent.client_secret });
   } catch (err) {
     console.error("Payment intent error:", err);
-
-    return NextResponse.json(
-      { error: err.message || "Payment failed" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: err.message || "Payment failed" }, { status: 500 });
   }
 }

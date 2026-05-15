@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { useAuth } from "@/context/AuthContext";
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
 const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
@@ -430,6 +431,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
+  const { currentUser: authUser, library, owns, signUp, signIn, signOut, refreshLibrary, loading: authLoading } = useAuth();
 
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
@@ -467,7 +469,9 @@ export default function Page() {
   const [authMode, setAuthMode]                   = useState("login");
   const [authEmail, setAuthEmail]                 = useState("");
   const [authPassword, setAuthPassword]           = useState("");
+  const [authName, setAuthName]                   = useState("");
   const [authError, setAuthError]                 = useState("");
+  const [authSubmitting, setAuthSubmitting]       = useState(false);
   const [liveCountdown, setLiveCountdown]         = useState({ days:0, hours:0, minutes:0, seconds:0 });
   const [liveIsLive, setLiveIsLive]               = useState(false);
   const [innerCirclePost, setInnerCirclePost]     = useState(null);
@@ -569,14 +573,17 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    const stored = localStorage.getItem("2mrrw_user");
-    if (stored) { setCurrentUser(JSON.parse(stored)); setGateSubmitted(true); }
-  }, []);
+    if (authUser) {
+      setCurrentUser(authUser);
+      setGateSubmitted(true);
+    } else if (!authLoading) {
+      setCurrentUser(null);
+    }
+  }, [authUser, authLoading]);
 
   useEffect(() => {
-    const stored = localStorage.getItem("2mrrw_purchases");
-    if (stored) setMyPurchases(JSON.parse(stored));
-  }, []);
+    if (library?.length) setMyPurchases(library);
+  }, [library]);
 
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_circle");
@@ -682,10 +689,11 @@ export default function Page() {
 
   // ── HELPERS ───────────────────────────────────────────────────────────────
   const addToCart      = useCallback(item => {
+    if (item.slug && owns(item.slug)) return;
     setCart(p => [...p, item]);
     setAddedFlash(item.slug);
     setTimeout(() => setAddedFlash(null), 400);
-  }, []);
+  }, [owns]);
   const clearCart      = () => setCart([]);
   const removeFromCart = idx => setCart(p => p.filter((_, i) => i !== idx));
   const total          = cart.reduce((s, item) => s + item.price, 0);
@@ -718,42 +726,87 @@ export default function Page() {
   }, [audioDuration]);
 
   const handleGateSubmit = async () => {
-    if (!gateName.trim() || !gatePhone.trim() || !gateEmail.trim()) { setGateError("Please fill out all fields."); return; }
+    if (!gateName.trim() || !gatePhone.trim() || !gateEmail.trim() || !authPassword.trim()) {
+      setGateError("Please fill out all fields including password.");
+      return;
+    }
     setGateError("");
     try {
-      const res  = await fetch("/api/register-user", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ name:gateName, phone:gatePhone, email:gateEmail }) });
-      const data = await res.json();
-      if (!res.ok) { setGateError(data.error || "Something went wrong."); return; }
-      const user = { id:data.id, name:gateName, phone:gatePhone, email:gateEmail };
-      localStorage.setItem("2mrrw_user", JSON.stringify(user));
-      setCurrentUser(user); setGateSubmitted(true);
-    } catch { setGateError("Network error. Please try again."); }
+      await signUp({ email: gateEmail.trim(), password: authPassword, fullName: gateName.trim(), phone: gatePhone.trim() });
+      await signIn({ email: gateEmail.trim(), password: authPassword });
+      setGateSubmitted(true);
+    } catch (err) {
+      setGateError(err.message || "Could not create account.");
+    }
+  };
+
+  const handleAuthSubmit = async () => {
+    if (!authEmail.trim() || !authPassword.trim()) { setAuthError("Please fill out all fields."); return; }
+    if (authMode === "signup" && !authName.trim()) { setAuthError("Please enter your name."); return; }
+    setAuthError("");
+    setAuthSubmitting(true);
+    try {
+      if (authMode === "signup") {
+        await signUp({ email: authEmail.trim(), password: authPassword, fullName: authName.trim() });
+      }
+      await signIn({ email: authEmail.trim(), password: authPassword });
+      setAuthPassword("");
+    } catch (err) {
+      setAuthError(err.message || "Authentication failed.");
+    } finally {
+      setAuthSubmitting(false);
+    }
   };
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
+    if (!currentUser) { setCheckoutError("Sign in to checkout."); switchTab("account"); return; }
     setCheckingOut(true); setCheckoutError("");
     try {
-      const res  = await fetch("/api/create-payment-intent", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ cart }) });
+      const res  = await fetch("/api/create-payment-intent", { method:"POST", headers:{"Content-Type":"application/json"}, credentials:"include", body:JSON.stringify({ cart }) });
       const data = await res.json();
-      if (!res.ok)            { setCheckoutError(data.error || data.message || "Checkout failed."); setCheckingOut(false); return; }
-      if (!data.clientSecret) { setCheckoutError("No client secret returned.");                     setCheckingOut(false); return; }
+      if (!res.ok) { setCheckoutError(data.error || data.message || "Checkout failed."); setCheckingOut(false); return; }
+      if (!data.clientSecret) { setCheckoutError("No client secret returned."); setCheckingOut(false); return; }
       setClientSecret(data.clientSecret);
+      setCheckingOut(false);
     } catch (err) { setCheckoutError(`Network error: ${err.message}`); setCheckingOut(false); }
   };
 
-  const handleCheckoutSuccess = () => {
-    const purchasedItems = cart.map(item => ({ ...item, purchasedAt: new Date().toISOString() }));
-    const np = [...myPurchases, ...purchasedItems];
-    setMyPurchases(np);
-    localStorage.setItem("2mrrw_purchases", JSON.stringify(np));
+  const handleDownload = async (slug) => {
+    try {
+      const res = await fetch(`/api/library/stream?slug=${encodeURIComponent(slug)}`, { credentials: "include" });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "Download unavailable."); return; }
+      window.open(data.url, "_blank");
+    } catch { alert("Could not generate download link."); }
+  };
+
+  const handleCheckoutSuccess = async (paymentIntentId) => {
+    if (paymentIntentId) {
+      try {
+        await fetch("/api/purchase/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ paymentIntentId }),
+        });
+      } catch { /* webhook may still fulfill */ }
+    }
     let inv = { ...inventory };
     cart.forEach(item => {
       if (item.slug in REAL_INVENTORY) { inv = decrementInventory(inv, item.slug); }
     });
     setInventory(inv);
     setClientSecret(null); setCheckingOut(false); clearCart();
+    await refreshLibrary();
     if (isMobile) setMobileCartOpen(false);
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    setCurrentUser(null);
+    setGateSubmitted(false);
+    setMyPurchases([]);
   };
 
   const getDaysInMonth     = (m, y) => new Date(y, m+1, 0).getDate();
@@ -955,6 +1008,7 @@ export default function Page() {
             <input placeholder="Full Name"     value={gateName}  onChange={e=>setGateName(e.target.value)}  onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
             <input placeholder="Phone Number"  value={gatePhone} onChange={e=>setGatePhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
             <input placeholder="Email Address" value={gateEmail} onChange={e=>setGateEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
+            <input placeholder="Password" type="password" value={authPassword} onChange={e=>setAuthPassword(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
             {gateError && <p style={{color:"red",fontSize:13}}>{gateError}</p>}
             <button onClick={handleGateSubmit} style={{width:"min(280px,90vw)",padding:"12px 0",background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer",fontSize:14}}>Enter Site</button>
           </motion.div>
@@ -1500,7 +1554,7 @@ export default function Page() {
                               <div key={i} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
                                 {item.cover&&<img src={item.cover} style={{width:48,height:48,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}
                                 <div style={{flex:1,minWidth:120}}><div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{item.title}</div><div style={{fontSize:11,color:"#555"}}>Purchased {item.purchasedAt?new Date(item.purchasedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}</div></div>
-                                <button onClick={()=>alert("Download links are generated server-side with signed, expiring URLs.")} style={{padding:"8px 16px",background:"transparent",color:"#00ffff",border:"1px solid #00ffff33",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700}}>↓ Download</button>
+                                <button onClick={()=>handleDownload(item.slug)} style={{padding:"8px 16px",background:"transparent",color:"#00ffff",border:"1px solid #00ffff33",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700}}>↓ Download</button>
                               </div>
                             ))}
                           </div>
@@ -1802,17 +1856,17 @@ export default function Page() {
                         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===currentUser.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Music Library",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
-                      <button onClick={()=>{localStorage.removeItem("2mrrw_user");setCurrentUser(null);setGateSubmitted(false);}} style={{padding:"12px 0",background:"transparent",color:"#444",border:"1px solid #1e1e1e",borderRadius:10,cursor:"pointer",fontSize:13,width:"100%",transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#333";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";e.currentTarget.style.borderColor="#1e1e1e";}}>Sign Out</button>
+                      <button onClick={handleSignOut} style={{padding:"12px 0",background:"transparent",color:"#444",border:"1px solid #1e1e1e",borderRadius:10,cursor:"pointer",fontSize:13,width:"100%",transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#333";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";e.currentTarget.style.borderColor="#1e1e1e";}}>Sign Out</button>
                     </div>
                   ) : (
                     <div style={{maxWidth:400}}>
                       <div style={{display:"flex",gap:8,marginBottom:28}}>{["login","signup"].map(mode=><button key={mode} onClick={()=>{setAuthMode(mode);setAuthError("");}} style={{flex:1,padding:"10px 0",fontSize:12,fontWeight:700,letterSpacing:2,cursor:"pointer",border:authMode===mode?"1px solid #00ffff":"1px solid #2a2a2a",borderRadius:10,background:authMode===mode?"rgba(0,255,255,0.1)":"transparent",color:authMode===mode?"#00ffff":"#555",textTransform:"uppercase",transition:"0.2s"}}>{mode==="login"?"Sign In":"Create Account"}</button>)}</div>
                       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                        {authMode==="signup" && <input placeholder="Full Name" style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>}
+                        {authMode==="signup" && <input placeholder="Full Name" value={authName} onChange={e=>setAuthName(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>}
                         <input placeholder="Email Address" value={authEmail} onChange={e=>setAuthEmail(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
                         <input placeholder="Password" type="password" value={authPassword} onChange={e=>setAuthPassword(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
                         {authError && <div style={{fontSize:12,color:"#ff4d4d"}}>{authError}</div>}
-                        <button onClick={()=>{if(!authEmail.trim()||!authPassword.trim()){setAuthError("Please fill out all fields.");return;}setAuthError("Connect /api/auth to enable full login.");}} style={{padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1,marginTop:4}}>{authMode==="login"?"Sign In":"Create Account"}</button>
+                        <button onClick={handleAuthSubmit} disabled={authSubmitting} style={{padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1,marginTop:4,opacity:authSubmitting?0.6:1}}>{authSubmitting?"…":authMode==="login"?"Sign In":"Create Account"}</button>
                       </div>
                     </div>
                   )}
@@ -1865,7 +1919,7 @@ export default function Page() {
             ))}
             <div style={{marginTop:20,fontSize:13,fontWeight:700}}>Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span></div>
             <button onClick={clearCart} style={{marginTop:15,width:"100%",padding:12,background:"rgba(255,30,30,0.15)",color:"#ff4d4d",fontWeight:"bold",border:"1px solid #ff4d4d33",borderRadius:8,cursor:"pointer",fontSize:12,transition:"0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,30,30,0.25)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,30,30,0.15)"}>CLEAR CART</button>
-            <button onClick={handleCheckout} disabled={checkingOut||cart.length===0} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{marginTop:10,width:"100%",padding:12,background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",transition:"0.25s",fontSize:13,fontWeight:700}}>{checkingOut?"Redirecting…":"Checkout"}</button>
+            <button onClick={handleCheckout} disabled={checkingOut||cart.length===0} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{marginTop:10,width:"100%",padding:12,background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",transition:"0.25s",fontSize:13,fontWeight:700}}>{checkingOut?"Loading…":"Checkout"}</button>
             {checkoutError && <div style={{marginTop:8}}><p style={{color:"#ff4d4d",fontSize:12}}>{checkoutError}</p></div>}
             {currentUser && <div><p style={{fontSize:11,color:"#555",marginTop:12,textAlign:"center"}}>Signed in as {currentUser.name}</p>{userStatus&&<div style={{marginTop:6,textAlign:"center",fontSize:10,fontWeight:900,letterSpacing:1,color:userStatus.color}}>{userStatus.label}</div>}</div>}
           </div>
@@ -2020,7 +2074,7 @@ export default function Page() {
                   <motion.div style={{padding:"16px 20px 0"}}><h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Cart {cart.length>0&&`(${cart.length})`}</h3></motion.div>
                   {cart.length===0 && <p style={{opacity:0.4,fontSize:13,padding:"0 20px 20px"}}>Your cart is empty.</p>}
                   <motion.div style={{padding:"0 20px"}}>{cart.map((item,i)=><motion.div key={i} style={{marginBottom:10,display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>{item.cover&&<img src={item.cover} style={{width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0}} alt="" />}<span style={{fontSize:13,flex:1,lineHeight:1.4}}>{item.title}<br/><span style={{color:"#00ffff",fontSize:12}}>${item.price.toFixed(2)}</span></span><button onClick={()=>removeFromCart(i)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button></motion.div>)}</motion.div>
-                  {cart.length>0 && <motion.div style={{padding:"16px 20px 0",display:"flex",flexDirection:"column",gap:10}}><motion.div style={{fontSize:15,fontWeight:700}}>Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span></motion.div><button onClick={handleCheckout} disabled={checkingOut} style={{width:"100%",padding:"14px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:15}}>{checkingOut?"Redirecting…":"Checkout"}</button><button onClick={()=>{clearCart();setMobileCartOpen(false);}} style={{width:"100%",padding:"12px 0",background:"transparent",color:"#ff4d4d",border:"1px solid #ff4d4d33",borderRadius:10,cursor:"pointer",fontSize:13}}>Clear Cart</button></motion.div>}
+                  {cart.length>0 && <motion.div style={{padding:"16px 20px 0",display:"flex",flexDirection:"column",gap:10}}><motion.div style={{fontSize:15,fontWeight:700}}>Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span></motion.div><button onClick={handleCheckout} disabled={checkingOut} style={{width:"100%",padding:"14px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:15}}>{checkingOut?"Loading…":"Checkout"}</button><button onClick={()=>{clearCart();setMobileCartOpen(false);}} style={{width:"100%",padding:"12px 0",background:"transparent",color:"#ff4d4d",border:"1px solid #ff4d4d33",borderRadius:10,cursor:"pointer",fontSize:13}}>Clear Cart</button></motion.div>}
                   {checkoutError && <p style={{color:"#ff4d4d",fontSize:12,padding:"10px 20px 0"}}>{checkoutError}</p>}
                   <motion.div style={{padding:"12px 20px 0"}}><button onClick={()=>setMobileCartOpen(false)} style={{width:"100%",padding:"12px 0",background:"none",border:"1px solid #1e1e1e",color:"#555",cursor:"pointer",fontSize:13,borderRadius:10}}>Close</button></motion.div>
                 </motion.div>
@@ -2249,7 +2303,7 @@ function CheckoutForm({ onSuccess }) {
     setLoading(true); setError("");
     const result = await stripe.confirmPayment({ elements, redirect:"if_required" });
     if (result.error) { setError(result.error.message || "Payment failed."); setLoading(false); }
-    else { onSuccess(); }
+    else { onSuccess(result.paymentIntent?.id); }
   };
   return (
     <form onSubmit={handleSubmit}>
