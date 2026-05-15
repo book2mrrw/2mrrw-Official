@@ -1,8 +1,22 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+
+const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
+const OVERLAY_FADE = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.22 } };
+const SHEET_UP = { initial: { y: "100%" }, animate: { y: 0 }, exit: { y: "100%" }, transition: SPRING_SOFT };
+const MODAL_CENTER = { initial: { opacity: 0, scale: 0.96 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.96 }, transition: SPRING_SOFT };
+const MOBILE_NAV_SVGS = {
+  home: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1V9.5z"/></svg>,
+  music: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>,
+  shop: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 002 1.61h9.72a2 2 0 002-1.61L23 6H6"/></svg>,
+  vault: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>,
+  shows: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>,
+  more: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></svg>,
+};
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 const formatTime = (s) => {
@@ -471,6 +485,7 @@ export default function Page() {
   const [isMobile, setIsMobile]                   = useState(false);
   const [mobileCartOpen, setMobileCartOpen]       = useState(false);
   const [mobileNavOpen, setMobileNavOpen]         = useState(false);
+  const [heroScrollY, setHeroScrollY]             = useState(0);
 
   // ── REFS ──────────────────────────────────────────────────────────────────
   const cursorRef          = useRef(null);
@@ -480,6 +495,7 @@ export default function Page() {
   const ytPlayerRef        = useRef(null);
   const ytIframeRef        = useRef(null);
   const modalAudioRef      = useRef(null);
+  const mainScrollRef      = useRef(null);
 
   // ── AUDIO FOCUS HANDLER ───────────────────────────────────────────────────
   const handleAudioVisualsFocused = useCallback(() => {
@@ -496,6 +512,14 @@ export default function Page() {
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
+  }, []);
+
+  useEffect(() => {
+    const el = mainScrollRef.current;
+    if (!el) return;
+    const onScroll = () => setHeroScrollY(el.scrollTop);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
   }, []);
 
   useEffect(() => {
@@ -902,6 +926,17 @@ export default function Page() {
     return `${item.stock} remaining`;
   };
 
+  const mobileHeroHeight = isMobile ? Math.max(108, 200 - heroScrollY * 0.46) : 380;
+  const mobileVideoBrightness = isMobile ? Math.max(0.08, 0.35 - heroScrollY * 0.0025) : 0.35;
+  const heroTextOpacity = isMobile ? Math.max(0, 1 - heroScrollY / 70) : 1;
+  const heroTextScale = isMobile ? Math.max(0.72, 1 - heroScrollY / 350) : 1;
+  const heroSocialsOp = isMobile ? Math.max(0, 1 - heroScrollY / 60) : 1;
+  const mobileScrollPadding = isMobile ? (nowPlaying ? "178px" : "110px") : "30px";
+  const mobileCartFabBottom = nowPlaying
+    ? "calc(62px + env(safe-area-inset-bottom, 0px) + 72px)"
+    : "calc(62px + env(safe-area-inset-bottom, 0px) + 12px)";
+  const mobileMiniPlayerBottom = "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)";
+
   // ═══════════════════════════════════════════════════════════════════════════
   return (
     <>
@@ -912,69 +947,148 @@ export default function Page() {
       <audio ref={modalAudioRef} style={{display:"none"}}/>
 
       {/* ── GATE ── */}
-      {!gateSubmitted && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:30}}>
-          <div style={{fontSize:28,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 20px rgba(0,255,255,0.8)"}}>2MRRW</div>
-          <p style={{color:"#aaa",marginBottom:10,textAlign:"center"}}>Enter your info to access the site</p>
-          <input placeholder="Full Name"     value={gateName}  onChange={e=>setGateName(e.target.value)}  onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
-          <input placeholder="Phone Number"  value={gatePhone} onChange={e=>setGatePhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
-          <input placeholder="Email Address" value={gateEmail} onChange={e=>setGateEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
-          {gateError && <p style={{color:"red",fontSize:13}}>{gateError}</p>}
-          <button onClick={handleGateSubmit} style={{width:"min(280px,90vw)",padding:"12px 0",background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer",fontSize:14}}>Enter Site</button>
-        </div>
-      )}
+      <AnimatePresence>
+        {!gateSubmitted && (
+          <motion.div key="gate" {...OVERLAY_FADE} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:30}}>
+            <div style={{fontSize:28,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 20px rgba(0,255,255,0.8)"}}>2MRRW</div>
+            <p style={{color:"#aaa",marginBottom:10,textAlign:"center"}}>Enter your info to access the site</p>
+            <input placeholder="Full Name"     value={gateName}  onChange={e=>setGateName(e.target.value)}  onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
+            <input placeholder="Phone Number"  value={gatePhone} onChange={e=>setGatePhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
+            <input placeholder="Email Address" value={gateEmail} onChange={e=>setGateEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
+            {gateError && <p style={{color:"red",fontSize:13}}>{gateError}</p>}
+            <button onClick={handleGateSubmit} style={{width:"min(280px,90vw)",padding:"12px 0",background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer",fontSize:14}}>Enter Site</button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── SINGLE MODAL ── */}
-      {selectedSingle && (
-        <div onClick={()=>setSelectedSingle(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:isMobile?20:30,width:isMobile?"100%":340,maxWidth:isMobile?"calc(100vw - 32px)":"none",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
-            <video
-              key={selectedSingle.slug}
-              src={selectedSingle.video}
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="auto"
-              webkit-playsinline="true"
+      <AnimatePresence>
+        {selectedSingle && (
+          <motion.div
+            key="single-overlay"
+            {...OVERLAY_FADE}
+            onClick={() => setSelectedSingle(null)}
+            style={{
+              position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8888,
+              display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",
+              padding:isMobile?0:16,
+            }}
+          >
+            <motion.div
+              key="single-sheet"
+              {...(isMobile ? SHEET_UP : MODAL_CENTER)}
+              onClick={e => e.stopPropagation()}
               style={{
-                width:isMobile?160:200,
-                height:isMobile?160:200,
-                borderRadius:14,
-                objectFit:"cover",
-                display:"block",
-                pointerEvents:"none",
+                background:"#0d0d0d",
+                border:isMobile?"1px solid #1e1e1e":"1px solid #222",
+                borderRadius:isMobile?"20px 20px 0 0":20,
+                width:isMobile?"100%":340,
+                maxWidth:isMobile?"100%":"none",
+                maxHeight:isMobile?"92vh":"90vh",
+                overflow:"hidden",
+                display:"flex",
+                flexDirection:"column",
               }}
-            />
-            <div style={{fontSize:18,fontWeight:700}}>{selectedSingle.title}</div>
-            <div style={{fontSize:13,opacity:0.5}}>SINGLE PREVIEW · ${selectedSingle.price.toFixed(2)}</div>
-            <div style={{width:"100%"}}>
-              <ModalAudioPlayer audioRef={modalAudioRef} isMobile={isMobile}/>
-            </div>
-            <button onClick={()=>{addToCart(selectedSingle);setSelectedSingle(null);}} style={{width:"100%",padding:"10px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontSize:13}}>Add to Cart – ${selectedSingle.price.toFixed(2)}</button>
-            <button onClick={()=>{addVinylToCart(selectedSingle);setSelectedSingle(null);}} style={{width:"100%",padding:"10px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – $47.99 (Optional)</button>
-            <button onClick={()=>setSelectedSingle(null)} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,marginTop:4}}>Close</button>
-          </div>
-        </div>
-      )}
+            >
+              {isMobile && <motion.div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"12px auto 0",flexShrink:0}} />}
+              {isMobile ? (
+                <motion.div style={{position:"relative",width:"100%",height:220,flexShrink:0,overflow:"hidden"}}>
+                  <video
+                    key={selectedSingle.slug}
+                    src={selectedSingle.video}
+                    autoPlay muted loop playsInline preload="auto" webkit-playsinline="true"
+                    style={{width:"100%",height:"100%",objectFit:"cover",pointerEvents:"none"}}
+                  />
+                  <motion.div style={{position:"absolute",inset:0,background:"linear-gradient(to top,rgba(0,0,0,0.85) 0%,transparent 55%)"}} />
+                </motion.div>
+              ) : (
+                <motion.div style={{padding:"24px 24px 0",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
+                  <video
+                    key={selectedSingle.slug}
+                    src={selectedSingle.video}
+                    autoPlay muted loop playsInline preload="auto" webkit-playsinline="true"
+                    style={{width:200,height:200,borderRadius:14,objectFit:"cover",display:"block",pointerEvents:"none"}}
+                  />
+                </motion.div>
+              )}
+              <motion.div style={{padding:isMobile?"16px 20px 28px":"0 24px 24px",display:"flex",flexDirection:"column",gap:12,overflowY:"auto"}}>
+                <motion.div style={{fontSize:isMobile?20:18,fontWeight:800}}>{selectedSingle.title}</motion.div>
+                <motion.div style={{fontSize:12,opacity:0.5,letterSpacing:1}}>SINGLE PREVIEW · ${selectedSingle.price.toFixed(2)}</motion.div>
+                <motion.div style={{width:"100%"}}>
+                  <ModalAudioPlayer audioRef={modalAudioRef} isMobile={isMobile}/>
+                </motion.div>
+                <button onClick={()=>{addToCart(selectedSingle);setSelectedSingle(null);}} style={{width:"100%",padding:"12px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:700}}>Add to Cart – ${selectedSingle.price.toFixed(2)}</button>
+                <button onClick={()=>{addVinylToCart(selectedSingle);setSelectedSingle(null);}} style={{width:"100%",padding:"12px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – $47.99 (Optional)</button>
+                <button onClick={()=>setSelectedSingle(null)} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,marginTop:4}}>Close</button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
 
       {/* ── ALBUM MODAL ── */}
-      {selectedAlbum && (
-        <div onClick={()=>setSelectedAlbum(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:"22px 26px",width:isMobile?"100%":320,maxWidth:isMobile?"calc(100vw - 32px)":"none",maxHeight:"80vh",overflowY:"auto",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
-            <img src={selectedAlbum.cover} style={{width:130,height:130,borderRadius:10,objectFit:"cover"}}/>
-            <div style={{fontSize:17,fontWeight:900,letterSpacing:2,textAlign:"center"}}>{selectedAlbum.title}</div>
-            <div style={{fontSize:11,opacity:0.4,letterSpacing:1}}>{selectedAlbum.date}</div>
-            <div style={{width:"100%",marginTop:4}}>
-              <div style={{fontSize:10,letterSpacing:2,opacity:0.4,marginBottom:8,textTransform:"uppercase"}}>Track Listing</div>
-              {selectedAlbum.tracks.map((t,i)=><div key={i} style={{padding:"6px 0",fontSize:13,borderBottom:"1px solid #1a1a1a",color:"white"}}>{i+1}. {t}</div>)}
-            </div>
-            <button onClick={()=>{addToCart(selectedAlbum);setSelectedAlbum(null);}} style={{width:"100%",padding:"10px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontSize:13,marginTop:6}}>Add to Cart – ${selectedAlbum.price.toFixed(2)}</button>
-            <button onClick={()=>{addToCart({title:`${selectedAlbum.title} – Vinyl`,slug:`${selectedAlbum.slug}-vinyl`,cover:selectedAlbum.cover,price:selectedAlbum.vinyl});setSelectedAlbum(null);}} style={{width:"100%",padding:"10px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – ${selectedAlbum.vinyl.toFixed(2)} (Optional)</button>
-            <button onClick={()=>setSelectedAlbum(null)} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,marginTop:4}}>Close</button>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {selectedAlbum && (
+          <motion.div
+            key="album-overlay"
+            {...OVERLAY_FADE}
+            onClick={() => setSelectedAlbum(null)}
+            style={{
+              position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8888,
+              display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",
+              padding:isMobile?0:16,
+            }}
+          >
+            <motion.div
+              key="album-sheet"
+              {...(isMobile ? SHEET_UP : MODAL_CENTER)}
+              onClick={e => e.stopPropagation()}
+              style={{
+                background:"#0d0d0d",
+                border:isMobile?"1px solid #1e1e1e":"1px solid #222",
+                borderRadius:isMobile?"20px 20px 0 0":20,
+                width:isMobile?"100%":320,
+                maxWidth:isMobile?"100%":"none",
+                maxHeight:isMobile?"88vh":"80vh",
+                overflowY:"auto",
+                display:"flex",
+                flexDirection:"column",
+                alignItems:"center",
+                gap:10,
+                padding:isMobile?"0 0 28px":"22px 26px",
+              }}
+            >
+              {isMobile && <motion.div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"12px auto 0",flexShrink:0}} />}
+              {isMobile && (
+                <motion.div style={{position:"relative",width:"100%",height:180,flexShrink:0,overflow:"hidden"}}>
+                  <img src={selectedAlbum.cover} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt="" />
+                  <motion.div style={{position:"absolute",inset:0,background:"linear-gradient(to top,rgba(0,0,0,0.9) 0%,transparent 50%)"}} />
+                  <motion.div style={{position:"absolute",bottom:16,left:20,right:20}}>
+                    <motion.div style={{fontSize:20,fontWeight:900,letterSpacing:2}}>{selectedAlbum.title}</motion.div>
+                    <motion.div style={{fontSize:11,opacity:0.5,letterSpacing:1,marginTop:4}}>{selectedAlbum.date}</motion.div>
+                  </motion.div>
+                </motion.div>
+              )}
+              <motion.div style={{padding:isMobile?"0 20px":"0",width:"100%",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
+                {!isMobile && <img src={selectedAlbum.cover} style={{width:130,height:130,borderRadius:10,objectFit:"cover"}} alt="" />}
+                {!isMobile && <motion.div style={{fontSize:17,fontWeight:900,letterSpacing:2,textAlign:"center"}}>{selectedAlbum.title}</motion.div>}
+                {!isMobile && <motion.div style={{fontSize:11,opacity:0.4,letterSpacing:1}}>{selectedAlbum.date}</motion.div>}
+                <motion.div style={{width:"100%",marginTop:4}}>
+                  <motion.div style={{fontSize:10,letterSpacing:2,opacity:0.4,marginBottom:8,textTransform:"uppercase"}}>Track Listing</motion.div>
+                  {selectedAlbum.tracks.map((t,i)=><motion.div key={i} style={{padding:"6px 0",fontSize:13,borderBottom:"1px solid #1a1a1a",color:"white"}}>{i+1}. {t}</motion.div>)}
+                </motion.div>
+                <button onClick={()=>{addToCart(selectedAlbum);setSelectedAlbum(null);}} style={{width:"100%",padding:"12px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,marginTop:6,fontWeight:700}}>Add to Cart – ${selectedAlbum.price.toFixed(2)}</button>
+                <button onClick={()=>{addToCart({title:`${selectedAlbum.title} – Vinyl`,slug:`${selectedAlbum.slug}-vinyl`,cover:selectedAlbum.cover,price:selectedAlbum.vinyl});setSelectedAlbum(null);}} style={{width:"100%",padding:"12px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – ${selectedAlbum.vinyl.toFixed(2)} (Optional)</button>
+                <button onClick={()=>setSelectedAlbum(null)} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,marginTop:4}}>Close</button>
+              </motion.div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
 
       {/* ── TICKET MODAL ── */}
       {selectedEvent && (
@@ -1072,27 +1186,36 @@ export default function Page() {
 
         {/* ── MAIN AREA ── */}
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
-          <div style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:isMobile?"16px 14px 100px":30,WebkitOverflowScrolling:"touch"}}>
-
-            {/* HERO — video stays at /videos/A2B.mp4 (root of /videos/, not in /singles/) */}
-            <div style={{position:"relative",height:isMobile?200:380,marginBottom:0,borderRadius:isMobile?14:20,overflow:"hidden",background:"black"}}>
-              <video
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="auto"
-                webkit-playsinline="true"
-                src="/videos/A2B.mp4"
-                style={{position:"absolute",width:"100%",height:"100%",objectFit:"cover",opacity:0.35,filter:"blur(1px)"}}
+          <div
+            ref={mainScrollRef}
+            style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:0,WebkitOverflowScrolling:"touch"}}
+          >
+            <motion.div style={{padding:isMobile?`0 0 ${mobileScrollPadding} 0`:"0 30px 30px"}}>
+            <motion.div style={{padding:isMobile?"0 14px":"0"}}>
+            {/* HERO — scroll compression on mobile */}
+            <motion.div style={{
+              position:"relative", height: mobileHeroHeight, marginBottom: 0,
+              borderRadius: isMobile ? 0 : 20, overflow:"hidden", background:"black",
+              transition: isMobile ? "height 0.08s cubic-bezier(0.25,0.46,0.45,0.94)" : "none",
+            }}>
+              <video autoPlay muted loop playsInline preload="auto" webkit-playsinline="true" src="/videos/A2B.mp4"
+                style={{
+                  position:"absolute",width:"100%",height:"100%",objectFit:"cover",
+                  opacity: mobileVideoBrightness,
+                  filter:`brightness(${mobileVideoBrightness / 0.35}) blur(${isMobile ? Math.min(2, heroScrollY * 0.01) : 1}px)`,
+                  transform:`scale(${isMobile ? 1 + heroScrollY * 0.0008 : 1})`,
+                  transition: isMobile ? "filter 0.1s, transform 0.1s" : "none",
+                }}
               />
               <div style={{position:"absolute",inset:0,background:"linear-gradient(to top,black,transparent 60%)"}}/>
               <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at center,transparent 30%,black 100%)"}}/>
-              <div style={{position:"absolute",top:isMobile?16:25,left:isMobile?16:25,zIndex:10,fontSize:isMobile?28:42,fontWeight:900,letterSpacing:isMobile?5:8,animation:"pulse 2.5s infinite",textShadow:"0 0 20px rgba(0,255,255,0.8)"}}>2MRRW</div>
-              <div style={{position:"absolute",bottom:isMobile?14:24,right:isMobile?14:25,display:"flex",gap:isMobile?12:16,alignItems:"center",zIndex:10,flexWrap:"wrap",justifyContent:"flex-end"}}>
+              <motion.div style={{position:"absolute",top:isMobile?16:25,left:isMobile?16:25,zIndex:10,opacity:heroTextOpacity,transform:`scale(${heroTextScale})`,transformOrigin:"top left",transition:isMobile?"opacity 0.08s, transform 0.08s":"none"}}>
+                <div style={{fontSize:isMobile?28:42,fontWeight:900,letterSpacing:isMobile?5:8,animation:"pulse 2.5s infinite",textShadow:"0 0 20px rgba(0,255,255,0.8)"}}>2MRRW</div>
+              </motion.div>
+              <motion.div style={{position:"absolute",bottom:isMobile?14:24,right:isMobile?14:25,display:"flex",gap:isMobile?12:16,alignItems:"center",zIndex:10,flexWrap:"wrap",justifyContent:"flex-end",opacity:heroSocialsOp,transition:isMobile?"opacity 0.08s":"none"}}>
                 {SOCIALS.map(s=><a key={s.name} href={s.href} target="_blank" rel="noopener noreferrer" title={s.name} style={{color:"rgba(255,255,255,0.65)",transition:"transform 0.2s,color 0.2s,filter 0.2s",display:"flex",alignItems:"center",textDecoration:"none"}} onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.5)";e.currentTarget.style.color="#00ffff";e.currentTarget.style.filter="drop-shadow(0 0 6px rgba(0,255,255,0.8))";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.color="rgba(255,255,255,0.65)";e.currentTarget.style.filter="none";}}>{s.svg}</a>)}
-              </div>
-            </div>
+              </motion.div>
+            </motion.div>
 
             {activeTab==="home" && <div style={{padding:"18px 0 8px",display:"flex",justifyContent:"flex-start"}}><button onClick={()=>window.open("https://www.paypal.com/donate","_blank")} style={{padding:"10px 28px",background:"transparent",color:"#888",border:"1px solid #2a2a2a",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:2,transition:"0.2s",textTransform:"uppercase"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#555";e.currentTarget.style.background="rgba(255,255,255,0.04)";}} onMouseLeave={e=>{e.currentTarget.style.color="#888";e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.background="transparent";}}>♥ Donate</button></div>}
 
@@ -1697,10 +1820,12 @@ export default function Page() {
               )}
 
             </div>{/* end tabKey */}
+            </motion.div>
+            </motion.div>
           </div>{/* end scroll area */}
 
-          {/* ── NOW PLAYING BAR ── */}
-          {nowPlaying && (
+          {/* ── NOW PLAYING BAR (desktop) ── */}
+          {nowPlaying && !isMobile && (
             <div style={{flexShrink:0,borderTop:"1px solid #141414",background:"rgba(4,4,4,0.97)",backdropFilter:"blur(20px)",zIndex:isMobile?6500:1,marginBottom:isMobile?60:0}}>
               <div onClick={seekTo} style={{width:"100%",height:3,background:"#111",cursor:"pointer",position:"relative"}}>
                 <div style={{width:audioDuration?`${(audioCurrentTime/audioDuration)*100}%`:"0%",height:"100%",background:"#00ffff",transition:"width 0.1s linear",boxShadow:"0 0 4px rgba(0,255,255,0.5)"}}/>
@@ -1750,62 +1875,162 @@ export default function Page() {
       {/* ── MOBILE UI ── */}
       {isMobile && (
         <>
-          <button onClick={()=>setMobileCartOpen(true)} style={{position:"fixed",bottom:76,right:16,zIndex:6800,width:50,height:50,borderRadius:"50%",background:"#00ffff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(0,255,255,0.45)",flexShrink:0}}>
+          <motion.button
+            layout
+            onClick={()=>setMobileCartOpen(true)}
+            animate={{ bottom: mobileCartFabBottom }}
+            transition={SPRING_SOFT}
+            style={{
+              position:"fixed",right:16,zIndex:6800,width:50,height:50,borderRadius:"50%",
+              background:"#00ffff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",
+              justifyContent:"center",boxShadow:"0 4px 24px rgba(0,255,255,0.4)",flexShrink:0,
+            }}
+          >
             <svg viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" width="20" height="20"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-            {cart.length>0 && <div style={{position:"absolute",top:-4,right:-4,width:20,height:20,borderRadius:"50%",background:"#ff4d4d",color:"white",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{cart.length}</div>}
-          </button>
+            {cart.length>0 && <motion.div style={{position:"absolute",top:-4,right:-4,minWidth:20,height:20,borderRadius:10,padding:"0 5px",background:"#ff4d4d",color:"white",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{cart.length}</motion.div>}
+          </motion.button>
 
-          <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:6700,background:"rgba(4,4,4,0.97)",backdropFilter:"blur(20px)",borderTop:"1px solid #1a1a1a",display:"flex",alignItems:"center",justifyContent:"space-around",padding:"6px 0 14px",height:62}}>
+          <motion.div style={{
+            position:"fixed",bottom:0,left:0,right:0,zIndex:6700,
+            background:"rgba(6,6,6,0.94)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",
+            borderTop:"1px solid rgba(255,255,255,0.06)",
+            display:"flex",alignItems:"center",justifyContent:"space-around",
+            paddingTop:6,paddingBottom:"max(14px, env(safe-area-inset-bottom))",
+            minHeight:62,
+          }}>
             {[
-              {id:"home",    label:"Home",  icon:"⌂"},
-              {id:"singles", label:"Music", icon:"♫"},
-              {id:"shop",    label:"Shop",  icon:"◎"},
-              {id:"vault",   label:"Vault", icon:"◈"},
-              {id:"shows",   label:"Shows", icon:"✦"},
-            ].map(tab=>(
-              <button key={tab.id} onClick={()=>switchTab(tab.id)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:(activeTab===tab.id||(tab.id==="singles"&&(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic")))?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,padding:"4px 8px",borderRadius:8,transition:"color 0.2s",textShadow:(activeTab===tab.id||(tab.id==="singles"&&(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic")))?"0 0 10px rgba(0,255,255,0.6)":"none",minWidth:44,minHeight:44,justifyContent:"center"}}>
-                <span style={{fontSize:17,lineHeight:1}}>{tab.icon}</span><span>{tab.label}</span>
-              </button>
-            ))}
-            <button onClick={()=>setMobileNavOpen(true)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3,background:"none",border:"none",cursor:"pointer",color:"#555",fontSize:9,fontWeight:700,padding:"4px 8px",minWidth:44,minHeight:44,justifyContent:"center"}}>
-              <span style={{fontSize:17,lineHeight:1}}>≡</span><span>More</span>
-            </button>
-          </div>
+              {id:"home",    label:"Home",  svg:MOBILE_NAV_SVGS.home},
+              {id:"singles", label:"Music", svg:MOBILE_NAV_SVGS.music},
+              {id:"shop",    label:"Shop",  svg:MOBILE_NAV_SVGS.shop},
+              {id:"vault",   label:"Vault", svg:MOBILE_NAV_SVGS.vault},
+              {id:"shows",   label:"Shows", svg:MOBILE_NAV_SVGS.shows},
+            ].map(tab=>{
+              const active = activeTab===tab.id||(tab.id==="singles"&&(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic"));
+              return (
+                <motion.button
+                  key={tab.id}
+                  whileTap={{ scale: 0.92 }}
+                  onClick={()=>switchTab(tab.id)}
+                  style={{
+                    display:"flex",flexDirection:"column",alignItems:"center",gap:2,
+                    background:"none",border:"none",cursor:"pointer",
+                    color:active?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,
+                    padding:"4px 8px",borderRadius:10,minWidth:44,minHeight:44,justifyContent:"center",
+                    textShadow:active?"0 0 12px rgba(0,255,255,0.5)":"none",
+                    transition:"color 0.2s",
+                  }}
+                >
+                  {tab.svg}<span>{tab.label}</span>
+                </motion.button>
+              );
+            })}
+            <motion.button
+              whileTap={{ scale: 0.92 }}
+              onClick={()=>setMobileNavOpen(true)}
+              style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",color:"#555",fontSize:9,fontWeight:700,padding:"4px 8px",minWidth:44,minHeight:44,justifyContent:"center"}}
+            >
+              {MOBILE_NAV_SVGS.more}<span>More</span>
+            </motion.button>
+          </motion.div>
 
-          {mobileNavOpen && (
-            <div onClick={()=>setMobileNavOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
-              <div onClick={e=>e.stopPropagation()} style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:32,border:"1px solid #1e1e1e",maxHeight:"80vh",overflowY:"auto"}}>
-                <div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 16px"}}/>
-                {currentUser&&userStatus&&<div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}><div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>{currentUser.name[0].toUpperCase()}</div><div><div style={{fontSize:13,fontWeight:700,color:"white"}}>{currentUser.name}</div><div style={{fontSize:9,color:userStatus.color,fontWeight:700,letterSpacing:1}}>{userStatus.label}</div></div></div>}
-                {sidebarNav.map(group=>(
-                  <div key={group.groupId}>
-                    <button onClick={()=>switchTab(group.directTab)} style={{width:"100%",padding:"13px 24px",background:"none",border:"none",color:activeTab===group.directTab||group.subTabs.some(st=>st.id===activeTab)?"#00ffff":"#ccc",fontSize:13,fontWeight:700,letterSpacing:2,textAlign:"left",cursor:"pointer",textTransform:"uppercase",transition:"color 0.2s"}}>{group.label}</button>
-                    {group.subTabs.length>0 && <div style={{paddingLeft:16,paddingBottom:4}}>{group.subTabs.map(st=><button key={st.id} onClick={()=>switchTab(st.id)} style={{width:"100%",padding:"9px 24px",background:"none",border:"none",color:activeTab===st.id?"#00ffff":"#666",fontSize:12,textAlign:"left",cursor:"pointer",letterSpacing:1,transition:"color 0.2s"}}>{st.label}</button>)}</div>}
-                  </div>
-                ))}
-                <div style={{padding:"14px 24px",borderTop:"1px solid #111",marginTop:4,display:"flex",flexDirection:"column",gap:10}}>
-                  <button onClick={()=>switchTab("account")} style={{width:"100%",padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1}}>My Account</button>
-                  <button onClick={()=>setSoundOn(!soundOn)} style={{width:"100%",padding:"11px 0",background:"transparent",color:soundOn?"#00ffff":"#666",fontWeight:700,border:"1px solid #2a2a2a",borderRadius:10,cursor:"pointer",fontSize:13,letterSpacing:1}}>{soundOn?"♫ Sound On":"♫ Sound Off"}</button>
-                </div>
-              </div>
-            </div>
-          )}
+          <AnimatePresence>
+            {nowPlaying && (
+              <motion.div
+                key="mobile-mini-player"
+                initial={{ y: 72, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 72, opacity: 0 }}
+                transition={SPRING_SOFT}
+                style={{
+                  position:"fixed",left:12,right:12,bottom:mobileMiniPlayerBottom,zIndex:6750,
+                  borderRadius:16,overflow:"hidden",
+                  background:"rgba(10,10,10,0.9)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",
+                  border:"1px solid rgba(255,255,255,0.08)",
+                  boxShadow:"0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,255,255,0.05)",
+                }}
+              >
+                <motion.div onClick={seekTo} style={{width:"100%",height:3,background:"#111",cursor:"pointer"}}>
+                  <motion.div style={{width:audioDuration?`${(audioCurrentTime/audioDuration)*100}%`:"0%",height:"100%",background:"#00ffff",transition:"width 0.1s linear"}}/>
+                </motion.div>
+                <motion.div style={{padding:"8px 12px",display:"flex",alignItems:"center",gap:10}}>
+                  <img src={nowPlaying.cover} alt="" style={{width:40,height:40,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
+                  <motion.div style={{flex:1,minWidth:0}}>
+                    <motion.div style={{fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.title}</motion.div>
+                    <motion.div style={{fontSize:10,color:"#555",fontVariantNumeric:"tabular-nums"}}>{formatTime(audioCurrentTime)} / {formatTime(audioDuration)}</motion.div>
+                  </motion.div>
+                  <button onClick={()=>{
+                    if (!nowPlayingAudioRef.current) return;
+                    if (nowPlayingPlaying) { nowPlayingAudioRef.current.pause(); setNowPlayingPlaying(false); }
+                    else { nowPlayingAudioRef.current.play().catch(()=>{}); setNowPlayingPlaying(true); }
+                  }} style={{width:38,height:38,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                    {nowPlayingPlaying
+                      ? <svg viewBox="0 0 24 24" fill="#000" width="14" height="14"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
+                      : <svg viewBox="0 0 24 24" fill="#000" width="14" height="14" style={{marginLeft:2}}><path d="M8 5v14l11-7z"/></svg>}
+                  </button>
+                  <button onClick={()=>{setNowPlaying(null);setNowPlayingPlaying(false);if(nowPlayingAudioRef.current)nowPlayingAudioRef.current.pause();}} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:20,lineHeight:1,padding:"0 4px"}}>×</button>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-          {mobileCartOpen && (
-            <div onClick={()=>setMobileCartOpen(false)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}>
-              <div onClick={e=>e.stopPropagation()} style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",padding:"0 0 32px",border:"1px solid #1e1e1e",maxHeight:"82vh",overflowY:"auto"}}>
-                <div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 0"}}/>
-                <div style={{padding:"16px 20px 0"}}><h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Cart {cart.length>0&&`(${cart.length})`}</h3></div>
-                {cart.length===0 && <p style={{opacity:0.4,fontSize:13,padding:"0 20px 20px"}}>Your cart is empty.</p>}
-                <div style={{padding:"0 20px"}}>{cart.map((item,i)=><div key={i} style={{marginBottom:10,display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>{item.cover&&<img src={item.cover} style={{width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}<span style={{fontSize:13,flex:1,lineHeight:1.4}}>{item.title}<br/><span style={{color:"#00ffff",fontSize:12}}>${item.price.toFixed(2)}</span></span><button onClick={()=>removeFromCart(i)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button></div>)}</div>
-                {cart.length>0 && <div style={{padding:"16px 20px 0",display:"flex",flexDirection:"column",gap:10}}><div style={{fontSize:15,fontWeight:700}}>Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span></div><button onClick={handleCheckout} disabled={checkingOut} style={{width:"100%",padding:"14px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:15}}>{checkingOut?"Redirecting…":"Checkout"}</button><button onClick={()=>{clearCart();setMobileCartOpen(false);}} style={{width:"100%",padding:"12px 0",background:"transparent",color:"#ff4d4d",border:"1px solid #ff4d4d33",borderRadius:10,cursor:"pointer",fontSize:13}}>Clear Cart</button></div>}
-                {checkoutError && <p style={{color:"#ff4d4d",fontSize:12,padding:"10px 20px 0"}}>{checkoutError}</p>}
-                <div style={{padding:"12px 20px 0"}}><button onClick={()=>setMobileCartOpen(false)} style={{width:"100%",padding:"12px 0",background:"none",border:"1px solid #1e1e1e",color:"#555",cursor:"pointer",fontSize:13,borderRadius:10}}>Close</button></div>
-              </div>
-            </div>
-          )}
+          <AnimatePresence>
+            {mobileNavOpen && (
+              <motion.div
+                key="nav-sheet"
+                {...OVERLAY_FADE}
+                onClick={()=>setMobileNavOpen(false)}
+                style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}
+              >
+                <motion.div
+                  {...SHEET_UP}
+                  onClick={e=>e.stopPropagation()}
+                  style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:"max(32px, env(safe-area-inset-bottom))",border:"1px solid #1e1e1e",maxHeight:"80vh",overflowY:"auto"}}
+                >
+                  <motion.div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 16px"}}/>
+                  {currentUser&&userStatus&&<motion.div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}><motion.div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>{currentUser.name[0].toUpperCase()}</motion.div><motion.div><motion.div style={{fontSize:13,fontWeight:700,color:"white"}}>{currentUser.name}</motion.div><motion.div style={{fontSize:9,color:userStatus.color,fontWeight:700,letterSpacing:1}}>{userStatus.label}</motion.div></motion.div></motion.div>}
+                  {sidebarNav.map(group=>(
+                    <motion.div key={group.groupId}>
+                      <button onClick={()=>switchTab(group.directTab)} style={{width:"100%",padding:"13px 24px",background:"none",border:"none",color:activeTab===group.directTab||group.subTabs.some(st=>st.id===activeTab)?"#00ffff":"#ccc",fontSize:13,fontWeight:700,letterSpacing:2,textAlign:"left",cursor:"pointer",textTransform:"uppercase",transition:"color 0.2s"}}>{group.label}</button>
+                      {group.subTabs.length>0 && <motion.div style={{paddingLeft:16,paddingBottom:4}}>{group.subTabs.map(st=><button key={st.id} onClick={()=>switchTab(st.id)} style={{width:"100%",padding:"9px 24px",background:"none",border:"none",color:activeTab===st.id?"#00ffff":"#666",fontSize:12,textAlign:"left",cursor:"pointer",letterSpacing:1,transition:"color 0.2s"}}>{st.label}</button>)}</motion.div>}
+                    </motion.div>
+                  ))}
+                  <motion.div style={{padding:"14px 24px",borderTop:"1px solid #111",marginTop:4,display:"flex",flexDirection:"column",gap:10}}>
+                    <button onClick={()=>switchTab("account")} style={{width:"100%",padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1}}>My Account</button>
+                    <button onClick={()=>setSoundOn(!soundOn)} style={{width:"100%",padding:"11px 0",background:"transparent",color:soundOn?"#00ffff":"#666",fontWeight:700,border:"1px solid #2a2a2a",borderRadius:10,cursor:"pointer",fontSize:13,letterSpacing:1}}>{soundOn?"♫ Sound On":"♫ Sound Off"}</button>
+                  </motion.div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {mobileCartOpen && (
+              <motion.div
+                key="cart-sheet"
+                {...OVERLAY_FADE}
+                onClick={()=>setMobileCartOpen(false)}
+                style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}
+              >
+                <motion.div
+                  {...SHEET_UP}
+                  onClick={e=>e.stopPropagation()}
+                  style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",padding:"0 0 max(32px, env(safe-area-inset-bottom))",border:"1px solid #1e1e1e",maxHeight:"82vh",overflowY:"auto"}}
+                >
+                  <motion.div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 0"}}/>
+                  <motion.div style={{padding:"16px 20px 0"}}><h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Cart {cart.length>0&&`(${cart.length})`}</h3></motion.div>
+                  {cart.length===0 && <p style={{opacity:0.4,fontSize:13,padding:"0 20px 20px"}}>Your cart is empty.</p>}
+                  <motion.div style={{padding:"0 20px"}}>{cart.map((item,i)=><motion.div key={i} style={{marginBottom:10,display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>{item.cover&&<img src={item.cover} style={{width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0}} alt="" />}<span style={{fontSize:13,flex:1,lineHeight:1.4}}>{item.title}<br/><span style={{color:"#00ffff",fontSize:12}}>${item.price.toFixed(2)}</span></span><button onClick={()=>removeFromCart(i)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button></motion.div>)}</motion.div>
+                  {cart.length>0 && <motion.div style={{padding:"16px 20px 0",display:"flex",flexDirection:"column",gap:10}}><motion.div style={{fontSize:15,fontWeight:700}}>Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span></motion.div><button onClick={handleCheckout} disabled={checkingOut} style={{width:"100%",padding:"14px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:15}}>{checkingOut?"Redirecting…":"Checkout"}</button><button onClick={()=>{clearCart();setMobileCartOpen(false);}} style={{width:"100%",padding:"12px 0",background:"transparent",color:"#ff4d4d",border:"1px solid #ff4d4d33",borderRadius:10,cursor:"pointer",fontSize:13}}>Clear Cart</button></motion.div>}
+                  {checkoutError && <p style={{color:"#ff4d4d",fontSize:12,padding:"10px 20px 0"}}>{checkoutError}</p>}
+                  <motion.div style={{padding:"12px 20px 0"}}><button onClick={()=>setMobileCartOpen(false)} style={{width:"100%",padding:"12px 0",background:"none",border:"1px solid #1e1e1e",color:"#555",cursor:"pointer",fontSize:13,borderRadius:10}}>Close</button></motion.div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </>
       )}
+
+
 
       {/* ── CSS ── */}
       <style jsx>{`
@@ -1833,17 +2058,27 @@ export default function Page() {
       `}</style>
 
       {/* ── STRIPE MODAL ── */}
-      {clientSecret && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
-          <div style={{background:"#0a0a0a",padding:isMobile?20:30,borderRadius:20,width:isMobile?"100%":400,maxWidth:isMobile?"calc(100vw - 32px)":"none",border:"1px solid #222"}}>
-            <div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Checkout</div>
-            <Elements stripe={stripePromise} options={{clientSecret,appearance:{theme:"night",variables:{colorPrimary:"#00ffff",colorBackground:"#0a0a0a",colorText:"#ffffff",borderRadius:"8px"}}}}>
-              <CheckoutForm onSuccess={handleCheckoutSuccess}/>
-            </Elements>
-            <button onClick={()=>{setClientSecret(null);setCheckingOut(false);}} style={{marginTop:10,width:"100%",padding:10,background:"none",border:"1px solid #333",color:"#777",cursor:"pointer",borderRadius:8}}>Cancel</button>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {clientSecret && (
+          <motion.div
+            key="stripe"
+            {...OVERLAY_FADE}
+            style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}
+          >
+            <motion.div
+              {...(isMobile ? SHEET_UP : MODAL_CENTER)}
+              style={{background:"#0a0a0a",padding:isMobile?20:30,borderRadius:isMobile?"20px 20px 0 0":20,width:isMobile?"100%":400,maxWidth:isMobile?"100%":"none",border:"1px solid #222",alignSelf:isMobile?"flex-end":"center"}}
+            >
+              <motion.div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Checkout</motion.div>
+              <Elements stripe={stripePromise} options={{clientSecret,appearance:{theme:"night",variables:{colorPrimary:"#00ffff",colorBackground:"#0a0a0a",colorText:"#ffffff",borderRadius:"8px"}}}}>
+                <CheckoutForm onSuccess={handleCheckoutSuccess}/>
+              </Elements>
+              <button onClick={()=>{setClientSecret(null);setCheckingOut(false);}} style={{marginTop:10,width:"100%",padding:10,background:"none",border:"1px solid #333",color:"#777",cursor:"pointer",borderRadius:8}}>Cancel</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </>
   );
 }
