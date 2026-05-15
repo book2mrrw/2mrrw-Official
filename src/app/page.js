@@ -87,7 +87,6 @@ const singles = [
     price: 2.99,
     preview: "/audio/previews/hourglass-preview.mp3",
   },
-
   {
     title: "W: Da Guys",
     slug: "w-da-guys",
@@ -96,7 +95,6 @@ const singles = [
     price: 2.99,
     preview: "/audio/previews/wdaguys-preview.mp3",
   },
-
   {
     title: "W.2.D",
     slug: "w2d",
@@ -105,7 +103,6 @@ const singles = [
     price: 2.99,
     preview: "/audio/previews/w2d-preview.mp3",
   },
-
   {
     title: "Artificial",
     slug: "artificial",
@@ -114,7 +111,6 @@ const singles = [
     price: 2.99,
     preview: "/audio/previews/artificial-preview.mp3",
   },
-
   {
     title: "Turnt Me 2 Dis",
     slug: "turnt-me-2-dis",
@@ -162,24 +158,19 @@ function decrementInventory(inv, slug) {
 // ══════════════════════════════════════════════════════════════════════════════
 // ── AUDIO VISUALS SECTION ────────────────────────────────────────────────────
 //
-// AUDIO FOCUS LOGIC:
-//   • When this section scrolls into primary view (≥50% visible on mobile,
-//     ≥40% on desktop), it fires onAudioVisualsFocused() — which stops the
-//     preview player in the parent — then mounts the iframe with autoplay=1
-//     and mute=0 so the video plays WITH sound immediately.
-//   • The observer uses a "primary focus" threshold (0.5 mobile / 0.4 desktop)
-//     so it only triggers when the section is the dominant content on screen,
-//     not just barely peeking into view.
-//   • The observer fires once per mount and disconnects, preventing loops.
-//   • If the user clicks the placeholder thumbnail before scrolling, we also
-//     fire onAudioVisualsFocused so preview audio stops cleanly.
+// FIX SUMMARY (3 changes from original):
+//   1. Added iframeRef to send postMessage commands to the YouTube iframe.
+//   2. Added &enablejsapi=1 to iframeSrc so postMessage commands work.
+//   3. Replaced obs.disconnect()-inside-callback with a stable enter/exit
+//      observer that pauses the video when scrolled away and resumes on
+//      re-entry — fixing audio continuing offscreen.
 // ══════════════════════════════════════════════════════════════════════════════
 const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudioVisualsFocused }) {
   const [featuredId, setFeaturedId] = useState(musicVideos[0].youtubeId);
-  // hasEntered: true once section is in primary focus → iframe mounts with sound
   const [hasEntered, setHasEntered] = useState(false);
   const sectionRef = useRef(null);
-  // Track whether we've already fired the focus callback to avoid repeat calls
+  // ── FIX 1: ref for the active YouTube iframe so we can send postMessage ──
+  const iframeRef = useRef(null);
   const firedFocusRef = useRef(false);
 
   const featuredVid = useMemo(
@@ -187,8 +178,6 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
     [featuredId]
   );
 
-  // Called when Audio Visuals takes primary focus — stops preview audio
-  // and marks that the iframe should now play with sound.
   const triggerFocus = useCallback(() => {
     if (!firedFocusRef.current) {
       firedFocusRef.current = true;
@@ -199,44 +188,56 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
     setHasEntered(true);
   }, [onAudioVisualsFocused]);
 
-  // IntersectionObserver — watches for the section becoming the primary
-  // visible content. Threshold is higher than a simple "entered viewport"
-  // check so it only triggers when this section is clearly the focus area.
-  // Disconnects after first trigger to avoid any loop or re-firing.
+  // ── FIX 3: stable viewport-aware observer — no disconnect inside callback ──
+  // Tracks enter/exit so video pauses when scrolled away and resumes on re-entry.
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
-
-    // Use a higher threshold on mobile (0.5) since the viewport is narrow
-    // and the section fills more of the screen; desktop uses 0.4.
     const threshold = isMobile ? 0.5 : 0.4;
+    let hasBeenInView = false;
+
+    // Helper: send a YouTube iframe API command via postMessage
+    const sendCmd = (cmd) => {
+      try {
+        iframeRef.current?.contentWindow?.postMessage(
+          JSON.stringify({ event: "command", func: cmd, args: [] }),
+          "*"
+        );
+      } catch {}
+    };
 
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          triggerFocus();
-          obs.disconnect(); // fire once only — no aggressive loop
+          triggerFocus(); // first entry: mount iframe with autoplay + stop preview audio
+          if (hasBeenInView) {
+            // Re-entering after scroll-away: resume playback
+            sendCmd("playVideo");
+          }
+          hasBeenInView = true;
+        } else if (hasBeenInView) {
+          // Scrolled away: pause so audio doesn't continue offscreen
+          sendCmd("pauseVideo");
         }
       },
-      { threshold }
+      { threshold: [0, threshold] }
     );
+
     obs.observe(el);
-    return () => obs.disconnect();
+    return () => obs.disconnect(); // only disconnect on unmount
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally empty — runs once on mount only
+  }, []); // runs once on mount; iframeRef is stable
 
   const handleSelect = useCallback((id) => {
     setFeaturedId(id);
   }, []);
 
-  // iframe src: autoplay=1, mute=0 — plays with sound when mounted.
-  // key={featuredId} forces a clean iframe remount on video switch.
+  // ── FIX 2: enablejsapi=1 added so postMessage pause/play commands work ──
   const iframeSrc = useMemo(
-    () => `https://www.youtube.com/embed/${featuredId}?rel=0&playsinline=1&autoplay=1&mute=0`,
+    () => `https://www.youtube.com/embed/${featuredId}?rel=0&playsinline=1&autoplay=1&mute=0&enablejsapi=1`,
     [featuredId]
   );
 
-  // Placeholder click handler — user tapped before scrolling into focus
   const handlePlaceholderClick = useCallback(() => {
     triggerFocus();
   }, [triggerFocus]);
@@ -258,6 +259,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
               {hasEntered ? (
                 <iframe
                   key={featuredId}
+                  ref={iframeRef} // ── FIX 1: attach ref ──
                   src={iframeSrc}
                   title={featuredVid.title}
                   frameBorder="0"
@@ -266,7 +268,6 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
                   style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}}
                 />
               ) : (
-                // Placeholder thumbnail until section reaches primary focus
                 <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",cursor:"pointer"}} onClick={handlePlaceholderClick}>
                   <img
                     src={`https://img.youtube.com/vi/${featuredId}/mqdefault.jpg`}
@@ -287,7 +288,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
             </div>
           </div>
 
-          {/* Queue strip — thumbnail cards, tap to switch featured */}
+          {/* Queue strip */}
           <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:6,scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch"}}>
             {musicVideos.map(vid => {
               const isActive = featuredId === vid.youtubeId;
@@ -339,6 +340,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
               {hasEntered ? (
                 <iframe
                   key={featuredId}
+                  ref={iframeRef} // ── FIX 1: attach ref ──
                   src={iframeSrc}
                   title={featuredVid.title}
                   frameBorder="0"
@@ -347,7 +349,6 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
                   style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}}
                 />
               ) : (
-                // Placeholder until in primary focus
                 <div
                   style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",cursor:"pointer"}}
                   onClick={handlePlaceholderClick}
@@ -508,8 +509,6 @@ export default function Page() {
   const ytIframeRef        = useRef(null);
 
   // ── AUDIO FOCUS HANDLER ───────────────────────────────────────────────────
-  // Called by AudioVisualsSection when it becomes the primary visible section.
-  // Pauses the preview player so there's no audio overlap.
   const handleAudioVisualsFocused = useCallback(() => {
     const audio = nowPlayingAudioRef.current;
     if (audio && !audio.paused) {
@@ -906,7 +905,6 @@ export default function Page() {
     );
   };
 
-  // ── BRIEF §8: stock display helper
   const stockLabel = (item) => {
     if (item.stock === null || item.stock === undefined) return null;
     if (item.stock <= 0) return "SOLD OUT";
@@ -938,7 +936,38 @@ export default function Page() {
       {selectedSingle && (
         <div onClick={()=>setSelectedSingle(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:isMobile?20:30,width:isMobile?"100%":340,maxWidth:isMobile?"calc(100vw - 32px)":"none",display:"flex",flexDirection:"column",alignItems:"center",gap:14}}>
-            <img src={selectedSingle.cover} style={{width:isMobile?160:200,height:isMobile?160:200,borderRadius:14,objectFit:"cover"}}/>
+
+            {/*
+              ── FIX: Modal cover — replaced <img> with <video> ──
+              key={selectedSingle.slug} forces a clean remount on every new single
+              so the video src updates correctly and doesn't play the previous single.
+              pointerEvents:"none" keeps click-to-close working on the backdrop.
+            */}
+            <video
+              key={selectedSingle.slug}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              style={{
+                width:isMobile?160:200,
+                height:isMobile?160:200,
+                borderRadius:14,
+                objectFit:"cover",
+                display:"block",
+                pointerEvents:"none",
+              }}
+            >
+              <source src={selectedSingle.video} type="video/mp4"/>
+              {/* Fallback if video fails */}
+              <img
+                src={selectedSingle.cover}
+                alt={selectedSingle.title}
+                style={{width:isMobile?160:200,height:isMobile?160:200,borderRadius:14,objectFit:"cover"}}
+              />
+            </video>
+
             <div style={{fontSize:18,fontWeight:700}}>{selectedSingle.title}</div>
             <div style={{fontSize:13,opacity:0.5}}>SINGLE PREVIEW · ${selectedSingle.price.toFixed(2)}</div>
             <div style={{width:"100%"}}>
@@ -1102,213 +1131,159 @@ export default function Page() {
               {/* ══ HOME ══ */}
               {activeTab==="home" && (
                 <>
-        {/* Latest Singles */}
-<div style={{marginTop:20,marginBottom:4}}>
-  <h2 className="section-heading" style={{marginBottom:14}}>Latest Singles</h2>
+                  {/* Latest Singles */}
+                  <div style={{marginTop:20,marginBottom:4}}>
+                    <h2 className="section-heading" style={{marginBottom:14}}>Latest Singles</h2>
 
-  <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:18,alignItems:"flex-start"}}>
+                    <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:18,alignItems:"flex-start"}}>
 
-    <div
-      className="singles-row"
-      style={{
-        flex:1,
-        display:"flex",
-        gap:isMobile?12:18,
-        overflowX:"auto",
-        paddingBottom:14,
-        scrollSnapType:"x mandatory",
-        WebkitOverflowScrolling:"touch",
-        overscrollBehaviorX:"contain",
-        flexWrap:"nowrap",
-        width:"100%",
-        minWidth:0
-      }}
-    >
+                      <div
+                        className="singles-row"
+                        style={{
+                          flex:1,
+                          display:"flex",
+                          gap:isMobile?12:18,
+                          overflowX:"auto",
+                          paddingBottom:14,
+                          scrollSnapType:"x mandatory",
+                          WebkitOverflowScrolling:"touch",
+                          overscrollBehaviorX:"contain",
+                          flexWrap:"nowrap",
+                          width:"100%",
+                          minWidth:0
+                        }}
+                      >
+                        {singles.map((single,i)=>(
+                          <div
+                            key={single.slug}
+                            onClick={()=>openSingleModal(single)}
+                            style={{
+                              flex:"0 0 auto",
+                              width:isMobile?160:200,
+                              cursor:"pointer",
+                              scrollSnapAlign:"start",
+                              opacity:0,
+                              animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,
+                              background:"#0a0a0a",
+                              borderRadius:14,
+                              border:"1px solid #1a1a1a",
+                              transition:"border-color 0.25s",
+                              position:"relative",
+                            }}
+                            // ── FIX: hover proxied to parent since video has pointerEvents:none ──
+                            onMouseEnter={e=>{
+                              e.currentTarget.style.borderColor="#00ffff1a";
+                              const vid=e.currentTarget.querySelector("video");
+                              if(vid) hoverIn({currentTarget:vid});
+                            }}
+                            onMouseLeave={e=>{
+                              e.currentTarget.style.borderColor="#1a1a1a";
+                              const vid=e.currentTarget.querySelector("video");
+                              if(vid) hoverOut({currentTarget:vid});
+                            }}
+                          >
+                            {/*
+                              ── FIX: video element ──
+                              1. <source type="video/mp4"> — required for Safari codec negotiation
+                              2. pointerEvents:"none" — stops video eating clicks so modal opens correctly
+                              3. <img> fallback inside <video> — graceful degradation
+                            */}
+                            <video
+                              autoPlay
+                              muted
+                              loop
+                              playsInline
+                              preload="metadata"
+                              style={{
+                                width:"100%",
+                                aspectRatio:"1/1",
+                                objectFit:"cover",
+                                display:"block",
+                                borderRadius:"13px 13px 0 0",
+                                transition:"transform 0.3s,filter 0.3s,box-shadow 0.3s",
+                                pointerEvents:"none",
+                              }}
+                            >
+                              <source src={single.video} type="video/mp4"/>
+                              <img
+                                src={single.cover}
+                                alt={single.title}
+                                style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",display:"block",borderRadius:"13px 13px 0 0"}}
+                              />
+                            </video>
 
-      {singles.map((single,i)=>(
+                            <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
+                              <div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>
+                                {single.title}
+                              </div>
+                              <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>
+                                ${single.price.toFixed(2)}
+                              </div>
+                              <button
+                                onClick={e=>{
+                                  e.stopPropagation();
+                                  addToCart(single);
+                                }}
+                                style={{
+                                  width:"100%",
+                                  padding:"7px 0",
+                                  fontSize:11,
+                                  background:"#1a1a1a",
+                                  color:"white",
+                                  border:"1px solid #2a2a2a",
+                                  borderRadius:7,
+                                  cursor:"pointer",
+                                  fontWeight:600,
+                                  transition:"0.2s"
+                                }}
+                                onMouseEnter={e=>{
+                                  e.currentTarget.style.borderColor="#00ffff";
+                                  e.currentTarget.style.color="#00ffff";
+                                }}
+                                onMouseLeave={e=>{
+                                  e.currentTarget.style.borderColor="#2a2a2a";
+                                  e.currentTarget.style.color="white";
+                                }}
+                              >
+                                + Cart
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
 
-        <div
-          key={single.slug}
-          onClick={()=>openSingleModal(single)}
-          style={{
-            flex:"0 0 auto",
-            width:isMobile?160:200,
-            cursor:"pointer",
-            scrollSnapAlign:"start",
-            opacity:0,
-            animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,
-            background:"#0a0a0a",
-            borderRadius:14,
-            border:"1px solid #1a1a1a",
-            transition:"border-color 0.25s"
-          }}
-          onMouseEnter={e=>e.currentTarget.style.borderColor="#00ffff1a"}
-          onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}
-        >
+                      {!isMobile && <LivePanel/>}
 
-          <video
-            src={single.video}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            style={{
-              width:"100%",
-              aspectRatio:"1/1",
-              objectFit:"cover",
-              display:"block",
-              borderRadius:"13px 13px 0 0",
-              transition:"transform 0.3s,filter 0.3s,box-shadow 0.3s"
-            }}
-            onMouseEnter={hoverIn}
-            onMouseLeave={hoverOut}
-          />
+                    </div>
 
-          <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
-
-            <div style={{
-              fontSize:isMobile?12:13,
-              fontWeight:700,
-              marginBottom:4
-            }}>
-              {single.title}
-            </div>
-
-            <div style={{
-              fontSize:12,
-              color:"#00ffff",
-              fontWeight:700,
-              marginBottom:isMobile?8:10
-            }}>
-              ${single.price.toFixed(2)}
-            </div>
-
-            <button
-              onClick={e=>{
-                e.stopPropagation();
-                addToCart(single);
-              }}
-              style={{
-                width:"100%",
-                padding:"7px 0",
-                fontSize:11,
-                background:"#1a1a1a",
-                color:"white",
-                border:"1px solid #2a2a2a",
-                borderRadius:7,
-                cursor:"pointer",
-                fontWeight:600,
-                transition:"0.2s"
-              }}
-              onMouseEnter={e=>{
-                e.currentTarget.style.borderColor="#00ffff";
-                e.currentTarget.style.color="#00ffff";
-              }}
-              onMouseLeave={e=>{
-                e.currentTarget.style.borderColor="#2a2a2a";
-                e.currentTarget.style.color="white";
-              }}
-            >
-              + Cart
-            </button>
-
-          </div>
-        </div>
-
-      ))}
-
-    </div>
-
-    {!isMobile && <LivePanel/>}
-
-  </div>
-
-  {isMobile && (
-    <div style={{
-      marginTop:14,
-      background:"linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",
-      border:"1px solid rgba(0,255,255,0.15)",
-      borderRadius:16,
-      padding:"20px 18px",
-      backdropFilter:"blur(12px)"
-    }}>
-
-      <div style={{
-        fontSize:11,
-        color:"#444",
-        letterSpacing:3,
-        marginBottom:10,
-        textTransform:"uppercase",
-        fontWeight:700
-      }}>
-        2MRRW LIVE
-      </div>
-
-      {liveIsLive ? (
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
-          <div style={{
-            width:10,
-            height:10,
-            borderRadius:"50%",
-            background:"#00ffff",
-            animation:"pulse 1.2s infinite"
-          }}/>
-
-          <div style={{
-            fontSize:20,
-            fontWeight:900,
-            color:"#00ffff",
-            letterSpacing:3
-          }}>
-            LIVE NOW
-          </div>
-        </div>
-      ) : (
-        <div style={{display:"flex",gap:8}}>
-          {[
-            {v:liveCountdown.days,l:"D"},
-            {v:liveCountdown.hours,l:"H"},
-            {v:liveCountdown.minutes,l:"M"},
-            {v:liveCountdown.seconds,l:"S"}
-          ].map(u=>(
-            <div
-              key={u.l}
-              style={{
-                flex:1,
-                background:"rgba(0,0,0,0.5)",
-                border:"1px solid #1a1a1a",
-                borderRadius:10,
-                padding:"10px 4px",
-                textAlign:"center"
-              }}
-            >
-              <div style={{
-                fontSize:22,
-                fontWeight:900,
-                color:"#00ffff",
-                fontVariantNumeric:"tabular-nums",
-                lineHeight:1
-              }}>
-                {String(u.v).padStart(2,"0")}
-              </div>
-
-              <div style={{
-                fontSize:9,
-                color:"#444",
-                letterSpacing:1.5,
-                marginTop:3
-              }}>
-                {u.l}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-    </div>
-  )}
-</div>
+                    {isMobile && (
+                      <div style={{
+                        marginTop:14,
+                        background:"linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",
+                        border:"1px solid rgba(0,255,255,0.15)",
+                        borderRadius:16,
+                        padding:"20px 18px",
+                        backdropFilter:"blur(12px)"
+                      }}>
+                        <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:10,textTransform:"uppercase",fontWeight:700}}>2MRRW LIVE</div>
+                        {liveIsLive ? (
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <div style={{width:10,height:10,borderRadius:"50%",background:"#00ffff",animation:"pulse 1.2s infinite"}}/>
+                            <div style={{fontSize:20,fontWeight:900,color:"#00ffff",letterSpacing:3}}>LIVE NOW</div>
+                          </div>
+                        ) : (
+                          <div style={{display:"flex",gap:8}}>
+                            {[{v:liveCountdown.days,l:"D"},{v:liveCountdown.hours,l:"H"},{v:liveCountdown.minutes,l:"M"},{v:liveCountdown.seconds,l:"S"}].map(u=>(
+                              <div key={u.l} style={{flex:1,background:"rgba(0,0,0,0.5)",border:"1px solid #1a1a1a",borderRadius:10,padding:"10px 4px",textAlign:"center"}}>
+                                <div style={{fontSize:22,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(u.v).padStart(2,"0")}</div>
+                                <div style={{fontSize:9,color:"#444",letterSpacing:1.5,marginTop:3}}>{u.l}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Features */}
                   <div style={{marginTop:28,marginBottom:4}}>
@@ -1335,7 +1310,7 @@ export default function Page() {
                     <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile}/>
                   </div>
 
-                  {/* Audio Visuals — passes handleAudioVisualsFocused to stop preview on focus */}
+                  {/* Audio Visuals */}
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
                   <AudioVisualsSection isMobile={isMobile} onAudioVisualsFocused={handleAudioVisualsFocused}/>
 
@@ -1446,7 +1421,6 @@ export default function Page() {
                         <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)}/>
                       </div>
 
-                      {/* AudioVisualsSection — Music tab, same audio focus logic */}
                       <AudioVisualsSection isMobile={isMobile} onAudioVisualsFocused={handleAudioVisualsFocused}/>
                     </>
                   )}
