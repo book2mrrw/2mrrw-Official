@@ -79,11 +79,50 @@ const features = [
   { title:"2 Heavy",             slug:"2-heavy",            cover:"/images/features/2heavy.jpg", price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/2-heavy-preview.wav" },
 ];
 const singles = [
-  { title:"Hour Glass",     slug:"hour-glass",     cover:"/images/singles/hourglass.jpg", price:2.99, preview:"/audio/previews/hourglass-preview.mp3" },
-  { title:"W: Da Guys",     slug:"w-da-guys",      cover:"/images/singles/wdaguys.jpg",   price:2.99, preview:"/audio/previews/wdaguys-preview.mp3" },
-  { title:"W.2.D",          slug:"w2d",            cover:"/images/singles/w2d.jpg",       price:2.99, preview:"/audio/previews/w2d-preview.mp3" },
-  { title:"Artificial",     slug:"artificial",     cover:"/images/singles/artificial.jpg",price:2.99, preview:"/audio/previews/artificial-preview.mp3" },
-  { title:"Turnt Me 2 Dis", slug:"turnt-me-2-dis", cover:"/images/singles/turnt.jpg",     price:2.99, preview:"/audio/previews/turntme2dis-preview.mp3" },
+  {
+    title: "Hour Glass",
+    slug: "hour-glass",
+    cover: "/images/singles/hourglass.jpg",
+    video: "/videos/hourglass.mp4",
+    price: 2.99,
+    preview: "/audio/previews/hourglass-preview.mp3",
+  },
+
+  {
+    title: "W: Da Guys",
+    slug: "w-da-guys",
+    cover: "/images/singles/wdaguys.jpg",
+    video: "/videos/wdaguys.mp4",
+    price: 2.99,
+    preview: "/audio/previews/wdaguys-preview.mp3",
+  },
+
+  {
+    title: "W.2.D",
+    slug: "w2d",
+    cover: "/images/singles/w2d.jpg",
+    video: "/videos/w2d.mp4",
+    price: 2.99,
+    preview: "/audio/previews/w2d-preview.mp3",
+  },
+
+  {
+    title: "Artificial",
+    slug: "artificial",
+    cover: "/images/singles/artificial.jpg",
+    video: "/videos/artificial.mp4",
+    price: 2.99,
+    preview: "/audio/previews/artificial-preview.mp3",
+  },
+
+  {
+    title: "Turnt Me 2 Dis",
+    slug: "turnt-me-2-dis",
+    cover: "/images/singles/turnt.jpg",
+    video: "/videos/turntme2dis.mp4",
+    price: 2.99,
+    preview: "/audio/previews/turntme2dis-preview.mp3",
+  },
 ];
 
 const albums = [
@@ -1063,32 +1102,213 @@ export default function Page() {
               {/* ══ HOME ══ */}
               {activeTab==="home" && (
                 <>
-                  {/* Latest Singles */}
-                  <div style={{marginTop:20,marginBottom:4}}>
-                    <h2 className="section-heading" style={{marginBottom:14}}>Latest Singles</h2>
-                    <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:18,alignItems:"flex-start"}}>
-                      <div className="singles-row" style={{flex:1,display:"flex",gap:isMobile?12:18,overflowX:"auto",paddingBottom:14,scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch",overscrollBehaviorX:"contain",flexWrap:"nowrap",width:"100%",minWidth:0}}>
-                        {singles.map((single,i)=>(
-                          <div key={single.slug} onClick={()=>openSingleModal(single)} style={{flex:"0 0 auto",width:isMobile?160:200,cursor:"pointer",scrollSnapAlign:"start",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#00ffff1a"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
-                            <img src={single.cover} style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",display:"block",borderRadius:"13px 13px 0 0",transition:"transform 0.3s,filter 0.3s,box-shadow 0.3s"}} onMouseEnter={hoverIn} onMouseLeave={hoverOut}/>
-                            <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
-                              <div style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{single.title}</div>
-                              <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${single.price.toFixed(2)}</div>
-                              <button onClick={e=>{e.stopPropagation();addToCart(single);}} style={{width:"100%",padding:"7px 0",fontSize:11,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",borderRadius:7,cursor:"pointer",fontWeight:600,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="white";}}>+ Cart</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                      {!isMobile && <LivePanel/>}
-                    </div>
-                    {isMobile && (
-                      <div style={{marginTop:14,background:"linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",border:"1px solid rgba(0,255,255,0.15)",borderRadius:16,padding:"20px 18px",backdropFilter:"blur(12px)"}}>
-                        <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:10,textTransform:"uppercase",fontWeight:700}}>2MRRW LIVE</div>
-                        {liveIsLive ? <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,borderRadius:"50%",background:"#00ffff",animation:"pulse 1.2s infinite"}}/><div style={{fontSize:20,fontWeight:900,color:"#00ffff",letterSpacing:3}}>LIVE NOW</div></div>
-                          : <div style={{display:"flex",gap:8}}>{[{v:liveCountdown.days,l:"D"},{v:liveCountdown.hours,l:"H"},{v:liveCountdown.minutes,l:"M"},{v:liveCountdown.seconds,l:"S"}].map(u=><div key={u.l} style={{flex:1,background:"rgba(0,0,0,0.5)",border:"1px solid #1a1a1a",borderRadius:10,padding:"10px 4px",textAlign:"center"}}><div style={{fontSize:22,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(u.v).padStart(2,"0")}</div><div style={{fontSize:9,color:"#444",letterSpacing:1.5,marginTop:3}}>{u.l}</div></div>)}</div>}
-                      </div>
-                    )}
-                  </div>
+        {/* Latest Singles */}
+<div style={{marginTop:20,marginBottom:4}}>
+  <h2 className="section-heading" style={{marginBottom:14}}>Latest Singles</h2>
+
+  <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:18,alignItems:"flex-start"}}>
+
+    <div
+      className="singles-row"
+      style={{
+        flex:1,
+        display:"flex",
+        gap:isMobile?12:18,
+        overflowX:"auto",
+        paddingBottom:14,
+        scrollSnapType:"x mandatory",
+        WebkitOverflowScrolling:"touch",
+        overscrollBehaviorX:"contain",
+        flexWrap:"nowrap",
+        width:"100%",
+        minWidth:0
+      }}
+    >
+
+      {singles.map((single,i)=>(
+
+        <div
+          key={single.slug}
+          onClick={()=>openSingleModal(single)}
+          style={{
+            flex:"0 0 auto",
+            width:isMobile?160:200,
+            cursor:"pointer",
+            scrollSnapAlign:"start",
+            opacity:0,
+            animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,
+            background:"#0a0a0a",
+            borderRadius:14,
+            border:"1px solid #1a1a1a",
+            transition:"border-color 0.25s"
+          }}
+          onMouseEnter={e=>e.currentTarget.style.borderColor="#00ffff1a"}
+          onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}
+        >
+
+          <video
+            src={single.video}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            style={{
+              width:"100%",
+              aspectRatio:"1/1",
+              objectFit:"cover",
+              display:"block",
+              borderRadius:"13px 13px 0 0",
+              transition:"transform 0.3s,filter 0.3s,box-shadow 0.3s"
+            }}
+            onMouseEnter={hoverIn}
+            onMouseLeave={hoverOut}
+          />
+
+          <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
+
+            <div style={{
+              fontSize:isMobile?12:13,
+              fontWeight:700,
+              marginBottom:4
+            }}>
+              {single.title}
+            </div>
+
+            <div style={{
+              fontSize:12,
+              color:"#00ffff",
+              fontWeight:700,
+              marginBottom:isMobile?8:10
+            }}>
+              ${single.price.toFixed(2)}
+            </div>
+
+            <button
+              onClick={e=>{
+                e.stopPropagation();
+                addToCart(single);
+              }}
+              style={{
+                width:"100%",
+                padding:"7px 0",
+                fontSize:11,
+                background:"#1a1a1a",
+                color:"white",
+                border:"1px solid #2a2a2a",
+                borderRadius:7,
+                cursor:"pointer",
+                fontWeight:600,
+                transition:"0.2s"
+              }}
+              onMouseEnter={e=>{
+                e.currentTarget.style.borderColor="#00ffff";
+                e.currentTarget.style.color="#00ffff";
+              }}
+              onMouseLeave={e=>{
+                e.currentTarget.style.borderColor="#2a2a2a";
+                e.currentTarget.style.color="white";
+              }}
+            >
+              + Cart
+            </button>
+
+          </div>
+        </div>
+
+      ))}
+
+    </div>
+
+    {!isMobile && <LivePanel/>}
+
+  </div>
+
+  {isMobile && (
+    <div style={{
+      marginTop:14,
+      background:"linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",
+      border:"1px solid rgba(0,255,255,0.15)",
+      borderRadius:16,
+      padding:"20px 18px",
+      backdropFilter:"blur(12px)"
+    }}>
+
+      <div style={{
+        fontSize:11,
+        color:"#444",
+        letterSpacing:3,
+        marginBottom:10,
+        textTransform:"uppercase",
+        fontWeight:700
+      }}>
+        2MRRW LIVE
+      </div>
+
+      {liveIsLive ? (
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{
+            width:10,
+            height:10,
+            borderRadius:"50%",
+            background:"#00ffff",
+            animation:"pulse 1.2s infinite"
+          }}/>
+
+          <div style={{
+            fontSize:20,
+            fontWeight:900,
+            color:"#00ffff",
+            letterSpacing:3
+          }}>
+            LIVE NOW
+          </div>
+        </div>
+      ) : (
+        <div style={{display:"flex",gap:8}}>
+          {[
+            {v:liveCountdown.days,l:"D"},
+            {v:liveCountdown.hours,l:"H"},
+            {v:liveCountdown.minutes,l:"M"},
+            {v:liveCountdown.seconds,l:"S"}
+          ].map(u=>(
+            <div
+              key={u.l}
+              style={{
+                flex:1,
+                background:"rgba(0,0,0,0.5)",
+                border:"1px solid #1a1a1a",
+                borderRadius:10,
+                padding:"10px 4px",
+                textAlign:"center"
+              }}
+            >
+              <div style={{
+                fontSize:22,
+                fontWeight:900,
+                color:"#00ffff",
+                fontVariantNumeric:"tabular-nums",
+                lineHeight:1
+              }}>
+                {String(u.v).padStart(2,"0")}
+              </div>
+
+              <div style={{
+                fontSize:9,
+                color:"#444",
+                letterSpacing:1.5,
+                marginTop:3
+              }}>
+                {u.l}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+    </div>
+  )}
+</div>
 
                   {/* Features */}
                   <div style={{marginTop:28,marginBottom:4}}>
