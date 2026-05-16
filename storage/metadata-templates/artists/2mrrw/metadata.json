@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "artistSlug": "2mrrw",
+  "displayName": "2MRRW",
+  "bio": "",
+  "genres": ["Hip-Hop", "R&B"],
+  "links": {
+    "website": "",
+    "instagram": "",
+    "youtube": "",
+    "tiktok": "",
+    "x": "",
+    "patreon": ""
+  },
+  "assets": {
+    "avatar": "artists/2mrrw/avatar.jpg",
+    "hero": "artists/2mrrw/hero.jpg"
+  }
+}

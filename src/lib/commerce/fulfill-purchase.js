@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { grantLibraryItems } from "@/lib/commerce/entitlements";
 
 export async function fulfillCheckoutSession(session) {
-  const userId = session.metadata?.user_id;
+  const userId = session.metadata?.guest_user_id || session.metadata?.user_id;
   if (!userId) {
     throw new Error(`checkout session ${session.id} missing metadata.user_id`);
   }
@@ -62,7 +62,7 @@ export async function fulfillPaymentIntent(paymentIntent) {
     return null;
   }
 
-  const userId = paymentIntent.metadata?.user_id;
+  const userId = paymentIntent.metadata?.guest_user_id || paymentIntent.metadata?.user_id;
   if (!userId) {
     throw new Error(`payment_intent ${paymentIntent.id} missing metadata.user_id`);
   }

@@ -3,10 +3,10 @@
 ## 1. Supabase
 
 1. Create a project at [supabase.com](https://supabase.com).
-2. Run `supabase/migrations/001_auth_commerce_library.sql` in the SQL editor.
-3. Enable **Email** auth (and **Phone** if you want OTP).
+2. Run `supabase/migrations/001_auth_commerce_library.sql`, `002_repair_purchases_status.sql` if needed, then `003_guest_gifts_memberships.sql` in the SQL editor.
+3. Enable **Email** auth. Users never see a password flow; the server creates hidden guest identities and stores real email + phone in `profiles`.
 4. Create a **private** storage bucket `digital-assets` and upload audio files matching `storage_path` in the catalog.
-5. Copy URL, anon key, and service role key into `.env.local`.
+5. Copy URL, anon key, service role key, and `GUEST_SESSION_SECRET` into `.env.local`.
 
 ## 2. Stripe
 
@@ -40,11 +40,12 @@ stripe listen --forward-to localhost:3000/api/webhook
 
 ## 5. Flow
 
-- **Sign up / sign in** → Supabase session (cookies via middleware).
+- **Entry** → `POST /api/guest/session` with email + phone (+ optional name) creates/retrieves a passwordless guest identity and sets a signed httpOnly cookie.
 - **Checkout** → `POST /api/create-payment-intent` → in-page Stripe modal → `payment_intent.succeeded` webhook (or `POST /api/purchase/confirm`) grants `library_items`.
 - **Library** → `GET /api/library`; downloads via `GET /api/library/stream?slug=...`.
+- **Gifts** → creator calls `POST /api/admin/gifts`; fan opens `/gift/[token]`, enters email + phone, and receives `library_items` with source `gift`.
 - **QR access** → `GET /api/access/[token]` (hashed tokens in `access_tokens`).
 
 ## 6. page.js integration
 
-The main UI uses `AuthProvider` for session, Stripe Checkout redirect, and server-backed library — localStorage purchases are no longer the source of truth when signed in.
+The main UI uses `AuthProvider` for passwordless guest identity, the in-page Stripe modal, and server-backed library — localStorage purchases are no longer the source of truth.

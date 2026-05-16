@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getStripe } from "@/lib/commerce/stripe";
 import { resolveCartLines } from "@/lib/commerce/resolve-cart";
 import { getOwnedSlugs } from "@/lib/commerce/entitlements";
+import { getGuestUser } from "@/lib/guest-session";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ||
@@ -11,11 +11,10 @@ const siteUrl = () =>
 
 export async function POST(req) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getGuestUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Sign in to checkout" }, { status: 401 });
+      return NextResponse.json({ error: "Enter email and phone to checkout" }, { status: 401 });
     }
 
     const { cart } = await req.json();
@@ -46,6 +45,9 @@ export async function POST(req) {
       cancel_url: `${siteUrl()}/?tab=shop`,
       metadata: {
         user_id: user.id,
+        guest_user_id: user.id,
+        email: user.email || "",
+        phone: user.phone || "",
         slugs: JSON.stringify(purchasable.map((l) => l.slug)),
         items: JSON.stringify(
           purchasable.map((l) => ({

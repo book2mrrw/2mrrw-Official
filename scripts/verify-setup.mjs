@@ -36,11 +36,32 @@ if (!siteUrl) {
 
 const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
-const tables = ["profiles", "products", "purchases", "library_items", "access_tokens"];
+const tables = [
+  "profiles",
+  "products",
+  "purchases",
+  "library_items",
+  "access_tokens",
+  "memberships",
+  "gift_links",
+  "gift_link_items",
+  "gift_redemptions",
+];
 for (const t of tables) {
-  const { error } = await admin.from(t).select("*", { count: "exact", head: true });
+  const { error } = await admin.from(t).select("*").limit(1);
   console.log(`table ${t}:`, error ? `FAIL ${error.message}` : "OK");
   if (error) failed = true;
+}
+
+const { error: profileShapeError } = await admin
+  .from("profiles")
+  .select("id, full_name, email, phone", { count: "exact", head: true });
+if (profileShapeError) {
+  console.log(`profiles guest columns: FAIL ${profileShapeError.message}`);
+  console.log("RUN MIGRATION: supabase/migrations/004_repair_profiles_for_guest_identity.sql");
+  failed = true;
+} else {
+  console.log("profiles guest columns: OK");
 }
 
 const { count, error: pErr } = await admin.from("products").select("slug", { count: "exact" });

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "type": "single",
+  "slug": "artificial",
+  "title": "Artificial",
+  "artist": "2MRRW",
+  "artistSlug": "2mrrw",
+  "releaseDate": null,
+  "priceCents": 299,
+  "genres": [],
+  "explicit": false,
+  "durationSeconds": null,
+  "isrc": null,
+  "assets": {
+    "audio": "singles/artificial/audio.mp3",
+    "preview": "singles/artificial/preview.mp3",
+    "cover": "singles/artificial/cover.jpg",
+    "visual": "singles/artificial/visual.mp4",
+    "lyrics": "singles/artificial/lyrics.lrc"
+  }
+}

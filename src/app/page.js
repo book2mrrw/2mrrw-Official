@@ -431,7 +431,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
-  const { currentUser: authUser, library, owns, signUp, signIn, signOut, refreshLibrary, loading: authLoading } = useAuth();
+  const { currentUser: authUser, library, owns, enterGuest, signOut, refreshLibrary, loading: authLoading } = useAuth();
 
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
@@ -468,10 +468,11 @@ export default function Page() {
   const [myPurchases, setMyPurchases]             = useState([]);
   const [authMode, setAuthMode]                   = useState("login");
   const [authEmail, setAuthEmail]                 = useState("");
-  const [authPassword, setAuthPassword]           = useState("");
+  const [authPhone, setAuthPhone]                 = useState("");
   const [authName, setAuthName]                   = useState("");
   const [authError, setAuthError]                 = useState("");
   const [authSubmitting, setAuthSubmitting]       = useState(false);
+  const [membershipUpsellOpen, setMembershipUpsellOpen] = useState(false);
   const [liveCountdown, setLiveCountdown]         = useState({ days:0, hours:0, minutes:0, seconds:0 });
   const [liveIsLive, setLiveIsLive]               = useState(false);
   const [innerCirclePost, setInnerCirclePost]     = useState(null);
@@ -582,7 +583,7 @@ export default function Page() {
   }, [authUser, authLoading]);
 
   useEffect(() => {
-    if (library?.length) setMyPurchases(library);
+    setMyPurchases(library || []);
   }, [library]);
 
   useEffect(() => {
@@ -726,33 +727,28 @@ export default function Page() {
   }, [audioDuration]);
 
   const handleGateSubmit = async () => {
-    if (!gateName.trim() || !gatePhone.trim() || !gateEmail.trim() || !authPassword.trim()) {
-      setGateError("Please fill out all fields including password.");
+    if (!gatePhone.trim() || !gateEmail.trim()) {
+      setGateError("Email and phone are required.");
       return;
     }
     setGateError("");
     try {
-      await signUp({ email: gateEmail.trim(), password: authPassword, fullName: gateName.trim(), phone: gatePhone.trim() });
-      await signIn({ email: gateEmail.trim(), password: authPassword });
+      await enterGuest({ email: gateEmail.trim(), phone: gatePhone.trim(), name: gateName.trim() });
       setGateSubmitted(true);
     } catch (err) {
-      setGateError(err.message || "Could not create account.");
+      setGateError(err.message || "Could not enter.");
     }
   };
 
   const handleAuthSubmit = async () => {
-    if (!authEmail.trim() || !authPassword.trim()) { setAuthError("Please fill out all fields."); return; }
-    if (authMode === "signup" && !authName.trim()) { setAuthError("Please enter your name."); return; }
+    if (!authEmail.trim() || !authPhone.trim()) { setAuthError("Email and phone are required."); return; }
     setAuthError("");
     setAuthSubmitting(true);
     try {
-      if (authMode === "signup") {
-        await signUp({ email: authEmail.trim(), password: authPassword, fullName: authName.trim() });
-      }
-      await signIn({ email: authEmail.trim(), password: authPassword });
-      setAuthPassword("");
+      await enterGuest({ email: authEmail.trim(), phone: authPhone.trim(), name: authName.trim() });
+      setGateSubmitted(true);
     } catch (err) {
-      setAuthError(err.message || "Authentication failed.");
+      setAuthError(err.message || "Could not continue.");
     } finally {
       setAuthSubmitting(false);
     }
@@ -760,7 +756,7 @@ export default function Page() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
-    if (!currentUser) { setCheckoutError("Sign in to checkout."); switchTab("account"); return; }
+    if (!currentUser) { setCheckoutError("Enter email and phone before checkout."); switchTab("account"); return; }
     setCheckingOut(true); setCheckoutError("");
     try {
       const res  = await fetch("/api/create-payment-intent", { method:"POST", headers:{"Content-Type":"application/json"}, credentials:"include", body:JSON.stringify({ cart }) });
@@ -799,6 +795,7 @@ export default function Page() {
     setInventory(inv);
     setClientSecret(null); setCheckingOut(false); clearCart();
     await refreshLibrary();
+    setMembershipUpsellOpen(true);
     if (isMobile) setMobileCartOpen(false);
   };
 
@@ -1004,11 +1001,10 @@ export default function Page() {
         {!gateSubmitted && (
           <motion.div key="gate" {...OVERLAY_FADE} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:30}}>
             <div style={{fontSize:28,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 20px rgba(0,255,255,0.8)"}}>2MRRW</div>
-            <p style={{color:"#aaa",marginBottom:10,textAlign:"center"}}>Enter your info to access the site</p>
-            <input placeholder="Full Name"     value={gateName}  onChange={e=>setGateName(e.target.value)}  onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
+            <p style={{color:"#aaa",marginBottom:10,textAlign:"center"}}>Enter instantly. No password required.</p>
+            <input placeholder="Full Name (optional)" value={gateName}  onChange={e=>setGateName(e.target.value)}  onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
             <input placeholder="Phone Number"  value={gatePhone} onChange={e=>setGatePhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
             <input placeholder="Email Address" value={gateEmail} onChange={e=>setGateEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
-            <input placeholder="Password" type="password" value={authPassword} onChange={e=>setAuthPassword(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
             {gateError && <p style={{color:"red",fontSize:13}}>{gateError}</p>}
             <button onClick={handleGateSubmit} style={{width:"min(280px,90vw)",padding:"12px 0",background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer",fontSize:14}}>Enter Site</button>
           </motion.div>
@@ -1531,7 +1527,7 @@ export default function Page() {
                       {!currentUser ? (
                         <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"48px 32px",textAlign:"center"}}>
                           <div style={{fontSize:32,marginBottom:16}}>🔒</div>
-                          <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Sign in to access your library</div>
+                          <div style={{fontSize:18,fontWeight:700,marginBottom:8}}>Enter email + phone to access your library</div>
                           <div style={{fontSize:13,color:"#555",marginBottom:24}}>Your purchased music, downloads, and exclusive content all live here.</div>
                           <button onClick={()=>switchTab("account")} style={{padding:"12px 28px",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14}}>Go to Account</button>
                         </div>
@@ -1553,7 +1549,7 @@ export default function Page() {
                             {myPurchases.filter(p=>!p.slug?.startsWith("exc-")).map((item,i)=>(
                               <div key={i} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
                                 {item.cover&&<img src={item.cover} style={{width:48,height:48,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}
-                                <div style={{flex:1,minWidth:120}}><div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{item.title}</div><div style={{fontSize:11,color:"#555"}}>Purchased {item.purchasedAt?new Date(item.purchasedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}</div></div>
+                                <div style={{flex:1,minWidth:120}}><div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{item.title}</div><div style={{fontSize:11,color:"#555"}}>{item.gifted?"Gifted":"Purchased"} {item.purchasedAt?new Date(item.purchasedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}</div></div>
                                 <button onClick={()=>handleDownload(item.slug)} style={{padding:"8px 16px",background:"transparent",color:"#00ffff",border:"1px solid #00ffff33",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700}}>↓ Download</button>
                               </div>
                             ))}
@@ -1565,7 +1561,7 @@ export default function Page() {
                                 {myPurchases.filter(p=>p.slug?.startsWith("exc-")).map((item,i)=>(
                                   <div key={i} style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:14,padding:"14px 18px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
                                     {item.cover&&<img src={item.cover} style={{width:48,height:48,borderRadius:8,objectFit:"cover",flexShrink:0}}/>}
-                                    <div style={{flex:1,minWidth:120}}><div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{item.title}</div><div style={{fontSize:11,color:"#555"}}>Purchased {item.purchasedAt?new Date(item.purchasedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}</div></div>
+                                    <div style={{flex:1,minWidth:120}}><div style={{fontSize:14,fontWeight:700,marginBottom:3}}>{item.title}</div><div style={{fontSize:11,color:"#555"}}>{item.gifted?"Gifted":"Purchased"} {item.purchasedAt?new Date(item.purchasedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}</div></div>
                                     <div style={{fontSize:11,color:"#a259ff",fontWeight:700,letterSpacing:1}}>COLLECTIBLE</div>
                                   </div>
                                 ))}
@@ -1860,13 +1856,13 @@ export default function Page() {
                     </div>
                   ) : (
                     <div style={{maxWidth:400}}>
-                      <div style={{display:"flex",gap:8,marginBottom:28}}>{["login","signup"].map(mode=><button key={mode} onClick={()=>{setAuthMode(mode);setAuthError("");}} style={{flex:1,padding:"10px 0",fontSize:12,fontWeight:700,letterSpacing:2,cursor:"pointer",border:authMode===mode?"1px solid #00ffff":"1px solid #2a2a2a",borderRadius:10,background:authMode===mode?"rgba(0,255,255,0.1)":"transparent",color:authMode===mode?"#00ffff":"#555",textTransform:"uppercase",transition:"0.2s"}}>{mode==="login"?"Sign In":"Create Account"}</button>)}</div>
+                      <div style={{fontSize:13,color:"#777",lineHeight:1.7,marginBottom:20}}>Enter with email + phone. No password, no login wall — your purchases, gifts, and cards stay attached to this identity.</div>
                       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                        {authMode==="signup" && <input placeholder="Full Name" value={authName} onChange={e=>setAuthName(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>}
+                        <input placeholder="Full Name (optional)" value={authName} onChange={e=>setAuthName(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
                         <input placeholder="Email Address" value={authEmail} onChange={e=>setAuthEmail(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
-                        <input placeholder="Password" type="password" value={authPassword} onChange={e=>setAuthPassword(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
+                        <input placeholder="Phone Number" value={authPhone} onChange={e=>setAuthPhone(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
                         {authError && <div style={{fontSize:12,color:"#ff4d4d"}}>{authError}</div>}
-                        <button onClick={handleAuthSubmit} disabled={authSubmitting} style={{padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1,marginTop:4,opacity:authSubmitting?0.6:1}}>{authSubmitting?"…":authMode==="login"?"Sign In":"Create Account"}</button>
+                        <button onClick={handleAuthSubmit} disabled={authSubmitting} style={{padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1,marginTop:4,opacity:authSubmitting?0.6:1}}>{authSubmitting?"…":"Continue"}</button>
                       </div>
                     </div>
                   )}
@@ -2110,6 +2106,21 @@ export default function Page() {
         @keyframes eqBar4{from{height:8px}to{height:14px}}
         .section-heading{animation:fadeInUp .9s cubic-bezier(.22,1,.36,1) both;animation-fill-mode:forwards;}
       `}</style>
+
+      {/* ── POST-PURCHASE MEMBERSHIP UPSELL ── */}
+      <AnimatePresence>
+        {membershipUpsellOpen && (
+          <motion.div key="membership-upsell" {...OVERLAY_FADE} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
+            <motion.div {...(isMobile ? SHEET_UP : MODAL_CENTER)} style={{background:"#0a0a0a",padding:isMobile?22:30,borderRadius:isMobile?"20px 20px 0 0":20,width:isMobile?"100%":420,border:"1px solid #222",alignSelf:isMobile?"flex-end":"center",boxShadow:"0 0 40px rgba(0,255,255,0.12)"}}>
+              <div style={{fontSize:11,color:"#00ffff",letterSpacing:3,marginBottom:12,textTransform:"uppercase"}}>Thanks for supporting</div>
+              <div style={{fontSize:22,fontWeight:900,marginBottom:10}}>Want early access, exclusive drops, and giveaways?</div>
+              <p style={{fontSize:13,color:"#888",lineHeight:1.7,marginBottom:20}}>Membership is optional. Your purchase is already saved to your library.</p>
+              <button onClick={()=>{setMembershipUpsellOpen(false);switchTab("innercircle");}} style={{width:"100%",padding:"13px 0",background:"#a259ff",color:"#fff",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,marginBottom:10}}>Join Membership</button>
+              <button onClick={()=>setMembershipUpsellOpen(false)} style={{width:"100%",padding:"12px 0",background:"transparent",color:"#777",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13}}>Maybe later</button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── STRIPE MODAL ── */}
       <AnimatePresence>

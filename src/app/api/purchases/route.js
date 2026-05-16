@@ -1,15 +1,16 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getGuestUser } from "@/lib/guest-session";
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getGuestUser();
 
   if (!user) {
     return NextResponse.json({ purchases: [] }, { status: 401 });
   }
 
-  const { data, error } = await supabase
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("purchases")
     .select("*")
     .eq("user_id", user.id)

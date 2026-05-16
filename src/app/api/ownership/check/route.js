@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getOwnedSlugs } from "@/lib/commerce/entitlements";
+import { getGuestUser } from "@/lib/guest-session";
 
 export async function POST(req) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getGuestUser();
   const { slugs } = await req.json();
 
   if (!user) {

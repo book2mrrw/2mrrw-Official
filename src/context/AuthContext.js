@@ -1,27 +1,14 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const supabase = useMemo(() => createClient(), []);
   const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [ownedSlugs, setOwnedSlugs] = useState(new Set());
   const [library, setLibrary] = useState([]);
+  const [ownedSlugs, setOwnedSlugs] = useState(new Set());
   const [loading, setLoading] = useState(true);
-
-  const mapUser = useCallback((authUser, prof) => {
-    if (!authUser) return null;
-    return {
-      id: authUser.id,
-      email: authUser.email || prof?.email || "",
-      name: prof?.full_name || authUser.user_metadata?.full_name || "Fan",
-      phone: prof?.phone || authUser.user_metadata?.phone || "",
-    };
-  }, []);
 
   const refreshLibrary = useCallback(async () => {
     const res = await fetch("/api/library", { credentials: "include" });
@@ -32,122 +19,69 @@ export function AuthProvider({ children }) {
     }
     const data = await res.json();
     setLibrary(data.items || []);
-    setOwnedSlugs(new Set((data.ownedSlugs || [])));
+    setOwnedSlugs(new Set(data.ownedSlugs || []));
   }, []);
 
-  const refreshProfile = useCallback(async (authUser) => {
-    if (!authUser) {
-      setProfile(null);
-      return;
+  const refreshGuest = useCallback(async () => {
+    const res = await fetch("/api/guest/session", { credentials: "include" });
+    if (!res.ok) {
+      setUser(null);
+      setLibrary([]);
+      setOwnedSlugs(new Set());
+      return null;
     }
-    const { data } = await supabase.from("profiles").select("*").eq("id", authUser.id).single();
-    setProfile(data || null);
-  }, [supabase]);
+    const data = await res.json();
+    setUser(data.user || null);
+    if (data.user) await refreshLibrary();
+    return data.user || null;
+  }, [refreshLibrary]);
 
   useEffect(() => {
     let mounted = true;
-
-    const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!mounted) return;
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) {
-        await refreshProfile(u);
-        await refreshLibrary();
-      }
-      setLoading(false);
-    };
-
-    init();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      const u = session?.user ?? null;
-      setUser(u);
-      if (u) {
-        await refreshProfile(u);
-        await refreshLibrary();
-      } else {
-        setProfile(null);
-        setLibrary([]);
-        setOwnedSlugs(new Set());
-      }
+    refreshGuest().finally(() => {
+      if (mounted) setLoading(false);
     });
-
     return () => {
       mounted = false;
-      subscription.unsubscribe();
     };
-  }, [supabase, refreshProfile, refreshLibrary]);
+  }, [refreshGuest]);
 
-  const signUp = useCallback(async ({ email, password, fullName, phone }) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName, phone: phone || null },
-      },
+  const enterGuest = useCallback(async ({ email, phone, name }) => {
+    const res = await fetch("/api/guest/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ email, phone, name }),
     });
-    if (error) throw error;
-    if (data.user) {
-      await supabase.from("profiles").upsert({
-        id: data.user.id,
-        full_name: fullName,
-        email,
-        phone: phone || null,
-      });
-    }
-    return data;
-  }, [supabase]);
-
-  const signIn = useCallback(async ({ email, password }) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    return data;
-  }, [supabase]);
-
-  const signInWithPhone = useCallback(async (phone) => {
-    const { data, error } = await supabase.auth.signInWithOtp({ phone });
-    if (error) throw error;
-    return data;
-  }, [supabase]);
-
-  const verifyPhoneOtp = useCallback(async ({ phone, token }) => {
-    const { data, error } = await supabase.auth.verifyOtp({
-      phone,
-      token,
-      type: "sms",
-    });
-    if (error) throw error;
-    return data;
-  }, [supabase]);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Could not enter");
+    setUser(data.user);
+    await refreshLibrary();
+    return data.user;
+  }, [refreshLibrary]);
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+    await fetch("/api/guest/session", { method: "DELETE", credentials: "include" });
     setUser(null);
-    setProfile(null);
     setLibrary([]);
     setOwnedSlugs(new Set());
-  }, [supabase]);
+  }, []);
 
   const owns = useCallback((slug) => ownedSlugs.has(slug), [ownedSlugs]);
 
   const value = useMemo(() => ({
     user,
-    profile,
-    currentUser: mapUser(user, profile),
+    profile: user,
+    currentUser: user,
     library,
     ownedSlugs,
     owns,
     loading,
-    signUp,
-    signIn,
-    signInWithPhone,
-    verifyPhoneOtp,
+    enterGuest,
     signOut,
+    refreshGuest,
     refreshLibrary,
-    supabase,
-  }), [user, profile, mapUser, library, ownedSlugs, owns, loading, signUp, signIn, signInWithPhone, verifyPhoneOtp, signOut, refreshLibrary, supabase]);
+  }), [user, library, ownedSlugs, owns, loading, enterGuest, signOut, refreshGuest, refreshLibrary]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

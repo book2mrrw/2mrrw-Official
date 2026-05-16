@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userOwnsProduct } from "@/lib/commerce/entitlements";
+import { getGuestUser } from "@/lib/guest-session";
 
 export async function GET(req) {
   const slug = req.nextUrl.searchParams.get("slug");
@@ -9,8 +9,7 @@ export async function GET(req) {
     return NextResponse.json({ error: "slug required" }, { status: 400 });
   }
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getGuestUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

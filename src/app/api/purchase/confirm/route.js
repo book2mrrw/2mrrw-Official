@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { getStripe } from "@/lib/commerce/stripe";
 import { fulfillPaymentIntent } from "@/lib/commerce/fulfill-purchase";
+import { getGuestUser } from "@/lib/guest-session";
 
 /** Idempotent fulfillment after in-page Payment Element success (webhook backup). */
 export async function POST(req) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await getGuestUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -18,7 +17,7 @@ export async function POST(req) {
     }
 
     const pi = await getStripe().paymentIntents.retrieve(paymentIntentId);
-    if (pi.metadata?.user_id !== user.id) {
+    if ((pi.metadata?.guest_user_id || pi.metadata?.user_id) !== user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
