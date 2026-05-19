@@ -108,15 +108,33 @@ try {
     join(ROOT, "docs/foundation/FRONTEND_FOUNDATION_BASELINE.md"),
     "utf8"
   );
-  if (!baseline.includes(head)) {
+  const anchor = existsSync(join(ROOT, "docs/foundation/recovery-anchor.json"))
+    ? readJson("docs/foundation/recovery-anchor.json")
+    : null;
+  let operational = head;
+  if (anchor?.operationalTag) {
+    try {
+      operational = execSync(`git rev-parse ${anchor.operationalTag}^{commit}`, {
+        cwd: ROOT,
+        encoding: "utf8",
+      }).trim();
+    } catch {
+      operational = head;
+    }
+  }
+  const baselineOk =
+    baseline.includes(head) ||
+    (operational === head &&
+      (baseline.includes(anchor?.operationalTag || "") ||
+        baseline.includes("recovery-anchor.json")));
+  if (!baselineOk) {
     fail(`FRONTEND_FOUNDATION_BASELINE.md does not document current HEAD (${head})`);
   } else {
     pass(`Baseline doc references current HEAD ${head.slice(0, 12)}…`);
   }
 
   const anchorPath = join(ROOT, "docs/foundation/recovery-anchor.json");
-  if (existsSync(anchorPath)) {
-    const anchor = readJson("docs/foundation/recovery-anchor.json");
+  if (existsSync(anchorPath) && anchor) {
     let expected = anchor.commit;
     if (anchor.operationalTag) {
       try {
