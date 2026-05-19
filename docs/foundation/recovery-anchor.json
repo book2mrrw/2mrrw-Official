@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Canonical frontend foundation recovery anchor. Scripts read this file; do not duplicate commit hashes elsewhere without updating here.",
+  "version": 1,
+  "commit": "ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c",
+  "commitShort": "ce6ae20e",
+  "branch": "frontend-stable-foundation",
+  "mainBranch": "main",
+  "commitMessage": "docs: add recovery system pointer to control repo bundle",
+  "anchoredAt": "2026-05-19T16:29:17-05:00",
+  "documentedAt": "2026-05-19",
+  "deploymentUrl": "https://artist-platform-silk.vercel.app",
+  "legacyDeploymentUrl": "https://2mrrw-official.vercel.app",
+  "deploymentId": null,
+  "vercelProject": "artist-platform",
+  "dependencies": {
+    "next": "16.2.4",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "framer-motion": "12.38.0",
+    "@supabase/ssr": "0.10.3",
+    "@supabase/supabase-js": "2.105.4",
+    "@stripe/react-stripe-js": "6.2.0",
+    "@stripe/stripe-js": "9.2.0",
+    "qrcode.react": "4.2.0",
+    "stripe": "22.0.2",
+    "@tailwindcss/postcss": "4.2.2",
+    "tailwindcss": "4.2.2",
+    "eslint": "9.39.4",
+    "eslint-config-next": "16.2.4",
+    "vercel": "54.1.0"
+  },
+  "lockfile": "package-lock.json",
+  "notes": [
+    "HEAD verified equal to anchor commit on 2026-05-19.",
+    "Production alias: artist-platform-silk.vercel.app",
+    "Never force-push frontend-stable-foundation without explicit approval.",
+    "Update deploymentId when a new production deploy is promoted as foundation."
+  ]
+}

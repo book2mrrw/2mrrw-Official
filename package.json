@@ -6,24 +6,34 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint .",
+    "deploy:prod": "vercel deploy --prod --yes",
+    "test:foundation": "node scripts/frontend-foundation-smoke.mjs",
+    "check:frontend-guardrails": "node scripts/check-frontend-guardrails.mjs",
+    "verify:foundation": "node scripts/recovery/verify-foundation.mjs",
+    "recover:foundation": "node scripts/recovery/recover-foundation.mjs",
+    "recover:stable": "node scripts/recovery/recover-stable.mjs",
+    "recover:rollback": "node scripts/recovery/recover-rollback.mjs",
+    "recover:deploy": "node scripts/recovery/recover-deploy.mjs",
+    "snapshot:foundation": "node scripts/recovery/create-frontend-snapshot.mjs"
   },
   "dependencies": {
-    "@stripe/react-stripe-js": "^6.2.0",
-    "@stripe/stripe-js": "^9.2.0",
-    "@supabase/ssr": "^0.10.3",
-    "@supabase/supabase-js": "^2.105.4",
-    "framer-motion": "^12.38.0",
+    "@stripe/react-stripe-js": "6.2.0",
+    "@stripe/stripe-js": "9.2.0",
+    "@supabase/ssr": "0.10.3",
+    "@supabase/supabase-js": "2.105.4",
+    "framer-motion": "12.38.0",
     "next": "16.2.4",
-    "qrcode.react": "^4.2.0",
+    "qrcode.react": "4.2.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "stripe": "^22.0.2"
+    "stripe": "22.0.2"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "eslint": "^9",
+    "@tailwindcss/postcss": "4.2.2",
+    "eslint": "9.39.4",
     "eslint-config-next": "16.2.4",
-    "tailwindcss": "^4"
+    "tailwindcss": "4.2.2",
+    "vercel": "54.1.0"
   }
 }

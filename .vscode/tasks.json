@@ -1,0 +1,60 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Verify Frontend Foundation",
+      "type": "npm",
+      "script": "verify:foundation",
+      "problemMatcher": [],
+      "group": { "kind": "test", "isDefault": false }
+    },
+    {
+      "label": "Recover Frontend Foundation",
+      "type": "npm",
+      "script": "recover:foundation",
+      "problemMatcher": []
+    },
+    {
+      "label": "Recover Frontend Foundation (dry-run)",
+      "type": "shell",
+      "command": "npm run recover:foundation -- --dry-run",
+      "problemMatcher": []
+    },
+    {
+      "label": "Restore Stable Foundation Branch",
+      "type": "npm",
+      "script": "recover:stable",
+      "problemMatcher": []
+    },
+    {
+      "label": "Safe Frontend Rollback (guide)",
+      "type": "npm",
+      "script": "recover:rollback",
+      "problemMatcher": []
+    },
+    {
+      "label": "Foundation Deploy (requires --deploy)",
+      "type": "shell",
+      "command": "npm run recover:deploy -- --deploy",
+      "problemMatcher": []
+    },
+    {
+      "label": "Create Foundation Snapshot",
+      "type": "npm",
+      "script": "snapshot:foundation",
+      "problemMatcher": []
+    },
+    {
+      "label": "Frontend Guardrails Scan",
+      "type": "npm",
+      "script": "check:frontend-guardrails",
+      "problemMatcher": []
+    },
+    {
+      "label": "Foundation Smoke Tests",
+      "type": "npm",
+      "script": "test:foundation",
+      "problemMatcher": []
+    }
+  ]
+}
