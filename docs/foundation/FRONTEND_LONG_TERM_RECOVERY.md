@@ -90,5 +90,5 @@ Advance only when:
 3. Production has run stable ≥ 48 hours
 4. All foundation docs updated with new commit hash
 
-**Operational recovery truth:** `recovery-anchor.json` → `52fa0275e43758aec70272c87031fe93e75606f2` (`foundation-stable-v2`).  
+**Operational recovery truth:** `recovery-anchor.json` → `e13b192e3ce20ad7106e4143a80726bea9ff30ca` (`foundation-stable-v2`).  
 **UI-only rollback:** `foundation-stable-v1` → `ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c` (unchanged).
