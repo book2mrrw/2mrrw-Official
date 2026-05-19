@@ -8,7 +8,7 @@
 
 | Field | Value |
 |-------|-------|
-| Git commit (HEAD) | `b45a8d93905bd002cc36a6e1d9862fd0e967a10c` |
+| Git commit (HEAD) | `8496fa7178845783dab7441598af4ab68ef73d74` |
 | Git branch | `main` / `frontend-stable-foundation` |
 | Commit message | feat(recovery): frontend checkpoint parity and foundation tag strategy |
 | Commit date | 2026-05-19 13:39:34 -0500 |
