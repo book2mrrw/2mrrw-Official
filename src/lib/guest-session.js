@@ -45,19 +45,37 @@ function decodeGuestCookie(value) {
   return guestId;
 }
 
-export function withGuestCookie(response, guestId) {
+export function withGuestCookie(response, guestId, options = {}) {
+  const maxAge = options.remember === false ? 60 * 60 * 24 * 7 : ONE_YEAR;
   response.cookies.set(COOKIE_NAME, encodeGuestCookie(guestId), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: ONE_YEAR,
+    maxAge,
   });
   return response;
 }
 
-export function clearGuestCookie() {
-  const response = NextResponse.json({ ok: true });
+export async function getGuestSessionCookieState() {
+  const store = await cookies();
+  const raw = store.get(COOKIE_NAME)?.value;
+  if (!raw) {
+    return { remember: false, expired: false };
+  }
+  try {
+    const guestId = decodeGuestCookie(raw);
+    if (!guestId) {
+      return { remember: false, expired: true };
+    }
+    return { remember: true, expired: false, guestId };
+  } catch {
+    return { remember: false, expired: true };
+  }
+}
+
+export function clearGuestCookie(body = { ok: true }) {
+  const response = NextResponse.json(body);
   response.cookies.set(COOKIE_NAME, "", {
     httpOnly: true,
     sameSite: "lax",
