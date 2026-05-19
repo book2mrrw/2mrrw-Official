@@ -15,7 +15,8 @@
     "recover:stable": "node scripts/recovery/recover-stable.mjs",
     "recover:rollback": "node scripts/recovery/recover-rollback.mjs",
     "recover:deploy": "node scripts/recovery/recover-deploy.mjs",
-    "snapshot:foundation": "node scripts/recovery/create-frontend-snapshot.mjs"
+    "snapshot:foundation": "node scripts/recovery/create-frontend-snapshot.mjs",
+    "recover:checkpoint": "node scripts/recovery/create-frontend-checkpoint.mjs"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "6.2.0",
