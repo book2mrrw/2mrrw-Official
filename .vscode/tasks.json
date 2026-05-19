@@ -45,6 +45,18 @@
       "problemMatcher": []
     },
     {
+      "label": "Create Frontend Checkpoint",
+      "type": "npm",
+      "script": "recover:checkpoint",
+      "problemMatcher": []
+    },
+    {
+      "label": "Create Frontend Checkpoint (dry-run)",
+      "type": "shell",
+      "command": "npm run recover:checkpoint -- --dry-run",
+      "problemMatcher": []
+    },
+    {
       "label": "Frontend Guardrails Scan",
       "type": "npm",
       "script": "check:frontend-guardrails",

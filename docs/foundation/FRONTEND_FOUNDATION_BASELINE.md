@@ -8,10 +8,12 @@
 
 | Field | Value |
 |-------|-------|
-| Git commit (HEAD) | `ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c` |
-| Git branch | `main` |
-| Commit message | docs: add recovery system pointer to control repo bundle |
-| Commit date | 2026-05-19 11:29:17 -0500 |
+| Git commit (HEAD) | `b45a8d93905bd002cc36a6e1d9862fd0e967a10c` |
+| Git branch | `main` / `frontend-stable-foundation` |
+| Commit message | feat(recovery): frontend checkpoint parity and foundation tag strategy |
+| Commit date | 2026-05-19 13:39:34 -0500 |
+| UI origin (immutable) | `foundation-stable-v1` → `ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c` |
+| Operational tag | `foundation-stable-v2` → same commit as HEAD |
 
 ## Production deployment
 

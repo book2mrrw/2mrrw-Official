@@ -5,7 +5,7 @@
  */
 
 import { execSync } from "node:child_process";
-import { loadAnchor, ROOT } from "./lib/anchor.mjs";
+import { loadAnchor, ROOT, resolvedOperationalCommit } from "./lib/anchor.mjs";
 import { parseFlags } from "./lib/flags.mjs";
 import { checkEnv, checkControlSystemSync } from "./lib/env-check.mjs";
 import { npmScript, run } from "./lib/run.mjs";
@@ -18,8 +18,19 @@ async function main() {
   console.log("═══════════════════════════════════════════════════════════");
   console.log("  VERIFY FRONTEND FOUNDATION STATE");
   console.log("═══════════════════════════════════════════════════════════");
+  const head = execSync("git rev-parse HEAD", { cwd: ROOT, encoding: "utf8" }).trim();
+  const operational = resolvedOperationalCommit(anchor);
   console.log(`  Anchor: ${anchor.commit}`);
-  console.log(`  HEAD:   ${execSync("git rev-parse HEAD", { cwd: ROOT, encoding: "utf8" }).trim()}\n`);
+  if (anchor.operationalTag) {
+    console.log(`  Operational (${anchor.operationalTag}): ${operational}`);
+  }
+  console.log(`  HEAD:   ${head}\n`);
+  if (operational !== head) {
+    throw new Error(
+      `HEAD (${head}) does not match operational anchor (${operational})` +
+        (anchor.operationalTag ? ` [${anchor.operationalTag}]` : "")
+    );
+  }
 
   npmScript("check:frontend-guardrails", { dryRun: flags.dryRun });
   npmScript("test:foundation", { dryRun: flags.dryRun });
