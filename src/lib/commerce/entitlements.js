@@ -82,3 +82,133 @@ export async function verifyAccessToken(rawToken) {
   if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
   return data;
 }
+
+const VAULT_TIER_RANK = {
+  public: 0,
+  inner_circle: 1,
+  vault_pass: 2,
+};
+
+export function isMissingSupabaseTable(error) {
+  const code = error?.code || "";
+  const message = String(error?.message || "");
+  return code === "42P01" || /relation .* does not exist/i.test(message);
+}
+
+export function isMissingCollectorOwnershipsTable(error) {
+  return isMissingSupabaseTable(error);
+}
+
+export function isVaultPassSlug(slug) {
+  return slug === "vault-pass" || slug === "vault_pass";
+}
+
+export function isCollectorAccessSlug(slug) {
+  if (!slug || typeof slug !== "string") return false;
+  return (
+    slug.startsWith("exc-bundle") ||
+    slug.startsWith("exc-card") ||
+    slug.startsWith("collector-") ||
+    slug.includes("collector")
+  );
+}
+
+export function isDigitalProduct(product) {
+  const type = product?.product_type || product?.type;
+  return type === "digital" || type === "audio" || type === "single" || type === "album";
+}
+
+export function membershipHasPremiumAccess(membership) {
+  if (!membership) return false;
+  const status = String(membership.status || "").toLowerCase();
+  return status === "active" || status === "trialing";
+}
+
+export function vaultTierFor({ hasVaultPass = false, hasInnerCircleAccess = false } = {}) {
+  if (hasVaultPass) return "vault_pass";
+  if (hasInnerCircleAccess) return "inner_circle";
+  return "public";
+}
+
+export function canAccessVaultTier(userTier, contentTier) {
+  const userRank = VAULT_TIER_RANK[userTier] ?? 0;
+  const contentRank = VAULT_TIER_RANK[contentTier] ?? 0;
+  if (contentTier === "public") return true;
+  return userRank >= contentRank;
+}
+
+export async function getActiveMembership(userId) {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("memberships")
+    .select("tier, status, stripe_customer_id, stripe_subscription_id, current_period_end, started_at, canceled_at, updated_at")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingSupabaseTable(error)) return null;
+    throw error;
+  }
+  return data || null;
+}
+
+export async function getCollectorAccessState(admin, userId, legacyOwnedSlugs = []) {
+  const slugs = new Set(legacyOwnedSlugs || []);
+  const hasSlugAccess = [...slugs].some(isCollectorAccessSlug);
+
+  if (!admin || !userId) {
+    return { hasCollectorAccess: hasSlugAccess, records: [] };
+  }
+
+  const { data, error } = await admin
+    .from("collector_ownerships")
+    .select("id, product_slug, verification_status, entitlement_status")
+    .eq("user_id", userId);
+
+  if (error) {
+    if (isMissingCollectorOwnershipsTable(error)) {
+      return { hasCollectorAccess: hasSlugAccess, records: [] };
+    }
+    throw error;
+  }
+
+  const records = data || [];
+  const hasCollectorAccess =
+    hasSlugAccess ||
+    records.some((row) => {
+      const status = String(row.entitlement_status || row.verification_status || "").toLowerCase();
+      return status === "active" || status === "verified" || status === "granted";
+    });
+
+  return { hasCollectorAccess, records };
+}
+
+export async function getVaultPassAccessState(admin, userId, legacyOwnedSlugs = []) {
+  const slugs = new Set(legacyOwnedSlugs || []);
+  const hasSlugAccess = [...slugs].some(isVaultPassSlug);
+
+  if (!admin || !userId) {
+    return { hasVaultPass: hasSlugAccess, entitlement: null };
+  }
+
+  const { data, error } = await admin
+    .from("vault_entitlements")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("entitlement_type", "vault_pass")
+    .eq("status", "active")
+    .order("starts_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingSupabaseTable(error)) {
+      return { hasVaultPass: hasSlugAccess, entitlement: null };
+    }
+    throw error;
+  }
+
+  return { hasVaultPass: hasSlugAccess || Boolean(data), entitlement: data || null };
+}
