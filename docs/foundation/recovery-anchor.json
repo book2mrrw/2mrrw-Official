@@ -2,8 +2,6 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Canonical frontend foundation recovery anchor. Scripts read this file; do not duplicate commit hashes elsewhere without updating here.",
   "version": 1,
-  "commit": "ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c",
-  "commitShort": "ce6ae20e",
   "branch": "frontend-stable-foundation",
   "mainBranch": "main",
   "commitMessage": "docs: add recovery system pointer to control repo bundle",
