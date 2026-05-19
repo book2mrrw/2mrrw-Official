@@ -1,16 +1,25 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Canonical frontend foundation recovery anchor. Scripts read this file; do not duplicate commit hashes elsewhere without updating here.",
-  "version": 1,
+  "version": 2,
+  "commit": "41351d8534fd1ad0ab6e4f94fee9cde14a0cf289",
+  "commitShort": "41351d85",
   "branch": "frontend-stable-foundation",
   "mainBranch": "main",
-  "commitMessage": "docs: add recovery system pointer to control repo bundle",
-  "anchoredAt": "2026-05-19T16:29:17-05:00",
+  "commitMessage": "chore(foundation): sync baseline docs with operational anchor 8496fa7",
+  "anchoredAt": "2026-05-19T20:00:00-05:00",
   "documentedAt": "2026-05-19",
   "deploymentUrl": "https://artist-platform-silk.vercel.app",
   "legacyDeploymentUrl": "https://2mrrw-official.vercel.app",
   "deploymentId": null,
   "vercelProject": "artist-platform",
+  "sacredOrigin": {
+    "tag": "foundation-stable-v1",
+    "commit": "ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c",
+    "commitShort": "ce6ae20e",
+    "role": "Immutable UI origin — cinematic frontend baseline before recovery bundle"
+  },
+  "operationalTag": "foundation-stable-v2",
   "dependencies": {
     "next": "16.2.4",
     "react": "19.2.4",
@@ -30,7 +39,9 @@
   },
   "lockfile": "package-lock.json",
   "notes": [
-    "HEAD verified equal to anchor commit on 2026-05-19.",
+    "Operational anchor advanced 2026-05-19: same cinematic UI as ce6ae20 plus recovery scripts/docs.",
+    "foundation-stable-v1 remains on ce6ae20 for UI-only rollback; never move that tag.",
+    "foundation-stable-v2 tags this commit for full operational recovery.",
     "Production alias: artist-platform-silk.vercel.app",
     "Never force-push frontend-stable-foundation without explicit approval.",
     "Update deploymentId when a new production deploy is promoted as foundation."
