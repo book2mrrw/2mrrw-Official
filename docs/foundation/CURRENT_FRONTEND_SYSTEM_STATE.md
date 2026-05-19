@@ -1,6 +1,6 @@
 # Current Frontend System State
 
-Snapshot as of foundation lock **2026-05-19** at operational commit `8496fa7178845783dab7441598af4ab68ef73d74` on branch `main` (UI origin `ce6ae20` via `foundation-stable-v1`).
+Snapshot as of foundation lock **2026-05-19** at operational commit `41351d8534fd1ad0ab6e4f94fee9cde14a0cf289` on branch `main` (UI origin `ce6ae20` via `foundation-stable-v1`).
 
 ## Rendering model
 
