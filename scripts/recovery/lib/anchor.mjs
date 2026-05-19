@@ -4,6 +4,7 @@
  */
 
 import { readFileSync, existsSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -28,4 +29,20 @@ export function anchorCommit(anchor = loadAnchor()) {
 
 export function anchorBranch(anchor = loadAnchor()) {
   return anchor?.branch || "frontend-stable-foundation";
+}
+
+/** Resolved operational commit: operationalTag when present, else anchor.commit */
+export function resolvedOperationalCommit(anchor = loadAnchor()) {
+  const tag = anchor?.operationalTag;
+  if (tag) {
+    try {
+      return execSync(`git rev-parse ${tag}^{commit}`, {
+        cwd: ROOT,
+        encoding: "utf8",
+      }).trim();
+    } catch {
+      // fall through to anchor.commit
+    }
+  }
+  return anchorCommit(anchor);
 }
