@@ -6,11 +6,11 @@ Operational symmetry with the control repo: **checkpoints** for milestones, **sa
 
 | Mechanism | Value | Notes |
 |-----------|-------|-------|
-| Operational anchor | `41351d8` | See `docs/foundation/recovery-anchor.json` |
+| Operational anchor | `52fa027` | See `docs/foundation/recovery-anchor.json` |
 | UI origin (immutable) | `ce6ae20` | `foundation-stable-v1` — cinematic baseline before recovery bundle |
 | Stable branch | `frontend-stable-foundation` | Tracks operational anchor; **do not force-push** |
 | Sacred tag v1 | `foundation-stable-v1` | Annotated tag on `ce6ae20`; **never move** |
-| Sacred tag v2 | `foundation-stable-v2` | Annotated tag on operational anchor (`41351d8`); full recovery |
+| Sacred tag v2 | `foundation-stable-v2` | Annotated tag on operational anchor (`52fa027`); full recovery |
 
 `foundation-stable-v1` mirrors backend naming for the original UI lock. `foundation-stable-v2` is the promoted operational baseline (recovery scripts + same UI). `recover:foundation` reads `recovery-anchor.json`, not the v1 tag directly.
 
