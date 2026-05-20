@@ -60,6 +60,6 @@ export async function GET() {
     });
   } catch (err) {
     console.error("exclusive drops error:", err);
-    return NextResponse.json({ items: [], source: "error", error: err.message }, { status: 500 });
+    return NextResponse.json({ items: [], source: "fallback", error: err.message });
   }
 }

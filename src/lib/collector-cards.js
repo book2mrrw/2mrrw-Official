@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isMissingSupabaseTable } from "@/lib/commerce/entitlements";
+import { isMissingSupabaseTable, isSchemaUnavailableError } from "@/lib/commerce/entitlements";
 
 const ACTIVE_COLLECTOR_STATUSES = new Set(["collector", "verified_collector", "founder_collector", "vault_collector"]);
 
@@ -91,7 +91,10 @@ async function grantCollectorAccess(admin, { userId, card }) {
     .select("*, collector_cards (visible_serial, release_title, access_tier, verification_status)")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    if (isSchemaUnavailableError(error)) return null;
+    throw error;
+  }
   return data;
 }
 
@@ -154,16 +157,34 @@ export function mapCollectorAccessRecord(row = {}) {
 }
 
 export async function getCollectorAccessRecords(admin, userId) {
-  const { data, error } = await admin
+  const embeddedSelect =
+    "id, collector_card_id, streaming_access, vault_access, livestream_access, collector_status, perks_json, updated_at, revoked_at, collector_cards (visible_serial, release_title, access_tier, verification_status)";
+  const plainSelect =
+    "id, collector_card_id, streaming_access, vault_access, livestream_access, collector_status, perks_json, updated_at, revoked_at";
+
+  let { data, error } = await admin
     .from("collector_access")
-    .select("id, collector_card_id, streaming_access, vault_access, livestream_access, collector_status, perks_json, updated_at, revoked_at, collector_cards (visible_serial, release_title, access_tier, verification_status)")
+    .select(embeddedSelect)
     .eq("user_id", userId)
     .is("revoked_at", null)
     .order("updated_at", { ascending: false });
 
   if (error) {
-    if (isMissingSupabaseTable(error)) return [];
-    throw error;
+    if (isMissingSupabaseTable(error) || isSchemaUnavailableError(error)) {
+      const fallback = await admin
+        .from("collector_access")
+        .select(plainSelect)
+        .eq("user_id", userId)
+        .is("revoked_at", null)
+        .order("updated_at", { ascending: false });
+      if (fallback.error) {
+        if (isMissingSupabaseTable(fallback.error) || isSchemaUnavailableError(fallback.error)) return [];
+        throw fallback.error;
+      }
+      data = fallback.data;
+    } else {
+      throw error;
+    }
   }
 
   return (data || []).filter((row) => ACTIVE_COLLECTOR_STATUSES.has(row.collector_status)).map(mapCollectorAccessRecord);
@@ -182,7 +203,12 @@ export async function claimCollectorCard({ userId, token, deviceInfo = {}, ipHas
     .eq("hidden_secure_id", hiddenSecureId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    if (isSchemaUnavailableError(error)) {
+      return { ok: false, status: 503, reason: "unavailable" };
+    }
+    throw error;
+  }
 
   if (!card) {
     await logCollectorActivity(admin, {
@@ -245,7 +271,12 @@ export async function claimCollectorCard({ userId, token, deviceInfo = {}, ipHas
       .select("*")
       .maybeSingle();
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      if (isSchemaUnavailableError(updateError)) {
+        return { ok: false, status: 503, reason: "unavailable" };
+      }
+      throw updateError;
+    }
     if (!updated) {
       return { ok: false, status: 409, reason: "claim_race" };
     }
@@ -293,7 +324,7 @@ export async function claimCollectorCard({ userId, token, deviceInfo = {}, ipHas
       collectorTier: cardAccessTier(claimedCard),
       status: cardVerificationStatus(claimedCard),
     },
-    access: mapCollectorAccessRecord(access),
+    access: access ? mapCollectorAccessRecord(access) : null,
   };
 }
 
@@ -310,7 +341,12 @@ export async function verifyCollectorCardToken({ token, userId = null, deviceInf
     .eq("hidden_secure_id", hiddenSecureId)
     .maybeSingle();
 
-  if (error) throw error;
+  if (error) {
+    if (isSchemaUnavailableError(error)) {
+      return { ok: false, status: 503, reason: "unavailable" };
+    }
+    throw error;
+  }
 
   if (!card || cardVerificationStatus(card) === "revoked" || card.revoked_at) {
     await logCollectorActivity(admin, {

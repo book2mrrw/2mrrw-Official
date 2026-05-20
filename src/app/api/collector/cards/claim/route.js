@@ -38,6 +38,7 @@ export async function POST(req) {
         revoked: "This collector card is no longer active.",
         already_claimed: "This collector card is already attached to another account.",
         claim_race: "This card was just claimed. Refresh and try again.",
+        unavailable: "Collector card verification is temporarily unavailable. Try again later.",
       };
       return NextResponse.json({
         error: messages[result.reason] || "Collector claim failed.",

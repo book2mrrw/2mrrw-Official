@@ -95,6 +95,16 @@ export function isMissingSupabaseTable(error) {
   return code === "42P01" || /relation .* does not exist/i.test(message);
 }
 
+export function isMissingSupabaseColumn(error) {
+  const code = error?.code || "";
+  const message = String(error?.message || "");
+  return code === "42703" || /column .* does not exist/i.test(message);
+}
+
+export function isSchemaUnavailableError(error) {
+  return isMissingSupabaseTable(error) || isMissingSupabaseColumn(error);
+}
+
 export function isMissingCollectorOwnershipsTable(error) {
   return isMissingSupabaseTable(error);
 }

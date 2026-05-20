@@ -61,6 +61,27 @@ export async function GET() {
     });
   } catch (err) {
     console.error("public vault error:", err);
-    return NextResponse.json({ error: err.message || "Public vault failed" }, { status: 500 });
+    return NextResponse.json({
+      unlocked: false,
+      pricing: {
+        regularCents: VAULT_PASS_REGULAR_CENTS,
+        subscriberCents: VAULT_PASS_SUBSCRIBER_CENTS,
+        displayRegular: `$${(VAULT_PASS_REGULAR_CENTS / 100).toFixed(2)}`,
+        displaySubscriber: `$${(VAULT_PASS_SUBSCRIBER_CENTS / 100).toFixed(2)}`,
+        cardOwnerFree: false,
+        hasSubscriber: false,
+      },
+      vaultAccess: {
+        tier: "public",
+        hasInnerCircleAccess: false,
+        hasVaultPass: false,
+        fullAccess: false,
+        cardOwnerFree: false,
+      },
+      sections: [],
+      room: { mode: "locked" },
+      source: "fallback",
+      syncedAt: new Date().toISOString(),
+    });
   }
 }

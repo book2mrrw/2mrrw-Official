@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { grantLibraryItems } from "@/lib/commerce/entitlements";
+import { grantLibraryItems, isMissingSupabaseColumn } from "@/lib/commerce/entitlements";
 
 function hashToken(raw) {
   return crypto.createHash("sha256").update(String(raw || "")).digest("hex");
@@ -63,14 +63,22 @@ export async function createPendingGiftTransaction({
   amountCents
 }) {
   const admin = createAdminClient();
-  const { data: product, error: productError } = await admin
+  let productResult = await admin
     .from("products")
-    .select("id, slug, gifting_enabled")
+    .select("id, slug, gifting_enabled, metadata")
     .eq("slug", productSlug)
     .maybeSingle();
-  if (productError) throw productError;
+
+  if (productResult.error && isMissingSupabaseColumn(productResult.error)) {
+    productResult = await admin.from("products").select("id, slug, metadata").eq("slug", productSlug).maybeSingle();
+  }
+  if (productResult.error) throw productResult.error;
+
+  const product = productResult.data;
   if (!product) throw new Error("Product not found.");
-  if (!product.gifting_enabled) throw new Error("Gifting is not enabled for this product.");
+
+  const giftingEnabled = Boolean(product.gifting_enabled ?? product.metadata?.gifting_enabled);
+  if (!giftingEnabled) throw new Error("Gifting is not enabled for this product.");
 
   const { data, error } = await admin
     .from("gift_transactions")
