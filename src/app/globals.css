@@ -24,3 +24,37 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Living Scroll — timed lyrics visual (CSS only; does not change layout shell) */
+.living-scroll-lyrics {
+  max-height: 200px;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, transparent 0%, #000 12%, #000 88%, transparent 100%);
+  padding: 8px 4px;
+}
+
+.living-scroll-lyrics .living-scroll-line {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #aaa;
+  text-align: center;
+  animation: livingScrollDrift 14s ease-in-out infinite;
+}
+
+.living-scroll-lyrics .living-scroll-line:nth-child(odd) {
+  animation-duration: 16s;
+  color: #c8c8c8;
+}
+
+@keyframes livingScrollDrift {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-4px);
+  }
+}

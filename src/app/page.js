@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { useAuth } from "@/context/AuthContext";
+import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
+import { ReleaseDetailExtras } from "@/components/ReleaseDetailExtras";
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
 const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
@@ -441,6 +443,7 @@ export default function Page() {
   const [addedFlash, setAddedFlash]               = useState(null);
   const [soundOn, setSoundOn]                     = useState(false);
   const [selectedSingle, setSelectedSingle]       = useState(null);
+  const [selectedReleaseDetail, setSelectedReleaseDetail] = useState(null);
   const [selectedAlbum, setSelectedAlbum]         = useState(null);
   const [singleIndex, setSingleIndex]             = useState(0);
   const [slideDir, setSlideDir]                   = useState("right");
@@ -717,7 +720,14 @@ export default function Page() {
   const currentSingle = useMemo(() => singles[singleIndex], [singleIndex]);
   const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
 
-  const openSingleModal = useCallback(single => { setSelectedSingle(single); }, []);
+  const openSingleModal = useCallback((single) => {
+    setSelectedSingle(single);
+    setSelectedReleaseDetail(null);
+    if (!single?.slug) return;
+    void getControlSystemReleaseDetail({ slug: single.slug, fallbackRelease: single }).then((detail) => {
+      if (detail) setSelectedReleaseDetail(detail);
+    });
+  }, []);
 
   const seekTo = useCallback(e => {
     if (!nowPlayingAudioRef.current || !audioDuration) return;
@@ -1067,6 +1077,7 @@ export default function Page() {
                 <motion.div style={{width:"100%"}}>
                   <ModalAudioPlayer audioRef={modalAudioRef} isMobile={isMobile}/>
                 </motion.div>
+                <ReleaseDetailExtras release={selectedReleaseDetail || selectedSingle} />
                 <button onClick={()=>{addToCart(selectedSingle);setSelectedSingle(null);}} style={{width:"100%",padding:"12px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:700}}>Add to Cart – ${selectedSingle.price.toFixed(2)}</button>
                 <button onClick={()=>{addVinylToCart(selectedSingle);setSelectedSingle(null);}} style={{width:"100%",padding:"12px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – $47.99 (Optional)</button>
                 <button onClick={()=>setSelectedSingle(null)} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,marginTop:4}}>Close</button>

@@ -199,6 +199,8 @@ function mapTrackToFrontendTrack(track, release, fallbackTrack, apiBaseUrl) {
     fullAssetId: track?.fullAssetId || fullAsset?.assetId || fullAsset?.id || null,
     loopAssetId: track?.loopAssetId || loopAsset?.assetId || loopAsset?.id || null,
     lyricsAssetId: track?.lyricsAssetId || lyricsAsset?.assetId || lyricsAsset?.id || null,
+    lyricsMode: track?.lyricsMode || track?.lyrics_mode || "static",
+    lyricsText: track?.lyricsText || track?.lyrics_text || null,
     assets: {
       preview: previewAsset,
       full: fullAsset,
@@ -239,6 +241,8 @@ export function mapControlSystemRelease(release, fallbackRelease = {}, index = 0
       : fallback.price ?? 2.99;
   const priceLabel = firstPricedProduct?.priceLabel || release.priceLabel || release.price_label || formatPriceLabel(priceCents);
   const productSlug = release.productSlug || release.product_slug || firstPricedProduct?.productSlug || products[0]?.productSlug || null;
+  const pricingTier = release.pricingTier || release.pricing_tier || null;
+  const giftingEnabled = Boolean(release.giftingEnabled ?? release.gifting_enabled);
 
   return {
     ...fallback,
@@ -252,6 +256,10 @@ export function mapControlSystemRelease(release, fallbackRelease = {}, index = 0
     priceCents,
     priceLabel,
     productSlug,
+    pricingTier,
+    giftingEnabled,
+    deluxePriceInCents: numberFromCents(release.deluxePriceInCents ?? release.deluxe_price_in_cents),
+    bundlePriceInCents: numberFromCents(release.bundlePriceInCents ?? release.bundle_price_in_cents),
     products,
     type: releaseTypeFor(release) || fallback.type,
     releaseDate: release.releaseDate || fallback.releaseDate,
@@ -259,6 +267,8 @@ export function mapControlSystemRelease(release, fallbackRelease = {}, index = 0
     controlSystemReleaseStatus: release.status,
     controlSystemTrackCount: release.playback?.trackCount ?? release.tracks?.length,
     controlSystemDurationSeconds: release.playback?.totalDurationSeconds,
+    credits: release.credits ?? [],
+    giftingEnabled: release.giftingEnabled ?? release.gifting_enabled ?? false,
     tracks: mappedTracks,
     artworkAssetId: release.artworkAssetId || release.artwork_asset_id || artworkAsset?.assetId || artworkAsset?.id || null,
     artworkAsset,
