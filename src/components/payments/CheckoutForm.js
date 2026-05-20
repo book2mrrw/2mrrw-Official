@@ -25,6 +25,12 @@ function CheckoutForm({ onSuccess, requiresShipping, submitLabel = "Pay Now" }) 
     e.preventDefault();
     if (!stripe || !elements) return;
     setLoading(true); setError("");
+    const submit = await elements.submit();
+    if (submit.error) {
+      setError(submit.error.message || "Payment failed.");
+      setLoading(false);
+      return;
+    }
     const result = await stripe.confirmPayment({ elements, redirect:"if_required" });
     if (result.error) { setError(result.error.message || "Payment failed."); setLoading(false); }
     else { onSuccess(result.paymentIntent?.id); }

@@ -37,7 +37,7 @@ export async function POST(req) {
     const paymentIntent = await getStripe().paymentIntents.create({
       amount,
       currency: "usd",
-      payment_method_types: ["card"],
+      automatic_payment_methods: { enabled: true },
       receipt_email: user.email || undefined,
       metadata: {
         user_id: user.id,

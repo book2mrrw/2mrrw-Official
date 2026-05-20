@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { loadStripe } from "@stripe/stripe-js";
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import { Elements } from "@stripe/react-stripe-js";
+import CheckoutForm from "@/components/payments/CheckoutForm";
 import { useAuth } from "@/context/AuthContext";
 import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
 import { ReleaseDetailExtras } from "@/components/ReleaseDetailExtras";
@@ -739,6 +740,15 @@ export default function Page() {
   const clearCart      = () => setCart([]);
   const removeFromCart = idx => setCart(p => p.filter((_, i) => i !== idx));
   const total          = cart.reduce((s, item) => s + item.price, 0);
+  const cartRequiresShipping = useMemo(() => cart.some((item) => {
+    const slug = String(item?.slug || "");
+    if (slug === "vault-pass") return false;
+    return slug.startsWith("exc-card") ||
+      slug.startsWith("exc-bundle") ||
+      slug.includes("vinyl") ||
+      ["hoodie", "shirt", "hat"].includes(slug) ||
+      slug.startsWith("evt-");
+  }), [cart]);
 
   const hoverIn       = useCallback(e => { e.currentTarget.style.transform="scale(1.08)"; e.currentTarget.style.filter="brightness(1.15)"; e.currentTarget.style.boxShadow="0 0 18px rgba(0,255,255,0.6)"; }, []);
   const hoverOut      = useCallback(e => { e.currentTarget.style.transform="scale(1)";    e.currentTarget.style.filter="brightness(1)";    e.currentTarget.style.boxShadow="none"; }, []);
@@ -1316,7 +1326,12 @@ export default function Page() {
               </motion.div>
             </motion.div>
 
-            {activeTab==="home" && <div style={{padding:"18px 0 8px",display:"flex",justifyContent:"flex-start"}}><button onClick={()=>window.open("https://www.paypal.com/donate","_blank")} style={{padding:"10px 28px",background:"transparent",color:"#888",border:"1px solid #2a2a2a",borderRadius:8,cursor:"pointer",fontSize:12,fontWeight:700,letterSpacing:2,transition:"0.2s",textTransform:"uppercase"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#555";e.currentTarget.style.background="rgba(255,255,255,0.04)";}} onMouseLeave={e=>{e.currentTarget.style.color="#888";e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.background="transparent";}}>♥ Donate</button></div>}
+            {activeTab==="home" && (
+              <div style={{padding:"18px 0 8px",display:"flex",justifyContent:"flex-start",gap:10,flexWrap:"wrap",alignItems:"center"}}>
+                <button type="button" className="donate-glow-button" onClick={()=>window.open("https://www.paypal.com/donate","_blank")}>♥ Donate</button>
+                <button type="button" className="subscribe-shimmer-button" onClick={()=>{window.location.href="/subscribe";}}>Subscribe</button>
+              </div>
+            )}
 
             <div key={tabKey} style={{animation:"fadeInTab 0.22s ease forwards"}}>
 
@@ -2162,6 +2177,13 @@ export default function Page() {
         @keyframes eqBar2{from{height:10px}to{height:18px}}
         @keyframes eqBar3{from{height:14px}to{height:8px}}
         @keyframes eqBar4{from{height:8px}to{height:14px}}
+        @keyframes subscribeSweep{0%{transform:translateX(-140%) skewX(-18deg);opacity:0}22%{opacity:.45}54%{opacity:.18}100%{transform:translateX(190%) skewX(-18deg);opacity:0}}
+        .donate-glow-button,.subscribe-shimmer-button{position:relative;overflow:hidden;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;transition:color .2s,border-color .2s,background .2s,box-shadow .2s,transform .2s;border:1px solid #2a2a2a}
+        .donate-glow-button{background:transparent;color:#888}
+        .donate-glow-button:hover{color:#fff;border-color:#555;background:rgba(255,255,255,0.04)}
+        .subscribe-shimmer-button{background:#a259ff;color:#fff;border-color:#a259ff88;box-shadow:0 0 28px rgba(162,89,255,0.28)}
+        .subscribe-shimmer-button:hover{box-shadow:0 0 36px rgba(162,89,255,0.42);transform:translateY(-1px)}
+        .donate-glow-button::after,.subscribe-shimmer-button::after{content:"";position:absolute;top:-30%;bottom:-30%;left:0;width:42%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.45),transparent);animation:subscribeSweep 5.8s ease-in-out infinite;pointer-events:none}
         .section-heading{animation:fadeInUp .9s cubic-bezier(.22,1,.36,1) both;animation-fill-mode:forwards;}
       `}</style>
 
@@ -2194,7 +2216,7 @@ export default function Page() {
             >
               <motion.div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Checkout</motion.div>
               <Elements stripe={stripePromise} options={{clientSecret,appearance:{theme:"night",variables:{colorPrimary:"#00ffff",colorBackground:"#0a0a0a",colorText:"#ffffff",borderRadius:"8px"}}}}>
-                <CheckoutForm onSuccess={handleCheckoutSuccess}/>
+                <CheckoutForm onSuccess={handleCheckoutSuccess} requiresShipping={cartRequiresShipping}/>
               </Elements>
               <button onClick={()=>{setClientSecret(null);setCheckingOut(false);}} style={{marginTop:10,width:"100%",padding:10,background:"none",border:"1px solid #333",color:"#777",cursor:"pointer",borderRadius:8}}>Cancel</button>
             </motion.div>
@@ -2357,28 +2379,5 @@ function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, button
         </div>
       ))}
     </div>
-  );
-}
-
-// ── CHECKOUT FORM ─────────────────────────────────────────────────────────────
-function CheckoutForm({ onSuccess }) {
-  const stripe   = useStripe();
-  const elements = useElements();
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
-  const handleSubmit = async e => {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-    setLoading(true); setError("");
-    const result = await stripe.confirmPayment({ elements, redirect:"if_required" });
-    if (result.error) { setError(result.error.message || "Payment failed."); setLoading(false); }
-    else { onSuccess(result.paymentIntent?.id); }
-  };
-  return (
-    <form onSubmit={handleSubmit}>
-      <PaymentElement options={{layout:"tabs"}}/>
-      <button type="submit" disabled={!stripe||loading} style={{marginTop:20,width:"100%",padding:12,background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer"}}>{loading?"Processing…":"Pay Now"}</button>
-      {error && <p style={{color:"#ff4d4d",fontSize:12,marginTop:10}}>{error}</p>}
-    </form>
   );
 }
