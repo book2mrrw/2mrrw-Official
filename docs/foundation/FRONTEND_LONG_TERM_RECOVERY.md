@@ -4,7 +4,8 @@ Ongoing practices so the foundation remains recoverable months after this lock.
 
 ## 1. Immutable anchor commit
 
-- **Current anchor:** `ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c`
+- **UI origin (immutable):** `undefined` (`foundation-stable-v1`)
+- **Operational anchor:** `undefined` (`foundation-stable-v3`)
 - Stored in: `docs/foundation/recovery-anchor.json` (canonical), `FRONTEND_FOUNDATION_BASELINE.md`, `FRONTEND_RECOVERY_ANCHOR.md`
 
 ## One-command recovery (npm)
@@ -90,5 +91,6 @@ Advance only when:
 3. Production has run stable ≥ 48 hours
 4. All foundation docs updated with new commit hash
 
-**Operational recovery truth:** `recovery-anchor.json` → `e13b192e3ce20ad7106e4143a80726bea9ff30ca` (`foundation-stable-v2`).  
-**UI-only rollback:** `foundation-stable-v1` → `ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c` (unchanged).
+**Operational recovery truth:** `recovery-anchor.json` → `undefined` (`foundation-stable-v3`).  
+**UI-only rollback:** `foundation-stable-v1` → `undefined` (unchanged).  
+**Historical v2:** `foundation-stable-v2` → `undefined` (same tree as v3; never move).

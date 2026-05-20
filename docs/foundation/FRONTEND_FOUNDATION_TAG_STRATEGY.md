@@ -6,13 +6,14 @@ Operational symmetry with the control repo: **checkpoints** for milestones, **sa
 
 | Mechanism | Value | Notes |
 |-----------|-------|-------|
-| Operational anchor | `e13b192` | See `docs/foundation/recovery-anchor.json` |
+| Operational anchor | `23eb597` | See `docs/foundation/recovery-anchor.json` |
 | UI origin (immutable) | `ce6ae20` | `foundation-stable-v1` — cinematic baseline before recovery bundle |
 | Stable branch | `frontend-stable-foundation` | Tracks operational anchor; **do not force-push** |
 | Sacred tag v1 | `foundation-stable-v1` | Annotated tag on `ce6ae20`; **never move** |
-| Sacred tag v2 | `foundation-stable-v2` | Annotated tag on operational anchor (`e13b192`); full recovery |
+| Sacred tag v2 | `foundation-stable-v2` | Historical: metadata sync at `42a4bd9` (same tree as v3); **never move** |
+| Sacred tag v3 | `foundation-stable-v3` | Annotated tag on operational anchor (`23eb597`); full recovery |
 
-`foundation-stable-v1` mirrors backend naming for the original UI lock. `foundation-stable-v2` is the promoted operational baseline (recovery scripts + same UI). `recover:foundation` reads `recovery-anchor.json`, not the v1 tag directly.
+`foundation-stable-v1` mirrors backend naming for the original UI lock. `foundation-stable-v3` is the current operational baseline (rebased main + recovery scripts + same UI). `foundation-stable-v2` remains for historical reference. `recover:foundation` reads `recovery-anchor.json`, not the v1 tag directly.
 
 ## Experimental checkpoints
 
@@ -26,7 +27,7 @@ Checkpoints are **not** foundations. They never replace `foundation-stable-v1` o
 
 ## Promotion discipline
 
-Promote to a new sacred tag (e.g. `foundation-stable-v2`) only when:
+Promote to a new sacred tag (e.g. `foundation-stable-v3`) only when:
 
 1. Production smoke passes on the candidate commit
 2. `verify:foundation` and guardrails pass

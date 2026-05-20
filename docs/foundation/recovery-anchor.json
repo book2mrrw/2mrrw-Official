@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Canonical frontend foundation recovery anchor. Scripts read this file; do not duplicate commit hashes elsewhere without updating here.",
-  "version": 2,
-  "commit": "e13b192e3ce20ad7106e4143a80726bea9ff30ca",
-  "commitShort": "e13b192e",
+  "version": 3,
+  "commit": "23eb5974042c9fb0dbab6aca1b1748baf3b4fdb2",
+  "commitShort": "23eb5974",
   "branch": "frontend-stable-foundation",
   "mainBranch": "main",
-  "commitMessage": "chore(foundation): restore recovery-anchor v2 and align docs to 41351d8",
-  "anchoredAt": "2026-05-19T20:00:00-05:00",
+  "commitMessage": "chore(foundation): sync recovery-anchor metadata to e13b192",
+  "anchoredAt": "2026-05-19T19:24:27-05:00",
   "documentedAt": "2026-05-19",
   "deploymentUrl": "https://artist-platform-silk.vercel.app",
   "legacyDeploymentUrl": "https://2mrrw-official.vercel.app",
@@ -19,7 +19,7 @@
     "commitShort": "ce6ae20e",
     "role": "Immutable UI origin — cinematic frontend baseline before recovery bundle"
   },
-  "operationalTag": "foundation-stable-v2",
+  "operationalTag": "foundation-stable-v3",
   "dependencies": {
     "next": "16.2.4",
     "react": "19.2.4",
@@ -39,9 +39,10 @@
   },
   "lockfile": "package-lock.json",
   "notes": [
-    "Operational anchor advanced 2026-05-19: same cinematic UI as ce6ae20 plus recovery scripts/docs.",
+    "Operational anchor advanced 2026-05-19: rebased main reconciled with v2 tree; promoted to foundation-stable-v3.",
     "foundation-stable-v1 remains on ce6ae20 for UI-only rollback; never move that tag.",
-    "foundation-stable-v2 tags this commit for full operational recovery.",
+    "foundation-stable-v2 remains on 42a4bd9 (metadata sync at e13b192 tree); historical reference only.",
+    "foundation-stable-v3 tags 23eb597 (rebased tree from ca954b4) for full operational recovery.",
     "Production alias: artist-platform-silk.vercel.app",
     "Never force-push frontend-stable-foundation without explicit approval.",
     "Update deploymentId when a new production deploy is promoted as foundation."

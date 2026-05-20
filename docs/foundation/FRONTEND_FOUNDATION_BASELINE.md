@@ -8,12 +8,13 @@
 
 | Field | Value |
 |-------|-------|
-| Git commit (HEAD) | `e13b192e3ce20ad7106e4143a80726bea9ff30ca` |
+| Git commit (HEAD) | `undefined` |
 | Git branch | `main` / `frontend-stable-foundation` |
-| Commit message | feat(recovery): frontend checkpoint parity and foundation tag strategy |
-| Commit date | 2026-05-19 13:39:34 -0500 |
-| UI origin (immutable) | `foundation-stable-v1` → `ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c` |
-| Operational tag | `foundation-stable-v2` → same commit as HEAD |
+| Commit message | chore(foundation): sync recovery-anchor metadata to e13b192 |
+| Commit date | 2026-05-19 19:24:27 -0500 |
+| UI origin (immutable) | `foundation-stable-v1` → `undefined` |
+| Operational tag | `foundation-stable-v3` → same commit as HEAD |
+| Prior operational (historical) | `foundation-stable-v2` → `undefined` (same tree as v3) |
 
 ## Production deployment
 
