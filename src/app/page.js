@@ -6,6 +6,7 @@ import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-
 import { useAuth } from "@/context/AuthContext";
 import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
 import { ReleaseDetailExtras } from "@/components/ReleaseDetailExtras";
+import { VaultUnlockedRoom } from "@/components/vault/VaultUnlockedRoom";
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
 const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
@@ -490,6 +491,8 @@ export default function Page() {
   const [audioCurrentTime, setAudioCurrentTime]   = useState(0);
   const [audioDuration, setAudioDuration]         = useState(0);
   const [inventory, setInventory]                 = useState({});
+  const [exclusiveCatalog, setExclusiveCatalog] = useState(exclusiveItemsBase);
+  const [publicVault, setPublicVault]             = useState(null);
   const [isMobile, setIsMobile]                   = useState(false);
   const [mobileCartOpen, setMobileCartOpen]       = useState(false);
   const [mobileNavOpen, setMobileNavOpen]         = useState(false);
@@ -533,6 +536,41 @@ export default function Page() {
   useEffect(() => {
     setInventory(loadInventory());
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/catalog/exclusive-drops", { cache: "no-store" });
+        const payload = await response.json();
+        if (!cancelled && response.ok && Array.isArray(payload.items) && payload.items.length) {
+          setExclusiveCatalog(payload.items);
+        }
+      } catch {
+        /* keep static fallback */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== "innercircle") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/public/vault", { cache: "no-store" });
+        const payload = await response.json();
+        if (!cancelled && response.ok) setPublicVault(payload);
+      } catch {
+        if (!cancelled) setPublicVault(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab]);
 
   useEffect(() => {
     const audio = nowPlayingAudioRef.current;
@@ -861,7 +899,7 @@ export default function Page() {
   const currentSlide   = radioSlides[radioIndex];
   const activeFlowMode = flowConversionActive ? "conversion" : nowPlaying ? "nowplaying" : "idle";
 
-  const exclusiveItems = exclusiveItemsBase.map(item => ({
+  const exclusiveItems = exclusiveCatalog.map(item => ({
     ...item,
     stock: inventory[item.slug] !== undefined ? inventory[item.slug] : REAL_INVENTORY[item.slug],
   }));
@@ -1834,6 +1872,15 @@ export default function Page() {
                             <div style={{fontSize:18,fontWeight:800,marginBottom:8}}>The stories behind the music.</div>
                             <div style={{fontSize:13,color:"#555",lineHeight:1.8}}>Not for everyone. Written for the people who actually listen.</div>
                           </div>
+                          {publicVault?.unlocked ? (
+                            <div style={{marginBottom:32}}>
+                              <VaultUnlockedRoom
+                                sections={publicVault.sections || []}
+                                pricing={publicVault.pricing}
+                                vaultAccess={publicVault.vaultAccess}
+                              />
+                            </div>
+                          ) : null}
                           <div style={{display:"flex",flexDirection:"column",gap:18}}>
                             {innerCirclePosts.map((post,i)=>(
                               <div key={post.id} onClick={()=>setInnerCirclePost(post)} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:16,padding:isMobile?18:24,cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.1}s forwards`,transition:"border-color 0.25s,box-shadow 0.25s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#a259ff55";e.currentTarget.style.boxShadow="0 0 20px rgba(162,89,255,0.1)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a1a1a";e.currentTarget.style.boxShadow="none";}}>
