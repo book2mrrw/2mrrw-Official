@@ -6,6 +6,7 @@ import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "@/components/payments/CheckoutForm";
 import DonateModal from "@/components/payments/DonateModal";
 import { useAuth } from "@/context/AuthContext";
+import { useAuthGate, isOtpAuthenticated } from "@/context/AuthGateContext";
 import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
 import ImmersivePreviewModal from "@/components/preview/ImmersivePreviewModal";
 import GiftBottomSheet from "@/components/gifts/GiftBottomSheet";
@@ -18,6 +19,7 @@ import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/li
 import { resolveContentAccess, resolvePlaybackSrc } from "@/lib/music-access";
 import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
 import { useAudioPlayer } from "@/context/AudioContext";
+import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
 import { VaultUnlockedRoom } from "@/components/vault/VaultUnlockedRoom";
 import { MobileNavAnimatedIcon } from "@/components/nav/MobileNavAnimatedIcon";
 import { VaultNavLockIcon } from "@/components/nav/VaultNavLockIcon";
@@ -481,6 +483,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
   const { currentUser: authUser, library, owns, accountState, isAdmin, enterGuest, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
+  const { requireAuth, openGate } = useAuthGate();
   const { playTrack, playQueue, hasStarted, currentTrack } = useAudioPlayer();
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
@@ -853,12 +856,15 @@ export default function Page() {
   const goRadio = useCallback(i => setRadioIndex(i), []);
 
   // ── HELPERS ───────────────────────────────────────────────────────────────
-  const addToCart      = useCallback(item => {
+  const addToCartRaw   = useCallback(item => {
     if (item.slug && owns(item.slug)) return;
     setCart(p => [...p, item]);
     setAddedFlash(item.slug);
     setTimeout(() => setAddedFlash(null), 400);
   }, [owns]);
+  const addToCart      = useCallback(item => {
+    requireAuth(() => addToCartRaw(item));
+  }, [addToCartRaw, requireAuth]);
   const clearCart      = () => setCart([]);
   const removeFromCart = idx => setCart(p => p.filter((_, i) => i !== idx));
   const total          = cart.reduce((s, item) => s + item.price, 0);
@@ -958,7 +964,10 @@ export default function Page() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
-    if (!currentUser) { setCheckoutError("Enter email and phone before checkout."); switchTab("account"); return; }
+    if (!isOtpAuthenticated(authUser)) {
+      requireAuth(() => void handleCheckout());
+      return;
+    }
     setCheckingOut(true); setCheckoutError("");
     try {
       const res  = await fetch("/api/create-payment-intent", { method:"POST", headers:{"Content-Type":"application/json"}, credentials:"include", body:JSON.stringify({ cart }) });
@@ -998,12 +1007,12 @@ export default function Page() {
     if (params.get("checkout") !== "pending") return;
     if (cart.length === 0) return;
     window.history.replaceState({}, "", window.location.pathname);
-    if (!currentUser) {
-      switchTab("account");
+    if (!isOtpAuthenticated(authUser)) {
+      requireAuth(() => void handleCheckout());
       return;
     }
     void handleCheckout();
-  }, [cart, currentUser]);
+  }, [authUser, cart, requireAuth]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -1066,17 +1075,25 @@ export default function Page() {
   }, []);
 
   const switchTab = tabId => {
-    if (tabId === "cards") {
-      window.location.assign(COLLECTORS_CARDS_ROUTE);
+    const gatedTabs = new Set(["mymusic", "vault", "cards"]);
+    const navigate = () => {
+      if (tabId === "cards") {
+        window.location.assign(COLLECTORS_CARDS_ROUTE);
+        return;
+      }
+      setHomeScrollSection(null);
+      setTabKey(p => p + 1);
+      setActiveTab(tabId);
+      if (isMobile) {
+        setMobileNavOpen(false);
+        setMobileNavClosing(false);
+      }
+    };
+    if (gatedTabs.has(tabId) && !isOtpAuthenticated(authUser)) {
+      requireAuth(navigate);
       return;
     }
-    setHomeScrollSection(null);
-    setTabKey(p => p + 1);
-    setActiveTab(tabId);
-    if (isMobile) {
-      setMobileNavOpen(false);
-      setMobileNavClosing(false);
-    }
+    navigate();
   };
 
   const isMobileNavTabActive = tabId => {
@@ -1641,12 +1658,19 @@ export default function Page() {
                             <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
                               <div className="song-title-turquoise-glow" style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{single.title}</div>
                               <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${single.price.toFixed(2)}</div>
-                              <button
-                                onClick={e => { e.stopPropagation(); addToCart(single); }}
-                                style={{width:"100%",padding:"7px 0",fontSize:11,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",borderRadius:7,cursor:"pointer",fontWeight:600,transition:"0.2s"}}
-                                onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";}}
-                                onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="white";}}
-                              >+ Cart</button>
+                              <ReleaseCardActions
+                                item={singleUi}
+                                accountState={accountState}
+                                userId={authUser?.id}
+                                source="home_single_card"
+                                onAddToCart={e => { e.stopPropagation(); addToCart(single); }}
+                                cartButtonStyle={{
+                                  background:"#1a1a1a",
+                                  color:"white",
+                                  border:"1px solid #2a2a2a",
+                                }}
+                                cartLabel="+ Cart"
+                              />
                             </div>
                           </div>
                         );})}
@@ -1680,7 +1704,7 @@ export default function Page() {
                   {/* Features */}
                   <div style={{marginTop:28,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)}/>
+                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)} accountState={accountState} userId={authUser?.id}/>
                   </div>
 
                   {/* Radio */}
@@ -1819,6 +1843,7 @@ export default function Page() {
                         onSwitchTab={switchTab}
                         onOpenSingle={openSingleModal}
                         onOpenAlbum={setSelectedAlbum}
+                        onRequireAuth={() => openGate()}
                       />
                     </>
                   )}
@@ -2115,16 +2140,15 @@ export default function Page() {
                       <button onClick={handleSignOut} style={{padding:"12px 0",background:"transparent",color:"#444",border:"1px solid #1e1e1e",borderRadius:10,cursor:"pointer",fontSize:13,width:"100%",transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#333";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";e.currentTarget.style.borderColor="#1e1e1e";}}>Sign Out</button>
                     </div>
                   ) : (
-                    <div style={{maxWidth:400}}>
-                      <div style={{fontSize:13,color:"#777",lineHeight:1.7,marginBottom:20}}>Verify with email + phone (one-time code). Your purchases, gifts, and library stay on this account.</div>
-                      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                        <input placeholder="Full Name (optional)" value={authName} onChange={e=>setAuthName(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
-                        <input placeholder="Email Address" value={authEmail} onChange={e=>setAuthEmail(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
-                        <input placeholder="Phone Number" value={authPhone} onChange={e=>setAuthPhone(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
-                        {authError && <div style={{fontSize:12,color:"#ff4d4d"}}>{authError}</div>}
-                        <button onClick={handleAuthSubmit} style={{padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1,marginTop:4}}>Continue to verification</button>
-                        <a href="/login" style={{fontSize:13,color:"#00ffff",textAlign:"center",marginTop:8}}>Already have an account? Sign in</a>
-                      </div>
+                    <div style={{maxWidth:400,padding:"24px 0"}}>
+                      <div style={{fontSize:13,color:"#777",lineHeight:1.7,marginBottom:20}}>Sign in to view purchases, library, and account settings.</div>
+                      <button
+                        type="button"
+                        onClick={() => openGate()}
+                        style={{padding:"13px 28px",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14}}
+                      >
+                        Sign in
+                      </button>
                     </div>
                   )}
                 </>
@@ -2520,8 +2544,24 @@ function FeaturesRail({ features, isMobile, addToCart, onPlay, accountState, use
             <div className="hero-title-glow" style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{feat.title}</div>
             <div style={{fontSize:10,color:"#a259ff",fontWeight:700,letterSpacing:1.5,marginBottom:6}}>{feat.featuring}</div>
             {access?.showPrice && <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${feat.price.toFixed(2)}</div>}
-            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-              {access?.showCart && <button onClick={e=>{e.stopPropagation();addToCart(feat);}} style={{flex:1,padding:"7px 0",fontSize:11,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",borderRadius:7,cursor:"pointer",fontWeight:600,transition:"0.2s",minWidth:72}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#a259ff";e.currentTarget.style.color="#a259ff";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="white";}}>+ Cart</button>}
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}} onClick={e=>e.stopPropagation()}>
+              {access?.showCart && (
+                <div style={{flex:1,minWidth:0}}>
+                  <ReleaseCardActions
+                    item={feat}
+                    accountState={accountState}
+                    userId={userId}
+                    source="home_feature_card"
+                    onAddToCart={e => { e.stopPropagation(); addToCart(feat); }}
+                    cartButtonStyle={{
+                      background:"#1a1a1a",
+                      color:"white",
+                      border:"1px solid #2a2a2a",
+                    }}
+                    cartLabel="+ Cart"
+                  />
+                </div>
+              )}
               {userId && <span onClick={e=>e.stopPropagation()}><MusicPlusButton track={feat} userId={userId} access={access} isMobile={isMobile} deepLinkType="feature" onLibraryChange={onLibraryChange} /></span>}
               {isAdmin && <GiftButton onClick={() => onGift?.(feat)} />}
             </div>
