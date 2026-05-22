@@ -1,6 +1,22 @@
 const ASSET_ID_KEYS = ["assetId", "asset_id", "id"];
 const SIGNED_URL_KEYS = ["signedUrl", "signed_url", "playbackUrl", "playback_url"];
 const PUBLIC_URL_KEYS = ["url", "publicUrl", "public_url", "src", "href"];
+const R2_PUBLIC_CDN_BASE =
+  (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_R2_PUBLIC_URL) ||
+  "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
+
+function isPublicCdnUrl(value) {
+  const raw = firstString(value);
+  if (!raw) return false;
+  return raw.startsWith(R2_PUBLIC_CDN_BASE) || /^https?:\/\/pub-[a-z0-9]+\.r2\.dev\//i.test(raw);
+}
+
+function publicArtworkUrlFromPath(storagePath) {
+  const normalized = firstString(storagePath)?.replace(/^\//, "");
+  if (!normalized) return "";
+  if (isPublicCdnUrl(normalized)) return normalized;
+  return `${R2_PUBLIC_CDN_BASE.replace(/\/$/, "")}/${normalized}`;
+}
 const FULL_ACCESS_VALUES = new Set(["full", "owned", "purchased", "subscribed", "subscriber", "vault", "collector", "granted", "unlocked"]);
 
 export function firstString(...values) {
@@ -104,19 +120,35 @@ async function fetchSignedUrl(endpoint) {
   }
 }
 
-export async function resolveMediaAssetUrl(asset, apiBaseUrl = "", fallbackUrl = "") {
+export async function resolveMediaAssetUrl(asset, apiBaseUrl = "", fallbackUrl = "", options = {}) {
   const normalized = mediaAssetMetadata(asset, apiBaseUrl);
   if (!normalized) return absolutizeControlSystemMediaUrl(fallbackUrl, apiBaseUrl);
 
-  const signedUrl = absolutizeControlSystemMediaUrl(normalized.signedUrl, apiBaseUrl);
-  if (signedUrl) return signedUrl;
+  const preferPublic = options.preferPublic === true;
+  const directPublic = absolutizeControlSystemMediaUrl(normalized.url, apiBaseUrl);
+  if (preferPublic && (isPublicCdnUrl(directPublic) || isPublicCdnUrl(fallbackUrl))) {
+    return directPublic || absolutizeControlSystemMediaUrl(fallbackUrl, apiBaseUrl);
+  }
 
-  if (normalized.assetId || normalized.signedUrlEndpoint) {
+  const storagePath = asset?.storagePath || asset?.storage_path || asset?.path;
+  if (preferPublic && storagePath) {
+    const mapped = publicArtworkUrlFromPath(storagePath);
+    if (mapped) return mapped;
+  }
+
+  const signedUrl = absolutizeControlSystemMediaUrl(normalized.signedUrl, apiBaseUrl);
+  if (!preferPublic && signedUrl) return signedUrl;
+
+  if (!preferPublic && (normalized.assetId || normalized.signedUrlEndpoint)) {
     const fetchedSignedUrl = await fetchSignedUrl(normalized.signedUrlEndpoint);
     if (fetchedSignedUrl) return absolutizeControlSystemMediaUrl(fetchedSignedUrl, apiBaseUrl);
   }
 
-  return absolutizeControlSystemMediaUrl(normalized.url, apiBaseUrl) || absolutizeControlSystemMediaUrl(fallbackUrl, apiBaseUrl);
+  return directPublic || absolutizeControlSystemMediaUrl(fallbackUrl, apiBaseUrl);
+}
+
+export async function resolvePublicArtworkUrl(asset, apiBaseUrl = "", fallbackUrl = "") {
+  return resolveMediaAssetUrl(asset, apiBaseUrl, fallbackUrl, { preferPublic: true });
 }
 
 export async function resolveEntitledMediaAssetUrl(asset, apiBaseUrl = "") {

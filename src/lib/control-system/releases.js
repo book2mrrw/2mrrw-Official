@@ -12,6 +12,7 @@ import {
   mediaAssetMetadata,
   resolveEntitledMediaAssetUrl,
   resolveMediaAssetUrl,
+  resolvePublicArtworkUrl,
 } from "./media";
 
 const DEFAULT_RELEASE_LIMIT = 4;
@@ -29,7 +30,7 @@ async function resolveControlSystemMediaUrls(release, apiBaseUrl) {
   if (!release) return release;
 
   const artworkAsset = release.artworkAsset || mediaAssetFromFields(release, [], ["artworkAssetId", "artwork_asset_id", "assetId", "asset_id"], apiBaseUrl);
-  const resolvedCover = await resolveMediaAssetUrl(artworkAsset, apiBaseUrl, release.cover);
+  const resolvedCover = await resolvePublicArtworkUrl(artworkAsset, apiBaseUrl, release.cover);
   const resolvedTracks = Array.isArray(release.tracks)
     ? await Promise.all(release.tracks.map(async (track) => {
         const previewAsset = track?.assets?.preview || mediaAssetFromFields(track, [], ["previewAssetId", "preview_asset_id"], apiBaseUrl);
@@ -89,6 +90,18 @@ function immediateAssetUrl(asset, apiBaseUrl) {
       asset?.public_url ||
       asset?.src ||
       asset?.href,
+    apiBaseUrl
+  );
+}
+
+function immediatePublicCoverUrl(asset, apiBaseUrl, fallback = "") {
+  return absolutizeControlSystemMediaUrl(
+    asset?.publicUrl ||
+      asset?.public_url ||
+      asset?.url ||
+      asset?.src ||
+      asset?.href ||
+      fallback,
     apiBaseUrl
   );
 }
@@ -222,7 +235,7 @@ export function mapControlSystemRelease(release, fallbackRelease = {}, index = 0
   const directCover = directMediaUrl(release, ["cover", "coverUrl", "cover_url", "artworkUrl", "artwork_url", "image", "imageUrl", "image_url"], apiBaseUrl);
   const directPreview = directMediaUrl(primaryTrack, ["preview", "previewUrl", "preview_url", "src", "audio", "audioUrl", "audio_url", "url", "playbackUrl", "playback_url"], apiBaseUrl) || directMediaUrl(release, ["preview", "previewUrl", "preview_url", "audio", "audioUrl", "audio_url", "url"], apiBaseUrl);
   const directVideo = directMediaUrl(primaryTrack, ["video", "videoUrl", "video_url", "loop", "loopUrl", "loop_url"], apiBaseUrl) || directMediaUrl(release, ["video", "videoUrl", "video_url", "loop", "loopUrl", "loop_url"], apiBaseUrl);
-  const cover = immediateAssetUrl(artworkAsset, apiBaseUrl) || directCover || fallback.cover || "";
+  const cover = immediatePublicCoverUrl(artworkAsset, apiBaseUrl, directCover || fallback.cover || "");
   const preview = immediateAssetUrl(primaryTrack?.assets?.preview, apiBaseUrl) || directPreview || fallback.preview || "";
   const video = immediateAssetUrl(primaryTrack?.assets?.loop, apiBaseUrl) || directVideo || fallback.video || "";
   const fallbackTracks = Array.isArray(fallback.tracks)
