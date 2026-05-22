@@ -17,7 +17,7 @@ import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/lib/deep-links";
 import { resolveContentAccess, resolvePlaybackSrc } from "@/lib/music-access";
-import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
+import { albumCardPlaybackItem, albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
 import { VaultUnlockedRoom } from "@/components/vault/VaultUnlockedRoom";
@@ -1700,7 +1700,7 @@ export default function Page() {
                   {/* Albums */}
                   <div id="home-albums">
                     <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                    <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile}/>
+                    <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile} accountState={accountState} userId={authUser?.id}/>
                   </div>
 
                   {/* Audio Visuals */}
@@ -2570,9 +2570,27 @@ function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, button
             {item.date && <div style={{fontSize:isMobile?9:11,color:"#444",marginBottom:6,letterSpacing:1}}>{item.date}</div>}
             {access?.badge && <div style={{marginBottom:6}}><MusicAccessBadge access={access} label={access.badge} compact /></div>}
             {access?.showPrice && <div style={{fontSize:isMobile?12:13,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${item.price.toFixed(2)}</div>}
-            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-              {access?.showCart && <button onClick={()=>addToCart(item)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>}
-              {userId && type==="albums" && <MusicPlusButton track={item} userId={userId} access={access} isMobile={isMobile} deepLinkType="album" onLibraryChange={onLibraryChange} />}
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}} onClick={type==="albums"?e=>e.stopPropagation():undefined}>
+              {access?.showCart && type==="albums" ? (
+                <div style={{flex:1,minWidth:0}}>
+                  <ReleaseCardActions
+                    item={withR2CatalogMedia(albumCardPlaybackItem(item))}
+                    accountState={accountState}
+                    userId={userId}
+                    source="home_album_card"
+                    onAddToCart={e => { e.stopPropagation(); addToCart(item); }}
+                    cartButtonStyle={{
+                      background:"#1a1a1a",
+                      color:"white",
+                      border:"1px solid #2a2a2a",
+                    }}
+                    cartLabel="+ Cart"
+                  />
+                </div>
+              ) : access?.showCart ? (
+                <button onClick={()=>addToCart(item)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>
+              ) : null}
+              {userId && type==="albums" && <span onClick={e=>e.stopPropagation()}><MusicPlusButton track={item} userId={userId} access={access} isMobile={isMobile} deepLinkType="album" onLibraryChange={onLibraryChange} /></span>}
               {isAdmin && <GiftButton onClick={() => onGift?.(item)} />}
             </div>
           </div>

@@ -19,6 +19,34 @@ export function toPlaybackTrack(item, accountState, source = "library", override
   };
 }
 
+/** First-track (or album-level preview) catalog item for inline card play — matches album modal start index 0. */
+export function albumCardPlaybackItem(album) {
+  if (!album) return album;
+  const trackList = album.tracks || album.trackTitles || [];
+  const first = trackList[0];
+  if (!first) return album;
+  if (typeof first === "string") {
+    return {
+      slug: album.slug,
+      albumSlug: album.slug,
+      title: first,
+      cover: album.cover,
+      preview: album.preview,
+      audio: album.audio,
+      artist: album.artist || "2MRRW",
+    };
+  }
+  return {
+    ...first,
+    slug: first.slug || album.slug,
+    albumSlug: album.slug,
+    cover: first.cover || album.cover,
+    preview: first.preview || album.preview,
+    audio: first.audio || album.audio,
+    artist: first.artist || album.artist || "2MRRW",
+  };
+}
+
 export function albumTracksForPlayback(album, accountState, source = "album") {
   const trackList = album?.tracks || album?.trackTitles || [];
   return trackList
