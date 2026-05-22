@@ -103,3 +103,7 @@ Document in `FRONTEND_FOUNDATION_REPORT.md`:
 ## Escalation
 
 If anchor commit builds but production fails: check Vercel env, Supabase outage, Stripe keys — not UI redesign.
+
+## Development workflow integration
+
+AI and feature work should follow [`PROJECT_GUARDRAILS.md`](../../PROJECT_GUARDRAILS.md) and [`docs/workflow/`](../workflow/) (feature isolation, scoped prompting, selective restoration). Use **surgical file restore** from `recovery-anchor.json` when a single module regresses; reserve full `npm run recover:foundation` for dependency drift or multi-surface breakage. See [`SELECTIVE_RESTORATION_WORKFLOW.md`](../workflow/SELECTIVE_RESTORATION_WORKFLOW.md).

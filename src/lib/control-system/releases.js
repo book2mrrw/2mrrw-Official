@@ -201,6 +201,7 @@ function mapTrackToFrontendTrack(track, release, fallbackTrack, apiBaseUrl) {
     lyricsAssetId: track?.lyricsAssetId || lyricsAsset?.assetId || lyricsAsset?.id || null,
     lyricsMode: track?.lyricsMode || track?.lyrics_mode || "static",
     lyricsText: track?.lyricsText || track?.lyrics_text || null,
+    lyricsLrc: track?.lyricsLrc || track?.lyrics_lrc || track?.lrc || null,
     assets: {
       preview: previewAsset,
       full: fullAsset,

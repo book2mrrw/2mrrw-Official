@@ -5,6 +5,8 @@ import { sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
 
 const AudioContext = createContext(null);
 
+const REPEAT_MODES = ["off", "all", "one"];
+
 const EMPTY_STATE = {
   currentTrackId: null,
   currentTrack: null,
@@ -14,6 +16,10 @@ const EMPTY_STATE = {
   duration: 0,
   error: null,
   hasStarted: false,
+  queue: [],
+  queueIndex: -1,
+  repeatMode: "off",
+  shuffle: false,
 };
 
 const normalizeTrack = (track = {}) => {
@@ -36,6 +42,11 @@ export function AudioProvider({ children }) {
   const lastPersistRef = useRef({ key: null, at: 0 });
   const pendingSeekRef = useRef(null);
   const stateRef = useRef(EMPTY_STATE);
+  const queueRef = useRef([]);
+  const queueIndexRef = useRef(-1);
+  const repeatModeRef = useRef("off");
+  const shuffleRef = useRef(false);
+  const playTrackRef = useRef(null);
   const [state, setState] = useState(EMPTY_STATE);
 
   const patchState = useCallback((patch) => {
@@ -44,6 +55,10 @@ export function AudioProvider({ children }) {
 
   useEffect(() => {
     stateRef.current = state;
+    queueRef.current = state.queue || [];
+    queueIndexRef.current = state.queueIndex ?? -1;
+    repeatModeRef.current = state.repeatMode || "off";
+    shuffleRef.current = Boolean(state.shuffle);
   }, [state]);
 
   useEffect(() => {
@@ -100,8 +115,42 @@ export function AudioProvider({ children }) {
     };
     const onDuration = () => patchState({ duration: isFinite(audio.duration) ? audio.duration : 0 });
     const onEnded = () => {
-      patchState({ isPlaying: false, currentTime: 0 });
       persistPlayback("complete");
+      const repeatMode = repeatModeRef.current;
+      const queue = queueRef.current;
+      const queueIndex = queueIndexRef.current;
+
+      if (repeatMode === "one" && stateRef.current.currentTrack) {
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+        return;
+      }
+
+      if (queue.length > 0) {
+        let nextIndex = queueIndex + 1;
+        if (shuffleRef.current && queue.length > 1) {
+          let candidate = Math.floor(Math.random() * queue.length);
+          while (candidate === queueIndex) {
+            candidate = Math.floor(Math.random() * queue.length);
+          }
+          nextIndex = candidate;
+        } else if (nextIndex >= queue.length) {
+          if (repeatMode === "all") nextIndex = 0;
+          else {
+            patchState({ isPlaying: false, currentTime: 0 });
+            return;
+          }
+        }
+        const nextTrack = queue[nextIndex];
+        if (nextTrack) {
+          queueIndexRef.current = nextIndex;
+          patchState({ queueIndex: nextIndex });
+          playTrackRef.current?.(nextTrack, { resumeAt: 0 });
+          return;
+        }
+      }
+
+      patchState({ isPlaying: false, currentTime: 0 });
     };
     const onError = () => patchState({
       isPlaying: false,
@@ -195,6 +244,80 @@ export function AudioProvider({ children }) {
     }
   }, [patchState]);
 
+  useEffect(() => {
+    playTrackRef.current = playTrack;
+  });
+
+  const setQueue = useCallback((tracks = [], startIndex = 0) => {
+    const normalized = (tracks || []).map(normalizeTrack).filter((t) => t.src);
+    const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
+    queueRef.current = normalized;
+    queueIndexRef.current = normalized.length ? index : -1;
+    patchState({ queue: normalized, queueIndex: queueIndexRef.current });
+    return normalized;
+  }, [patchState]);
+
+  const playNext = useCallback(async () => {
+    const queue = queueRef.current;
+    if (!queue.length) return false;
+    let nextIndex = queueIndexRef.current + 1;
+    if (shuffleRef.current && queue.length > 1) {
+      nextIndex = Math.floor(Math.random() * queue.length);
+    } else if (nextIndex >= queue.length) {
+      nextIndex = repeatModeRef.current === "all" ? 0 : queueIndexRef.current;
+      if (nextIndex === queueIndexRef.current) return false;
+    }
+    queueIndexRef.current = nextIndex;
+    patchState({ queueIndex: nextIndex });
+    return playTrack(queue[nextIndex], { resumeAt: 0 });
+  }, [playTrack, patchState]);
+
+  const playPrevious = useCallback(async () => {
+    const queue = queueRef.current;
+    const audio = audioRef.current;
+    if (audio && audio.currentTime > 3) {
+      audio.currentTime = 0;
+      patchState({ currentTime: 0 });
+      return true;
+    }
+    if (!queue.length) return false;
+    let prevIndex = queueIndexRef.current - 1;
+    if (prevIndex < 0) prevIndex = repeatModeRef.current === "all" ? queue.length - 1 : 0;
+    queueIndexRef.current = prevIndex;
+    patchState({ queueIndex: prevIndex });
+    return playTrack(queue[prevIndex], { resumeAt: 0 });
+  }, [playTrack, patchState]);
+
+  const setRepeatMode = useCallback((mode) => {
+    const next = REPEAT_MODES.includes(mode) ? mode : "off";
+    repeatModeRef.current = next;
+    patchState({ repeatMode: next });
+  }, [patchState]);
+
+  const toggleRepeat = useCallback(() => {
+    const order = ["off", "all", "one"];
+    const current = repeatModeRef.current || "off";
+    const next = order[(order.indexOf(current) + 1) % order.length];
+    setRepeatMode(next);
+    return next;
+  }, [setRepeatMode]);
+
+  const setShuffle = useCallback((enabled) => {
+    shuffleRef.current = Boolean(enabled);
+    patchState({ shuffle: Boolean(enabled) });
+  }, [patchState]);
+
+  const toggleShuffle = useCallback(() => {
+    setShuffle(!shuffleRef.current);
+    return shuffleRef.current;
+  }, [setShuffle]);
+
+  const playQueue = useCallback(async (tracks = [], startIndex = 0, options = {}) => {
+    const normalized = setQueue(tracks, startIndex);
+    if (!normalized.length) return false;
+    return playTrack(normalized[Math.max(0, Math.min(startIndex, normalized.length - 1))], options);
+  }, [setQueue, playTrack]);
+
   const pause = useCallback(() => {
     audioRef.current?.pause();
   }, []);
@@ -238,18 +361,44 @@ export function AudioProvider({ children }) {
       audio.load();
     }
     setState(EMPTY_STATE);
+    queueRef.current = [];
+    queueIndexRef.current = -1;
   }, []);
 
   const value = useMemo(() => ({
     ...state,
     playTrack,
+    playQueue,
+    setQueue,
+    playNext,
+    playPrevious,
+    setRepeatMode,
+    toggleRepeat,
+    setShuffle,
+    toggleShuffle,
     pause,
     resume,
     toggle,
     seek,
     stop,
     audioRef,
-  }), [pause, playTrack, resume, seek, state, stop, toggle]);
+  }), [
+    pause,
+    playQueue,
+    playTrack,
+    playNext,
+    playPrevious,
+    resume,
+    seek,
+    setQueue,
+    setRepeatMode,
+    setShuffle,
+    state,
+    stop,
+    toggle,
+    toggleRepeat,
+    toggleShuffle,
+  ]);
 
   return (
     <AudioContext.Provider value={value}>

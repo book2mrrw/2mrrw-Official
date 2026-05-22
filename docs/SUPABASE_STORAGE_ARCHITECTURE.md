@@ -1,6 +1,13 @@
-# Supabase Storage Architecture
+# Cloudflare R2 Storage Architecture
 
-Bucket:
+Production media lives in a **single Cloudflare R2 bucket** (`CLOUDFLARE_R2_BUCKET_NAME`, e.g. `2mrrw-media`). Former Supabase buckets are **path prefixes** inside that bucket:
+
+| Former bucket | R2 key prefix |
+|---------------|---------------|
+| `digital-assets` | `digital-assets/` |
+| `protected-media` | `protected-media/` |
+
+## Layout (digital-assets prefix)
 
 ```text
 digital-assets/
@@ -9,120 +16,66 @@ digital-assets/
 └── artists/
 ```
 
-This plan is non-destructive. It does not move, delete, or rename existing media. It gives you a scalable target structure, metadata templates, a manifest, and validation tooling.
-
-## Naming Rules
-
-Use lower-kebab-case for storage folder names:
+## Layout (protected-media prefix — Control System uploads)
 
 ```text
-hour-glass
-turnt-me-2-dis
-love-hz
-01-roll-call
+protected-media/
+├── masters/
+├── previews/
+├── artwork/
+├── loops/
+├── vault/
+└── lyrics/
 ```
 
-Keep display titles in `metadata.json`, not in folder names. This avoids URL encoding issues in Supabase Storage and keeps paths stable for purchases, streaming, Apple Music style pages, lyrics, and future releases.
+## Public vs signed access
 
-Canonical filenames inside every release folder:
+| Content | Access |
+|---------|--------|
+| Previews | Public CDN: `NEXT_PUBLIC_R2_PUBLIC_URL` + `previews/` |
+| Artwork / motion loops | Public CDN: `artwork/`, `videos/singles/` |
+| Single covers in manifest | `digital-assets/singles/*/cover.jpg` (public when bucket policy allows) |
+| Purchased masters / vault | Signed GET via `@aws-sdk/s3-request-presigner` (artist-platform: `/api/library/stream`, `/api/vault/media`; Control System: `/api/media/{assetId}/signed-url`) |
 
-```text
-audio.mp3
-preview.mp3
-cover.jpg
-visual.mp4
-lyrics.lrc
-metadata.json
-```
-
-## Singles
-
-```text
-digital-assets/
-└── singles/
-    └── hour-glass/
-        ├── audio.mp3
-        ├── preview.mp3
-        ├── cover.jpg
-        ├── visual.mp4
-        ├── lyrics.lrc
-        └── metadata.json
-```
-
-## Albums
-
-```text
-digital-assets/
-└── albums/
-    └── love-hz/
-        ├── album-cover.jpg
-        ├── metadata.json
-        ├── 01-roll-call/
-        │   ├── audio.mp3
-        │   ├── preview.mp3
-        │   ├── cover.jpg
-        │   ├── visual.mp4
-        │   ├── lyrics.lrc
-        │   └── metadata.json
-        └── 02-w2d/
-            └── ...
-```
-
-## Artists
-
-```text
-digital-assets/
-└── artists/
-    └── 2mrrw/
-        ├── avatar.jpg
-        ├── hero.jpg
-        └── metadata.json
-```
-
-## Generated Files
-
-- `storage/digital-assets.manifest.json` — asset inventory and intended Supabase paths.
-- `storage/metadata-templates/` — release and artist `metadata.json` templates.
-- `scripts/validate-storage-manifest.mjs` — local manifest validator.
-
-## Supabase Storage API Compatibility
-
-Use manifest `storagePath` values with Supabase Storage:
+## Signed URL generation (artist-platform)
 
 ```js
-const { data, error } = await supabase.storage
-  .from("digital-assets")
-  .createSignedUrl("singles/hour-glass/audio.mp3", 3600);
+import { buildR2Key, createR2SignedGetUrl, R2_PREFIX } from "@/lib/storage/r2";
+
+const key = buildR2Key(R2_PREFIX.DIGITAL_ASSETS, product.storage_path);
+const url = await createR2SignedGetUrl(key, 3600);
 ```
 
-Public previews can still be served from public app assets while paid full files stay private in `digital-assets`.
+Playback for entitled users: `resolvePlaybackSrc()` returns `/api/library/stream?slug=…&redirect=1`, which redirects to the signed R2 URL.
 
-## Upload Order
+## Environment variables
 
-1. Upload artist metadata/images.
-2. Upload album covers and album metadata.
-3. Upload single/track covers, previews, and metadata.
-4. Upload full audio files.
-5. Upload visuals and lyrics.
-6. Run validation.
-
-## Validation
-
-Validate manifest shape and optional local asset staging folder:
-
-```bash
-node scripts/validate-storage-manifest.mjs
-node scripts/validate-storage-manifest.mjs --local-root ./staged-digital-assets
+```text
+CLOUDFLARE_R2_ENDPOINT
+CLOUDFLARE_R2_ACCESS_KEY_ID
+CLOUDFLARE_R2_SECRET_ACCESS_KEY
+CLOUDFLARE_R2_BUCKET_NAME
+NEXT_PUBLIC_R2_PUBLIC_URL
 ```
 
-The script checks:
+## Generated files
 
-- Missing required files under `--local-root`
-- Naming consistency
-- Metadata template JSON validity
-- Cover dimensions when local files exist
-- Video aspect ratio when local files exist and `ffprobe` is installed
+- `storage/digital-assets.manifest.json` — asset inventory (paths under `digital-assets/` prefix).
+- `storage/metadata-templates/` — release and artist `metadata.json` templates.
+- `scripts/validate-storage-manifest.mjs` — manifest validator (reports R2 bucket + prefix).
+- `scripts/verify-setup.mjs` — includes R2 `HeadBucket` connectivity check.
+
+## cover_url normalization
+
+Store `products.cover_url` **without** a leading slash (e.g. `images/singles/hourglass.jpg`). UI resolves via `catalogCoverUrl()` → public R2 when configured.
+
+## SQL (optional DB cleanup)
+
+```sql
+-- Normalize legacy leading slashes on cover_url
+UPDATE products SET cover_url = ltrim(cover_url, '/') WHERE cover_url LIKE '/%';
+```
 
 ## Important
 
-Do not update `products.storage_path` to the new structure until the matching files are uploaded to Supabase. Current app paths can keep working while you stage the new storage organization.
+Do not update `products.storage_path` until matching objects exist at `digital-assets/{storage_path}` in R2.

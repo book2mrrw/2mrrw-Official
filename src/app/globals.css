@@ -47,6 +47,110 @@ body {
   color: #c8c8c8;
 }
 
+/* Hero luminous title — preview modals, singles, featured (font-family unchanged) */
+.hero-title-glow {
+  text-shadow: 0 0 20px rgba(0, 255, 255, 0.8);
+  animation: heroTitleGlow 2.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-title-glow {
+    animation: none;
+  }
+}
+
+@keyframes heroTitleGlow {
+  0%,
+  100% {
+    text-shadow: 0 0 14px rgba(0, 255, 255, 0.55), 0 0 28px rgba(0, 255, 255, 0.22);
+  }
+  50% {
+    text-shadow: 0 0 24px rgba(0, 255, 255, 0.9), 0 0 42px rgba(0, 255, 255, 0.38);
+  }
+}
+
+/* Song titles — singles, upcoming, modal (font-family unchanged) */
+.song-title-turquoise-glow {
+  text-shadow:
+    0 0 12px rgba(0, 220, 210, 0.35),
+    0 0 24px rgba(0, 200, 195, 0.18),
+    0 0 40px rgba(0, 180, 175, 0.08);
+  animation: songTitleTurquoisePulse 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .song-title-turquoise-glow {
+    animation: none;
+    text-shadow:
+      0 0 10px rgba(0, 220, 210, 0.28),
+      0 0 20px rgba(0, 200, 195, 0.12);
+  }
+}
+
+@keyframes songTitleTurquoisePulse {
+  0%,
+  100% {
+    text-shadow:
+      0 0 10px rgba(0, 220, 210, 0.28),
+      0 0 22px rgba(0, 200, 195, 0.14),
+      0 0 36px rgba(0, 180, 175, 0.06);
+  }
+  50% {
+    text-shadow:
+      0 0 16px rgba(0, 235, 225, 0.42),
+      0 0 30px rgba(0, 210, 205, 0.22),
+      0 0 48px rgba(0, 190, 185, 0.1);
+  }
+}
+
+.preview-credits-heading {
+  font-size: 10px;
+  letter-spacing: 2.8px;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: rgba(0, 220, 210, 0.55);
+  text-shadow:
+    0 0 10px rgba(0, 220, 210, 0.22),
+    0 0 20px rgba(0, 200, 195, 0.1);
+  margin-bottom: 12px;
+  opacity: 0.88;
+}
+
+@media (max-width: 768px) {
+  .preview-sheet-dismiss-handle {
+    width: 100%;
+    padding: 10px 0 8px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    touch-action: none;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .preview-sheet-dismiss-handle::before {
+    content: "";
+    display: block;
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: #444;
+  }
+
+  .preview-drawer-handle {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.28);
+    margin: 0 auto 14px;
+    flex-shrink: 0;
+    cursor: pointer;
+    touch-action: none;
+  }
+}
+
 @keyframes livingScrollDrift {
   0%,
   100% {
@@ -56,6 +160,48 @@ body {
   50% {
     opacity: 1;
     transform: translateY(-4px);
+  }
+}
+
+/* Collector's Cards — sheen clipped inside card frame only */
+.collector-card-frame {
+  position: relative;
+  overflow: hidden;
+}
+
+.collector-card-sheen::after {
+  content: "";
+  position: absolute;
+  inset: -40%;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    105deg,
+    transparent 38%,
+    rgba(255, 255, 255, 0.06) 44%,
+    rgba(255, 255, 255, 0.22) 50%,
+    rgba(255, 255, 255, 0.06) 56%,
+    transparent 62%
+  );
+  transform: translateX(-130%) skewX(-18deg);
+  animation: collectorCardSheen 4.8s ease-in-out infinite;
+}
+
+@keyframes collectorCardSheen {
+  0%,
+  100% {
+    transform: translateX(-130%) skewX(-18deg);
+  }
+  45%,
+  55% {
+    transform: translateX(130%) skewX(-18deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collector-card-sheen::after {
+    animation: none;
+    opacity: 0;
   }
 }
 

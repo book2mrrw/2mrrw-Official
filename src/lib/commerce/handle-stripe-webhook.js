@@ -1,8 +1,82 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/commerce/stripe";
 import { fulfillCheckoutSession, fulfillPaymentIntent } from "@/lib/commerce/fulfill-purchase";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const LOG_PREFIX = "[stripe-webhook]";
+
+function resolvePaymentIntentId(event) {
+  const obj = event?.data?.object;
+  if (!obj) return null;
+  if (event.type === "payment_intent.canceled") {
+    return obj.id || null;
+  }
+  const pi = obj.payment_intent;
+  if (!pi) return null;
+  return typeof pi === "string" ? pi : pi.id || null;
+}
+
+async function revokePurchaseByPaymentIntent(paymentIntentId) {
+  if (!paymentIntentId) {
+    console.warn(`${LOG_PREFIX} revocation skipped: missing payment_intent id`);
+    return;
+  }
+
+  const admin = createAdminClient();
+  const { data: purchase, error: findErr } = await admin
+    .from("purchases")
+    .select("id, user_id")
+    .eq("stripe_payment_intent_id", paymentIntentId)
+    .maybeSingle();
+
+  if (findErr) {
+    console.warn(`${LOG_PREFIX} revocation lookup failed`, paymentIntentId, findErr.message);
+    return;
+  }
+
+  if (!purchase) {
+    console.warn(`${LOG_PREFIX} revocation: no purchase for PI ${paymentIntentId}`);
+    return;
+  }
+
+  const { data: libraryRows, error: libErr } = await admin
+    .from("library_items")
+    .select("id, products(slug)")
+    .eq("purchase_id", purchase.id);
+
+  if (libErr) {
+    console.warn(`${LOG_PREFIX} revocation library lookup failed`, purchase.id, libErr.message);
+    return;
+  }
+
+  const slugs = (libraryRows || []).map((row) => row.products?.slug).filter(Boolean);
+
+  const { error: statusErr } = await admin
+    .from("purchases")
+    .update({ status: "refunded" })
+    .eq("id", purchase.id);
+
+  if (statusErr) {
+    console.warn(`${LOG_PREFIX} revocation status update failed`, purchase.id, statusErr.message);
+    return;
+  }
+
+  const { error: deleteErr } = await admin
+    .from("library_items")
+    .delete()
+    .eq("purchase_id", purchase.id);
+
+  if (deleteErr) {
+    console.warn(`${LOG_PREFIX} revocation library delete failed`, purchase.id, deleteErr.message);
+    return;
+  }
+
+  console.warn(`${LOG_PREFIX} revoked purchase`, {
+    paymentIntentId,
+    userId: purchase.user_id,
+    slugs,
+  });
+}
 
 /**
  * Canonical Stripe webhook handler.
@@ -36,6 +110,18 @@ export async function handleStripeWebhook(req) {
   }
 
   console.log(`${LOG_PREFIX} received`, event.id, event.type);
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("processed_stripe_events")
+    .select("event_id")
+    .eq("event_id", event.id)
+    .maybeSingle();
+
+  if (existing) {
+    console.log(`${LOG_PREFIX} duplicate event skipped`, event.id, event.type);
+    return NextResponse.json({ received: true, duplicate: true, eventId: event.id, type: event.type });
+  }
 
   try {
     switch (event.type) {
@@ -88,6 +174,14 @@ export async function handleStripeWebhook(req) {
         break;
       }
 
+      case "charge.refunded":
+      case "payment_intent.canceled":
+      case "charge.dispute.created": {
+        const paymentIntentId = resolvePaymentIntentId(event);
+        await revokePurchaseByPaymentIntent(paymentIntentId);
+        break;
+      }
+
       default:
         console.log(`${LOG_PREFIX} ignored event type: ${event.type}`);
     }
@@ -95,6 +189,18 @@ export async function handleStripeWebhook(req) {
     console.error(`${LOG_PREFIX} handler error`, event.id, event.type, err.message, err.stack);
     return NextResponse.json(
       { error: "Webhook handler failed", eventId: event.id, type: event.type },
+      { status: 500 }
+    );
+  }
+
+  const { error: markErr } = await admin
+    .from("processed_stripe_events")
+    .insert({ event_id: event.id });
+
+  if (markErr) {
+    console.error(`${LOG_PREFIX} failed to mark event processed`, event.id, markErr.message);
+    return NextResponse.json(
+      { error: "Failed to record processed event", eventId: event.id, type: event.type },
       { status: 500 }
     );
   }

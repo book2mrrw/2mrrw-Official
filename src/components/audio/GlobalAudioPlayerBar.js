@@ -11,7 +11,24 @@ const formatTime = (seconds) => {
 };
 
 function GlobalAudioPlayerBar() {
-  const { currentTrack, hasStarted, isPlaying, currentTime, duration, error, toggle, seek, stop } = useAudioPlayer();
+  const {
+    currentTrack,
+    hasStarted,
+    isPlaying,
+    currentTime,
+    duration,
+    error,
+    toggle,
+    seek,
+    stop,
+    queue,
+    playNext,
+    playPrevious,
+    shuffle,
+    repeatMode,
+    toggleShuffle,
+    toggleRepeat,
+  } = useAudioPlayer();
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -26,12 +43,24 @@ function GlobalAudioPlayerBar() {
   const progress = duration ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
   const bottom = isMobile ? "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)" : 0;
   const sourceLabel = String(currentTrack.source || "audio").replace(/_/g, " ");
+  const hasQueue = (queue || []).length > 1;
 
   const handleSeek = (event) => {
     if (!duration) return;
     const rect = event.currentTarget.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
     seek(ratio * duration);
+  };
+
+  const iconBtn = {
+    background: "none",
+    border: "none",
+    color: "#666",
+    cursor: "pointer",
+    padding: "4px 6px",
+    fontSize: 14,
+    lineHeight: 1,
+    flexShrink: 0,
   };
 
   return (
@@ -57,7 +86,29 @@ function GlobalAudioPlayerBar() {
       <div onClick={handleSeek} style={{ width: "100%", height: 3, background: "#111", cursor: duration ? "pointer" : "default" }}>
         <div style={{ width: `${progress}%`, height: "100%", background: error ? "#ff8a8a" : "#00ffff", transition: "width 0.1s linear", boxShadow: error ? "0 0 6px rgba(255,138,138,0.5)" : "0 0 6px rgba(0,255,255,0.5)" }} />
       </div>
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: isMobile ? "8px 12px" : "10px 20px", display: "flex", alignItems: "center", gap: isMobile ? 10 : 14 }}>
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: isMobile ? "8px 12px" : "10px 20px", display: "flex", alignItems: "center", gap: isMobile ? 8 : 12 }}>
+        {hasQueue && (
+          <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+            <button type="button" aria-label="Previous track" onClick={() => playPrevious()} style={iconBtn}>⏮</button>
+            <button type="button" aria-label="Next track" onClick={() => playNext()} style={iconBtn}>⏭</button>
+            <button
+              type="button"
+              aria-label="Shuffle"
+              onClick={() => toggleShuffle()}
+              style={{ ...iconBtn, color: shuffle ? "#00ffff" : "#666" }}
+            >
+              ⇄
+            </button>
+            <button
+              type="button"
+              aria-label="Repeat"
+              onClick={() => toggleRepeat()}
+              style={{ ...iconBtn, color: repeatMode !== "off" ? "#00ffff" : "#666", fontSize: 12 }}
+            >
+              {repeatMode === "one" ? "①" : "↻"}
+            </button>
+          </div>
+        )}
         {currentTrack.cover ? (
           <img src={currentTrack.cover} alt="" style={{ width: isMobile ? 40 : 38, height: isMobile ? 40 : 38, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
         ) : (

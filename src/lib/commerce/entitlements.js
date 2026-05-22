@@ -31,9 +31,21 @@ export async function grantLibraryItems({ userId, purchaseId, slugs, source = "p
   const admin = createAdminClient();
   const { data: products, error: pErr } = await admin.from("products").select("id, slug").in("slug", slugs);
   if (pErr) throw pErr;
-  if (!products?.length) return [];
 
-  const rows = products.map((p) => ({
+  const resolved = products || [];
+  const requested = (slugs || []).filter(Boolean);
+  const matchedSlugs = new Set(resolved.map((p) => p.slug));
+  const missingSlugs = requested.filter((slug) => !matchedSlugs.has(slug));
+
+  if (requested.length && missingSlugs.length === requested.length) {
+    console.warn(`grantLibraryItems: no products found for slugs: ${missingSlugs.join(", ")}`);
+  } else if (missingSlugs.length) {
+    console.warn(`grantLibraryItems: missing products for slugs: ${missingSlugs.join(", ")}`);
+  }
+
+  if (!resolved.length) return [];
+
+  const rows = resolved.map((p) => ({
     user_id: userId,
     product_id: p.id,
     purchase_id: purchaseId,

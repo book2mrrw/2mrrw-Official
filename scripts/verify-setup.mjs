@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
 import { createClient } from "@supabase/supabase-js";
+import { checkR2Connectivity } from "../src/lib/storage/r2.js";
 
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
@@ -75,9 +76,9 @@ if (pErr) {
   }
 }
 
-const { data: buckets } = await admin.storage.listBuckets();
-const hasAssets = buckets?.some((b) => b.name === "digital-assets");
-console.log(`storage digital-assets: ${hasAssets ? "OK" : "MISSING (create private bucket)"}`);
+const r2 = await checkR2Connectivity();
+console.log(`storage R2 (${process.env.CLOUDFLARE_R2_BUCKET_NAME || "unset"}):`, r2.ok ? "OK" : `FAIL ${r2.message}`);
+if (!r2.ok) failed = true;
 
 if (!env.STRIPE_WEBHOOK_SECRET) {
   console.log("ENV WARN: STRIPE_WEBHOOK_SECRET not set (webhooks will fail)");

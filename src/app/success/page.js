@@ -5,33 +5,104 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 
+function slugsFromPurchaseItems(items) {
+  const list = Array.isArray(items) ? items : [];
+  return list.map((item) => item.slug).filter(Boolean);
+}
+
+function slugsFromPurchaseRecord(purchase) {
+  if (!purchase) return [];
+  let items = purchase.items;
+  if (typeof items === "string") {
+    try {
+      items = JSON.parse(items);
+    } catch {
+      items = [];
+    }
+  }
+  return slugsFromPurchaseItems(items);
+}
+
+function resolveExpectedSlugs(searchParams) {
+  const single = searchParams.get("slug");
+  const many = searchParams.get("slugs");
+  if (many) {
+    return many.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  if (single) return [single];
+  return [];
+}
+
 function SuccessContent() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session_id");
-  const { currentUser, refreshLibrary } = useAuth();
+  const { currentUser, refreshLibrary, refreshAccountState } = useAuth();
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+    const loadPurchases = async () => {
+      const res = await fetch("/api/purchases", { credentials: "include" });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Could not load purchases.");
+      }
+      return data.purchases || [];
+    };
+
     const load = async () => {
       try {
-        await refreshLibrary();
-        const res = await fetch("/api/purchases", { credentials: "include" });
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data.error || "Could not load purchases.");
-          return;
+        let expectedSlugs = resolveExpectedSlugs(searchParams);
+
+        await Promise.all([refreshAccountState(), refreshLibrary()]);
+
+        for (let attempt = 0; attempt <= 6; attempt += 1) {
+          if (cancelled) return;
+
+          const account = await refreshAccountState();
+          await refreshLibrary();
+          const owned = new Set(account?.ownedSlugs || []);
+
+          if (!expectedSlugs.length) {
+            const orderHistory = await loadPurchases();
+            if (cancelled) return;
+            if (sessionId) {
+              const match = orderHistory.find(
+                (p) => p.stripe_checkout_session_id === sessionId
+              );
+              expectedSlugs = slugsFromPurchaseRecord(match);
+            }
+          }
+
+          const pending =
+            expectedSlugs.length > 0 &&
+            expectedSlugs.some((slug) => !owned.has(slug));
+
+          if (!pending) break;
+          if (attempt < 6) await sleep(2000);
         }
-        setPurchases(data.purchases || []);
-      } catch {
-        setError("Network error. Could not load purchases.");
+
+        const orderHistory = await loadPurchases();
+        if (!cancelled) setPurchases(orderHistory);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Network error. Could not load purchases.");
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
+
     load();
-  }, [sessionId, refreshLibrary]);
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, refreshLibrary, refreshAccountState, searchParams]);
 
   const userName = currentUser?.name?.split(" ")[0] || "";
 

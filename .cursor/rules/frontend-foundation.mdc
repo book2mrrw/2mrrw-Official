@@ -20,6 +20,7 @@ The current deployed cinematic frontend is the **official foundation baseline** 
 
 - Baseline commit: see `docs/foundation/FRONTEND_FOUNDATION_BASELINE.md`
 - Recovery workflow: `docs/foundation/FRONTEND_RECOVERY_PROTOCOL.md`
+- AI workflow + feature isolation: `PROJECT_GUARDRAILS.md`, `docs/workflow/`
 - Guardrails scan: `npm run check:frontend-guardrails`
 - Smoke tests: `npm run test:foundation`
 

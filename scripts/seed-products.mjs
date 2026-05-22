@@ -13,10 +13,10 @@ const env = Object.fromEntries(
 );
 
 const CATALOG = [
-  { slug: "hour-glass", title: "Hour Glass", product_type: "single", price_cents: 299, cover_url: "/images/singles/hourglass.jpg", storage_path: "singles/hour-glass.mp3" },
-  { slug: "w2d", title: "W.2.D", product_type: "single", price_cents: 299, cover_url: "/images/singles/w2d.jpg", storage_path: "singles/w2d.mp3" },
-  { slug: "artificial", title: "Artificial", product_type: "single", price_cents: 299, cover_url: "/images/singles/artificial.jpg", storage_path: "singles/artificial.mp3" },
-  { slug: "turnt-me-2-dis", title: "Turnt Me 2 Dis", product_type: "single", price_cents: 299, cover_url: "/images/singles/turnt.jpg", storage_path: "singles/turnt-me-2-dis.mp3" },
+  { slug: "hour-glass", title: "Hour Glass", product_type: "single", price_cents: 299, cover_url: "/images/singles/hourglass.jpg", storage_path: "singles/hour-glass/audio.mp3" },
+  { slug: "w2d", title: "W.2.D", product_type: "single", price_cents: 299, cover_url: "/images/singles/w2d.jpg", storage_path: "singles/w2d/audio.mp3" },
+  { slug: "artificial", title: "Artificial", product_type: "single", price_cents: 299, cover_url: "/images/singles/artificial.jpg", storage_path: "singles/artificial/audio.mp3" },
+  { slug: "turnt-me-2-dis", title: "Turnt Me 2 Dis", product_type: "single", price_cents: 299, cover_url: "/images/singles/turnt.jpg", storage_path: "singles/turnt-me-2-dis/audio.mp3" },
   { slug: "i-dont-believe-you", title: "I Don't Believe You", product_type: "feature", price_cents: 299, cover_url: "/images/features/idbu.jpg", preview_path: "/audio/previews/i-dont-believe-you-preview.wav" },
   { slug: "2-heavy", title: "2 Heavy", product_type: "feature", price_cents: 299, cover_url: "/images/features/2heavy.jpg", preview_path: "/audio/previews/2-heavy-preview.wav" },
   { slug: "tbh", title: "T.B.H.", product_type: "album", price_cents: 999, cover_url: "/images/albums/tbh.jpg" },

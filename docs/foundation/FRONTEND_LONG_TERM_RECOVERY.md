@@ -82,6 +82,8 @@ Keep outside the repo if possible:
 - Agents must run guardrails before suggesting `page.js` edits
 - New features: backend + leaf components first
 
+**Development workflow integration:** [`PROJECT_GUARDRAILS.md`](../../PROJECT_GUARDRAILS.md) defines protected components, scoped AI behavior, and links to [`docs/workflow/`](../workflow/) (feature branches, mobile-only scope, visual checkpoints). Prefer selective restoration ([`SELECTIVE_RESTORATION_WORKFLOW.md`](../workflow/SELECTIVE_RESTORATION_WORKFLOW.md)) before full `recover:foundation`. Cursor: `.cursor/rules/project-guardrails.mdc`.
+
 ## 8. When to advance the anchor
 
 Advance only when:

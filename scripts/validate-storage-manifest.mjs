@@ -134,8 +134,12 @@ for (const record of records) {
   }
 }
 
+const r2Bucket = process.env.CLOUDFLARE_R2_BUCKET_NAME || "2mrrw-media";
+const r2Prefix = "digital-assets";
+
 console.log(`Manifest: ${manifestPath}`);
-console.log(`Bucket: ${manifest.bucket}`);
+console.log(`Legacy manifest bucket: ${manifest.bucket}`);
+console.log(`R2 target: ${r2Bucket} (prefix: ${r2Prefix}/)`);
 console.log(`Assets checked: ${records.length}`);
 if (localRoot) console.log(`Local root: ${localRoot}`);
 
