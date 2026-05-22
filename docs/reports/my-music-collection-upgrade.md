@@ -73,7 +73,7 @@ Next.js 16.2.4 — compiled successfully.
 | Item | Value |
 |------|-------|
 | Commit message | `feat: My Music Collection — full-screen player, playlist cards, sort controls, cover art, recently added` |
-| Commit hash | _(see below after commit)_ |
+| Commit hash | `e4b3cc3` |
 
 ## Deliverable
 
