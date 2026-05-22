@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { LYRICS_LABEL } from "@/lib/releases";
 
 function parseLyricsLines(text) {
   if (!text || typeof text !== "string") return [];
@@ -34,7 +35,7 @@ export function ReleaseDetailExtras({ release }) {
               marginBottom: 8
             }}
           >
-            Lyrics {lyricsMode === "timed" ? "· Living Scroll" : ""}
+            {LYRICS_LABEL} {lyricsMode === "timed" ? "· Living Scroll" : ""}
           </div>
           <div
             className={lyricsMode === "timed" ? "living-scroll-lyrics" : "static-lyrics-panel"}

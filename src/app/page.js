@@ -2468,6 +2468,9 @@ function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, button
         return (
         <div key={item.slug} style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
           <img src={item.cover} onClick={()=>onCardClick?.(item)} onMouseEnter={hoverIn} onMouseLeave={hoverOut} style={{width:"100%",aspectRatio:"1/1",height:"auto",cursor:"pointer",transition:"transform 0.3s,filter 0.3s,box-shadow 0.3s",objectFit:"cover",display:"block"}}/>
+          {type==="albums"&&(item.type==="deluxe"||item.releaseType==="deluxe")?(
+            <span style={{position:"absolute",top:8,right:8,fontSize:9,fontWeight:800,letterSpacing:1.2,padding:"4px 7px",borderRadius:6,background:"rgba(245,158,11,0.92)",color:"#111"}}>DELUXE</span>
+          ):null}
           <div style={{padding:isMobile?"10px 10px 14px":"14px 16px 18px"}}>
             <div className={type==="albums"&&isUpcomingReleaseDate(item.date)?"song-title-turquoise-glow":undefined} style={{fontSize:isMobile?12:14,fontWeight:700,marginBottom:4,lineHeight:1.3}}>{item.title}</div>
             {item.date && <div style={{fontSize:isMobile?9:11,color:"#444",marginBottom:6,letterSpacing:1}}>{item.date}</div>}
