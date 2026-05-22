@@ -13,7 +13,7 @@ Disaster recovery documentation and snapshots live in the **control** repository
 | Field | Value |
 |-------|--------|
 | **Production URL** | https://artist-platform-silk.vercel.app |
-| **Control API** | `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL` → https://2-mrrw-control-system.vercel.app |
+| **Control API** | `NEXT_PUBLIC_CONTROL_SYSTEM_API_URL` → https://2mrrw-control-system.vercel.app |
 | **Site URL** | `NEXT_PUBLIC_SITE_URL` → https://artist-platform-silk.vercel.app |
 | **Env template** | `.env.example` (also copied in control bundle as `ENVIRONMENT_BACKUPS/artist-platform.env.example`) |
 
