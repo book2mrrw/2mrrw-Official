@@ -3,7 +3,7 @@
  * Catalog source remains control-system APIs — these utilities shape display only.
  */
 
-export const LYRICS_LABEL = "Glipz";
+export const LYRICS_LABEL = "GLYPHS";
 
 export function isDeluxe(release) {
   const type = release?.releaseType || release?.release_type || release?.type;

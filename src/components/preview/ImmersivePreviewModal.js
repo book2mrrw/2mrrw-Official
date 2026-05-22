@@ -404,7 +404,7 @@ function ImmersivePreviewModal({
                 cursor: "pointer",
               }}
             >
-              Glyphs
+              GLYPHS
             </button>
           </div>
 

@@ -29,7 +29,7 @@
 | 6 | Release creation flow | **Partial** | Full wizard/editor lives in Control SPA + `ReleasePages` / `MediaSyncReleaseStudio` / manage APIs — not the greenfield `ReleaseEditor.tsx` from the prompt. Draft-on-type + publish path already wired. |
 | 7 | Releases list fixes | **Partial** | Catalog list, chips, filters, cover thumbs in SPA — confirm against Phase 12 checklist in staging. |
 | 8 | Dashboard fixes | **Done** | Live counts (published/draft/scheduled/tracks); FAB hidden on flow/editor/settings. |
-| 9 | Storefront sync | **Partial** | Storefront uses **control-system APIs** (not direct Supabase reads). Added `src/lib/releases.js` helpers, R2 `next.config` images, **Glipz** label, Deluxe badge on album grid. Deep links remain `song/[slug]`, `album/[slug]`, `feature/[slug]`. |
+| 9 | Storefront sync | **Partial** | Storefront uses **control-system APIs** (not direct Supabase reads). Added `src/lib/releases.js` helpers, R2 `next.config` images, **GLYPHS** label, Deluxe badge on album grid. Deep links remain `song/[slug]`, `album/[slug]`, `feature/[slug]`. |
 | 10 | Error handling & resilience | **Partial** | Upload-intent + studio toasts exist; offline queue / full editor autosave per prompt not fully reimplemented. |
 | 11 | Scheduled auto-publish | **Done** | `/api/cron/scheduled-releases` + `vercel.json` cron (Option A path already in repo). |
 | 12 | Final checklist | **Partial** | Builds pass; manual QA on auth, upload CORS, publish→storefront still required. |
@@ -51,7 +51,7 @@
 
 - `next.config.mjs` — R2 `remotePatterns`
 - `src/lib/releases.js` — **new** (`LYRICS_LABEL`, `partitionReleases`, `getDisplayDate`, `isDeluxe`)
-- `src/components/ReleaseDetailExtras.js` — Glipz label
+- `src/components/ReleaseDetailExtras.js` — GLYPHS label
 - `src/app/page.js` — Deluxe badge on album cards
 - `supabase/migrations/20260522120000_master_prompt_release_schema.sql` — **new**
 
@@ -84,5 +84,5 @@ This execution **extends** the existing 2MRRW stack (control-system catalog APIs
 
 - Admin login → `returnTo` after session expiry mid-route
 - Cover upload → R2 → thumbnail on releases list
-- Publish → storefront section + Glipz + audio on hero/browse
+- Publish → storefront section + GLYPHS + audio on hero/browse
 - Scheduled release → Upcoming chip / cron flip
