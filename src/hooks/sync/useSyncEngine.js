@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRealtimeEvents } from "./useRealtimeEvents";
 
 const DEFAULT_DEBOUNCE_MS = 250;
+const CIRCUIT_OPEN_THRESHOLD = 3;
+const CIRCUIT_RESET_MS = 30_000;
 
 export function useSyncEngine({
   resourceKey,
@@ -20,6 +22,8 @@ export function useSyncEngine({
   const [version, setVersion] = useState(0);
   const mountedRef = useRef(false);
   const debounceRef = useRef(null);
+  const failureCountRef = useRef(0);
+  const circuitOpenUntilRef = useRef(0);
   const eventTypeSet = useMemo(() => new Set(eventTypes), [eventTypes]);
 
   const runFetch = useCallback(async ({ reason = "manual" } = {}) => {
@@ -34,11 +38,17 @@ export function useSyncEngine({
       setData(hasUsableData ? nextData : fallbackData);
       setSource(hasUsableData ? next?.source || "control-system" : "fallback");
       setVersion((value) => value + 1);
+      failureCountRef.current = 0;
+      circuitOpenUntilRef.current = 0;
     } catch (err) {
       if (!mountedRef.current) return;
       setError(err);
       setData(fallbackData);
       setSource("fallback");
+      failureCountRef.current += 1;
+      if (failureCountRef.current >= CIRCUIT_OPEN_THRESHOLD) {
+        circuitOpenUntilRef.current = Date.now() + CIRCUIT_RESET_MS;
+      }
     } finally {
       if (mountedRef.current) setLoading(false);
     }
@@ -51,6 +61,16 @@ export function useSyncEngine({
       runFetch({ reason });
     }, debounceMs);
   }, [debounceMs, runFetch]);
+
+  const guardedResync = useCallback(
+    (reason = "manual") => {
+      if (reason === "focus" || reason === "visibility") {
+        if (Date.now() < circuitOpenUntilRef.current) return;
+      }
+      resync(reason);
+    },
+    [resync]
+  );
 
   const { status, events } = useRealtimeEvents({
     enabled,
@@ -70,9 +90,9 @@ export function useSyncEngine({
 
   useEffect(() => {
     if (!enabled) return undefined;
-    const handleFocus = () => resync("focus");
+    const handleFocus = () => guardedResync("focus");
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") resync("visibility");
+      if (document.visibilityState === "visible") guardedResync("visibility");
     };
     window.addEventListener("focus", handleFocus);
     document.addEventListener("visibilitychange", handleVisibility);
@@ -80,7 +100,7 @@ export function useSyncEngine({
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [enabled, resync]);
+  }, [enabled, guardedResync]);
 
   return {
     data,

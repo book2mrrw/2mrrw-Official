@@ -35,11 +35,14 @@ const LEGACY_EVENT_TYPES = {
 const STORAGE_KEY = "2mrrw_control_last_event_time";
 const RECONNECT_BASE_MS = 1200;
 const RECONNECT_MAX_MS = 30000;
+const MAX_RECONNECT_ATTEMPTS = 8;
+const MIN_HEALTHY_CONNECTION_MS = 5000;
 
 let source = null;
 let refCount = 0;
 let reconnectTimer = null;
 let reconnectAttempt = 0;
+let connectionOpenedAt = 0;
 let status = {
   connected: false,
   connecting: false,
@@ -113,6 +116,11 @@ function clearReconnectTimer() {
 
 function scheduleReconnect() {
   if (refCount <= 0 || reconnectTimer) return;
+  if (reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) {
+    console.warn("[sync] SSE: max reconnect attempts reached, going silent");
+    updateStatus({ connected: false, connecting: false, error: "Realtime connection paused after repeated failures." });
+    return;
+  }
   const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** reconnectAttempt);
   reconnectAttempt += 1;
   reconnectTimer = window.setTimeout(() => {
@@ -150,11 +158,17 @@ function connect() {
   if (!target) return;
 
   updateStatus({ connecting: true, error: null });
-  replayMissedEvents();
+  const previousConnectionHealthy =
+    connectionOpenedAt > 0 && Date.now() - connectionOpenedAt >= MIN_HEALTHY_CONNECTION_MS;
+  if (previousConnectionHealthy) {
+    void replayMissedEvents();
+  }
 
   source = new EventSource(target.href, { withCredentials: true });
+  connectionOpenedAt = Date.now();
   source.addEventListener("connected", (message) => {
     reconnectAttempt = 0;
+    connectionOpenedAt = Date.now();
     updateStatus({ connected: true, connecting: false, error: null });
     parseMessage(message);
   });
@@ -168,6 +182,7 @@ function connect() {
   source.onerror = () => {
     source?.close();
     source = null;
+    connectionOpenedAt = 0;
     updateStatus({ connected: false, connecting: false, error: "Realtime connection lost." });
     scheduleReconnect();
   };
