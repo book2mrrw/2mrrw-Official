@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
+import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 
 const formatTime = (seconds) => {
   if (!seconds || !isFinite(seconds)) return "0:00";
@@ -163,6 +164,7 @@ function GlobalAudioPlayerBar() {
 
   if (!hasStarted || !currentTrack) return null;
 
+  const coverUrl = resolveAbsoluteArtworkUrl(currentTrack.cover);
   const progress = duration ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
   const bottom = isMobile ? "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)" : 0;
   const sourceLabel = String(currentTrack.source || "audio").replace(/_/g, " ");
@@ -235,7 +237,7 @@ function GlobalAudioPlayerBar() {
             color: "inherit",
           }}
         >
-          <CoverArt cover={currentTrack.cover} size={24} />
+          <CoverArt cover={coverUrl} size={24} />
           <WaveformBars playing={isPlaying} />
           {playPauseBtn(28, false)}
         </button>
@@ -264,13 +266,13 @@ function GlobalAudioPlayerBar() {
             transition: swipeClosing || swipeOffset === 0 ? "transform 0.22s ease-out" : "none",
           }}
         >
-          {currentTrack.cover && (
+          {coverUrl && (
             <div
               aria-hidden
               style={{
                 position: "absolute",
                 inset: 0,
-                backgroundImage: `url(${currentTrack.cover})`,
+                backgroundImage: `url(${coverUrl})`,
                 backgroundSize: "cover",
                 backgroundPosition: "center",
                 filter: "blur(48px) brightness(0.35)",
@@ -327,7 +329,7 @@ function GlobalAudioPlayerBar() {
               }}
             >
               <div style={{ width: coverSize, height: coverSize, maxWidth: 320, maxHeight: 320 }}>
-                <CoverArt cover={currentTrack.cover} size={320} pulse={isPlaying} />
+                <CoverArt cover={coverUrl} size={320} pulse={isPlaying} />
               </div>
 
               <div style={{ textAlign: "center", width: "100%", maxWidth: 400, padding: "0 8px" }}>
@@ -514,7 +516,7 @@ function GlobalAudioPlayerBar() {
                 color: "inherit",
               }}
             >
-              <CoverArt cover={currentTrack.cover} size={isMobile ? 40 : 38} />
+              <CoverArt cover={coverUrl} size={isMobile ? 40 : 38} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
