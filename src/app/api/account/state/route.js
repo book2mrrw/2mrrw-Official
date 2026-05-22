@@ -10,22 +10,22 @@ import {
   membershipHasPremiumAccess,
   vaultTierFor,
 } from "@/lib/commerce/entitlements";
+import { getFanSessionUser } from "@/lib/auth/session-user";
 import {
   clearGuestCookie,
   getGuestSessionCookieState,
-  getGuestUser,
   withGuestCookie,
 } from "@/lib/guest-session";
 import { DEFAULT_NOTIFICATION_PREFERENCES, getNotificationState } from "@/lib/notifications";
 
-function permissionsFor({ membership, hasCollectorAccess, hasVaultPass }) {
+function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest = true }) {
   const hasActiveMembership = membershipHasPremiumAccess(membership);
   const hasInnerCircleAccess = hasActiveMembership || hasCollectorAccess;
   const effectiveVaultPass = hasVaultPass || hasCollectorAccess;
   const vaultTier = vaultTierFor({ hasVaultPass: effectiveVaultPass, hasInnerCircleAccess });
 
   return {
-    guest: true,
+    guest: isGuest,
     subscriber: Boolean(hasActiveMembership),
     collectorAccess: Boolean(hasCollectorAccess),
     innerCircle: Boolean(hasInnerCircleAccess),
@@ -48,7 +48,7 @@ export async function GET() {
       return clearGuestCookie({ user: null, expired: true });
     }
 
-    const user = await getGuestUser();
+    const user = await getFanSessionUser();
     if (!user) {
       return NextResponse.json({
         user: null,
@@ -224,12 +224,20 @@ export async function GET() {
         entitlement: vaultPassAccess.entitlement,
       },
       notifications: notificationState,
-      permissions: permissionsFor({ membership, hasCollectorAccess, hasVaultPass }),
+      permissions: permissionsFor({
+        membership,
+        hasCollectorAccess,
+        hasVaultPass,
+        isGuest: Boolean(user.isGuest),
+      }),
       session: { remember: Boolean(session?.remember) },
       syncedAt: new Date().toISOString(),
     };
 
-    return withGuestCookie(NextResponse.json(body), user.id, { remember: session?.remember });
+    if (user.isGuest) {
+      return withGuestCookie(NextResponse.json(body), user.id, { remember: session?.remember });
+    }
+    return NextResponse.json(body);
   } catch (err) {
     console.error("account state error:", err);
     return NextResponse.json({ error: err.message || "Account state failed" }, { status: 500 });

@@ -96,13 +96,30 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
-    refreshGuest().finally(() => {
+    (async () => {
+      await refreshGuest();
+      if (!mounted) return;
+      const account = await refreshAccountState();
+      if (!mounted) return;
+      if (!account?.user) {
+        try {
+          const { createClient } = await import("@/lib/supabase/client");
+          const supabase = createClient();
+          const { data } = await supabase.auth.getUser();
+          if (data?.user?.email && !data.user.email.endsWith("@guest.2mrrw.local")) {
+            await refreshAccountState();
+          }
+        } catch {
+          /* OTP session optional */
+        }
+      }
+    })().finally(() => {
       if (mounted) setLoading(false);
     });
     return () => {
       mounted = false;
     };
-  }, [refreshGuest]);
+  }, [refreshGuest, refreshAccountState]);
 
   const enterGuest = useCallback(async ({ email, phone, name }) => {
     const res = await fetch("/api/guest/session", {
@@ -127,6 +144,12 @@ export function AuthProvider({ children }) {
   }, [refreshAccountState]);
 
   const signOut = useCallback(async () => {
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      await createClient().auth.signOut();
+    } catch {
+      /* ignore */
+    }
     await fetch("/api/guest/session", { method: "DELETE", credentials: "include" });
     setUser(null);
     setLibrary([]);

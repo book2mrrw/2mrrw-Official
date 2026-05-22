@@ -1,73 +1,196 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
-export default function GiftRedeemPage() {
+function formatDate(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+
+export default function GiftClaimPage() {
   const { token } = useParams();
   const router = useRouter();
-  const { refreshGuest, refreshLibrary } = useAuth();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [loading, setLoading] = useState(false);
+  const { refreshAccountState, user, loading: authLoading } = useAuth();
+  const [preview, setPreview] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [toast, setToast] = useState("");
 
-  const redeem = async (e) => {
-    e.preventDefault();
+  const loadPreview = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/gifts/redeem", {
+      const res = await fetch(`/api/gifts/preview/${token}`, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gift not found");
+      setPreview(data);
+    } catch (err) {
+      setError(err.message);
+      setPreview(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (token) void loadPreview();
+  }, [token, loadPreview]);
+
+  const claim = async () => {
+    setClaiming(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/gifts/claim/${token}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ token, name, email, phone }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not redeem gift");
-      await refreshGuest();
-      await refreshLibrary();
-      setSuccess(`Unlocked: ${(data.slugs || []).join(", ")}`);
+      if (data.requiresSignup) {
+        router.push(`/join?gift=${token}`);
+        return;
+      }
+      if (!res.ok) throw new Error(data.message || data.error || "Could not claim gift");
+      await refreshAccountState();
+      setToast("Your gift is in your library");
       setTimeout(() => router.push("/?tab=mymusic"), 900);
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      setClaiming(false);
     }
   };
 
+  const state = preview?.state || "invalid";
+  const gift = preview?.gift;
+  const cover = preview?.cover_url;
+  const isRecipient = user?.id && gift?.recipient_id === user.id;
+
   return (
-    <main style={{ minHeight: "100vh", background: "#050505", color: "white", display: "grid", placeItems: "center", padding: 24, fontFamily: "sans-serif" }}>
-      <form onSubmit={redeem} style={{ width: "100%", maxWidth: 420, background: "#0d0d0d", border: "1px solid #222", borderRadius: 20, padding: 28, display: "flex", flexDirection: "column", gap: 12 }}>
-        <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 6, color: "#00ffff" }}>2MRRW</div>
-        <h1 style={{ margin: "6px 0 0", fontSize: 24 }}>Redeem Gift</h1>
-        <p style={{ margin: "0 0 12px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
-          Enter your email and phone so this gift is saved to your personal library forever.
-        </p>
-        <input placeholder="Name (optional)" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
-        <input placeholder="Email Address" value={email} onChange={(e) => setEmail(e.target.value)} required style={inputStyle} />
-        <input placeholder="Phone Number" value={phone} onChange={(e) => setPhone(e.target.value)} required style={inputStyle} />
-        {error && <div style={{ color: "#ff4d4d", fontSize: 13 }}>{error}</div>}
-        {success && <div style={{ color: "#00ffff", fontSize: 13 }}>{success}</div>}
-        <button disabled={loading} style={{ padding: "13px 0", background: "#00ffff", color: "#000", fontWeight: 900, border: "none", borderRadius: 10, cursor: "pointer", opacity: loading ? 0.7 : 1 }}>
-          {loading ? "Unlocking..." : "Unlock Gift"}
-        </button>
-        <Link href="/" style={{ color: "#777", fontSize: 13, textAlign: "center", marginTop: 4 }}>Back to site</Link>
-      </form>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#050505",
+        color: "white",
+        fontFamily: "sans-serif",
+      }}
+    >
+      <div
+        style={{
+          minHeight: 280,
+          background: cover
+            ? `linear-gradient(180deg, rgba(5,5,5,0.2) 0%, #050505 85%), url(${cover}) center/cover`
+            : "linear-gradient(135deg, #0a0a12 0%, #050505 60%)",
+        }}
+      />
+      <div style={{ maxWidth: 520, margin: "-80px auto 0", padding: "0 24px 48px", position: "relative" }}>
+        {loading || authLoading ? (
+          <p style={{ color: "#666", fontSize: 14 }}>Loading gift…</p>
+        ) : null}
+
+        {!loading && state === "valid" ? (
+          <>
+            <p style={{ fontSize: 11, letterSpacing: 3, color: "#a259ff", textTransform: "uppercase", marginBottom: 8 }}>
+              Gift
+            </p>
+            <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 8px" }}>Tomorrow gifted you this</h1>
+            {gift?.item_title ? (
+              <div style={{ display: "inline-block", marginBottom: 16, padding: "4px 10px", borderRadius: 999, background: "#1a1a1a", fontSize: 11, color: "#aaa" }}>
+                {gift.item_type || "release"} · {gift.item_title}
+              </div>
+            ) : null}
+            {gift?.message ? (
+              <div
+                style={{
+                  padding: 16,
+                  borderRadius: 14,
+                  background: "rgba(162,89,255,0.08)",
+                  border: "1px solid rgba(162,89,255,0.2)",
+                  marginBottom: 20,
+                  fontSize: 14,
+                  lineHeight: 1.7,
+                  color: "#ddd",
+                }}
+              >
+                {gift.message}
+              </div>
+            ) : null}
+            <p style={{ fontSize: 13, color: "#888", marginBottom: 24 }}>Claim before {formatDate(gift?.expires_at)}</p>
+
+            {user ? (
+              <button
+                type="button"
+                onClick={() => void claim()}
+                disabled={claiming}
+                style={{
+                  width: "100%",
+                  padding: "14px 0",
+                  background: "#00ffff",
+                  color: "#000",
+                  fontWeight: 900,
+                  border: "none",
+                  borderRadius: 10,
+                  cursor: "pointer",
+                  opacity: claiming ? 0.7 : 1,
+                }}
+              >
+                {claiming ? "Claiming…" : "Claim Gift"}
+              </button>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <Link
+                  href={`/join?gift=${token}`}
+                  style={{
+                    display: "block",
+                    textAlign: "center",
+                    padding: "14px 0",
+                    background: "#00ffff",
+                    color: "#000",
+                    fontWeight: 900,
+                    borderRadius: 10,
+                    textDecoration: "none",
+                  }}
+                >
+                  Create Account to Claim
+                </Link>
+                <Link href={`/login?gift=${token}`} style={{ color: "#00ffff", fontSize: 13, textAlign: "center" }}>
+                  Already have an account? Sign in
+                </Link>
+              </div>
+            )}
+          </>
+        ) : null}
+
+        {state === "expired" ? (
+          <>
+            <h1 style={{ fontSize: 24, fontWeight: 800 }}>This gift has expired</h1>
+            <Link href="/" style={{ color: "#00ffff", fontSize: 14, marginTop: 16, display: "inline-block" }}>
+              Back to storefront
+            </Link>
+          </>
+        ) : null}
+
+        {state === "revoked" ? (
+          <h1 style={{ fontSize: 24, fontWeight: 800 }}>This gift is no longer available</h1>
+        ) : null}
+
+        {state === "claimed" ? (
+          <>
+            <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 12 }}>This gift has already been claimed</h1>
+            {isRecipient ? (
+              <Link href="/?tab=mymusic" style={{ color: "#00ffff", fontSize: 14 }}>
+                View in your library →
+              </Link>
+            ) : null}
+          </>
+        ) : null}
+
+        {error ? <p style={{ color: "#ff6b6b", fontSize: 13, marginTop: 16 }}>{error}</p> : null}
+        {toast ? <p style={{ color: "#00ffff", fontSize: 13, marginTop: 16 }}>{toast}</p> : null}
+      </div>
     </main>
   );
 }
-
-const inputStyle = {
-  padding: "12px 14px",
-  background: "#111",
-  border: "1px solid #2a2a2a",
-  color: "white",
-  borderRadius: 10,
-  fontSize: 14,
-  outline: "none",
-};

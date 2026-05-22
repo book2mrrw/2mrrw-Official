@@ -83,7 +83,10 @@ function LibraryCarousel({ title, items, accountState, userId, onPlay, onOpen, o
                 </div>
               </div>
               <div style={{ padding: "10px 12px 12px" }}>
-                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, lineHeight: 1.3 }}>{item.title}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: item.gifted || item.source === "gift" ? 4 : 8, lineHeight: 1.3 }}>{item.title}</div>
+                {item.gifted || item.source === "gift" ? (
+                  <div style={{ fontSize: 11, color: "#9b7abf", marginBottom: 8, letterSpacing: 0.3 }}>Gifted by 2MRRW</div>
+                ) : null}
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <button
                     type="button"
