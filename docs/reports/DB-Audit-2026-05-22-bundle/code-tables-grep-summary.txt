@@ -1,0 +1,35 @@
+# Distinct public.* tables referenced via Supabase .from("...") in artist-platform/src
+# Generated 2026-05-22 (static grep)
+
+access_tokens
+api_rate_limits
+circle_posts
+circle_reactions
+circle_replies
+collector_access
+collector_activity_logs
+collector_cards
+collector_claims
+collector_ownerships
+community_comments
+gift_link_items
+gift_links
+gift_redemptions
+gift_transactions
+library_items
+media_playback_progress
+media_stream_events
+memberships
+notification_events
+notification_inbox
+notification_preferences
+processed_stripe_events
+products
+purchases
+signal_user_states
+signals
+stripe_customers
+users                    # LEGACY — no migration; see P0
+vault_content
+vault_content_progress
+vault_entitlements
