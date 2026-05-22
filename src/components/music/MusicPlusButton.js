@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   addToLibrary,
   addTrackToPlaylist,
@@ -23,6 +23,7 @@ export default function MusicPlusButton({
   onLibraryChange,
   isMobile,
   deepLinkType = "song",
+  showOfflineDownload = false,
 }) {
   const [open, setOpen] = useState(false);
   const [inLib, setInLib] = useState(false);
@@ -31,8 +32,17 @@ export default function MusicPlusButton({
   const [newPlaylistTitle, setNewPlaylistTitle] = useState("");
   const [flashCheck, setFlashCheck] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [actionFlash, setActionFlash] = useState(null);
 
   const slug = track?.slug;
+  const canAddLibrary = Boolean(access?.canAddToLibrary);
+  const canAddPlaylist = Boolean(access?.canAddToPlaylist);
+  const canAdd = canAddLibrary || canAddPlaylist;
+
+  const currentPlaylist = useMemo(
+    () => playlists.find((p) => !p.isSystem) || null,
+    [playlists]
+  );
 
   useEffect(() => {
     if (!userId || !slug) {
@@ -49,6 +59,12 @@ export default function MusicPlusButton({
     else if (userId) setPlaylists(loadPlaylists(userId).filter((p) => !p.isSystem));
   }, [playlistsProp, userId, open]);
 
+  const flashAction = useCallback((key, ms = 900) => {
+    setActionFlash(key);
+    const t = setTimeout(() => setActionFlash(null), ms);
+    return () => clearTimeout(t);
+  }, []);
+
   const refreshPlaylists = useCallback(() => {
     const next = loadPlaylists(userId).filter((p) => !p.isSystem);
     setPlaylists(next);
@@ -56,8 +72,9 @@ export default function MusicPlusButton({
   }, [userId, onPlaylistsChange]);
 
   const handleAddToLibrary = async () => {
-    if (!userId || !track?.slug || saving) return;
+    if (!userId || !track?.slug || saving || !canAddLibrary) return;
     setSaving(true);
+    flashAction("library");
     addToLibrary(userId, track);
     try {
       await postLibraryAdd(track.slug);
@@ -70,23 +87,33 @@ export default function MusicPlusButton({
     setInLib(true);
     setFlashCheck(true);
     setTimeout(() => setFlashCheck(false), 1200);
-    setOpen(false);
+    setTimeout(() => setOpen(false), 450);
   };
 
   const handleAddToPlaylist = (playlistId) => {
-    if (!userId) return;
+    if (!userId || !canAddPlaylist) return;
+    flashAction(playlistId);
     addTrackToPlaylist(userId, playlistId, track);
     refreshPlaylists();
-    setOpen(false);
+    setTimeout(() => setOpen(false), 450);
+  };
+
+  const handleAddToCurrentPlaylist = () => {
+    if (!currentPlaylist?.id || !canAddPlaylist) return;
+    flashAction("current-playlist");
+    addTrackToPlaylist(userId, currentPlaylist.id, track);
+    refreshPlaylists();
+    setTimeout(() => setOpen(false), 450);
   };
 
   const handleCreateAndAdd = () => {
-    if (!userId || !newPlaylistTitle.trim()) return;
+    if (!userId || !newPlaylistTitle.trim() || !canAddPlaylist) return;
+    flashAction("create");
     const pl = createPlaylist(userId, { title: newPlaylistTitle.trim(), trackIds: [] });
     addTrackToPlaylist(userId, pl.id, track);
     setNewPlaylistTitle("");
     refreshPlaylists();
-    setOpen(false);
+    setTimeout(() => setOpen(false), 450);
   };
 
   const handleOffline = async () => {
@@ -98,6 +125,7 @@ export default function MusicPlusButton({
   };
 
   const handleShare = async () => {
+    flashAction("share", 600);
     const url = buildShareUrl({ type: deepLinkType, slug: track.slug });
     try {
       if (navigator.share) {
@@ -114,11 +142,11 @@ export default function MusicPlusButton({
         alert(url);
       }
     }
-    setOpen(false);
+    setTimeout(() => setOpen(false), 350);
   };
 
   const showCheck = inLib || flashCheck;
-  const showPlus = access?.canStream || access?.canPreview || access?.canOffline;
+  const showPlus = canAdd || Boolean(userId);
 
   if (!showPlus) return null;
 
@@ -133,7 +161,7 @@ export default function MusicPlusButton({
           height: 36,
           borderRadius: "50%",
           border: `1px solid ${showCheck ? "#00ffff55" : "#333"}`,
-          background: showCheck ? "rgba(0,255,255,0.12)" : "transparent",
+          background: showCheck ? "rgba(0,255,255,0.12)" : actionFlash ? "rgba(0,255,255,0.06)" : "transparent",
           color: showCheck ? "#00ffff" : "#888",
           cursor: "pointer",
           fontSize: 18,
@@ -141,6 +169,7 @@ export default function MusicPlusButton({
           lineHeight: 1,
           flexShrink: 0,
           transition: "all 0.2s",
+          transform: actionFlash ? "scale(0.94)" : "scale(1)",
         }}
       >
         {showCheck ? "✓" : "+"}
@@ -156,13 +185,17 @@ export default function MusicPlusButton({
         access={access}
         userId={userId}
         playlists={playlists}
+        currentPlaylist={currentPlaylist}
         newPlaylistTitle={newPlaylistTitle}
         onNewPlaylistTitleChange={setNewPlaylistTitle}
         onAddToLibrary={handleAddToLibrary}
         onAddToPlaylist={handleAddToPlaylist}
+        onAddToCurrentPlaylist={currentPlaylist ? handleAddToCurrentPlaylist : undefined}
         onCreateAndAdd={handleCreateAndAdd}
         onOffline={handleOffline}
         onShare={handleShare}
+        showOfflineDownload={showOfflineDownload}
+        actionFlash={actionFlash}
       />
     </>
   );

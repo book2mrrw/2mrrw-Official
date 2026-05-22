@@ -20,25 +20,37 @@ export function toPlaybackTrack(item, accountState, source = "library", override
 }
 
 export function albumTracksForPlayback(album, accountState, source = "album") {
-  const access = resolveTrackAccess(album, accountState);
   const trackList = album?.tracks || album?.trackTitles || [];
-  return trackList.map((track, index) => {
-    if (typeof track === "string") {
-      return {
-        id: `${album.slug}-track-${index}`,
-        slug: album.slug,
-        albumSlug: album.slug,
-        title: track,
-        cover: album.cover,
-        src: access.canStream ? (album.preview || album.audio) : (album.preview || ""),
+  return trackList
+    .map((track, index) => {
+      if (typeof track === "string") {
+        return toPlaybackTrack(
+          {
+            slug: album.slug,
+            albumSlug: album.slug,
+            title: track,
+            cover: album.cover,
+            preview: album.preview,
+            audio: album.audio,
+          },
+          accountState,
+          source,
+          { trackIndex: index }
+        );
+      }
+      return toPlaybackTrack(
+        {
+          ...track,
+          slug: track.slug || album.slug,
+          albumSlug: album.slug,
+          cover: track.cover || album.cover,
+          preview: track.preview || album.preview,
+          audio: track.audio || album.audio,
+        },
+        accountState,
         source,
-        metadata: { access, trackIndex: index },
-      };
-    }
-    return toPlaybackTrack(
-      { ...track, slug: track.slug || album.slug, albumSlug: album.slug, cover: track.cover || album.cover },
-      accountState,
-      source
-    );
-  }).filter((t) => t.src);
+        { trackIndex: index }
+      );
+    })
+    .filter((t) => t.src);
 }

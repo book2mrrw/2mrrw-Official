@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { parseLrc, getActiveLrcIndex } from "@/lib/lrc";
 
-function GlyphLyricsPanel({ open, lrcText, audioRef, onClose }) {
+function GlyphLyricsPanel({ open, lrcText, audioRef, onClose, isMobile = false }) {
   const lines = useMemo(() => parseLrc(lrcText), [lrcText]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const scrollRef = useRef(null);
@@ -40,13 +40,15 @@ function GlyphLyricsPanel({ open, lrcText, audioRef, onClose }) {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 16 }}
           transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+          onClick={(e) => e.stopPropagation()}
           style={{
             position: "absolute",
             inset: 0,
             zIndex: 6,
             display: "flex",
             flexDirection: "column",
-            background: "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.72) 38%, rgba(0,0,0,0.92) 100%)",
+            background:
+              "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.72) 38%, rgba(0,0,0,0.92) 100%)",
             backdropFilter: "blur(6px)",
             pointerEvents: "auto",
           }}
@@ -56,32 +58,66 @@ function GlyphLyricsPanel({ open, lrcText, audioRef, onClose }) {
               display: "flex",
               justifyContent: "space-between",
               alignItems: "center",
-              padding: "14px 18px 8px",
+              padding: isMobile ? "10px 12px 8px" : "14px 18px 8px",
               flexShrink: 0,
+              gap: 10,
             }}
           >
+            <button
+              type="button"
+              className="preview-modal-close-btn"
+              aria-label="Back to preview"
+              onClick={onClose}
+              style={{
+                background: "rgba(0,0,0,0.55)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                borderRadius: 20,
+                color: "rgba(255,255,255,0.9)",
+                fontSize: isMobile ? 11 : 10,
+                fontWeight: 700,
+                letterSpacing: isMobile ? 1.5 : 2,
+                padding: isMobile ? "8px 14px" : "6px 12px",
+                cursor: "pointer",
+                textTransform: "uppercase",
+                flexShrink: 0,
+              }}
+            >
+              {isMobile ? "← Back" : "Back"}
+            </button>
             <span
               className="hero-title-glow"
-              style={{ fontSize: 11, fontWeight: 800, letterSpacing: 3, textTransform: "uppercase" }}
+              style={{
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: 3,
+                textTransform: "uppercase",
+                flex: 1,
+                textAlign: "center",
+              }}
             >
               GLYPHS
             </span>
             <button
               type="button"
+              className="preview-modal-close-btn"
+              aria-label="Close glyphs"
               onClick={onClose}
               style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.12)",
-                color: "#aaa",
-                fontSize: 10,
-                letterSpacing: 2,
-                padding: "6px 12px",
-                borderRadius: 20,
+                background: "rgba(0,0,0,0.55)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                borderRadius: "50%",
+                width: isMobile ? 34 : 32,
+                height: isMobile ? 34 : 32,
+                color: "rgba(255,255,255,0.85)",
+                fontSize: 16,
                 cursor: "pointer",
-                textTransform: "uppercase",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                flexShrink: 0,
               }}
             >
-              Close
+              ✕
             </button>
           </div>
           <div
@@ -91,7 +127,8 @@ function GlyphLyricsPanel({ open, lrcText, audioRef, onClose }) {
               overflowY: "auto",
               padding: "8px 22px 28px",
               WebkitOverflowScrolling: "touch",
-              maskImage: "linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%)",
+              maskImage:
+                "linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%)",
             }}
           >
             {lines.length ? (

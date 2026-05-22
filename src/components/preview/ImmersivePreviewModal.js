@@ -81,6 +81,14 @@ function ImmersivePreviewModal({
 
   const collapseDrawer = useCallback(() => setViewMoreOpen(false), []);
 
+  const handleOverlayClick = useCallback(() => {
+    if (glyphsOpen) {
+      setGlyphsOpen(false);
+      return;
+    }
+    closeModal();
+  }, [glyphsOpen, closeModal]);
+
   const handleDrawerDragEnd = useCallback((_e, info) => {
     if (info.offset.y > DRAWER_COLLAPSE_THRESHOLD || info.velocity.y > 420) {
       collapseDrawer();
@@ -107,7 +115,7 @@ function ImmersivePreviewModal({
     <motion.div
       key="preview-overlay"
       {...OVERLAY_FADE}
-      onClick={viewMoreOpen && isMobile ? collapseDrawer : closeModal}
+      onClick={handleOverlayClick}
       style={{
         position: "fixed",
         inset: 0,
@@ -142,12 +150,17 @@ function ImmersivePreviewModal({
         {isMobile && (
           <button
             type="button"
-            onClick={closeModal}
+            className="preview-modal-close-btn"
+            aria-label="Close preview"
+            onClick={(e) => {
+              e.stopPropagation();
+              closeModal();
+            }}
             style={{
               position: "absolute",
               top: 14,
               right: 14,
-              zIndex: 20,
+              zIndex: glyphsOpen || viewMoreOpen ? 30 : 20,
               background: "rgba(0,0,0,0.55)",
               border: "1px solid rgba(255,255,255,0.15)",
               borderRadius: "50%",
@@ -309,6 +322,7 @@ function ImmersivePreviewModal({
             open={glyphsOpen}
             lrcText={lrcText}
             audioRef={audioRef}
+            isMobile={isMobile}
             onClose={() => setGlyphsOpen(false)}
           />
         </motion.div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { useMusicLibrary } from "@/hooks/useMusicLibrary";
 import { membershipHasPremiumAccess } from "@/lib/commerce/entitlements";
@@ -9,6 +9,39 @@ import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import PlaylistSection from "@/components/music/PlaylistSection";
+
+const SORT_STORAGE_KEY = "mymusic_sort_pref";
+
+const SORT_OPTIONS = [
+  { id: "recent", label: "Recently Added" },
+  { id: "az", label: "A-Z" },
+  { id: "za", label: "Z-A" },
+];
+
+function readSortPref() {
+  if (typeof window === "undefined") return "recent";
+  try {
+    const v = localStorage.getItem(SORT_STORAGE_KEY);
+    return SORT_OPTIONS.some((o) => o.id === v) ? v : "recent";
+  } catch {
+    return "recent";
+  }
+}
+
+function sortOwnedSingles(items, sortId) {
+  const list = [...items];
+  if (sortId === "az") {
+    return list.sort((a, b) => String(a.title || a.slug).localeCompare(String(b.title || b.slug)));
+  }
+  if (sortId === "za") {
+    return list.sort((a, b) => String(b.title || b.slug).localeCompare(String(a.title || a.slug)));
+  }
+  return list.sort((a, b) => {
+    const ta = a.purchasedAt ? new Date(a.purchasedAt).getTime() : 0;
+    const tb = b.purchasedAt ? new Date(b.purchasedAt).getTime() : 0;
+    return tb - ta;
+  });
+}
 
 function LibraryCarousel({ title, items, accountState, userId, onPlay, onOpen, onLibraryChange, isMobile }) {
   if (!items?.length) return null;
@@ -83,6 +116,7 @@ function LibraryCarousel({ title, items, accountState, userId, onPlay, onOpen, o
                       userId={userId}
                       access={access}
                       isMobile={isMobile}
+                      showOfflineDownload={false}
                       onLibraryChange={onLibraryChange}
                     />
                   )}
@@ -91,6 +125,79 @@ function LibraryCarousel({ title, items, accountState, userId, onPlay, onOpen, o
             </div>
           );
         })}
+      </div>
+    </section>
+  );
+}
+
+function RecentlyAddedRow({ items, onPlay, isMobile }) {
+  if (!items?.length) return null;
+  return (
+    <section style={{ marginBottom: 28 }}>
+      <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
+        Recently Added
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 12,
+          overflowX: "auto",
+          paddingBottom: 8,
+          scrollSnapType: "x mandatory",
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
+        {items.map((item) => (
+          <button
+            key={item.slug}
+            type="button"
+            onClick={() => onPlay(item)}
+            style={{
+              flex: "0 0 auto",
+              width: 100,
+              scrollSnapAlign: "start",
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              textAlign: "center",
+              color: "inherit",
+            }}
+          >
+            {item.cover ? (
+              <img
+                src={item.cover}
+                alt=""
+                style={{ width: 100, height: 100, borderRadius: 10, objectFit: "cover", display: "block", marginBottom: 8 }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 100,
+                  height: 100,
+                  borderRadius: 10,
+                  background: "linear-gradient(135deg, rgba(0,255,255,0.12), rgba(162,89,255,0.12))",
+                  border: "1px solid #222",
+                  marginBottom: 8,
+                }}
+              />
+            )}
+            <div
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                lineHeight: 1.3,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                display: "-webkit-box",
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: "vertical",
+              }}
+            >
+              {item.title}
+            </div>
+          </button>
+        ))}
       </div>
     </section>
   );
@@ -123,9 +230,51 @@ function MyMusicTab({
     refresh,
   } = useMusicLibrary({ singles, albums });
 
-  const { playTrack, playQueue, resume } = useAudioPlayer();
+  const { playTrack, playQueue, resume, setShuffle } = useAudioPlayer();
   const membershipActive = membershipHasPremiumAccess(accountState?.membership);
   const subscriptionLocked = Boolean(accountState?.membership && !membershipActive);
+  const [sortPref, setSortPref] = useState("recent");
+  const [sortSheetOpen, setSortSheetOpen] = useState(false);
+
+  useEffect(() => {
+    setSortPref(readSortPref());
+  }, []);
+
+  const setSort = useCallback((id) => {
+    setSortPref(id);
+    try {
+      localStorage.setItem(SORT_STORAGE_KEY, id);
+    } catch {
+      /* ignore */
+    }
+    setSortSheetOpen(false);
+  }, []);
+
+  const sortedOwnedSingles = useMemo(
+    () => sortOwnedSingles(ownedSingles, sortPref),
+    [ownedSingles, sortPref]
+  );
+
+  const mergedOwnedSingles = useMemo(
+    () =>
+      sortedOwnedSingles.map((item) => ({
+        ...item,
+        ...(singles.find((s) => s.slug === item.slug) || {}),
+      })),
+    [sortedOwnedSingles, singles]
+  );
+
+  const recentlyAddedSingles = useMemo(() => {
+    if (!ownedSingles.length) return [];
+    const byPurchase = [...ownedSingles].sort((a, b) => {
+      const ta = a.purchasedAt ? new Date(a.purchasedAt).getTime() : 0;
+      const tb = b.purchasedAt ? new Date(b.purchasedAt).getTime() : 0;
+      return tb - ta;
+    });
+    return byPurchase
+      .slice(0, 5)
+      .map((item) => ({ ...item, ...(singles.find((s) => s.slug === item.slug) || {}) }));
+  }, [ownedSingles, singles]);
 
   const catalogTracks = useMemo(() => {
     const map = new Map();
@@ -137,11 +286,12 @@ function MyMusicTab({
 
   const playItem = useCallback(
     (item, access, resumeAt = 0) => {
-      if (!access?.canStream) return;
+      const resolvedAccess = access || resolveTrackAccess(item, accountState);
+      if (!resolvedAccess?.canStream) return;
       const track = toPlaybackTrack(item, { ...accountState, userId: user?.id }, "my_music");
       void playTrack(track, { resumeAt });
     },
-    [accountState, playTrack]
+    [accountState, playTrack, user?.id]
   );
 
   const playAlbum = useCallback(
@@ -155,16 +305,29 @@ function MyMusicTab({
       }
       void playQueue(tracks, 0);
     },
-    [accountState, playItem, playQueue]
+    [accountState, playItem, playQueue, user?.id]
   );
 
   const playPlaylist = useCallback(
     (playlist) => {
-      const tracks = (playlist.tracks || []).filter((t) => t.src || t.preview);
+      const catalogBySlug = new Map(catalogTracks.map((t) => [t.slug, t]));
+      const refs = (playlist.tracks || []).length
+        ? playlist.tracks
+        : (playlist.trackIds || []).map((id) => catalogBySlug.get(id)).filter(Boolean);
+      let tracks = refs
+        .map((item) => {
+          const merged = { ...catalogBySlug.get(item.slug), ...item };
+          return toPlaybackTrack(merged, { ...accountState, userId: user?.id }, "playlist");
+        })
+        .filter((t) => t.src);
       if (!tracks.length) return;
+      if (playlist.shuffle) {
+        tracks = [...tracks].sort(() => Math.random() - 0.5);
+        setShuffle(true);
+      }
       void playQueue(tracks, 0);
     },
-    [playQueue]
+    [accountState, catalogTracks, playQueue, setShuffle, user?.id]
   );
 
   const resumeLast = useCallback(() => {
@@ -174,6 +337,8 @@ function MyMusicTab({
     playItem(catalog, access, lastPlayed.completed ? 0 : Number(lastPlayed.positionSeconds || 0));
     void resume();
   }, [accountState, lastPlayed, playItem, resume, singles]);
+
+  const sortLabel = SORT_OPTIONS.find((o) => o.id === sortPref)?.label || "Recently Added";
 
   if (!user) {
     return (
@@ -206,7 +371,104 @@ function MyMusicTab({
     recentlyPlayed.length > 0;
 
   return (
-    <div style={{ paddingBottom: isMobile ? 100 : 40 }}>
+    <div style={{ paddingBottom: isMobile ? 140 : 40 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 20,
+          flexWrap: "wrap",
+        }}
+      >
+        <h2 className="section-heading" style={{ margin: 0, fontSize: isMobile ? 17 : 22 }}>
+          My Music Collection
+        </h2>
+        <button
+          type="button"
+          onClick={() => setSortSheetOpen(true)}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#00ffff",
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+            letterSpacing: 0.5,
+            padding: "4px 0",
+          }}
+        >
+          {sortLabel} ▾
+        </button>
+      </div>
+
+      {sortSheetOpen && (
+        <div
+          role="dialog"
+          aria-label="Sort library"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 7400,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+          }}
+          onClick={() => setSortSheetOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: 480,
+              background: "#0d0d0d",
+              borderTop: "1px solid #222",
+              borderRadius: "16px 16px 0 0",
+              padding: "16px 20px max(24px, env(safe-area-inset-bottom, 0px))",
+            }}
+          >
+            <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase", marginBottom: 12, fontWeight: 700 }}>
+              Sort by
+            </div>
+            {SORT_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setSort(opt.id)}
+                style={{
+                  display: "block",
+                  width: "100%",
+                  textAlign: "left",
+                  padding: "14px 4px",
+                  background: "none",
+                  border: "none",
+                  borderBottom: "1px solid #1a1a1a",
+                  color: sortPref === opt.id ? "#00ffff" : "#ccc",
+                  fontSize: 15,
+                  fontWeight: sortPref === opt.id ? 800 : 500,
+                  cursor: "pointer",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <LibraryCarousel
+        title="Recently Played"
+        items={recentlyPlayed}
+        accountState={accountState}
+        userId={user?.id}
+        onPlay={playItem}
+        onOpen={(item) => onOpenSingle?.(singles.find((s) => s.slug === item.slug) || item)}
+        onLibraryChange={refresh}
+        isMobile={isMobile}
+      />
+
       {lastPlayed && (
         <section
           style={{
@@ -231,27 +493,26 @@ function MyMusicTab({
         </section>
       )}
 
+      <RecentlyAddedRow
+        items={recentlyAddedSingles}
+        isMobile={isMobile}
+        onPlay={(item) => {
+          const access = resolveTrackAccess(item, accountState);
+          playItem(item, access);
+        }}
+      />
+
       <PlaylistSection
         userId={user?.id}
         catalogTracks={catalogTracks}
         onPlayPlaylist={playPlaylist}
         subscriptionLocked={subscriptionLocked}
-      />
-
-      <LibraryCarousel
-        title="Recently Played"
-        items={recentlyPlayed}
-        accountState={accountState}
-        userId={user?.id}
-        onPlay={playItem}
-        onOpen={(item) => onOpenSingle?.(singles.find((s) => s.slug === item.slug) || item)}
-        onLibraryChange={refresh}
         isMobile={isMobile}
       />
 
       <LibraryCarousel
         title="Owned Singles"
-        items={ownedSingles.map((item) => ({ ...item, ...(singles.find((s) => s.slug === item.slug) || {}) }))}
+        items={mergedOwnedSingles}
         accountState={accountState}
         userId={user?.id}
         onPlay={playItem}
@@ -283,7 +544,7 @@ function MyMusicTab({
                     Tracklist
                   </button>
                   {user?.id && (
-                    <MusicPlusButton track={merged} userId={user.id} access={access} isMobile={isMobile} deepLinkType="album" onLibraryChange={refresh} />
+                    <MusicPlusButton track={merged} userId={user.id} access={access} isMobile={isMobile} deepLinkType="album" showOfflineDownload={false} onLibraryChange={refresh} />
                   )}
                 </div>
               );

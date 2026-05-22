@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "@/components/payments/CheckoutForm";
+import DonateModal from "@/components/payments/DonateModal";
 import { useAuth } from "@/context/AuthContext";
 import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
 import ImmersivePreviewModal from "@/components/preview/ImmersivePreviewModal";
@@ -11,7 +12,9 @@ import MyMusicTab from "@/components/music/MyMusicTab";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/lib/deep-links";
-import { resolveContentAccess } from "@/lib/music-access";
+import { resolveContentAccess, resolvePlaybackSrc } from "@/lib/music-access";
+import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
+import { useAudioPlayer } from "@/context/AudioContext";
 import { VaultUnlockedRoom } from "@/components/vault/VaultUnlockedRoom";
 import { MobileNavAnimatedIcon } from "@/components/nav/MobileNavAnimatedIcon";
 import { VaultNavLockIcon } from "@/components/nav/VaultNavLockIcon";
@@ -475,6 +478,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
   const { currentUser: authUser, library, owns, accountState, enterGuest, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
+  const { playTrack, playQueue } = useAudioPlayer();
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
   const [activeTab, setActiveTab]                 = useState("home");
@@ -516,6 +520,7 @@ export default function Page() {
   const [authError, setAuthError]                 = useState("");
   const [authSubmitting, setAuthSubmitting]       = useState(false);
   const [membershipUpsellOpen, setMembershipUpsellOpen] = useState(false);
+  const [donateOpen, setDonateOpen] = useState(false);
   const [liveCountdown, setLiveCountdown]         = useState({ days:0, hours:0, minutes:0, seconds:0 });
   const [liveIsLive, setLiveIsLive]               = useState(false);
   const [innerCirclePost, setInnerCirclePost]     = useState(null);
@@ -767,11 +772,15 @@ export default function Page() {
     audio.pause();
     setAudioCurrentTime(0);
     setAudioDuration(0);
-    audio.src = nowPlaying.preview;
+    const access = resolveContentAccess(nowPlaying, accountState);
+    audio.src =
+      resolvePlaybackSrc(nowPlaying, access, { userId: authUser?.id }) ||
+      nowPlaying.preview ||
+      "";
     audio.play()
       .then(() => setNowPlayingPlaying(true))
       .catch(() => setNowPlayingPlaying(false));
-  }, [nowPlaying]);
+  }, [nowPlaying, accountState, authUser?.id]);
 
   useEffect(() => {
     if (activeTab !== "live") {
@@ -788,14 +797,32 @@ export default function Page() {
         nowPlayingAudioRef.current.pause();
         setNowPlayingPlaying(false);
       }
-      audio.src = selectedSingle.preview;
+      const access = resolveContentAccess(selectedSingle, accountState);
+      audio.src =
+        resolvePlaybackSrc(selectedSingle, access, { userId: authUser?.id }) ||
+        selectedSingle.preview ||
+        "";
       audio.currentTime = 0;
       audio.play().catch(() => {});
     } else {
       audio.pause();
       audio.src = "";
     }
-  }, [selectedSingle]);
+  }, [selectedSingle, accountState, authUser?.id]);
+
+  const playAlbumTracks = useCallback(
+    (album, startIndex = 0) => {
+      const tracks = albumTracksForPlayback(album, { ...accountState, userId: authUser?.id }, "album_modal");
+      if (tracks.length) {
+        void playQueue(tracks, startIndex);
+        return;
+      }
+      const access = resolveContentAccess(album, accountState);
+      if (!access.canStream) return;
+      void playTrack(toPlaybackTrack(album, { ...accountState, userId: authUser?.id }, "album_modal"));
+    },
+    [accountState, authUser?.id, playQueue, playTrack]
+  );
 
   const goRadio = useCallback(i => setRadioIndex(i), []);
 
@@ -928,6 +955,19 @@ export default function Page() {
     setMembershipUpsellOpen(true);
     if (isMobile) setMobileCartOpen(false);
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("checkout") !== "pending") return;
+    if (cart.length === 0) return;
+    window.history.replaceState({}, "", window.location.pathname);
+    if (!currentUser) {
+      switchTab("account");
+      return;
+    }
+    void handleCheckout();
+  }, [cart, currentUser]);
 
   const handleSignOut = async () => {
     await signOut();
@@ -1286,8 +1326,24 @@ export default function Page() {
                 {!isMobile && <motion.div style={{fontSize:11,opacity:0.4,letterSpacing:1}}>{selectedAlbum.date}</motion.div>}
                 <motion.div style={{width:"100%",marginTop:4}}>
                   <motion.div style={{fontSize:10,letterSpacing:2,opacity:0.4,marginBottom:8,textTransform:"uppercase"}}>Track Listing</motion.div>
-                  {selectedAlbum.tracks.map((t,i)=><motion.div key={i} style={{padding:"6px 0",fontSize:13,borderBottom:"1px solid #1a1a1a",color:"white"}}>{i+1}. {t}</motion.div>)}
+                  {selectedAlbum.tracks.map((t,i)=>{
+                    const trackTitle = typeof t === "string" ? t : t?.title || `Track ${i + 1}`;
+                    const canPlayTrack = Boolean(selectedAlbumAccess?.canStream);
+                    return (
+                      <motion.div key={i} style={{padding:"6px 0",fontSize:13,borderBottom:"1px solid #1a1a1a",color:canPlayTrack ? "white" : "#666",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                        <span>{i+1}. {trackTitle}{!canPlayTrack ? " · Preview only" : ""}</span>
+                        {canPlayTrack ? (
+                          <button type="button" onClick={()=>playAlbumTracks(selectedAlbum, i)} style={{background:"none",border:"none",color:"#00ffff",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>Play</button>
+                        ) : (
+                          <span style={{fontSize:10,color:"#444",flexShrink:0}}>Locked</span>
+                        )}
+                      </motion.div>
+                    );
+                  })}
                 </motion.div>
+                {selectedAlbumAccess?.canStream && (
+                  <button type="button" onClick={()=>playAlbumTracks(selectedAlbum, 0)} style={{width:"100%",padding:"12px 0",background:"#00ffff",color:"#000",border:"none",borderRadius:10,cursor:"pointer",fontSize:13,marginTop:6,fontWeight:800}}>Play Album</button>
+                )}
                 {selectedAlbumAccess?.showCart && (
                   <>
                     <button onClick={()=>{addToCart(selectedAlbum);setSelectedAlbum(null);}} style={{width:"100%",padding:"12px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,marginTop:6,fontWeight:700}}>Add to Cart – ${selectedAlbum.price.toFixed(2)}</button>
@@ -1444,7 +1500,7 @@ export default function Page() {
 
             {activeTab==="home" && (
               <div style={{padding:"18px 0 8px",display:"flex",justifyContent:"flex-start",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-                <button type="button" className="donate-glow-button" onClick={()=>window.open("https://www.paypal.com/donate","_blank")}>♥ Donate</button>
+                <button type="button" className="donate-glow-button" onClick={()=>setDonateOpen(true)}>♥ Donate</button>
                 <button type="button" className="subscribe-shimmer-button" onClick={()=>{window.location.href="/subscribe";}}>Subscribe</button>
               </div>
             )}
@@ -1701,7 +1757,6 @@ export default function Page() {
                   {/* ── MY MUSIC sub-tab ── */}
                   {activeTab==="mymusic" && (
                     <>
-                      <h2 className="section-heading">My Music</h2>
                       <MyMusicTab
                         singles={singles}
                         albums={albums}
@@ -2253,6 +2308,8 @@ export default function Page() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <DonateModal open={donateOpen} onClose={()=>setDonateOpen(false)} isMobile={isMobile}/>
 
       {/* ── STRIPE MODAL ── */}
       <AnimatePresence>

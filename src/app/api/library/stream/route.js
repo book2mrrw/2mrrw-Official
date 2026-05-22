@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { userOwnsProduct } from "@/lib/commerce/entitlements";
+import { userCanStreamProduct } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
 import { buildR2Key, createR2SignedGetUrl, R2_PREFIX } from "@/lib/storage/r2";
 
@@ -16,9 +16,9 @@ export async function GET(req) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const owns = await userOwnsProduct(user.id, slug);
-  if (!owns) {
-    return NextResponse.json({ error: "Not in your library" }, { status: 403 });
+  const canStream = await userCanStreamProduct(user.id, slug);
+  if (!canStream) {
+    return NextResponse.json({ error: "Not entitled to stream this item" }, { status: 403 });
   }
 
   const admin = createAdminClient();

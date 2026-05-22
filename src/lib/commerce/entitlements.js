@@ -27,6 +27,27 @@ export async function userOwnsProduct(userId, productSlug) {
   return !!data;
 }
 
+/** True when the user may stream full audio for this catalog slug (purchase, membership, or collector). */
+export async function userCanStreamProduct(userId, productSlug) {
+  if (!userId || !productSlug) return false;
+  if (await userOwnsProduct(userId, productSlug)) return true;
+
+  const admin = createAdminClient();
+  const membership = await getActiveMembership(userId);
+  const ownedSlugs = await getOwnedSlugs(userId);
+  const collector = await getCollectorAccessState(admin, userId, [...ownedSlugs]);
+  const entitled =
+    membershipHasPremiumAccess(membership) || collector.hasCollectorAccess;
+  if (!entitled) return false;
+
+  const { data: product } = await admin
+    .from("products")
+    .select("id, product_type")
+    .eq("slug", productSlug)
+    .maybeSingle();
+  return Boolean(product && isDigitalProduct(product));
+}
+
 export async function grantLibraryItems({ userId, purchaseId, slugs, source = "purchase" }) {
   const admin = createAdminClient();
   const { data: products, error: pErr } = await admin.from("products").select("id, slug").in("slug", slugs);

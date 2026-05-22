@@ -11,4 +11,9 @@ export {
   verifyCollectorCardToken,
 } from "@/lib/collector-cards";
 
-export { addCollectorCardToCart } from "./purchase";
+export {
+  addCollectorCardToCart,
+  cartLineFromCard,
+  createCollectorPaymentIntent,
+  confirmCollectorPurchase,
+} from "./purchase";

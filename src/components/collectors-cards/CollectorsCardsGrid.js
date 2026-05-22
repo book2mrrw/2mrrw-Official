@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
+import { useAuth } from "@/context/AuthContext";
 import { COLLECTORS_CARDS_LABEL } from "@/lib/collectors-cards";
 import { COLLECTOR_CARDS_CATALOG } from "./collectorCardCatalog";
 import { CollectorCardItem } from "./CollectorCardItem";
@@ -18,7 +19,13 @@ const fadeUp = {
 export function CollectorsCardsGrid() {
   const [selected, setSelected] = useState(null);
   const [isMobile, setIsMobile] = useState(false);
-  const { getLeft } = useCollectorInventory();
+  const { getLeft, decrement } = useCollectorInventory();
+  const { refreshAccountState } = useAuth();
+
+  const handlePurchaseComplete = (slug) => {
+    decrement(slug);
+    void refreshAccountState();
+  };
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 768px)");
@@ -138,6 +145,7 @@ export function CollectorsCardsGrid() {
           remaining={getLeft(selected.slug)}
           onClose={() => setSelected(null)}
           isMobile={isMobile}
+          onPurchaseComplete={handlePurchaseComplete}
         />
       )}
     </motion.main>

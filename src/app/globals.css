@@ -116,7 +116,24 @@ body {
   opacity: 0.88;
 }
 
+.preview-modal-close-btn {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
 @media (max-width: 768px) {
+  .preview-modal-close-btn {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+
+  .playlist-drag-handle:active {
+    cursor: grabbing;
+    color: #00ffff;
+    border-color: rgba(0, 255, 255, 0.35);
+  }
+
   .preview-sheet-dismiss-handle {
     width: 100%;
     padding: 10px 0 8px;

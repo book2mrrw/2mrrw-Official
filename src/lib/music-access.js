@@ -51,6 +51,21 @@ function activeCollectorOwnerships(collectorOwnerships = []) {
   });
 }
 
+/** Active collector card / ledger owner — unlocks full-catalog library + playlist adds. */
+export function isCollectorCardOwner(accountState = {}) {
+  const permissions = accountState.permissions || {};
+  if (Boolean(permissions.collectorAccess || permissions.collector)) return true;
+  return activeCollectorOwnerships(accountState.collectorOwnerships).length > 0;
+}
+
+export function canAddToLibrary(access) {
+  return Boolean(access?.canAddToLibrary);
+}
+
+export function canAddToPlaylist(access) {
+  return Boolean(access?.canAddToPlaylist);
+}
+
 /**
  * @param {object} track - single, album track, or catalog item with slug
  * @param {object} accountState - from /api/account/state or AuthContext
@@ -63,8 +78,11 @@ export function resolveTrackAccess(track, accountState = {}) {
     owned: false,
     subscription: false,
     collector: false,
+    collectorCardOwner: false,
     previewOnly: true,
     canStream: false,
+    canAddToLibrary: false,
+    canAddToPlaylist: false,
     badge: null,
   };
   if (!slug && !albumSlug) return empty;
@@ -81,9 +99,9 @@ export function resolveTrackAccess(track, accountState = {}) {
   const subscriptionActive = membershipHasPremiumAccess(membership);
   const permissions = accountState.permissions || {};
   const collectorRecords = activeCollectorOwnerships(accountState.collectorOwnerships);
+  const collectorCardOwner = isCollectorCardOwner(accountState);
   const hasCollectorEntitlement =
-    Boolean(permissions.collectorAccess || permissions.collector) ||
-    collectorRecords.length > 0;
+    collectorCardOwner || collectorRecords.length > 0;
 
   const owned =
     ownedSlugs.has(slug) ||
@@ -99,13 +117,17 @@ export function resolveTrackAccess(track, accountState = {}) {
     subscriptionActive && (subscriptionViaLibrary || subscriptionGlobal);
 
   const collector =
-    hasCollectorEntitlement &&
-    (collectorLibrary.has(slug) ||
-      collectorLibrary.has(albumSlug) ||
-      collectorRecords.some((row) => row.slug === slug || row.slug === albumSlug) ||
-      Boolean(permissions.collectorAccess || permissions.collector));
+    collectorCardOwner ||
+    (hasCollectorEntitlement &&
+      (collectorLibrary.has(slug) ||
+        collectorLibrary.has(albumSlug) ||
+        collectorRecords.some((row) => row.slug === slug || row.slug === albumSlug)));
 
-  const canStreamFull = owned || (subscription && subscriptionActive) || collector;
+  const canAddToLibrary = owned || (subscription && subscriptionActive) || collectorCardOwner;
+  const canAddToPlaylist = canAddToLibrary;
+
+  const canStreamFull =
+    owned || (subscription && subscriptionActive) || collector || collectorCardOwner;
   const subscriptionExpired = Boolean(membership && !subscriptionActive && subscriptionLibrary.has(slug));
 
   let badge = null;
@@ -118,8 +140,11 @@ export function resolveTrackAccess(track, accountState = {}) {
     owned,
     subscription: subscription && subscriptionActive,
     collector,
+    collectorCardOwner,
     previewOnly: !canStreamFull,
     canStream: canStreamFull,
+    canAddToLibrary,
+    canAddToPlaylist,
     subscriptionLocked: subscriptionExpired,
     badge,
   };
@@ -202,6 +227,8 @@ export function resolveContentAccess(item, accountState = {}) {
     mode: libraryMode ? "library" : "store",
     canPreview: !libraryMode,
     canStream: trackAccess.canStream,
+    canAddToLibrary: trackAccess.canAddToLibrary,
+    canAddToPlaylist: trackAccess.canAddToPlaylist,
     canOffline:
       trackAccess.canStream &&
       (tier === "subscriber" || tier === "collector" || trackAccess.owned),

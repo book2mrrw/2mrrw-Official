@@ -1,6 +1,8 @@
 "use client";
 
-export function ActionRow({ label, hint, onClick, disabled }) {
+import { useMemo } from "react";
+
+export function ActionRow({ label, hint, onClick, disabled, confirmed }) {
   return (
     <button
       type="button"
@@ -10,17 +12,19 @@ export function ActionRow({ label, hint, onClick, disabled }) {
         width: "100%",
         textAlign: "left",
         padding: "12px 0",
-        background: "none",
+        background: confirmed ? "rgba(0,255,255,0.08)" : "none",
         border: "none",
         borderBottom: "1px solid #1a1a1a",
-        color: disabled ? "#444" : "#eee",
+        color: disabled ? "#444" : confirmed ? "#00ffff" : "#eee",
         cursor: disabled ? "default" : "pointer",
         fontSize: 13,
         fontWeight: 600,
+        transition: "background 0.2s, color 0.2s",
       }}
     >
+      {confirmed ? "✓ " : ""}
       {label}
-      {hint && <div style={{ fontSize: 10, color: "#555", marginTop: 2 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 10, color: confirmed ? "#00aaaa" : "#555", marginTop: 2 }}>{hint}</div>}
     </button>
   );
 }
@@ -35,14 +39,26 @@ export default function PlusActionSheet({
   access,
   userId,
   playlists = [],
+  currentPlaylist = null,
   newPlaylistTitle,
   onNewPlaylistTitleChange,
   onAddToLibrary,
   onAddToPlaylist,
+  onAddToCurrentPlaylist,
   onCreateAndAdd,
   onOffline,
   onShare,
+  showOfflineDownload = false,
+  actionFlash = null,
 }) {
+  const canAddLibrary = Boolean(access?.canAddToLibrary);
+  const canAddPlaylist = Boolean(access?.canAddToPlaylist);
+
+  const currentPlaylistLabel = useMemo(() => {
+    if (!currentPlaylist?.title) return null;
+    return `Add to current playlist · ${currentPlaylist.title}`;
+  }, [currentPlaylist]);
+
   if (!open) return null;
 
   return (
@@ -75,55 +91,98 @@ export default function PlusActionSheet({
         <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>{track?.title}</div>
         <div style={{ fontSize: 11, color: "#555", marginBottom: 16 }}>Library actions</div>
 
-        <ActionRow label="Add to Library" onClick={onAddToLibrary} disabled={!userId || inLib} />
-        <div style={{ fontSize: 10, color: "#444", letterSpacing: 1.5, margin: "12px 0 8px", textTransform: "uppercase" }}>
-          Add to Playlist
-        </div>
-        {playlists.slice(0, 6).map((pl) => (
-          <ActionRow key={pl.id} label={pl.title} onClick={() => onAddToPlaylist(pl.id)} disabled={!userId} />
-        ))}
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <input
-            value={newPlaylistTitle}
-            onChange={(e) => onNewPlaylistTitleChange(e.target.value)}
-            placeholder="New playlist name"
-            style={{
-              flex: 1,
-              padding: "8px 10px",
-              background: "#111",
-              border: "1px solid #2a2a2a",
-              borderRadius: 8,
-              color: "white",
-              fontSize: 12,
-            }}
+        {canAddLibrary ? (
+          <ActionRow
+            label={inLib ? "In Library" : "Add to Library"}
+            onClick={onAddToLibrary}
+            disabled={!userId || inLib}
+            confirmed={actionFlash === "library"}
           />
-          <button
-            type="button"
-            onClick={onCreateAndAdd}
-            disabled={!userId || !newPlaylistTitle.trim()}
-            style={{
-              padding: "8px 12px",
-              background: "#00ffff",
-              color: "#000",
-              border: "none",
-              borderRadius: 8,
-              fontWeight: 800,
-              fontSize: 11,
-              cursor: "pointer",
-              opacity: !userId || !newPlaylistTitle.trim() ? 0.5 : 1,
-            }}
-          >
-            Create
-          </button>
-        </div>
+        ) : null}
 
-        <ActionRow
-          label={offlineQueued ? "Offline queued" : "Download for Offline Playback"}
-          hint={offlineQueued ? "In-app only · queued" : access?.canOffline ? "In-app cache (MVP)" : "Requires subscription or ownership"}
-          onClick={onOffline}
-          disabled={!userId || !access?.canOffline || offlineQueued}
-        />
-        <ActionRow label="Share Song" onClick={onShare} />
+        {canAddPlaylist ? (
+          <>
+            {currentPlaylist && onAddToCurrentPlaylist ? (
+              <ActionRow
+                label={currentPlaylistLabel}
+                onClick={onAddToCurrentPlaylist}
+                disabled={!userId}
+                confirmed={actionFlash === "current-playlist"}
+              />
+            ) : null}
+            <div
+              style={{
+                fontSize: 10,
+                color: "#444",
+                letterSpacing: 1.5,
+                margin: "12px 0 8px",
+                textTransform: "uppercase",
+              }}
+            >
+              Add to Playlist
+            </div>
+            {playlists.slice(0, 6).map((pl) => (
+              <ActionRow
+                key={pl.id}
+                label={pl.title}
+                onClick={() => onAddToPlaylist(pl.id)}
+                disabled={!userId}
+                confirmed={actionFlash === pl.id}
+              />
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <input
+                value={newPlaylistTitle}
+                onChange={(e) => onNewPlaylistTitleChange(e.target.value)}
+                placeholder="New playlist name"
+                style={{
+                  flex: 1,
+                  padding: "8px 10px",
+                  background: "#111",
+                  border: "1px solid #2a2a2a",
+                  borderRadius: 8,
+                  color: "white",
+                  fontSize: 12,
+                }}
+              />
+              <button
+                type="button"
+                onClick={onCreateAndAdd}
+                disabled={!userId || !newPlaylistTitle.trim()}
+                style={{
+                  padding: "8px 12px",
+                  background: actionFlash === "create" ? "#66ffff" : "#00ffff",
+                  color: "#000",
+                  border: "none",
+                  borderRadius: 8,
+                  fontWeight: 800,
+                  fontSize: 11,
+                  cursor: "pointer",
+                  opacity: !userId || !newPlaylistTitle.trim() ? 0.5 : 1,
+                  transition: "background 0.2s",
+                }}
+              >
+                {actionFlash === "create" ? "✓" : "Create"}
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        {showOfflineDownload ? (
+          <ActionRow
+            label={offlineQueued ? "Offline queued" : "Download for Offline Playback"}
+            hint={
+              offlineQueued
+                ? "In-app only · queued"
+                : access?.canOffline
+                  ? "In-app cache (MVP)"
+                  : "Requires subscription or ownership"
+            }
+            onClick={onOffline}
+            disabled={!userId || !access?.canOffline || offlineQueued}
+          />
+        ) : null}
+        <ActionRow label="Share Song" onClick={onShare} confirmed={actionFlash === "share"} />
         <button
           type="button"
           onClick={onClose}
