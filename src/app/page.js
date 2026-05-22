@@ -8,6 +8,9 @@ import DonateModal from "@/components/payments/DonateModal";
 import { useAuth } from "@/context/AuthContext";
 import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
 import ImmersivePreviewModal from "@/components/preview/ImmersivePreviewModal";
+import GiftBottomSheet from "@/components/gifts/GiftBottomSheet";
+import GiftButton from "@/components/gifts/GiftButton";
+import { validateEmail, validatePhone } from "@/lib/auth/validation";
 import MyMusicTab from "@/components/music/MyMusicTab";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
@@ -477,7 +480,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
-  const { currentUser: authUser, library, owns, accountState, enterGuest, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
+  const { currentUser: authUser, library, owns, accountState, isAdmin, enterGuest, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
   const { playTrack, playQueue, hasStarted, currentTrack } = useAudioPlayer();
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
@@ -521,6 +524,9 @@ export default function Page() {
   const [authSubmitting, setAuthSubmitting]       = useState(false);
   const [membershipUpsellOpen, setMembershipUpsellOpen] = useState(false);
   const [donateOpen, setDonateOpen] = useState(false);
+  const [giftSheetRelease, setGiftSheetRelease] = useState(null);
+  const [giftsSent, setGiftsSent] = useState([]);
+  const [giftsSentLoading, setGiftsSentLoading] = useState(false);
   const [liveCountdown, setLiveCountdown]         = useState({ days:0, hours:0, minutes:0, seconds:0 });
   const [liveIsLive, setLiveIsLive]               = useState(false);
   const [innerCirclePost, setInnerCirclePost]     = useState(null);
@@ -697,6 +703,26 @@ export default function Page() {
       setCurrentUser(null);
     }
   }, [authUser, authLoading]);
+
+  useEffect(() => {
+    if (!isAdmin || activeTab !== "account") return;
+    let cancelled = false;
+    setGiftsSentLoading(true);
+    fetch("/api/gifts/sent", { credentials: "include", cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setGiftsSent(data.gifts || []);
+      })
+      .catch(() => {
+        if (!cancelled) setGiftsSent([]);
+      })
+      .finally(() => {
+        if (!cancelled) setGiftsSentLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, activeTab]);
 
   useEffect(() => {
     setMyPurchases(library || []);
@@ -893,30 +919,40 @@ export default function Page() {
   }, [audioDuration]);
 
   const handleGateSubmit = async () => {
-    if (!gatePhone.trim() || !gateEmail.trim()) {
-      setGateError("Email and phone are required.");
+    const emailCheck = validateEmail(gateEmail);
+    const phoneCheck = validatePhone(gatePhone);
+    if (!emailCheck.ok || !phoneCheck.ok) {
+      setGateError(emailCheck.error || phoneCheck.error);
       return;
     }
     setGateError("");
     try {
-      await enterGuest({ email: gateEmail.trim(), phone: gatePhone.trim(), name: gateName.trim() });
+      await enterGuest({ email: emailCheck.value, phone: phoneCheck.value, name: gateName.trim() });
       setGateSubmitted(true);
     } catch (err) {
       setGateError(err.message || "Could not enter.");
     }
   };
 
-  const handleAuthSubmit = async () => {
-    if (!authEmail.trim() || !authPhone.trim()) { setAuthError("Email and phone are required."); return; }
+  const openGiftSheet = useCallback((release) => {
+    if (!isAdmin) return;
+    setGiftSheetRelease(release);
+  }, [isAdmin]);
+
+  const handleAuthSubmit = () => {
     setAuthError("");
-    setAuthSubmitting(true);
-    try {
-      await enterGuest({ email: authEmail.trim(), phone: authPhone.trim(), name: authName.trim() });
-      setGateSubmitted(true);
-    } catch (err) {
-      setAuthError(err.message || "Could not continue.");
-    } finally {
-      setAuthSubmitting(false);
+    const emailCheck = validateEmail(authEmail);
+    const phoneCheck = validatePhone(authPhone);
+    if (!emailCheck.ok || !phoneCheck.ok) {
+      setAuthError(emailCheck.error || phoneCheck.error);
+      return;
+    }
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("pendingJoinEmail", emailCheck.value);
+      sessionStorage.setItem("pendingJoinPhone", phoneCheck.value);
+      if (authName.trim()) sessionStorage.setItem("pendingProfileName", authName.trim());
+      window.location.href = "/join";
+      return;
     }
   };
 
@@ -1267,6 +1303,8 @@ export default function Page() {
             audioRef={modalAudioRef}
             trackAccess={selectedSingleAccess}
             userId={currentUser?.id}
+            isAdmin={isAdmin}
+            onGift={() => openGiftSheet(selectedSingle)}
             onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
             onClose={() => setSelectedSingle(null)}
             onAddToCart={addToCart}
@@ -1754,10 +1792,10 @@ export default function Page() {
                         </div>
                       </div>
                       <h2 className="section-heading" style={{marginBottom:14}}>Singles</h2>
-                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={singles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} openSingleModal={openSingleModal} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={accountState} userId={currentUser?.id} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={singles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} openSingleModal={openSingleModal} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       <div style={{marginTop:32,marginBottom:4}}>
                         <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                        <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)} accountState={accountState} userId={currentUser?.id} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                        <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       </div>
                       <AudioVisualsSection isMobile={isMobile} onAudioVisualsFocused={handleAudioVisualsFocused}/>
                     </>
@@ -1767,7 +1805,7 @@ export default function Page() {
                   {activeTab==="albums" && (
                     <>
                       <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                      <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                      <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                     </>
                   )}
 
@@ -2038,24 +2076,54 @@ export default function Page() {
               {activeTab==="account" && (
                 <>
                   <h2 className="section-heading">Account</h2>
-                  {currentUser ? (
+                  {currentUser && !currentUser.isGuest ? (
                     <div style={{display:"flex",flexDirection:"column",gap:20}}>
                       <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:28}}>
                         <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{currentUser.name[0].toUpperCase()}</div><div><div style={{fontSize:18,fontWeight:800}}>{currentUser.name}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{currentUser.email}</div></div>{userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`}}>{userStatus.label}</div>}</div>
                         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===currentUser.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Music Library",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
+                      {isAdmin ? (
+                        <div style={{background:"#0d0d0d",border:"1px solid rgba(162,89,255,0.25)",borderRadius:20,padding:isMobile?18:24}}>
+                          <div style={{fontSize:11,color:"#a259ff",letterSpacing:3,marginBottom:14,fontWeight:800}}>GIFTS SENT</div>
+                          {giftsSentLoading ? (
+                            <p style={{fontSize:13,color:"#555",margin:0}}>Loading…</p>
+                          ) : giftsSent.length === 0 ? (
+                            <p style={{fontSize:13,color:"#555",margin:0}}>No gifts sent yet.</p>
+                          ) : (
+                            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                              {giftsSent.map((gift) => (
+                                <div key={gift.id} style={{display:"flex",alignItems:"center",gap:12}}>
+                                  {gift.coverUrl ? (
+                                    <img src={gift.coverUrl} alt="" style={{width:40,height:40,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
+                                  ) : (
+                                    <div style={{width:40,height:40,borderRadius:8,background:"#1a1a1a",flexShrink:0}}/>
+                                  )}
+                                  <div style={{minWidth:0,flex:1}}>
+                                    <div style={{fontSize:13,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{gift.title}</div>
+                                    <div style={{fontSize:11,color:"#666",marginTop:2}}>{gift.recipientEmail}</div>
+                                  </div>
+                                  <div style={{fontSize:11,color:"#555",flexShrink:0}}>
+                                    {gift.createdAt ? new Date(gift.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
                       <button onClick={handleSignOut} style={{padding:"12px 0",background:"transparent",color:"#444",border:"1px solid #1e1e1e",borderRadius:10,cursor:"pointer",fontSize:13,width:"100%",transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#333";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";e.currentTarget.style.borderColor="#1e1e1e";}}>Sign Out</button>
                     </div>
                   ) : (
                     <div style={{maxWidth:400}}>
-                      <div style={{fontSize:13,color:"#777",lineHeight:1.7,marginBottom:20}}>Enter with email + phone. No password, no login wall — your purchases, gifts, and cards stay attached to this identity.</div>
+                      <div style={{fontSize:13,color:"#777",lineHeight:1.7,marginBottom:20}}>Verify with email + phone (one-time code). Your purchases, gifts, and library stay on this account.</div>
                       <div style={{display:"flex",flexDirection:"column",gap:12}}>
                         <input placeholder="Full Name (optional)" value={authName} onChange={e=>setAuthName(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
                         <input placeholder="Email Address" value={authEmail} onChange={e=>setAuthEmail(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
                         <input placeholder="Phone Number" value={authPhone} onChange={e=>setAuthPhone(e.target.value)} style={{padding:"12px 14px",background:"#111",border:"1px solid #2a2a2a",color:"white",borderRadius:10,fontSize:14,outline:"none"}}/>
                         {authError && <div style={{fontSize:12,color:"#ff4d4d"}}>{authError}</div>}
-                        <button onClick={handleAuthSubmit} disabled={authSubmitting} style={{padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1,marginTop:4,opacity:authSubmitting?0.6:1}}>{authSubmitting?"…":"Continue"}</button>
+                        <button onClick={handleAuthSubmit} style={{padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1,marginTop:4}}>Continue to verification</button>
+                        <a href="/login" style={{fontSize:13,color:"#00ffff",textAlign:"center",marginTop:8}}>Already have an account? Sign in</a>
                       </div>
                     </div>
                   )}
@@ -2352,6 +2420,13 @@ export default function Page() {
       </AnimatePresence>
 
       <DonateModal open={donateOpen} onClose={()=>setDonateOpen(false)} isMobile={isMobile}/>
+      <GiftBottomSheet
+        open={Boolean(giftSheetRelease)}
+        release={giftSheetRelease}
+        senderUserId={authUser?.id}
+        isMobile={isMobile}
+        onClose={() => setGiftSheetRelease(null)}
+      />
 
       {/* ── STRIPE MODAL ── */}
       <AnimatePresence>
@@ -2380,7 +2455,7 @@ export default function Page() {
 }
 
 // ── CAROUSEL UI ───────────────────────────────────────────────────────────────
-function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singleIndex, singles, prevSingle, nextSingle, goToSingle, openSingleModal, addToCart, addVinylToCart, buttonHoverIn, buttonHoverOut, accountState, userId, onLibraryChange }) {
+function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singleIndex, singles, prevSingle, nextSingle, goToSingle, openSingleModal, addToCart, addVinylToCart, buttonHoverIn, buttonHoverOut, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   const [previewHover, setPreviewHover] = useState(false);
   const access = currentSingleAccess || (currentSingle ? resolveContentAccess(currentSingle, accountState) : null);
   return (
@@ -2424,6 +2499,7 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
           {access?.showCart && <button onClick={()=>addToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"12px 0":large?"11px 20px":"10px 18px",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold",transition:"0.25s",width:isMobile?"100%":"auto"}}>+ Add to Cart</button>}
           {access?.showCart && (large||isMobile) && <button onClick={()=>addVinylToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"12px 0":"11px 20px",background:"#0a0a0a",color:"#aaa",border:"1px solid #2a2a2a",borderRadius:8,cursor:"pointer",fontSize:13,transition:"0.25s",width:isMobile?"100%":"auto"}}>+ Vinyl $47.99</button>}
           {userId && <MusicPlusButton track={currentSingle} userId={userId} access={access} isMobile={isMobile} onLibraryChange={onLibraryChange} />}
+          {isAdmin && <GiftButton onClick={() => onGift?.(currentSingle)} />}
         </div>
       </div>
       {!isMobile && <button onClick={nextSingle} style={{width:large?50:44,height:large?50:44,borderRadius:"50%",background:"rgba(255,255,255,0.04)",border:"1px solid #2a2a2a",color:"#555",fontSize:large?22:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";e.currentTarget.style.boxShadow="0 0 10px rgba(0,255,255,0.3)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#555";e.currentTarget.style.boxShadow="none";}}>›</button>}
@@ -2432,7 +2508,7 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
 }
 
 // ── FEATURES RAIL ─────────────────────────────────────────────────────────────
-function FeaturesRail({ features, isMobile, addToCart, onPlay, accountState, userId, onLibraryChange }) {
+function FeaturesRail({ features, isMobile, addToCart, onPlay, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   return (
     <div className="features-row" style={{display:"flex",flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollSnapType:"x mandatory",overscrollBehaviorX:"contain",gap:isMobile?12:18,paddingBottom:14}}>
       {features.map((feat,i)=>{
@@ -2444,9 +2520,10 @@ function FeaturesRail({ features, isMobile, addToCart, onPlay, accountState, use
             <div className="hero-title-glow" style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{feat.title}</div>
             <div style={{fontSize:10,color:"#a259ff",fontWeight:700,letterSpacing:1.5,marginBottom:6}}>{feat.featuring}</div>
             {access?.showPrice && <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${feat.price.toFixed(2)}</div>}
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              {access?.showCart && <button onClick={e=>{e.stopPropagation();addToCart(feat);}} style={{flex:1,padding:"7px 0",fontSize:11,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",borderRadius:7,cursor:"pointer",fontWeight:600,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#a259ff";e.currentTarget.style.color="#a259ff";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="white";}}>+ Cart</button>}
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              {access?.showCart && <button onClick={e=>{e.stopPropagation();addToCart(feat);}} style={{flex:1,padding:"7px 0",fontSize:11,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",borderRadius:7,cursor:"pointer",fontWeight:600,transition:"0.2s",minWidth:72}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#a259ff";e.currentTarget.style.color="#a259ff";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="white";}}>+ Cart</button>}
               {userId && <span onClick={e=>e.stopPropagation()}><MusicPlusButton track={feat} userId={userId} access={access} isMobile={isMobile} deepLinkType="feature" onLibraryChange={onLibraryChange} /></span>}
+              {isAdmin && <GiftButton onClick={() => onGift?.(feat)} />}
             </div>
           </div>
         </div>
@@ -2456,7 +2533,7 @@ function FeaturesRail({ features, isMobile, addToCart, onPlay, accountState, use
 }
 
 // ── GRID ──────────────────────────────────────────────────────────────────────
-function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, isMobile, accountState, userId, onLibraryChange }) {
+function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, isMobile, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   if (!items || items.length === 0) return null;
   const containerStyle = isMobile
     ? { display:"flex", flexWrap:"nowrap", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollSnapType:"x mandatory", overscrollBehaviorX:"contain", gap:12, paddingBottom:10 }
@@ -2476,9 +2553,10 @@ function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, button
             {item.date && <div style={{fontSize:isMobile?9:11,color:"#444",marginBottom:6,letterSpacing:1}}>{item.date}</div>}
             {access?.badge && <div style={{marginBottom:6}}><MusicAccessBadge access={access} label={access.badge} compact /></div>}
             {access?.showPrice && <div style={{fontSize:isMobile?12:13,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${item.price.toFixed(2)}</div>}
-            <div style={{display:"flex",gap:8,alignItems:"center"}}>
-              {access?.showCart && <button onClick={()=>addToCart(item)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600}}>Add to Cart</button>}
+            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+              {access?.showCart && <button onClick={()=>addToCart(item)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>}
               {userId && type==="albums" && <MusicPlusButton track={item} userId={userId} access={access} isMobile={isMobile} deepLinkType="album" onLibraryChange={onLibraryChange} />}
+              {isAdmin && <GiftButton onClick={() => onGift?.(item)} />}
             </div>
           </div>
         </div>

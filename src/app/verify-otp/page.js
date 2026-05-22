@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
+import { formatResendCountdown } from "@/lib/auth/validation";
+import { isAdminUser } from "@/lib/auth/constants";
 import { useAuth } from "@/context/AuthContext";
 
 const boxStyle = {
@@ -22,7 +24,7 @@ const boxStyle = {
 function VerifyOtpForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { refreshAccountState } = useAuth();
+  const { refreshAccountState, markAdmin } = useAuth();
   const email = searchParams.get("email") || "";
   const nextPath = searchParams.get("next") || "/?tab=mymusic";
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
@@ -32,6 +34,12 @@ function VerifyOtpForm() {
   const inputsRef = useRef([]);
 
   const code = useMemo(() => digits.join(""), [digits]);
+
+  useEffect(() => {
+    if (!email) {
+      router.replace("/join");
+    }
+  }, [email, router]);
 
   useEffect(() => {
     if (resendIn <= 0) return undefined;
@@ -65,19 +73,34 @@ function VerifyOtpForm() {
       if (verifyError) throw verifyError;
 
       const phone = readPendingPhone();
-      if (phone) {
+      const pendingName =
+        typeof window !== "undefined" ? sessionStorage.getItem("pendingProfileName") : "";
+      if (phone || pendingName) {
         await fetch("/api/auth/complete-profile", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ email, phone }),
+          body: JSON.stringify({
+            email,
+            phone: phone || undefined,
+            name: pendingName || undefined,
+          }),
         });
       }
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("pendingProfileName");
+      }
       clearPendingPhone();
+
+      const verifiedUser = data?.user || data?.session?.user;
+      if (verifiedUser && isAdminUser(verifiedUser)) {
+        markAdmin(verifiedUser);
+      }
+
       await refreshAccountState();
       router.push(nextPath);
       router.refresh();
-    } catch (err) {
+    } catch {
       setError("Invalid or expired code. Try again.");
     } finally {
       setLoading(false);
@@ -137,7 +160,7 @@ function VerifyOtpForm() {
             />
           ))}
         </div>
-        {error ? <div style={{ color: "#ff4d4d", fontSize: 13, marginBottom: 12 }}>{error}</div> : null}
+        {error ? <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</div> : null}
         <button
           type="submit"
           disabled={loading}
@@ -163,13 +186,14 @@ function VerifyOtpForm() {
             marginTop: 14,
             background: "none",
             border: "none",
-            color: resendIn > 0 ? "#555" : "#00ffff",
+            color: "#00ffff",
             fontSize: 13,
             cursor: resendIn > 0 ? "default" : "pointer",
             width: "100%",
+            opacity: resendIn > 0 ? 0.85 : 1,
           }}
         >
-          {resendIn > 0 ? `Resend code in ${resendIn}s` : "Resend code"}
+          {resendIn > 0 ? `Resend code in ${formatResendCountdown(resendIn)}` : "Resend code"}
         </button>
         <Link href="/join" style={{ display: "block", color: "#777", fontSize: 13, textAlign: "center", marginTop: 16 }}>
           Back

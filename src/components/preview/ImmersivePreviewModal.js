@@ -8,6 +8,7 @@ import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview
 import { extractLrcFromRelease } from "@/lib/lrc";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
+import GiftButton from "@/components/gifts/GiftButton";
 
 const SPRING_SOFT = { type: "spring", stiffness: 320, damping: 34 };
 const SPRING_EXIT = { type: "spring", stiffness: 380, damping: 36 };
@@ -60,6 +61,8 @@ function ImmersivePreviewModal({
   onAddVinyl,
   trackAccess = null,
   userId = null,
+  isAdmin = false,
+  onGift,
   onLibraryChange,
 }) {
   const [viewMoreOpen, setViewMoreOpen] = useState(false);
@@ -410,6 +413,12 @@ function ImmersivePreviewModal({
 
           <PreviewModalPlayer audioRef={audioRef} compact={isMobile} />
 
+          {isAdmin ? (
+            <GiftButton
+              onClick={() => onGift?.(single)}
+              style={{ width: "100%", marginBottom: 8 }}
+            />
+          ) : null}
           {showPurchase ? (
             <button
               type="button"

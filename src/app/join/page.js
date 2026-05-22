@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { writePendingPhone } from "@/lib/auth/otp-pending";
+import { validateEmail, validatePhone } from "@/lib/auth/validation";
 
 const inputStyle = {
   padding: "12px 14px",
@@ -23,10 +24,31 @@ function JoinForm() {
   const giftToken = searchParams.get("gift") || "";
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [existsHint, setExistsHint] = useState(false);
   const [giftPreview, setGiftPreview] = useState(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const pendingEmail = sessionStorage.getItem("pendingJoinEmail");
+    const pendingPhone = sessionStorage.getItem("pendingJoinPhone");
+    if (pendingEmail) {
+      setEmail(pendingEmail);
+      sessionStorage.removeItem("pendingJoinEmail");
+    }
+    if (pendingPhone) {
+      setPhone(pendingPhone);
+      sessionStorage.removeItem("pendingJoinPhone");
+    }
+    const pendingName = sessionStorage.getItem("pendingProfileName");
+    if (pendingName) {
+      setName(pendingName);
+    }
+  }, []);
 
   useEffect(() => {
     if (!giftToken) return;
@@ -42,15 +64,31 @@ function JoinForm() {
 
   const submit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
+    setEmailError("");
+    setPhoneError("");
     setExistsHint(false);
 
+    const emailCheck = validateEmail(email);
+    const phoneCheck = validatePhone(phone);
+    if (!emailCheck.ok) {
+      setEmailError(emailCheck.error);
+    }
+    if (!phoneCheck.ok) {
+      setPhoneError(phoneCheck.error);
+    }
+    if (!emailCheck.ok || !phoneCheck.ok) return;
+
+    setLoading(true);
+
     try {
-      writePendingPhone(phone);
+      writePendingPhone(phoneCheck.value);
+      if (name.trim()) {
+        sessionStorage.setItem("pendingProfileName", name.trim());
+      }
       const supabase = createClient();
       const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: email.trim().toLowerCase(),
+        email: emailCheck.value,
         options: { shouldCreateUser: true },
       });
 
@@ -65,7 +103,7 @@ function JoinForm() {
       }
 
       const params = new URLSearchParams({
-        email: email.trim().toLowerCase(),
+        email: emailCheck.value,
         next: nextPath,
       });
       router.push(`/verify-otp?${params.toString()}`);
@@ -121,24 +159,43 @@ function JoinForm() {
         ) : null}
         <h1 style={{ margin: "6px 0 0", fontSize: 24 }}>Join 2MRRW</h1>
         <p style={{ margin: "0 0 8px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
-          Email verification only. No password.
+          Email + phone verification. No password.
         </p>
         <input
-          placeholder="Email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
+          placeholder="Full Name (optional)"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           style={inputStyle}
         />
-        <input
-          placeholder="Phone number"
-          type="tel"
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          required
-          style={inputStyle}
-        />
+        <div>
+          <input
+            placeholder="Email"
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (emailError) setEmailError("");
+            }}
+            required
+            style={{ ...inputStyle, borderColor: emailError ? "#ef4444" : "#2a2a2a" }}
+          />
+          {emailError ? <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>{emailError}</div> : null}
+        </div>
+        <div>
+          <input
+            placeholder="Phone number"
+            type="tel"
+            value={phone}
+            onChange={(e) => {
+              setPhone(e.target.value);
+              if (phoneError) setPhoneError("");
+            }}
+            required
+            style={{ ...inputStyle, borderColor: phoneError ? "#ef4444" : "#2a2a2a" }}
+          />
+          {phoneError ? <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>{phoneError}</div> : null}
+        </div>
         {error ? <div style={{ color: "#ff4d4d", fontSize: 13 }}>{error}</div> : null}
         {existsHint ? (
           <Link
@@ -149,6 +206,7 @@ function JoinForm() {
           </Link>
         ) : null}
         <button
+          type="submit"
           disabled={loading}
           style={{
             padding: "13px 0",

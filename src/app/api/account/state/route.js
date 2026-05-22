@@ -11,6 +11,7 @@ import {
   vaultTierFor,
 } from "@/lib/commerce/entitlements";
 import { getFanSessionUser } from "@/lib/auth/session-user";
+import { isAdminUser } from "@/lib/auth/constants";
 import {
   clearGuestCookie,
   getGuestSessionCookieState,
@@ -18,7 +19,7 @@ import {
 } from "@/lib/guest-session";
 import { DEFAULT_NOTIFICATION_PREFERENCES, getNotificationState } from "@/lib/notifications";
 
-function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest = true }) {
+function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest = true, user = null }) {
   const hasActiveMembership = membershipHasPremiumAccess(membership);
   const hasInnerCircleAccess = hasActiveMembership || hasCollectorAccess;
   const effectiveVaultPass = hasVaultPass || hasCollectorAccess;
@@ -37,7 +38,7 @@ function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest 
     vaultSelectedAccess: vaultTier === "inner_circle" || vaultTier === "vault_pass",
     collector: hasCollectorAccess,
     creator: false,
-    admin: false,
+    admin: isAdminUser(user),
   };
 }
 
@@ -63,7 +64,7 @@ export async function GET() {
           summary: { unreadCount: 0, latest: [] },
           available: false,
         },
-        permissions: permissionsFor({ membership: null, hasCollectorAccess: false, hasVaultPass: false }),
+        permissions: permissionsFor({ membership: null, hasCollectorAccess: false, hasVaultPass: false, user: null }),
         session: null,
       });
     }
@@ -229,6 +230,7 @@ export async function GET() {
         hasCollectorAccess,
         hasVaultPass,
         isGuest: Boolean(user.isGuest),
+        user,
       }),
       session: { remember: Boolean(session?.remember) },
       syncedAt: new Date().toISOString(),

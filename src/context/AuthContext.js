@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { isAdminUser } from "@/lib/auth/constants";
 
 const EMPTY_ACCOUNT_STATE = {
   library: [],
@@ -19,6 +20,7 @@ export function AuthProvider({ children }) {
   const [library, setLibrary] = useState([]);
   const [ownedSlugs, setOwnedSlugs] = useState(new Set());
   const [accountState, setAccountState] = useState(EMPTY_ACCOUNT_STATE);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const applyAccountPayload = useCallback((data = {}) => {
@@ -61,6 +63,7 @@ export function AuthProvider({ children }) {
     if (!res.ok) {
       if (res.status === 401) {
         setUser(null);
+        setIsAdmin(false);
         setLibrary([]);
         setOwnedSlugs(new Set());
         setAccountState(EMPTY_ACCOUNT_STATE);
@@ -68,7 +71,10 @@ export function AuthProvider({ children }) {
       return null;
     }
     const data = await res.json();
-    if (data.user) setUser(data.user);
+    if (data.user) {
+      setUser(data.user);
+      setIsAdmin(Boolean(data.permissions?.admin) || isAdminUser(data.user));
+    }
     applyAccountPayload(data);
     return data;
   }, [applyAccountPayload]);
@@ -85,8 +91,10 @@ export function AuthProvider({ children }) {
     const data = await res.json();
     setUser(data.user || null);
     if (data.user) {
+      setIsAdmin(isAdminUser(data.user));
       await refreshAccountState();
     } else {
+      setIsAdmin(false);
       setLibrary([]);
       setOwnedSlugs(new Set());
       setAccountState(EMPTY_ACCOUNT_STATE);
@@ -131,6 +139,7 @@ export function AuthProvider({ children }) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Could not enter");
     setUser(data.user);
+    setIsAdmin(isAdminUser(data.user));
     await refreshAccountState();
     if (typeof window !== "undefined") {
       const redirect = sessionStorage.getItem("postAuthRedirect");
@@ -152,9 +161,14 @@ export function AuthProvider({ children }) {
     }
     await fetch("/api/guest/session", { method: "DELETE", credentials: "include" });
     setUser(null);
+    setIsAdmin(false);
     setLibrary([]);
     setOwnedSlugs(new Set());
     setAccountState(EMPTY_ACCOUNT_STATE);
+  }, []);
+
+  const markAdmin = useCallback((nextUser) => {
+    if (isAdminUser(nextUser)) setIsAdmin(true);
   }, []);
 
   const owns = useCallback((slug) => ownedSlugs.has(slug), [ownedSlugs]);
@@ -167,6 +181,8 @@ export function AuthProvider({ children }) {
     ownedSlugs,
     accountState,
     owns,
+    isAdmin,
+    markAdmin,
     loading,
     enterGuest,
     signOut,
@@ -179,6 +195,8 @@ export function AuthProvider({ children }) {
     ownedSlugs,
     accountState,
     owns,
+    isAdmin,
+    markAdmin,
     loading,
     enterGuest,
     signOut,

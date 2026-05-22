@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { validateEmail } from "@/lib/auth/validation";
 
 const inputStyle = {
   padding: "12px 14px",
@@ -24,7 +25,29 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [giftPreview, setGiftPreview] = useState(null);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.auth.getUser();
+        if (mounted && data?.user?.email && !data.user.email.endsWith("@guest.2mrrw.local")) {
+          router.replace("/");
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+      if (mounted) setCheckingSession(false);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
 
   useEffect(() => {
     if (!giftToken) return;
@@ -41,14 +64,21 @@ function LoginForm() {
 
   const submit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError("");
+    setEmailError("");
+
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.ok) {
+      setEmailError(emailCheck.error);
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const supabase = createClient();
-      const normalized = email.trim().toLowerCase();
       const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: normalized,
+        email: emailCheck.value,
         options: { shouldCreateUser: false },
       });
 
@@ -61,7 +91,7 @@ function LoginForm() {
         return;
       }
 
-      const params = new URLSearchParams({ email: normalized, next: nextPath });
+      const params = new URLSearchParams({ email: emailCheck.value, next: nextPath });
       router.push(`/verify-otp?${params.toString()}`);
     } catch (err) {
       setError(err.message || "Could not send code");
@@ -69,6 +99,10 @@ function LoginForm() {
       setLoading(false);
     }
   };
+
+  if (checkingSession) {
+    return <main style={{ minHeight: "100vh", background: "#050505" }} />;
+  }
 
   return (
     <main
@@ -106,14 +140,20 @@ function LoginForm() {
         <p style={{ margin: "0 0 8px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
           We&apos;ll email you a one-time code. No password.
         </p>
-        <input
-          placeholder="Email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          style={inputStyle}
-        />
+        <div>
+          <input
+            placeholder="Email"
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (emailError) setEmailError("");
+            }}
+            required
+            style={{ ...inputStyle, borderColor: emailError ? "#ef4444" : "#2a2a2a" }}
+          />
+          {emailError ? <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>{emailError}</div> : null}
+        </div>
         {error ? <div style={{ color: "#ff4d4d", fontSize: 13 }}>{error}</div> : null}
         {error?.includes("Create one") ? (
           <Link href={giftToken ? `/join?gift=${giftToken}` : "/join"} style={{ color: "#00ffff", fontSize: 13 }}>
@@ -121,6 +161,7 @@ function LoginForm() {
           </Link>
         ) : null}
         <button
+          type="submit"
           disabled={loading}
           style={{
             padding: "13px 0",

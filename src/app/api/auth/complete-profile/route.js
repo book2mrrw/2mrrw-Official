@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { isAdminUser } from "@/lib/auth/constants";
 
 export async function POST(request) {
   try {
@@ -16,13 +17,19 @@ export async function POST(request) {
     const body = await request.json().catch(() => ({}));
     const phone = String(body.phone || "").trim();
     const email = String(body.email || user.email || "").trim().toLowerCase();
+    const name = String(body.name || "").trim();
 
     const admin = createAdminClient();
+    const { data: existing } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
+    const role = existing?.role === "admin" || isAdminUser(user) ? "admin" : "user";
+
     const { error } = await admin.from("profiles").upsert({
       id: user.id,
       email,
       phone: phone || null,
-      role: "user",
+      full_name: name || null,
+      phone_verified: Boolean(phone),
+      role,
     });
 
     if (error) throw error;
