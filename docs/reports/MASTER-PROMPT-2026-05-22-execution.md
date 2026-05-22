@@ -61,8 +61,8 @@
 
 | Repo | `npm run build` | Commit (post-push) | Deploy |
 |------|-----------------|-------------------|--------|
-| 2MRRW-Control-System | exit 0 | _(see git log after push)_ | `npx vercel deploy --prod --yes` |
-| artist-platform | exit 0 | _(see git log after push)_ | `npm run deploy:prod` |
+| 2MRRW-Control-System | exit 0 | `4a76aca` | `npx vercel deploy --prod --yes` |
+| artist-platform | exit 0 | `87bdafd` | `npm run deploy:prod` |
 
 ---
 
