@@ -130,7 +130,7 @@ function LibraryCarousel({ title, items, accountState, userId, onPlay, onOpen, o
   );
 }
 
-function RecentlyAddedRow({ items, onPlay, isMobile }) {
+function RecentlyAddedRow({ items, onPlay, accountState }) {
   if (!items?.length) return null;
   return (
     <section style={{ marginBottom: 28 }}>
@@ -147,57 +147,64 @@ function RecentlyAddedRow({ items, onPlay, isMobile }) {
           WebkitOverflowScrolling: "touch",
         }}
       >
-        {items.map((item) => (
-          <button
-            key={item.slug}
-            type="button"
-            onClick={() => onPlay(item)}
-            style={{
-              flex: "0 0 auto",
-              width: 100,
-              scrollSnapAlign: "start",
-              background: "none",
-              border: "none",
-              padding: 0,
-              cursor: "pointer",
-              textAlign: "center",
-              color: "inherit",
-            }}
-          >
-            {item.cover ? (
-              <img
-                src={item.cover}
-                alt=""
-                style={{ width: 100, height: 100, borderRadius: 10, objectFit: "cover", display: "block", marginBottom: 8 }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: 100,
-                  height: 100,
-                  borderRadius: 10,
-                  background: "linear-gradient(135deg, rgba(0,255,255,0.12), rgba(162,89,255,0.12))",
-                  border: "1px solid #222",
-                  marginBottom: 8,
-                }}
-              />
-            )}
-            <div
+        {items.map((item) => {
+          const access = resolveContentAccess(item, accountState);
+          return (
+            <button
+              key={item.slug}
+              type="button"
+              onClick={() => onPlay(item)}
               style={{
-                fontSize: 11,
-                fontWeight: 700,
-                lineHeight: 1.3,
+                flex: "0 0 auto",
+                width: 130,
+                scrollSnapAlign: "start",
+                background: "#0a0a0a",
+                border: "1px solid #1a1a1a",
+                borderRadius: 12,
+                padding: 0,
                 overflow: "hidden",
-                textOverflow: "ellipsis",
-                display: "-webkit-box",
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: "vertical",
+                cursor: "pointer",
+                textAlign: "left",
+                color: "inherit",
               }}
             >
-              {item.title}
-            </div>
-          </button>
-        ))}
+              <div style={{ position: "relative" }}>
+                {item.cover ? (
+                  <img
+                    src={item.cover}
+                    alt=""
+                    style={{ width: 130, height: 130, objectFit: "cover", display: "block" }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 130,
+                      height: 130,
+                      background: "linear-gradient(135deg, rgba(0,255,255,0.12), rgba(162,89,255,0.12))",
+                      borderBottom: "1px solid #222",
+                    }}
+                  />
+                )}
+                <div style={{ position: "absolute", top: 8, left: 8 }}>
+                  <MusicAccessBadge label={access.badge} compact />
+                </div>
+              </div>
+              <div
+                style={{
+                  padding: "8px 10px 10px",
+                  fontSize: 11,
+                  fontWeight: 700,
+                  lineHeight: 1.3,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {item.title}
+              </div>
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -371,7 +378,7 @@ function MyMusicTab({
     recentlyPlayed.length > 0;
 
   return (
-    <div style={{ paddingBottom: isMobile ? 140 : 40 }}>
+    <div style={{ paddingBottom: isMobile ? 160 : 40 }}>
       <div
         style={{
           display: "flex",
@@ -389,14 +396,15 @@ function MyMusicTab({
           type="button"
           onClick={() => setSortSheetOpen(true)}
           style={{
-            background: "none",
-            border: "none",
-            color: "#00ffff",
+            background: "#111",
+            border: "1px solid #222",
+            color: "#ccc",
             fontSize: 12,
             fontWeight: 700,
             cursor: "pointer",
             letterSpacing: 0.5,
-            padding: "4px 0",
+            padding: "8px 14px",
+            borderRadius: 8,
           }}
         >
           {sortLabel} ▾
@@ -410,7 +418,7 @@ function MyMusicTab({
           style={{
             position: "fixed",
             inset: 0,
-            zIndex: 7400,
+            zIndex: 7000,
             background: "rgba(0,0,0,0.6)",
             display: "flex",
             alignItems: "flex-end",
@@ -495,7 +503,7 @@ function MyMusicTab({
 
       <RecentlyAddedRow
         items={recentlyAddedSingles}
-        isMobile={isMobile}
+        accountState={accountState}
         onPlay={(item) => {
           const access = resolveTrackAccess(item, accountState);
           playItem(item, access);

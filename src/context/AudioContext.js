@@ -104,14 +104,31 @@ export function AudioProvider({ children }) {
     const onPlay = () => {
       patchState({ isPlaying: true, error: null, hasStarted: true });
       persistPlayback("play");
+      if (typeof navigator !== "undefined" && navigator.mediaSession) {
+        navigator.mediaSession.playbackState = "playing";
+      }
     };
     const onPause = () => {
       patchState({ isPlaying: false });
       persistPlayback("pause");
+      if (typeof navigator !== "undefined" && navigator.mediaSession) {
+        navigator.mediaSession.playbackState = "paused";
+      }
     };
     const onTime = () => {
       patchState({ currentTime: audio.currentTime || 0 });
       persistPlayback("progress");
+      if (typeof navigator !== "undefined" && navigator.mediaSession?.setPositionState && isFinite(audio.duration)) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: audio.duration,
+            playbackRate: audio.playbackRate || 1,
+            position: Math.min(audio.currentTime, audio.duration),
+          });
+        } catch {
+          /* unsupported duration/position combo */
+        }
+      }
     };
     const onDuration = () => patchState({ duration: isFinite(audio.duration) ? audio.duration : 0 });
     const onEnded = () => {
@@ -363,7 +380,80 @@ export function AudioProvider({ children }) {
     setState(EMPTY_STATE);
     queueRef.current = [];
     queueIndexRef.current = -1;
+    if (typeof navigator !== "undefined" && navigator.mediaSession) {
+      navigator.mediaSession.metadata = null;
+      navigator.mediaSession.playbackState = "none";
+    }
   }, []);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.mediaSession) return undefined;
+    const ms = navigator.mediaSession;
+    const handlePlay = () => {
+      void resume();
+    };
+    const handlePause = () => {
+      pause();
+    };
+    const handleNext = () => {
+      void playNext();
+    };
+    const handlePrev = () => {
+      void playPrevious();
+    };
+    const handleSeek = (details) => {
+      if (details?.seekTime != null && Number.isFinite(details.seekTime)) {
+        seek(details.seekTime);
+      }
+    };
+    try {
+      ms.setActionHandler("play", handlePlay);
+      ms.setActionHandler("pause", handlePause);
+      ms.setActionHandler("previoustrack", handlePrev);
+      ms.setActionHandler("nexttrack", handleNext);
+      ms.setActionHandler("seekto", handleSeek);
+    } catch {
+      /* action handler not supported */
+    }
+    return () => {
+      try {
+        ms.setActionHandler("play", null);
+        ms.setActionHandler("pause", null);
+        ms.setActionHandler("previoustrack", null);
+        ms.setActionHandler("nexttrack", null);
+        ms.setActionHandler("seekto", null);
+      } catch {
+        /* ignore */
+      }
+    };
+  }, [pause, resume, playNext, playPrevious, seek]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !navigator.mediaSession) return;
+    const track = state.currentTrack;
+    if (!track) {
+      navigator.mediaSession.metadata = null;
+      return;
+    }
+    const artwork = [];
+    if (track.cover) {
+      const cover = track.cover.startsWith("http") ? track.cover : new URL(track.cover, window.location.origin).href;
+      artwork.push({ src: cover, sizes: "512x512", type: "image/png" });
+      artwork.push({ src: cover, sizes: "192x192", type: "image/png" });
+      artwork.push({ src: cover, sizes: "96x96", type: "image/png" });
+    }
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title || "Untitled",
+        artist: track.artist || "2MRRW",
+        album: track.source || "2MRRW",
+        artwork,
+      });
+      navigator.mediaSession.playbackState = state.isPlaying ? "playing" : "paused";
+    } catch {
+      /* MediaMetadata unsupported */
+    }
+  }, [state.currentTrack, state.isPlaying]);
 
   const value = useMemo(() => ({
     ...state,

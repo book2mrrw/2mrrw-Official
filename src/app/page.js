@@ -478,7 +478,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
   const { currentUser: authUser, library, owns, accountState, enterGuest, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
-  const { playTrack, playQueue } = useAudioPlayer();
+  const { playTrack, playQueue, hasStarted, currentTrack } = useAudioPlayer();
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
   const [activeTab, setActiveTab]                 = useState("home");
@@ -1109,7 +1109,7 @@ export default function Page() {
 
   const sidebarNav = [
     { groupId:"g-home",      label:"HOME",           directTab:"home",    subTabs:[] },
-    { groupId:"g-music",     label:"MUSIC",          directTab:"singles", subTabs:[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mymusic",label:"My Music"}] },
+    { groupId:"g-music",     label:"MUSIC",          directTab:"singles", subTabs:[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mymusic",label:"My Music Collection"}] },
     { groupId:"g-shop",      label:"SHOP",           directTab:"shop",    subTabs:[{id:"shop",label:"Merch"}] },
     { groupId:"g-cards",     label:"CARDS",          directTab:"cards",   subTabs:[{id:"cards",label:"Collector's Cards"}] },
     { groupId:"g-vault",     label:"VAULT",          directTab:"vault",   subTabs:[{id:"vault",label:"Exclusive Drops"}] },
@@ -1426,6 +1426,23 @@ export default function Page() {
 
       {/* ══════════════════════ MAIN LAYOUT ═══════════════════════════════════ */}
       <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
+        {hasStarted && currentTrack?.cover && (
+          <div
+            aria-hidden
+            style={{
+              position:"fixed",
+              inset:0,
+              zIndex:-1,
+              pointerEvents:"none",
+              backgroundImage:`url(${currentTrack.cover})`,
+              backgroundSize:"cover",
+              backgroundPosition:"center",
+              filter:"blur(72px) brightness(0.32)",
+              opacity:0.45,
+              transform:"scale(1.08)",
+            }}
+          />
+        )}
 
         {/* ── DESKTOP SIDEBAR ── */}
         {!isMobile && (
@@ -1719,7 +1736,7 @@ export default function Page() {
                 <>
                   <div style={{marginTop:8,marginBottom:0}}>
                     <div style={{display:"flex",gap:0,borderBottom:"1px solid #1a1a1a",marginBottom:24}}>
-                      {[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mymusic",label:"My Music"}].map(sub=>(
+                      {[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mymusic",label:"Collection"}].map(sub=>(
                         <button key={sub.id} onClick={()=>switchTab(sub.id)} style={{padding:isMobile?"11px 16px":"12px 22px",background:"none",border:"none",borderBottom:activeTab===sub.id?"2px solid #00ffff":"2px solid transparent",color:activeTab===sub.id?"#00ffff":"#555",fontSize:isMobile?12:13,fontWeight:700,letterSpacing:1.5,cursor:"pointer",transition:"all 0.18s",textTransform:"uppercase",marginBottom:-1}}>
                           {sub.label}
                         </button>
@@ -2124,6 +2141,29 @@ export default function Page() {
             paddingTop:6,paddingBottom:"max(14px, env(safe-area-inset-bottom))",
             minHeight:62,overflow:"visible",isolation:"auto",
           }}>
+            {(() => {
+              const activeIdx = MOBILE_NAV_TABS.findIndex(tab => (tab.more ? mobileNavOpen : isMobileNavTabActive(tab.id)));
+              const idx = activeIdx >= 0 ? activeIdx : 0;
+              const tabWidth = 100 / MOBILE_NAV_TABS.length;
+              return (
+                <div
+                  aria-hidden
+                  style={{
+                    position:"fixed",
+                    left:`calc(${idx * tabWidth}% + ${tabWidth / 2}% - 12px)`,
+                    bottom:"max(10px, env(safe-area-inset-bottom, 0px))",
+                    width:24,
+                    height:3,
+                    borderRadius:2,
+                    background:"#00ffff",
+                    boxShadow:"0 0 10px rgba(0,255,255,0.55)",
+                    transition:"left 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
+                    pointerEvents:"none",
+                    zIndex:6701,
+                  }}
+                />
+              );
+            })()}
             {MOBILE_NAV_TABS.map(tab=>{
               const active = tab.more ? mobileNavOpen : isMobileNavTabActive(tab.id);
               return (
@@ -2134,9 +2174,11 @@ export default function Page() {
                     display:"flex",flexDirection:"column",alignItems:"center",gap:2,
                     background:"none",border:"none",cursor:"pointer",
                     color:active?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,
-                    padding:"4px 4px",borderRadius:10,flex:1,minWidth:0,maxWidth:56,minHeight:44,justifyContent:"center",
+                    padding:"4px 4px 10px",borderRadius:10,flex:1,minWidth:0,maxWidth:56,minHeight:44,justifyContent:"center",
                     textShadow:active?"0 0 12px rgba(0,255,255,0.5)":"none",
                     transition:"color 0.2s",
+                    position:"relative",
+                    zIndex:1,
                   }}
                 >
                   {tab.vault ? <VaultNavLockIcon /> : tab.more ? MOBILE_NAV_MORE_SVG : <MobileNavAnimatedIcon tabId={tab.id} />}

@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Reorder, useDragControls } from "framer-motion";
 import { usePlaylists } from "@/hooks/usePlaylists";
+import PlaylistCard from "@/components/music/PlaylistCard";
 
 const COVER_GRADIENT = "linear-gradient(135deg, rgba(0,255,255,0.12), rgba(162,89,255,0.12))";
 
@@ -197,7 +198,7 @@ function NewPlaylistModal({ onCancel, onCreate }) {
       style={{
         position: "fixed",
         inset: 0,
-        zIndex: 7500,
+        zIndex: 8000,
         background: "rgba(0,0,0,0.75)",
         display: "flex",
         alignItems: "center",
@@ -380,7 +381,7 @@ function PlaylistSection({
             padding: 0,
           }}
         >
-          ← Back
+          ← Playlists
         </button>
 
         <div style={{ display: "flex", flexDirection: "column", alignItems: isMobile ? "stretch" : "flex-start", gap: 16, marginBottom: 20 }}>
@@ -388,13 +389,13 @@ function PlaylistSection({
             <img
               src={cover}
               alt=""
-              style={{ width: 200, height: 200, borderRadius: 12, objectFit: "cover", alignSelf: "center" }}
+              style={{ width: 180, height: 180, borderRadius: 12, objectFit: "cover", alignSelf: "center" }}
             />
           ) : (
             <div
               style={{
-                width: 200,
-                height: 200,
+                width: 180,
+                height: 180,
                 borderRadius: 12,
                 background: COVER_GRADIENT,
                 border: "1px solid #222",
@@ -527,7 +528,7 @@ function PlaylistSection({
             width: "100%",
           }}
         >
-          + Add tracks
+          + ADD TRACKS
         </button>
 
         {showAddTracks && addableTracks.length > 0 && (
@@ -633,46 +634,25 @@ function PlaylistSection({
           {playlists.map((playlist) => {
             const cover = resolvePlaylistCover(playlist, catalogTracks);
             const count = (playlist.tracks || []).length || playlist.trackIds?.length || 0;
+            const tracksForPlay = (playlist.tracks || []).length
+              ? playlist.tracks
+              : (playlist.trackIds || []).map((id) => catalogBySlug.get(id)).filter(Boolean);
             return (
-              <button
+              <PlaylistCard
                 key={playlist.id}
-                type="button"
-                onClick={() => openDetail(playlist)}
-                style={{
-                  textAlign: "left",
-                  background: "#0a0a0a",
-                  border: "1px solid #1a1a1a",
-                  borderRadius: 14,
-                  overflow: "hidden",
-                  cursor: "pointer",
-                  padding: 0,
+                playlist={playlist}
+                trackCount={count}
+                cover={cover}
+                isMobile={isMobile}
+                onOpen={() => openDetail(playlist)}
+                onPlay={() => {
+                  if (!tracksForPlay.length) {
+                    openDetail(playlist);
+                    return;
+                  }
+                  onPlayPlaylist?.({ ...playlist, tracks: tracksForPlay, shuffle: false });
                 }}
-              >
-                <div style={{ aspectRatio: "1", position: "relative" }}>
-                  {cover ? (
-                    <img src={cover} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                  ) : (
-                    <div style={{ width: "100%", height: "100%", background: COVER_GRADIENT }} />
-                  )}
-                </div>
-                <div style={{ padding: "10px 12px 12px" }}>
-                  <div
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 700,
-                      marginBottom: 4,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {playlist.title}
-                  </div>
-                  <div style={{ fontSize: 10, color: "#555" }}>
-                    {count} track{count !== 1 ? "s" : ""}
-                  </div>
-                </div>
-              </button>
+              />
             );
           })}
         </div>

@@ -6,6 +6,12 @@ import GlobalAudioPlayerBar from "@/components/audio/GlobalAudioPlayerBar";
 export const metadata = {
   title: "Artist Site",
   description: "Music, albums, and merch",
+  manifest: "/manifest.json",
+  themeColor: "#0a0a0a",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({ children }) {
