@@ -41,7 +41,6 @@
     "@tailwindcss/postcss": "4.2.2",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.4",
-    "tailwindcss": "4.2.2",
-    "vercel": "54.1.0"
+    "tailwindcss": "4.2.2"
   }
 }
