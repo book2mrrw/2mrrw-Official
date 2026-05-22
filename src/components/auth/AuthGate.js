@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { writePendingPhone, clearPendingPhone } from "@/lib/auth/otp-pending";
+import { writePendingPhone, clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
 import { validateEmail, validatePhone, formatResendCountdown } from "@/lib/auth/validation";
 import { isAdminUser } from "@/lib/auth/constants";
 import { useAuth } from "@/context/AuthContext";
+
+const DISMISS_DRAG_PX = 80;
 
 const inputStyle = {
   padding: "12px 14px",
@@ -41,14 +43,16 @@ export default function AuthGate({ open, onClose, onVerified }) {
   const [phoneError, setPhoneError] = useState("");
   const [formError, setFormError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [lookupEmail, setLookupEmail] = useState("");
   const [otpEmail, setOtpEmail] = useState("");
   const [otpCreateUser, setOtpCreateUser] = useState(true);
   const [digits, setDigits] = useState(["", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [resendIn, setResendIn] = useState(30);
+  const [sheetDragY, setSheetDragY] = useState(0);
   const inputsRef = useRef([]);
+  const touchStartYRef = useRef(null);
+  const draggingRef = useRef(false);
 
   const code = useMemo(() => digits.join(""), [digits]);
   const screen = mode === "otp" ? "otp" : mode === "signin" ? "signin" : "signup";
@@ -61,11 +65,13 @@ export default function AuthGate({ open, onClose, onVerified }) {
     setEmailError("");
     setPhoneError("");
     setFormError("");
-    setLookupEmail("");
     setOtpEmail("");
     setDigits(["", "", "", "", "", ""]);
     setOtpError("");
     setResendIn(30);
+    setSheetDragY(0);
+    touchStartYRef.current = null;
+    draggingRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -82,11 +88,11 @@ export default function AuthGate({ open, onClose, onVerified }) {
 
   const sendOtpToEmail = useCallback(async (targetEmail, shouldCreateUser) => {
     const supabase = createClient();
-    const { error: otpError } = await supabase.auth.signInWithOtp({
+    const { error: otpErr } = await supabase.auth.signInWithOtp({
       email: targetEmail,
       options: { shouldCreateUser },
     });
-    if (otpError) throw otpError;
+    if (otpErr) throw otpErr;
     setOtpEmail(targetEmail);
     setOtpCreateUser(shouldCreateUser);
     setDigits(["", "", "", "", "", ""]);
@@ -94,69 +100,70 @@ export default function AuthGate({ open, onClose, onVerified }) {
     setMode("otp");
   }, []);
 
-  const lookupAndProceed = useCallback(async () => {
-    setFormError("");
-    setPhoneError("");
-    const phoneCheck = validatePhone(phone);
-    if (!phoneCheck.ok) {
-      setPhoneError(phoneCheck.error);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const res = await fetch("/api/auth/lookup-phone", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: phoneCheck.value }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not verify phone");
-
-      if (data.exists && data.email) {
-        setLookupEmail(data.email);
-        writePendingPhone(phoneCheck.value);
-        await sendOtpToEmail(data.email, false);
-        return;
-      }
-
-      if (mode === "signin") {
-        setFormError("No account found for this phone. Create an account instead.");
-        return;
-      }
-
-      const emailCheck = validateEmail(email);
-      if (!emailCheck.ok) {
-        setEmailError(emailCheck.error);
-        return;
-      }
-
-      writePendingPhone(phoneCheck.value);
-      if (name.trim()) {
-        sessionStorage.setItem("pendingProfileName", name.trim());
-      }
-      await sendOtpToEmail(emailCheck.value, true);
-    } catch (err) {
-      setFormError(err.message || "Could not send verification code");
-    } finally {
-      setLoading(false);
-    }
-  }, [email, mode, name, phone, sendOtpToEmail]);
+  const checkEmailExists = useCallback(async (targetEmail) => {
+    const res = await fetch("/api/auth/lookup-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: targetEmail }),
+    });
+    const data = await res.json();
+    if (!res.ok) return false;
+    return Boolean(data.exists);
+  }, []);
 
   const submitSignup = async (e) => {
     e.preventDefault();
+    setFormError("");
     setEmailError("");
+    setPhoneError("");
+
     const emailCheck = validateEmail(email);
     const phoneCheck = validatePhone(phone);
     if (!emailCheck.ok) setEmailError(emailCheck.error);
     if (!phoneCheck.ok) setPhoneError(phoneCheck.error);
     if (!emailCheck.ok || !phoneCheck.ok) return;
-    await lookupAndProceed();
+
+    setLoading(true);
+    try {
+      writePendingPhone(phoneCheck.value);
+      if (name.trim()) {
+        sessionStorage.setItem("pendingProfileName", name.trim());
+      }
+
+      const exists = await checkEmailExists(emailCheck.value);
+      await sendOtpToEmail(emailCheck.value, !exists);
+    } catch (err) {
+      if (/already|exists|registered/i.test(err.message || "")) {
+        setFormError("You already have an account. Sign in instead.");
+        setMode("signin");
+        setEmail(email.trim());
+      } else {
+        setFormError(err.message || "Could not send verification code");
+      }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const submitSignin = async (e) => {
     e.preventDefault();
-    await lookupAndProceed();
+    setFormError("");
+    setEmailError("");
+
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.ok) {
+      setEmailError(emailCheck.error);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await sendOtpToEmail(emailCheck.value, false);
+    } catch (err) {
+      setFormError(err.message || "Could not send code");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const updateDigit = (index, value) => {
@@ -184,10 +191,10 @@ export default function AuthGate({ open, onClose, onVerified }) {
       });
       if (verifyError) throw verifyError;
 
-      const pendingPhone = phone.trim() || undefined;
+      const pendingPhone = readPendingPhone() || undefined;
       const pendingName =
         typeof window !== "undefined" ? sessionStorage.getItem("pendingProfileName") : "";
-      if (pendingPhone || pendingName || email) {
+      if (pendingPhone || pendingName) {
         await fetch("/api/auth/complete-profile", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -227,8 +234,29 @@ export default function AuthGate({ open, onClose, onVerified }) {
     }
   };
 
+  const handleSheetTouchStart = (e) => {
+    if (e.touches.length !== 1) return;
+    touchStartYRef.current = e.touches[0].clientY;
+    draggingRef.current = true;
+  };
+
+  const handleSheetTouchMove = (e) => {
+    if (!draggingRef.current || touchStartYRef.current == null) return;
+    const delta = Math.max(0, e.touches[0].clientY - touchStartYRef.current);
+    setSheetDragY(delta);
+  };
+
+  const handleSheetTouchEnd = () => {
+    if (sheetDragY >= DISMISS_DRAG_PX) {
+      onClose();
+    }
+    setSheetDragY(0);
+    touchStartYRef.current = null;
+    draggingRef.current = false;
+  };
+
   const signupReady = validateEmail(email).ok && validatePhone(phone).ok;
-  const signinReady = validatePhone(phone).ok;
+  const signinReady = validateEmail(email).ok;
 
   if (!open) return null;
 
@@ -258,6 +286,10 @@ export default function AuthGate({ open, onClose, onVerified }) {
         }}
       />
       <div
+        onTouchStart={handleSheetTouchStart}
+        onTouchMove={handleSheetTouchMove}
+        onTouchEnd={handleSheetTouchEnd}
+        onTouchCancel={handleSheetTouchEnd}
         style={{
           position: "relative",
           background: "#111",
@@ -265,6 +297,8 @@ export default function AuthGate({ open, onClose, onVerified }) {
           padding: "12px 24px 32px",
           maxHeight: "90vh",
           overflowY: "auto",
+          transform: sheetDragY > 0 ? `translateY(${sheetDragY}px)` : undefined,
+          transition: sheetDragY > 0 ? "none" : "transform 0.2s ease",
         }}
       >
         <div
@@ -279,9 +313,9 @@ export default function AuthGate({ open, onClose, onVerified }) {
 
         {screen === "otp" ? (
           <form onSubmit={verifyOtp}>
-            <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 800 }}>Check your texts</h2>
+            <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 800 }}>Check your email</h2>
             <p style={{ margin: "0 0 20px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
-              Enter the 6-digit code we sent to {otpEmail || lookupEmail || "your email"}.
+              Enter the 6-digit code we sent to {otpEmail || "your email"}.
             </p>
             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 20 }}>
               {digits.map((digit, index) => (
@@ -340,21 +374,21 @@ export default function AuthGate({ open, onClose, onVerified }) {
           <form onSubmit={submitSignin}>
             <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 800 }}>Welcome back</h2>
             <p style={{ margin: "0 0 20px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
-              Enter your phone number and we&apos;ll send a verification code.
+              Enter your email and we&apos;ll send a verification code.
             </p>
             <input
-              placeholder="Phone number"
-              type="tel"
-              value={phone}
+              placeholder="Email"
+              type="email"
+              value={email}
               onChange={(e) => {
-                setPhone(e.target.value);
-                if (phoneError) setPhoneError("");
+                setEmail(e.target.value);
+                if (emailError) setEmailError("");
               }}
               required
-              style={{ ...inputStyle, borderColor: phoneError ? "#ef4444" : "#2a2a2a", marginBottom: 8 }}
+              style={{ ...inputStyle, borderColor: emailError ? "#ef4444" : "#2a2a2a", marginBottom: 8 }}
             />
-            {phoneError ? (
-              <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}>{phoneError}</div>
+            {emailError ? (
+              <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}>{emailError}</div>
             ) : null}
             {formError ? (
               <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{formError}</div>
@@ -399,7 +433,7 @@ export default function AuthGate({ open, onClose, onVerified }) {
           <form onSubmit={submitSignup}>
             <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 800 }}>Join 2MRRW</h2>
             <p style={{ margin: "0 0 20px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
-              Email + phone verification. No password.
+              Email verification. Phone is saved for your profile — no password.
             </p>
             <input
               placeholder="Full Name (optional)"

@@ -104,28 +104,68 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
+    let authSubscription = null;
+
+    const clearAuthenticatedState = () => {
+      setUser(null);
+      setIsAdmin(false);
+      setLibrary([]);
+      setOwnedSlugs(new Set());
+      setAccountState(EMPTY_ACCOUNT_STATE);
+    };
+
     (async () => {
-      await refreshGuest();
-      if (!mounted) return;
-      const account = await refreshAccountState();
-      if (!mounted) return;
-      if (!account?.user) {
-        try {
-          const { createClient } = await import("@/lib/supabase/client");
-          const supabase = createClient();
-          const { data } = await supabase.auth.getUser();
-          if (data?.user?.email && !data.user.email.endsWith("@guest.2mrrw.local")) {
+      try {
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const sessionUser = sessionData?.session?.user;
+        if (
+          sessionUser?.email &&
+          !sessionUser.email.endsWith("@guest.2mrrw.local") &&
+          mounted
+        ) {
+          setIsAdmin(isAdminUser(sessionUser));
+        }
+
+        const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (!mounted) return;
+          if (event === "SIGNED_OUT") {
+            clearAuthenticatedState();
+            return;
+          }
+          const nextUser = session?.user;
+          if (nextUser?.email && !nextUser.email.endsWith("@guest.2mrrw.local")) {
+            setIsAdmin(isAdminUser(nextUser));
             await refreshAccountState();
           }
-        } catch {
-          /* OTP session optional */
+        });
+        authSubscription = authListener?.subscription;
+
+        await refreshGuest();
+        if (!mounted) return;
+
+        const account = await refreshAccountState();
+        if (!mounted) return;
+
+        if (!account?.user) {
+          const { data } = await supabase.auth.getUser();
+          if (data?.user?.email && !data.user.email.endsWith("@guest.2mrrw.local")) {
+            setIsAdmin(isAdminUser(data.user));
+            await refreshAccountState();
+          }
         }
+      } catch {
+        /* session restore optional */
       }
     })().finally(() => {
       if (mounted) setLoading(false);
     });
+
     return () => {
       mounted = false;
+      authSubscription?.unsubscribe();
     };
   }, [refreshGuest, refreshAccountState]);
 
@@ -155,11 +195,16 @@ export function AuthProvider({ children }) {
   const signOut = useCallback(async () => {
     try {
       const { createClient } = await import("@/lib/supabase/client");
-      await createClient().auth.signOut();
+      const supabase = createClient();
+      await supabase.auth.signOut();
     } catch {
       /* ignore */
     }
-    await fetch("/api/guest/session", { method: "DELETE", credentials: "include" });
+    try {
+      await fetch("/api/guest/session", { method: "DELETE", credentials: "include" });
+    } catch {
+      /* ignore */
+    }
     setUser(null);
     setIsAdmin(false);
     setLibrary([]);

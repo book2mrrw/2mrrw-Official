@@ -519,12 +519,6 @@ export default function Page() {
   const [circleSubmissions, setCircleSubmissions] = useState([]);
   const [circleSubmitted, setCircleSubmitted]     = useState(false);
   const [myPurchases, setMyPurchases]             = useState([]);
-  const [authMode, setAuthMode]                   = useState("login");
-  const [authEmail, setAuthEmail]                 = useState("");
-  const [authPhone, setAuthPhone]                 = useState("");
-  const [authName, setAuthName]                   = useState("");
-  const [authError, setAuthError]                 = useState("");
-  const [authSubmitting, setAuthSubmitting]       = useState(false);
   const [membershipUpsellOpen, setMembershipUpsellOpen] = useState(false);
   const [donateOpen, setDonateOpen] = useState(false);
   const [giftSheetRelease, setGiftSheetRelease] = useState(null);
@@ -944,23 +938,6 @@ export default function Page() {
     if (!isAdmin) return;
     setGiftSheetRelease(release);
   }, [isAdmin]);
-
-  const handleAuthSubmit = () => {
-    setAuthError("");
-    const emailCheck = validateEmail(authEmail);
-    const phoneCheck = validatePhone(authPhone);
-    if (!emailCheck.ok || !phoneCheck.ok) {
-      setAuthError(emailCheck.error || phoneCheck.error);
-      return;
-    }
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("pendingJoinEmail", emailCheck.value);
-      sessionStorage.setItem("pendingJoinPhone", phoneCheck.value);
-      if (authName.trim()) sessionStorage.setItem("pendingProfileName", authName.trim());
-      window.location.href = "/join";
-      return;
-    }
-  };
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
@@ -2137,7 +2114,7 @@ export default function Page() {
                           )}
                         </div>
                       ) : null}
-                      <button onClick={handleSignOut} style={{padding:"12px 0",background:"transparent",color:"#444",border:"1px solid #1e1e1e",borderRadius:10,cursor:"pointer",fontSize:13,width:"100%",transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";e.currentTarget.style.borderColor="#333";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";e.currentTarget.style.borderColor="#1e1e1e";}}>Sign Out</button>
+                      <button onClick={handleSignOut} style={{width:"100%",height:44,padding:0,background:"transparent",color:"#444",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";}}>Sign Out</button>
                     </div>
                   ) : (
                     <div style={{maxWidth:400,padding:"24px 0"}}>
