@@ -6,17 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { writePendingPhone } from "@/lib/auth/otp-pending";
 import { validateEmail, validatePhone } from "@/lib/auth/validation";
-
-const inputStyle = {
-  padding: "12px 14px",
-  background: "#111",
-  border: "1px solid #2a2a2a",
-  color: "white",
-  borderRadius: 10,
-  fontSize: 14,
-  outline: "none",
-  width: "100%",
-};
+import AuthScreenCard from "@/components/auth/AuthScreenCard";
 
 function JoinForm() {
   const router = useRouter();
@@ -115,60 +105,35 @@ function JoinForm() {
   };
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        background: "#050505",
-        color: "white",
-        display: "grid",
-        placeItems: "center",
-        padding: 24,
-        fontFamily: "sans-serif",
-      }}
-    >
-      <form
-        onSubmit={submit}
-        style={{
-          width: "100%",
-          maxWidth: 420,
-          background: "#0d0d0d",
-          border: "1px solid #222",
-          borderRadius: 20,
-          padding: 28,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
-        <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 6, color: "#00ffff" }}>2MRRW</div>
-        {giftPreview?.gift ? (
-          <div
-            style={{
-              padding: 14,
-              borderRadius: 12,
-              background: "rgba(162,89,255,0.08)",
-              border: "1px solid rgba(162,89,255,0.25)",
-              marginBottom: 4,
-            }}
-          >
-            <p style={{ margin: 0, fontSize: 13, color: "#c9b8ff", lineHeight: 1.6 }}>
-              You have a gift waiting — create your account to claim it
-              {giftPreview.gift.item_title ? `: ${giftPreview.gift.item_title}` : ""}.
-            </p>
-          </div>
-        ) : null}
-        <h1 style={{ margin: "6px 0 0", fontSize: 24 }}>Join 2MRRW</h1>
-        <p style={{ margin: "0 0 8px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
-          Email + phone verification. No password.
-        </p>
-        <input
-          placeholder="Full Name (optional)"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          style={inputStyle}
-        />
-        <div>
+    <main className="auth-page">
+      <form onSubmit={submit} style={{ width: "100%", maxWidth: 420 }}>
+        <AuthScreenCard variant="root">
+          {giftPreview?.gift ? (
+            <div
+              style={{
+                padding: 14,
+                borderRadius: 12,
+                background: "rgba(162,89,255,0.08)",
+                border: "1px solid rgba(162,89,255,0.25)",
+                marginBottom: 16,
+              }}
+            >
+              <p style={{ margin: 0, fontSize: 13, color: "#c9b8ff", lineHeight: 1.6 }}>
+                You have a gift waiting — create your account to claim it
+                {giftPreview.gift.item_title ? `: ${giftPreview.gift.item_title}` : ""}.
+              </p>
+            </div>
+          ) : null}
+          <h1 className="auth-heading">Join Tomorrow Music</h1>
+          <p className="auth-subtext">Email + phone verification. No password.</p>
+          <input
+            placeholder="Full Name (optional)"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="auth-input"
+            style={{ marginBottom: 12 }}
+          />
           <input
             placeholder="Email"
             type="email"
@@ -178,11 +143,14 @@ function JoinForm() {
               if (emailError) setEmailError("");
             }}
             required
-            style={{ ...inputStyle, borderColor: emailError ? "#ef4444" : "#2a2a2a" }}
+            className={`auth-input${emailError ? " auth-input--error" : ""}`}
+            style={{ marginBottom: emailError ? 8 : 12 }}
           />
-          {emailError ? <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>{emailError}</div> : null}
-        </div>
-        <div>
+          {emailError ? (
+            <div className="auth-error" style={{ marginTop: -4 }}>
+              {emailError}
+            </div>
+          ) : null}
           <input
             placeholder="Phone number"
             type="tel"
@@ -192,38 +160,31 @@ function JoinForm() {
               if (phoneError) setPhoneError("");
             }}
             required
-            style={{ ...inputStyle, borderColor: phoneError ? "#ef4444" : "#2a2a2a" }}
+            className={`auth-input${phoneError ? " auth-input--error" : ""}`}
+            style={{ marginBottom: phoneError ? 8 : 12 }}
           />
-          {phoneError ? <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>{phoneError}</div> : null}
-        </div>
-        {error ? <div style={{ color: "#ff4d4d", fontSize: 13 }}>{error}</div> : null}
-        {existsHint ? (
-          <Link
-            href={giftToken ? `/login?gift=${giftToken}` : "/login"}
-            style={{ color: "#00ffff", fontSize: 13 }}
-          >
-            Sign in instead →
+          {phoneError ? (
+            <div className="auth-error" style={{ marginTop: -4 }}>
+              {phoneError}
+            </div>
+          ) : null}
+          {error ? <div className="auth-error">⚠ {error}</div> : null}
+          {existsHint ? (
+            <Link
+              href={giftToken ? `/login?gift=${giftToken}` : "/login"}
+              className="auth-link"
+              style={{ display: "block", marginTop: 0, marginBottom: 12 }}
+            >
+              Sign in instead →
+            </Link>
+          ) : null}
+          <button type="submit" disabled={loading} className="auth-cta">
+            {loading ? "Sending code…" : "Send Verification Code"}
+          </button>
+          <Link href="/" className="auth-link" style={{ opacity: 0.7 }}>
+            Back to site
           </Link>
-        ) : null}
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: "13px 0",
-            background: "#00ffff",
-            color: "#000",
-            fontWeight: 900,
-            border: "none",
-            borderRadius: 10,
-            cursor: "pointer",
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
-          {loading ? "Sending code…" : "Continue"}
-        </button>
-        <Link href="/" style={{ color: "#777", fontSize: 13, textAlign: "center", marginTop: 4 }}>
-          Back to site
-        </Link>
+        </AuthScreenCard>
       </form>
     </main>
   );
@@ -231,7 +192,7 @@ function JoinForm() {
 
 export default function JoinPage() {
   return (
-    <Suspense fallback={<main style={{ minHeight: "100vh", background: "#050505" }} />}>
+    <Suspense fallback={<main className="auth-page" />}>
       <JoinForm />
     </Suspense>
   );

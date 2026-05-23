@@ -5,32 +5,9 @@ import { createClient } from "@/lib/supabase/client";
 import { writePendingPhone, clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
 import { validateEmail, validatePhone, formatResendCountdown } from "@/lib/auth/validation";
 import { useAuth } from "@/context/AuthContext";
+import AuthScreenCard from "@/components/auth/AuthScreenCard";
 
 const DISMISS_DRAG_PX = 80;
-
-const inputStyle = {
-  padding: "12px 14px",
-  background: "#111",
-  border: "1px solid #2a2a2a",
-  color: "white",
-  borderRadius: 10,
-  fontSize: 14,
-  outline: "none",
-  width: "100%",
-  boxSizing: "border-box",
-};
-
-const otpBoxStyle = {
-  width: 44,
-  height: 52,
-  textAlign: "center",
-  fontSize: 22,
-  fontWeight: 800,
-  background: "#111",
-  border: "1px solid #2a2a2a",
-  color: "white",
-  borderRadius: 10,
-};
 
 export default function AuthGate({ open, onClose, onVerified, variant = "sheet" }) {
   const isRoot = variant === "root";
@@ -53,6 +30,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
   const inputsRef = useRef([]);
   const touchStartYRef = useRef(null);
   const draggingRef = useRef(false);
+  const otpAutoSubmittedRef = useRef(false);
 
   const code = useMemo(() => digits.join(""), [digits]);
   const screen = mode === "otp" ? "otp" : mode === "signin" ? "signin" : "signup";
@@ -72,6 +50,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     setSheetDragY(0);
     touchStartYRef.current = null;
     draggingRef.current = false;
+    otpAutoSubmittedRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -108,6 +87,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     setOtpCreateUser(shouldCreateUser);
     setDigits(["", "", "", "", "", ""]);
     setResendIn(30);
+    otpAutoSubmittedRef.current = false;
     setMode("otp");
   }, []);
 
@@ -182,63 +162,76 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     const next = [...digits];
     next[index] = char;
     setDigits(next);
+    setOtpError("");
+    otpAutoSubmittedRef.current = false;
     if (char && index < 5) inputsRef.current[index + 1]?.focus();
   };
 
-  const verifyOtp = async (e) => {
-    e.preventDefault();
-    if (code.length !== 6) {
-      setOtpError("Enter the 6-digit code.");
-      return;
-    }
-    setOtpLoading(true);
-    setOtpError("");
-    try {
-      const supabase = createClient();
-      const { data, error: verifyError } = await supabase.auth.verifyOtp({
-        email: otpEmail,
-        token: code,
-        type: "email",
-      });
-      if (verifyError) throw verifyError;
-
-      const pendingPhone = readPendingPhone() || undefined;
-      const pendingName =
-        typeof window !== "undefined" ? sessionStorage.getItem("pendingProfileName") : "";
-      if (pendingPhone || pendingName) {
-        await fetch("/api/auth/complete-profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            email: otpEmail,
-            phone: pendingPhone,
-            name: pendingName || name.trim() || undefined,
-          }),
+  const verifyOtp = useCallback(
+    async (e) => {
+      e?.preventDefault?.();
+      if (code.length !== 6) {
+        setOtpError("Enter the 6-digit code.");
+        return;
+      }
+      setOtpLoading(true);
+      setOtpError("");
+      try {
+        const supabase = createClient();
+        const { data, error: verifyError } = await supabase.auth.verifyOtp({
+          email: otpEmail,
+          token: code,
+          type: "email",
         });
-      }
-      if (typeof window !== "undefined") {
-        sessionStorage.removeItem("pendingProfileName");
-      }
-      clearPendingPhone();
+        if (verifyError) throw verifyError;
 
-      if (data?.session) {
-        await applySessionUser(data.session);
-      } else if (data?.user) {
-        await applySessionUser({ user: data.user });
+        const pendingPhone = readPendingPhone() || undefined;
+        const pendingName =
+          typeof window !== "undefined" ? sessionStorage.getItem("pendingProfileName") : "";
+        if (pendingPhone || pendingName) {
+          await fetch("/api/auth/complete-profile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              email: otpEmail,
+              phone: pendingPhone,
+              name: pendingName || name.trim() || undefined,
+            }),
+          });
+        }
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("pendingProfileName");
+        }
+        clearPendingPhone();
+
+        if (data?.session) {
+          await applySessionUser(data.session);
+        } else if (data?.user) {
+          await applySessionUser({ user: data.user });
+        }
+        await refreshAccountState();
+        await onVerified?.();
+      } catch {
+        setOtpError("Invalid or expired code. Try again.");
+        otpAutoSubmittedRef.current = false;
+      } finally {
+        setOtpLoading(false);
       }
-      await refreshAccountState();
-      await onVerified?.();
-    } catch {
-      setOtpError("Invalid or expired code. Try again.");
-    } finally {
-      setOtpLoading(false);
-    }
-  };
+    },
+    [code, otpEmail, name, applySessionUser, refreshAccountState, onVerified]
+  );
+
+  useEffect(() => {
+    if (screen !== "otp" || code.length !== 6 || otpLoading || otpAutoSubmittedRef.current) return;
+    otpAutoSubmittedRef.current = true;
+    void verifyOtp();
+  }, [screen, code, otpLoading, verifyOtp]);
 
   const resendOtp = async () => {
     if (resendIn > 0 || !otpEmail) return;
     setOtpError("");
+    otpAutoSubmittedRef.current = false;
     try {
       await sendOtpToEmail(otpEmail, otpCreateUser);
     } catch (err) {
@@ -272,166 +265,63 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
 
   if (!open) return null;
 
-  const panelStyle = isRoot
-    ? {
-        position: "relative",
-        background: "#111",
-        borderRadius: 20,
-        padding: "32px 28px",
-        width: "min(420px, calc(100vw - 32px))",
-        maxHeight: "90vh",
-        overflowY: "auto",
-        border: "1px solid #222",
-      }
-    : {
-        position: "relative",
-        background: "#111",
-        borderRadius: "20px 20px 0 0",
-        padding: "12px 24px 32px",
-        maxHeight: "90vh",
-        overflowY: "auto",
-        transform: sheetDragY > 0 ? `translateY(${sheetDragY}px)` : undefined,
-        transition: sheetDragY > 0 ? "none" : "transform 0.2s ease",
-      };
-
   return (
     <div
       role="dialog"
       aria-modal="true"
-      style={
-        isRoot
-          ? {
-              position: "fixed",
-              inset: 0,
-              zIndex: 9500,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: "#0a0a0a",
-              padding: 16,
-            }
-          : {
-              position: "fixed",
-              inset: 0,
-              zIndex: 9500,
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "flex-end",
-            }
-      }
+      className={isRoot ? "auth-overlay auth-overlay--root" : "auth-overlay auth-overlay--sheet"}
     >
       {!isRoot ? (
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(0,0,0,0.75)",
-            border: "none",
-            cursor: "pointer",
-          }}
-        />
+        <button type="button" aria-label="Close" onClick={onClose} className="auth-overlay-backdrop" />
       ) : null}
-      <div
-        onTouchStart={isRoot ? undefined : handleSheetTouchStart}
-        onTouchMove={isRoot ? undefined : handleSheetTouchMove}
-        onTouchEnd={isRoot ? undefined : handleSheetTouchEnd}
-        onTouchCancel={isRoot ? undefined : handleSheetTouchEnd}
-        style={panelStyle}
+      <AuthScreenCard
+        variant={variant}
+        sheetDragY={sheetDragY}
+        onTouchStart={handleSheetTouchStart}
+        onTouchMove={handleSheetTouchMove}
+        onTouchEnd={handleSheetTouchEnd}
+        onTouchCancel={handleSheetTouchEnd}
       >
-        {isRoot ? (
-          <div
-            style={{
-              fontSize: 24,
-              fontWeight: 900,
-              letterSpacing: 6,
-              color: "white",
-              textAlign: "center",
-              marginBottom: 24,
-              textShadow: "0 0 20px rgba(0,255,255,0.5)",
-            }}
-          >
-            2MRRW
-          </div>
-        ) : (
-          <div
-            style={{
-              width: 40,
-              height: 4,
-              borderRadius: 2,
-              background: "#333",
-              margin: "0 auto 20px",
-            }}
-          />
-        )}
-
         {screen === "otp" ? (
           <form onSubmit={verifyOtp}>
-            <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 800 }}>Check your email</h2>
-            <p style={{ margin: "0 0 20px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
-              Enter the 6-digit code we sent to {otpEmail || "your email"}.
+            <h2 className="auth-heading">Check your email</h2>
+            <p className="auth-subtext">
+              Enter the 6-digit code sent to {otpEmail || "your email"}.
             </p>
-            <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 20 }}>
+            <div className="auth-otp-row">
               {digits.map((digit, index) => (
                 <input
                   key={index}
                   ref={(el) => {
                     inputsRef.current[index] = el;
                   }}
+                  className="auth-otp-box"
                   inputMode="numeric"
                   maxLength={1}
                   value={digit}
                   onChange={(e) => updateDigit(index, e.target.value)}
-                  style={otpBoxStyle}
+                  aria-label={`Digit ${index + 1}`}
                 />
               ))}
             </div>
-            {otpError ? (
-              <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{otpError}</div>
-            ) : null}
-            <button
-              type="submit"
-              disabled={otpLoading}
-              style={{
-                width: "100%",
-                padding: "13px 0",
-                background: "#00ffff",
-                color: "#000",
-                fontWeight: 900,
-                border: "none",
-                borderRadius: 10,
-                cursor: "pointer",
-                opacity: otpLoading ? 0.7 : 1,
-              }}
-            >
+            {otpError ? <div className="auth-error">⚠ {otpError}</div> : null}
+            <button type="submit" disabled={otpLoading} className="auth-cta">
               {otpLoading ? "Verifying…" : "Verify"}
             </button>
             <button
               type="button"
               onClick={() => void resendOtp()}
               disabled={resendIn > 0}
-              style={{
-                marginTop: 14,
-                background: "none",
-                border: "none",
-                color: "#00ffff",
-                fontSize: 13,
-                cursor: resendIn > 0 ? "default" : "pointer",
-                width: "100%",
-                opacity: resendIn > 0 ? 0.85 : 1,
-              }}
+              className="auth-link"
+              style={{ opacity: resendIn > 0 ? 0.85 : 1, cursor: resendIn > 0 ? "default" : "pointer" }}
             >
               {resendIn > 0 ? `Resend code in ${formatResendCountdown(resendIn)}` : "Resend code"}
             </button>
           </form>
         ) : screen === "signin" ? (
           <form onSubmit={submitSignin}>
-            <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 800 }}>Welcome back</h2>
-            <p style={{ margin: "0 0 20px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
-              Enter your email and we&apos;ll send a verification code.
-            </p>
+            <h2 className="auth-heading">Welcome back</h2>
+            <p className="auth-subtext">Enter your email and we&apos;ll send a verification code.</p>
             <input
               placeholder="Email"
               type="email"
@@ -441,29 +331,12 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
                 if (emailError) setEmailError("");
               }}
               required
-              style={{ ...inputStyle, borderColor: emailError ? "#ef4444" : "#2a2a2a", marginBottom: 8 }}
+              className={`auth-input${emailError ? " auth-input--error" : ""}`}
+              style={{ marginBottom: emailError ? 8 : 12 }}
             />
-            {emailError ? (
-              <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}>{emailError}</div>
-            ) : null}
-            {formError ? (
-              <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{formError}</div>
-            ) : null}
-            <button
-              type="submit"
-              disabled={loading || !signinReady}
-              style={{
-                width: "100%",
-                padding: "13px 0",
-                background: "#00ffff",
-                color: "#000",
-                fontWeight: 900,
-                border: "none",
-                borderRadius: 10,
-                cursor: signinReady && !loading ? "pointer" : "not-allowed",
-                opacity: loading || !signinReady ? 0.5 : 1,
-              }}
-            >
+            {emailError ? <div className="auth-error" style={{ marginTop: -4 }}>{emailError}</div> : null}
+            {formError ? <div className="auth-error">⚠ {formError}</div> : null}
+            <button type="submit" disabled={loading || !signinReady} className="auth-cta">
               {loading ? "Sending…" : "Send Code"}
             </button>
             <button
@@ -472,23 +345,15 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
                 setMode("signup");
                 setFormError("");
               }}
-              style={{
-                marginTop: 16,
-                background: "none",
-                border: "none",
-                color: "#00ffff",
-                fontSize: 13,
-                cursor: "pointer",
-                width: "100%",
-              }}
+              className="auth-link"
             >
               Create account
             </button>
           </form>
         ) : (
           <form onSubmit={submitSignup}>
-            <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 800 }}>Join 2MRRW</h2>
-            <p style={{ margin: "0 0 20px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
+            <h2 className="auth-heading">Join Tomorrow Music</h2>
+            <p className="auth-subtext">
               Email verification. Phone is saved for your profile — no password.
             </p>
             <input
@@ -496,7 +361,8 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              style={{ ...inputStyle, marginBottom: 12 }}
+              className="auth-input"
+              style={{ marginBottom: 12 }}
             />
             <input
               placeholder="Email"
@@ -507,11 +373,10 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
                 if (emailError) setEmailError("");
               }}
               required
-              style={{ ...inputStyle, borderColor: emailError ? "#ef4444" : "#2a2a2a", marginBottom: 8 }}
+              className={`auth-input${emailError ? " auth-input--error" : ""}`}
+              style={{ marginBottom: emailError ? 8 : 12 }}
             />
-            {emailError ? (
-              <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 8 }}>{emailError}</div>
-            ) : null}
+            {emailError ? <div className="auth-error" style={{ marginTop: -4 }}>{emailError}</div> : null}
             <input
               placeholder="Phone number"
               type="tel"
@@ -521,29 +386,12 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
                 if (phoneError) setPhoneError("");
               }}
               required
-              style={{ ...inputStyle, borderColor: phoneError ? "#ef4444" : "#2a2a2a", marginBottom: 8 }}
+              className={`auth-input${phoneError ? " auth-input--error" : ""}`}
+              style={{ marginBottom: phoneError ? 8 : 12 }}
             />
-            {phoneError ? (
-              <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}>{phoneError}</div>
-            ) : null}
-            {formError ? (
-              <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{formError}</div>
-            ) : null}
-            <button
-              type="submit"
-              disabled={loading || !signupReady}
-              style={{
-                width: "100%",
-                padding: "13px 0",
-                background: "#00ffff",
-                color: "#000",
-                fontWeight: 900,
-                border: "none",
-                borderRadius: 10,
-                cursor: signupReady && !loading ? "pointer" : "not-allowed",
-                opacity: loading || !signupReady ? 0.5 : 1,
-              }}
-            >
+            {phoneError ? <div className="auth-error" style={{ marginTop: -4 }}>{phoneError}</div> : null}
+            {formError ? <div className="auth-error">⚠ {formError}</div> : null}
+            <button type="submit" disabled={loading || !signupReady} className="auth-cta">
               {loading ? "Sending…" : "Send Verification Code"}
             </button>
             <button
@@ -553,21 +401,13 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
                 setFormError("");
                 setEmailError("");
               }}
-              style={{
-                marginTop: 16,
-                background: "none",
-                border: "none",
-                color: "#00ffff",
-                fontSize: 13,
-                cursor: "pointer",
-                width: "100%",
-              }}
+              className="auth-link"
             >
               Sign in
             </button>
           </form>
         )}
-      </div>
+      </AuthScreenCard>
     </div>
   );
 }

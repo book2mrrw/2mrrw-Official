@@ -20,7 +20,7 @@ export default function AppAuthRoot({ children }) {
         aria-label="Loading"
         style={{
           minHeight: "100vh",
-          background: "#0a0a0a",
+          background: "#050508",
         }}
       />
     );
