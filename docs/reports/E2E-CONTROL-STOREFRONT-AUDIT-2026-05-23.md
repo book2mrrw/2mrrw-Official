@@ -150,7 +150,7 @@ curl -sS "https://2mrrw-control-system.vercel.app/api/public/releases?limit=1" \
 | Repo | Message | Hash |
 |------|---------|------|
 | 2MRRW-Control-System | audit: fix public releases API, presign preview type, signed-url auth, R2 url resolution | `6cde62bee52e34cc2785a81bf31ddd961a45b3b3` |
-| artist-platform | audit: fix catalog media urls, library cover art, R2 remotePatterns, end-to-end asset chain | `f8a9dbffec158044dae8fb8715b03a66ede987d5` |
+| artist-platform | audit: fix catalog media urls, library cover art, R2 remotePatterns, end-to-end asset chain | `ea01e82` |
 
 ---
 
