@@ -352,7 +352,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
           </form>
         ) : (
           <form onSubmit={submitSignup}>
-            <h2 className="auth-heading">Join 2MRRW Music</h2>
+            <h2 className="auth-heading hero-title-glow">Join 2MRRW Music</h2>
             <p className="auth-subtext">
               Email verification. Phone is saved for your profile — no password.
             </p>

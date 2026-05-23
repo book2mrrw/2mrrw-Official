@@ -3,7 +3,7 @@
 export function AuthBrandBlock() {
   return (
     <div className="auth-brand-block">
-      <div className="auth-brand">2MRRW</div>
+      <div className="auth-brand hero-title-glow">2MRRW</div>
       <div className="auth-tagline">TOMORROW MUSIC</div>
     </div>
   );
