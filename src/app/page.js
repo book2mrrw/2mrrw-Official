@@ -17,9 +17,10 @@ import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/lib/deep-links";
 import { resolveContentAccess, resolvePlaybackSrc } from "@/lib/music-access";
-import { albumCardPlaybackItem, albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
+import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
+import AlbumTracklistSheet from "@/components/music/AlbumTracklistSheet";
 import { VaultUnlockedRoom } from "@/components/vault/VaultUnlockedRoom";
 import { MobileNavAnimatedIcon } from "@/components/nav/MobileNavAnimatedIcon";
 import { VaultNavLockIcon } from "@/components/nav/VaultNavLockIcon";
@@ -184,6 +185,8 @@ function withR2CatalogMedia(item) {
   if (next.cover) next.cover = catalogCoverUrl(String(next.cover).replace(/^\//, ""));
   if (next.video) next.video = catalogMotionVideoUrl(String(next.video).replace(/^\//, ""));
   if (next.preview) next.preview = catalogPreviewAudioUrl(String(next.preview).replace(/^\//, ""));
+  if (next.csAudio) next.csAudio = catalogPublicMediaUrl(String(next.csAudio).replace(/^\//, ""));
+  if (next.csCover) next.csCover = catalogCoverUrl(String(next.csCover).replace(/^\//, ""));
   return next;
 }
 
@@ -522,6 +525,7 @@ export default function Page() {
   const [membershipUpsellOpen, setMembershipUpsellOpen] = useState(false);
   const [donateOpen, setDonateOpen] = useState(false);
   const [giftSheetRelease, setGiftSheetRelease] = useState(null);
+  const [albumTracklistRelease, setAlbumTracklistRelease] = useState(null);
   const [giftsSent, setGiftsSent] = useState([]);
   const [giftsSentLoading, setGiftsSentLoading] = useState(false);
   const [liveCountdown, setLiveCountdown]         = useState({ days:0, hours:0, minutes:0, seconds:0 });
@@ -1700,7 +1704,7 @@ export default function Page() {
                   {/* Albums */}
                   <div id="home-albums">
                     <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                    <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile} accountState={accountState} userId={authUser?.id}/>
+                    <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={authUser?.id}/>
                   </div>
 
                   {/* Audio Visuals */}
@@ -1806,7 +1810,7 @@ export default function Page() {
                   {activeTab==="albums" && (
                     <>
                       <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                      <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                      <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                     </>
                   )}
 
@@ -2428,6 +2432,13 @@ export default function Page() {
         isMobile={isMobile}
         onClose={() => setGiftSheetRelease(null)}
       />
+      <AlbumTracklistSheet
+        open={Boolean(albumTracklistRelease)}
+        album={albumTracklistRelease}
+        accountState={accountState}
+        userId={authUser?.id}
+        onClose={() => setAlbumTracklistRelease(null)}
+      />
 
       {/* ── STRIPE MODAL ── */}
       <AnimatePresence>
@@ -2550,7 +2561,7 @@ function FeaturesRail({ features, isMobile, addToCart, onPlay, accountState, use
 }
 
 // ── GRID ──────────────────────────────────────────────────────────────────────
-function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, isMobile, accountState, userId, isAdmin, onGift, onLibraryChange }) {
+function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, onOpenAlbumTracklist, isMobile, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   if (!items || items.length === 0) return null;
   const containerStyle = isMobile
     ? { display:"flex", flexWrap:"nowrap", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollSnapType:"x mandatory", overscrollBehaviorX:"contain", gap:12, paddingBottom:10 }
@@ -2574,10 +2585,14 @@ function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, button
               {access?.showCart && type==="albums" ? (
                 <div style={{flex:1,minWidth:0}}>
                   <ReleaseCardActions
-                    item={withR2CatalogMedia(albumCardPlaybackItem(item))}
+                    item={withR2CatalogMedia(item)}
                     accountState={accountState}
                     userId={userId}
                     source="home_album_card"
+                    onPlayClick={(e) => {
+                      e.stopPropagation();
+                      onOpenAlbumTracklist?.(withR2CatalogMedia(item));
+                    }}
                     onAddToCart={e => { e.stopPropagation(); addToCart(item); }}
                     cartButtonStyle={{
                       background:"#1a1a1a",

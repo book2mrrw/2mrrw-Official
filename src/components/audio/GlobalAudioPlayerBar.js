@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
+import ChoppedSlowedToggle from "@/components/music/ChoppedSlowedToggle";
 
 const formatTime = (seconds) => {
   if (!seconds || !isFinite(seconds)) return "0:00";
@@ -24,9 +25,18 @@ const iconBtn = {
   flexShrink: 0,
 };
 
-function CoverArt({ cover, size, pulse }) {
+function CoverArt({ cover, size, pulse, flipKey }) {
   const dim = size;
   const borderRadius = dim <= 32 ? "50%" : dim >= 180 ? 12 : 8;
+  const [flipPhase, setFlipPhase] = useState(false);
+
+  useEffect(() => {
+    if (!flipKey) return undefined;
+    setFlipPhase(true);
+    const t = window.setTimeout(() => setFlipPhase(false), 200);
+    return () => window.clearTimeout(t);
+  }, [flipKey]);
+
   const style = {
     width: dim >= 180 ? "100%" : dim,
     height: dim >= 180 ? "100%" : dim,
@@ -36,6 +46,8 @@ function CoverArt({ cover, size, pulse }) {
     objectFit: "cover",
     flexShrink: 0,
     display: "block",
+    transform: flipPhase ? "scaleX(0)" : "scaleX(1)",
+    transition: "transform 200ms ease",
   };
   if (cover) {
     return (
@@ -165,6 +177,7 @@ function GlobalAudioPlayerBar() {
   if (!hasStarted || !currentTrack) return null;
 
   const coverUrl = resolveAbsoluteArtworkUrl(currentTrack.cover);
+  const coverFlipKey = `${currentTrack.id || currentTrack.slug}:${coverUrl}:${currentTrack.title}`;
   const progress = duration ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
   const bottom = isMobile ? "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)" : 0;
   const sourceLabel = String(currentTrack.source || "audio").replace(/_/g, " ");
@@ -237,7 +250,7 @@ function GlobalAudioPlayerBar() {
             color: "inherit",
           }}
         >
-          <CoverArt cover={coverUrl} size={24} />
+          <CoverArt cover={coverUrl} size={24} flipKey={coverFlipKey} />
           <WaveformBars playing={isPlaying} />
           {playPauseBtn(28, false)}
         </button>
@@ -329,7 +342,7 @@ function GlobalAudioPlayerBar() {
               }}
             >
               <div style={{ width: coverSize, height: coverSize, maxWidth: 320, maxHeight: 320 }}>
-                <CoverArt cover={coverUrl} size={320} pulse={isPlaying} />
+                <CoverArt cover={coverUrl} size={320} pulse={isPlaying} flipKey={coverFlipKey} />
               </div>
 
               <div style={{ textAlign: "center", width: "100%", maxWidth: 400, padding: "0 8px" }}>
@@ -398,29 +411,32 @@ function GlobalAudioPlayerBar() {
                 )}
               </div>
 
-              {hasQueue && (
-                <div style={{ display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap", justifyContent: "center" }}>
-                  <button
-                    type="button"
-                    aria-label="Shuffle"
-                    onClick={() => toggleShuffle()}
-                    style={{ ...iconBtn, fontSize: 16, color: shuffle ? "#00ffff" : "#666" }}
-                  >
-                    ⇄ Shuffle
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="Repeat"
-                    onClick={() => toggleRepeat()}
-                    style={{ ...iconBtn, fontSize: 16, color: repeatMode !== "off" ? "#00ffff" : "#666" }}
-                  >
-                    {repeatMode === "one" ? "①" : "↻"} Repeat
-                  </button>
-                  {queueLabel && (
-                    <div style={{ fontSize: 12, color: "#555", letterSpacing: 1.5, textTransform: "uppercase" }}>{queueLabel}</div>
-                  )}
-                </div>
-              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", justifyContent: "center" }}>
+                <ChoppedSlowedToggle />
+                {hasQueue && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Shuffle"
+                      onClick={() => toggleShuffle()}
+                      style={{ ...iconBtn, fontSize: 16, color: shuffle ? "#00ffff" : "#666" }}
+                    >
+                      ⇄ Shuffle
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Repeat"
+                      onClick={() => toggleRepeat()}
+                      style={{ ...iconBtn, fontSize: 16, color: repeatMode !== "off" ? "#00ffff" : "#666" }}
+                    >
+                      {repeatMode === "one" ? "①" : "↻"} Repeat
+                    </button>
+                    {queueLabel && (
+                      <div style={{ fontSize: 12, color: "#555", letterSpacing: 1.5, textTransform: "uppercase" }}>{queueLabel}</div>
+                    )}
+                  </>
+                )}
+              </div>
 
               {error && <div style={{ fontSize: 12, color: "#ff8a8a", textAlign: "center" }}>{error}</div>}
             </div>
@@ -516,7 +532,7 @@ function GlobalAudioPlayerBar() {
                 color: "inherit",
               }}
             >
-              <CoverArt cover={coverUrl} size={isMobile ? 40 : 38} />
+              <CoverArt cover={coverUrl} size={isMobile ? 40 : 38} flipKey={coverFlipKey} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -541,6 +557,7 @@ function GlobalAudioPlayerBar() {
                 </div>
               </div>
             </button>
+            <ChoppedSlowedToggle compact />
             {playPauseBtn(isMobile ? 38 : 36, false)}
             <button
               type="button"

@@ -4,12 +4,16 @@ import { useCallback } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { toPlaybackTrack } from "@/lib/music-playback";
 
-export default function ReleaseCardPlayButton({ item, accountState, userId, source = "home_card" }) {
+export default function ReleaseCardPlayButton({ item, accountState, userId, source = "home_card", onPlayClick }) {
   const { playQueue, toggle, currentTrack, isPlaying, hasStarted } = useAudioPlayer();
 
   const handlePlay = useCallback(
     (e) => {
       e.stopPropagation();
+      if (onPlayClick) {
+        onPlayClick(e, item);
+        return;
+      }
       const track = toPlaybackTrack(item, { ...accountState, userId }, source);
       if (!track.src) return;
       const sameTrack =
@@ -21,7 +25,7 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
       }
       void playQueue([track], 0);
     },
-    [accountState, currentTrack?.id, currentTrack?.slug, hasStarted, item, playQueue, source, toggle, userId]
+    [accountState, currentTrack?.id, currentTrack?.slug, hasStarted, item, onPlayClick, playQueue, source, toggle, userId]
   );
 
   const sameTrack =
@@ -54,10 +58,10 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
   );
 }
 
-export function ReleaseCardActions({ item, accountState, userId, source, onAddToCart, cartButtonStyle, cartLabel = "+ Cart" }) {
+export function ReleaseCardActions({ item, accountState, userId, source, onAddToCart, onPlayClick, cartButtonStyle, cartLabel = "+ Cart" }) {
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <ReleaseCardPlayButton item={item} accountState={accountState} userId={userId} source={source} />
+      <ReleaseCardPlayButton item={item} accountState={accountState} userId={userId} source={source} onPlayClick={onPlayClick} />
       <button
         type="button"
         onClick={onAddToCart}

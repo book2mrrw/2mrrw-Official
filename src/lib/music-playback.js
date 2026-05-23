@@ -1,8 +1,17 @@
 import { resolvePlaybackSrc, resolveTrackAccess } from "@/lib/music-access";
+import { catalogCoverUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
+
+function resolveCsMediaUrl(path) {
+  if (!path) return null;
+  const normalized = String(path).replace(/^\//, "");
+  return catalogPublicMediaUrl(normalized) || path;
+}
 
 export function toPlaybackTrack(item, accountState, source = "library", overrides = {}) {
   const access = resolveTrackAccess(item, accountState);
   const userId = accountState?.userId || overrides.userId;
+  const csAudioRaw = item?.csAudio || item?.cs_audio || null;
+  const csCoverRaw = item?.csCover || item?.cs_cover || item?.csCoverArt || null;
   return {
     id: item?.slug || item?.id,
     slug: item?.slug,
@@ -10,10 +19,13 @@ export function toPlaybackTrack(item, accountState, source = "library", override
     artist: item?.artist || "2MRRW",
     cover: item?.cover || item?.coverArt || null,
     src: resolvePlaybackSrc(item, access, { userId }),
+    csAudio: csAudioRaw ? resolveCsMediaUrl(csAudioRaw) : null,
+    csCover: csCoverRaw ? catalogCoverUrl(csCoverRaw) : null,
     source,
     metadata: {
       access,
       price: item?.price,
+      albumSlug: item?.albumSlug || overrides.albumSlug,
       ...overrides,
     },
   };
@@ -74,10 +86,12 @@ export function albumTracksForPlayback(album, accountState, source = "album") {
           cover: track.cover || album.cover,
           preview: track.preview || album.preview,
           audio: track.audio || album.audio,
+          csAudio: track.csAudio || track.cs_audio,
+          csCover: track.csCover || track.cs_cover,
         },
         accountState,
         source,
-        { trackIndex: index }
+        { trackIndex: index, albumSlug: album.slug }
       );
     })
     .filter((t) => t.src);

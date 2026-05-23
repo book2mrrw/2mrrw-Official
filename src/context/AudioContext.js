@@ -13,6 +13,8 @@ const AudioContext = createContext(null);
 
 const REPEAT_MODES = ["off", "all", "one"];
 const POSITION_STATE_THROTTLE_MS = 1000;
+const SLOWED_SUFFIX = " · Slowed";
+const CS_PLAYBACK_RATE = 0.75;
 
 const EMPTY_STATE = {
   currentTrackId: null,
@@ -27,22 +29,76 @@ const EMPTY_STATE = {
   queueIndex: -1,
   repeatMode: "off",
   shuffle: false,
+  csMode: false,
 };
+
+function stripSlowedSuffix(title) {
+  if (!title) return "Untitled";
+  return title.endsWith(SLOWED_SUFFIX) ? title.slice(0, -SLOWED_SUFFIX.length) : title;
+}
+
+function withSlowedSuffix(title) {
+  const base = stripSlowedSuffix(title);
+  return `${base}${SLOWED_SUFFIX}`;
+}
 
 const normalizeTrack = (track = {}) => {
   const src = track.src || track.preview || track.audio || track.url || "";
   const id = track.id || track.trackId || track.slug || src;
+  const baseTitle = stripSlowedSuffix(track.title || "Untitled");
+  const baseCover = track.baseCover || track.cover || track.coverArt || track.image || null;
+  const csAudio = track.csAudio || track.cs_audio || null;
+  const csCover = track.csCover || track.cs_cover || track.csCoverArt || null;
   return {
     id,
     slug: track.slug || id,
-    title: track.title || "Untitled",
+    title: baseTitle,
     artist: track.artist || "2MRRW",
-    cover: track.cover || track.coverArt || track.image || null,
+    cover: baseCover,
+    baseSrc: track.baseSrc || src,
+    baseCover,
     src,
+    csAudio: csAudio || null,
+    csCover: csCover || null,
     source: track.source || "unknown",
     metadata: track.metadata || {},
   };
 };
+
+function resolvePlaybackPresentation(track, csOn, usingCsSrc) {
+  if (!track) return track;
+  const baseTitle = stripSlowedSuffix(track.title);
+  const baseSrc = track.baseSrc || track.src;
+  const baseCover = track.baseCover || track.cover;
+  if (!csOn) {
+    return {
+      ...track,
+      title: baseTitle,
+      src: baseSrc,
+      cover: baseCover,
+      playbackRate: 1,
+      useCsSrc: false,
+    };
+  }
+  if (track.csAudio) {
+    return {
+      ...track,
+      title: withSlowedSuffix(baseTitle),
+      src: track.csAudio,
+      cover: track.csCover || baseCover,
+      playbackRate: 1,
+      useCsSrc: true,
+    };
+  }
+  return {
+    ...track,
+    title: withSlowedSuffix(baseTitle),
+    src: baseSrc,
+    cover: baseCover,
+    playbackRate: CS_PLAYBACK_RATE,
+    useCsSrc: false,
+  };
+}
 
 function isStandalonePwa() {
   if (typeof window === "undefined") return false;
@@ -61,6 +117,8 @@ export function AudioProvider({ children }) {
   const queueIndexRef = useRef(-1);
   const repeatModeRef = useRef("off");
   const shuffleRef = useRef(false);
+  const csModeRef = useRef(false);
+  const csUsingAlternateSrcRef = useRef(false);
   const playTrackRef = useRef(null);
   const userPausedRef = useRef(false);
   const skipPauseInterruptionRef = useRef(false);
@@ -138,6 +196,7 @@ export function AudioProvider({ children }) {
     queueIndexRef.current = state.queueIndex ?? -1;
     repeatModeRef.current = state.repeatMode || "off";
     shuffleRef.current = Boolean(state.shuffle);
+    csModeRef.current = Boolean(state.csMode);
   }, [state]);
 
   useEffect(() => {
@@ -288,8 +347,34 @@ export function AudioProvider({ children }) {
     };
   }, [patchState, updateMediaSession, syncPositionState]);
 
+  const applyCsToElement = useCallback((audio, presentation, resumeAt = null) => {
+    if (!audio || !presentation) return;
+    audio.playbackRate = presentation.playbackRate ?? 1;
+    if (typeof audio.preservesPitch !== "undefined") {
+      audio.preservesPitch = true;
+    }
+    csUsingAlternateSrcRef.current = Boolean(presentation.useCsSrc);
+    const applySeek = () => {
+      if (resumeAt != null && resumeAt > 0 && isFinite(audio.duration)) {
+        audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
+      }
+      audio.removeEventListener("loadedmetadata", applySeek);
+    };
+    if (resumeAt != null && resumeAt > 0) {
+      audio.addEventListener("loadedmetadata", applySeek);
+      if (isFinite(audio.duration) && audio.duration > 0) applySeek();
+    }
+  }, []);
+
   const playTrack = useCallback(async (track, options = {}) => {
-    const nextTrack = normalizeTrack(track);
+    const normalized = normalizeTrack(track);
+    const presentation = resolvePlaybackPresentation(normalized, csModeRef.current, csUsingAlternateSrcRef.current);
+    const nextTrack = {
+      ...normalized,
+      title: presentation.title,
+      src: presentation.src,
+      cover: presentation.cover,
+    };
     const audio = audioRef.current;
     if (!audio || !nextTrack.src) {
       patchState({
@@ -307,6 +392,7 @@ export function AudioProvider({ children }) {
     const nextUrl = new URL(nextTrack.src, window.location.href).href;
     const isSameTrack = stateRef.current.currentTrackId === nextTrack.id && currentSrc === nextUrl;
     const isReplay = isSameTrack && audio.ended;
+    const resumeAt = options.resumeAt && options.resumeAt > 5 ? options.resumeAt : null;
 
     patchState({
       currentTrackId: nextTrack.id,
@@ -322,10 +408,12 @@ export function AudioProvider({ children }) {
         audio.pause();
         audio.src = nextTrack.src;
         audio.load();
-        pendingSeekRef.current = options.resumeAt && options.resumeAt > 5 ? options.resumeAt : null;
-      } else if (options.resumeAt && options.resumeAt > 5 && Math.abs(audio.currentTime - options.resumeAt) > 2) {
-        audio.currentTime = options.resumeAt;
+        pendingSeekRef.current = resumeAt;
+      } else if (resumeAt && Math.abs(audio.currentTime - resumeAt) > 2) {
+        audio.currentTime = resumeAt;
       }
+
+      applyCsToElement(audio, presentation, pendingSeekRef.current || null);
 
       if (pendingSeekRef.current) {
         const applyPendingSeek = () => {
@@ -355,7 +443,51 @@ export function AudioProvider({ children }) {
       void updateMediaSession(nextTrack, { playing: false });
       return false;
     }
-  }, [patchState, updateMediaSession]);
+  }, [patchState, updateMediaSession, applyCsToElement]);
+
+  const toggleCSMode = useCallback(async () => {
+    const next = !csModeRef.current;
+    csModeRef.current = next;
+    patchState({ csMode: next });
+
+    const audio = audioRef.current;
+    const track = stateRef.current.currentTrack;
+    if (!audio || !track || !stateRef.current.hasStarted) return next;
+
+    const normalized = normalizeTrack(track);
+    const resumeAt = audio.currentTime;
+    const presentation = resolvePlaybackPresentation(normalized, next, csUsingAlternateSrcRef.current);
+    const nextTrack = {
+      ...normalized,
+      title: presentation.title,
+      src: presentation.src,
+      cover: presentation.cover,
+    };
+
+    const currentUrl = audio.currentSrc || audio.src;
+    const targetUrl = new URL(nextTrack.src, window.location.href).href;
+    const needsSrcSwap = currentUrl !== targetUrl;
+
+    try {
+      if (needsSrcSwap) {
+        skipPauseInterruptionRef.current = true;
+        audio.pause();
+        audio.src = nextTrack.src;
+        audio.load();
+        pendingSeekRef.current = resumeAt > 0 ? resumeAt : null;
+      }
+      applyCsToElement(audio, presentation, resumeAt > 0 ? resumeAt : null);
+      patchState({ currentTrack: nextTrack });
+      void updateMediaSession(nextTrack, { playing: !audio.paused });
+      if (audio.paused && stateRef.current.isPlaying) {
+        await audio.play();
+      }
+      syncPositionState(true);
+    } catch {
+      patchState({ error: "Could not apply chopped & slowed mode." });
+    }
+    return next;
+  }, [patchState, updateMediaSession, applyCsToElement, syncPositionState]);
 
   useEffect(() => {
     playTrackRef.current = playTrack;
@@ -481,6 +613,8 @@ export function AudioProvider({ children }) {
       audio.removeAttribute("src");
       audio.load();
     }
+    csModeRef.current = false;
+    csUsingAlternateSrcRef.current = false;
     setState(EMPTY_STATE);
     queueRef.current = [];
     queueIndexRef.current = -1;
@@ -584,6 +718,7 @@ export function AudioProvider({ children }) {
     toggleRepeat,
     setShuffle,
     toggleShuffle,
+    toggleCSMode,
     pause,
     resume,
     toggle,
@@ -606,6 +741,7 @@ export function AudioProvider({ children }) {
     toggle,
     toggleRepeat,
     toggleShuffle,
+    toggleCSMode,
   ]);
 
   return (
