@@ -17,7 +17,7 @@ export function ReleaseDetailExtras({ release }) {
   const credits = Array.isArray(release?.credits) ? release.credits : [];
   const primaryTrack = tracks[0];
   const lyricsMode = primaryTrack?.lyricsMode || primaryTrack?.lyrics_mode || "static";
-  const lyricsText = primaryTrack?.lyricsText || primaryTrack?.lyrics_text || "";
+  const lyricsText = primaryTrack?.lyricsText || primaryTrack?.lyrics_text || primaryTrack?.lyrics || "";
   const lines = useMemo(() => parseLyricsLines(lyricsText), [lyricsText]);
 
   if (!lines.length && !credits.length) return null;

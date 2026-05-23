@@ -32,7 +32,7 @@ export function useMusicLibrary({ singles = [], albums = [] } = {}) {
         return {
           slug: row.slug,
           title: catalog?.title || row.slug,
-          cover: catalog?.cover || catalog?.coverArt,
+          cover: catalog?.cover_art_url || catalog?.coverArtUrl || catalog?.cover || catalog?.coverArt,
           positionSeconds: row.positionSeconds,
           durationSeconds: row.durationSeconds,
           completed: row.completed,

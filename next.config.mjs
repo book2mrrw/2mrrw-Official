@@ -8,6 +8,10 @@ const remotePatterns = [
     protocol: "https",
     hostname: "**.r2.dev",
   },
+  {
+    protocol: "https",
+    hostname: "**.r2.cloudflarestorage.com",
+  },
 ];
 
 if (r2PublicHost) {

@@ -193,8 +193,8 @@ function mapTrackToFrontendTrack(track, release, fallbackTrack, apiBaseUrl) {
   const fullAsset = mediaAssetFromFields(track, ["assets.full", "fullAsset", "full_asset"], ["fullAssetId", "full_asset_id", "assetId", "asset_id"], apiBaseUrl) || mediaAssetMetadata(track?.assets?.full, apiBaseUrl);
   const loopAsset = mediaAssetFromFields(track, ["assets.loop", "loopAsset", "loop_asset"], ["loopAssetId", "loop_asset_id"], apiBaseUrl) || mediaAssetMetadata(track?.assets?.loop, apiBaseUrl);
   const lyricsAsset = mediaAssetFromFields(track, ["assets.lyrics", "lyricsAsset", "lyrics_asset"], ["lyricsAssetId", "lyrics_asset_id"], apiBaseUrl) || mediaAssetMetadata(track?.assets?.lyrics, apiBaseUrl);
-  const directPreview = directMediaUrl(track, ["preview", "previewUrl", "preview_url", "src", "audio", "audioUrl", "audio_url", "url", "playbackUrl", "playback_url"], apiBaseUrl);
-  const directLoop = directMediaUrl(track, ["video", "videoUrl", "video_url", "loop", "loopUrl", "loop_url"], apiBaseUrl);
+  const directPreview = directMediaUrl(track, ["preview", "previewUrl", "preview_url", "preview_audio_url", "previewAudioUrl", "src", "audio", "audioUrl", "audio_url", "url", "playbackUrl", "playback_url"], apiBaseUrl);
+  const directLoop = directMediaUrl(track, ["video", "videoUrl", "video_url", "motion_cover_url", "motionCoverUrl", "loop", "loopUrl", "loop_url"], apiBaseUrl);
   const preview = immediateAssetUrl(previewAsset, apiBaseUrl) || directPreview || fallbackTrack?.src || fallbackTrack?.preview || "";
   const video = immediateAssetUrl(loopAsset, apiBaseUrl) || directLoop || fallbackTrack?.video || "";
 
@@ -213,7 +213,7 @@ function mapTrackToFrontendTrack(track, release, fallbackTrack, apiBaseUrl) {
     loopAssetId: track?.loopAssetId || loopAsset?.assetId || loopAsset?.id || null,
     lyricsAssetId: track?.lyricsAssetId || lyricsAsset?.assetId || lyricsAsset?.id || null,
     lyricsMode: track?.lyricsMode || track?.lyrics_mode || "static",
-    lyricsText: track?.lyricsText || track?.lyrics_text || null,
+    lyricsText: track?.lyricsText || track?.lyrics_text || track?.lyrics || null,
     lyricsLrc: track?.lyricsLrc || track?.lyrics_lrc || track?.lrc || null,
     assets: {
       preview: previewAsset,
@@ -232,12 +232,19 @@ export function mapControlSystemRelease(release, fallbackRelease = {}, index = 0
   const fallback = fallbackRelease || {};
   const primaryTrack = firstTrack(release);
   const artworkAsset = mediaAssetFromFields(release, ["artworkAsset", "artwork", "coverAsset", "cover_asset"], ["artworkAssetId", "artwork_asset_id"], apiBaseUrl);
-  const directCover = directMediaUrl(release, ["cover", "coverUrl", "cover_url", "artworkUrl", "artwork_url", "image", "imageUrl", "image_url"], apiBaseUrl);
-  const directPreview = directMediaUrl(primaryTrack, ["preview", "previewUrl", "preview_url", "src", "audio", "audioUrl", "audio_url", "url", "playbackUrl", "playback_url"], apiBaseUrl) || directMediaUrl(release, ["preview", "previewUrl", "preview_url", "audio", "audioUrl", "audio_url", "url"], apiBaseUrl);
-  const directVideo = directMediaUrl(primaryTrack, ["video", "videoUrl", "video_url", "loop", "loopUrl", "loop_url"], apiBaseUrl) || directMediaUrl(release, ["video", "videoUrl", "video_url", "loop", "loopUrl", "loop_url"], apiBaseUrl);
+  const directCover = directMediaUrl(release, ["cover", "coverUrl", "cover_url", "cover_art_url", "coverArtUrl", "artworkUrl", "artwork_url", "image", "imageUrl", "image_url"], apiBaseUrl);
+  const directMotion = directMediaUrl(release, ["motion_cover_url", "motionCoverUrl", "motionCover", "motion_cover"], apiBaseUrl);
+  const directPreview =
+    directMediaUrl(primaryTrack, ["preview", "previewUrl", "preview_url", "preview_audio_url", "previewAudioUrl", "src", "audio", "audioUrl", "audio_url", "url", "playbackUrl", "playback_url"], apiBaseUrl) ||
+    directMediaUrl(release, ["preview", "previewUrl", "preview_url", "preview_audio_url", "previewAudioUrl", "audio", "audioUrl", "audio_url", "url"], apiBaseUrl);
+  const directVideo =
+    directMediaUrl(primaryTrack, ["video", "videoUrl", "video_url", "motion_cover_url", "motionCoverUrl", "loop", "loopUrl", "loop_url"], apiBaseUrl) ||
+    directMediaUrl(release, ["video", "videoUrl", "video_url", "motion_cover_url", "motionCoverUrl", "loop", "loopUrl", "loop_url"], apiBaseUrl) ||
+    directMotion;
   const cover = immediatePublicCoverUrl(artworkAsset, apiBaseUrl, directCover || fallback.cover || "");
   const preview = immediateAssetUrl(primaryTrack?.assets?.preview, apiBaseUrl) || directPreview || fallback.preview || "";
   const video = immediateAssetUrl(primaryTrack?.assets?.loop, apiBaseUrl) || directVideo || fallback.video || "";
+  const coverArtType = release?.coverArtType || release?.cover_art_type || (directMotion || directVideo ? "video" : "image");
   const fallbackTracks = Array.isArray(fallback.tracks)
     ? fallback.tracks.map((track, trackIndex) => (typeof track === "string" ? { title: track, position: trackIndex + 1 } : track))
     : [];
@@ -264,6 +271,9 @@ export function mapControlSystemRelease(release, fallbackRelease = {}, index = 0
     title: release.title,
     artist: release.artist?.name || fallback.artist || "2MRRW",
     cover,
+    cover_art_url: directCover || cover,
+    motion_cover_url: directMotion || directVideo || video,
+    coverArtType,
     preview,
     video,
     price,

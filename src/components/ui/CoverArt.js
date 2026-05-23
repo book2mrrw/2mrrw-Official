@@ -19,7 +19,20 @@ export default function CoverArt({
   onTouchStart,
   onTouchEnd,
 }) {
-  if (!src) return null;
+  if (!src) {
+    return (
+      <div
+        aria-hidden
+        style={{
+          width: width ?? "100%",
+          height: height ?? "100%",
+          borderRadius,
+          background: "#1a1a1a",
+          ...style,
+        }}
+      />
+    );
+  }
 
   const mediaType = resolveCoverMediaType(src, type);
 

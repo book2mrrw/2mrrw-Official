@@ -12,10 +12,11 @@ export function toPlaybackTrack(item, accountState, source = "library", override
   const userId = accountState?.userId || overrides.userId;
   const csAudioRaw = item?.csAudio || item?.cs_audio || null;
   const csCoverRaw = item?.csCover || item?.cs_cover || item?.csCoverArt || null;
-  const coverArtType = item?.coverArtType || item?.cover_art_type || (item?.video ? "video" : "image");
+  const motionRaw = item?.motion_cover_url || item?.motionCoverUrl || item?.video || null;
+  const coverArtType = item?.coverArtType || item?.cover_art_type || (motionRaw ? "video" : "image");
   const csCoverType = item?.csCoverType || item?.cs_cover_type || "image";
-  const coverRaw = item?.cover || item?.coverArt || null;
-  const videoRaw = item?.video || null;
+  const coverRaw = item?.cover_art_url || item?.coverArtUrl || item?.cover || item?.coverArt || null;
+  const videoRaw = motionRaw;
   const cover =
     coverArtType === "video" && videoRaw
       ? catalogMotionVideoUrl(String(videoRaw).replace(/^\//, ""))

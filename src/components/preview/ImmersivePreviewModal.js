@@ -72,7 +72,13 @@ function ImmersivePreviewModal({
   const release = releaseDetail || single;
   const editorial = useMemo(() => getReleaseEditorial(release), [release]);
   const creditRows = useMemo(() => getCreditsDisplayRows(editorial), [editorial]);
-  const lrcText = useMemo(() => extractLrcFromRelease(release), [release]);
+  const lrcText = useMemo(() => {
+    const lrc = extractLrcFromRelease(release);
+    if (lrc?.trim()) return lrc;
+    const track = Array.isArray(release?.tracks) ? release.tracks[0] : null;
+    return track?.lyricsText || track?.lyrics_text || track?.lyrics || "";
+  }, [release]);
+  const hasLyrics = Boolean(lrcText?.trim());
 
   const mediaHeight = isMobile ? "min(72vh, 75dvh)" : "min(52vh, 520px)";
   const shellVariant = isMobile ? SHEET_UP : MODAL_CENTER;
@@ -386,29 +392,31 @@ function ImmersivePreviewModal({
             )}
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button
-              type="button"
-              onClick={() => {
-                setViewMoreOpen(false);
-                setGlyphsOpen(true);
-              }}
-              style={{
-                background: "rgba(162,89,255,0.12)",
-                border: "1px solid rgba(162,89,255,0.35)",
-                color: "#d4b8ff",
-                fontSize: 10,
-                fontWeight: 800,
-                letterSpacing: 2.5,
-                textTransform: "uppercase",
-                padding: "8px 16px",
-                borderRadius: 20,
-                cursor: "pointer",
-              }}
-            >
-              GLYPHS
-            </button>
-          </div>
+          {hasLyrics ? (
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMoreOpen(false);
+                  setGlyphsOpen(true);
+                }}
+                style={{
+                  background: "rgba(162,89,255,0.12)",
+                  border: "1px solid rgba(162,89,255,0.35)",
+                  color: "#d4b8ff",
+                  fontSize: 10,
+                  fontWeight: 800,
+                  letterSpacing: 2.5,
+                  textTransform: "uppercase",
+                  padding: "8px 16px",
+                  borderRadius: 20,
+                  cursor: "pointer",
+                }}
+              >
+                GLYPHS
+              </button>
+            </div>
+          ) : null}
 
           <PreviewModalPlayer audioRef={audioRef} compact={isMobile} />
 
