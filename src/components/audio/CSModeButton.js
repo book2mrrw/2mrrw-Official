@@ -1,42 +1,59 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useState } from "react";
+import { motion } from "framer-motion";
 import { useAudioPlayer } from "@/context/AudioContext";
 
-const BAR_HEIGHTS = [6, 12, 20, 12, 6];
-const BAR_X = [2, 8, 14, 20, 26];
-const BAR_WIDTH = 4;
+const pressSpring = { type: "spring", stiffness: 520, damping: 28, mass: 0.55 };
 
-function FrequencyPulseIcon({ active, animateBars }) {
-  const color = active ? "#1E90FF" : "#444";
-  const baseY = 22;
+function TimeDistortionIcon({ active, animate, gradId, glowId }) {
+  const stroke = active ? "#00BFFF" : "rgba(255,255,255,0.35)";
+  const fillWave = active ? `url(#${gradId})` : "rgba(255,255,255,0.12)";
 
   return (
-    <svg viewBox="0 0 32 28" width={28} height={24} aria-hidden className={animateBars ? "cs-pulse-icon" : undefined}>
-      {BAR_HEIGHTS.map((h, i) => (
-        <rect
-          key={i}
-          className={animateBars ? "cs-bar-pulse" : undefined}
-          x={BAR_X[i]}
-          y={baseY - h}
-          width={BAR_WIDTH}
-          height={h}
-          rx={1}
-          fill={color}
-          style={{ transformOrigin: `${BAR_X[i] + BAR_WIDTH / 2}px ${baseY}px` }}
-        />
-      ))}
+    <svg viewBox="0 0 32 32" width={22} height={22} aria-hidden className={animate ? "cs-distort-icon--pulse" : undefined}>
+      <defs>
+        <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#00BFFF" />
+          <stop offset="100%" stopColor="#1B9FFF" />
+        </linearGradient>
+        <filter id={glowId}>
+          <feGaussianBlur stdDeviation="1.2" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      <circle cx="16" cy="16" r="13" fill="none" stroke={stroke} strokeWidth="1.2" opacity={active ? 0.85 : 0.45} />
       <path
-        d="M16 24 L12 28 L20 28 Z"
-        fill={color}
-        className={animateBars ? "cs-arrow-glow" : undefined}
+        d="M6 18 C9 12, 13 22, 16 14 C19 6, 23 16, 26 10"
+        fill="none"
+        stroke={stroke}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        filter={active ? `url(#${glowId})` : undefined}
+        className={animate ? "cs-distort-wave" : undefined}
       />
+      <path
+        d="M8 20 C11 14, 14 24, 17 16 C20 8, 24 18, 27 12"
+        fill="none"
+        stroke={fillWave}
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        opacity={active ? 0.9 : 0.35}
+        className={animate ? "cs-distort-wave cs-distort-wave--lag" : undefined}
+      />
+      <circle cx="16" cy="16" r="2.5" fill={active ? "#1B9FFF" : "rgba(255,255,255,0.2)"} />
     </svg>
   );
 }
 
-export default function CSModeButton({ style: styleOverride, iconOnly = false }) {
+export default function CSModeButton({ style: styleOverride }) {
   const { csMode, toggleCSMode, isPlaying } = useAudioPlayer();
+  const uid = useId().replace(/:/g, "");
+  const gradId = `csWaveGrad-${uid}`;
+  const glowId = `csGlow-${uid}`;
   const [animating, setAnimating] = useState(false);
   const active = csMode;
   const showMotion = active && isPlaying;
@@ -57,52 +74,35 @@ export default function CSModeButton({ style: styleOverride, iconOnly = false })
   }, [animating]);
 
   return (
-    <button
+    <motion.button
       type="button"
       aria-label={active ? "Turn off chopped and slowed" : "Turn on chopped and slowed"}
       aria-pressed={active}
       onClick={handleClick}
       className={[
         "cs-mode-btn",
+        "player-glass-btn",
         active ? "cs-mode-btn--active" : "",
         animating ? "cs-mode-btn--ripple" : "",
         showMotion ? "cs-mode-btn--breath" : "",
       ]
         .filter(Boolean)
         .join(" ")}
+      whileTap={{ scale: 0.96 }}
+      transition={pressSpring}
       style={{
         width: 44,
         height: 44,
-        padding: "6px 8px",
+        padding: 0,
         borderRadius: 10,
         display: "flex",
-        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 2,
-        cursor: "pointer",
         flexShrink: 0,
-        background: active ? "rgba(30, 144, 255, 0.1)" : "#111",
-        color: active ? "#1E90FF" : "#444",
-        border: active ? "1px solid #1E90FF" : "1px solid #333",
         ...styleOverride,
       }}
     >
-      <FrequencyPulseIcon active={active} animateBars={showMotion} />
-      {!iconOnly && (
-        <span
-          style={{
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: 1.2,
-            textTransform: "uppercase",
-            lineHeight: 1,
-            color: active ? "#1E90FF" : "#444",
-          }}
-        >
-          {active ? "SLOWED" : "SLOW"}
-        </span>
-      )}
-    </button>
+      <TimeDistortionIcon active={active} animate={showMotion} gradId={gradId} glowId={glowId} />
+    </motion.button>
   );
 }

@@ -4,6 +4,14 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 import CSModeButton from "@/components/audio/CSModeButton";
+import {
+  ClosePlayerButton,
+  HoldSeekButton,
+  PlayPauseHero,
+  RepeatButton,
+  ShuffleButton,
+  TrackTransportButton,
+} from "@/components/audio/PlayerControlButton";
 import CoverArt from "@/components/ui/CoverArt";
 import CoverArtCS from "@/components/ui/CoverArtCS";
 
@@ -19,77 +27,6 @@ const HOLD_FADE_MS = 300;
 const RELEASE_FADE_MS = 200;
 const MOVE_CANCEL_PX = 10;
 const CS_PLAYBACK_RATE = 0.75;
-
-const iconBtn = {
-  background: "none",
-  border: "none",
-  color: "#666",
-  cursor: "pointer",
-  padding: "4px 6px",
-  fontSize: 14,
-  lineHeight: 1,
-  flexShrink: 0,
-};
-
-const transportBtnBase = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: 1,
-  padding: 0,
-  flexShrink: 0,
-  lineHeight: 1,
-};
-
-function SeekButton({ direction, size, labelSize, onClick }) {
-  const label = direction === "back" ? "-15" : "+15";
-  return (
-    <button
-      type="button"
-      aria-label={direction === "back" ? "Rewind 15 seconds" : "Forward 15 seconds"}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      style={{
-        ...transportBtnBase,
-        width: size,
-        height: size,
-        color: "#666",
-        fontSize: size * 0.5,
-      }}
-    >
-      <span style={{ fontSize: labelSize, color: "#444", fontWeight: 600, lineHeight: 1 }}>{label}</span>
-      <span>{direction === "back" ? "⏪" : "⏩"}</span>
-    </button>
-  );
-}
-
-function TrackTransportButton({ label, size, color, onClick }) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      style={{
-        ...transportBtnBase,
-        width: size,
-        height: size,
-        color: color || "#666",
-        fontSize: size * 0.55,
-      }}
-    >
-      {label === "Previous track" ? "⏮" : "⏭"}
-    </button>
-  );
-}
 
 function WaveformBars({ playing }) {
   return (
@@ -472,6 +409,14 @@ function GlobalAudioPlayerBar() {
     touchDeltaY.current = 0;
   }, [closeExpanded]);
 
+  const handlePlayToggle = useCallback(
+    (e) => {
+      e?.stopPropagation?.();
+      toggle();
+    },
+    [toggle]
+  );
+
   if (!hasStarted || !currentTrack) return null;
 
   const csOpacity = csMode ? 1 : csHoldOpacity;
@@ -495,39 +440,17 @@ function GlobalAudioPlayerBar() {
     flexShrink: 0,
   });
 
-  const renderSecondaryControls = (gap, iconOnlyCs = false) => (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap,
-        flexWrap: "nowrap",
-      }}
-    >
-      <button
-        type="button"
-        aria-label="Shuffle"
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleShuffle();
-        }}
-        style={{ ...iconBtn, fontSize: 14, color: shuffle ? "#00ffff" : "#666" }}
-      >
-        ⇄ Shuffle
-      </button>
-      <button
-        type="button"
-        aria-label="Repeat"
+  const renderSecondaryControls = (btnSize) => (
+    <div className="player-controls-row" style={{ gap: 20, marginTop: 8 }}>
+      <RepeatButton
+        repeatMode={repeatMode}
+        size={btnSize}
         onClick={(e) => {
           e.stopPropagation();
           toggleRepeat();
         }}
-        style={{ ...iconBtn, fontSize: 14, color: repeatMode !== "off" ? "#00ffff" : "#666" }}
-      >
-        {repeatMode === "one" ? "①" : "↻"} Repeat
-      </button>
-      <CSModeButton iconOnly={iconOnlyCs} />
+      />
+      <CSModeButton />
     </div>
   );
 
@@ -535,81 +458,59 @@ function GlobalAudioPlayerBar() {
     playSize,
     transportSize,
     skipSize,
-    labelSize,
-    prevNextColor,
     gap,
     hidePrevNext = false,
+    shuffleSize,
   }) => (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        gap,
-        width: "100%",
-        flexWrap: "nowrap",
-      }}
-    >
+    <div className="player-controls-row player-controls-row--primary" style={{ gap }}>
       {hidePrevNext ? (
         <div style={{ width: transportSize, flexShrink: 0 }} aria-hidden />
       ) : (
-        <TrackTransportButton
-          label="Previous track"
-          size={transportSize}
-          color={prevNextColor}
-          onClick={() => playPrevious()}
-        />
+        <TrackTransportButton direction="back" size={transportSize} onClick={() => playPrevious()} />
       )}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap, flex: 1 }}>
-        <SeekButton direction="back" size={skipSize} labelSize={labelSize} onClick={() => seekBack(15)} />
-        {playPauseBtn(playSize, playSize >= 64)}
-        <SeekButton direction="forward" size={skipSize} labelSize={labelSize} onClick={() => seekForward(15)} />
+        <HoldSeekButton
+          direction="back"
+          size={skipSize}
+          onTapSeek={() => seekBack(15)}
+          onScrubTick={(secs) => seekBack(Math.abs(secs))}
+        />
+        <PlayPauseHero
+          isPlaying={isPlaying}
+          hasError={Boolean(error)}
+          size={playSize}
+          onClick={handlePlayToggle}
+        />
+        <HoldSeekButton
+          direction="forward"
+          size={skipSize}
+          onTapSeek={() => seekForward(15)}
+          onScrubTick={(secs) => seekForward(Math.abs(secs))}
+        />
       </div>
       {hidePrevNext ? (
         <div style={{ width: transportSize, flexShrink: 0 }} aria-hidden />
       ) : (
-        <TrackTransportButton
-          label="Next track"
-          size={transportSize}
-          color={prevNextColor}
-          onClick={() => playNext()}
-        />
+        <TrackTransportButton direction="forward" size={transportSize} onClick={() => playNext()} />
       )}
+      <ShuffleButton
+        active={shuffle}
+        size={shuffleSize || transportSize}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleShuffle();
+        }}
+      />
     </div>
   );
 
-  const playPauseBtn = (size, large) => (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.stopPropagation();
-        toggle();
-      }}
-      aria-label={isPlaying ? "Pause audio" : "Play audio"}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        background: error ? "#333" : "#00ffff",
-        border: "none",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        cursor: "pointer",
-        flexShrink: 0,
-        boxShadow: large && !error ? "0 0 20px rgba(0,255,255,0.45)" : undefined,
-      }}
-    >
-      {isPlaying ? (
-        <svg viewBox="0 0 24 24" fill="#000" width={large ? 22 : 14} height={large ? 22 : 14}>
-          <path d="M6 19h4V5H6zm8-14v14h4V5z" />
-        </svg>
-      ) : (
-        <svg viewBox="0 0 24 24" fill={error ? "#aaa" : "#000"} width={large ? 22 : 14} height={large ? 22 : 14} style={{ marginLeft: large ? 3 : 2 }}>
-          <path d="M8 5v14l11-7z" />
-        </svg>
-      )}
-    </button>
+  const playPauseCompact = (size) => (
+    <PlayPauseHero
+      isPlaying={isPlaying}
+      hasError={Boolean(error)}
+      size={size}
+      onClick={handlePlayToggle}
+    />
   );
 
   return (
@@ -619,6 +520,7 @@ function GlobalAudioPlayerBar() {
           type="button"
           onClick={() => setExpanded(true)}
           aria-label="Expand audio player"
+          className="player-island-pill"
           style={{
             position: "fixed",
             top: "calc(env(safe-area-inset-top, 12px) + 8px)",
@@ -632,11 +534,6 @@ function GlobalAudioPlayerBar() {
             height: 36,
             padding: "0 12px 0 6px",
             borderRadius: 20,
-            background: "rgba(0,0,0,0.92)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
-            boxShadow: "0 4px 24px rgba(0,0,0,0.5), 0 0 18px rgba(0,255,255,0.2)",
             cursor: "pointer",
             color: "inherit",
           }}
@@ -650,7 +547,7 @@ function GlobalAudioPlayerBar() {
             style={coverFrameStyle(24, "50%")}
           />
           <WaveformBars playing={isPlaying} />
-          {playPauseBtn(28, false)}
+          {playPauseCompact(28)}
         </button>
       )}
 
@@ -658,7 +555,7 @@ function GlobalAudioPlayerBar() {
         <div
           role="dialog"
           aria-label="Full screen audio player"
-          className={swipeClosing ? undefined : "audio-immersive-enter"}
+          className={["audio-immersive-enter", "player-immersive"].filter(Boolean).join(" ")}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
@@ -696,11 +593,12 @@ function GlobalAudioPlayerBar() {
 
           <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
             <div
+              className="player-sheet-handle"
               style={{
                 width: 40,
-                height: 4,
-                borderRadius: 2,
-                background: "rgba(255,255,255,0.28)",
+                height: 5,
+                borderRadius: 3,
+                background: "rgba(140,140,148,0.55)",
                 margin: "6px auto 16px",
                 flexShrink: 0,
               }}
@@ -760,9 +658,15 @@ function GlobalAudioPlayerBar() {
               </div>
 
               <div style={{ textAlign: "center", width: "100%", maxWidth: 400, padding: "0 8px" }}>
-                <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1.2, marginBottom: 6 }}>{currentTrack.title}</div>
-                <div style={{ fontSize: 14, color: "#888", marginBottom: 4 }}>{currentTrack.artist}</div>
-                <div style={{ fontSize: 10, color: "#555", letterSpacing: 1.6, textTransform: "uppercase" }}>{sourceLabel}</div>
+                <div className="player-track-title" style={{ fontSize: 24, lineHeight: 1.2, marginBottom: 6 }}>
+                  {currentTrack.title}
+                </div>
+                <div className="player-track-meta" style={{ fontSize: 14, marginBottom: 4, opacity: 0.55 }}>
+                  {currentTrack.artist}
+                </div>
+                <div className="player-track-meta" style={{ fontSize: 10, letterSpacing: 1.6, textTransform: "uppercase", opacity: 0.4 }}>
+                  {sourceLabel}
+                </div>
               </div>
 
               <div style={{ width: "100%", maxWidth: 480 }}>
@@ -813,15 +717,14 @@ function GlobalAudioPlayerBar() {
 
               {renderTransportRow({
                 playSize: 72,
-                transportSize: 48,
+                transportSize: 44,
                 skipSize: 44,
-                labelSize: 9,
-                prevNextColor: "#888",
-                gap: 24,
+                gap: 20,
                 hidePrevNext: isSmallScreen,
+                shuffleSize: 40,
               })}
 
-              {renderSecondaryControls(isSmallScreen ? 14 : 20, isSmallScreen)}
+              {renderSecondaryControls(isSmallScreen ? 40 : 44)}
 
               {hasQueue && queueLabel && (
                 <div style={{ fontSize: 12, color: "#555", letterSpacing: 1.5, textTransform: "uppercase", textAlign: "center" }}>
@@ -839,6 +742,7 @@ function GlobalAudioPlayerBar() {
         <div
           role="region"
           aria-label="Global audio player"
+          className="player-dock"
           style={{
             position: "fixed",
             left: isMobile ? 12 : 0,
@@ -847,12 +751,6 @@ function GlobalAudioPlayerBar() {
             zIndex: 7600,
             borderRadius: isMobile ? 16 : 0,
             overflow: "hidden",
-            background: "rgba(4,4,4,0.96)",
-            borderTop: "1px solid rgba(255,255,255,0.08)",
-            border: isMobile ? "1px solid rgba(255,255,255,0.08)" : undefined,
-            boxShadow: "0 -8px 34px rgba(0,0,0,0.62),0 0 26px rgba(0,255,255,0.06)",
-            backdropFilter: "blur(24px)",
-            WebkitBackdropFilter: "blur(24px)",
           }}
         >
           <div
@@ -869,7 +767,7 @@ function GlobalAudioPlayerBar() {
               }}
             />
           </div>
-          <div style={{ maxWidth: 1180, margin: "0 auto", padding: isMobile ? "8px 12px 10px" : "10px 20px" }}>
+          <div className="player-dock-inner" style={{ maxWidth: 1180, margin: "0 auto", padding: isMobile ? "8px 12px 10px" : "10px 20px" }}>
             {isMobile ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
@@ -907,13 +805,18 @@ function GlobalAudioPlayerBar() {
                       color: "inherit",
                     }}
                   >
-                    <div style={{ fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div
+                      className="player-track-title"
+                      style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                    >
                       {currentTrack.title}
                     </div>
                     <div
+                      className="player-track-meta"
                       style={{
                         fontSize: 10,
-                        color: error ? "#ff8a8a" : "#555",
+                        color: error ? "#ff8a8a" : undefined,
+                        opacity: error ? 1 : 0.48,
                         fontVariantNumeric: "tabular-nums",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
@@ -923,66 +826,21 @@ function GlobalAudioPlayerBar() {
                       {error || `${currentTrack.artist} · ${formatTime(currentTime)} / ${formatTime(duration)}`}
                     </div>
                   </button>
-                  <button
-                    type="button"
-                    onClick={stop}
-                    aria-label="Close audio player"
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#555",
-                      cursor: "pointer",
-                      fontSize: 20,
-                      lineHeight: 1,
-                      padding: "0 4px",
-                      flexShrink: 0,
-                    }}
-                  >
-                    ×
-                  </button>
+                  <ClosePlayerButton onClick={stop} size={18} />
                 </div>
                 {renderTransportRow({
                   playSize: 44,
                   transportSize: 36,
                   skipSize: 36,
-                  labelSize: 8,
-                  prevNextColor: "#666",
-                  gap: isSmallScreen ? 8 : 10,
+                  gap: isSmallScreen ? 6 : 10,
                   hidePrevNext: isSmallScreen,
+                  shuffleSize: 34,
                 })}
-                <div style={{ marginTop: 8 }}>
-                  {renderSecondaryControls(isSmallScreen ? 14 : 20, isSmallScreen)}
-                </div>
+                {renderSecondaryControls(isSmallScreen ? 36 : 40)}
               </>
             ) : (
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                {hasQueue && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                    <button type="button" aria-label="Previous track" onClick={() => playPrevious()} style={iconBtn}>
-                      ⏮
-                    </button>
-                    <button type="button" aria-label="Next track" onClick={() => playNext()} style={iconBtn}>
-                      ⏭
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Shuffle"
-                      onClick={() => toggleShuffle()}
-                      style={{ ...iconBtn, color: shuffle ? "#00ffff" : "#666" }}
-                    >
-                      ⇄
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Repeat"
-                      onClick={() => toggleRepeat()}
-                      style={{ ...iconBtn, color: repeatMode !== "off" ? "#00ffff" : "#666", fontSize: 12 }}
-                    >
-                      {repeatMode === "one" ? "①" : "↻"}
-                    </button>
-                  </div>
-                )}
-                <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <CoverArtCS
                     originalSrc={baseCoverUrl}
                     originalType={baseCoverType}
@@ -990,10 +848,10 @@ function GlobalAudioPlayerBar() {
                     csType={csCoverType}
                     csOpacity={csOpacity}
                     isLocked={csMode}
-                    width={38}
-                    height={38}
+                    width={42}
+                    height={42}
                     borderRadius={8}
-                    style={coverFrameStyle(38, 8)}
+                    style={coverFrameStyle(42, 8)}
                     role="button"
                     tabIndex={0}
                     aria-label="Cover art"
@@ -1017,19 +875,18 @@ function GlobalAudioPlayerBar() {
                       color: "inherit",
                     }}
                   >
-                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {currentTrack.title}
-                      </div>
-                      <div style={{ fontSize: 9, color: "#555", letterSpacing: 1.4, textTransform: "uppercase", whiteSpace: "nowrap" }}>
-                        {sourceLabel}
-                      </div>
+                    <div
+                      className="player-track-title"
+                      style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                    >
+                      {currentTrack.title}
                     </div>
                     <div
+                      className="player-track-meta"
                       style={{
                         fontSize: 10,
-                        color: error ? "#ff8a8a" : "#555",
-                        letterSpacing: error ? 0.3 : 1,
+                        color: error ? "#ff8a8a" : undefined,
+                        opacity: error ? 1 : 0.45,
                         fontVariantNumeric: "tabular-nums",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
@@ -1039,28 +896,17 @@ function GlobalAudioPlayerBar() {
                       {error || `${currentTrack.artist} · ${formatTime(currentTime)} / ${formatTime(duration)}`}
                     </div>
                   </button>
+                  <ClosePlayerButton onClick={stop} size={18} />
                 </div>
-                <SeekButton direction="back" size={36} labelSize={8} onClick={() => seekBack(15)} />
-                {playPauseBtn(36, false)}
-                <SeekButton direction="forward" size={36} labelSize={8} onClick={() => seekForward(15)} />
-                <CSModeButton iconOnly={isSmallScreen} />
-                <button
-                  type="button"
-                  onClick={stop}
-                  aria-label="Close audio player"
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "#555",
-                    cursor: "pointer",
-                    fontSize: 18,
-                    lineHeight: 1,
-                    padding: "0 4px",
-                    flexShrink: 0,
-                  }}
-                >
-                  ×
-                </button>
+                {renderTransportRow({
+                  playSize: 40,
+                  transportSize: 36,
+                  skipSize: 36,
+                  gap: 12,
+                  hidePrevNext: false,
+                  shuffleSize: 36,
+                })}
+                {renderSecondaryControls(40)}
               </div>
             )}
           </div>
