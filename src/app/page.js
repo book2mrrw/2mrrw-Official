@@ -1207,6 +1207,19 @@ export default function Page() {
     navigate();
   };
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const openTab = sessionStorage.getItem("openTab");
+    if (!openTab) return;
+    sessionStorage.removeItem("openTab");
+    switchTab(openTab);
+    if (openTab === "mymusic") {
+      window.setTimeout(() => {
+        mainScrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+      }, 0);
+    }
+  }, []);
+
   const isMobileNavTabActive = tabId => {
     if (tabId === "cards") return activeTab === "cards" || (activeTab === "home" && homeScrollSection === "cards");
     if (tabId === "vault") return activeTab === "vault" || (activeTab === "home" && homeScrollSection === "vault");

@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import Link from "next/link";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import CoverArt from "@/components/ui/CoverArt";
+import { catalogCoverUrl } from "@/lib/media-urls";
 
 function slugsFromPurchaseItems(items) {
   const list = Array.isArray(items) ? items : [];
@@ -23,6 +24,19 @@ function slugsFromPurchaseRecord(purchase) {
   return slugsFromPurchaseItems(items);
 }
 
+function parsePurchaseItems(purchase) {
+  if (!purchase) return [];
+  let items = purchase.items;
+  if (typeof items === "string") {
+    try {
+      items = JSON.parse(items);
+    } catch {
+      items = [];
+    }
+  }
+  return Array.isArray(items) ? items : [];
+}
+
 function resolveExpectedSlugs(searchParams) {
   const single = searchParams.get("slug");
   const many = searchParams.get("slugs");
@@ -33,13 +47,46 @@ function resolveExpectedSlugs(searchParams) {
   return [];
 }
 
+function pickCollectedItem(purchases, sessionId, expectedSlugs) {
+  let items = [];
+  if (sessionId) {
+    const match = purchases.find((p) => p.stripe_checkout_session_id === sessionId);
+    items = parsePurchaseItems(match);
+  }
+  if (!items.length && purchases.length) {
+    items = parsePurchaseItems(purchases[0]);
+  }
+  const preferred =
+    items.find((item) => item?.slug && expectedSlugs.includes(item.slug)) ||
+    items.find((item) => {
+      const type = String(item?.type || item?.product_type || "").toLowerCase();
+      return type && !["merch", "vinyl", "ticket"].includes(type);
+    }) ||
+    items[0];
+
+  if (!preferred) return null;
+
+  const coverRaw = preferred.cover || preferred.cover_url || preferred.coverArt;
+  return {
+    title: preferred.title || "Collected",
+    subtitle: preferred.artist || preferred.subtitle || "Now in your collection",
+    cover: coverRaw ? catalogCoverUrl(coverRaw) : null,
+    coverArtType: preferred.coverArtType || preferred.cover_art_type || "image",
+  };
+}
+
 function SuccessContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session_id");
-  const { currentUser, refreshLibrary, refreshAccountState } = useAuth();
+  const { refreshLibrary, refreshAccountState } = useAuth();
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [collected, setCollected] = useState(null);
+  const [entered, setEntered] = useState(false);
+  const [exiting, setExiting] = useState(false);
+  const [buttonPressed, setButtonPressed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,7 +135,10 @@ function SuccessContent() {
         }
 
         const orderHistory = await loadPurchases();
-        if (!cancelled) setPurchases(orderHistory);
+        if (!cancelled) {
+          setPurchases(orderHistory);
+          setCollected(pickCollectedItem(orderHistory, sessionId, expectedSlugs));
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err.message || "Network error. Could not load purchases.");
@@ -104,52 +154,187 @@ function SuccessContent() {
     };
   }, [sessionId, refreshLibrary, refreshAccountState, searchParams]);
 
-  const userName = currentUser?.name?.split(" ")[0] || "";
+  useEffect(() => {
+    if (loading) return undefined;
+    const frame = requestAnimationFrame(() => setEntered(true));
+    return () => cancelAnimationFrame(frame);
+  }, [loading]);
+
+  const handleGoToCollection = useCallback(() => {
+    if (exiting) return;
+    setExiting(true);
+    sessionStorage.setItem("openTab", "mymusic");
+    window.setTimeout(() => {
+      router.push("/");
+    }, 450);
+  }, [exiting, router]);
+
+  const displayTitle = collected?.title || "Collected";
+  const displaySubtitle = collected?.subtitle || "Now in your collection";
+
+  const pageWrapperStyle = {
+    minHeight: "100vh",
+    background: "#050505",
+    color: "white",
+    fontFamily: "sans-serif",
+    position: "relative",
+    overflow: "hidden",
+    transform: exiting ? "translateY(-100%)" : "translateY(0)",
+    transition: "transform 400ms ease-in-out",
+    transitionDelay: exiting ? "50ms" : "0ms",
+  };
+
+  const ambientStyle = {
+    position: "fixed",
+    inset: 0,
+    pointerEvents: "none",
+    zIndex: 0,
+    background: collected?.cover
+      ? `url(${collected.cover}) center/cover`
+      : "radial-gradient(circle at 50% 30%, rgba(0,255,255,0.12) 0%, transparent 55%), #050505",
+    filter: "blur(90px) saturate(1.25) brightness(0.55)",
+    opacity: exiting ? 0 : entered ? 0.55 : 0,
+    transition: exiting ? "opacity 400ms ease-in" : "opacity 800ms ease-out",
+  };
+
+  const contentWrapperStyle = {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    textAlign: "center",
+    transform: exiting
+      ? "translateY(-40px) scale(1.04)"
+      : entered
+        ? "translateY(0) scale(1)"
+        : "translateY(20px) scale(0.96)",
+    opacity: exiting ? 0 : entered ? 1 : 0,
+    transition: exiting
+      ? "all 350ms ease-in"
+      : "opacity 700ms ease-out, transform 700ms cubic-bezier(0.22, 1, 0.36, 1)",
+  };
+
+  const buttonScale = buttonPressed ? 0.96 : 1;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#050505", color: "white", display: "flex", flexDirection: "column", alignItems: "center", padding: "60px 20px", fontFamily: "sans-serif" }}>
-      <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 6, marginBottom: 30, textShadow: "0 0 20px rgba(0,255,255,0.8)" }}>2MRRW</div>
-      <div style={{ width: 72, height: 72, borderRadius: "50%", border: "2px solid #00ffff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, color: "#00ffff", marginBottom: 24, boxShadow: "0 0 24px rgba(0,255,255,0.4)" }}>✓</div>
-      <h1 style={{ fontSize: 26, fontWeight: 800, marginBottom: 8, letterSpacing: 2 }}>Payment Successful</h1>
-      <p style={{ color: "#aaa", fontSize: 15, marginBottom: 30 }}>
-        {userName ? `Thanks ${userName}, your order is confirmed.` : "Your order is confirmed."}
-      </p>
-      <div style={{ width: "100%", maxWidth: 520, background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 16, padding: 24, marginBottom: 30 }}>
-        <h2 style={{ fontSize: 14, letterSpacing: 3, color: "#555", marginBottom: 16, textTransform: "uppercase" }}>Your Purchases</h2>
-        {loading && <p style={{ color: "#555", fontSize: 13 }}>Loading your order history…</p>}
-        {error && <p style={{ color: "red", fontSize: 13 }}>{error}</p>}
-        {!loading && !error && purchases.length === 0 && (
-          <p style={{ color: "#555", fontSize: 13 }}>No purchases found yet — they may take a moment to appear.</p>
-        )}
-        {!loading && purchases.map((purchase, i) => {
-          let items = [];
-          try {
-            items = typeof purchase.items === "string" ? JSON.parse(purchase.items) : purchase.items || [];
-          } catch { /* ignore */ }
-          return (
-            <div key={purchase.id || i} style={{ marginBottom: 16, paddingBottom: 16, borderBottom: i < purchases.length - 1 ? "1px solid #1e1e1e" : "none" }}>
-              <div style={{ fontSize: 11, color: "#444", marginBottom: 6 }}>
-                {new Date(purchase.purchased_at || purchase.created_at).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+    <div style={pageWrapperStyle}>
+      <div aria-hidden style={ambientStyle} />
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
+          minHeight: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "48px 24px 56px",
+        }}
+      >
+        {loading ? (
+          <p style={{ color: "#555", fontSize: 13, letterSpacing: 2 }}>Confirming your collection…</p>
+        ) : (
+          <>
+            <div style={contentWrapperStyle}>
+              <div
+                style={{
+                  width: "min(72vw, 280px)",
+                  aspectRatio: "1",
+                  marginBottom: 28,
+                  borderRadius: 20,
+                  overflow: "hidden",
+                  boxShadow: "0 0 40px rgba(0,255,255,0.25)",
+                }}
+              >
+                <CoverArt
+                  src={collected?.cover}
+                  type={collected?.coverArtType || "image"}
+                  alt={displayTitle}
+                  width="100%"
+                  height="100%"
+                  borderRadius={20}
+                />
               </div>
-              {items.map((item, j) => (
-                <div key={j} style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                  {item.cover && <img src={item.cover} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }} />}
-                  <span style={{ fontSize: 13, flex: 1 }}>{item.title}</span>
-                  <span style={{ fontSize: 12, color: "#00ffff" }}>${Number(item.price).toFixed(2)}</span>
-                </div>
-              ))}
+              <div
+                style={{
+                  fontSize: 11,
+                  letterSpacing: 6,
+                  color: "#00ffff",
+                  fontWeight: 800,
+                  marginBottom: 12,
+                  textShadow: "0 0 16px rgba(0,255,255,0.45)",
+                }}
+              >
+                COLLECTED.
+              </div>
+              <h1
+                style={{
+                  fontSize: 28,
+                  fontWeight: 900,
+                  margin: "0 0 10px",
+                  letterSpacing: 1,
+                  lineHeight: 1.15,
+                  maxWidth: 320,
+                }}
+              >
+                {displayTitle}
+              </h1>
+              <p style={{ color: "#888", fontSize: 14, margin: 0, maxWidth: 300, lineHeight: 1.5 }}>
+                {error ? error : displaySubtitle}
+              </p>
             </div>
-          );
-        })}
+
+            <button
+              type="button"
+              onClick={handleGoToCollection}
+              onMouseDown={() => setButtonPressed(true)}
+              onMouseUp={() => setButtonPressed(false)}
+              onMouseLeave={() => setButtonPressed(false)}
+              onTouchStart={() => setButtonPressed(true)}
+              onTouchEnd={() => setButtonPressed(false)}
+              disabled={exiting}
+              style={{
+                marginTop: 40,
+                padding: "14px 32px",
+                background: "#111",
+                color: "#00ffff",
+                border: "1px solid #00ffff",
+                borderRadius: 10,
+                fontWeight: 800,
+                fontSize: 12,
+                letterSpacing: 2,
+                cursor: exiting ? "default" : "pointer",
+                transform: `scale(${buttonScale})`,
+                transition: "transform 0.1s ease",
+                opacity: exiting ? 0.6 : 1,
+              }}
+            >
+              Go to My Music Collection
+            </button>
+          </>
+        )}
       </div>
-      <Link href="/?tab=mymusic" style={{ padding: "12px 32px", background: "#111", color: "#00ffff", border: "1px solid #00ffff", borderRadius: 8, textDecoration: "none", fontWeight: "bold", fontSize: 13, letterSpacing: 2 }}>← OPEN LIBRARY</Link>
     </div>
   );
 }
 
 export default function SuccessPage() {
   return (
-    <Suspense fallback={<div style={{ background: "#050505", color: "white", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>Loading…</div>}>
+    <Suspense
+      fallback={
+        <div
+          style={{
+            background: "#050505",
+            color: "white",
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          Loading…
+        </div>
+      }
+    >
       <SuccessContent />
     </Suspense>
   );
