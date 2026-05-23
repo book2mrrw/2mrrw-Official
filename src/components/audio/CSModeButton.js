@@ -35,7 +35,7 @@ function FrequencyPulseIcon({ active, animateBars }) {
   );
 }
 
-export default function CSModeButton({ style: styleOverride }) {
+export default function CSModeButton({ style: styleOverride, iconOnly = false }) {
   const { csMode, toggleCSMode, isPlaying } = useAudioPlayer();
   const [animating, setAnimating] = useState(false);
   const active = csMode;
@@ -89,18 +89,20 @@ export default function CSModeButton({ style: styleOverride }) {
       }}
     >
       <FrequencyPulseIcon active={active} animateBars={showMotion} />
-      <span
-        style={{
-          fontSize: 9,
-          fontWeight: 700,
-          letterSpacing: 1.2,
-          textTransform: "uppercase",
-          lineHeight: 1,
-          color: active ? "#1E90FF" : "#444",
-        }}
-      >
-        {active ? "SLOWED" : "SLOW"}
-      </span>
+      {!iconOnly && (
+        <span
+          style={{
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: 1.2,
+            textTransform: "uppercase",
+            lineHeight: 1,
+            color: active ? "#1E90FF" : "#444",
+          }}
+        >
+          {active ? "SLOWED" : "SLOW"}
+        </span>
+      )}
     </button>
   );
 }

@@ -649,6 +649,20 @@ export default function Page() {
   const ytIframeRef        = useRef(null);
   const modalAudioRef      = useRef(null);
   const mainScrollRef      = useRef(null);
+  const singlesRowRef      = useRef(null);
+
+  const syncSinglesCarouselVideos = useCallback(() => {
+    const row = singlesRowRef.current;
+    if (!row) return;
+    const vw = window.innerWidth;
+    row.querySelectorAll("video[data-single-carousel]").forEach((video) => {
+      const card = video.closest("[data-single-card]");
+      const rect = (card || video).getBoundingClientRect();
+      const inView = rect.left >= 0 && rect.right <= vw;
+      if (inView) video.play().catch(() => {});
+      else video.pause();
+    });
+  }, []);
 
   // ── AUDIO FOCUS HANDLER ───────────────────────────────────────────────────
   const handleAudioVisualsFocused = useCallback(() => {
@@ -707,6 +721,33 @@ export default function Page() {
   useEffect(() => {
     setInventory(loadInventory());
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "home") return undefined;
+    let debounceTimer;
+    const onScroll = () => {
+      window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(syncSinglesCarouselVideos, 100);
+    };
+    const row = singlesRowRef.current;
+    row?.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    syncSinglesCarouselVideos();
+    const onVisibility = () => {
+      if (document.hidden) {
+        singlesRowRef.current?.querySelectorAll("video[data-single-carousel]").forEach((v) => v.pause());
+      } else {
+        syncSinglesCarouselVideos();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.clearTimeout(debounceTimer);
+      row?.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [activeTab, tabKey, syncSinglesCarouselVideos]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1645,6 +1686,7 @@ export default function Page() {
                     <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:18,alignItems:"flex-start"}}>
 
                       <div
+                        ref={singlesRowRef}
                         className="singles-row"
                         style={{
                           flex:1,
@@ -1665,6 +1707,7 @@ export default function Page() {
                           return (
                           <div
                             key={single.slug}
+                            data-single-card
                             onClick={() => openSingleModal(singleUi)}
                             style={{
                               flex:"0 0 auto",
@@ -1694,12 +1737,12 @@ export default function Page() {
                           >
                             {/* FIXED: src points to /videos/singles/, webkit-playsinline for iOS Safari */}
                             <video
+                              data-single-carousel
                               src={singleUi.video}
-                              autoPlay
                               muted
                               loop
                               playsInline
-                              preload="auto"
+                              preload="metadata"
                               webkit-playsinline="true"
                               style={{
                                 width:"100%",

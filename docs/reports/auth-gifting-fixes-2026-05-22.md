@@ -36,8 +36,24 @@ Admin ID: `545cd959-5cae-4009-8a91-1c46fe2f4d27` · Email: `book2mrrw@gmail.com`
 
 ## Build
 
-`npm run build` — **exit 0**
+`npm run build` — **exit 0** (verified 2026-05-22)
+
+## Deploy
+
+| Field | Value |
+|-------|--------|
+| **Commit** | `a7fc68a` — feat: OTP enforcement, resend countdown, admin gifting UI, gift delivery, gift history |
+| **Production alias** | https://artist-platform-silk.vercel.app |
+| **Deployment URL** | https://artist-platform-6sjzy4be1-eellian-morrows-projects.vercel.app |
+| **Inspect** | https://vercel.com/eellian-morrows-projects/artist-platform/2BPXYftVvbCD5wvrZGLxuz7M9MFD |
+| **Deployment ID** | `dpl_2BPXYftVvbCD5wvrZGLxuz7M9MFD` |
+
+Deployed via `npx vercel deploy --prod --yes` after local build pass. No new application commits; report-only doc update for deploy record.
 
 ## Control system
 
 No changes required (send/revoke already in 2MRRW-Control-System; storefront uses local `/api/gifts/send`).
+
+## Final status
+
+**COMPLETE** — Implementation present at `a7fc68a`; all seven checks pass; production deploy ready on alias above.

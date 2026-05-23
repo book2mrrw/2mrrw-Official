@@ -157,6 +157,7 @@ export function AudioProvider({ children }) {
   const csModeRef = useRef(false);
   const csUsingAlternateSrcRef = useRef(false);
   const playTrackRef = useRef(null);
+  const applyCSModeToTrackRef = useRef(null);
   const userPausedRef = useRef(false);
   const skipPauseInterruptionRef = useRef(false);
   const lastPositionStateAtRef = useRef(0);
@@ -348,7 +349,9 @@ export function AudioProvider({ children }) {
         if (nextTrack) {
           queueIndexRef.current = nextIndex;
           patchState({ queueIndex: nextIndex });
-          playTrackRef.current?.(nextTrack, { resumeAt: 0 });
+          void playTrackRef.current?.(nextTrack, { resumeAt: 0 }).then((ok) => {
+            if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
+          });
           return;
         }
       }
@@ -485,6 +488,42 @@ export function AudioProvider({ children }) {
     }
   }, [patchState, updateMediaSession, applyCsToElement]);
 
+  const applyCSModeToTrack = useCallback(
+    async (track) => {
+      if (!csModeRef.current || !track) return;
+      const normalized = normalizeTrack(track);
+      const audio = audioRef.current;
+      if (!audio) return;
+      const presentation = resolvePlaybackPresentation(
+        normalized,
+        true,
+        csUsingAlternateSrcRef.current
+      );
+      const nextTrack = {
+        ...normalized,
+        title: presentation.title,
+        src: presentation.src,
+        cover: presentation.cover,
+      };
+      const currentUrl = audio.currentSrc || audio.src;
+      const targetUrl = new URL(nextTrack.src, window.location.href).href;
+      if (currentUrl !== targetUrl) {
+        skipPauseInterruptionRef.current = true;
+        audio.pause();
+        audio.src = nextTrack.src;
+        audio.load();
+      }
+      applyCsToElement(audio, presentation, audio.currentTime > 0 ? audio.currentTime : null);
+      patchState({
+        csTrack: normalized,
+        currentTrack: nextTrack,
+        currentTrackId: nextTrack.id,
+      });
+      void updateMediaSession(nextTrack, { playing: !audio.paused });
+    },
+    [applyCsToElement, patchState, updateMediaSession]
+  );
+
   const toggleCSMode = useCallback(async () => {
     const next = !csModeRef.current;
     csModeRef.current = next;
@@ -538,6 +577,7 @@ export function AudioProvider({ children }) {
 
   useEffect(() => {
     playTrackRef.current = playTrack;
+    applyCSModeToTrackRef.current = applyCSModeToTrack;
   });
 
   const setQueue = useCallback((tracks = [], startIndex = 0) => {
@@ -561,8 +601,11 @@ export function AudioProvider({ children }) {
     }
     queueIndexRef.current = nextIndex;
     patchState({ queueIndex: nextIndex });
-    return playTrack(queue[nextIndex], { resumeAt: 0 });
-  }, [playTrack, patchState]);
+    const track = queue[nextIndex];
+    const ok = await playTrack(track, { resumeAt: 0 });
+    if (ok && csModeRef.current) await applyCSModeToTrack(track);
+    return ok;
+  }, [playTrack, patchState, applyCSModeToTrack]);
 
   const playPrevious = useCallback(async () => {
     const queue = queueRef.current;
@@ -578,8 +621,11 @@ export function AudioProvider({ children }) {
     if (prevIndex < 0) prevIndex = repeatModeRef.current === "all" ? queue.length - 1 : 0;
     queueIndexRef.current = prevIndex;
     patchState({ queueIndex: prevIndex });
-    return playTrack(queue[prevIndex], { resumeAt: 0 });
-  }, [playTrack, patchState, syncPositionState]);
+    const track = queue[prevIndex];
+    const ok = await playTrack(track, { resumeAt: 0 });
+    if (ok && csModeRef.current) await applyCSModeToTrack(track);
+    return ok;
+  }, [playTrack, patchState, syncPositionState, applyCSModeToTrack]);
 
   const setRepeatMode = useCallback((mode) => {
     const next = REPEAT_MODES.includes(mode) ? mode : "off";

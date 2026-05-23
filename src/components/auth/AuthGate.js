@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { writePendingPhone, clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
 import { validateEmail, validatePhone, formatResendCountdown } from "@/lib/auth/validation";
-import { isAdminUser } from "@/lib/auth/constants";
 import { useAuth } from "@/context/AuthContext";
 
 const DISMISS_DRAG_PX = 80;
@@ -34,7 +33,7 @@ const otpBoxStyle = {
 };
 
 export default function AuthGate({ open, onClose, onVerified }) {
-  const { markAdmin } = useAuth();
+  const { applySessionUser, refreshAccountState } = useAuth();
   const [mode, setMode] = useState("signup");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -79,6 +78,17 @@ export default function AuthGate({ open, onClose, onVerified }) {
       resetForm();
     }
   }, [open, resetForm]);
+
+  useEffect(() => {
+    if (!open || typeof window === "undefined") return;
+    const pendingEmail = sessionStorage.getItem("pendingOtpEmail");
+    if (pendingEmail) {
+      setEmail(pendingEmail);
+      setOtpEmail(pendingEmail);
+      setMode("otp");
+      sessionStorage.removeItem("pendingOtpEmail");
+    }
+  }, [open]);
 
   useEffect(() => {
     if (screen !== "otp" || resendIn <= 0) return undefined;
@@ -211,11 +221,12 @@ export default function AuthGate({ open, onClose, onVerified }) {
       }
       clearPendingPhone();
 
-      const verifiedUser = data?.user || data?.session?.user;
-      if (verifiedUser && isAdminUser(verifiedUser)) {
-        markAdmin(verifiedUser);
+      if (data?.session) {
+        await applySessionUser(data.session);
+      } else if (data?.user) {
+        await applySessionUser({ user: data.user });
       }
-
+      await refreshAccountState();
       await onVerified?.();
     } catch {
       setOtpError("Invalid or expired code. Try again.");

@@ -15,6 +15,12 @@ const EMPTY_ACCOUNT_STATE = {
 
 const AuthContext = createContext(null);
 
+export function resolveUserFromSession(session) {
+  const user = session?.user;
+  if (!user?.email || user.email.endsWith("@guest.2mrrw.local")) return null;
+  return { user, isAdmin: isAdminUser(user) };
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [library, setLibrary] = useState([]);
@@ -72,8 +78,9 @@ export function AuthProvider({ children }) {
     }
     const data = await res.json();
     if (data.user) {
+      const resolved = resolveUserFromSession({ user: data.user });
       setUser(data.user);
-      setIsAdmin(Boolean(data.permissions?.admin) || isAdminUser(data.user));
+      setIsAdmin(Boolean(data.permissions?.admin) || resolved?.isAdmin);
     }
     applyAccountPayload(data);
     return data;
@@ -102,6 +109,18 @@ export function AuthProvider({ children }) {
     return data.user || null;
   }, [refreshAccountState]);
 
+  const applySessionUser = useCallback(
+    async (session) => {
+      const resolved = resolveUserFromSession(session);
+      if (!resolved) return null;
+      setUser(resolved.user);
+      setIsAdmin(resolved.isAdmin);
+      await refreshAccountState();
+      return resolved.user;
+    },
+    [refreshAccountState]
+  );
+
   useEffect(() => {
     let mounted = true;
     let authSubscription = null;
@@ -120,13 +139,15 @@ export function AuthProvider({ children }) {
         const supabase = createClient();
 
         const { data: sessionData } = await supabase.auth.getSession();
-        const sessionUser = sessionData?.session?.user;
-        if (
-          sessionUser?.email &&
-          !sessionUser.email.endsWith("@guest.2mrrw.local") &&
-          mounted
-        ) {
-          setIsAdmin(isAdminUser(sessionUser));
+        if (!mounted) return;
+
+        const resolved = resolveUserFromSession(sessionData?.session);
+        if (resolved) {
+          setUser(resolved.user);
+          setIsAdmin(resolved.isAdmin);
+          await refreshAccountState();
+        } else {
+          await refreshGuest();
         }
 
         const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -135,27 +156,11 @@ export function AuthProvider({ children }) {
             clearAuthenticatedState();
             return;
           }
-          const nextUser = session?.user;
-          if (nextUser?.email && !nextUser.email.endsWith("@guest.2mrrw.local")) {
-            setIsAdmin(isAdminUser(nextUser));
-            await refreshAccountState();
+          if (event === "SIGNED_IN" && session) {
+            await applySessionUser(session);
           }
         });
         authSubscription = authListener?.subscription;
-
-        await refreshGuest();
-        if (!mounted) return;
-
-        const account = await refreshAccountState();
-        if (!mounted) return;
-
-        if (!account?.user) {
-          const { data } = await supabase.auth.getUser();
-          if (data?.user?.email && !data.user.email.endsWith("@guest.2mrrw.local")) {
-            setIsAdmin(isAdminUser(data.user));
-            await refreshAccountState();
-          }
-        }
       } catch {
         /* session restore optional */
       }
@@ -167,7 +172,7 @@ export function AuthProvider({ children }) {
       mounted = false;
       authSubscription?.unsubscribe();
     };
-  }, [refreshGuest, refreshAccountState]);
+  }, [applySessionUser, refreshAccountState, refreshGuest]);
 
   const enterGuest = useCallback(async ({ email, phone, name }) => {
     const res = await fetch("/api/guest/session", {
@@ -234,6 +239,7 @@ export function AuthProvider({ children }) {
     refreshGuest,
     refreshLibrary,
     refreshAccountState,
+    applySessionUser,
   }), [
     user,
     library,
@@ -248,6 +254,7 @@ export function AuthProvider({ children }) {
     refreshGuest,
     refreshLibrary,
     refreshAccountState,
+    applySessionUser,
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

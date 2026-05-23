@@ -1,204 +1,64 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
-import { formatResendCountdown } from "@/lib/auth/validation";
-import { isAdminUser } from "@/lib/auth/constants";
-import { useAuth } from "@/context/AuthContext";
 
-const boxStyle = {
-  width: 44,
-  height: 52,
-  textAlign: "center",
-  fontSize: 22,
-  fontWeight: 800,
-  background: "#111",
-  border: "1px solid #2a2a2a",
-  color: "white",
-  borderRadius: 10,
-};
-
-function VerifyOtpForm() {
+/**
+ * Legacy /verify-otp route — redirects to home and opens AuthGate for codes.
+ * Supabase Auth redirect URL should be https://artist-platform-silk.vercel.app
+ * (not /verify-otp). Magic links land on /; AuthContext restores the session.
+ */
+function VerifyOtpRedirect() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { refreshAccountState, markAdmin } = useAuth();
   const email = searchParams.get("email") || "";
-  const nextPath = searchParams.get("next") || "/?tab=mymusic";
-  const [digits, setDigits] = useState(["", "", "", "", "", ""]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [resendIn, setResendIn] = useState(30);
-  const inputsRef = useRef([]);
-
-  const code = useMemo(() => digits.join(""), [digits]);
+  const nextPath = searchParams.get("next") || "/";
 
   useEffect(() => {
-    if (!email) {
-      router.replace("/join");
-    }
-  }, [email, router]);
+    let mounted = true;
 
-  useEffect(() => {
-    if (resendIn <= 0) return undefined;
-    const timer = setInterval(() => setResendIn((v) => Math.max(0, v - 1)), 1000);
-    return () => clearInterval(timer);
-  }, [resendIn]);
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data } = await supabase.auth.getSession();
+        const sessionUser = data?.session?.user;
+        const isRealUser =
+          sessionUser?.email && !sessionUser.email.endsWith("@guest.2mrrw.local");
 
-  const updateDigit = (index, value) => {
-    const char = value.replace(/\D/g, "").slice(-1);
-    const next = [...digits];
-    next[index] = char;
-    setDigits(next);
-    if (char && index < 5) inputsRef.current[index + 1]?.focus();
-  };
-
-  const verify = async (e) => {
-    e.preventDefault();
-    if (code.length !== 6) {
-      setError("Enter the 6-digit code.");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      const supabase = createClient();
-      const { data, error: verifyError } = await supabase.auth.verifyOtp({
-        email,
-        token: code,
-        type: "email",
-      });
-      if (verifyError) throw verifyError;
-
-      const phone = readPendingPhone();
-      const pendingName =
-        typeof window !== "undefined" ? sessionStorage.getItem("pendingProfileName") : "";
-      if (phone || pendingName) {
-        await fetch("/api/auth/complete-profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            email,
-            phone: phone || undefined,
-            name: pendingName || undefined,
-          }),
-        });
+        if (isRealUser) {
+          if (mounted) router.replace(nextPath);
+          return;
+        }
+      } catch {
+        /* fall through to AuthGate */
       }
+
       if (typeof window !== "undefined") {
-        sessionStorage.removeItem("pendingProfileName");
+        if (email) sessionStorage.setItem("pendingOtpEmail", email);
+        sessionStorage.setItem("openAuthGate", "otp");
       }
-      clearPendingPhone();
+      if (mounted) router.replace(nextPath);
+    })();
 
-      const verifiedUser = data?.user || data?.session?.user;
-      if (verifiedUser && isAdminUser(verifiedUser)) {
-        markAdmin(verifiedUser);
-      }
-
-      await refreshAccountState();
-      router.push(nextPath);
-      router.refresh();
-    } catch {
-      setError("Invalid or expired code. Try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const resend = async () => {
-    if (resendIn > 0) return;
-    setError("");
-    const supabase = createClient();
-    const { error: otpError } = await supabase.auth.signInWithOtp({ email });
-    if (otpError) {
-      setError(otpError.message);
-      return;
-    }
-    setResendIn(30);
-  };
+    return () => {
+      mounted = false;
+    };
+  }, [email, nextPath, router]);
 
   return (
     <main
       style={{
         minHeight: "100vh",
         background: "#050505",
-        color: "white",
+        color: "#888",
         display: "grid",
         placeItems: "center",
-        padding: 24,
         fontFamily: "sans-serif",
+        fontSize: 14,
       }}
     >
-      <form
-        onSubmit={verify}
-        style={{
-          width: "100%",
-          maxWidth: 420,
-          background: "#0d0d0d",
-          border: "1px solid #222",
-          borderRadius: 20,
-          padding: 28,
-        }}
-      >
-        <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 6, color: "#00ffff", marginBottom: 12 }}>2MRRW</div>
-        <h1 style={{ margin: "0 0 8px", fontSize: 24 }}>Verify code</h1>
-        <p style={{ margin: "0 0 20px", color: "#888", fontSize: 14 }}>Sent to {email}</p>
-        <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 20 }}>
-          {digits.map((digit, index) => (
-            <input
-              key={index}
-              ref={(el) => {
-                inputsRef.current[index] = el;
-              }}
-              inputMode="numeric"
-              maxLength={1}
-              value={digit}
-              onChange={(e) => updateDigit(index, e.target.value)}
-              style={boxStyle}
-            />
-          ))}
-        </div>
-        {error ? <div style={{ color: "#ef4444", fontSize: 13, marginBottom: 12 }}>{error}</div> : null}
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: "100%",
-            padding: "13px 0",
-            background: "#00ffff",
-            color: "#000",
-            fontWeight: 900,
-            border: "none",
-            borderRadius: 10,
-            cursor: "pointer",
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
-          {loading ? "Verifying…" : "Verify"}
-        </button>
-        <button
-          type="button"
-          onClick={() => void resend()}
-          disabled={resendIn > 0}
-          style={{
-            marginTop: 14,
-            background: "none",
-            border: "none",
-            color: "#00ffff",
-            fontSize: 13,
-            cursor: resendIn > 0 ? "default" : "pointer",
-            width: "100%",
-            opacity: resendIn > 0 ? 0.85 : 1,
-          }}
-        >
-          {resendIn > 0 ? `Resend code in ${formatResendCountdown(resendIn)}` : "Resend code"}
-        </button>
-        <Link href="/join" style={{ display: "block", color: "#777", fontSize: 13, textAlign: "center", marginTop: 16 }}>
-          Back
-        </Link>
-      </form>
+      Redirecting…
     </main>
   );
 }
@@ -206,7 +66,7 @@ function VerifyOtpForm() {
 export default function VerifyOtpPage() {
   return (
     <Suspense fallback={<main style={{ minHeight: "100vh", background: "#050505" }} />}>
-      <VerifyOtpForm />
+      <VerifyOtpRedirect />
     </Suspense>
   );
 }

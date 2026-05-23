@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import AuthGate from "@/components/auth/AuthGate";
 import { useAuth } from "@/context/AuthContext";
 
@@ -14,6 +14,14 @@ export function AuthGateProvider({ children }) {
   const { user, refreshAccountState } = useAuth();
   const [open, setOpen] = useState(false);
   const pendingRef = useRef(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || isOtpAuthenticated(user)) return;
+    const flag = sessionStorage.getItem("openAuthGate");
+    if (!flag) return;
+    sessionStorage.removeItem("openAuthGate");
+    setOpen(true);
+  }, [user]);
 
   const closeGate = useCallback(() => {
     setOpen(false);

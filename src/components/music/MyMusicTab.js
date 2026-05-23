@@ -265,6 +265,12 @@ function MyMusicTab({
     setSortPref(readSortPref());
   }, []);
 
+  useEffect(() => {
+    if (user && !loading) {
+      void refresh();
+    }
+  }, [user, loading, refresh]);
+
   const setSort = useCallback((id) => {
     setSortPref(id);
     try {

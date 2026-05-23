@@ -128,6 +128,9 @@ function GlobalAudioPlayerBar() {
     suppressPauseInterruptionRef,
   } = useAudioPlayer();
   const [isMobile, setIsMobile] = useState(false);
+  const [windowWidth, setWindowWidth] = useState(
+    typeof window !== "undefined" ? window.innerWidth : 768
+  );
   const [expanded, setExpanded] = useState(false);
   const [ambientCoverUrl, setAmbientCoverUrl] = useState(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
@@ -156,11 +159,17 @@ function GlobalAudioPlayerBar() {
   }, [csMode]);
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
+    const check = () => {
+      const w = window.innerWidth;
+      setWindowWidth(w);
+      setIsMobile(w < 768);
+    };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
+
+  const isSmallScreen = windowWidth < 360;
 
   useEffect(() => {
     if (!hasStarted || !currentTrack) {
@@ -486,8 +495,16 @@ function GlobalAudioPlayerBar() {
     flexShrink: 0,
   });
 
-  const renderSecondaryControls = (gap) => (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap }}>
+  const renderSecondaryControls = (gap, iconOnlyCs = false) => (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap,
+        flexWrap: "nowrap",
+      }}
+    >
       <button
         type="button"
         aria-label="Shuffle"
@@ -510,17 +527,54 @@ function GlobalAudioPlayerBar() {
       >
         {repeatMode === "one" ? "①" : "↻"} Repeat
       </button>
-      <CSModeButton />
+      <CSModeButton iconOnly={iconOnlyCs} />
     </div>
   );
 
-  const renderTransportRow = ({ playSize, transportSize, skipSize, labelSize, prevNextColor, gap }) => (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap, width: "100%" }}>
-      <TrackTransportButton label="Previous track" size={transportSize} color={prevNextColor} onClick={() => playPrevious()} />
-      <SeekButton direction="back" size={skipSize} labelSize={labelSize} onClick={() => seekBack(15)} />
-      {playPauseBtn(playSize, playSize >= 64)}
-      <SeekButton direction="forward" size={skipSize} labelSize={labelSize} onClick={() => seekForward(15)} />
-      <TrackTransportButton label="Next track" size={transportSize} color={prevNextColor} onClick={() => playNext()} />
+  const renderTransportRow = ({
+    playSize,
+    transportSize,
+    skipSize,
+    labelSize,
+    prevNextColor,
+    gap,
+    hidePrevNext = false,
+  }) => (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap,
+        width: "100%",
+        flexWrap: "nowrap",
+      }}
+    >
+      {hidePrevNext ? (
+        <div style={{ width: transportSize, flexShrink: 0 }} aria-hidden />
+      ) : (
+        <TrackTransportButton
+          label="Previous track"
+          size={transportSize}
+          color={prevNextColor}
+          onClick={() => playPrevious()}
+        />
+      )}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap, flex: 1 }}>
+        <SeekButton direction="back" size={skipSize} labelSize={labelSize} onClick={() => seekBack(15)} />
+        {playPauseBtn(playSize, playSize >= 64)}
+        <SeekButton direction="forward" size={skipSize} labelSize={labelSize} onClick={() => seekForward(15)} />
+      </div>
+      {hidePrevNext ? (
+        <div style={{ width: transportSize, flexShrink: 0 }} aria-hidden />
+      ) : (
+        <TrackTransportButton
+          label="Next track"
+          size={transportSize}
+          color={prevNextColor}
+          onClick={() => playNext()}
+        />
+      )}
     </div>
   );
 
@@ -764,9 +818,10 @@ function GlobalAudioPlayerBar() {
                 labelSize: 9,
                 prevNextColor: "#888",
                 gap: 24,
+                hidePrevNext: isSmallScreen,
               })}
 
-              {renderSecondaryControls(32)}
+              {renderSecondaryControls(isSmallScreen ? 14 : 20, isSmallScreen)}
 
               {hasQueue && queueLabel && (
                 <div style={{ fontSize: 12, color: "#555", letterSpacing: 1.5, textTransform: "uppercase", textAlign: "center" }}>
@@ -892,9 +947,12 @@ function GlobalAudioPlayerBar() {
                   skipSize: 36,
                   labelSize: 8,
                   prevNextColor: "#666",
-                  gap: 10,
+                  gap: isSmallScreen ? 8 : 10,
+                  hidePrevNext: isSmallScreen,
                 })}
-                <div style={{ marginTop: 8 }}>{renderSecondaryControls(20)}</div>
+                <div style={{ marginTop: 8 }}>
+                  {renderSecondaryControls(isSmallScreen ? 14 : 20, isSmallScreen)}
+                </div>
               </>
             ) : (
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -985,7 +1043,7 @@ function GlobalAudioPlayerBar() {
                 <SeekButton direction="back" size={36} labelSize={8} onClick={() => seekBack(15)} />
                 {playPauseBtn(36, false)}
                 <SeekButton direction="forward" size={36} labelSize={8} onClick={() => seekForward(15)} />
-                <CSModeButton />
+                <CSModeButton iconOnly={isSmallScreen} />
                 <button
                   type="button"
                   onClick={stop}
