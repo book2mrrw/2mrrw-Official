@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Canonical frontend foundation recovery anchor. Scripts read this file; do not duplicate commit hashes elsewhere without updating here.",
   "version": 3,
-  "commit": "98d75318e2836d1722b2630090d8edb50d37c449",
-  "commitShort": "98d75318",
+  "commit": "676c67b4f21b29478f2ac0578338418d13f23e90",
+  "commitShort": "676c67b4",
   "branch": "frontend-stable-foundation",
   "mainBranch": "main",
   "commitMessage": "chore(p7): bump recovery anchor to main HEAD (4d18dc2)",
@@ -15,8 +15,8 @@
   "vercelProject": "artist-platform",
   "sacredOrigin": {
     "tag": "foundation-stable-v1",
-    "commit": "98d75318e2836d1722b2630090d8edb50d37c449",
-    "commitShort": "98d75318",
+    "commit": "ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c",
+    "commitShort": "ce6ae20e",
     "role": "Immutable UI origin — cinematic frontend baseline before recovery bundle"
   },
   "operationalTag": "foundation-stable-v3",
