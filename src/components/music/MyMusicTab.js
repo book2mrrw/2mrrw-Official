@@ -3,7 +3,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { useMusicLibrary } from "@/hooks/useMusicLibrary";
-import { isOtpAuthenticated } from "@/context/AuthGateContext";
 import { membershipHasPremiumAccess } from "@/lib/commerce/entitlements";
 import { resolveContentAccess, resolveTrackAccess } from "@/lib/music-access";
 import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
@@ -237,7 +236,6 @@ function MyMusicTab({
   onDiscoverVault,
   onOpenSingle,
   onOpenAlbum,
-  onRequireAuth,
 }) {
   const goAccount = onGoToAccount || (() => onSwitchTab?.("account"));
   const goSingles = onDiscoverSingles || (() => onSwitchTab?.("singles"));
@@ -370,25 +368,6 @@ function MyMusicTab({
   }, [accountState, lastPlayed, playItem, resume, singles]);
 
   const sortLabel = SORT_OPTIONS.find((o) => o.id === sortPref)?.label || "Recently Added";
-
-  if (!isOtpAuthenticated(user)) {
-    return (
-      <div style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 20, padding: "48px 32px", textAlign: "center" }}>
-        <div style={{ fontSize: 32, marginBottom: 16 }}>🔒</div>
-        <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Sign in to access your library</div>
-        <div style={{ fontSize: 13, color: "#555", marginBottom: 24, lineHeight: 1.6 }}>
-          Stream your owned music, playlists, and continue listening — all in one place.
-        </div>
-        <button
-          type="button"
-          onClick={() => onRequireAuth?.()}
-          style={{ padding: "12px 28px", background: "#00ffff", color: "#000", fontWeight: 900, border: "none", borderRadius: 10, cursor: "pointer", fontSize: 14 }}
-        >
-          Sign in
-        </button>
-      </div>
-    );
-  }
 
   if (loading) {
     return <div style={{ padding: 40, textAlign: "center", color: "#555", fontSize: 13 }}>Loading your library…</div>;

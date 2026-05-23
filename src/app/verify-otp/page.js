@@ -36,7 +36,6 @@ function VerifyOtpRedirect() {
 
       if (typeof window !== "undefined") {
         if (email) sessionStorage.setItem("pendingOtpEmail", email);
-        sessionStorage.setItem("openAuthGate", "otp");
       }
       if (mounted) router.replace(nextPath);
     })();

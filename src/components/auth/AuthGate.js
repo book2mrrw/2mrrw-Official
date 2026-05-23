@@ -32,7 +32,8 @@ const otpBoxStyle = {
   borderRadius: 10,
 };
 
-export default function AuthGate({ open, onClose, onVerified }) {
+export default function AuthGate({ open, onClose, onVerified, variant = "sheet" }) {
+  const isRoot = variant === "root";
   const { applySessionUser, refreshAccountState } = useAuth();
   const [mode, setMode] = useState("signup");
   const [name, setName] = useState("");
@@ -271,56 +272,100 @@ export default function AuthGate({ open, onClose, onVerified }) {
 
   if (!open) return null;
 
+  const panelStyle = isRoot
+    ? {
+        position: "relative",
+        background: "#111",
+        borderRadius: 20,
+        padding: "32px 28px",
+        width: "min(420px, calc(100vw - 32px))",
+        maxHeight: "90vh",
+        overflowY: "auto",
+        border: "1px solid #222",
+      }
+    : {
+        position: "relative",
+        background: "#111",
+        borderRadius: "20px 20px 0 0",
+        padding: "12px 24px 32px",
+        maxHeight: "90vh",
+        overflowY: "auto",
+        transform: sheetDragY > 0 ? `translateY(${sheetDragY}px)` : undefined,
+        transition: sheetDragY > 0 ? "none" : "transform 0.2s ease",
+      };
+
   return (
     <div
       role="dialog"
       aria-modal="true"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9500,
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "flex-end",
-      }}
+      style={
+        isRoot
+          ? {
+              position: "fixed",
+              inset: 0,
+              zIndex: 9500,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "#0a0a0a",
+              padding: 16,
+            }
+          : {
+              position: "fixed",
+              inset: 0,
+              zIndex: 9500,
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-end",
+            }
+      }
     >
-      <button
-        type="button"
-        aria-label="Close"
-        onClick={onClose}
-        style={{
-          position: "absolute",
-          inset: 0,
-          background: "rgba(0,0,0,0.75)",
-          border: "none",
-          cursor: "pointer",
-        }}
-      />
-      <div
-        onTouchStart={handleSheetTouchStart}
-        onTouchMove={handleSheetTouchMove}
-        onTouchEnd={handleSheetTouchEnd}
-        onTouchCancel={handleSheetTouchEnd}
-        style={{
-          position: "relative",
-          background: "#111",
-          borderRadius: "20px 20px 0 0",
-          padding: "12px 24px 32px",
-          maxHeight: "90vh",
-          overflowY: "auto",
-          transform: sheetDragY > 0 ? `translateY(${sheetDragY}px)` : undefined,
-          transition: sheetDragY > 0 ? "none" : "transform 0.2s ease",
-        }}
-      >
-        <div
+      {!isRoot ? (
+        <button
+          type="button"
+          aria-label="Close"
+          onClick={onClose}
           style={{
-            width: 40,
-            height: 4,
-            borderRadius: 2,
-            background: "#333",
-            margin: "0 auto 20px",
+            position: "absolute",
+            inset: 0,
+            background: "rgba(0,0,0,0.75)",
+            border: "none",
+            cursor: "pointer",
           }}
         />
+      ) : null}
+      <div
+        onTouchStart={isRoot ? undefined : handleSheetTouchStart}
+        onTouchMove={isRoot ? undefined : handleSheetTouchMove}
+        onTouchEnd={isRoot ? undefined : handleSheetTouchEnd}
+        onTouchCancel={isRoot ? undefined : handleSheetTouchEnd}
+        style={panelStyle}
+      >
+        {isRoot ? (
+          <div
+            style={{
+              fontSize: 24,
+              fontWeight: 900,
+              letterSpacing: 6,
+              color: "white",
+              textAlign: "center",
+              marginBottom: 24,
+              textShadow: "0 0 20px rgba(0,255,255,0.5)",
+            }}
+          >
+            2MRRW
+          </div>
+        ) : (
+          <div
+            style={{
+              width: 40,
+              height: 4,
+              borderRadius: 2,
+              background: "#333",
+              margin: "0 auto 20px",
+            }}
+          />
+        )}
 
         {screen === "otp" ? (
           <form onSubmit={verifyOtp}>

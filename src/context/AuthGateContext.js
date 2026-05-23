@@ -1,79 +1,32 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import AuthGate from "@/components/auth/AuthGate";
-import { useAuth } from "@/context/AuthContext";
+import { createContext, useContext, useMemo } from "react";
 
 const AuthGateContext = createContext(null);
 
 export function isOtpAuthenticated(user) {
-  return Boolean(user?.id && user.isGuest === false);
+  if (!user?.id) return false;
+  if (user.isGuest === true) return false;
+  if (user.isGuest === false) return true;
+  const email = String(user.email || "").trim().toLowerCase();
+  return Boolean(email && !email.endsWith("@guest.2mrrw.local"));
 }
 
 export function AuthGateProvider({ children }) {
-  const { user, refreshAccountState } = useAuth();
-  const [open, setOpen] = useState(false);
-  const pendingRef = useRef(null);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || isOtpAuthenticated(user)) return;
-    const flag = sessionStorage.getItem("openAuthGate");
-    if (!flag) return;
-    sessionStorage.removeItem("openAuthGate");
-    setOpen(true);
-  }, [user]);
-
-  const closeGate = useCallback(() => {
-    setOpen(false);
-  }, []);
-
-  const runPending = useCallback(() => {
-    const action = pendingRef.current;
-    pendingRef.current = null;
-    if (typeof action === "function") {
-      action();
-    }
-  }, []);
-
-  const openGate = useCallback((action) => {
-    if (isOtpAuthenticated(user)) {
-      if (typeof action === "function") action();
-      return;
-    }
-    pendingRef.current = typeof action === "function" ? action : null;
-    setOpen(true);
-  }, [user]);
-
-  const requireAuth = useCallback(
-    (action) => {
-      openGate(action);
-    },
-    [openGate]
-  );
-
-  const handleVerified = useCallback(async () => {
-    await refreshAccountState();
-    closeGate();
-    runPending();
-  }, [closeGate, refreshAccountState, runPending]);
-
   const value = useMemo(
     () => ({
-      open,
-      openGate,
-      requireAuth,
-      closeGate,
-      isAuthenticated: isOtpAuthenticated(user),
+      open: false,
+      openGate: () => {},
+      requireAuth: (action) => {
+        if (typeof action === "function") action();
+      },
+      closeGate: () => {},
+      isAuthenticated: true,
     }),
-    [closeGate, open, openGate, requireAuth, user]
+    []
   );
 
-  return (
-    <AuthGateContext.Provider value={value}>
-      {children}
-      <AuthGate open={open} onClose={closeGate} onVerified={handleVerified} />
-    </AuthGateContext.Provider>
-  );
+  return <AuthGateContext.Provider value={value}>{children}</AuthGateContext.Provider>;
 }
 
 export function useAuthGate() {

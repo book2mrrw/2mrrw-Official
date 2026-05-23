@@ -6,12 +6,10 @@ import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "@/components/payments/CheckoutForm";
 import DonateModal from "@/components/payments/DonateModal";
 import { useAuth } from "@/context/AuthContext";
-import { useAuthGate, isOtpAuthenticated } from "@/context/AuthGateContext";
 import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
 import ImmersivePreviewModal from "@/components/preview/ImmersivePreviewModal";
 import GiftBottomSheet from "@/components/gifts/GiftBottomSheet";
 import GiftButton from "@/components/gifts/GiftButton";
-import { validateEmail, validatePhone } from "@/lib/auth/validation";
 import MyMusicTab from "@/components/music/MyMusicTab";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
@@ -574,8 +572,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
-  const { currentUser: authUser, library, owns, accountState, isAdmin, enterGuest, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
-  const { requireAuth, openGate } = useAuthGate();
+  const { currentUser: authUser, library, owns, accountState, isAdmin, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
   const { playTrack, playQueue, hasStarted, currentTrack, csMode } = useAudioPlayer();
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
@@ -590,11 +587,6 @@ export default function Page() {
   const [singleIndex, setSingleIndex]             = useState(0);
   const [slideDir, setSlideDir]                   = useState("right");
   const [animating, setAnimating]                 = useState(false);
-  const [gateSubmitted, setGateSubmitted]         = useState(false);
-  const [gateName, setGateName]                   = useState("");
-  const [gatePhone, setGatePhone]                 = useState("");
-  const [gateEmail, setGateEmail]                 = useState("");
-  const [gateError, setGateError]                 = useState("");
   const [currentUser, setCurrentUser]             = useState(null);
   const [checkingOut, setCheckingOut]             = useState(false);
   const [checkoutError, setCheckoutError]         = useState("");
@@ -829,7 +821,6 @@ export default function Page() {
   useEffect(() => {
     if (authUser) {
       setCurrentUser(authUser);
-      setGateSubmitted(true);
     } else if (!authLoading) {
       setCurrentUser(null);
     }
@@ -840,8 +831,9 @@ export default function Page() {
     let cancelled = false;
     setGiftsSentLoading(true);
     fetch("/api/gifts/sent", { credentials: "include", cache: "no-store" })
-      .then((res) => res.json())
-      .then((data) => {
+      .then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Could not load gifts");
         if (!cancelled) setGiftsSent(data.gifts || []);
       })
       .catch(() => {
@@ -991,8 +983,8 @@ export default function Page() {
     setTimeout(() => setAddedFlash(null), 400);
   }, [owns]);
   const addToCart      = useCallback(item => {
-    requireAuth(() => addToCartRaw(item));
-  }, [addToCartRaw, requireAuth]);
+    addToCartRaw(item);
+  }, [addToCartRaw]);
   const clearCart      = () => setCart([]);
   const removeFromCart = idx => setCart(p => p.filter((_, i) => i !== idx));
   const total          = cart.reduce((s, item) => s + item.price, 0);
@@ -1052,22 +1044,6 @@ export default function Page() {
     nowPlayingAudioRef.current.currentTime = ratio * audioDuration;
   }, [audioDuration]);
 
-  const handleGateSubmit = async () => {
-    const emailCheck = validateEmail(gateEmail);
-    const phoneCheck = validatePhone(gatePhone);
-    if (!emailCheck.ok || !phoneCheck.ok) {
-      setGateError(emailCheck.error || phoneCheck.error);
-      return;
-    }
-    setGateError("");
-    try {
-      await enterGuest({ email: emailCheck.value, phone: phoneCheck.value, name: gateName.trim() });
-      setGateSubmitted(true);
-    } catch (err) {
-      setGateError(err.message || "Could not enter.");
-    }
-  };
-
   const openGiftSheet = useCallback((release) => {
     if (!isAdmin) return;
     setGiftSheetRelease(release);
@@ -1075,10 +1051,6 @@ export default function Page() {
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
-    if (!isOtpAuthenticated(authUser)) {
-      requireAuth(() => void handleCheckout());
-      return;
-    }
     setCheckingOut(true); setCheckoutError("");
     try {
       const res  = await fetch("/api/create-payment-intent", { method:"POST", headers:{"Content-Type":"application/json"}, credentials:"include", body:JSON.stringify({ cart }) });
@@ -1118,17 +1090,12 @@ export default function Page() {
     if (params.get("checkout") !== "pending") return;
     if (cart.length === 0) return;
     window.history.replaceState({}, "", window.location.pathname);
-    if (!isOtpAuthenticated(authUser)) {
-      requireAuth(() => void handleCheckout());
-      return;
-    }
     void handleCheckout();
-  }, [authUser, cart, requireAuth]);
+  }, [authUser, cart]);
 
   const handleSignOut = async () => {
     await signOut();
     setCurrentUser(null);
-    setGateSubmitted(false);
     setMyPurchases([]);
   };
 
@@ -1186,25 +1153,17 @@ export default function Page() {
   }, []);
 
   const switchTab = tabId => {
-    const gatedTabs = new Set(["mymusic", "vault", "cards"]);
-    const navigate = () => {
-      if (tabId === "cards") {
-        window.location.assign(COLLECTORS_CARDS_ROUTE);
-        return;
-      }
-      setHomeScrollSection(null);
-      setTabKey(p => p + 1);
-      setActiveTab(tabId);
-      if (isMobile) {
-        setMobileNavOpen(false);
-        setMobileNavClosing(false);
-      }
-    };
-    if (gatedTabs.has(tabId) && !isOtpAuthenticated(authUser)) {
-      requireAuth(navigate);
+    if (tabId === "cards") {
+      window.location.assign(COLLECTORS_CARDS_ROUTE);
       return;
     }
-    navigate();
+    setHomeScrollSection(null);
+    setTabKey(p => p + 1);
+    setActiveTab(tabId);
+    if (isMobile) {
+      setMobileNavOpen(false);
+      setMobileNavClosing(false);
+    }
   };
 
   useEffect(() => {
@@ -1242,7 +1201,7 @@ export default function Page() {
       next.searchParams.delete("deepLink");
       window.history.replaceState({}, "", next.pathname + (next.search || ""));
     }
-    if (!currentUser && !gateSubmitted) {
+    if (!currentUser) {
       setPostAuthRedirect(window.location.pathname + window.location.search || `/?deepLink=${raw}`);
     }
     if (parsed.type === "song") {
@@ -1264,7 +1223,7 @@ export default function Page() {
         setNowPlaying(feat);
       }
     }
-  }, [authLoading, currentUser, gateSubmitted, openSingleModal]);
+  }, [authLoading, currentUser, openSingleModal]);
 
   const shopItems      = printfulProducts.length > 0 ? printfulProducts : fallbackMerch;
   const shopIsFallback = !printfulLoading && printfulProducts.length === 0;
@@ -1417,21 +1376,6 @@ export default function Page() {
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(circle at 18% 18%,rgba(0,255,255,0.026) 0%,transparent 55%),radial-gradient(circle at 82% 80%,rgba(162,89,255,0.018) 0%,transparent 52%)"}}/>
       <audio ref={nowPlayingAudioRef} style={{display:"none"}}/>
       <audio ref={modalAudioRef} style={{display:"none"}}/>
-
-      {/* ── GATE ── */}
-      <AnimatePresence>
-        {!gateSubmitted && (
-          <motion.div key="gate" {...OVERLAY_FADE} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:16,padding:30}}>
-            <div style={{fontSize:28,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 20px rgba(0,255,255,0.8)"}}>2MRRW</div>
-            <p style={{color:"#aaa",marginBottom:10,textAlign:"center"}}>Enter instantly. No password required.</p>
-            <input placeholder="Full Name (optional)" value={gateName}  onChange={e=>setGateName(e.target.value)}  onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
-            <input placeholder="Phone Number"  value={gatePhone} onChange={e=>setGatePhone(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
-            <input placeholder="Email Address" value={gateEmail} onChange={e=>setGateEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleGateSubmit()} style={{width:"min(280px,90vw)",padding:"10px 14px",background:"#111",border:"1px solid #333",color:"white",borderRadius:8,fontSize:14}}/>
-            {gateError && <p style={{color:"red",fontSize:13}}>{gateError}</p>}
-            <button onClick={handleGateSubmit} style={{width:"min(280px,90vw)",padding:"12px 0",background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer",fontSize:14}}>Enter Site</button>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* ── SINGLE PREVIEW MODAL (immersive) ── */}
       <AnimatePresence>
@@ -1955,7 +1899,6 @@ export default function Page() {
                         onSwitchTab={switchTab}
                         onOpenSingle={openSingleModal}
                         onOpenAlbum={setSelectedAlbum}
-                        onRequireAuth={() => openGate()}
                       />
                     </>
                   )}
@@ -2213,7 +2156,7 @@ export default function Page() {
               {activeTab==="account" && (
                 <>
                   <h2 className="section-heading">Account</h2>
-                  {currentUser && !currentUser.isGuest ? (
+                  {currentUser ? (
                     <div style={{display:"flex",flexDirection:"column",gap:20}}>
                       <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:28}}>
                         <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{currentUser.name[0].toUpperCase()}</div><div><div style={{fontSize:18,fontWeight:800}}>{currentUser.name}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{currentUser.email}</div></div>{userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`}}>{userStatus.label}</div>}</div>
@@ -2253,14 +2196,7 @@ export default function Page() {
                     </div>
                   ) : (
                     <div style={{maxWidth:400,padding:"24px 0"}}>
-                      <div style={{fontSize:13,color:"#777",lineHeight:1.7,marginBottom:20}}>Sign in to view purchases, library, and account settings.</div>
-                      <button
-                        type="button"
-                        onClick={() => openGate()}
-                        style={{padding:"13px 28px",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14}}
-                      >
-                        Sign in
-                      </button>
+                      <div style={{fontSize:13,color:"#777",lineHeight:1.7}}>Loading account…</div>
                     </div>
                   )}
                 </>

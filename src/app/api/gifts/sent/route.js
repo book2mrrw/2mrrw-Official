@@ -16,8 +16,7 @@ export async function GET() {
     const admin = createAdminClient();
     const { data: gifts, error } = await admin
       .from("gifts")
-      .select("id, created_at, recipient_email, item_title, item_type, item_id, status")
-      .eq("sender_id", user.id)
+      .select("id, created_at, recipient_email, item_title, item_type, item_id, status, sender_id")
       .order("created_at", { ascending: false })
       .limit(100);
 

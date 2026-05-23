@@ -1,6 +1,7 @@
 import StripeProvider from "./StripeProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import { AuthGateProvider } from "@/context/AuthGateContext";
+import AppAuthRoot from "@/components/auth/AppAuthRoot";
 import { AudioProvider } from "@/context/AudioContext";
 import GlobalAudioPlayerBar from "@/components/audio/GlobalAudioPlayerBar";
 
@@ -27,14 +28,16 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <body style={{ margin: 0, background: "#0a0a0a", color: "white" }}>
         <AuthProvider>
-          <AuthGateProvider>
-            <AudioProvider>
-              <StripeProvider>
-                {children}
-                <GlobalAudioPlayerBar />
-              </StripeProvider>
-            </AudioProvider>
-          </AuthGateProvider>
+          <AppAuthRoot>
+            <AuthGateProvider>
+              <AudioProvider>
+                <StripeProvider>
+                  {children}
+                  <GlobalAudioPlayerBar />
+                </StripeProvider>
+              </AudioProvider>
+            </AuthGateProvider>
+          </AppAuthRoot>
         </AuthProvider>
       </body>
     </html>
