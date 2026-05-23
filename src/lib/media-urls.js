@@ -1,15 +1,29 @@
 import { getPublicR2Url } from "@/lib/storage/r2";
 
+const R2_CDN_FALLBACK = "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
+
+function catalogCdnBase() {
+  return (process.env.NEXT_PUBLIC_R2_PUBLIC_URL || R2_CDN_FALLBACK).replace(/\/$/, "");
+}
+
+function toCatalogCdnUrl(relativePath) {
+  const normalized = String(relativePath || "").replace(/^\//, "");
+  if (!normalized) return "";
+  if (/^https?:\/\//i.test(normalized)) return normalized;
+  const r2 = getPublicR2Url(normalized);
+  if (r2) return r2;
+  return `${catalogCdnBase()}/${normalized}`;
+}
+
 /**
  * Map legacy public/ paths to R2 public CDN URLs when NEXT_PUBLIC_R2_PUBLIC_URL is set.
- * Falls back to site-relative paths for local dev without R2 public URL.
+ * Falls back to the production R2 CDN base when env is unset.
  */
 export function catalogPublicMediaUrl(relativePath) {
   if (!relativePath) return "";
   const normalized = String(relativePath).replace(/^\//, "");
-  const r2 = getPublicR2Url(normalized);
-  if (r2) return r2;
-  return relativePath.startsWith("/") ? relativePath : `/${relativePath}`;
+  if (/^https?:\/\//i.test(normalized)) return normalized;
+  return toCatalogCdnUrl(normalized);
 }
 
 /** Normalize cover_url for display (strip leading slash; prefer R2 public when configured). */

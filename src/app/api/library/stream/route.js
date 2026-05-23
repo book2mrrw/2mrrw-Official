@@ -27,7 +27,10 @@ export async function GET(req) {
     return NextResponse.json({ error: "No downloadable asset for this item" }, { status: 404 });
   }
 
-  const key = buildR2Key(R2_PREFIX.DIGITAL_ASSETS, product.storage_path);
+  const normalizedPath = String(product.storage_path).replace(/^\//, "");
+  const key = normalizedPath.startsWith(`${R2_PREFIX.DIGITAL_ASSETS}/`)
+    ? normalizedPath
+    : buildR2Key(R2_PREFIX.DIGITAL_ASSETS, normalizedPath);
   const url = await createR2SignedGetUrl(key, 3600);
 
   if (redirect) {

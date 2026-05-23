@@ -9,6 +9,7 @@ import {
   userOwnsProduct,
 } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
+import { catalogCoverUrl } from "@/lib/media-urls";
 
 export async function POST(request) {
   const user = await getGuestUser();
@@ -75,15 +76,24 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const items = (data || []).map((row) => ({
+  const items = (data || []).map((row) => {
+    const rawCover = row.products?.cover_url;
+    const cover = rawCover
+      ? /^https?:\/\//i.test(String(rawCover))
+        ? rawCover
+        : catalogCoverUrl(String(rawCover).replace(/^\//, ""))
+      : null;
+
+    return {
     slug: row.products?.slug,
     title: row.products?.title,
     product_type: row.products?.product_type,
-    cover: row.products?.cover_url,
+    cover,
     source: row.source,
     gifted: row.source === "gift",
     purchasedAt: row.granted_at,
-  }));
+  };
+  });
 
   return NextResponse.json({
     items,

@@ -13,9 +13,21 @@ function browserControlSessionId() {
   return generated;
 }
 
+let warnedMissingControlSystemUrl = false;
+
 export function getControlSystemApiUrl() {
-  const rawUrl = process.env.NEXT_PUBLIC_CONTROL_SYSTEM_API_URL;
-  if (typeof rawUrl !== "string" || !rawUrl.trim()) return "";
+  const rawUrl =
+    process.env.NEXT_PUBLIC_CONTROL_SYSTEM_API_URL ||
+    process.env.NEXT_PUBLIC_CONTROL_SYSTEM_URL;
+  if (typeof rawUrl !== "string" || !rawUrl.trim()) {
+    if (!warnedMissingControlSystemUrl) {
+      warnedMissingControlSystemUrl = true;
+      console.warn(
+        "[2MRRW Storefront] NEXT_PUBLIC_CONTROL_SYSTEM_API_URL is not set — release catalog will fall back to hardcoded data only."
+      );
+    }
+    return "";
+  }
   return rawUrl.trim().replace(/\/+$/, "");
 }
 

@@ -72,7 +72,14 @@ export function mediaAssetMetadata(asset, apiBaseUrl = "") {
   const assetId = firstString(...ASSET_ID_KEYS.map((key) => normalized?.[key]));
   const publicUrl = firstString(...PUBLIC_URL_KEYS.map((key) => normalized?.[key]));
   const signedUrl = firstString(...SIGNED_URL_KEYS.map((key) => normalized?.[key]));
-  const hasStorageRef = Boolean(normalized?.bucket || normalized?.path || normalized?.storagePath || normalized?.storage_path);
+  const hasStorageRef = Boolean(
+    normalized?.bucket ||
+      normalized?.path ||
+      normalized?.storagePath ||
+      normalized?.storage_path ||
+      normalized?.sourcePath ||
+      normalized?.source_path
+  );
   if (!assetId && !publicUrl && !signedUrl && !hasStorageRef) return null;
 
   return {
@@ -130,7 +137,12 @@ export async function resolveMediaAssetUrl(asset, apiBaseUrl = "", fallbackUrl =
     return directPublic || absolutizeControlSystemMediaUrl(fallbackUrl, apiBaseUrl);
   }
 
-  const storagePath = asset?.storagePath || asset?.storage_path || asset?.path;
+  const storagePath =
+    asset?.storagePath ||
+    asset?.storage_path ||
+    asset?.sourcePath ||
+    asset?.source_path ||
+    asset?.path;
   if (preferPublic && storagePath) {
     const mapped = publicArtworkUrlFromPath(storagePath);
     if (mapped) return mapped;

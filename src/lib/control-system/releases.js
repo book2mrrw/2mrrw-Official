@@ -348,7 +348,7 @@ async function fetchControlSystemReleases({ limit = DEFAULT_RELEASE_LIMIT, type 
   const params = { limit };
   if (RELEASE_TYPES.has(type)) params.type = type;
 
-  const { apiBaseUrl, ok, payload } = await fetchControlSystemJson("/api/releases", { params });
+  const { apiBaseUrl, ok, payload } = await fetchControlSystemJson("/api/public/releases", { params });
   if (!ok) return { apiBaseUrl, releases: [] };
 
   return {

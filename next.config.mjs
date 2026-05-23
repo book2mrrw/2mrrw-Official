@@ -6,6 +6,10 @@ const r2PublicHost = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "")
 const remotePatterns = [
   {
     protocol: "https",
+    hostname: "pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev",
+  },
+  {
+    protocol: "https",
     hostname: "**.r2.dev",
   },
   {

@@ -34,9 +34,19 @@ export function buildR2Key(prefix, path) {
  * Public CDN URL for objects under public prefixes (previews/, artwork/, etc.).
  * @param {string} path - path relative to public CDN root (no leading slash)
  */
+let warnedMissingR2PublicUrl = false;
+
 export function getPublicR2Url(path) {
   const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
-  if (!base) return null;
+  if (!base) {
+    if (!warnedMissingR2PublicUrl) {
+      warnedMissingR2PublicUrl = true;
+      console.warn(
+        "[2MRRW Storefront] NEXT_PUBLIC_R2_PUBLIC_URL is not set — catalog media helpers will use site-relative paths."
+      );
+    }
+    return null;
+  }
   const normalized = String(path || "").replace(/^\//, "");
   if (!normalized) return base.replace(/\/$/, "");
   return `${base.replace(/\/$/, "")}/${normalized}`;
