@@ -124,7 +124,7 @@ function JoinForm() {
               </p>
             </div>
           ) : null}
-          <h1 className="auth-heading hero-title-glow">Join 2MRRW Music</h1>
+          <h1 className="auth-heading auth-heading--elevated hero-title-glow">Join 2MRRW Music</h1>
           <p className="auth-subtext">Email + phone verification. No password.</p>
           <input
             placeholder="Full Name (optional)"

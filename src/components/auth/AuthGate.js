@@ -284,18 +284,18 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
       >
         {screen === "otp" ? (
           <form onSubmit={verifyOtp}>
-            <h2 className="auth-heading">Check your email</h2>
+            <h2 className="auth-heading auth-heading--elevated">Check your email</h2>
             <p className="auth-subtext">
               Enter the 6-digit code sent to {otpEmail || "your email"}.
             </p>
-            <div className="auth-otp-row">
+            <div className="auth-otp-row auth-otp-row--equal">
               {digits.map((digit, index) => (
                 <input
                   key={index}
                   ref={(el) => {
                     inputsRef.current[index] = el;
                   }}
-                  className={`auth-otp-box${digit ? " auth-otp-box--filled" : ""}`}
+                  className={`auth-otp-box auth-otp-box--square auth-otp-box--focus-teal${digit ? " auth-otp-box--filled" : ""}`}
                   inputMode="numeric"
                   maxLength={1}
                   value={digit}
@@ -320,7 +320,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
           </form>
         ) : screen === "signin" ? (
           <form onSubmit={submitSignin}>
-            <h2 className="auth-heading">Welcome back</h2>
+            <h2 className="auth-heading auth-heading--elevated">Welcome back</h2>
             <p className="auth-subtext">Enter your email and we&apos;ll send a verification code.</p>
             <input
               placeholder="Email"
@@ -352,7 +352,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
           </form>
         ) : (
           <form onSubmit={submitSignup}>
-            <h2 className="auth-heading hero-title-glow">Join 2MRRW Music</h2>
+            <h2 className="auth-heading auth-heading--elevated hero-title-glow">Join 2MRRW Music</h2>
             <p className="auth-subtext">
               Email verification. Phone is saved for your profile — no password.
             </p>

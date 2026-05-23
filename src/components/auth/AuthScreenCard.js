@@ -3,7 +3,7 @@
 export function AuthBrandBlock() {
   return (
     <div className="auth-brand-block">
-      <div className="auth-brand hero-title-glow">2MRRW</div>
+      <div className="auth-brand auth-brand-refined hero-title-glow">2MRRW</div>
       <div className="auth-tagline">TOMORROW MUSIC</div>
     </div>
   );
@@ -22,7 +22,7 @@ export default function AuthScreenCard({
 
   return (
     <div
-      className={isRoot ? "auth-card" : "auth-card auth-card--sheet"}
+      className={isRoot ? "auth-card auth-card--elevated" : "auth-card auth-card--sheet auth-card--elevated"}
       onTouchStart={isRoot ? undefined : onTouchStart}
       onTouchMove={isRoot ? undefined : onTouchMove}
       onTouchEnd={isRoot ? undefined : onTouchEnd}
