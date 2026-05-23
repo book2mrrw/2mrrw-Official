@@ -1100,10 +1100,12 @@ body {
 .auth-brand.auth-brand-refined {
   letter-spacing: 0.3em;
   font-weight: 300;
+  color: #fff;
 }
 
 .auth-heading.auth-heading--elevated {
   font-size: 1.5rem;
+  font-weight: 700;
 }
 
 @media (min-width: 640px) {
@@ -1132,4 +1134,45 @@ body {
 .auth-otp-box.auth-otp-box--focus-teal:focus {
   border-color: rgba(0, 191, 255, 0.75);
   box-shadow: 0 0 0 3px rgba(0, 191, 255, 0.18);
+}
+
+/* Auth reference layout — additive modifiers only */
+.auth-page.auth-page--ref {
+  background: #000;
+}
+
+.auth-overlay.auth-overlay--root.auth-overlay--ref {
+  background: #000;
+}
+
+.auth-card.auth-card--ref {
+  background: #111;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  padding: 2rem;
+}
+
+.auth-card.auth-card--ref::before {
+  display: none;
+}
+
+.auth-card.auth-card--ref .auth-input {
+  background: #1a1a1a;
+}
+
+.auth-card.auth-card--ref .auth-otp-box {
+  background: #1a1a1a;
+}
+
+.auth-card.auth-card--ref .auth-cta {
+  background: #00b4b4;
+  box-shadow: 0 0 20px rgba(0, 180, 180, 0.25);
+}
+
+.auth-card.auth-card--ref .auth-link {
+  color: #00b4b4;
+}
+
+.auth-heading.auth-heading--elevated.auth-heading--serif {
+  font-family: Georgia, "Times New Roman", Times, serif;
 }

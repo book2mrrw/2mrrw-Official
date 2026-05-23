@@ -269,7 +269,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     <div
       role="dialog"
       aria-modal="true"
-      className={isRoot ? "auth-overlay auth-overlay--root" : "auth-overlay auth-overlay--sheet"}
+      className={isRoot ? "auth-overlay auth-overlay--root auth-overlay--ref" : "auth-overlay auth-overlay--sheet"}
     >
       {!isRoot ? (
         <button type="button" aria-label="Close" onClick={onClose} className="auth-overlay-backdrop" />
@@ -352,7 +352,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
           </form>
         ) : (
           <form onSubmit={submitSignup}>
-            <h2 className="auth-heading auth-heading--elevated hero-title-glow">Join 2MRRW Music</h2>
+            <h2 className="auth-heading auth-heading--elevated auth-heading--serif hero-title-glow">Join 2MRRW Music</h2>
             <p className="auth-subtext">
               Email verification. Phone is saved for your profile — no password.
             </p>

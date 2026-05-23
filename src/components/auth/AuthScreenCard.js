@@ -22,7 +22,7 @@ export default function AuthScreenCard({
 
   return (
     <div
-      className={isRoot ? "auth-card auth-card--elevated" : "auth-card auth-card--sheet auth-card--elevated"}
+      className={isRoot ? "auth-card auth-card--elevated auth-card--ref" : "auth-card auth-card--sheet auth-card--elevated auth-card--ref"}
       onTouchStart={isRoot ? undefined : onTouchStart}
       onTouchMove={isRoot ? undefined : onTouchMove}
       onTouchEnd={isRoot ? undefined : onTouchEnd}

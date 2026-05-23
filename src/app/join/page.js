@@ -105,7 +105,7 @@ function JoinForm() {
   };
 
   return (
-    <main className="auth-page">
+    <main className="auth-page auth-page--ref">
       <form onSubmit={submit} style={{ width: "100%", maxWidth: 420 }}>
         <AuthScreenCard variant="root">
           {giftPreview?.gift ? (
@@ -124,7 +124,7 @@ function JoinForm() {
               </p>
             </div>
           ) : null}
-          <h1 className="auth-heading auth-heading--elevated hero-title-glow">Join 2MRRW Music</h1>
+          <h1 className="auth-heading auth-heading--elevated auth-heading--serif hero-title-glow">Join 2MRRW Music</h1>
           <p className="auth-subtext">Email + phone verification. No password.</p>
           <input
             placeholder="Full Name (optional)"
@@ -192,7 +192,7 @@ function JoinForm() {
 
 export default function JoinPage() {
   return (
-    <Suspense fallback={<main className="auth-page" />}>
+    <Suspense fallback={<main className="auth-page auth-page--ref" />}>
       <JoinForm />
     </Suspense>
   );
