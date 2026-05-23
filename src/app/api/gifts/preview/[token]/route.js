@@ -1,9 +1,20 @@
 import { NextResponse } from "next/server";
 import { expireGiftIfNeeded, getGiftByToken, giftPublicState, resolveProductForGift } from "@/lib/gifts/helpers";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { hashGiftLinkToken } from "@/lib/gifts/token-hash";
 
-export async function GET(_req, { params }) {
+export async function GET(req, { params }) {
   try {
     const token = (await params)?.token;
+    const limit = await checkRateLimit(req, {
+      routeKey: "gifts.preview",
+      limit: 30,
+      windowSeconds: 60,
+      identifier: hashGiftLinkToken(token),
+    });
+    if (!limit.allowed) {
+      return rateLimitResponse(limit.retryAfterSeconds);
+    }
     if (!token) {
       return NextResponse.json({ error: "Token required" }, { status: 400 });
     }

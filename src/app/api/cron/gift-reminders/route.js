@@ -33,6 +33,9 @@ export async function GET(request) {
 
     let reminders_sent = 0;
     for (const gift of gifts || []) {
+      if (!gift.gift_link_token) {
+        continue;
+      }
       await sendGiftReminderEmail({
         to: gift.recipient_email,
         itemTitle: gift.item_title || "your gift",

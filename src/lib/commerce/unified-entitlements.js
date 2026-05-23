@@ -49,6 +49,7 @@ export async function grantEntitlementsForProducts({
   purchaseId = null,
   products = [],
   source = "purchase",
+  metadataExtra = null,
 }) {
   if (!products?.length) return { granted: 0, skipped: false };
 
@@ -66,6 +67,7 @@ export async function grantEntitlementsForProducts({
       metadata: {
         product_slug: product.slug,
         library_source: source,
+        ...(metadataExtra && typeof metadataExtra === "object" ? metadataExtra : {}),
       },
     };
 

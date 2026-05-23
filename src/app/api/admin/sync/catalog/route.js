@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { normalizeStoragePathForStorefront } from "@/lib/sync/normalize-storage-path";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 function authorize(req) {
   const secret = req.headers.get("x-seed-secret");
@@ -11,13 +13,24 @@ export async function POST(req) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const limit = await checkRateLimit(req, {
+    routeKey: "admin.sync.catalog",
+    limit: 30,
+    windowSeconds: 60,
+  });
+  if (!limit.allowed) {
+    return rateLimitResponse(limit.retryAfterSeconds);
+  }
+
   try {
     const body = await req.json();
     const vaultRows = Array.isArray(body.vaultContent) ? body.vaultContent : [];
     const productRows = Array.isArray(body.products) ? body.products : [];
     const admin = createAdminClient();
 
+    const failed = [];
     let vaultUpserted = 0;
+
     for (const row of vaultRows) {
       if (!row?.slug) continue;
       const { error } = await admin.from("vault_content").upsert(
@@ -27,7 +40,11 @@ export async function POST(req) {
         },
         { onConflict: "slug" }
       );
-      if (!error) vaultUpserted += 1;
+      if (error) {
+        failed.push({ slug: row.slug, kind: "vault", error: error.message });
+        continue;
+      }
+      vaultUpserted += 1;
     }
 
     let productUpserted = 0;
@@ -36,6 +53,8 @@ export async function POST(req) {
       const meta = row.metadata || {};
       const contentType = row.content_type ?? meta.content_type ?? null;
       const contentId = row.content_id ?? meta.content_id ?? null;
+      const storagePath = normalizeStoragePathForStorefront(row.storage_path ?? meta.canonical_media_path);
+      const previewPath = normalizeStoragePathForStorefront(row.preview_path);
 
       const payload = {
         slug: row.slug,
@@ -43,8 +62,8 @@ export async function POST(req) {
         product_type: row.product_type,
         price_cents: row.price_cents,
         cover_url: row.cover_url ?? null,
-        storage_path: row.storage_path ?? null,
-        preview_path: row.preview_path ?? null,
+        storage_path: storagePath || null,
+        preview_path: previewPath || null,
         content_type: contentType,
         content_id: contentId,
         gifting_enabled: row.gifting_enabled ?? meta.gifting_enabled ?? false,
@@ -54,18 +73,24 @@ export async function POST(req) {
           content_type: contentType,
           content_id: contentId,
           gifting_enabled: row.gifting_enabled ?? meta.gifting_enabled ?? false,
+          canonical_media_path: storagePath || null,
         },
         updated_at: new Date().toISOString(),
       };
 
       const { error } = await admin.from("products").upsert(payload, { onConflict: "slug" });
-      if (!error) productUpserted += 1;
+      if (error) {
+        failed.push({ slug: row.slug, kind: "product", error: error.message });
+        continue;
+      }
+      productUpserted += 1;
     }
 
     return NextResponse.json({
-      ok: true,
+      ok: failed.length === 0,
       vaultUpserted,
       productUpserted,
+      failed,
       reason: body.reason || null,
       syncedAt: new Date().toISOString(),
     });

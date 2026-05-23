@@ -6,10 +6,21 @@ import {
   getGiftByToken,
   giftPublicState,
 } from "@/lib/gifts/helpers";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { hashGiftLinkToken } from "@/lib/gifts/token-hash";
 
-export async function POST(_req, { params }) {
+export async function POST(req, { params }) {
   try {
     const token = (await params)?.token;
+    const limit = await checkRateLimit(req, {
+      routeKey: "gifts.claim",
+      limit: 12,
+      windowSeconds: 60,
+      identifier: hashGiftLinkToken(token),
+    });
+    if (!limit.allowed) {
+      return rateLimitResponse(limit.retryAfterSeconds);
+    }
     if (!token) {
       return NextResponse.json({ error: "Token required" }, { status: 400 });
     }

@@ -3,6 +3,7 @@ import { grantLibraryItems } from "@/lib/commerce/entitlements";
 import { isAdminUser } from "@/lib/auth/constants";
 import { buildGiftLink, sendGiftEmail } from "@/lib/gifts/email";
 import { claimGiftForUser } from "@/lib/gifts/helpers";
+import { createGiftLinkToken } from "@/lib/gifts/token-hash";
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
@@ -69,6 +70,8 @@ export async function sendStorefrontGift({
   const itemType = itemTypeForRelease(releaseType || product.product_type);
   const expiresAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString();
 
+  const { raw: giftTokenRaw, hash: giftTokenHash } = createGiftLinkToken();
+
   const { data: gift, error } = await admin
     .from("gifts")
     .insert({
@@ -80,13 +83,15 @@ export async function sendStorefrontGift({
       item_title: releaseTitle || product.title,
       message: message?.trim() || null,
       expires_at: expiresAt,
+      gift_link_token_hash: giftTokenHash,
+      gift_link_token: null,
     })
     .select("*")
     .single();
 
   if (error) throw error;
 
-  const giftLink = buildGiftLink(gift.gift_link_token);
+  const giftLink = buildGiftLink(giftTokenRaw);
   await sendGiftEmail({
     to: email,
     itemTitle: gift.item_title || product.title,

@@ -93,7 +93,7 @@ export async function userCanStreamProduct(userId, productSlug) {
   return Boolean(product && isDigitalProduct(product));
 }
 
-export async function grantLibraryItems({ userId, purchaseId, slugs, source = "purchase" }) {
+export async function grantLibraryItems({ userId, purchaseId, slugs, source = "purchase", entitlementMetadata = null }) {
   const admin = createAdminClient();
   const { data: products, error: pErr } = await admin.from("products").select("id, slug").in("slug", slugs);
   if (pErr) throw pErr;
@@ -132,6 +132,7 @@ export async function grantLibraryItems({ userId, purchaseId, slugs, source = "p
     purchaseId,
     products: resolved,
     source,
+    metadataExtra: entitlementMetadata,
   });
 
   return data || [];

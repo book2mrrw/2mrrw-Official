@@ -2,11 +2,22 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { grantLibraryItems } from "@/lib/commerce/entitlements";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { normalizeEmail } from "@/lib/guest-session";
+import { hashGiftLinkToken } from "@/lib/gifts/token-hash";
 
 export { getFanSessionUser };
 
 export async function getGiftByToken(token) {
   const admin = createAdminClient();
+  const tokenHash = hashGiftLinkToken(token);
+
+  const { data: byHash, error: hashError } = await admin
+    .from("gifts")
+    .select("*")
+    .eq("gift_link_token_hash", tokenHash)
+    .maybeSingle();
+  if (hashError) throw hashError;
+  if (byHash) return byHash;
+
   const { data, error } = await admin
     .from("gifts")
     .select("*")
@@ -108,6 +119,7 @@ export async function claimGiftForUser(gift, user) {
     purchaseId: purchase.id,
     slugs: [product.slug],
     source: "gift",
+    entitlementMetadata: { gift_id: gift.id },
   });
 
   const libraryPatch = {
