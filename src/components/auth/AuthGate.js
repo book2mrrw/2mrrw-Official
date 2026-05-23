@@ -295,7 +295,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
                   ref={(el) => {
                     inputsRef.current[index] = el;
                   }}
-                  className="auth-otp-box"
+                  className={`auth-otp-box${digit ? " auth-otp-box--filled" : ""}`}
                   inputMode="numeric"
                   maxLength={1}
                   value={digit}
@@ -352,7 +352,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
           </form>
         ) : (
           <form onSubmit={submitSignup}>
-            <h2 className="auth-heading">Join Tomorrow Music</h2>
+            <h2 className="auth-heading">Join 2MRRW Music</h2>
             <p className="auth-subtext">
               Email verification. Phone is saved for your profile — no password.
             </p>

@@ -873,7 +873,7 @@ body {
   }
 }
 
-/* Auth screen — Tomorrow Music branding */
+/* Auth screen — premium card shell */
 .auth-overlay {
   position: fixed;
   inset: 0;
@@ -952,6 +952,7 @@ body {
   letter-spacing: 6px;
   color: #00bfff;
   line-height: 1;
+  white-space: nowrap;
 }
 
 .auth-tagline {
@@ -1005,6 +1006,7 @@ body {
 
 .auth-cta {
   width: 100%;
+  margin-top: 4px;
   padding: 16px 0;
   background: #00bfff;
   color: #000;
@@ -1013,7 +1015,7 @@ body {
   border: none;
   border-radius: 12px;
   cursor: pointer;
-  box-shadow: 0 0 20px #00bfff44;
+  box-shadow: 0 0 20px #00bfff33;
   transition: transform 0.2s, filter 0.2s, opacity 0.2s;
 }
 
@@ -1071,6 +1073,11 @@ body {
 .auth-otp-box:focus {
   border-color: #00bfff55;
   box-shadow: 0 0 0 3px #00bfff11;
+}
+
+.auth-otp-box--filled {
+  border-color: #00bfff44;
+  background: #0c1018;
 }
 
 .auth-error {
