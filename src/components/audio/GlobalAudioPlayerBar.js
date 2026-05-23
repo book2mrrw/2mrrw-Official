@@ -5,6 +5,7 @@ import { useAudioPlayer } from "@/context/AudioContext";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 import CSModeButton from "@/components/audio/CSModeButton";
 import GestureCoverArt from "@/components/audio/GestureCoverArt";
+import CoverArt from "@/components/ui/CoverArt";
 
 const formatTime = (seconds) => {
   if (!seconds || !isFinite(seconds)) return "0:00";
@@ -12,8 +13,6 @@ const formatTime = (seconds) => {
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
-
-const COVER_GRADIENT = "linear-gradient(135deg, rgba(0,255,255,0.12), rgba(162,89,255,0.12))";
 
 const iconBtn = {
   background: "none",
@@ -26,10 +25,9 @@ const iconBtn = {
   flexShrink: 0,
 };
 
-function CoverArt({ cover, size, pulse, flipKey }) {
-  const dim = size;
-  const borderRadius = dim <= 32 ? "50%" : dim >= 180 ? 12 : 8;
+function FlipCoverArt({ src, type, size, flipKey, pulse }) {
   const [flipPhase, setFlipPhase] = useState(false);
+  const borderRadius = size <= 32 ? "50%" : 8;
 
   useEffect(() => {
     if (!flipKey) return undefined;
@@ -38,37 +36,17 @@ function CoverArt({ cover, size, pulse, flipKey }) {
     return () => window.clearTimeout(t);
   }, [flipKey]);
 
-  const style = {
-    width: dim >= 180 ? "100%" : dim,
-    height: dim >= 180 ? "100%" : dim,
-    maxWidth: dim >= 180 ? dim : undefined,
-    maxHeight: dim >= 180 ? dim : undefined,
-    borderRadius,
-    objectFit: "cover",
-    flexShrink: 0,
-    display: "block",
-    transform: flipPhase ? "scaleX(0)" : "scaleX(1)",
-    transition: "transform 200ms ease",
-  };
-  if (cover) {
-    return (
-      <img
-        src={cover}
-        alt=""
-        className={pulse ? "audio-immersive-cover-pulse" : undefined}
-        style={style}
-      />
-    );
-  }
   return (
     <div
       className={pulse ? "audio-immersive-cover-pulse" : undefined}
       style={{
-        ...style,
-        background: COVER_GRADIENT,
-        border: "1px solid #222",
+        flexShrink: 0,
+        transform: flipPhase ? "scaleX(0)" : "scaleX(1)",
+        transition: "transform 200ms ease",
       }}
-    />
+    >
+      <CoverArt src={src} type={type} width={size} height={size} borderRadius={borderRadius} alt="" />
+    </div>
   );
 }
 
@@ -185,6 +163,9 @@ function GlobalAudioPlayerBar() {
   const baseCover = currentTrack.baseCover || currentTrack.cover;
   const csCover = currentTrack.csCover || null;
   const csAudio = currentTrack.csAudio || null;
+  const coverArtType = currentTrack.coverArtType || null;
+  const csCoverType = currentTrack.csCoverType || null;
+  const activeCoverType = csMode && csCover ? csCoverType : coverArtType;
   const coverUrl = resolveAbsoluteArtworkUrl(csMode && csCover ? csCover : baseCover);
   const coverFlipKey = `${currentTrack.id || currentTrack.slug}:${coverUrl}:${currentTrack.title}:${csMode}`;
   const progress = duration ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
@@ -259,7 +240,7 @@ function GlobalAudioPlayerBar() {
             color: "inherit",
           }}
         >
-          <CoverArt cover={coverUrl} size={24} flipKey={coverFlipKey} />
+          <FlipCoverArt src={coverUrl} type={activeCoverType} size={24} flipKey={coverFlipKey} />
           <WaveformBars playing={isPlaying} />
           {playPauseBtn(28, false)}
         </button>
@@ -353,7 +334,9 @@ function GlobalAudioPlayerBar() {
               <div style={{ width: coverSize, height: coverSize, maxWidth: 320, maxHeight: 320 }}>
                 <GestureCoverArt
                   baseCover={baseCover}
+                  baseCoverType={coverArtType}
                   csCover={csCover}
+                  csCoverType={csCoverType}
                   csAudio={csAudio}
                   csMode={csMode}
                   toggleCSMode={toggleCSMode}
@@ -547,7 +530,9 @@ function GlobalAudioPlayerBar() {
             >
               <GestureCoverArt
                 baseCover={baseCover}
+                baseCoverType={coverArtType}
                 csCover={csCover}
+                csCoverType={csCoverType}
                 csAudio={csAudio}
                 csMode={csMode}
                 toggleCSMode={toggleCSMode}

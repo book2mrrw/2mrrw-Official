@@ -9,6 +9,7 @@ import { extractLrcFromRelease } from "@/lib/lrc";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import GiftButton from "@/components/gifts/GiftButton";
+import CoverArt from "@/components/ui/CoverArt";
 
 const SPRING_SOFT = { type: "spring", stiffness: 320, damping: 34 };
 const SPRING_EXIT = { type: "spring", stiffness: 380, damping: 36 };
@@ -114,6 +115,9 @@ function ImmersivePreviewModal({
   const priceLabel =
     single?.price != null && showPurchase ? `$${Number(single.price).toFixed(2)}` : null;
 
+  const coverSrc = single.video || single.cover;
+  const coverType = single.coverArtType || (single.video ? "video" : "image");
+
   return (
     <motion.div
       key="preview-overlay"
@@ -200,21 +204,16 @@ function ImmersivePreviewModal({
             background: "#000",
           }}
         >
-          <video
+          <CoverArt
             key={single.slug}
-            src={single.video}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="auto"
-            webkit-playsinline="true"
+            src={coverSrc}
+            type={coverType}
+            alt={single.title}
+            width="100%"
+            height="100%"
             style={{
-              width: "100%",
-              height: "100%",
               objectFit: isMobile ? "cover" : "contain",
               objectPosition: "center top",
-              display: "block",
               pointerEvents: "none",
             }}
           />

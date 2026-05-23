@@ -26,6 +26,7 @@ import { MobileNavAnimatedIcon } from "@/components/nav/MobileNavAnimatedIcon";
 import { VaultNavLockIcon } from "@/components/nav/VaultNavLockIcon";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
 import { catalogCoverUrl, catalogMotionVideoUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
+import CoverArt from "@/components/ui/CoverArt";
 
 const MOBILE_NAV_TABS = [
   { id: "home", label: "Home" },
@@ -2477,7 +2478,21 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <button onClick={prevSingle} style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.06)",border:"1px solid #2a2a2a",color:"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>‹</button>
           <div style={{flex:1,position:"relative",aspectRatio:"1/1"}} onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
-            <img key={currentSingle.slug} src={currentSingle.cover} style={{width:"100%",height:"100%",borderRadius:14,objectFit:"cover",display:"block",boxShadow:"0 8px 40px rgba(0,0,0,0.6)",transition:"filter 0.3s",filter:previewHover?"brightness(0.55)":"brightness(1)",animation:"fadeInCover 0.4s ease forwards"}}/>
+            <CoverArt
+              key={currentSingle.slug}
+              src={currentSingle.cover}
+              type={currentSingle.coverArtType}
+              alt=""
+              width="100%"
+              height="100%"
+              borderRadius={14}
+              style={{
+                boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
+                transition: "filter 0.3s",
+                filter: previewHover ? "brightness(0.55)" : "brightness(1)",
+                animation: "fadeInCover 0.4s ease forwards",
+              }}
+            />
             <div onClick={()=>openSingleModal(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,borderRadius:14,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
               <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(8px)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg viewBox="0 0 24 24" fill="white" width="24" height="24" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg></div>
               <div style={{fontSize:11,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>Preview</div>
@@ -2490,7 +2505,21 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
       )}
       {!isMobile && (
         <div style={{flexShrink:0,width:large?340:300,height:large?340:300,position:"relative"}} onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
-          <img key={currentSingle.slug} src={currentSingle.cover} style={{width:"100%",height:"100%",borderRadius:large?18:16,objectFit:"cover",display:"block",boxShadow:large?"0 10px 50px rgba(0,0,0,0.7)":"0 8px 40px rgba(0,0,0,0.6)",transition:"filter 0.3s",filter:previewHover?"brightness(0.55)":"brightness(1)",animation:"fadeInCover 0.4s ease forwards"}}/>
+          <CoverArt
+            key={currentSingle.slug}
+            src={currentSingle.cover}
+            type={currentSingle.coverArtType}
+            alt=""
+            width="100%"
+            height="100%"
+            borderRadius={large ? 18 : 16}
+            style={{
+              boxShadow: large ? "0 10px 50px rgba(0,0,0,0.7)" : "0 8px 40px rgba(0,0,0,0.6)",
+              transition: "filter 0.3s",
+              filter: previewHover ? "brightness(0.55)" : "brightness(1)",
+              animation: "fadeInCover 0.4s ease forwards",
+            }}
+          />
           <div onClick={()=>openSingleModal(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,borderRadius:large?18:16,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
             <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(0,0,0,0.55)",backdropFilter:"blur(8px)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 30px rgba(0,0,0,0.5)"}}><svg viewBox="0 0 24 24" fill="white" width="28" height="28" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg></div>
             <div style={{fontSize:12,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>Preview</div>
@@ -2527,7 +2556,15 @@ function FeaturesRail({ features, isMobile, addToCart, onPlay, accountState, use
         const access = resolveContentAccess(feat, accountState);
         return (
         <div key={feat.slug} onClick={()=>onPlay(feat)} style={{flex:"0 0 auto",width:isMobile?160:220,scrollSnapAlign:"start",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#a259ff55"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
-          <img src={feat.cover} style={{width:"100%",aspectRatio:"1/1",objectFit:"cover",display:"block",borderRadius:"13px 13px 0 0"}}/>
+          <CoverArt
+            src={feat.cover}
+            type={feat.coverArtType}
+            alt=""
+            width="100%"
+            height="auto"
+            borderRadius="13px 13px 0 0"
+            style={{ aspectRatio: "1/1", display: "block" }}
+          />
           <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
             <div className="hero-title-glow" style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{feat.title}</div>
             <div style={{fontSize:10,color:"#a259ff",fontWeight:700,letterSpacing:1.5,marginBottom:6}}>{feat.featuring}</div>
@@ -2572,7 +2609,20 @@ function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, button
         const access = resolveContentAccess(item, accountState);
         return (
         <div key={item.slug} style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
-          <img src={item.cover} onClick={()=>onCardClick?.(item)} onMouseEnter={hoverIn} onMouseLeave={hoverOut} style={{width:"100%",aspectRatio:"1/1",height:"auto",cursor:"pointer",transition:"transform 0.3s,filter 0.3s,box-shadow 0.3s",objectFit:"cover",display:"block"}}/>
+          <div onMouseEnter={hoverIn} onMouseLeave={hoverOut} onClick={() => onCardClick?.(item)} style={{ cursor: "pointer" }}>
+            <CoverArt
+              src={item.cover}
+              type={item.coverArtType}
+              alt=""
+              width="100%"
+              height="auto"
+              style={{
+                aspectRatio: "1/1",
+                transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s",
+                display: "block",
+              }}
+            />
+          </div>
           {type==="albums"&&(item.type==="deluxe"||item.releaseType==="deluxe")?(
             <span style={{position:"absolute",top:8,right:8,fontSize:9,fontWeight:800,letterSpacing:1.2,padding:"4px 7px",borderRadius:6,background:"rgba(245,158,11,0.92)",color:"#111"}}>DELUXE</span>
           ):null}

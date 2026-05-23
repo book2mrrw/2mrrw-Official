@@ -10,6 +10,7 @@ import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import PlaylistSection from "@/components/music/PlaylistSection";
+import CoverArt from "@/components/ui/CoverArt";
 
 const SORT_STORAGE_KEY = "mymusic_sort_pref";
 
@@ -76,9 +77,19 @@ function LibraryCarousel({ title, items, accountState, userId, onPlay, onOpen, o
               }}
             >
               <div style={{ position: "relative" }}>
-                {item.cover && (
-                  <img src={item.cover} alt="" style={{ width: "100%", aspectRatio: "1", objectFit: "cover", display: "block", opacity: locked ? 0.55 : 1 }} />
-                )}
+                {item.cover ? (
+                  <CoverArt
+                    src={item.cover}
+                    type={item.coverArtType}
+                    alt=""
+                    width="100%"
+                    style={{
+                      aspectRatio: "1",
+                      display: "block",
+                      opacity: locked ? 0.55 : 1,
+                    }}
+                  />
+                ) : null}
                 <div style={{ position: "absolute", top: 8, left: 8 }}>
                   <MusicAccessBadge label={access.badge} compact />
                 </div>
@@ -174,10 +185,12 @@ function RecentlyAddedRow({ items, onPlay, accountState }) {
             >
               <div style={{ position: "relative" }}>
                 {item.cover ? (
-                  <img
+                  <CoverArt
                     src={item.cover}
+                    type={item.coverArtType}
                     alt=""
-                    style={{ width: 130, height: 130, objectFit: "cover", display: "block" }}
+                    width={130}
+                    height={130}
                   />
                 ) : (
                   <div

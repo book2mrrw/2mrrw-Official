@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { albumTracksForPlayback } from "@/lib/music-playback";
 import { useAudioPlayer } from "@/context/AudioContext";
 import CSModeButton from "@/components/audio/CSModeButton";
+import CoverArt from "@/components/ui/CoverArt";
 
 const formatDuration = (seconds) => {
   if (!seconds || !isFinite(seconds)) return "";
@@ -152,10 +153,14 @@ export default function AlbumTracklistSheet({
             borderBottom: "1px solid #1a1a1a",
           }}
         >
-          <img
+          <CoverArt
             src={album.cover}
+            type={album.coverArtType}
             alt=""
-            style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+            width={56}
+            height={56}
+            borderRadius={8}
+            style={{ flexShrink: 0 }}
           />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div

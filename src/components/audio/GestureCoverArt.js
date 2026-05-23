@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import CoverArtCS from "@/components/ui/CoverArtCS";
+import { resolveCoverMediaType } from "@/components/ui/CoverArt";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 
 export const CS_GESTURE = {
@@ -11,11 +13,12 @@ export const CS_GESTURE = {
 };
 
 const CS_PLAYBACK_RATE = 0.75;
-const COVER_GRADIENT = "linear-gradient(135deg, rgba(0,255,255,0.12), rgba(162,89,255,0.12))";
 
 export default function GestureCoverArt({
   baseCover,
+  baseCoverType,
   csCover,
+  csCoverType,
   csAudio,
   csMode,
   toggleCSMode,
@@ -63,8 +66,15 @@ export default function GestureCoverArt({
   useEffect(() => {
     if (!csCover && !csAudio) return undefined;
     if (csCover) {
-      const img = new Image();
-      img.src = resolveAbsoluteArtworkUrl(csCover);
+      const url = resolveAbsoluteArtworkUrl(csCover);
+      if (resolveCoverMediaType(url, csCoverType) === "video") {
+        const video = document.createElement("video");
+        video.preload = "auto";
+        video.src = url;
+      } else {
+        const img = new Image();
+        img.src = url;
+      }
     }
     if (csAudio) {
       const preload = new Audio();
@@ -72,7 +82,7 @@ export default function GestureCoverArt({
       preload.src = csAudio;
     }
     return undefined;
-  }, [csCover, csAudio]);
+  }, [csCover, csCoverType, csAudio]);
 
   useEffect(
     () => () => {
@@ -261,61 +271,34 @@ export default function GestureCoverArt({
   const baseUrl = resolveAbsoluteArtworkUrl(baseCover);
   const csUrl = csCover ? resolveAbsoluteArtworkUrl(csCover) : null;
 
-  const frameStyle = {
-    width: dim >= 180 ? "100%" : dim,
-    height: dim >= 180 ? "100%" : dim,
-    maxWidth: dim >= 180 ? dim : undefined,
-    maxHeight: dim >= 180 ? dim : undefined,
-    borderRadius: radius,
-    flexShrink: 0,
-    position: "relative",
-    overflow: "hidden",
-    transform: flipPhase ? "scaleX(0)" : "scaleX(1)",
-    transition: "transform 200ms ease",
-    touchAction: "manipulation",
-    ...styleOverride,
-  };
-
-  const imgStyle = {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    display: "block",
-  };
-
   return (
-    <div
-      role={onSingleTap ? "button" : undefined}
-      tabIndex={onSingleTap ? 0 : undefined}
-      aria-label={onSingleTap ? "Cover art" : undefined}
+    <CoverArtCS
+      originalSrc={baseUrl}
+      originalType={baseCoverType}
+      csSrc={csUrl}
+      csType={csCoverType}
+      csOpacity={csOverlayOpacity}
+      isLocked={csMode}
+      width={dim >= 180 ? "100%" : dim}
+      height={dim >= 180 ? "100%" : dim}
+      borderRadius={radius}
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
       onClick={(e) => e.preventDefault()}
+      style={{
+        maxWidth: dim >= 180 ? dim : undefined,
+        maxHeight: dim >= 180 ? dim : undefined,
+        flexShrink: 0,
+        transform: flipPhase ? "scaleX(0)" : "scaleX(1)",
+        transition: "transform 200ms ease",
+        touchAction: "manipulation",
+        ...styleOverride,
+      }}
       className={pulse ? "audio-immersive-cover-pulse" : undefined}
-      style={frameStyle}
-    >
-      {baseUrl ? (
-        <img src={baseUrl} alt="" style={imgStyle} draggable={false} />
-      ) : (
-        <div style={{ ...imgStyle, background: COVER_GRADIENT, border: "1px solid #222" }} />
-      )}
-      {csUrl && (
-        <img
-          src={csUrl}
-          alt=""
-          draggable={false}
-          style={{
-            ...imgStyle,
-            position: "absolute",
-            inset: 0,
-            opacity: csOverlayOpacity,
-            transition: `opacity ${CS_GESTURE.CROSSFADE_MS}ms ease`,
-            filter: csOverlayOpacity > 0 ? "saturate(1.15) brightness(0.92)" : "none",
-            pointerEvents: "none",
-          }}
-        />
-      )}
-    </div>
+      role={onSingleTap ? "button" : undefined}
+      tabIndex={onSingleTap ? 0 : undefined}
+      aria-label={onSingleTap ? "Cover art" : undefined}
+    />
   );
 }

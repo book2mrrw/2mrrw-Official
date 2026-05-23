@@ -12,15 +12,19 @@ export function toPlaybackTrack(item, accountState, source = "library", override
   const userId = accountState?.userId || overrides.userId;
   const csAudioRaw = item?.csAudio || item?.cs_audio || null;
   const csCoverRaw = item?.csCover || item?.cs_cover || item?.csCoverArt || null;
+  const coverArtType = item?.coverArtType || item?.cover_art_type || null;
+  const csCoverType = item?.csCoverType || item?.cs_cover_type || null;
   return {
     id: item?.slug || item?.id,
     slug: item?.slug,
     title: item?.title || "Untitled",
     artist: item?.artist || "2MRRW",
     cover: item?.cover || item?.coverArt || null,
+    coverArtType,
     src: resolvePlaybackSrc(item, access, { userId }),
     csAudio: csAudioRaw ? resolveCsMediaUrl(csAudioRaw) : null,
     csCover: csCoverRaw ? catalogCoverUrl(csCoverRaw) : null,
+    csCoverType,
     source,
     metadata: {
       access,
@@ -88,6 +92,8 @@ export function albumTracksForPlayback(album, accountState, source = "album") {
           audio: track.audio || album.audio,
           csAudio: track.csAudio || track.cs_audio,
           csCover: track.csCover || track.cs_cover,
+          coverArtType: track.coverArtType || track.cover_art_type,
+          csCoverType: track.csCoverType || track.cs_cover_type,
         },
         accountState,
         source,

@@ -8,6 +8,7 @@ import {
   persistMediaSessionTrack,
   readPersistedMediaSessionTrack,
 } from "@/lib/media-session-artwork";
+import { resolveCoverMediaType } from "@/components/ui/CoverArt";
 
 const AudioContext = createContext(null);
 
@@ -50,6 +51,8 @@ const normalizeTrack = (track = {}) => {
   const baseCover = track.baseCover || track.cover || track.coverArt || track.image || null;
   const csAudio = track.csAudio || track.cs_audio || null;
   const csCover = track.csCover || track.cs_cover || track.csCoverArt || null;
+  const coverArtType = track.coverArtType || track.cover_art_type || (track.video ? "video" : "image");
+  const csCoverType = track.csCoverType || track.cs_cover_type || "image";
   return {
     id,
     slug: track.slug || id,
@@ -59,8 +62,10 @@ const normalizeTrack = (track = {}) => {
     baseSrc: track.baseSrc || src,
     baseCover,
     src,
+    coverArtType,
     csAudio: csAudio || null,
     csCover: csCover || null,
+    csCoverType,
     source: track.source || "unknown",
     metadata: track.metadata || {},
   };
@@ -109,7 +114,38 @@ function isStandalonePwa() {
   );
 }
 
+function preloadCsAssets(track, refs) {
+  refs.csImgRef.current = null;
+  refs.csVidRef.current = null;
+  refs.csAudioRef.current = null;
+  if (!track) return;
+  if (track.csCover) {
+    const mediaType = resolveCoverMediaType(track.csCover, track.csCoverType);
+    if (mediaType === "video") {
+      const vid = document.createElement("video");
+      vid.preload = "auto";
+      vid.src = track.csCover;
+      vid.load();
+      refs.csVidRef.current = vid;
+    } else {
+      const img = new Image();
+      img.src = track.csCover;
+      refs.csImgRef.current = img;
+    }
+  }
+  if (track.csAudio) {
+    const preload = new Audio();
+    preload.preload = "auto";
+    preload.src = track.csAudio;
+    preload.load();
+    refs.csAudioRef.current = preload;
+  }
+}
+
 export function AudioProvider({ children }) {
+  const csImgRef = useRef(null);
+  const csVidRef = useRef(null);
+  const csAudioRef = useRef(null);
   const audioRef = useRef(null);
   const lastPersistRef = useRef({ key: null, at: 0 });
   const pendingSeekRef = useRef(null);
@@ -403,6 +439,8 @@ export function AudioProvider({ children }) {
       hasStarted: true,
       csTrack: csModeRef.current ? normalized : null,
     });
+
+    preloadCsAssets(normalized, { csImgRef, csVidRef, csAudioRef });
 
     try {
       if (!isSameTrack) {
