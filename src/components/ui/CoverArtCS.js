@@ -24,8 +24,6 @@ export default function CoverArtCS({
   tabIndex,
   "aria-label": ariaLabel,
 }) {
-  const resolvedCsSrc = csSrc || originalSrc;
-
   return (
     <div
       className={className}
@@ -52,21 +50,23 @@ export default function CoverArtCS({
         borderRadius={borderRadius}
         style={{ position: "absolute", inset: 0 }}
       />
-      <CoverArt
-        src={resolvedCsSrc}
-        type={csType}
-        width="100%"
-        height="100%"
-        borderRadius={borderRadius}
-        style={{
-          position: "absolute",
-          inset: 0,
-          opacity: csOpacity,
-          filter: "saturate(1.3) brightness(0.85)",
-          transition: isLocked ? "none" : `opacity ${CROSSFADE_MS}ms ease`,
-          pointerEvents: "none",
-        }}
-      />
+      {csSrc && (
+        <CoverArt
+          src={csSrc}
+          type={csType}
+          width="100%"
+          height="100%"
+          borderRadius={borderRadius}
+          style={{
+            position: "absolute",
+            inset: 0,
+            opacity: csOpacity,
+            filter: "saturate(1.3) brightness(0.85)",
+            transition: isLocked ? "none" : `opacity ${CROSSFADE_MS}ms ease`,
+            pointerEvents: "none",
+          }}
+        />
+      )}
     </div>
   );
 }
