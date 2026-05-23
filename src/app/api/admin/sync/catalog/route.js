@@ -33,6 +33,10 @@ export async function POST(req) {
     let productUpserted = 0;
     for (const row of productRows) {
       if (!row?.slug) continue;
+      const meta = row.metadata || {};
+      const contentType = row.content_type ?? meta.content_type ?? null;
+      const contentId = row.content_id ?? meta.content_id ?? null;
+
       const payload = {
         slug: row.slug,
         title: row.title,
@@ -41,10 +45,15 @@ export async function POST(req) {
         cover_url: row.cover_url ?? null,
         storage_path: row.storage_path ?? null,
         preview_path: row.preview_path ?? null,
+        content_type: contentType,
+        content_id: contentId,
+        gifting_enabled: row.gifting_enabled ?? meta.gifting_enabled ?? false,
         active: row.active ?? true,
         metadata: {
-          ...(row.metadata || {}),
-          gifting_enabled: row.gifting_enabled ?? false,
+          ...meta,
+          content_type: contentType,
+          content_id: contentId,
+          gifting_enabled: row.gifting_enabled ?? meta.gifting_enabled ?? false,
         },
         updated_at: new Date().toISOString(),
       };

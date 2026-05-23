@@ -1,8 +1,41 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import crypto from "crypto";
+import { userOwnsProductViaEntitlements } from "@/lib/commerce/unified-entitlements";
+
+async function slugsFromEntitlements(admin, userId) {
+  const { data, error } = await admin
+    .from("entitlements")
+    .select("resource_id")
+    .eq("user_id", userId)
+    .eq("resource_type", "product")
+    .eq("status", "active");
+
+  if (error) {
+    if (error.code === "42P01" || /relation .* does not exist/i.test(String(error.message || ""))) {
+      return null;
+    }
+    throw error;
+  }
+
+  const productIds = (data || []).map((row) => row.resource_id).filter(Boolean);
+  if (!productIds.length) return [];
+
+  const { data: products, error: productError } = await admin
+    .from("products")
+    .select("slug")
+    .in("id", productIds);
+
+  if (productError) throw productError;
+  return (products || []).map((row) => row.slug).filter(Boolean);
+}
 
 export async function getOwnedSlugs(userId) {
   const admin = createAdminClient();
+  const fromEntitlements = await slugsFromEntitlements(admin, userId);
+  if (fromEntitlements !== null) {
+    return new Set(fromEntitlements);
+  }
+
   const { data, error } = await admin
     .from("library_items")
     .select("product_id, products(slug)")
@@ -16,6 +49,18 @@ export async function userOwnsProduct(userId, productSlug) {
   const admin = createAdminClient();
   const { data: product } = await admin.from("products").select("id").eq("slug", productSlug).single();
   if (!product) return false;
+
+  const entitled = await userOwnsProductViaEntitlements(admin, userId, product.id);
+  if (entitled === true) return true;
+  if (entitled === false) {
+    const { data } = await admin
+      .from("library_items")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("product_id", product.id)
+      .maybeSingle();
+    return !!data;
+  }
 
   const { data } = await admin
     .from("library_items")
@@ -79,6 +124,16 @@ export async function grantLibraryItems({ userId, purchaseId, slugs, source = "p
     .select("*, products(slug, title, product_type, cover_url)");
 
   if (error) throw error;
+
+  const { grantEntitlementsForProducts } = await import("@/lib/commerce/unified-entitlements");
+  await grantEntitlementsForProducts({
+    admin,
+    userId,
+    purchaseId,
+    products: resolved,
+    source,
+  });
+
   return data || [];
 }
 

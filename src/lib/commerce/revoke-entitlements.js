@@ -72,6 +72,10 @@ export async function revokeMembershipByPurchaseContext({ userId, slugs = [] }) 
 }
 
 export async function revokeExtendedEntitlementsForPurchase({ purchaseId, userId, slugs = [] }) {
+  const admin = createAdminClient();
+  const { revokeEntitlementsForPurchase } = await import("@/lib/commerce/unified-entitlements");
+  const entitlements = await revokeEntitlementsForPurchase(admin, purchaseId);
+
   const collector = await revokeCollectorOwnershipsByPurchase(purchaseId);
   const vault = await revokeVaultEntitlementsByPurchase(purchaseId);
   const membership = await revokeMembershipByPurchaseContext({ userId, slugs });
@@ -81,6 +85,7 @@ export async function revokeExtendedEntitlementsForPurchase({ purchaseId, userId
   const hadVaultSku = normalizedSlugs.some(isVaultPassSlug);
 
   return {
+    entitlements,
     collector,
     vault,
     membership,
