@@ -3,11 +3,21 @@ import { grantLibraryItems } from "@/lib/commerce/entitlements";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { normalizeEmail } from "@/lib/guest-session";
 import { hashGiftLinkToken } from "@/lib/gifts/token-hash";
+import { isGiftReminderToken, parseGiftReminderToken } from "@/lib/gifts/reminder-link";
 
 export { getFanSessionUser };
 
 export async function getGiftByToken(token) {
   const admin = createAdminClient();
+
+  if (isGiftReminderToken(token)) {
+    const parsed = parseGiftReminderToken(token);
+    if (!parsed?.giftId) return null;
+    const { data, error } = await admin.from("gifts").select("*").eq("id", parsed.giftId).maybeSingle();
+    if (error) throw error;
+    return data;
+  }
+
   const tokenHash = hashGiftLinkToken(token);
 
   const { data: byHash, error: hashError } = await admin

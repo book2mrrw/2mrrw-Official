@@ -4,6 +4,7 @@ import { userCanStreamProduct } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
 import { resolvePlaybackKey } from "@/lib/playback/resolve-playback-key";
 import { createR2SignedGetUrl } from "@/lib/storage/r2";
+import { getOrCreateStreamSignedUrl } from "@/lib/playback/stream-url-cache";
 
 export async function GET(req) {
   const slug = req.nextUrl.searchParams.get("slug");
@@ -28,7 +29,9 @@ export async function GET(req) {
     return NextResponse.json({ error: "No downloadable asset for this item" }, { status: 404 });
   }
 
-  const url = await createR2SignedGetUrl(resolved.key, 3600);
+  const url = await getOrCreateStreamSignedUrl(user.id, slug, () =>
+    createR2SignedGetUrl(resolved.key, 3600)
+  );
 
   if (redirect) {
     return NextResponse.redirect(url);

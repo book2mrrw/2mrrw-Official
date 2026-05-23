@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { buildGiftLink, sendGiftReminderEmail } from "@/lib/gifts/email";
+import { sendGiftReminderEmail } from "@/lib/gifts/email";
+import { buildSignedGiftReminderLink } from "@/lib/gifts/reminder-link";
 
 function authorizeCron(request) {
   const secret = process.env.CRON_SECRET;
@@ -23,7 +24,7 @@ export async function GET(request) {
 
     const { data: gifts, error } = await admin
       .from("gifts")
-      .select("id, recipient_email, item_title, gift_link_token, expires_at")
+      .select("id, recipient_email, item_title, gift_link_token, gift_link_token_hash, expires_at")
       .eq("status", "pending")
       .eq("reminder_sent", false)
       .gte("expires_at", nowIso)
@@ -32,14 +33,29 @@ export async function GET(request) {
     if (error) throw error;
 
     let reminders_sent = 0;
+    let skipped_no_link = 0;
     for (const gift of gifts || []) {
-      if (!gift.gift_link_token) {
+      let giftLink = null;
+      if (gift.gift_link_token) {
+        const { buildGiftLink } = await import("@/lib/gifts/email");
+        giftLink = buildGiftLink(gift.gift_link_token);
+      } else if (gift.gift_link_token_hash) {
+        try {
+          giftLink = await buildSignedGiftReminderLink(gift.id, gift.expires_at);
+        } catch (linkErr) {
+          console.warn("gift-reminders: signed link skipped", gift.id, linkErr.message);
+          skipped_no_link += 1;
+          continue;
+        }
+      } else {
+        skipped_no_link += 1;
         continue;
       }
+
       await sendGiftReminderEmail({
         to: gift.recipient_email,
         itemTitle: gift.item_title || "your gift",
-        giftLink: buildGiftLink(gift.gift_link_token),
+        giftLink,
         expiresAt: gift.expires_at,
       });
 
@@ -50,7 +66,7 @@ export async function GET(request) {
       if (!updateError) reminders_sent += 1;
     }
 
-    return NextResponse.json({ reminders_sent });
+    return NextResponse.json({ reminders_sent, skipped_no_link });
   } catch (err) {
     console.error("gift-reminders cron:", err);
     return NextResponse.json({ error: err.message || "Cron failed" }, { status: 500 });

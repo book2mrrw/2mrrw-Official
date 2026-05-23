@@ -21,6 +21,37 @@ function publicArtworkUrlFromPath(storagePath) {
 }
 const FULL_ACCESS_VALUES = new Set(["full", "owned", "purchased", "subscribed", "subscriber", "vault", "collector", "granted", "unlocked"]);
 
+/** Client-side signed URL cache (P4.1 — 50m TTL, below typical 3600s server expiry). */
+const SIGNED_URL_CACHE_TTL_MS = 50 * 60 * 1000;
+const signedUrlCache = new Map();
+
+function cacheKeyForEndpoint(endpoint) {
+  return endpoint || "";
+}
+
+function readSignedUrlCache(endpoint) {
+  const key = cacheKeyForEndpoint(endpoint);
+  const entry = signedUrlCache.get(key);
+  if (!entry) return "";
+  if (Date.now() >= entry.expiresAt) {
+    signedUrlCache.delete(key);
+    return "";
+  }
+  return entry.url;
+}
+
+function writeSignedUrlCache(endpoint, url) {
+  if (!endpoint || !url) return;
+  signedUrlCache.set(cacheKeyForEndpoint(endpoint), {
+    url,
+    expiresAt: Date.now() + SIGNED_URL_CACHE_TTL_MS,
+  });
+}
+
+export function clearSignedUrlCache() {
+  signedUrlCache.clear();
+}
+
 export function firstString(...values) {
   return values.find((value) => typeof value === "string" && value.trim()) || "";
 }
@@ -105,8 +136,22 @@ export function mediaAssetFromFields(record, assetKeys = [], assetIdKeys = [], a
   return mediaAssetMetadata(mergedAsset, apiBaseUrl);
 }
 
+function parseSignedUrlPayload(payload) {
+  return firstString(
+    payload?.data?.signedUrl,
+    payload?.data?.signed_url,
+    payload?.data?.url,
+    payload?.signedUrl,
+    payload?.signed_url,
+    payload?.url
+  );
+}
+
 async function fetchSignedUrl(endpoint) {
   if (!endpoint) return "";
+  const cached = readSignedUrlCache(endpoint);
+  if (cached) return cached;
+
   try {
     const response = await fetch(endpoint, {
       method: "GET",
@@ -116,17 +161,80 @@ async function fetchSignedUrl(endpoint) {
     });
     if (!response.ok) return "";
     const payload = await response.json();
-    return firstString(
-      payload?.data?.signedUrl,
-      payload?.data?.signed_url,
-      payload?.data?.url,
-      payload?.signedUrl,
-      payload?.signed_url,
-      payload?.url
-    );
+    const url = parseSignedUrlPayload(payload);
+    if (url) writeSignedUrlCache(endpoint, url);
+    return url;
   } catch {
     return "";
   }
+}
+
+/**
+ * Batch-resolve signed URLs via control POST /api/media/signed-urls (P4.2).
+ * Falls back to per-endpoint GET when batch is unavailable.
+ */
+export async function fetchSignedUrlsBatch(endpoints, apiBaseUrl = "") {
+  const unique = [...new Set(endpoints.filter(Boolean))];
+  const out = new Map();
+  const uncached = [];
+
+  for (const endpoint of unique) {
+    const cached = readSignedUrlCache(endpoint);
+    if (cached) {
+      out.set(endpoint, cached);
+    } else {
+      uncached.push(endpoint);
+    }
+  }
+
+  if (!uncached.length) return out;
+
+  const batchUrl = apiBaseUrl ? `${apiBaseUrl.replace(/\/+$/, "")}/api/media/signed-urls` : "";
+  if (batchUrl) {
+    const assetIds = uncached
+      .map((endpoint) => {
+        const match = endpoint.match(/\/api\/media\/([^/]+)\/signed-url/);
+        return match?.[1] ? decodeURIComponent(match[1]) : null;
+      })
+      .filter(Boolean);
+
+    if (assetIds.length === uncached.length) {
+      try {
+        const response = await fetch(batchUrl, {
+          method: "POST",
+          headers: { Accept: "application/json", "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ assetIds }),
+        });
+        if (response.ok) {
+          const payload = await response.json();
+          const results = payload?.data?.results || payload?.results || [];
+          for (const row of results) {
+            if (!row?.assetId || !row.ok) continue;
+            const endpoint = uncached.find((e) => e.includes(encodeURIComponent(row.assetId)));
+            const url = row.signedUrl || row.url;
+            if (endpoint && url) {
+              writeSignedUrlCache(endpoint, url);
+              out.set(endpoint, url);
+            }
+          }
+        }
+      } catch {
+        // fall through to per-endpoint fetch
+      }
+    }
+  }
+
+  await Promise.all(
+    uncached
+      .filter((endpoint) => !out.has(endpoint))
+      .map(async (endpoint) => {
+        const url = await fetchSignedUrl(endpoint);
+        if (url) out.set(endpoint, url);
+      })
+  );
+
+  return out;
 }
 
 export async function resolveMediaAssetUrl(asset, apiBaseUrl = "", fallbackUrl = "", options = {}) {
