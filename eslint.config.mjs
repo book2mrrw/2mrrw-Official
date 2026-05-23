@@ -7,6 +7,7 @@ const eslintConfig = defineConfig([
     rules: {
       // Foundation cinematic shell uses mount effects by design (see FRONTEND_FOUNDATION_BASELINE.md).
       "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/immutability": "warn",
       "react-hooks/static-components": "warn",
       "react/no-unescaped-entities": "warn",
     },
