@@ -153,7 +153,7 @@ function VerifyOtpForm() {
     <main className="auth-page auth-page--ref">
       <form onSubmit={verifyOtp} style={{ width: "100%", maxWidth: 420 }}>
         <AuthScreenCard variant="root">
-          <h1 className="auth-heading auth-heading--elevated hero-title-glow">Check your email</h1>
+          <h1 className="auth-heading auth-heading--elevated">Check your email</h1>
           <p className="auth-subtext">
             Enter the 8-digit code we sent to {email}
           </p>

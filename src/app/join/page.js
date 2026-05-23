@@ -181,8 +181,8 @@ function JoinForm() {
           <button type="submit" disabled={loading} className="auth-cta">
             {loading ? "Sending code…" : "Send Verification Code"}
           </button>
-          <Link href="/" className="auth-link" style={{ opacity: 0.7 }}>
-            Back to site
+          <Link href={giftToken ? `/login?gift=${giftToken}` : "/login"} className="auth-link">
+            Sign in
           </Link>
         </AuthScreenCard>
       </form>
