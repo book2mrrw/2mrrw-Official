@@ -3,7 +3,8 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
-import ChoppedSlowedToggle from "@/components/music/ChoppedSlowedToggle";
+import CSModeButton from "@/components/audio/CSModeButton";
+import GestureCoverArt from "@/components/audio/GestureCoverArt";
 
 const formatTime = (seconds) => {
   if (!seconds || !isFinite(seconds)) return "0:00";
@@ -100,9 +101,14 @@ function GlobalAudioPlayerBar() {
     repeatMode,
     toggleShuffle,
     toggleRepeat,
+    csMode,
+    toggleCSMode,
+    audioRef,
+    suppressPauseInterruptionRef,
   } = useAudioPlayer();
   const [isMobile, setIsMobile] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [ambientCoverUrl, setAmbientCoverUrl] = useState(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [swipeClosing, setSwipeClosing] = useState(false);
   const touchStartY = useRef(null);
@@ -176,8 +182,11 @@ function GlobalAudioPlayerBar() {
 
   if (!hasStarted || !currentTrack) return null;
 
-  const coverUrl = resolveAbsoluteArtworkUrl(currentTrack.cover);
-  const coverFlipKey = `${currentTrack.id || currentTrack.slug}:${coverUrl}:${currentTrack.title}`;
+  const baseCover = currentTrack.baseCover || currentTrack.cover;
+  const csCover = currentTrack.csCover || null;
+  const csAudio = currentTrack.csAudio || null;
+  const coverUrl = resolveAbsoluteArtworkUrl(csMode && csCover ? csCover : baseCover);
+  const coverFlipKey = `${currentTrack.id || currentTrack.slug}:${coverUrl}:${currentTrack.title}:${csMode}`;
   const progress = duration ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
   const bottom = isMobile ? "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)" : 0;
   const sourceLabel = String(currentTrack.source || "audio").replace(/_/g, " ");
@@ -279,13 +288,13 @@ function GlobalAudioPlayerBar() {
             transition: swipeClosing || swipeOffset === 0 ? "transform 0.22s ease-out" : "none",
           }}
         >
-          {coverUrl && (
+          {(ambientCoverUrl || coverUrl) && (
             <div
               aria-hidden
               style={{
                 position: "absolute",
                 inset: 0,
-                backgroundImage: `url(${coverUrl})`,
+                backgroundImage: `url(${ambientCoverUrl || coverUrl})`,
                 backgroundSize: "cover",
                 backgroundPosition: "center",
                 filter: "blur(48px) brightness(0.35)",
@@ -342,7 +351,20 @@ function GlobalAudioPlayerBar() {
               }}
             >
               <div style={{ width: coverSize, height: coverSize, maxWidth: 320, maxHeight: 320 }}>
-                <CoverArt cover={coverUrl} size={320} pulse={isPlaying} flipKey={coverFlipKey} />
+                <GestureCoverArt
+                  baseCover={baseCover}
+                  csCover={csCover}
+                  csAudio={csAudio}
+                  csMode={csMode}
+                  toggleCSMode={toggleCSMode}
+                  audioRef={audioRef}
+                  suppressPauseInterruptionRef={suppressPauseInterruptionRef}
+                  size={320}
+                  pulse={isPlaying}
+                  flipKey={coverFlipKey}
+                  borderRadius={12}
+                  onAmbientChange={setAmbientCoverUrl}
+                />
               </div>
 
               <div style={{ textAlign: "center", width: "100%", maxWidth: 400, padding: "0 8px" }}>
@@ -412,7 +434,7 @@ function GlobalAudioPlayerBar() {
               </div>
 
               <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", justifyContent: "center" }}>
-                <ChoppedSlowedToggle />
+                <CSModeButton />
                 {hasQueue && (
                   <>
                     <button
@@ -514,26 +536,42 @@ function GlobalAudioPlayerBar() {
                 </button>
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => setExpanded(true)}
-              aria-label="Expand player"
+            <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: isMobile ? 8 : 12,
                 flex: 1,
                 minWidth: 0,
-                background: "none",
-                border: "none",
-                padding: 0,
-                cursor: "pointer",
-                textAlign: "left",
-                color: "inherit",
               }}
             >
-              <CoverArt cover={coverUrl} size={isMobile ? 40 : 38} flipKey={coverFlipKey} />
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <GestureCoverArt
+                baseCover={baseCover}
+                csCover={csCover}
+                csAudio={csAudio}
+                csMode={csMode}
+                toggleCSMode={toggleCSMode}
+                audioRef={audioRef}
+                suppressPauseInterruptionRef={suppressPauseInterruptionRef}
+                size={isMobile ? 40 : 38}
+                flipKey={coverFlipKey}
+                onSingleTap={() => setExpanded(true)}
+              />
+              <button
+                type="button"
+                onClick={() => setExpanded(true)}
+                aria-label="Expand player"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  background: "none",
+                  border: "none",
+                  padding: 0,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  color: "inherit",
+                }}
+              >
                 <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                     {currentTrack.title}
@@ -555,9 +593,9 @@ function GlobalAudioPlayerBar() {
                 >
                   {error || `${currentTrack.artist} · ${formatTime(currentTime)} / ${formatTime(duration)}`}
                 </div>
-              </div>
-            </button>
-            <ChoppedSlowedToggle compact />
+              </button>
+            </div>
+            <CSModeButton />
             {playPauseBtn(isMobile ? 38 : 36, false)}
             <button
               type="button"

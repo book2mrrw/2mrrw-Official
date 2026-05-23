@@ -30,6 +30,7 @@ const EMPTY_STATE = {
   repeatMode: "off",
   shuffle: false,
   csMode: false,
+  csTrack: null,
 };
 
 function stripSlowedSuffix(title) {
@@ -400,6 +401,7 @@ export function AudioProvider({ children }) {
       source: nextTrack.source,
       error: null,
       hasStarted: true,
+      csTrack: csModeRef.current ? normalized : null,
     });
 
     try {
@@ -448,13 +450,15 @@ export function AudioProvider({ children }) {
   const toggleCSMode = useCallback(async () => {
     const next = !csModeRef.current;
     csModeRef.current = next;
-    patchState({ csMode: next });
 
     const audio = audioRef.current;
     const track = stateRef.current.currentTrack;
-    if (!audio || !track || !stateRef.current.hasStarted) return next;
+    if (!audio || !track || !stateRef.current.hasStarted) {
+      patchState({ csMode: next, csTrack: next && track ? normalizeTrack(track) : null });
+      return next;
+    }
 
-    const normalized = normalizeTrack(track);
+    const normalized = stateRef.current.csTrack || normalizeTrack(track);
     const resumeAt = audio.currentTime;
     const presentation = resolvePlaybackPresentation(normalized, next, csUsingAlternateSrcRef.current);
     const nextTrack = {
@@ -477,14 +481,19 @@ export function AudioProvider({ children }) {
         pendingSeekRef.current = resumeAt > 0 ? resumeAt : null;
       }
       applyCsToElement(audio, presentation, resumeAt > 0 ? resumeAt : null);
-      patchState({ currentTrack: nextTrack });
+      patchState({
+        csMode: next,
+        csTrack: next ? normalized : null,
+        currentTrack: nextTrack,
+      });
       void updateMediaSession(nextTrack, { playing: !audio.paused });
       if (audio.paused && stateRef.current.isPlaying) {
         await audio.play();
       }
       syncPositionState(true);
     } catch {
-      patchState({ error: "Could not apply chopped & slowed mode." });
+      csModeRef.current = !next;
+      patchState({ error: "Could not apply chopped & slowed mode.", csMode: !next });
     }
     return next;
   }, [patchState, updateMediaSession, applyCsToElement, syncPositionState]);
@@ -719,6 +728,7 @@ export function AudioProvider({ children }) {
     setShuffle,
     toggleShuffle,
     toggleCSMode,
+    suppressPauseInterruptionRef: skipPauseInterruptionRef,
     pause,
     resume,
     toggle,

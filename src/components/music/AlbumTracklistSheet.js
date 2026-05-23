@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { albumTracksForPlayback } from "@/lib/music-playback";
 import { useAudioPlayer } from "@/context/AudioContext";
-import ChoppedSlowedToggle from "@/components/music/ChoppedSlowedToggle";
+import CSModeButton from "@/components/audio/CSModeButton";
 
 const formatDuration = (seconds) => {
   if (!seconds || !isFinite(seconds)) return "";
@@ -313,7 +313,7 @@ export default function AlbumTracklistSheet({
           }}
         >
           <span style={{ fontSize: 11, color: "#555", letterSpacing: 1 }}>Chopped &amp; Slowed</span>
-          <ChoppedSlowedToggle />
+          <CSModeButton />
         </div>
       </div>
     </div>

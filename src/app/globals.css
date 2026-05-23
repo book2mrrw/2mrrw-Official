@@ -415,6 +415,20 @@ body {
   }
 }
 
+.cs-reel-spin {
+  transform-origin: center;
+  animation: csReelSpin 3s linear infinite;
+}
+
+@keyframes csReelSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .audio-island-waveform.is-playing span {
     animation: none;
@@ -426,6 +440,10 @@ body {
   }
 
   .audio-immersive-cover-pulse {
+    animation: none;
+  }
+
+  .cs-reel-spin {
     animation: none;
   }
 }
