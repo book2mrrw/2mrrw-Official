@@ -34,6 +34,7 @@ export default function CoverArtCS({
         position: "relative",
         width,
         height,
+        borderRadius,
         overflow: "hidden",
         ...style,
       }}
