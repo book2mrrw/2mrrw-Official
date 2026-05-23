@@ -4,8 +4,8 @@ import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 import CSModeButton from "@/components/audio/CSModeButton";
-import GestureCoverArt from "@/components/audio/GestureCoverArt";
 import CoverArt from "@/components/ui/CoverArt";
+import CoverArtCS from "@/components/ui/CoverArtCS";
 
 const formatTime = (seconds) => {
   if (!seconds || !isFinite(seconds)) return "0:00";
@@ -13,6 +13,12 @@ const formatTime = (seconds) => {
   const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
+
+const DOUBLE_TAP_MS = 300;
+const HOLD_FADE_MS = 300;
+const RELEASE_FADE_MS = 200;
+const MOVE_CANCEL_PX = 10;
+const CS_PLAYBACK_RATE = 0.75;
 
 const iconBtn = {
   background: "none",
@@ -25,28 +31,63 @@ const iconBtn = {
   flexShrink: 0,
 };
 
-function FlipCoverArt({ src, type, size, flipKey, pulse }) {
-  const [flipPhase, setFlipPhase] = useState(false);
-  const borderRadius = size <= 32 ? "50%" : 8;
+const transportBtnBase = {
+  background: "none",
+  border: "none",
+  cursor: "pointer",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 1,
+  padding: 0,
+  flexShrink: 0,
+  lineHeight: 1,
+};
 
-  useEffect(() => {
-    if (!flipKey) return undefined;
-    setFlipPhase(true);
-    const t = window.setTimeout(() => setFlipPhase(false), 200);
-    return () => window.clearTimeout(t);
-  }, [flipKey]);
-
+function SeekButton({ direction, size, labelSize, onClick }) {
+  const label = direction === "back" ? "-15" : "+15";
   return (
-    <div
-      className={pulse ? "audio-immersive-cover-pulse" : undefined}
+    <button
+      type="button"
+      aria-label={direction === "back" ? "Rewind 15 seconds" : "Forward 15 seconds"}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
       style={{
-        flexShrink: 0,
-        transform: flipPhase ? "scaleX(0)" : "scaleX(1)",
-        transition: "transform 200ms ease",
+        ...transportBtnBase,
+        width: size,
+        height: size,
+        color: "#666",
+        fontSize: size * 0.5,
       }}
     >
-      <CoverArt src={src} type={type} width={size} height={size} borderRadius={borderRadius} alt="" />
-    </div>
+      <span style={{ fontSize: labelSize, color: "#444", fontWeight: 600, lineHeight: 1 }}>{label}</span>
+      <span>{direction === "back" ? "⏪" : "⏩"}</span>
+    </button>
+  );
+}
+
+function TrackTransportButton({ label, size, color, onClick }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      style={{
+        ...transportBtnBase,
+        width: size,
+        height: size,
+        color: color || "#666",
+        fontSize: size * 0.55,
+      }}
+    >
+      {label === "Previous track" ? "⏮" : "⏭"}
+    </button>
   );
 }
 
@@ -81,6 +122,8 @@ function GlobalAudioPlayerBar() {
     toggleRepeat,
     csMode,
     toggleCSMode,
+    seekBack,
+    seekForward,
     audioRef,
     suppressPauseInterruptionRef,
   } = useAudioPlayer();
@@ -89,8 +132,28 @@ function GlobalAudioPlayerBar() {
   const [ambientCoverUrl, setAmbientCoverUrl] = useState(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [swipeClosing, setSwipeClosing] = useState(false);
+  const [csHoldOpacity, setCsHoldOpacity] = useState(0);
+  const [flipPhase, setFlipPhase] = useState(false);
   const touchStartY = useRef(null);
   const touchDeltaY = useRef(0);
+  const lastTapTimeRef = useRef(0);
+  const holdRafRef = useRef(null);
+  const holdActiveRef = useRef(false);
+  const previewActiveRef = useRef(false);
+  const savedAudioRef = useRef(null);
+  const touchMovedRef = useRef(false);
+  const touchStartRef = useRef(null);
+  const tapTimeoutRef = useRef(null);
+  const csModeRef = useRef(csMode);
+
+  useEffect(() => {
+    csModeRef.current = csMode;
+    if (csMode) {
+      setCsHoldOpacity(0);
+      holdActiveRef.current = false;
+      previewActiveRef.current = false;
+    }
+  }, [csMode]);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -114,6 +177,248 @@ function GlobalAudioPlayerBar() {
       document.body.style.overflow = prev;
     };
   }, [expanded]);
+
+  useEffect(
+    () => () => {
+      if (holdRafRef.current) cancelAnimationFrame(holdRafRef.current);
+      if (tapTimeoutRef.current) window.clearTimeout(tapTimeoutRef.current);
+    },
+    []
+  );
+
+  const baseCover = currentTrack?.baseCover || currentTrack?.cover;
+  const csCover = currentTrack?.csCover || null;
+  const csAudio = currentTrack?.csAudio || null;
+  const baseCoverType = currentTrack?.coverArtType || "image";
+  const csCoverType = currentTrack?.csCoverType || "image";
+  const hasCs = Boolean(csCover || csAudio);
+  const coverFlipKey = currentTrack
+    ? `${currentTrack.id || currentTrack.slug}:${baseCover}:${currentTrack.title}:${csMode}`
+    : null;
+
+  useEffect(() => {
+    if (!coverFlipKey) return undefined;
+    setFlipPhase(true);
+    const t = window.setTimeout(() => setFlipPhase(false), 200);
+    return () => window.clearTimeout(t);
+  }, [coverFlipKey]);
+
+  useEffect(() => {
+    if (!currentTrack) return;
+    const ambient = csMode && csCover ? csCover : baseCover;
+    if (ambient) setAmbientCoverUrl(resolveAbsoluteArtworkUrl(ambient));
+  }, [baseCover, csCover, csMode, currentTrack]);
+
+  const cancelHoldAnim = useCallback(() => {
+    if (holdRafRef.current) {
+      cancelAnimationFrame(holdRafRef.current);
+      holdRafRef.current = null;
+    }
+  }, []);
+
+  const markProgrammaticPause = useCallback(() => {
+    if (suppressPauseInterruptionRef) suppressPauseInterruptionRef.current = true;
+  }, [suppressPauseInterruptionRef]);
+
+  const applyHoldAudio = useCallback(
+    (progress) => {
+      const audio = audioRef?.current;
+      if (!audio || csModeRef.current) return;
+
+      if (csAudio) {
+        if (!previewActiveRef.current) {
+          savedAudioRef.current = {
+            src: audio.currentSrc || audio.src,
+            currentTime: audio.currentTime,
+            playbackRate: audio.playbackRate,
+            wasPlaying: !audio.paused,
+          };
+          markProgrammaticPause();
+          audio.pause();
+          audio.src = csAudio;
+          audio.load();
+          const seekTo = savedAudioRef.current.currentTime;
+          const applySeek = () => {
+            if (seekTo > 0 && isFinite(audio.duration)) {
+              audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
+            }
+            audio.removeEventListener("loadedmetadata", applySeek);
+          };
+          audio.addEventListener("loadedmetadata", applySeek);
+          if (isFinite(audio.duration) && audio.duration > 0) applySeek();
+          audio.playbackRate = 1;
+          if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+          if (savedAudioRef.current.wasPlaying) audio.play().catch(() => {});
+          previewActiveRef.current = true;
+        }
+      } else {
+        audio.playbackRate = 1 - (1 - CS_PLAYBACK_RATE) * progress;
+        if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+      }
+    },
+    [audioRef, csAudio, markProgrammaticPause]
+  );
+
+  const revertHoldPreview = useCallback(() => {
+    const audio = audioRef?.current;
+    if (!audio || csModeRef.current) return;
+
+    cancelHoldAnim();
+    holdActiveRef.current = false;
+
+    const saved = savedAudioRef.current;
+    if (previewActiveRef.current && saved) {
+      const currentUrl = audio.currentSrc || audio.src;
+      const savedUrl = saved.src ? new URL(saved.src, window.location.href).href : "";
+      const needsSwap = csAudio && savedUrl && currentUrl !== savedUrl;
+      if (needsSwap) {
+        markProgrammaticPause();
+        audio.pause();
+        audio.src = saved.src;
+        audio.load();
+        const seekTo = saved.currentTime;
+        const applySeek = () => {
+          if (seekTo > 0 && isFinite(audio.duration)) {
+            audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
+          }
+          audio.removeEventListener("loadedmetadata", applySeek);
+        };
+        audio.addEventListener("loadedmetadata", applySeek);
+      } else if (saved.currentTime > 0) {
+        audio.currentTime = saved.currentTime;
+      }
+      audio.playbackRate = saved.playbackRate ?? 1;
+      if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+      if (saved.wasPlaying && audio.paused) audio.play().catch(() => {});
+    } else if (audio) {
+      audio.playbackRate = 1;
+      if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+    }
+
+    previewActiveRef.current = false;
+    savedAudioRef.current = null;
+  }, [audioRef, cancelHoldAnim, csAudio, markProgrammaticPause]);
+
+  const animateHoldOpacity = useCallback(
+    (from, to, duration, onFrame, onComplete) => {
+      cancelHoldAnim();
+      const start = performance.now();
+      const step = (now) => {
+        const progress = Math.min(1, (now - start) / duration);
+        const value = from + (to - from) * progress;
+        setCsHoldOpacity(value);
+        onFrame?.(value, progress);
+        if (progress < 1) {
+          holdRafRef.current = requestAnimationFrame(step);
+        } else {
+          holdRafRef.current = null;
+          onComplete?.();
+        }
+      };
+      holdRafRef.current = requestAnimationFrame(step);
+    },
+    [cancelHoldAnim]
+  );
+
+  const handleCoverTouchStart = useCallback(
+    (e, onSingleTap) => {
+      e.stopPropagation();
+      touchMovedRef.current = false;
+      touchStartRef.current = { x: e.touches[0]?.clientX ?? 0, y: e.touches[0]?.clientY ?? 0 };
+
+      const now = Date.now();
+      const sinceLast = now - lastTapTimeRef.current;
+      if (sinceLast < DOUBLE_TAP_MS && lastTapTimeRef.current > 0 && hasCs) {
+        window.clearTimeout(tapTimeoutRef.current);
+        lastTapTimeRef.current = 0;
+        cancelHoldAnim();
+        revertHoldPreview();
+        setCsHoldOpacity(0);
+        void toggleCSMode?.();
+        return;
+      }
+      lastTapTimeRef.current = now;
+
+      if (!hasCs || csModeRef.current) {
+        if (onSingleTap) {
+          tapTimeoutRef.current = window.setTimeout(() => {
+            onSingleTap();
+            lastTapTimeRef.current = 0;
+          }, DOUBLE_TAP_MS);
+        }
+        return;
+      }
+
+      holdActiveRef.current = true;
+      animateHoldOpacity(0, 1, HOLD_FADE_MS, (value, progress) => {
+        applyHoldAudio(progress);
+        if (csCover) setAmbientCoverUrl(resolveAbsoluteArtworkUrl(csCover));
+      });
+    },
+    [
+      animateHoldOpacity,
+      applyHoldAudio,
+      cancelHoldAnim,
+      csCover,
+      hasCs,
+      revertHoldPreview,
+      toggleCSMode,
+    ]
+  );
+
+  const handleCoverTouchMove = useCallback(
+    (e) => {
+      if (!touchStartRef.current) return;
+      const dx = (e.touches[0]?.clientX ?? 0) - touchStartRef.current.x;
+      const dy = (e.touches[0]?.clientY ?? 0) - touchStartRef.current.y;
+      if (Math.hypot(dx, dy) > MOVE_CANCEL_PX) {
+        touchMovedRef.current = true;
+        if (holdActiveRef.current && !csModeRef.current) {
+          animateHoldOpacity(csHoldOpacity, 0, RELEASE_FADE_MS, null, () => {
+            revertHoldPreview();
+            if (baseCover) setAmbientCoverUrl(resolveAbsoluteArtworkUrl(baseCover));
+          });
+        }
+      }
+    },
+    [animateHoldOpacity, baseCover, csHoldOpacity, revertHoldPreview]
+  );
+
+  const handleCoverTouchEnd = useCallback(
+    (e, onSingleTap) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (touchMovedRef.current) {
+        touchStartRef.current = null;
+        return;
+      }
+
+      if (csModeRef.current) {
+        touchStartRef.current = null;
+        return;
+      }
+
+      if (holdActiveRef.current) {
+        animateHoldOpacity(csHoldOpacity, 0, RELEASE_FADE_MS, null, () => {
+          revertHoldPreview();
+          if (baseCover) setAmbientCoverUrl(resolveAbsoluteArtworkUrl(baseCover));
+        });
+        touchStartRef.current = null;
+        return;
+      }
+
+      if (onSingleTap) {
+        tapTimeoutRef.current = window.setTimeout(() => {
+          onSingleTap();
+          lastTapTimeRef.current = 0;
+        }, DOUBLE_TAP_MS);
+      }
+
+      touchStartRef.current = null;
+    },
+    [animateHoldOpacity, baseCover, csHoldOpacity, revertHoldPreview]
+  );
 
   const handleSeek = useCallback(
     (event) => {
@@ -160,14 +465,11 @@ function GlobalAudioPlayerBar() {
 
   if (!hasStarted || !currentTrack) return null;
 
-  const baseCover = currentTrack.baseCover || currentTrack.cover;
-  const csCover = currentTrack.csCover || null;
-  const csAudio = currentTrack.csAudio || null;
-  const coverArtType = currentTrack.coverArtType || null;
-  const csCoverType = currentTrack.csCoverType || null;
-  const activeCoverType = csMode && csCover ? csCoverType : coverArtType;
-  const coverUrl = resolveAbsoluteArtworkUrl(csMode && csCover ? csCover : baseCover);
-  const coverFlipKey = `${currentTrack.id || currentTrack.slug}:${coverUrl}:${currentTrack.title}:${csMode}`;
+  const csOpacity = csMode ? 1 : csHoldOpacity;
+  const baseCoverUrl = resolveAbsoluteArtworkUrl(baseCover);
+  const csCoverUrl = csCover ? resolveAbsoluteArtworkUrl(csCover) : null;
+  const islandCoverUrl = csMode && csCoverUrl ? csCoverUrl : baseCoverUrl;
+  const islandCoverType = csMode && csCover ? csCoverType : baseCoverType;
   const progress = duration ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
   const bottom = isMobile ? "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)" : 0;
   const sourceLabel = String(currentTrack.source || "audio").replace(/_/g, " ");
@@ -176,6 +478,51 @@ function GlobalAudioPlayerBar() {
   const queueTotal = queue?.length || 1;
   const queueLabel = hasQueue ? `${queuePos} of ${queueTotal}` : null;
   const coverSize = isMobile ? "min(80vw, 320px)" : 320;
+
+  const coverFrameStyle = (dim, radius) => ({
+    transform: flipPhase ? "scaleX(0)" : "scaleX(1)",
+    transition: "transform 200ms ease",
+    touchAction: "manipulation",
+    flexShrink: 0,
+  });
+
+  const renderSecondaryControls = (gap) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap }}>
+      <button
+        type="button"
+        aria-label="Shuffle"
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleShuffle();
+        }}
+        style={{ ...iconBtn, fontSize: 14, color: shuffle ? "#00ffff" : "#666" }}
+      >
+        ⇄ Shuffle
+      </button>
+      <button
+        type="button"
+        aria-label="Repeat"
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleRepeat();
+        }}
+        style={{ ...iconBtn, fontSize: 14, color: repeatMode !== "off" ? "#00ffff" : "#666" }}
+      >
+        {repeatMode === "one" ? "①" : "↻"} Repeat
+      </button>
+      <CSModeButton />
+    </div>
+  );
+
+  const renderTransportRow = ({ playSize, transportSize, skipSize, labelSize, prevNextColor, gap }) => (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap, width: "100%" }}>
+      <TrackTransportButton label="Previous track" size={transportSize} color={prevNextColor} onClick={() => playPrevious()} />
+      <SeekButton direction="back" size={skipSize} labelSize={labelSize} onClick={() => seekBack(15)} />
+      {playPauseBtn(playSize, playSize >= 64)}
+      <SeekButton direction="forward" size={skipSize} labelSize={labelSize} onClick={() => seekForward(15)} />
+      <TrackTransportButton label="Next track" size={transportSize} color={prevNextColor} onClick={() => playNext()} />
+    </div>
+  );
 
   const playPauseBtn = (size, large) => (
     <button
@@ -240,7 +587,14 @@ function GlobalAudioPlayerBar() {
             color: "inherit",
           }}
         >
-          <FlipCoverArt src={coverUrl} type={activeCoverType} size={24} flipKey={coverFlipKey} />
+          <CoverArt
+            src={islandCoverUrl}
+            type={islandCoverType}
+            width={24}
+            height={24}
+            borderRadius="50%"
+            style={coverFrameStyle(24, "50%")}
+          />
           <WaveformBars playing={isPlaying} />
           {playPauseBtn(28, false)}
         </button>
@@ -269,13 +623,13 @@ function GlobalAudioPlayerBar() {
             transition: swipeClosing || swipeOffset === 0 ? "transform 0.22s ease-out" : "none",
           }}
         >
-          {(ambientCoverUrl || coverUrl) && (
+          {(ambientCoverUrl || baseCoverUrl) && (
             <div
               aria-hidden
               style={{
                 position: "absolute",
                 inset: 0,
-                backgroundImage: `url(${ambientCoverUrl || coverUrl})`,
+                backgroundImage: `url(${ambientCoverUrl || baseCoverUrl})`,
                 backgroundSize: "cover",
                 backgroundPosition: "center",
                 filter: "blur(48px) brightness(0.35)",
@@ -332,21 +686,22 @@ function GlobalAudioPlayerBar() {
               }}
             >
               <div style={{ width: coverSize, height: coverSize, maxWidth: 320, maxHeight: 320 }}>
-                <GestureCoverArt
-                  baseCover={baseCover}
-                  baseCoverType={coverArtType}
-                  csCover={csCover}
-                  csCoverType={csCoverType}
-                  csAudio={csAudio}
-                  csMode={csMode}
-                  toggleCSMode={toggleCSMode}
-                  audioRef={audioRef}
-                  suppressPauseInterruptionRef={suppressPauseInterruptionRef}
-                  size={320}
-                  pulse={isPlaying}
-                  flipKey={coverFlipKey}
-                  borderRadius={12}
-                  onAmbientChange={setAmbientCoverUrl}
+                <CoverArtCS
+                  originalSrc={baseCoverUrl}
+                  originalType={baseCoverType}
+                  csSrc={csCoverUrl}
+                  csType={csCoverType}
+                  csOpacity={csOpacity}
+                  isLocked={csMode}
+                  width="100%"
+                  height="100%"
+                  borderRadius={20}
+                  className={isPlaying ? "audio-immersive-cover-pulse" : undefined}
+                  style={coverFrameStyle(320, 20)}
+                  onTouchStart={(e) => handleCoverTouchStart(e)}
+                  onTouchMove={handleCoverTouchMove}
+                  onTouchEnd={(e) => handleCoverTouchEnd(e)}
+                  onClick={(e) => e.preventDefault()}
                 />
               </div>
 
@@ -402,46 +757,22 @@ function GlobalAudioPlayerBar() {
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20 }}>
-                {hasQueue && (
-                  <button type="button" aria-label="Previous track" onClick={() => playPrevious()} style={{ ...iconBtn, fontSize: 22 }}>
-                    ⏮
-                  </button>
-                )}
-                {playPauseBtn(64, true)}
-                {hasQueue && (
-                  <button type="button" aria-label="Next track" onClick={() => playNext()} style={{ ...iconBtn, fontSize: 22 }}>
-                    ⏭
-                  </button>
-                )}
-              </div>
+              {renderTransportRow({
+                playSize: 72,
+                transportSize: 48,
+                skipSize: 44,
+                labelSize: 9,
+                prevNextColor: "#888",
+                gap: 24,
+              })}
 
-              <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", justifyContent: "center" }}>
-                <CSModeButton />
-                {hasQueue && (
-                  <>
-                    <button
-                      type="button"
-                      aria-label="Shuffle"
-                      onClick={() => toggleShuffle()}
-                      style={{ ...iconBtn, fontSize: 16, color: shuffle ? "#00ffff" : "#666" }}
-                    >
-                      ⇄ Shuffle
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Repeat"
-                      onClick={() => toggleRepeat()}
-                      style={{ ...iconBtn, fontSize: 16, color: repeatMode !== "off" ? "#00ffff" : "#666" }}
-                    >
-                      {repeatMode === "one" ? "①" : "↻"} Repeat
-                    </button>
-                    {queueLabel && (
-                      <div style={{ fontSize: 12, color: "#555", letterSpacing: 1.5, textTransform: "uppercase" }}>{queueLabel}</div>
-                    )}
-                  </>
-                )}
-              </div>
+              {renderSecondaryControls(32)}
+
+              {hasQueue && queueLabel && (
+                <div style={{ fontSize: 12, color: "#555", letterSpacing: 1.5, textTransform: "uppercase", textAlign: "center" }}>
+                  {queueLabel}
+                </div>
+              )}
 
               {error && <div style={{ fontSize: 12, color: "#ff8a8a", textAlign: "center" }}>{error}</div>}
             </div>
@@ -483,122 +814,197 @@ function GlobalAudioPlayerBar() {
               }}
             />
           </div>
-          <div
-            style={{
-              maxWidth: 1180,
-              margin: "0 auto",
-              padding: isMobile ? "8px 12px" : "10px 20px",
-              display: "flex",
-              alignItems: "center",
-              gap: isMobile ? 8 : 12,
-            }}
-          >
-            {hasQueue && (
-              <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                <button type="button" aria-label="Previous track" onClick={() => playPrevious()} style={iconBtn}>
-                  ⏮
-                </button>
-                <button type="button" aria-label="Next track" onClick={() => playNext()} style={iconBtn}>
-                  ⏭
-                </button>
+          <div style={{ maxWidth: 1180, margin: "0 auto", padding: isMobile ? "8px 12px 10px" : "10px 20px" }}>
+            {isMobile ? (
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <CoverArtCS
+                    originalSrc={baseCoverUrl}
+                    originalType={baseCoverType}
+                    csSrc={csCoverUrl}
+                    csType={csCoverType}
+                    csOpacity={csOpacity}
+                    isLocked={csMode}
+                    width={40}
+                    height={40}
+                    borderRadius={8}
+                    style={coverFrameStyle(40, 8)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Cover art"
+                    onTouchStart={(e) => handleCoverTouchStart(e, () => setExpanded(true))}
+                    onTouchMove={handleCoverTouchMove}
+                    onTouchEnd={(e) => handleCoverTouchEnd(e, () => setExpanded(true))}
+                    onClick={(e) => e.preventDefault()}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(true)}
+                    aria-label="Expand player"
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      textAlign: "left",
+                      color: "inherit",
+                    }}
+                  >
+                    <div style={{ fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {currentTrack.title}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: error ? "#ff8a8a" : "#555",
+                        fontVariantNumeric: "tabular-nums",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {error || `${currentTrack.artist} · ${formatTime(currentTime)} / ${formatTime(duration)}`}
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stop}
+                    aria-label="Close audio player"
+                    style={{
+                      background: "none",
+                      border: "none",
+                      color: "#555",
+                      cursor: "pointer",
+                      fontSize: 20,
+                      lineHeight: 1,
+                      padding: "0 4px",
+                      flexShrink: 0,
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+                {renderTransportRow({
+                  playSize: 44,
+                  transportSize: 36,
+                  skipSize: 36,
+                  labelSize: 8,
+                  prevNextColor: "#666",
+                  gap: 10,
+                })}
+                <div style={{ marginTop: 8 }}>{renderSecondaryControls(20)}</div>
+              </>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                {hasQueue && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <button type="button" aria-label="Previous track" onClick={() => playPrevious()} style={iconBtn}>
+                      ⏮
+                    </button>
+                    <button type="button" aria-label="Next track" onClick={() => playNext()} style={iconBtn}>
+                      ⏭
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Shuffle"
+                      onClick={() => toggleShuffle()}
+                      style={{ ...iconBtn, color: shuffle ? "#00ffff" : "#666" }}
+                    >
+                      ⇄
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Repeat"
+                      onClick={() => toggleRepeat()}
+                      style={{ ...iconBtn, color: repeatMode !== "off" ? "#00ffff" : "#666", fontSize: 12 }}
+                    >
+                      {repeatMode === "one" ? "①" : "↻"}
+                    </button>
+                  </div>
+                )}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                  <CoverArtCS
+                    originalSrc={baseCoverUrl}
+                    originalType={baseCoverType}
+                    csSrc={csCoverUrl}
+                    csType={csCoverType}
+                    csOpacity={csOpacity}
+                    isLocked={csMode}
+                    width={38}
+                    height={38}
+                    borderRadius={8}
+                    style={coverFrameStyle(38, 8)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Cover art"
+                    onTouchStart={(e) => handleCoverTouchStart(e, () => setExpanded(true))}
+                    onTouchMove={handleCoverTouchMove}
+                    onTouchEnd={(e) => handleCoverTouchEnd(e, () => setExpanded(true))}
+                    onClick={(e) => e.preventDefault()}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(true)}
+                    aria-label="Expand player"
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      background: "none",
+                      border: "none",
+                      padding: 0,
+                      cursor: "pointer",
+                      textAlign: "left",
+                      color: "inherit",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {currentTrack.title}
+                      </div>
+                      <div style={{ fontSize: 9, color: "#555", letterSpacing: 1.4, textTransform: "uppercase", whiteSpace: "nowrap" }}>
+                        {sourceLabel}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 10,
+                        color: error ? "#ff8a8a" : "#555",
+                        letterSpacing: error ? 0.3 : 1,
+                        fontVariantNumeric: "tabular-nums",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {error || `${currentTrack.artist} · ${formatTime(currentTime)} / ${formatTime(duration)}`}
+                    </div>
+                  </button>
+                </div>
+                <SeekButton direction="back" size={36} labelSize={8} onClick={() => seekBack(15)} />
+                {playPauseBtn(36, false)}
+                <SeekButton direction="forward" size={36} labelSize={8} onClick={() => seekForward(15)} />
+                <CSModeButton />
                 <button
                   type="button"
-                  aria-label="Shuffle"
-                  onClick={() => toggleShuffle()}
-                  style={{ ...iconBtn, color: shuffle ? "#00ffff" : "#666" }}
+                  onClick={stop}
+                  aria-label="Close audio player"
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#555",
+                    cursor: "pointer",
+                    fontSize: 18,
+                    lineHeight: 1,
+                    padding: "0 4px",
+                    flexShrink: 0,
+                  }}
                 >
-                  ⇄
-                </button>
-                <button
-                  type="button"
-                  aria-label="Repeat"
-                  onClick={() => toggleRepeat()}
-                  style={{ ...iconBtn, color: repeatMode !== "off" ? "#00ffff" : "#666", fontSize: 12 }}
-                >
-                  {repeatMode === "one" ? "①" : "↻"}
+                  ×
                 </button>
               </div>
             )}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: isMobile ? 8 : 12,
-                flex: 1,
-                minWidth: 0,
-              }}
-            >
-              <GestureCoverArt
-                baseCover={baseCover}
-                baseCoverType={coverArtType}
-                csCover={csCover}
-                csCoverType={csCoverType}
-                csAudio={csAudio}
-                csMode={csMode}
-                toggleCSMode={toggleCSMode}
-                audioRef={audioRef}
-                suppressPauseInterruptionRef={suppressPauseInterruptionRef}
-                size={isMobile ? 40 : 38}
-                flipKey={coverFlipKey}
-                onSingleTap={() => setExpanded(true)}
-              />
-              <button
-                type="button"
-                onClick={() => setExpanded(true)}
-                aria-label="Expand player"
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  background: "none",
-                  border: "none",
-                  padding: 0,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  color: "inherit",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {currentTrack.title}
-                  </div>
-                  <div style={{ fontSize: 9, color: "#555", letterSpacing: 1.4, textTransform: "uppercase", whiteSpace: "nowrap" }}>
-                    {sourceLabel}
-                  </div>
-                </div>
-                <div
-                  style={{
-                    fontSize: 10,
-                    color: error ? "#ff8a8a" : "#555",
-                    letterSpacing: error ? 0.3 : 1,
-                    fontVariantNumeric: "tabular-nums",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {error || `${currentTrack.artist} · ${formatTime(currentTime)} / ${formatTime(duration)}`}
-                </div>
-              </button>
-            </div>
-            <CSModeButton />
-            {playPauseBtn(isMobile ? 38 : 36, false)}
-            <button
-              type="button"
-              onClick={stop}
-              aria-label="Close audio player"
-              style={{
-                background: "none",
-                border: "none",
-                color: "#555",
-                cursor: "pointer",
-                fontSize: isMobile ? 20 : 18,
-                lineHeight: 1,
-                padding: "0 4px",
-                flexShrink: 0,
-              }}
-            >
-              ×
-            </button>
           </div>
         </div>
       )}

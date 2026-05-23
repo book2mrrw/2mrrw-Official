@@ -651,6 +651,25 @@ export function AudioProvider({ children }) {
     }
   }, [patchState, syncPositionState]);
 
+  const seekBack = useCallback((seconds = 15) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const next = Math.max(0, (audio.currentTime || 0) - seconds);
+    audio.currentTime = next;
+    patchState({ currentTime: next });
+    syncPositionState(true);
+  }, [patchState, syncPositionState]);
+
+  const seekForward = useCallback((seconds = 15) => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    const max = isFinite(audio.duration) && audio.duration > 0 ? audio.duration : (audio.currentTime || 0) + seconds;
+    const next = Math.min(max, (audio.currentTime || 0) + seconds);
+    audio.currentTime = next;
+    patchState({ currentTime: next });
+    syncPositionState(true);
+  }, [patchState, syncPositionState]);
+
   const stop = useCallback(() => {
     userPausedRef.current = true;
     const audio = audioRef.current;
@@ -771,6 +790,8 @@ export function AudioProvider({ children }) {
     resume,
     toggle,
     seek,
+    seekBack,
+    seekForward,
     stop,
     audioRef,
   }), [
@@ -781,6 +802,8 @@ export function AudioProvider({ children }) {
     playPrevious,
     resume,
     seek,
+    seekBack,
+    seekForward,
     setQueue,
     setRepeatMode,
     setShuffle,

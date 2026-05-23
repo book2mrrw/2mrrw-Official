@@ -20,7 +20,7 @@ export default function AlbumTracklistSheet({
   userId,
   onClose,
 }) {
-  const { playQueue, toggle, currentTrack, isPlaying, hasStarted, setShuffle } = useAudioPlayer();
+  const { playQueue, toggle, currentTrack, isPlaying, hasStarted, setShuffle, seekBack, seekForward } = useAudioPlayer();
   const [swipeOffset, setSwipeOffset] = useState(0);
   const touchStartY = useRef(null);
   const touchDeltaY = useRef(0);
@@ -98,6 +98,7 @@ export default function AlbumTracklistSheet({
   if (!open || !album) return null;
 
   const trackCount = tracks.length || album.tracks?.length || album.trackTitles?.length || 0;
+  const albumCoverType = album.coverArtType || "image";
 
   return (
     <div
@@ -155,7 +156,7 @@ export default function AlbumTracklistSheet({
         >
           <CoverArt
             src={album.cover}
-            type={album.coverArtType}
+            type={albumCoverType}
             alt=""
             width={56}
             height={56}
@@ -178,7 +179,7 @@ export default function AlbumTracklistSheet({
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8, padding: "10px 16px", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", flexShrink: 0 }}>
           <button
             type="button"
             onClick={() => playAndClose(0, false)}
@@ -217,6 +218,7 @@ export default function AlbumTracklistSheet({
           >
             Shuffle
           </button>
+          <CSModeButton />
         </div>
 
         <div style={{ overflowY: "auto", flex: 1, minHeight: 0, padding: "0 8px" }}>
@@ -231,6 +233,8 @@ export default function AlbumTracklistSheet({
               track.durationSeconds ||
               track.duration ||
               null;
+            const trackCover = track.cover || album.cover;
+            const trackCoverType = track.coverArtType || albumCoverType;
             return (
               <div
                 key={track.id || index}
@@ -246,6 +250,17 @@ export default function AlbumTracklistSheet({
                 <span style={{ width: 22, fontSize: 11, color: "#555", textAlign: "right", flexShrink: 0 }}>
                   {index + 1}
                 </span>
+                {trackCover && (
+                  <CoverArt
+                    src={trackCover}
+                    type={trackCoverType}
+                    alt=""
+                    width={32}
+                    height={32}
+                    borderRadius={6}
+                    style={{ flexShrink: 0 }}
+                  />
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
                     style={{
@@ -263,6 +278,48 @@ export default function AlbumTracklistSheet({
                 <span style={{ fontSize: 11, color: "#555", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
                   {formatDuration(duration) || "—"}
                 </span>
+                {active && (
+                  <>
+                    <button
+                      type="button"
+                      aria-label="Rewind 15 seconds"
+                      onClick={() => seekBack(15)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#666",
+                        cursor: "pointer",
+                        fontSize: 28,
+                        lineHeight: 1,
+                        padding: 0,
+                        width: 28,
+                        height: 28,
+                        flexShrink: 0,
+                      }}
+                    >
+                      ⏪
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Forward 15 seconds"
+                      onClick={() => seekForward(15)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#666",
+                        cursor: "pointer",
+                        fontSize: 28,
+                        lineHeight: 1,
+                        padding: 0,
+                        width: 28,
+                        height: 28,
+                        flexShrink: 0,
+                      }}
+                    >
+                      ⏩
+                    </button>
+                  </>
+                )}
                 <button
                   type="button"
                   aria-label={active && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
@@ -306,20 +363,7 @@ export default function AlbumTracklistSheet({
           })}
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 16px max(16px, env(safe-area-inset-bottom))",
-            borderTop: "1px solid #1a1a1a",
-            flexShrink: 0,
-            gap: 12,
-          }}
-        >
-          <span style={{ fontSize: 11, color: "#555", letterSpacing: 1 }}>Chopped &amp; Slowed</span>
-          <CSModeButton />
-        </div>
+        <div style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))", flexShrink: 0 }} />
       </div>
     </div>
   );

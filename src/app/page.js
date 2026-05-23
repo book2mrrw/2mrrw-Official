@@ -26,7 +26,7 @@ import { MobileNavAnimatedIcon } from "@/components/nav/MobileNavAnimatedIcon";
 import { VaultNavLockIcon } from "@/components/nav/VaultNavLockIcon";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
 import { catalogCoverUrl, catalogMotionVideoUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
-import CoverArt from "@/components/ui/CoverArt";
+import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
 
 const MOBILE_NAV_TABS = [
   { id: "home", label: "Home" },
@@ -188,7 +188,95 @@ function withR2CatalogMedia(item) {
   if (next.preview) next.preview = catalogPreviewAudioUrl(String(next.preview).replace(/^\//, ""));
   if (next.csAudio) next.csAudio = catalogPublicMediaUrl(String(next.csAudio).replace(/^\//, ""));
   if (next.csCover) next.csCover = catalogCoverUrl(String(next.csCover).replace(/^\//, ""));
+  if (!next.coverArtType) next.coverArtType = next.video ? "video" : "image";
   return next;
+}
+
+function catalogCoverDisplay(item) {
+  const resolved = withR2CatalogMedia(item);
+  const type = resolved.coverArtType || "image";
+  const src = type === "video" && resolved.video ? resolved.video : resolved.cover;
+  return { src, type };
+}
+
+function AmbientPlaybackBackground({ currentTrack, csMode }) {
+  if (!currentTrack?.cover) return null;
+
+  const baseSrc = currentTrack.cover;
+  const baseType = currentTrack.coverArtType || "image";
+  const csSrc = currentTrack.csCover || null;
+  const csType = currentTrack.csCoverType || "image";
+  const showCs = Boolean(csMode && csSrc);
+
+  const mediaStyle = {
+    position: "fixed",
+    inset: 0,
+    zIndex: -1,
+    pointerEvents: "none",
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    filter: "blur(120px) saturate(1.2) brightness(0.15)",
+    transition: "opacity 500ms ease",
+  };
+
+  const imageLayerStyle = {
+    position: "fixed",
+    inset: 0,
+    zIndex: -1,
+    pointerEvents: "none",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    filter: "blur(72px) brightness(0.32)",
+    transform: "scale(1.08)",
+    transition: "opacity 500ms ease",
+  };
+
+  return (
+    <>
+      {resolveCoverMediaType(baseSrc, baseType) === "video" ? (
+        <video
+          src={baseSrc}
+          autoPlay
+          loop
+          muted
+          playsInline
+          aria-hidden
+          style={{ ...mediaStyle, opacity: showCs ? 0 : 0.4 }}
+        />
+      ) : (
+        <div
+          aria-hidden
+          style={{
+            ...imageLayerStyle,
+            backgroundImage: `url(${baseSrc})`,
+            opacity: showCs ? 0 : 0.45,
+          }}
+        />
+      )}
+      {csSrc &&
+        (resolveCoverMediaType(csSrc, csType) === "video" ? (
+          <video
+            src={csSrc}
+            autoPlay
+            loop
+            muted
+            playsInline
+            aria-hidden
+            style={{ ...mediaStyle, opacity: showCs ? 0.4 : 0 }}
+          />
+        ) : (
+          <div
+            aria-hidden
+            style={{
+              ...imageLayerStyle,
+              backgroundImage: `url(${csSrc})`,
+              opacity: showCs ? 0.45 : 0,
+            }}
+          />
+        ))}
+    </>
+  );
 }
 
 const fallbackMerch = [
@@ -488,7 +576,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 export default function Page() {
   const { currentUser: authUser, library, owns, accountState, isAdmin, enterGuest, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
   const { requireAuth, openGate } = useAuthGate();
-  const { playTrack, playQueue, hasStarted, currentTrack } = useAudioPlayer();
+  const { playTrack, playQueue, hasStarted, currentTrack, csMode } = useAudioPlayer();
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
   const [activeTab, setActiveTab]                 = useState("home");
@@ -1464,21 +1552,7 @@ export default function Page() {
       {/* ══════════════════════ MAIN LAYOUT ═══════════════════════════════════ */}
       <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
         {hasStarted && currentTrack?.cover && (
-          <div
-            aria-hidden
-            style={{
-              position:"fixed",
-              inset:0,
-              zIndex:-1,
-              pointerEvents:"none",
-              backgroundImage:`url(${currentTrack.cover})`,
-              backgroundSize:"cover",
-              backgroundPosition:"center",
-              filter:"blur(72px) brightness(0.32)",
-              opacity:0.45,
-              transform:"scale(1.08)",
-            }}
-          />
+          <AmbientPlaybackBackground currentTrack={currentTrack} csMode={csMode} />
         )}
 
         {/* ── DESKTOP SIDEBAR ── */}
@@ -2471,6 +2545,7 @@ export default function Page() {
 function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singleIndex, singles, prevSingle, nextSingle, goToSingle, openSingleModal, addToCart, addVinylToCart, buttonHoverIn, buttonHoverOut, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   const [previewHover, setPreviewHover] = useState(false);
   const access = currentSingleAccess || (currentSingle ? resolveContentAccess(currentSingle, accountState) : null);
+  const coverDisplay = catalogCoverDisplay(currentSingle);
   return (
     <div style={{display:"flex",flexDirection:isMobile?"column":"row",alignItems:isMobile?"stretch":"center",gap:isMobile?16:20,background:"linear-gradient(135deg,#0e0e0e,#111)",border:"1px solid #1e1e1e",borderRadius:isMobile?16:20,padding:isMobile?"20px 16px":large?"32px 28px":"28px 24px",position:"relative",overflow:"hidden",boxShadow:"0 4px 40px rgba(0,0,0,0.5)"}}>
       <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:360,height:360,background:"radial-gradient(circle,rgba(0,255,255,0.04) 0%,transparent 70%)",pointerEvents:"none"}}/>
@@ -2480,8 +2555,8 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
           <div style={{flex:1,position:"relative",aspectRatio:"1/1"}} onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
             <CoverArt
               key={currentSingle.slug}
-              src={currentSingle.cover}
-              type={currentSingle.coverArtType}
+              src={coverDisplay.src}
+              type={coverDisplay.type || "image"}
               alt=""
               width="100%"
               height="100%"
@@ -2507,8 +2582,8 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
         <div style={{flexShrink:0,width:large?340:300,height:large?340:300,position:"relative"}} onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
           <CoverArt
             key={currentSingle.slug}
-            src={currentSingle.cover}
-            type={currentSingle.coverArtType}
+            src={coverDisplay.src}
+            type={coverDisplay.type || "image"}
             alt=""
             width="100%"
             height="100%"
@@ -2554,11 +2629,12 @@ function FeaturesRail({ features, isMobile, addToCart, onPlay, accountState, use
     <div className="features-row" style={{display:"flex",flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollSnapType:"x mandatory",overscrollBehaviorX:"contain",gap:isMobile?12:18,paddingBottom:14}}>
       {features.map((feat,i)=>{
         const access = resolveContentAccess(feat, accountState);
+        const coverDisplay = catalogCoverDisplay(feat);
         return (
         <div key={feat.slug} onClick={()=>onPlay(feat)} style={{flex:"0 0 auto",width:isMobile?160:220,scrollSnapAlign:"start",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#a259ff55"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
           <CoverArt
-            src={feat.cover}
-            type={feat.coverArtType}
+            src={coverDisplay.src}
+            type={coverDisplay.type || "image"}
             alt=""
             width="100%"
             height="auto"

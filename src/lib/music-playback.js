@@ -1,5 +1,5 @@
 import { resolvePlaybackSrc, resolveTrackAccess } from "@/lib/music-access";
-import { catalogCoverUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
+import { catalogCoverUrl, catalogMotionVideoUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
 
 function resolveCsMediaUrl(path) {
   if (!path) return null;
@@ -12,14 +12,22 @@ export function toPlaybackTrack(item, accountState, source = "library", override
   const userId = accountState?.userId || overrides.userId;
   const csAudioRaw = item?.csAudio || item?.cs_audio || null;
   const csCoverRaw = item?.csCover || item?.cs_cover || item?.csCoverArt || null;
-  const coverArtType = item?.coverArtType || item?.cover_art_type || null;
-  const csCoverType = item?.csCoverType || item?.cs_cover_type || null;
+  const coverArtType = item?.coverArtType || item?.cover_art_type || (item?.video ? "video" : "image");
+  const csCoverType = item?.csCoverType || item?.cs_cover_type || "image";
+  const coverRaw = item?.cover || item?.coverArt || null;
+  const videoRaw = item?.video || null;
+  const cover =
+    coverArtType === "video" && videoRaw
+      ? catalogMotionVideoUrl(String(videoRaw).replace(/^\//, ""))
+      : coverRaw
+        ? catalogCoverUrl(String(coverRaw).replace(/^\//, ""))
+        : null;
   return {
     id: item?.slug || item?.id,
     slug: item?.slug,
     title: item?.title || "Untitled",
     artist: item?.artist || "2MRRW",
-    cover: item?.cover || item?.coverArt || null,
+    cover,
     coverArtType,
     src: resolvePlaybackSrc(item, access, { userId }),
     csAudio: csAudioRaw ? resolveCsMediaUrl(csAudioRaw) : null,

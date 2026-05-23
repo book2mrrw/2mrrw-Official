@@ -429,6 +429,76 @@ body {
   }
 }
 
+.cs-mode-btn--ripple {
+  animation: csRipple 0.35s ease-out;
+}
+
+@keyframes csRipple {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.06);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.cs-mode-btn--active.cs-mode-btn--breath {
+  box-shadow: 0 0 14px rgba(30, 144, 255, 0.55);
+  animation: csBreath 2s ease-in-out infinite;
+}
+
+@keyframes csBreath {
+  0%,
+  100% {
+    box-shadow: 0 0 8px rgba(30, 144, 255, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(30, 144, 255, 0.65);
+  }
+}
+
+.cs-pulse-icon .cs-bar-pulse {
+  animation: barPulse 1.1s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+
+.cs-pulse-icon .cs-bar-pulse:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.cs-pulse-icon .cs-bar-pulse:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.cs-pulse-icon .cs-bar-pulse:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+.cs-pulse-icon .cs-bar-pulse:nth-child(4) {
+  animation-delay: 0.12s;
+}
+
+.cs-pulse-icon .cs-bar-pulse:nth-child(5) {
+  animation-delay: 0s;
+}
+
+.cs-mode-btn--active .cs-pulse-icon {
+  filter: drop-shadow(0 0 4px rgba(30, 144, 255, 0.75));
+}
+
+@keyframes barPulse {
+  0%,
+  100% {
+    transform: scaleY(0.55);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .audio-island-waveform.is-playing span {
     animation: none;
@@ -444,6 +514,12 @@ body {
   }
 
   .cs-reel-spin {
+    animation: none;
+  }
+
+  .cs-mode-btn--ripple,
+  .cs-mode-btn--breath,
+  .cs-pulse-icon .cs-bar-pulse {
     animation: none;
   }
 }
