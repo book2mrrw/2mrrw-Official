@@ -1176,3 +1176,28 @@ body {
 .auth-heading.auth-heading--elevated.auth-heading--serif {
   font-family: Georgia, "Times New Roman", Times, serif;
 }
+
+/* 8-digit OTP row — single line, 4px gap (verify-otp screen) */
+.auth-otp-row.auth-otp-row-8 {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.auth-otp-row.auth-otp-row-8 .auth-otp-box {
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto;
+  max-width: 40px;
+  height: 44px;
+  font-size: 18px;
+  padding: 0;
+  border-radius: 10px;
+}
+
+.auth-card.auth-card--ref .auth-otp-row-8 .auth-otp-box {
+  background: #1a1a1a;
+}
