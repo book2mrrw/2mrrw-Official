@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { grantLibraryItems } from "@/lib/commerce/entitlements";
+import { grantCollectorOwnerships } from "@/lib/commerce/collector-ownerships";
+import { grantVaultPassEntitlement } from "@/lib/commerce/vault-entitlements";
 
 export async function fulfillCheckoutSession(session) {
   const userId = session.metadata?.guest_user_id || session.metadata?.user_id;
@@ -51,6 +53,20 @@ export async function fulfillCheckoutSession(session) {
       purchaseId: purchase.id,
       slugs,
       source: "purchase",
+    });
+    await grantCollectorOwnerships({
+      userId,
+      purchaseId: purchase.id,
+      slugs,
+      items,
+      payment: session,
+    });
+    await grantVaultPassEntitlement({
+      userId,
+      purchaseId: purchase.id,
+      slugs,
+      items,
+      payment: session,
     });
   }
 
@@ -108,6 +124,20 @@ export async function fulfillPaymentIntent(paymentIntent) {
       purchaseId: purchase.id,
       slugs,
       source: "purchase",
+    });
+    await grantCollectorOwnerships({
+      userId,
+      purchaseId: purchase.id,
+      slugs,
+      items,
+      payment: paymentIntent,
+    });
+    await grantVaultPassEntitlement({
+      userId,
+      purchaseId: purchase.id,
+      slugs,
+      items,
+      payment: paymentIntent,
     });
   }
 

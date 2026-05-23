@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanStreamProduct } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
-import { buildR2Key, createR2SignedGetUrl, R2_PREFIX } from "@/lib/storage/r2";
+import { resolvePlaybackKey } from "@/lib/playback/resolve-playback-key";
+import { createR2SignedGetUrl } from "@/lib/storage/r2";
 
 export async function GET(req) {
   const slug = req.nextUrl.searchParams.get("slug");
@@ -22,16 +23,12 @@ export async function GET(req) {
   }
 
   const admin = createAdminClient();
-  const { data: product } = await admin.from("products").select("storage_path").eq("slug", slug).single();
-  if (!product?.storage_path) {
+  const resolved = await resolvePlaybackKey(admin, slug);
+  if (!resolved?.key) {
     return NextResponse.json({ error: "No downloadable asset for this item" }, { status: 404 });
   }
 
-  const normalizedPath = String(product.storage_path).replace(/^\//, "");
-  const key = normalizedPath.startsWith(`${R2_PREFIX.DIGITAL_ASSETS}/`)
-    ? normalizedPath
-    : buildR2Key(R2_PREFIX.DIGITAL_ASSETS, normalizedPath);
-  const url = await createR2SignedGetUrl(key, 3600);
+  const url = await createR2SignedGetUrl(resolved.key, 3600);
 
   if (redirect) {
     return NextResponse.redirect(url);

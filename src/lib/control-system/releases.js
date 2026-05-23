@@ -10,7 +10,6 @@ import {
   firstString,
   mediaAssetFromFields,
   mediaAssetMetadata,
-  resolveEntitledMediaAssetUrl,
   resolveMediaAssetUrl,
   resolvePublicArtworkUrl,
 } from "./media";
@@ -34,24 +33,25 @@ async function resolveControlSystemMediaUrls(release, apiBaseUrl) {
   const resolvedTracks = Array.isArray(release.tracks)
     ? await Promise.all(release.tracks.map(async (track) => {
         const previewAsset = track?.assets?.preview || mediaAssetFromFields(track, [], ["previewAssetId", "preview_asset_id"], apiBaseUrl);
-        const fullAsset = track?.assets?.full || mediaAssetFromFields(track, [], ["fullAssetId", "full_asset_id", "assetId", "asset_id"], apiBaseUrl);
         const loopAsset = track?.assets?.loop || mediaAssetFromFields(track, [], ["loopAssetId", "loop_asset_id"], apiBaseUrl);
-        const [resolvedPreview, resolvedFull] = await Promise.all([
-          resolveMediaAssetUrl(previewAsset, apiBaseUrl, track?.src || track?.preview || track?.audio || track?.url),
-          resolveEntitledMediaAssetUrl(fullAsset, apiBaseUrl),
-        ]);
+        const resolvedPreview = await resolveMediaAssetUrl(
+          previewAsset,
+          apiBaseUrl,
+          track?.src || track?.preview || track?.audio || track?.url
+        );
         const resolvedLoop = await resolveMediaAssetUrl(loopAsset, apiBaseUrl, track?.video);
-        const playbackUrl = resolvedFull || resolvedPreview || track?.src || "";
+        const playbackUrl = resolvedPreview || track?.preview || track?.src || "";
 
         return {
           ...track,
           src: playbackUrl,
           preview: resolvedPreview || track?.preview || "",
-          full: resolvedFull || track?.full || "",
+          full: "",
           audio: playbackUrl,
           video: resolvedLoop || track?.video || "",
-          signedMediaReady: Boolean(resolvedPreview || resolvedFull),
-          playbackAccess: resolvedFull ? "full" : "preview",
+          signedMediaReady: Boolean(resolvedPreview),
+          playbackAccess: "preview",
+          fullAssetId: track?.fullAssetId || track?.assets?.full?.assetId || track?.assets?.full?.id || null,
         };
       }))
     : release.tracks;
@@ -61,8 +61,8 @@ async function resolveControlSystemMediaUrls(release, apiBaseUrl) {
     ...release,
     cover: resolvedCover || release.cover,
     preview: firstResolvedTrack?.preview || firstResolvedTrack?.src || release.preview,
-    full: firstResolvedTrack?.full || release.full,
-    audio: firstResolvedTrack?.src || release.audio,
+    full: "",
+    audio: firstResolvedTrack?.preview || firstResolvedTrack?.src || release.preview,
     video: firstResolvedTrack?.video || release.video,
     tracks: resolvedTracks,
     signedMediaReady: Boolean(resolvedCover || firstResolvedTrack?.signedMediaReady || firstResolvedTrack?.video),

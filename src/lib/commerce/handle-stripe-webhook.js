@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/commerce/stripe";
 import { fulfillCheckoutSession, fulfillPaymentIntent } from "@/lib/commerce/fulfill-purchase";
+import { revokeExtendedEntitlementsForPurchase } from "@/lib/commerce/revoke-entitlements";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const LOG_PREFIX = "[stripe-webhook]";
@@ -71,10 +72,22 @@ async function revokePurchaseByPaymentIntent(paymentIntentId) {
     return;
   }
 
+  let extended = null;
+  try {
+    extended = await revokeExtendedEntitlementsForPurchase({
+      purchaseId: purchase.id,
+      userId: purchase.user_id,
+      slugs,
+    });
+  } catch (err) {
+    console.warn(`${LOG_PREFIX} extended revocation failed`, purchase.id, err.message);
+  }
+
   console.warn(`${LOG_PREFIX} revoked purchase`, {
     paymentIntentId,
     userId: purchase.user_id,
     slugs,
+    extended,
   });
 }
 

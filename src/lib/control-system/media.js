@@ -1,3 +1,5 @@
+import { catalogItemAllowsFullPlayback } from "@/lib/playback/playback-gate";
+
 const ASSET_ID_KEYS = ["assetId", "asset_id", "id"];
 const SIGNED_URL_KEYS = ["signedUrl", "signed_url", "playbackUrl", "playback_url"];
 const PUBLIC_URL_KEYS = ["url", "publicUrl", "public_url", "src", "href"];
@@ -178,7 +180,11 @@ export async function resolveEntitledMediaAssetUrl(asset, apiBaseUrl = "") {
   return "";
 }
 
-function hasBackendFullAccess(item, track) {
+function hasBackendFullAccess(item, track, accountState = null) {
+  if (accountState) {
+    return catalogItemAllowsFullPlayback(item, track, accountState);
+  }
+
   const releaseRequiredGrant = item?.entitlement?.requiredGrant || item?.entitlement?.required_grant;
   const trackRequiredGrant = track?.entitlement?.requiredGrant || track?.entitlement?.required_grant;
   const releaseAllowsStream = item?.entitlement?.canStream === true && (!releaseRequiredGrant || releaseRequiredGrant === "none");
@@ -211,9 +217,9 @@ function hasBackendFullAccess(item, track) {
   );
 }
 
-export function mapItemToAudioTrack(item, source = "single") {
+export function mapItemToAudioTrack(item, source = "single", accountState = null) {
   const primaryTrack = Array.isArray(item?.tracks) ? item.tracks.find((track) => typeof track === "object") || item.tracks[0] : null;
-  const canUseFull = hasBackendFullAccess(item, primaryTrack);
+  const canUseFull = hasBackendFullAccess(item, primaryTrack, accountState);
   const fullSrc = canUseFull ? firstString(
     primaryTrack?.full,
     primaryTrack?.fullUrl,
