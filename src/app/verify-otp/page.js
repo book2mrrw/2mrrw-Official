@@ -10,7 +10,7 @@ import { useAuth } from "@/context/AuthContext";
 import AuthScreenCard from "@/components/auth/AuthScreenCard";
 
 /** UI expects 6 digits; Supabase Auth email OTP length defaults to 6. */
-const OTP_LENGTH = 6;
+const OTP_LENGTH = 8;
 const EMPTY_DIGITS = () => Array(OTP_LENGTH).fill("");
 
 function VerifyOtpForm() {
@@ -69,7 +69,7 @@ function VerifyOtpForm() {
     async (e) => {
       e?.preventDefault?.();
       if (code.length !== OTP_LENGTH) {
-        setOtpError("Enter the 6-digit code.");
+        setOtpError("Enter the 8-digit code.");
         return;
       }
       setOtpLoading(true);
@@ -195,7 +195,7 @@ function VerifyOtpForm() {
               lineHeight: "1.6",
             }}
           >
-            Enter the 6-digit code we sent to {email}
+            Enter the 8-digit code we sent to {email}
           </p>
           <div
             style={{

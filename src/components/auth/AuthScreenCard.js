@@ -77,7 +77,7 @@ export default function AuthScreenCard({
         />
       ) : null}
       <AuthBrandBlock />
-      <div style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
         {children}
       </div>
     </div>
