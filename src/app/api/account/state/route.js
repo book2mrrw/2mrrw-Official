@@ -10,6 +10,7 @@ import {
   membershipHasPremiumAccess,
   vaultTierFor,
 } from "@/lib/commerce/entitlements";
+import { getUserEntitlements, hasEntitlement } from "@/lib/entitlements";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import {
@@ -19,16 +20,19 @@ import {
 } from "@/lib/guest-session";
 import { DEFAULT_NOTIFICATION_PREFERENCES, getNotificationState } from "@/lib/notifications";
 
-function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest = true, user = null }) {
-  const hasActiveMembership = membershipHasPremiumAccess(membership);
-  const hasInnerCircleAccess = hasActiveMembership || hasCollectorAccess;
-  const effectiveVaultPass = hasVaultPass || hasCollectorAccess;
+function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest = true, user = null, userEntitlements = null }) {
+  const hasActiveMembership = membershipHasPremiumAccess(membership) || hasEntitlement(userEntitlements, "subscriber");
+  const hasCollectorFromFlags = hasEntitlement(userEntitlements, "collector_card");
+  const effectiveCollector = hasCollectorAccess || hasCollectorFromFlags;
+  const hasInnerCircleAccess = hasActiveMembership || effectiveCollector;
+  const vaultFromFlags = hasEntitlement(userEntitlements, "vault_access");
+  const effectiveVaultPass = hasVaultPass || effectiveCollector || vaultFromFlags;
   const vaultTier = vaultTierFor({ hasVaultPass: effectiveVaultPass, hasInnerCircleAccess });
 
   return {
     guest: isGuest,
     subscriber: Boolean(hasActiveMembership),
-    collectorAccess: Boolean(hasCollectorAccess),
+    collectorAccess: Boolean(effectiveCollector),
     innerCircle: Boolean(hasInnerCircleAccess),
     premiumLivestreams: Boolean(hasInnerCircleAccess),
     vaultPass: Boolean(effectiveVaultPass),
@@ -36,9 +40,16 @@ function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest 
     vaultAccessLevel: vaultTier,
     vaultFullAccess: vaultTier === "vault_pass",
     vaultSelectedAccess: vaultTier === "inner_circle" || vaultTier === "vault_pass",
-    collector: hasCollectorAccess,
+    collector: effectiveCollector,
     creator: false,
     admin: isAdminUser(user),
+    entitlements: userEntitlements
+      ? {
+          vault_access: Boolean(userEntitlements.vault_access),
+          subscriber: Boolean(userEntitlements.subscriber),
+          collector_card: Boolean(userEntitlements.collector_card),
+        }
+      : null,
   };
 }
 
@@ -129,13 +140,14 @@ export async function GET() {
     const membership = membershipResult.data || null;
     const bySlug = new Map(purchasedLibrary.map((item) => [item.slug, item]));
     const legacyOwnedSlugs = purchasedLibrary.map((item) => item.slug).filter(Boolean);
-    const [collectorAccess, vaultPassAccess, notificationState] = await Promise.all([
+    const [collectorAccess, vaultPassAccess, notificationState, userEntitlements] = await Promise.all([
       getCollectorAccessState(admin, user.id, legacyOwnedSlugs),
       getVaultPassAccessState(admin, user.id, legacyOwnedSlugs),
       getNotificationState(admin, user.id),
+      getUserEntitlements(user.id, admin),
     ]);
-    const hasCollectorAccess = collectorAccess.hasCollectorAccess;
-    const hasVaultPass = vaultPassAccess.hasVaultPass || hasCollectorAccess;
+    const hasCollectorAccess = collectorAccess.hasCollectorAccess || hasEntitlement(userEntitlements, "collector_card");
+    const hasVaultPass = vaultPassAccess.hasVaultPass || hasCollectorAccess || hasEntitlement(userEntitlements, "vault_access");
 
     const adminFullLibrary = isAdminUser(user);
     if (adminFullLibrary || membershipHasPremiumAccess(membership) || hasCollectorAccess) {
@@ -236,7 +248,14 @@ export async function GET() {
         hasVaultPass,
         isGuest: Boolean(user.isGuest),
         user,
+        userEntitlements,
       }),
+      userEntitlements: {
+        vault_access: Boolean(userEntitlements?.vault_access),
+        subscriber: Boolean(userEntitlements?.subscriber),
+        collector_card: Boolean(userEntitlements?.collector_card),
+        collector_card_id: userEntitlements?.collector_card_id || null,
+      },
       session: { remember: Boolean(session?.remember) },
       syncedAt: new Date().toISOString(),
     };

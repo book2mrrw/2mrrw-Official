@@ -3,6 +3,23 @@ import crypto from "crypto";
 import { isAdminUser } from "@/lib/auth/constants";
 import { userOwnsProductViaEntitlements } from "@/lib/commerce/unified-entitlements";
 
+export {
+  ENTITLEMENT_TYPES,
+  hasEntitlement,
+  hasVaultAccess,
+  hasDigitalAccess,
+  getUserEntitlements,
+  grantEntitlementFlag,
+  revokeEntitlementFlag,
+  revokeAllUserEntitlements,
+  getCheckoutDiscountPercent,
+  getActiveCardBenefits,
+  hasVaultAccessForUser,
+  hasDigitalAccessForUser,
+  isMerchOrVinylProduct,
+  shouldGateProduct,
+} from "@/lib/entitlements";
+
 async function slugsFromEntitlements(admin, userId) {
   const { data, error } = await admin
     .from("entitlements")

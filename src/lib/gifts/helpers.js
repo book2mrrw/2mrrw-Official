@@ -5,6 +5,7 @@ import { getFanSessionUser } from "@/lib/auth/session-user";
 import { normalizeEmail } from "@/lib/guest-session";
 import { hashGiftLinkToken } from "@/lib/gifts/token-hash";
 import { isGiftReminderToken, parseGiftReminderToken } from "@/lib/gifts/reminder-link";
+import { grantEntitlementFlag } from "@/lib/entitlements";
 
 export { getFanSessionUser };
 
@@ -68,7 +69,7 @@ export async function resolveProductForGift(gift) {
   const admin = createAdminClient();
   const { data: direct } = await admin
     .from("products")
-    .select("id, slug, title, cover_url, product_type")
+    .select("id, slug, title, cover_url, product_type, content_type")
     .eq("id", gift.item_id)
     .maybeSingle();
   if (direct) return direct;
@@ -86,6 +87,20 @@ export async function resolveProductForGift(gift) {
     releaseType: byRelease.release_type,
   });
   return product;
+}
+
+function isVaultGiftProduct(product, gift) {
+  const slug = String(product?.slug || "").toLowerCase();
+  const itemType = String(gift?.item_type || product?.product_type || "").toLowerCase();
+  const contentType = String(product?.content_type || "").toLowerCase();
+  return (
+    slug === "vault-pass" ||
+    slug === "vault_pass" ||
+    itemType === "vault_access" ||
+    itemType === "vault_item" ||
+    contentType === "vault_access" ||
+    contentType === "vault_item"
+  );
 }
 
 export async function claimGiftForUser(gift, user) {
@@ -156,6 +171,14 @@ export async function claimGiftForUser(gift, user) {
     .select("*")
     .single();
   if (giftError) throw giftError;
+
+  if (isVaultGiftProduct(product, gift)) {
+    const admin = createAdminClient();
+    await grantEntitlementFlag(admin, user.id, "vault_access", "gift_claim", {
+      metadata: { gift_id: gift.id, product_slug: product.slug },
+    });
+    console.log("[gift-claim] vault_access granted", { userId: user.id, giftId: gift.id });
+  }
 
   await admin.from("signals").insert({
     title: "Gift claimed",

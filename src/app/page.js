@@ -13,6 +13,8 @@ import GiftButton from "@/components/gifts/GiftButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftsSentSection from "@/components/gifts/GiftsSentSection";
+import CollectorCardAdminPanel from "@/components/admin/CollectorCardAdminPanel";
+import HelpSupportSection from "@/components/support/HelpSupportSection";
 import MyMusicTab from "@/components/music/MyMusicTab";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
@@ -1269,7 +1271,7 @@ export default function Page() {
     { groupId:"g-cards",     label:"CARDS",          directTab:"cards",   subTabs:[{id:"cards",label:"Collector's Cards"}] },
     { groupId:"g-vault",     label:"VAULT",          directTab:"vault",   subTabs:[{id:"vault",label:"Exclusive Drops"}] },
     { groupId:"g-shows",     label:"SHOWS & EVENTS", directTab:"shows",   subTabs:[{id:"shows",label:"Upcoming Shows"}] },
-    { groupId:"g-community", label:"MORE",           directTab:"blog",    subTabs:[{id:"blog",label:"Blog"},{id:"vision",label:"Vision"},{id:"circle",label:"Circle"},{id:"innercircle",label:"Inner Circle"},{id:"live",label:"2MRRW Live"}] },
+    { groupId:"g-community", label:"MORE",           directTab:"blog",    subTabs:[{id:"blog",label:"Blog"},{id:"vision",label:"Vision"},{id:"circle",label:"Circle"},{id:"innercircle",label:"Inner Circle"},{id:"live",label:"2MRRW Live"},{id:"help",label:"Help & Support"}] },
   ];
 
   // ── INLINE COMPONENTS ─────────────────────────────────────────────────────
@@ -2033,6 +2035,11 @@ export default function Page() {
                 </>
               )}
 
+              {/* ══ HELP & SUPPORT ══ */}
+              {activeTab==="help" && (
+                <HelpSupportSection userId={authUser?.id || currentUser?.id} />
+              )}
+
               {/* ══ BLOG ══ */}
               {activeTab==="blog" && (
                 <>
@@ -2211,6 +2218,7 @@ export default function Page() {
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Collection",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
                       {isAdmin ? <GiftsSentSection /> : null}
+                      {isAdmin ? <CollectorCardAdminPanel accountState={accountState} /> : null}
                       <button onClick={handleSignOut} style={{width:"100%",height:44,padding:0,background:"transparent",color:"#444",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";}}>Sign Out</button>
                     </div>
                   ) : (

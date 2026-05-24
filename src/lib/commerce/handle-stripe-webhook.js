@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/commerce/stripe";
 import { fulfillCheckoutSession, fulfillPaymentIntent } from "@/lib/commerce/fulfill-purchase";
 import { revokeExtendedEntitlementsForPurchase } from "@/lib/commerce/revoke-entitlements";
+import {
+  handleCheckoutEntitlements,
+  revokeAllEntitlementsForDispute,
+  upsertMembershipFromSubscription,
+} from "@/lib/commerce/stripe-entitlements";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const LOG_PREFIX = "[stripe-webhook]";
@@ -172,6 +177,15 @@ export async function handleStripeWebhook(req) {
             purchaseId: result.purchaseId,
             slugs: result.slugs,
           });
+          try {
+            await handleCheckoutEntitlements({
+              userId: session.metadata?.guest_user_id || session.metadata?.user_id,
+              slugs: result.slugs,
+              purchaseId: result.purchaseId,
+            });
+          } catch (entErr) {
+            console.warn(`${LOG_PREFIX} checkout entitlements failed`, session.id, entErr.message);
+          }
         }
 
         let items = [];
@@ -187,10 +201,55 @@ export async function handleStripeWebhook(req) {
         break;
       }
 
+      case "customer.subscription.created":
+      case "customer.subscription.updated": {
+        const subscription = event.data.object;
+        try {
+          await upsertMembershipFromSubscription(subscription);
+        } catch (subErr) {
+          console.warn(`${LOG_PREFIX} subscription upsert failed`, subscription.id, subErr.message);
+          throw subErr;
+        }
+        break;
+      }
+
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object;
+        subscription.status = "canceled";
+        try {
+          await upsertMembershipFromSubscription(subscription);
+        } catch (subErr) {
+          console.warn(`${LOG_PREFIX} subscription delete revoke failed`, subscription.id, subErr.message);
+          throw subErr;
+        }
+        break;
+      }
+
       case "charge.refunded":
-      case "payment_intent.canceled":
+      case "payment_intent.canceled": {
+        const paymentIntentId = resolvePaymentIntentId(event);
+        await revokePurchaseByPaymentIntent(paymentIntentId);
+        break;
+      }
+
       case "charge.dispute.created": {
         const paymentIntentId = resolvePaymentIntentId(event);
+        const admin = createAdminClient();
+        const { data: purchase } = await admin
+          .from("purchases")
+          .select("id, user_id")
+          .eq("stripe_payment_intent_id", paymentIntentId)
+          .maybeSingle();
+        if (purchase?.user_id) {
+          try {
+            await revokeAllEntitlementsForDispute({
+              userId: purchase.user_id,
+              paymentIntentId,
+            });
+          } catch (disputeErr) {
+            console.warn(`${LOG_PREFIX} dispute entitlement revoke failed`, disputeErr.message);
+          }
+        }
         await revokePurchaseByPaymentIntent(paymentIntentId);
         break;
       }

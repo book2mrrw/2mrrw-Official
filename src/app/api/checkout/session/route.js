@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/commerce/stripe";
 import { resolveCartLines } from "@/lib/commerce/resolve-cart";
-import { getOwnedSlugs } from "@/lib/commerce/entitlements";
+import { getOwnedSlugs, getCheckoutDiscountPercent, isMerchOrVinylProduct } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
 
 const siteUrl = () =>
@@ -26,21 +26,34 @@ export async function POST(req) {
       return NextResponse.json({ error: "You already own everything in your cart" }, { status: 400 });
     }
 
+    const discountPercent = await getCheckoutDiscountPercent(user.id);
+    const discountEligible = purchasable.filter((l) => !isMerchOrVinylProduct(l.product_type));
+    const hasDiscount = discountPercent > 0 && discountEligible.length > 0;
+
     const stripe = getStripe();
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      customer_email: user.email || undefined,
-      line_items: purchasable.map((line) => ({
+    const lineItems = purchasable.map((line) => {
+      const eligible = !isMerchOrVinylProduct(line.product_type);
+      let unitAmount = line.price_cents;
+      if (hasDiscount && eligible) {
+        unitAmount = Math.max(50, Math.round(line.price_cents * (1 - discountPercent / 100)));
+      }
+      return {
         quantity: 1,
         price_data: {
           currency: "usd",
-          unit_amount: line.price_cents,
+          unit_amount: unitAmount,
           product_data: {
             name: line.title,
             images: line.cover_url ? [new URL(line.cover_url, siteUrl()).href] : undefined,
           },
         },
-      })),
+      };
+    });
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer_email: user.email || undefined,
+      line_items: lineItems,
       success_url: `${siteUrl()}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl()}/?tab=shop`,
       metadata: {
@@ -49,6 +62,7 @@ export async function POST(req) {
         email: user.email || "",
         phone: user.phone || "",
         slugs: JSON.stringify(purchasable.map((l) => l.slug)),
+        collector_discount_percent: hasDiscount ? String(discountPercent) : "0",
         items: JSON.stringify(
           purchasable.map((l) => ({
             slug: l.slug,

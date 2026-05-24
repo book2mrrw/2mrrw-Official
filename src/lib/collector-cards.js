@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isMissingSupabaseTable, isSchemaUnavailableError } from "@/lib/commerce/entitlements";
+import { grantEntitlementFlag } from "@/lib/entitlements";
 
 const ACTIVE_COLLECTOR_STATUSES = new Set(["collector", "verified_collector", "founder_collector", "vault_collector"]);
 
@@ -286,6 +287,13 @@ export async function claimCollectorCard({ userId, token, deviceInfo = {}, ipHas
   const [access] = await Promise.all([
     grantCollectorAccess(admin, { userId, card: claimedCard }),
     mirrorCollectorOwnership(admin, { userId, card: claimedCard }),
+    grantEntitlementFlag(admin, userId, "collector_card", "nfc_claim", {
+      collector_card_id: claimedCard.id,
+    }),
+    grantEntitlementFlag(admin, userId, "vault_access", "collector_card", {
+      metadata: { collector_card_id: claimedCard.id },
+    }),
+    admin.from("collector_cards").update({ digital_access_granted: true }).eq("id", claimedCard.id),
     admin.from("collector_claims").insert({
       collector_card_id: claimedCard.id,
       user_id: userId,
