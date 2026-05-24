@@ -80,10 +80,6 @@ export async function sendStorefrontGift({
   }
 
   const recipientProfile = await findRecipientProfile(email);
-  // Features resolve to products.product_type "feature", but gifts.item_type CHECK only allows
-  // single|ep|album|deluxe|collector_card (20260522140000_gifting_system.sql). releaseTypeToGiftItemType
-  // maps feature → "single" intentionally — not a catalog mistake. To store "feature" later, extend
-  // the CHECK constraint and releaseTypeToGiftItemType; no send-gift behavior change needed here.
   const itemType = releaseTypeToGiftItemType(releaseType, product.product_type);
   const expiresAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString();
 

@@ -1,6 +1,6 @@
 import { PRODUCT_CATALOG } from "@/lib/commerce/catalog";
 
-/** Ordered slug candidates: canonical catalog slug first, then legacy `-digital` suffix. */
+/** Ordered slug candidates: canonical catalog slug first, then base slug without `-vinyl`. */
 export function storefrontProductSlugCandidates(releaseSlug) {
   const raw = String(releaseSlug || "").trim();
   if (!raw) return [];
@@ -11,11 +11,6 @@ export function storefrontProductSlugCandidates(releaseSlug) {
   };
 
   add(raw);
-  if (raw.endsWith("-digital")) {
-    add(raw.slice(0, -"-digital".length));
-  } else {
-    add(`${raw}-digital`);
-  }
   if (raw.endsWith("-vinyl")) {
     add(raw.slice(0, -"-vinyl".length));
   }
@@ -40,6 +35,10 @@ export function releaseTypeToGiftItemType(releaseType, productType) {
   if (pt === "album") return "album";
   if (pt === "ep") return "ep";
   if (pt === "deluxe") return "deluxe";
+  if (pt === "feature") return "feature";
+  if (pt === "merch") return "merch";
+  if (pt === "bundle") return "bundle";
+  if (pt === "vinyl") return "vinyl";
   if (pt === "collector_card" || pt === "vault") return "collector_card";
   return "single";
 }
