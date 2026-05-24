@@ -25,3 +25,11 @@ export const PRODUCT_CATALOG = [
 export function slugFromCartItem(item) {
   return item?.slug || null;
 }
+
+export {
+  resolveGiftProduct,
+  resolveStorefrontProduct,
+  storefrontProductSlugCandidates,
+  releaseTypeToProductType,
+  releaseTypeToGiftItemType,
+} from "@/lib/commerce/resolve-storefront-product";

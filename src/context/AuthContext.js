@@ -11,6 +11,8 @@ const EMPTY_ACCOUNT_STATE = {
   mediaProgress: [],
   permissions: {},
   vaultAccess: null,
+  user: null,
+  isAdmin: false,
 };
 
 const AuthContext = createContext(null);
@@ -42,6 +44,8 @@ export function AuthProvider({ children }) {
       mediaProgress: data.mediaProgress || [],
       permissions: data.permissions || {},
       vaultAccess: data.vaultAccess || null,
+      user: data.user || null,
+      isAdmin: Boolean(data.permissions?.admin) || (data.user ? isAdminUser(data.user) : false),
       syncedAt: data.syncedAt || null,
     });
   }, []);
@@ -220,6 +224,22 @@ export function AuthProvider({ children }) {
   const markAdmin = useCallback((nextUser) => {
     if (isAdminUser(nextUser)) setIsAdmin(true);
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin && !user) return;
+    setAccountState((prev) => {
+      const adminFlag = isAdmin || (user ? isAdminUser(user) : false);
+      if (prev.isAdmin === adminFlag && prev.permissions?.admin === adminFlag && prev.user === user) {
+        return prev;
+      }
+      return {
+        ...prev,
+        user: user || prev.user,
+        isAdmin: adminFlag,
+        permissions: { ...(prev.permissions || {}), admin: adminFlag || prev.permissions?.admin },
+      };
+    });
+  }, [isAdmin, user]);
 
   const owns = useCallback((slug) => ownedSlugs.has(slug), [ownedSlugs]);
 

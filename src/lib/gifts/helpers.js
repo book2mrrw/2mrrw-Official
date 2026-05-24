@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { grantLibraryItems } from "@/lib/commerce/entitlements";
+import { resolveGiftProduct } from "@/lib/commerce/resolve-storefront-product";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { normalizeEmail } from "@/lib/guest-session";
 import { hashGiftLinkToken } from "@/lib/gifts/token-hash";
@@ -80,13 +81,10 @@ export async function resolveProductForGift(gift) {
 
   if (!byRelease?.slug) return null;
 
-  const slug = byRelease.slug.endsWith("-digital") ? byRelease.slug : `${byRelease.slug}-digital`;
-  const { data: product } = await admin
-    .from("products")
-    .select("id, slug, title, cover_url, product_type")
-    .eq("slug", slug)
-    .maybeSingle();
-
+  const { product } = await resolveGiftProduct(admin, {
+    slug: byRelease.slug,
+    releaseType: byRelease.release_type,
+  });
   return product;
 }
 

@@ -1,5 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { grantLibraryItems } from "@/lib/commerce/entitlements";
+import {
+  releaseTypeToGiftItemType,
+  resolveGiftProduct,
+} from "@/lib/commerce/resolve-storefront-product";
 import { isAdminUser } from "@/lib/auth/constants";
 import { buildGiftLink, sendGiftEmail } from "@/lib/gifts/email";
 import { claimGiftForUser } from "@/lib/gifts/helpers";
@@ -7,31 +11,6 @@ import { createGiftLinkToken } from "@/lib/gifts/token-hash";
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
-}
-
-function productSlugForRelease(releaseSlug) {
-  const slug = String(releaseSlug || "").trim();
-  if (!slug) return null;
-  return slug.endsWith("-digital") ? slug : `${slug}-digital`;
-}
-
-function itemTypeForRelease(releaseType) {
-  const t = String(releaseType || "").toLowerCase();
-  if (t === "album" || t === "ep") return t === "ep" ? "ep" : "album";
-  if (t === "deluxe") return "deluxe";
-  return "single";
-}
-
-async function resolveProductByReleaseSlug(releaseSlug) {
-  const admin = createAdminClient();
-  const slug = productSlugForRelease(releaseSlug);
-  const { data: product, error } = await admin
-    .from("products")
-    .select("id, slug, title, cover_url, product_type")
-    .eq("slug", slug)
-    .maybeSingle();
-  if (error) throw error;
-  return product;
 }
 
 async function findRecipientProfile(email) {
@@ -44,31 +23,64 @@ async function findRecipientProfile(email) {
   return profile;
 }
 
+export class GiftSendError extends Error {
+  constructor(message, { code = "GIFT_SEND_FAILED", details = null, status = 500 } = {}) {
+    super(message);
+    this.name = "GiftSendError";
+    this.code = code;
+    this.details = details;
+    this.status = status;
+  }
+}
+
 export async function sendStorefrontGift({
   senderUser,
   releaseSlug,
   releaseTitle,
   releaseType,
+  productId,
   recipientEmail,
   recipientPhone,
   recipientName,
   message,
 }) {
+  const logCtx = {
+    releaseSlug: String(releaseSlug || "").trim() || null,
+    releaseType: releaseType || null,
+    productId: productId || null,
+    senderId: senderUser?.id || null,
+  };
+
   if (!isAdminUser(senderUser)) {
-    throw new Error("Admin account required");
+    console.warn("[gift-send] rejected: not admin", logCtx);
+    throw new GiftSendError("Admin account required", { code: "ADMIN_REQUIRED", status: 403 });
   }
 
   const email = normalizeEmail(recipientEmail);
-  if (!email) throw new Error("Recipient email is required");
-
-  const product = await resolveProductByReleaseSlug(releaseSlug);
-  if (!product) {
-    throw new Error("Could not resolve storefront product for this release.");
+  if (!email) {
+    throw new GiftSendError("Recipient email is required", { code: "RECIPIENT_EMAIL_REQUIRED", status: 400 });
   }
 
   const admin = createAdminClient();
+  const { product, steps } = await resolveGiftProduct(admin, {
+    slug: logCtx.releaseSlug,
+    productId,
+    releaseType,
+  });
+
+  console.info("[gift-send] product resolution", { ...logCtx, steps });
+
+  if (!product) {
+    console.error("[gift-send] product not found", { ...logCtx, steps });
+    throw new GiftSendError("Could not resolve storefront product for this release.", {
+      code: "PRODUCT_NOT_FOUND",
+      details: { releaseSlug: logCtx.releaseSlug, releaseType: logCtx.releaseType, steps },
+      status: 422,
+    });
+  }
+
   const recipientProfile = await findRecipientProfile(email);
-  const itemType = itemTypeForRelease(releaseType || product.product_type);
+  const itemType = releaseTypeToGiftItemType(releaseType, product.product_type);
   const expiresAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString();
 
   const { raw: giftTokenRaw, hash: giftTokenHash } = createGiftLinkToken();
@@ -91,7 +103,19 @@ export async function sendStorefrontGift({
     .select("*")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error("[gift-send] gift insert failed", { ...logCtx, productId: product.id, error: error.message });
+    throw error;
+  }
+
+  console.info("[gift-send] gift created", {
+    ...logCtx,
+    giftId: gift.id,
+    productSlug: product.slug,
+    itemType,
+    recipientEmail: email,
+    deliveredToExistingUser: Boolean(recipientProfile?.id),
+  });
 
   const giftLink = buildGiftLink(giftTokenRaw);
   await sendGiftEmail({
@@ -112,7 +136,12 @@ export async function sendStorefrontGift({
     try {
       await claimGiftForUser(gift, recipientUser);
       delivered = true;
+      console.info("[gift-send] auto-claimed for recipient", { giftId: gift.id, userId: recipientProfile.id });
     } catch (claimErr) {
+      console.warn("[gift-send] claim fallback to grantLibraryItems", {
+        giftId: gift.id,
+        error: claimErr?.message,
+      });
       await grantLibraryItems({
         userId: recipientProfile.id,
         purchaseId: null,

@@ -1,4 +1,5 @@
 import { membershipHasPremiumAccess } from "@/lib/commerce/entitlements";
+import { isAdminUser } from "@/lib/auth/constants";
 import { getOfflinePlaybackUrl } from "@/lib/offline-cache";
 import { catalogPreviewAudioUrl } from "@/lib/media-urls";
 
@@ -60,7 +61,11 @@ export function isCollectorCardOwner(accountState = {}) {
 
 /** Platform admin — full catalog access, no purchase UI. */
 export function isAdminAccount(accountState = {}) {
-  return Boolean(accountState?.permissions?.admin);
+  if (Boolean(accountState?.permissions?.admin)) return true;
+  if (Boolean(accountState?.isAdmin)) return true;
+  const user = accountState?.user;
+  if (user && isAdminUser(user)) return true;
+  return false;
 }
 
 export function adminTrackAccess() {

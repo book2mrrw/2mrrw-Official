@@ -127,10 +127,10 @@ const events = [
   { id:"evt-5", name:"2MRRW Live – NYC",     location:"New York, NY",    date:"2026-07-04", time:"8:00 PM", price:35.00, tickets:45 },
 ];
 const radioSlides = [
-  { slug:"hour-glass",     title:"Hour Glass",     cover:"/images/singles/hourglass.jpg", price:2.99, tag:"NOW PLAYING", tagColor:"#00ffff" },
-  { slug:"w2d",            title:"W.2.D",          cover:"/images/singles/w2d.jpg",       price:2.99, tag:"FEATURED",    tagColor:"#a259ff" },
-  { slug:"artificial",     title:"Artificial",     cover:"/images/singles/artificial.jpg",price:2.99, tag:"TRENDING",    tagColor:"#ff6b35" },
-  { slug:"turnt-me-2-dis", title:"Turnt Me 2 Dis", cover:"/images/singles/turnt.jpg",     price:2.99, tag:"FEATURED",    tagColor:"#00ffff" },
+  { slug:"hour-glass",     title:"Hour Glass",     type:"single", cover:"/images/singles/hourglass.jpg", price:2.99, tag:"NOW PLAYING", tagColor:"#00ffff" },
+  { slug:"w2d",            title:"W.2.D",          type:"single", cover:"/images/singles/w2d.jpg",       price:2.99, tag:"FEATURED",    tagColor:"#a259ff" },
+  { slug:"artificial",     title:"Artificial",     type:"single", cover:"/images/singles/artificial.jpg",price:2.99, tag:"TRENDING",    tagColor:"#ff6b35" },
+  { slug:"turnt-me-2-dis", title:"Turnt Me 2 Dis", type:"single", cover:"/images/singles/turnt.jpg",     price:2.99, tag:"FEATURED",    tagColor:"#00ffff" },
 ];
 
 const features = [
@@ -143,6 +143,7 @@ const singles = [
   {
     title: "Hour Glass",
     slug: "hour-glass",
+    type: "single",
     cover: "/images/singles/hourglass.jpg",
     video: "/videos/singles/hourglass.mp4",
     price: 2.99,
@@ -151,6 +152,7 @@ const singles = [
   {
     title: "W.2.D",
     slug: "w2d",
+    type: "single",
     cover: "/images/singles/w2d.jpg",
     video: "/videos/singles/w2d.mp4",
     price: 2.99,
@@ -159,6 +161,7 @@ const singles = [
   {
     title: "Artificial",
     slug: "artificial",
+    type: "single",
     cover: "/images/singles/artificial.jpg",
     video: "/videos/singles/artificial.mp4",
     price: 2.99,
@@ -167,6 +170,7 @@ const singles = [
   {
     title: "Turnt Me 2 Dis",
     slug: "turnt-me-2-dis",
+    type: "single",
     cover: "/images/singles/turnt.jpg",
     video: "/videos/singles/turntme2dis.mp4",
     price: 2.99,
@@ -1292,6 +1296,7 @@ export default function Page() {
           <div style={{marginTop:4,padding:"4px 14px",background:currentSlide.tagColor+"18",border:`1px solid ${currentSlide.tagColor}30`,borderRadius:20,fontSize:10,fontWeight:700,color:currentSlide.tagColor,letterSpacing:1.5}}>{currentSlide.tag}</div>
         </div>
       </div>
+      {!isAdmin ? (
       <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="conversion"?1:0,pointerEvents:activeFlowMode==="conversion"?"auto":"none",transition:"opacity 0.45s"}}>
         <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 50% 45%,${currentSlide.tagColor}16 0%,transparent 60%)`,pointerEvents:"none"}}/>
         <div style={{position:"absolute",inset:0,zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px",gap:12,textAlign:"center"}}>
@@ -1303,6 +1308,7 @@ export default function Page() {
           <div style={{fontSize:10,color:"#444",letterSpacing:1,marginTop:2}}>Digital download · Instant access</div>
         </div>
       </div>
+      ) : null}
     </div>
   );
 

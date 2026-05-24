@@ -80,7 +80,8 @@ export default function GiftBottomSheet({
         body: JSON.stringify({
           releaseSlug: release?.slug,
           releaseTitle: release?.title,
-          releaseType: release?.type || release?.releaseType,
+          releaseType: release?.type || release?.releaseType || "single",
+          productId: release?.productId || release?.product_id || null,
           recipientEmail: check.value,
           recipientPhone: phonePayload,
           recipientName: name.trim() || null,
