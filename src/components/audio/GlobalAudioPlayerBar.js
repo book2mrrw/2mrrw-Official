@@ -1,37 +1,29 @@
 "use client";
 
 import { memo, useCallback, useEffect, useRef, useState } from "react";
-import { useAudioPlayer } from "@/context/AudioContext";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
-import CSModeButton from "@/components/audio/CSModeButton";
 import {
-  ClosePlayerButton,
-  HoldSeekButton,
-  PlayPauseHero,
-  RepeatButton,
-  ShuffleButton,
-  TrackTransportButton,
-} from "@/components/audio/PlayerControlButton";
-import CoverArt from "@/components/ui/CoverArt";
-import CoverArtCS from "@/components/ui/CoverArtCS";
-import GiftIcon from "@/components/gifts/GiftIcon";
-
-const formatTime = (seconds) => {
-  if (!seconds || !isFinite(seconds)) return "0:00";
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
-};
-
-const DOUBLE_TAP_MS = 300;
-const HOLD_FADE_MS = 300;
-const RELEASE_FADE_MS = 200;
-const MOVE_CANCEL_PX = 10;
-const CS_PLAYBACK_RATE = 0.75;
+  CompactDockPlayer,
+  FloatingMainPlayer,
+  PlayerArtwork,
+  SignaturePlayRing,
+  useImmersivePlayback,
+  usePlayerAmbience,
+  usePlayerBodyState,
+} from "@/components/player/ImmersivePlayerEngine";
+import {
+  DOUBLE_TAP_MS,
+  HOLD_FADE_MS,
+  RELEASE_FADE_MS,
+  MOVE_CANCEL_PX,
+  SWIPE_DISMISS_PX,
+  EXPAND_SWIPE_CLOSE_MS,
+  CS_PLAYBACK_RATE,
+} from "@/lib/player/constants";
 
 function WaveformBars({ playing }) {
   return (
-    <div className={`audio-island-waveform${playing ? " is-playing" : ""}`} aria-hidden>
+    <div className={`player-immersive-island-wave${playing ? " is-playing" : ""}`} aria-hidden>
       <span />
       <span />
       <span />
@@ -40,6 +32,7 @@ function WaveformBars({ playing }) {
 }
 
 function GlobalAudioPlayerBar() {
+  const playback = useImmersivePlayback();
   const {
     currentTrack,
     hasStarted,
@@ -51,7 +44,8 @@ function GlobalAudioPlayerBar() {
     accessDenied,
     streamRetryable,
     streamConflict,
-    toggle,
+    progress,
+    handlePlayToggle,
     seek,
     stop,
     queue,
@@ -64,15 +58,13 @@ function GlobalAudioPlayerBar() {
     toggleRepeat,
     csMode,
     toggleCSMode,
-    seekBack,
-    seekForward,
     audioRef,
     suppressPauseInterruptionRef,
     overrideConcurrentStream,
     dismissStreamConflict,
-    retryStreamPlayback,
     storeLinkHref,
-  } = useAudioPlayer();
+  } = playback;
+
   const [isMobile, setIsMobile] = useState(false);
   const [windowWidth, setWindowWidth] = useState(
     typeof window !== "undefined" ? window.innerWidth : 768
@@ -94,6 +86,19 @@ function GlobalAudioPlayerBar() {
   const touchStartRef = useRef(null);
   const tapTimeoutRef = useRef(null);
   const csModeRef = useRef(csMode);
+
+  const baseCover = currentTrack?.baseCover || currentTrack?.cover;
+  const csCover = currentTrack?.csCover || null;
+  const csAudio = currentTrack?.csAudio || null;
+  const baseCoverType = currentTrack?.coverArtType || "image";
+  const csCoverType = currentTrack?.csCoverType || "image";
+  const hasCs = Boolean(csCover || csAudio);
+  const { cssVars } = usePlayerAmbience(
+    csMode && csCover ? csCover : baseCover,
+    csMode && csCover ? csCoverType : baseCoverType
+  );
+
+  usePlayerBodyState({ playing: isPlaying && hasStarted, expanded });
 
   useEffect(() => {
     csModeRef.current = csMode;
@@ -141,12 +146,6 @@ function GlobalAudioPlayerBar() {
     []
   );
 
-  const baseCover = currentTrack?.baseCover || currentTrack?.cover;
-  const csCover = currentTrack?.csCover || null;
-  const csAudio = currentTrack?.csAudio || null;
-  const baseCoverType = currentTrack?.coverArtType || "image";
-  const csCoverType = currentTrack?.csCoverType || "image";
-  const hasCs = Boolean(csCover || csAudio);
   const coverFlipKey = currentTrack
     ? `${currentTrack.id || currentTrack.slug}:${baseCover}:${currentTrack.title}:${csMode}`
     : null;
@@ -176,7 +175,7 @@ function GlobalAudioPlayerBar() {
   }, [suppressPauseInterruptionRef]);
 
   const applyHoldAudio = useCallback(
-    (progress) => {
+    (progressVal) => {
       const audio = audioRef?.current;
       if (!audio || csModeRef.current) return;
 
@@ -207,7 +206,7 @@ function GlobalAudioPlayerBar() {
           previewActiveRef.current = true;
         }
       } else {
-        audio.playbackRate = 1 - (1 - CS_PLAYBACK_RATE) * progress;
+        audio.playbackRate = 1 - (1 - CS_PLAYBACK_RATE) * progressVal;
         if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
       }
     },
@@ -259,11 +258,11 @@ function GlobalAudioPlayerBar() {
       cancelHoldAnim();
       const start = performance.now();
       const step = (now) => {
-        const progress = Math.min(1, (now - start) / duration);
-        const value = from + (to - from) * progress;
+        const p = Math.min(1, (now - start) / duration);
+        const value = from + (to - from) * p;
         setCsHoldOpacity(value);
-        onFrame?.(value, progress);
-        if (progress < 1) {
+        onFrame?.(value, p);
+        if (p < 1) {
           holdRafRef.current = requestAnimationFrame(step);
         } else {
           holdRafRef.current = null;
@@ -305,20 +304,12 @@ function GlobalAudioPlayerBar() {
       }
 
       holdActiveRef.current = true;
-      animateHoldOpacity(0, 1, HOLD_FADE_MS, (value, progress) => {
-        applyHoldAudio(progress);
+      animateHoldOpacity(0, 1, HOLD_FADE_MS, (value, p) => {
+        applyHoldAudio(p);
         if (csCover) setAmbientCoverUrl(resolveAbsoluteArtworkUrl(csCover));
       });
     },
-    [
-      animateHoldOpacity,
-      applyHoldAudio,
-      cancelHoldAnim,
-      csCover,
-      hasCs,
-      revertHoldPreview,
-      toggleCSMode,
-    ]
+    [animateHoldOpacity, applyHoldAudio, cancelHoldAnim, csCover, hasCs, revertHoldPreview, toggleCSMode]
   );
 
   const handleCoverTouchMove = useCallback(
@@ -392,7 +383,7 @@ function GlobalAudioPlayerBar() {
       setExpanded(false);
       setSwipeClosing(false);
       setSwipeOffset(0);
-    }, 220);
+    }, EXPAND_SWIPE_CLOSE_MS);
   }, []);
 
   const onTouchStart = useCallback((e) => {
@@ -409,7 +400,7 @@ function GlobalAudioPlayerBar() {
   }, []);
 
   const onTouchEnd = useCallback(() => {
-    if (touchDeltaY.current > 80) {
+    if (touchDeltaY.current > SWIPE_DISMISS_PX) {
       closeExpanded();
     } else {
       setSwipeOffset(0);
@@ -418,80 +409,20 @@ function GlobalAudioPlayerBar() {
     touchDeltaY.current = 0;
   }, [closeExpanded]);
 
-  const handlePlayToggle = useCallback(
-    (e) => {
-      e?.stopPropagation?.();
-      if (streamRetryable && error) {
-        void retryStreamPlayback();
-        return;
-      }
-      toggle();
-    },
-    [toggle, streamRetryable, error, retryStreamPlayback]
-  );
-
   if (!hasStarted || !currentTrack) return null;
 
   const conflictDialog = streamConflict ? (
-    <div
-      role="alertdialog"
-      aria-label="Concurrent stream"
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 9200,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "rgba(0,0,0,0.72)",
-        padding: 24,
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 360,
-          width: "100%",
-          background: "#111",
-          border: "1px solid #2a2a2a",
-          borderRadius: 14,
-          padding: "20px 22px",
-        }}
-      >
-        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>Already streaming</div>
-        <p style={{ fontSize: 13, color: "#888", lineHeight: 1.5, margin: "0 0 18px" }}>
+    <div role="alertdialog" aria-label="Concurrent stream" className="player-immersive-conflict">
+      <div className="player-immersive-conflict__card">
+        <div className="player-immersive-conflict__title">Already streaming</div>
+        <p className="player-immersive-conflict__text">
           Already streaming on another device — stop other session?
         </p>
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button
-            type="button"
-            onClick={dismissStreamConflict}
-            style={{
-              padding: "10px 14px",
-              background: "transparent",
-              border: "1px solid #333",
-              borderRadius: 8,
-              color: "#aaa",
-              cursor: "pointer",
-              fontSize: 12,
-              fontWeight: 700,
-            }}
-          >
+        <div className="player-immersive-conflict__actions">
+          <button type="button" className="player-immersive-conflict__cancel" onClick={dismissStreamConflict}>
             Cancel
           </button>
-          <button
-            type="button"
-            onClick={() => void overrideConcurrentStream()}
-            style={{
-              padding: "10px 14px",
-              background: "#00ffff",
-              border: "none",
-              borderRadius: 8,
-              color: "#000",
-              cursor: "pointer",
-              fontSize: 12,
-              fontWeight: 800,
-            }}
-          >
+          <button type="button" className="player-immersive-conflict__confirm" onClick={() => void overrideConcurrentStream()}>
             Stop other &amp; play
           </button>
         </div>
@@ -504,99 +435,24 @@ function GlobalAudioPlayerBar() {
   const csCoverUrl = csCover ? resolveAbsoluteArtworkUrl(csCover) : null;
   const islandCoverUrl = csMode && csCoverUrl ? csCoverUrl : baseCoverUrl;
   const islandCoverType = csMode && csCover ? csCoverType : baseCoverType;
-  const progress = duration ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
   const bottom = isMobile ? "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)" : 0;
-  const sourceLabel = String(currentTrack.source || "audio").replace(/_/g, " ");
   const hasQueue = (queue || []).length > 1;
   const queuePos = queueIndex >= 0 && queue?.length ? queueIndex + 1 : 1;
   const queueTotal = queue?.length || 1;
   const queueLabel = hasQueue ? `${queuePos} of ${queueTotal}` : null;
   const coverSize = isMobile ? "min(80vw, 320px)" : 320;
 
-  const coverFrameStyle = (dim, radius) => ({
+  const coverFrameStyle = () => ({
     transform: flipPhase ? "scaleX(0)" : "scaleX(1)",
     transition: "transform 200ms ease",
     touchAction: "manipulation",
     flexShrink: 0,
   });
 
-  const renderSecondaryControls = (btnSize) => (
-    <div className="player-controls-row" style={{ gap: 20, marginTop: 8 }}>
-      <RepeatButton
-        repeatMode={repeatMode}
-        size={btnSize}
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleRepeat();
-        }}
-      />
-      <CSModeButton />
-    </div>
-  );
-
-  const renderTransportRow = ({
-    playSize,
-    transportSize,
-    skipSize,
-    gap,
-    hidePrevNext = false,
-    shuffleSize,
-  }) => (
-    <div className="player-controls-row player-controls-row--primary" style={{ gap }}>
-      {hidePrevNext ? (
-        <div style={{ width: transportSize, flexShrink: 0 }} aria-hidden />
-      ) : (
-        <TrackTransportButton direction="back" size={transportSize} onClick={() => playPrevious()} />
-      )}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap, flex: 1 }}>
-        <HoldSeekButton
-          direction="back"
-          size={skipSize}
-          onTapSeek={() => seekBack(15)}
-          onScrubTick={(secs) => seekBack(Math.abs(secs))}
-        />
-        <PlayPauseHero
-          isPlaying={isPlaying}
-          hasError={Boolean(error)}
-          size={playSize}
-          onClick={handlePlayToggle}
-        />
-        <HoldSeekButton
-          direction="forward"
-          size={skipSize}
-          onTapSeek={() => seekForward(15)}
-          onScrubTick={(secs) => seekForward(Math.abs(secs))}
-        />
-      </div>
-      {hidePrevNext ? (
-        <div style={{ width: transportSize, flexShrink: 0 }} aria-hidden />
-      ) : (
-        <TrackTransportButton direction="forward" size={transportSize} onClick={() => playNext()} />
-      )}
-      <ShuffleButton
-        active={shuffle}
-        size={shuffleSize || transportSize}
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleShuffle();
-        }}
-      />
-    </div>
-  );
-
-  const playPauseCompact = (size) => (
-    <PlayPauseHero
-      isPlaying={isPlaying}
-      hasError={Boolean(error)}
-      size={size}
-      onClick={handlePlayToggle}
-    />
-  );
-
   const errorMessage = accessDenied ? (
     <span>
       Access unavailable —{" "}
-      <a href={storeLinkHref || "/subscribe"} style={{ color: "#00ffff", textDecoration: "underline" }}>
+      <a href={storeLinkHref || "/subscribe"} className="player-immersive-access-link">
         get access
       </a>
     </span>
@@ -604,465 +460,107 @@ function GlobalAudioPlayerBar() {
     error
   );
 
+  const sharedDockProps = {
+    currentTrack,
+    isMobile,
+    cssVars,
+    progress,
+    currentTime,
+    duration,
+    isPlaying,
+    error,
+    accessDenied,
+    errorMessage,
+    csOpacity,
+    csMode,
+    baseCoverUrl,
+    baseCoverType,
+    csCoverUrl,
+    csCoverType,
+    coverFrameStyle,
+    onExpand: () => setExpanded(true),
+    onStop: stop,
+    onSeekBarClick: handleSeek,
+    handlePlayToggle,
+    playPrevious,
+    playNext,
+    repeatMode,
+    toggleRepeat,
+    shuffle,
+    toggleShuffle,
+    onCoverTouchStart: handleCoverTouchStart,
+    onCoverTouchMove: handleCoverTouchMove,
+    onCoverTouchEnd: handleCoverTouchEnd,
+  };
+
   return (
     <>
       {conflictDialog}
       {isBuffering && (
-        <div
-          aria-live="polite"
-          aria-label="Buffering"
-          style={{
-            position: "fixed",
-            left: "50%",
-            bottom: isMobile ? "calc(120px + env(safe-area-inset-bottom, 0px))" : 72,
-            transform: "translateX(-50%)",
-            zIndex: 7700,
-            width: 28,
-            height: 28,
-            border: "2px solid rgba(0,255,255,0.25)",
-            borderTopColor: "#00ffff",
-            borderRadius: "50%",
-            animation: "playerBufferSpin 0.8s linear infinite",
-          }}
-        />
+        <div className="player-immersive-buffer-indicator" aria-live="polite" aria-label="Buffering" data-mobile={isMobile ? "1" : undefined} />
       )}
       {isMobile && !expanded && (
         <button
           type="button"
           onClick={() => setExpanded(true)}
           aria-label="Expand audio player"
-          className="player-island-pill"
-          style={{
-            position: "fixed",
-            top: "calc(env(safe-area-inset-top, 12px) + 8px)",
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 9000,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            minWidth: 120,
-            height: 36,
-            padding: "0 12px 0 6px",
-            borderRadius: 20,
-            cursor: "pointer",
-            color: "inherit",
-          }}
+          className="player-island-pill player-immersive-island"
+          style={cssVars}
         >
-          <CoverArt
-            src={islandCoverUrl}
-            type={islandCoverType}
-            width={24}
-            height={24}
+          <PlayerArtwork
+            baseCoverUrl={islandCoverUrl}
+            baseCoverType={islandCoverType}
+            size={28}
             borderRadius="50%"
-            style={coverFrameStyle(24, "50%")}
+            isPlaying={isPlaying}
+            layoutId={undefined}
           />
           <WaveformBars playing={isPlaying} />
-          {playPauseCompact(28)}
+          <SignaturePlayRing
+            isPlaying={isPlaying}
+            hasError={Boolean(error)}
+            isBuffering={isBuffering}
+            progress={progress}
+            size={32}
+            onClick={handlePlayToggle}
+          />
         </button>
       )}
 
       {expanded && (
-        <div
-          role="dialog"
-          aria-label="Full screen audio player"
-          className={["audio-immersive-enter", "player-immersive"].filter(Boolean).join(" ")}
+        <FloatingMainPlayer
+          {...sharedDockProps}
+          isSmallScreen={isSmallScreen}
+          coverSize={coverSize}
+          ambientCoverUrl={ambientCoverUrl}
+          swipeOffset={swipeOffset}
+          swipeClosing={swipeClosing}
+          onClose={closeExpanded}
+          onSeek={handleSeek}
+          seek={seek}
+          seekBack={playback.seekBack}
+          seekForward={playback.seekForward}
+          hasQueue={hasQueue}
+          queueLabel={queueLabel}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
-          style={{
-            position: "fixed",
-            inset: 0,
-            zIndex: 8500,
-            background: "rgba(4,4,4,0.97)",
-            backdropFilter: "blur(40px)",
-            WebkitBackdropFilter: "blur(40px)",
-            display: "flex",
-            flexDirection: "column",
-            padding: `max(12px, env(safe-area-inset-top, 0px)) 20px max(24px, env(safe-area-inset-bottom, 0px))`,
-            overflowY: "auto",
-            transform: swipeOffset ? `translateY(${swipeOffset}px)` : undefined,
-            transition: swipeClosing || swipeOffset === 0 ? "transform 0.22s ease-out" : "none",
-          }}
-        >
-          {(ambientCoverUrl || baseCoverUrl) && (
-            <div
-              aria-hidden
-              style={{
-                position: "absolute",
-                inset: 0,
-                backgroundImage: `url(${ambientCoverUrl || baseCoverUrl})`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-                filter: "blur(48px) brightness(0.35)",
-                opacity: 0.55,
-                pointerEvents: "none",
-                zIndex: 0,
-              }}
-            />
-          )}
-
-          <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-            <div
-              className="player-sheet-handle"
-              style={{
-                width: 40,
-                height: 5,
-                borderRadius: 3,
-                background: "rgba(140,140,148,0.55)",
-                margin: "6px auto 16px",
-                flexShrink: 0,
-              }}
-            />
-
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ fontSize: 10, color: "#555", letterSpacing: 2.5, textTransform: "uppercase", fontWeight: 700 }}>
-                Now Playing
-              </div>
-              <button
-                type="button"
-                onClick={closeExpanded}
-                aria-label="Close expanded player"
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#888",
-                  fontSize: 28,
-                  lineHeight: 1,
-                  cursor: "pointer",
-                  padding: "4px 8px",
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            <div
-              style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 20,
-                minHeight: 0,
-              }}
-            >
-              <div style={{ width: coverSize, height: coverSize, maxWidth: 320, maxHeight: 320 }}>
-                <CoverArtCS
-                  originalSrc={baseCoverUrl}
-                  originalType={baseCoverType}
-                  csSrc={csCoverUrl}
-                  csType={csCoverType}
-                  csOpacity={csOpacity}
-                  isLocked={csMode}
-                  width="100%"
-                  height="100%"
-                  borderRadius={20}
-                  className={isPlaying ? "audio-immersive-cover-pulse" : undefined}
-                  style={coverFrameStyle(320, 20)}
-                  onTouchStart={(e) => handleCoverTouchStart(e)}
-                  onTouchMove={handleCoverTouchMove}
-                  onTouchEnd={(e) => handleCoverTouchEnd(e)}
-                  onClick={(e) => e.preventDefault()}
-                />
-              </div>
-
-              <div style={{ textAlign: "center", width: "100%", maxWidth: 400, padding: "0 8px" }}>
-                <div className="player-track-title" style={{ fontSize: 24, lineHeight: 1.2, marginBottom: 6 }}>
-                  {currentTrack.title}
-                  {currentTrack?.source === "gift" ||
-                  currentTrack?.gifted ? (
-                    <GiftIcon
-                      size={12}
-                      style={{
-                        marginLeft: 4,
-                        display: "inline-block",
-                        verticalAlign: "middle",
-                        animation: "giftIconSpin 4s ease-in-out infinite",
-                      }}
-                    />
-                  ) : null}
-                </div>
-                <div className="player-track-meta" style={{ fontSize: 14, marginBottom: 4, opacity: 0.55 }}>
-                  {currentTrack.artist}
-                </div>
-                <div className="player-track-meta" style={{ fontSize: 10, letterSpacing: 1.6, textTransform: "uppercase", opacity: 0.4 }}>
-                  {sourceLabel}
-                </div>
-              </div>
-
-              <div style={{ width: "100%", maxWidth: 480 }}>
-                <div
-                  onClick={handleSeek}
-                  role="slider"
-                  aria-valuemin={0}
-                  aria-valuemax={duration || 0}
-                  aria-valuenow={currentTime}
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (!duration) return;
-                    if (e.key === "ArrowRight") seek(Math.min(duration, currentTime + 5));
-                    if (e.key === "ArrowLeft") seek(Math.max(0, currentTime - 5));
-                  }}
-                  style={{
-                    width: "100%",
-                    height: 6,
-                    background: "#222",
-                    borderRadius: 3,
-                    cursor: duration ? "pointer" : "default",
-                    marginBottom: 8,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: `${progress}%`,
-                      height: "100%",
-                      background: error ? "#ff8a8a" : "#00ffff",
-                      borderRadius: 3,
-                      transition: "width 0.1s linear",
-                    }}
-                  />
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: 12,
-                    color: "#666",
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  <span>{formatTime(currentTime)}</span>
-                  <span>{formatTime(duration)}</span>
-                </div>
-              </div>
-
-              {renderTransportRow({
-                playSize: 72,
-                transportSize: 44,
-                skipSize: 44,
-                gap: 20,
-                hidePrevNext: isSmallScreen,
-                shuffleSize: 40,
-              })}
-
-              {renderSecondaryControls(isSmallScreen ? 40 : 44)}
-
-              {hasQueue && queueLabel && (
-                <div style={{ fontSize: 12, color: "#555", letterSpacing: 1.5, textTransform: "uppercase", textAlign: "center" }}>
-                  {queueLabel}
-                </div>
-              )}
-
-              {(error || accessDenied) && (
-                <div style={{ fontSize: 12, color: "#ff8a8a", textAlign: "center" }}>{errorMessage}</div>
-              )}
-            </div>
-          </div>
-        </div>
+        />
       )}
 
       {!expanded && (
         <div
-          role="region"
-          aria-label="Global audio player"
-          className="player-dock"
           style={{
             position: "fixed",
             left: isMobile ? 12 : 0,
             right: isMobile ? 12 : 0,
             bottom,
             zIndex: 7600,
-            borderRadius: isMobile ? 16 : 0,
+            borderRadius: isMobile ? 18 : 0,
             overflow: "hidden",
           }}
         >
-          <div
-            onClick={handleSeek}
-            style={{ width: "100%", height: 3, background: "#111", cursor: duration ? "pointer" : "default" }}
-          >
-            <div
-              style={{
-                width: `${progress}%`,
-                height: "100%",
-                background: error ? "#ff8a8a" : "#00ffff",
-                transition: "width 0.1s linear",
-                boxShadow: error ? "0 0 6px rgba(255,138,138,0.5)" : "0 0 6px rgba(0,255,255,0.5)",
-              }}
-            />
-          </div>
-          <div className="player-dock-inner" style={{ maxWidth: 1180, margin: "0 auto", padding: isMobile ? "8px 12px 10px" : "10px 20px" }}>
-            {isMobile ? (
-              <>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <CoverArtCS
-                    originalSrc={baseCoverUrl}
-                    originalType={baseCoverType}
-                    csSrc={csCoverUrl}
-                    csType={csCoverType}
-                    csOpacity={csOpacity}
-                    isLocked={csMode}
-                    width={40}
-                    height={40}
-                    borderRadius={8}
-                    style={coverFrameStyle(40, 8)}
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Cover art"
-                    onTouchStart={(e) => handleCoverTouchStart(e, () => setExpanded(true))}
-                    onTouchMove={handleCoverTouchMove}
-                    onTouchEnd={(e) => handleCoverTouchEnd(e, () => setExpanded(true))}
-                    onClick={(e) => e.preventDefault()}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setExpanded(true)}
-                    aria-label="Expand player"
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      background: "none",
-                      border: "none",
-                      padding: 0,
-                      cursor: "pointer",
-                      textAlign: "left",
-                      color: "inherit",
-                    }}
-                  >
-                    <div
-                      className="player-track-title"
-                      style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                    >
-                      {currentTrack.title}
-                      {currentTrack?.source === "gift" ||
-                      currentTrack?.gifted ? (
-                        <GiftIcon
-                          size={12}
-                          style={{
-                            marginLeft: 4,
-                            display: "inline-block",
-                            verticalAlign: "middle",
-                            animation: "giftIconSpin 4s ease-in-out infinite",
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                    <div
-                      className="player-track-meta"
-                      style={{
-                        fontSize: 10,
-                        color: error || accessDenied ? "#ff8a8a" : undefined,
-                        opacity: error || accessDenied ? 1 : 0.48,
-                        fontVariantNumeric: "tabular-nums",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {error || accessDenied
-                        ? errorMessage
-                        : `${currentTrack.artist} · ${formatTime(currentTime)} / ${formatTime(duration)}`}
-                    </div>
-                  </button>
-                  <ClosePlayerButton onClick={stop} size={18} />
-                </div>
-                {renderTransportRow({
-                  playSize: 44,
-                  transportSize: 36,
-                  skipSize: 36,
-                  gap: isSmallScreen ? 6 : 10,
-                  hidePrevNext: isSmallScreen,
-                  shuffleSize: 34,
-                })}
-                {renderSecondaryControls(isSmallScreen ? 36 : 40)}
-              </>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <CoverArtCS
-                    originalSrc={baseCoverUrl}
-                    originalType={baseCoverType}
-                    csSrc={csCoverUrl}
-                    csType={csCoverType}
-                    csOpacity={csOpacity}
-                    isLocked={csMode}
-                    width={42}
-                    height={42}
-                    borderRadius={8}
-                    style={coverFrameStyle(42, 8)}
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Cover art"
-                    onTouchStart={(e) => handleCoverTouchStart(e, () => setExpanded(true))}
-                    onTouchMove={handleCoverTouchMove}
-                    onTouchEnd={(e) => handleCoverTouchEnd(e, () => setExpanded(true))}
-                    onClick={(e) => e.preventDefault()}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setExpanded(true)}
-                    aria-label="Expand player"
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      background: "none",
-                      border: "none",
-                      padding: 0,
-                      cursor: "pointer",
-                      textAlign: "left",
-                      color: "inherit",
-                    }}
-                  >
-                    <div
-                      className="player-track-title"
-                      style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                    >
-                      {currentTrack.title}
-                      {currentTrack?.source === "gift" ||
-                      currentTrack?.gifted ? (
-                        <GiftIcon
-                          size={12}
-                          style={{
-                            marginLeft: 4,
-                            display: "inline-block",
-                            verticalAlign: "middle",
-                            animation: "giftIconSpin 4s ease-in-out infinite",
-                          }}
-                        />
-                      ) : null}
-                    </div>
-                    <div
-                      className="player-track-meta"
-                      style={{
-                        fontSize: 10,
-                        color: error || accessDenied ? "#ff8a8a" : undefined,
-                        opacity: error || accessDenied ? 1 : 0.45,
-                        fontVariantNumeric: "tabular-nums",
-                        whiteSpace: "nowrap",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                      }}
-                    >
-                      {error || accessDenied
-                        ? errorMessage
-                        : `${currentTrack.artist} · ${formatTime(currentTime)} / ${formatTime(duration)}`}
-                    </div>
-                  </button>
-                  <ClosePlayerButton onClick={stop} size={18} />
-                </div>
-                {renderTransportRow({
-                  playSize: 40,
-                  transportSize: 36,
-                  skipSize: 36,
-                  gap: 12,
-                  hidePrevNext: false,
-                  shuffleSize: 36,
-                })}
-                {renderSecondaryControls(40)}
-              </div>
-            )}
-          </div>
+          <CompactDockPlayer {...sharedDockProps} />
         </div>
       )}
     </>

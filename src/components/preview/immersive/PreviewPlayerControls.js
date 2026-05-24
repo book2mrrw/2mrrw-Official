@@ -1,15 +1,9 @@
 "use client";
 
-import { useEffect, useState, memo, useCallback } from "react";
-import { PlayPauseHero } from "@/components/audio/PlayerControlButton";
-import { paletteToCssVars } from "@/hooks/useCoverPalette";
-
-const formatTime = (s) => {
-  if (!s || isNaN(s) || !isFinite(s)) return "0:00";
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, "0")}`;
-};
+import { useEffect, useState, memo, useCallback, useMemo } from "react";
+import SignaturePlayRing from "@/components/player/ImmersivePlayerEngine/SignaturePlayRing";
+import { playerPaletteToCssVars } from "@/lib/player/usePlayerAmbience";
+import { formatPlayerTime } from "@/lib/player/formatTime";
 
 function PreviewPlayerControls({ audioRef, palette, compact = true }) {
   const [playing, setPlaying] = useState(false);
@@ -69,13 +63,13 @@ function PreviewPlayerControls({ audioRef, palette, compact = true }) {
   }, [audioRef, playing]);
 
   const progress = duration ? Math.max(0, Math.min(100, (current / duration) * 100)) : 0;
-  const playSize = compact ? 48 : 56;
-  const cssVars = paletteToCssVars(palette);
+  const playSize = compact ? 52 : 60;
+  const cssVars = useMemo(() => playerPaletteToCssVars(palette), [palette]);
 
   return (
-    <div className="modal-immersive-player modal-immersive-player--accent" style={cssVars}>
+    <div className="modal-immersive-player modal-immersive-player--accent player-immersive-modal-controls" style={cssVars}>
       <div
-        className="modal-immersive-player__track"
+        className="player-immersive-progress-rail"
         onClick={seekTo}
         role="slider"
         aria-valuemin={0}
@@ -83,13 +77,19 @@ function PreviewPlayerControls({ audioRef, palette, compact = true }) {
         aria-valuenow={current}
         tabIndex={0}
       >
-        <div className="modal-immersive-player__fill" style={{ width: `${progress}%` }} />
+        <div className="player-immersive-progress-rail__fill" style={{ width: `${progress}%` }} />
       </div>
-      <div className="modal-immersive-player__row">
-        <span className="modal-immersive-player__time">{formatTime(current)}</span>
-        <PlayPauseHero isPlaying={playing} hasError={false} size={playSize} onClick={togglePlay} />
+      <div className="modal-immersive-player__row player-immersive-modal-controls__row">
+        <span className="modal-immersive-player__time">{formatPlayerTime(current)}</span>
+        <SignaturePlayRing
+          isPlaying={playing}
+          hasError={false}
+          progress={progress}
+          size={playSize}
+          onClick={togglePlay}
+        />
         <span className="modal-immersive-player__time modal-immersive-player__time--end">
-          {formatTime(duration)}
+          {formatPlayerTime(duration)}
         </span>
       </div>
     </div>

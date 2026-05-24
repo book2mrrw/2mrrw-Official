@@ -6,6 +6,8 @@ import GlyphLyricsPanel from "@/components/preview/GlyphLyricsPanel";
 import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview/releaseMetadata";
 import { extractLrcFromRelease } from "@/lib/lrc";
 import { useCoverPalette, paletteToCssVars } from "@/hooks/useCoverPalette";
+import { usePlayerBodyState } from "@/lib/player/usePlayerBodyState";
+import { ModalPlayerShell, PlayerAtmosphere } from "@/components/player/ImmersivePlayerEngine";
 import AmbientArtworkBackground from "@/components/preview/immersive/AmbientArtworkBackground";
 import TrackMeta from "@/components/preview/immersive/TrackMeta";
 import PreviewPlayerControls from "@/components/preview/immersive/PreviewPlayerControls";
@@ -17,26 +19,6 @@ import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import GiftButton from "@/components/gifts/GiftButton";
 
-const SPRING_SOFT = { type: "spring", stiffness: 320, damping: 34 };
-const SPRING_EXIT = { type: "spring", stiffness: 380, damping: 36 };
-const OVERLAY_FADE = {
-  initial: { opacity: 0 },
-  animate: { opacity: 1 },
-  exit: { opacity: 0 },
-  transition: { duration: 0.28 },
-};
-const SHEET_UP = {
-  initial: { y: "100%", scale: 0.96, opacity: 0.55 },
-  animate: { y: 0, scale: 1, opacity: 1 },
-  exit: { y: "100%", scale: 0.97, opacity: 0.45 },
-  transition: SPRING_SOFT,
-};
-const MODAL_CENTER = {
-  initial: { opacity: 0, scale: 0.88, y: 24 },
-  animate: { opacity: 1, scale: 1, y: 0 },
-  exit: { opacity: 0, scale: 0.94, y: 12 },
-  transition: { duration: 0.48, ease: [0.22, 1, 0.36, 1] },
-};
 const DRAWER_COLLAPSE_THRESHOLD = 72;
 const MODAL_DISMISS_THRESHOLD = 56;
 
@@ -68,7 +50,7 @@ function ImmersivePreviewModal({
   }, [release]);
   const hasLyrics = Boolean(lrcText?.trim());
 
-  const shellVariant = isMobile ? SHEET_UP : MODAL_CENTER;
+  usePlayerBodyState({ modalOpen: true });
 
   const closeModal = useCallback(() => {
     setViewMoreOpen(false);
@@ -121,22 +103,12 @@ function ImmersivePreviewModal({
 
   if (isMobile) {
     return (
-      <motion.div
-        key="preview-overlay"
-        {...OVERLAY_FADE}
-        onClick={handleOverlayClick}
-        className="modal-immersive-overlay"
-      >
-        <motion.div
-          key="preview-shell-mobile"
-          {...shellVariant}
-          exit={{ ...shellVariant.exit, transition: SPRING_EXIT }}
-          onClick={(e) => e.stopPropagation()}
-          className="modal-immersive-shell"
-          style={paletteVars}
-          drag="y"
-          dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={{ top: 0, bottom: 0.38 }}
+      <>
+        <PlayerAtmosphere open />
+        <ModalPlayerShell
+          isMobile
+          paletteVars={paletteVars}
+          onOverlayClick={handleOverlayClick}
           onDragEnd={handleModalDismissDragEnd}
         >
           <button
@@ -238,37 +210,19 @@ function ImmersivePreviewModal({
               </button>
             ) : null}
           </section>
-        </motion.div>
-      </motion.div>
+        </ModalPlayerShell>
+      </>
     );
   }
 
   return (
-    <motion.div
-      key="preview-overlay"
-      {...OVERLAY_FADE}
-      onClick={handleOverlayClick}
-      style={{
-        position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.82)",
-        zIndex: 8888,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-      }}
-    >
-      <motion.div
-        key="preview-shell"
-        {...shellVariant}
-        exit={{ ...shellVariant.exit, transition: SPRING_EXIT }}
-        onClick={(e) => e.stopPropagation()}
-        className="modal-immersive-shell modal-immersive-shell--desktop"
-        style={{
-          ...paletteVars,
-          border: "1px solid #222",
-          borderRadius: 20,
+    <>
+      <PlayerAtmosphere open />
+      <ModalPlayerShell
+        isMobile={false}
+        paletteVars={paletteVars}
+        onOverlayClick={handleOverlayClick}
+        desktopStyle={{
           width: "min(420px, 96vw)",
           maxWidth: "100%",
           maxHeight: "94vh",
@@ -431,8 +385,8 @@ function ImmersivePreviewModal({
             Close
           </button>
         </motion.div>
-      </motion.div>
-    </motion.div>
+      </ModalPlayerShell>
+    </>
   );
 }
 
