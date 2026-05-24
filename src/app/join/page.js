@@ -239,13 +239,10 @@ function JoinForm() {
             opacity: loading ? 0.7 : 1,
           }}
         >
-          {loading ? "Sending code…" : "Send Verification Code"}
+          {loading ? "Sending code…" : "Continue"}
         </button>
-        <Link
-          href={giftToken ? `/login?gift=${giftToken}` : "/login"}
-          style={{ color: "#00ffff", fontSize: 13, textAlign: "center", marginTop: 4 }}
-        >
-          Sign in
+        <Link href="/" style={{ color: "#777", fontSize: 13, textAlign: "center", marginTop: 4 }}>
+          Back to site
         </Link>
       </form>
     </main>
