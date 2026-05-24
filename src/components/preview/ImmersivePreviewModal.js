@@ -7,7 +7,8 @@ import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview
 import { extractLrcFromRelease } from "@/lib/lrc";
 import { useCoverPalette, paletteToCssVars } from "@/hooks/useCoverPalette";
 import { usePlayerBodyState } from "@/lib/player/usePlayerBodyState";
-import { ModalPlayerShell, PlayerAtmosphere } from "@/components/player/ImmersivePlayerEngine";
+import { PlayerAtmosphere } from "@/components/player/ImmersivePlayerEngine";
+import ModalShell from "@/components/modal/ModalShell";
 import AmbientArtworkBackground from "@/components/preview/immersive/AmbientArtworkBackground";
 import TrackMeta from "@/components/preview/immersive/TrackMeta";
 import PreviewPlayerControls from "@/components/preview/immersive/PreviewPlayerControls";
@@ -21,6 +22,70 @@ import GiftButton from "@/components/gifts/GiftButton";
 
 const DRAWER_COLLAPSE_THRESHOLD = 72;
 const MODAL_DISMISS_THRESHOLD = 56;
+
+const LAYER_VISIBLE = {
+  opacity: 1,
+  pointerEvents: "auto",
+  visibility: "visible",
+  position: "relative",
+  width: "100%",
+  height: "100%",
+  flex: 1,
+  minHeight: 0,
+  display: "flex",
+  flexDirection: "column",
+};
+
+const LAYER_HIDDEN = {
+  opacity: 0,
+  pointerEvents: "none",
+  visibility: "hidden",
+  position: "absolute",
+  inset: 0,
+  width: "100%",
+  height: "100%",
+  overflow: "hidden",
+  display: "flex",
+  flexDirection: "column",
+};
+
+function viewLayerStyle(active) {
+  return active ? LAYER_VISIBLE : LAYER_HIDDEN;
+}
+
+const GLYPHS_BTN_STYLE = {
+  background: "rgba(162,89,255,0.12)",
+  border: "1px solid rgba(162,89,255,0.35)",
+  color: "#d4b8ff",
+  fontSize: 10,
+  fontWeight: 800,
+  letterSpacing: 2.5,
+  textTransform: "uppercase",
+  padding: "8px 16px",
+  borderRadius: 20,
+  cursor: "pointer",
+};
+
+const CART_BTN_STYLE = {
+  width: "100%",
+  padding: "12px 0",
+  background: "#1f1f1f",
+  color: "white",
+  border: "1px solid #333",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 700,
+};
+
+const CLOSE_BTN_STYLE = {
+  background: "none",
+  border: "none",
+  color: "#555",
+  cursor: "pointer",
+  fontSize: 12,
+  marginTop: 2,
+};
 
 function ImmersivePreviewModal({
   single,
@@ -87,28 +152,117 @@ function ImmersivePreviewModal({
   const palette = useCoverPalette(coverSrc, coverType);
   const paletteVars = paletteToCssVars(palette);
 
-  if (!single) return null;
-
   const canStream = Boolean(trackAccess?.canStream);
   const showPurchase = trackAccess ? Boolean(trackAccess.showCart) : true;
   const priceLabel =
     single?.price != null && showPurchase ? `$${Number(single.price).toFixed(2)}` : null;
 
-  const handleAddToCart = () => {
+  const handleAddToCart = useCallback(() => {
     onAddToCart(single);
     closeModal();
-  };
+  }, [onAddToCart, single, closeModal]);
 
-  if (isMobile) {
-    return (
-      <>
-        <PlayerAtmosphere open />
-        <ModalPlayerShell
-          isMobile
-          paletteVars={paletteVars}
-          onOverlayClick={handleOverlayClick}
-          onDragEnd={handleModalDismissDragEnd}
-        >
+  const desktopShellStyle = useMemo(
+    () => ({
+      width: "min(420px, 96vw)",
+      maxWidth: "100%",
+      maxHeight: "94vh",
+      boxShadow: `0 0 48px ${palette.primaryGlow}, 0 24px 80px rgba(0,0,0,0.65)`,
+    }),
+    [palette.primaryGlow]
+  );
+
+  const desktopStageStyle = useMemo(
+    () => ({
+      position: "relative",
+      width: "100%",
+      height: "min(52vh, 520px)",
+      flexShrink: 0,
+      overflow: "hidden",
+      background: "#000",
+    }),
+    []
+  );
+
+  const desktopCoverStyle = useMemo(
+    () => ({
+      objectFit: "contain",
+      objectPosition: "center top",
+      pointerEvents: "none",
+      position: "relative",
+      zIndex: 2,
+    }),
+    []
+  );
+
+  const desktopPanelStyle = useMemo(
+    () => ({
+      padding: "16px 22px 22px",
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+      overflowY: "auto",
+      pointerEvents: glyphsOpen ? "none" : "auto",
+    }),
+    [glyphsOpen]
+  );
+
+  const desktopTitleStyle = useMemo(
+    () => ({ fontSize: 20, fontWeight: 800, letterSpacing: 1, lineHeight: 1.2 }),
+    []
+  );
+
+  const desktopMetaRowStyle = useMemo(
+    () => ({ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }),
+    []
+  );
+
+  const desktopStatusStyle = useMemo(
+    () => ({ fontSize: 11, opacity: 0.45, letterSpacing: 1 }),
+    []
+  );
+
+  const desktopGlyphsRowStyle = useMemo(
+    () => ({ display: "flex", justifyContent: "flex-end" }),
+    []
+  );
+
+  const vinylBtnStyle = useMemo(
+    () => ({
+      width: "100%",
+      padding: "12px 0",
+      background: "#0a0a0a",
+      color: palette.primaryCss,
+      border: `1px solid ${palette.primaryCss}`,
+      borderRadius: 10,
+      cursor: "pointer",
+      fontSize: 13,
+      fontWeight: "bold",
+    }),
+    [palette.primaryCss]
+  );
+
+  const mobilePanelStyle = useMemo(
+    () => ({ opacity: glyphsOpen ? 0 : 1, pointerEvents: glyphsOpen ? "none" : "auto" }),
+    [glyphsOpen]
+  );
+
+  const mobileLayerStyle = useMemo(() => viewLayerStyle(isMobile), [isMobile]);
+  const desktopLayerStyle = useMemo(() => viewLayerStyle(!isMobile), [isMobile]);
+
+  if (!single) return null;
+
+  return (
+    <>
+      <PlayerAtmosphere open />
+      <ModalShell
+        isMobile={isMobile}
+        paletteVars={paletteVars}
+        onOverlayClick={handleOverlayClick}
+        onDragEnd={handleModalDismissDragEnd}
+        desktopStyle={desktopShellStyle}
+      >
+        <div style={mobileLayerStyle} aria-hidden={!isMobile}>
           <button
             type="button"
             className="modal-immersive-sheet-handle"
@@ -168,10 +322,7 @@ function ImmersivePreviewModal({
             />
           </section>
 
-          <section
-            className="modal-immersive-panel"
-            style={{ opacity: glyphsOpen ? 0 : 1, pointerEvents: glyphsOpen ? "none" : "auto" }}
-          >
+          <section className="modal-immersive-panel" style={mobilePanelStyle}>
             <TrackMeta
               title={single.title}
               canStream={canStream}
@@ -202,186 +353,125 @@ function ImmersivePreviewModal({
             />
 
             {showPurchase ? (
-              <button type="button" className="modal-immersive-vinyl-link" onClick={() => { onAddVinyl(single); closeModal(); }}>
+              <button
+                type="button"
+                className="modal-immersive-vinyl-link"
+                onClick={() => {
+                  onAddVinyl(single);
+                  closeModal();
+                }}
+              >
                 + Add Vinyl – $47.99 (Optional)
               </button>
             ) : null}
           </section>
-        </ModalPlayerShell>
-      </>
-    );
-  }
+        </div>
 
-  return (
-    <>
-      <PlayerAtmosphere open />
-      <ModalPlayerShell
-        isMobile={false}
-        paletteVars={paletteVars}
-        onOverlayClick={handleOverlayClick}
-        desktopStyle={{
-          width: "min(420px, 96vw)",
-          maxWidth: "100%",
-          maxHeight: "94vh",
-          boxShadow: `0 0 48px ${palette.primaryGlow}, 0 24px 80px rgba(0,0,0,0.65)`,
-        }}
-      >
-        <motion.div
-          layout
-          initial={{ opacity: 0.85, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1, boxShadow: `0 0 36px ${palette.primaryGlow}` }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
-          style={{
-            position: "relative",
-            width: "100%",
-            height: "min(52vh, 520px)",
-            flexShrink: 0,
-            overflow: "hidden",
-            background: "#000",
-          }}
-        >
-          <AmbientArtworkBackground src={coverSrc} type={coverType} palette={palette} />
-          <CoverArt
-            key={single.slug}
-            src={coverSrc}
-            type={coverType}
-            alt={single.title}
-            width="100%"
-            height="100%"
-            style={{ objectFit: "contain", objectPosition: "center top", pointerEvents: "none", position: "relative", zIndex: 2 }}
-          />
-          <FloatingViewMore
-            open={viewMoreOpen}
-            onToggle={() => {
-              setGlyphsOpen(false);
-              setViewMoreOpen((o) => !o);
-            }}
-            onCollapse={collapseDrawer}
-            isMobile={false}
-            creditRows={creditRows}
-            handleDrawerDragEnd={handleDrawerDragEnd}
-            palette={palette}
-          />
-          <GlyphLyricsPanel
-            open={glyphsOpen}
-            lrcText={lrcText}
-            isMobile={false}
-            onClose={() => setGlyphsOpen(false)}
-          />
-        </motion.div>
+        <div style={desktopLayerStyle} aria-hidden={isMobile}>
+          <motion.div
+            layout
+            initial={{ opacity: 0.85, scale: 0.96 }}
+            animate={{ opacity: 1, scale: 1, boxShadow: `0 0 36px ${palette.primaryGlow}` }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
+            style={desktopStageStyle}
+          >
+            <AmbientArtworkBackground src={coverSrc} type={coverType} palette={palette} />
+            <CoverArt
+              key={single.slug}
+              src={coverSrc}
+              type={coverType}
+              alt={single.title}
+              width="100%"
+              height="100%"
+              style={desktopCoverStyle}
+            />
+            <FloatingViewMore
+              open={viewMoreOpen}
+              onToggle={() => {
+                setGlyphsOpen(false);
+                setViewMoreOpen((o) => !o);
+              }}
+              onCollapse={collapseDrawer}
+              isMobile={false}
+              creditRows={creditRows}
+              handleDrawerDragEnd={handleDrawerDragEnd}
+              palette={palette}
+            />
+            <GlyphLyricsPanel
+              open={glyphsOpen}
+              lrcText={lrcText}
+              isMobile={false}
+              onClose={() => setGlyphsOpen(false)}
+            />
+          </motion.div>
 
-        <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: glyphsOpen ? 0 : 1, y: glyphsOpen ? 10 : 0 }}
-          transition={{ delay: glyphsOpen ? 0 : 0.42, duration: 0.35 }}
-          style={{
-            padding: "16px 22px 22px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 10,
-            overflowY: "auto",
-            pointerEvents: glyphsOpen ? "none" : "auto",
-          }}
-        >
-          <div className="hero-title-glow" style={{ fontSize: 20, fontWeight: 800, letterSpacing: 1, lineHeight: 1.2 }}>
-            {single.title}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <div style={{ fontSize: 11, opacity: 0.45, letterSpacing: 1 }}>
-              {canStream ? "FULL STREAM" : "PREVIEW TRACK"}
-              {showPurchase && priceLabel ? ` · ${priceLabel}` : ""}
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: glyphsOpen ? 0 : 1, y: glyphsOpen ? 10 : 0 }}
+            transition={{ delay: glyphsOpen ? 0 : 0.42, duration: 0.35 }}
+            style={desktopPanelStyle}
+          >
+            <div className="hero-title-glow" style={desktopTitleStyle}>
+              {single.title}
             </div>
-            <MusicAccessBadge access={trackAccess} label={trackAccess?.badge} compact />
-            {userId ? (
-              <MusicPlusButton
-                track={single}
-                userId={userId}
-                access={trackAccess}
-                isMobile={false}
-                onLibraryChange={onLibraryChange}
-              />
-            ) : null}
-          </div>
+            <div style={desktopMetaRowStyle}>
+              <div style={desktopStatusStyle}>
+                {canStream ? "FULL STREAM" : "PREVIEW TRACK"}
+                {showPurchase && priceLabel ? ` · ${priceLabel}` : ""}
+              </div>
+              <MusicAccessBadge access={trackAccess} label={trackAccess?.badge} compact />
+              {userId ? (
+                <MusicPlusButton
+                  track={single}
+                  userId={userId}
+                  access={trackAccess}
+                  isMobile={false}
+                  onLibraryChange={onLibraryChange}
+                />
+              ) : null}
+            </div>
 
-          {hasLyrics ? (
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            {hasLyrics ? (
+              <div style={desktopGlyphsRowStyle}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewMoreOpen(false);
+                    setGlyphsOpen(true);
+                  }}
+                  style={GLYPHS_BTN_STYLE}
+                >
+                  GLYPHS
+                </button>
+              </div>
+            ) : null}
+
+            <PreviewModalPlayer compact={false} />
+
+            {isAdmin ? <GiftButton onClick={() => onGift?.(single)} style={{ width: "100%", marginBottom: 8 }} /> : null}
+            {showPurchase ? (
+              <button type="button" onClick={handleAddToCart} style={CART_BTN_STYLE}>
+                Add to Cart{priceLabel ? ` – ${priceLabel}` : ""}
+              </button>
+            ) : null}
+            {showPurchase ? (
               <button
                 type="button"
                 onClick={() => {
-                  setViewMoreOpen(false);
-                  setGlyphsOpen(true);
+                  onAddVinyl(single);
+                  closeModal();
                 }}
-                style={{
-                  background: "rgba(162,89,255,0.12)",
-                  border: "1px solid rgba(162,89,255,0.35)",
-                  color: "#d4b8ff",
-                  fontSize: 10,
-                  fontWeight: 800,
-                  letterSpacing: 2.5,
-                  textTransform: "uppercase",
-                  padding: "8px 16px",
-                  borderRadius: 20,
-                  cursor: "pointer",
-                }}
+                style={vinylBtnStyle}
               >
-                GLYPHS
+                + Add Vinyl – $47.99 (Optional)
               </button>
-            </div>
-          ) : null}
-
-          <PreviewModalPlayer compact={false} />
-
-          {isAdmin ? <GiftButton onClick={() => onGift?.(single)} style={{ width: "100%", marginBottom: 8 }} /> : null}
-          {showPurchase ? (
-            <button
-              type="button"
-              onClick={handleAddToCart}
-              style={{
-                width: "100%",
-                padding: "12px 0",
-                background: "#1f1f1f",
-                color: "white",
-                border: "1px solid #333",
-                borderRadius: 10,
-                cursor: "pointer",
-                fontSize: 13,
-                fontWeight: 700,
-              }}
-            >
-              Add to Cart{priceLabel ? ` – ${priceLabel}` : ""}
+            ) : null}
+            <button type="button" onClick={closeModal} style={CLOSE_BTN_STYLE}>
+              Close
             </button>
-          ) : null}
-          {showPurchase ? (
-            <button
-              type="button"
-              onClick={() => {
-                onAddVinyl(single);
-                closeModal();
-              }}
-              style={{
-                width: "100%",
-                padding: "12px 0",
-                background: "#0a0a0a",
-                color: palette.primaryCss,
-                border: `1px solid ${palette.primaryCss}`,
-                borderRadius: 10,
-                cursor: "pointer",
-                fontSize: 13,
-                fontWeight: "bold",
-              }}
-            >
-              + Add Vinyl – $47.99 (Optional)
-            </button>
-          ) : null}
-          <button
-            type="button"
-            onClick={closeModal}
-            style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 12, marginTop: 2 }}
-          >
-            Close
-          </button>
-        </motion.div>
-      </ModalPlayerShell>
+          </motion.div>
+        </div>
+      </ModalShell>
     </>
   );
 }

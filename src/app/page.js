@@ -31,6 +31,9 @@ import { VaultNavLockIcon } from "@/components/nav/VaultNavLockIcon";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
 import { catalogCoverUrl, catalogMotionVideoUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
 import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
+import LivePanel from "@/components/home/LivePanel";
+import FlowState from "@/components/home/FlowState";
+import RadioCarousel from "@/components/home/RadioCarousel";
 
 const MOBILE_NAV_TABS = [
   { id: "home", label: "Home" },
@@ -1262,117 +1265,6 @@ export default function Page() {
     { groupId:"g-community", label:"MORE",           directTab:"blog",    subTabs:[{id:"blog",label:"Blog"},{id:"vision",label:"Vision"},{id:"circle",label:"Circle"},{id:"innercircle",label:"Inner Circle"},{id:"live",label:"2MRRW Live"},{id:"help",label:"Help & Support"}] },
   ];
 
-  // ── INLINE COMPONENTS ─────────────────────────────────────────────────────
-  const FlowState = () => (
-    <div style={{flex:1,minWidth:0,position:"relative",borderRadius:22,overflow:"hidden",background:"linear-gradient(160deg,#060606 0%,#0a0808 100%)",border:`1px solid ${activeFlowMode==="conversion"?currentSlide.tagColor+"50":activeFlowMode==="nowplaying"?currentSlide.tagColor+"28":"#161616"}`,boxShadow:activeFlowMode==="conversion"?`0 0 40px ${currentSlide.tagColor}20`:activeFlowMode==="nowplaying"?`0 0 50px ${currentSlide.tagColor}12`:"none",transition:"border-color 0.7s,box-shadow 0.7s",minHeight:320}}>
-      <div style={{position:"absolute",top:14,left:16,right:16,zIndex:20,display:"flex",alignItems:"center",justifyContent:"space-between",pointerEvents:"none"}}>
-        <div style={{fontSize:7,fontWeight:900,letterSpacing:3.5,color:"#222",textTransform:"uppercase"}}>FLOW STATE</div>
-        <div style={{fontSize:7,fontWeight:900,letterSpacing:2.5,textTransform:"uppercase",color:activeFlowMode!=="idle"?currentSlide.tagColor:"#1e1e1e",transition:"color 0.5s"}}>{activeFlowMode==="nowplaying"?"NOW PLAYING":activeFlowMode==="conversion"?"ACQUIRE":"STANDBY"}</div>
-      </div>
-      <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="idle"?1:0,pointerEvents:activeFlowMode==="idle"?"auto":"none",transition:"opacity 0.6s",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24,gap:18,textAlign:"center"}}>
-        <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at 40% 55%,rgba(0,255,255,0.03) 0%,transparent 65%)",pointerEvents:"none"}}/>
-        <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:20}}>
-          <div style={{fontSize:40,fontWeight:900,letterSpacing:10,color:"rgba(255,255,255,0.055)",animation:"flowIdlePulse 5s ease-in-out infinite",lineHeight:1}}>2MRRW</div>
-          <div style={{display:"flex",gap:6}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:"50%",background:"rgba(0,255,255,0.18)",animation:`flowIdleDot 2.4s ease-in-out ${i*0.5}s infinite`}}/>)}</div>
-          <div style={{fontSize:8,color:"#1c1c1c",letterSpacing:5,textTransform:"uppercase",fontWeight:700}}>ARTIST PRESENCE</div>
-        </div>
-      </div>
-      <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="nowplaying"?1:0,pointerEvents:activeFlowMode==="nowplaying"?"auto":"none",transition:"opacity 0.6s"}}>
-        <div style={{position:"absolute",inset:0,overflow:"hidden"}}><img src={currentSlide.cover} alt="" style={{width:"100%",height:"100%",objectFit:"cover",filter:"blur(32px) brightness(0.18) saturate(1.6)",transform:"scale(1.15)",transition:"all 0.9s"}}/></div>
-        <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 50% 40%,${currentSlide.tagColor}20 0%,transparent 65%)`,transition:"background 0.9s",pointerEvents:"none"}}/>
-        <div style={{position:"absolute",inset:0,zIndex:2,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"28px 20px",gap:14,textAlign:"center"}}>
-          <img src={currentSlide.cover} alt={currentSlide.title} style={{width:88,height:88,borderRadius:12,objectFit:"cover",boxShadow:`0 8px 32px ${currentSlide.tagColor}55`,transition:"all 0.7s"}}/>
-          <div style={{fontSize:16,fontWeight:900,letterSpacing:2,lineHeight:1.2,color:"#fff"}}>{currentSlide.title}</div>
-          <div style={{fontSize:9,color:currentSlide.tagColor,letterSpacing:4,fontWeight:700,textTransform:"uppercase",opacity:0.85}}>NOW PLAYING</div>
-          <div style={{display:"flex",alignItems:"flex-end",gap:3,height:22}}>{[1,2,3,4,5].map(i=><div key={i} style={{width:3,borderRadius:2,background:currentSlide.tagColor,animation:`eqBar${(i-1)%4+1} ${0.38+i*0.09}s ease-in-out infinite alternate`,boxShadow:`0 0 8px ${currentSlide.tagColor}88`}}/>)}</div>
-          <div style={{marginTop:4,padding:"4px 14px",background:currentSlide.tagColor+"18",border:`1px solid ${currentSlide.tagColor}30`,borderRadius:20,fontSize:10,fontWeight:700,color:currentSlide.tagColor,letterSpacing:1.5}}>{currentSlide.tag}</div>
-        </div>
-      </div>
-      {showOwnTrackConversion ? (
-      <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="conversion"?1:0,pointerEvents:activeFlowMode==="conversion"?"auto":"none",transition:"opacity 0.45s"}}>
-        <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 50% 45%,${currentSlide.tagColor}16 0%,transparent 60%)`,pointerEvents:"none"}}/>
-        <div style={{position:"absolute",inset:0,zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px",gap:12,textAlign:"center"}}>
-          <div style={{fontSize:9,color:currentSlide.tagColor,letterSpacing:4,fontWeight:900,textTransform:"uppercase"}}>OWN THIS TRACK</div>
-          <img src={currentSlide.cover} alt={currentSlide.title} style={{width:72,height:72,borderRadius:10,objectFit:"cover",boxShadow:`0 6px 24px ${currentSlide.tagColor}55`}}/>
-          <div style={{fontSize:18,fontWeight:900,letterSpacing:1,color:"#fff",lineHeight:1.2}}>{currentSlide.title}</div>
-          <div style={{fontSize:26,fontWeight:900,color:currentSlide.tagColor,letterSpacing:1,lineHeight:1}}>${currentSlide.price.toFixed(2)}</div>
-          <button onClick={()=>addToCart({title:currentSlide.title,slug:currentSlide.slug,cover:currentSlide.cover,price:currentSlide.price})} style={{padding:"11px 28px",background:currentSlide.tagColor,color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:13,letterSpacing:1,boxShadow:`0 0 28px ${currentSlide.tagColor}50`,transition:"opacity 0.2s,transform 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.opacity="0.85";e.currentTarget.style.transform="scale(1.04)";}} onMouseLeave={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.transform="scale(1)";}}>Add to Cart</button>
-          <div style={{fontSize:10,color:"#444",letterSpacing:1,marginTop:2}}>Digital download · Instant access</div>
-        </div>
-      </div>
-      ) : null}
-    </div>
-  );
-
-  const LivePanel = () => (
-    <div style={{background:"linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",border:"1px solid rgba(0,255,255,0.15)",borderRadius:18,padding:"28px 26px",backdropFilter:"blur(12px)",boxShadow:"0 0 30px rgba(0,255,255,0.06)",position:"relative",overflow:"hidden",minWidth:220,width:248,flexShrink:0}}>
-      <div style={{position:"absolute",top:0,left:"50%",transform:"translateX(-50%)",width:120,height:1,background:"linear-gradient(90deg,transparent,rgba(0,255,255,0.3),transparent)",pointerEvents:"none"}}/>
-      <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:12,textTransform:"uppercase",fontWeight:700}}>2MRRW LIVE</div>
-      {liveIsLive ? (
-        <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{width:10,height:10,borderRadius:"50%",background:"#00ffff",boxShadow:"0 0 10px rgba(0,255,255,0.9)",animation:"pulse 1.2s infinite"}}/><div style={{fontSize:20,fontWeight:900,color:"#00ffff",letterSpacing:3}}>LIVE NOW</div></div>
-      ) : (
-        <><div style={{fontSize:14,color:"#888",marginBottom:4}}>{liveStreamDate}</div><div style={{fontSize:12,color:"#555",marginBottom:16}}>{liveStreamTime}</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          {[{v:liveCountdown.days,l:"D"},{v:liveCountdown.hours,l:"H"},{v:liveCountdown.minutes,l:"M"},{v:liveCountdown.seconds,l:"S"}].map(u=>(
-            <div key={u.l} style={{background:"rgba(0,0,0,0.5)",border:"1px solid #1a1a1a",borderRadius:12,padding:"11px 8px",textAlign:"center"}}>
-              <div style={{fontSize:28,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(u.v).padStart(2,"0")}</div>
-              <div style={{fontSize:10,color:"#444",letterSpacing:1.5,marginTop:4}}>{u.l}</div>
-            </div>
-          ))}
-        </div></>
-      )}
-    </div>
-  );
-
-  const RadioCarousel = ({ narrow=false }) => {
-    const coverW    = isMobile ? 120 : narrow ? 200 : 320;
-    const infoPad   = isMobile ? "20px 16px" : narrow ? "28px 22px" : "36px 32px";
-    const titleSize = isMobile ? 18 : narrow ? 24 : 34;
-    const radioAccess = resolveContentAccess(currentSlide, accountState);
-    return (
-      <div style={{position:"relative",borderRadius:22,overflow:"hidden",background:"linear-gradient(135deg,#080808,#0d0d0d)",border:"1px solid #1e1e1e",boxShadow:"0 8px 60px rgba(0,0,0,0.6)",height:"100%"}}>
-        {isAdmin ? (
-          <GiftOverlayButton onClick={() => openGiftSheet(currentSlide)} />
-        ) : null}
-        <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 30% 50%,${currentSlide.tagColor}10 0%,transparent 55%)`,pointerEvents:"none",zIndex:0}}/>
-        <div style={{display:"flex",alignItems:"stretch",minHeight:isMobile?180:320,position:"relative",zIndex:1}}>
-          <div style={{flexShrink:0,width:coverW,position:"relative",overflow:"hidden"}}>
-            <img key={currentSlide.slug} src={currentSlide.cover} alt={currentSlide.title} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}/>
-            <div style={{position:"absolute",inset:0,background:"linear-gradient(135deg,transparent 40%,rgba(0,0,0,0.35) 100%)",pointerEvents:"none"}}/>
-            <div style={{position:"absolute",top:12,left:12,background:currentSlide.tagColor,color:"#000",fontSize:8,fontWeight:900,letterSpacing:2,padding:"4px 10px",borderRadius:20,boxShadow:`0 0 16px ${currentSlide.tagColor}88`}}>{currentSlide.tag}</div>
-          </div>
-          <div style={{flex:1,padding:infoPad,display:"flex",flexDirection:"column",justifyContent:"center",gap:isMobile?8:14}}>
-            <div style={{fontSize:10,color:"#444",letterSpacing:4,textTransform:"uppercase",fontWeight:700}}>2MRRW RADIO</div>
-            <div style={{fontSize:titleSize,fontWeight:900,letterSpacing:2,lineHeight:1.1}}>{currentSlide.title}</div>
-            <div style={{display:"flex",alignItems:"center",gap:10}}>
-              <div style={{display:"flex",alignItems:"flex-end",gap:3,height:18}}>{[10,16,8,14].map((h,i)=><div key={i} style={{width:3,height:h,borderRadius:2,background:currentSlide.tagColor,boxShadow:`0 0 6px ${currentSlide.tagColor}88`}}/>)}</div>
-              <div style={{fontSize:13,color:"#555",letterSpacing:1}}>SINGLE</div>
-            </div>
-            {radioAccess?.showPrice ? (
-              <div style={{fontSize:isMobile?16:20,color:"#00ffff",fontWeight:700}}>${currentSlide.price.toFixed(2)}</div>
-            ) : null}
-            <div style={{display:"flex",gap:10,marginTop:4,alignItems:"center",flexWrap:"wrap"}}>
-              {radioAccess?.showCart ? (
-                <button onClick={()=>addToCart({title:currentSlide.title,slug:currentSlide.slug,cover:currentSlide.cover,price:currentSlide.price})} onMouseEnter={e=>{e.currentTarget.style.opacity="0.85";e.currentTarget.style.transform="scale(1.04)";setFlowConversionActive(true);}} onMouseLeave={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.transform="scale(1)";setFlowConversionActive(false);}} style={{padding:isMobile?"10px 16px":"11px 22px",background:currentSlide.tagColor,color:"#000",border:"none",borderRadius:10,cursor:"pointer",fontSize:isMobile?12:13,fontWeight:900,transition:"0.25s",boxShadow:`0 0 20px ${currentSlide.tagColor}55`}}>+ Add to Cart</button>
-              ) : null}
-              {currentUser?.id ? (
-                <MusicPlusButton track={currentSlide} userId={currentUser.id} access={radioAccess} isMobile={isMobile} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }} />
-              ) : null}
-            </div>
-            <div style={{display:"flex",gap:7,marginTop:isMobile?4:10}}>
-              {radioSlides.map((s,i)=><div key={s.slug} onClick={()=>goRadio(i)} style={{width:i===radioIndex?22:6,height:6,borderRadius:4,background:i===radioIndex?currentSlide.tagColor:"#2a2a2a",cursor:"pointer",transition:"all 0.3s",boxShadow:i===radioIndex?`0 0 8px ${currentSlide.tagColor}88`:"none"}}/>)}
-            </div>
-          </div>
-          <div style={{position:"absolute",bottom:isMobile?12:24,right:isMobile?12:24,display:"flex",gap:8}}>
-            {[{d:"prev",icon:"‹"},{d:"next",icon:"›"}].map(({d,icon})=>(
-              <button key={d} onClick={()=>{const ni=d==="prev"?(radioIndex===0?radioSlides.length-1:radioIndex-1):(radioIndex===radioSlides.length-1?0:radioIndex+1);goRadio(ni);}} style={{width:isMobile?32:36,height:isMobile?32:36,borderRadius:"50%",background:"rgba(255,255,255,0.05)",border:"1px solid #2a2a2a",color:"#666",fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=currentSlide.tagColor;e.currentTarget.style.color=currentSlide.tagColor;}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#666";}}>{icon}</button>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const stockLabel = (item) => {
     if (item.stock === null || item.stock === undefined) return null;
     if (item.stock <= 0) return "SOLD OUT";
@@ -1764,7 +1656,14 @@ export default function Page() {
                         );})}
                       </div>
 
-                      {!isMobile && <LivePanel/>}
+                      {!isMobile && (
+                        <LivePanel
+                          liveIsLive={liveIsLive}
+                          liveStreamDate={liveStreamDate}
+                          liveStreamTime={liveStreamTime}
+                          liveCountdown={liveCountdown}
+                        />
+                      )}
                     </div>
 
                     {isMobile && (
@@ -1798,10 +1697,46 @@ export default function Page() {
                   {/* Radio */}
                   <div style={{marginTop:28,marginBottom:28}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>2MRRW RADIO</h2>
-                    {isMobile ? <RadioCarousel/> : (
+                    {isMobile ? (
+                      <RadioCarousel
+                        isMobile={isMobile}
+                        currentSlide={currentSlide}
+                        radioSlides={radioSlides}
+                        radioIndex={radioIndex}
+                        goRadio={goRadio}
+                        isAdmin={isAdmin}
+                        onGift={openGiftSheet}
+                        onAddToCart={addToCart}
+                        onFlowConversionActive={setFlowConversionActive}
+                        accountState={accountState}
+                        currentUserId={currentUser?.id}
+                        onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
+                      />
+                    ) : (
                       <div style={{display:"flex",gap:16,alignItems:"stretch",minHeight:320}}>
-                        <div style={{flex:"0 0 55%",minWidth:0}}><RadioCarousel narrow/></div>
-                        <FlowState/>
+                        <div style={{flex:"0 0 55%",minWidth:0}}>
+                          <RadioCarousel
+                            narrow
+                            isMobile={isMobile}
+                            currentSlide={currentSlide}
+                            radioSlides={radioSlides}
+                            radioIndex={radioIndex}
+                            goRadio={goRadio}
+                            isAdmin={isAdmin}
+                            onGift={openGiftSheet}
+                            onAddToCart={addToCart}
+                            onFlowConversionActive={setFlowConversionActive}
+                            accountState={accountState}
+                            currentUserId={currentUser?.id}
+                            onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
+                          />
+                        </div>
+                        <FlowState
+                          activeFlowMode={activeFlowMode}
+                          currentSlide={currentSlide}
+                          showOwnTrackConversion={showOwnTrackConversion}
+                          onAddToCart={addToCart}
+                        />
                       </div>
                     )}
                   </div>
