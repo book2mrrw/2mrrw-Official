@@ -22,7 +22,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
   const [loading, setLoading] = useState(false);
   const [otpEmail, setOtpEmail] = useState("");
   const [otpCreateUser, setOtpCreateUser] = useState(true);
-  const [digits, setDigits] = useState(["", "", "", "", "", ""]);
+  const [digits, setDigits] = useState(["", "", "", "", "", "", "", ""]);
   const [otpError, setOtpError] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [resendIn, setResendIn] = useState(30);
@@ -44,7 +44,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     setPhoneError("");
     setFormError("");
     setOtpEmail("");
-    setDigits(["", "", "", "", "", ""]);
+    setDigits(["", "", "", "", "", "", "", ""]);
     setOtpError("");
     setResendIn(30);
     setSheetDragY(0);
@@ -85,7 +85,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     if (otpErr) throw otpErr;
     setOtpEmail(targetEmail);
     setOtpCreateUser(shouldCreateUser);
-    setDigits(["", "", "", "", "", ""]);
+    setDigits(["", "", "", "", "", "", "", ""]);
     setResendIn(30);
     otpAutoSubmittedRef.current = false;
     setMode("otp");
@@ -170,8 +170,8 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
   const verifyOtp = useCallback(
     async (e) => {
       e?.preventDefault?.();
-      if (code.length !== 6) {
-        setOtpError("Enter the 6-digit code.");
+      if (code.length !== 8) {
+        setOtpError("Enter the 8-digit code.");
         return;
       }
       setOtpLoading(true);
@@ -223,7 +223,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
   );
 
   useEffect(() => {
-    if (screen !== "otp" || code.length !== 6 || otpLoading || otpAutoSubmittedRef.current) return;
+    if (screen !== "otp" || code.length !== 8 || otpLoading || otpAutoSubmittedRef.current) return;
     otpAutoSubmittedRef.current = true;
     void verifyOtp();
   }, [screen, code, otpLoading, verifyOtp]);
@@ -286,9 +286,12 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
           <form onSubmit={verifyOtp}>
             <h2 className="auth-heading auth-heading--elevated">Check your email</h2>
             <p className="auth-subtext">
-              Enter the 6-digit code sent to {otpEmail || "your email"}.
+              Enter the 8-digit code sent to {otpEmail || "your email"}.
             </p>
-            <div className="auth-otp-row auth-otp-row--equal">
+            <div
+              className="auth-otp-row auth-otp-row--equal"
+              style={{ display: "flex", flexDirection: "row", flexWrap: "nowrap" }}
+            >
               {digits.map((digit, index) => (
                 <input
                   key={index}
@@ -296,6 +299,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
                     inputsRef.current[index] = el;
                   }}
                   className={`auth-otp-box auth-otp-box--square auth-otp-box--focus-teal${digit ? " auth-otp-box--filled" : ""}`}
+                  style={{ flex: "1 1 0", minWidth: 0 }}
                   inputMode="numeric"
                   maxLength={1}
                   value={digit}
