@@ -10,6 +10,8 @@ import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import PlaylistSection from "@/components/music/PlaylistSection";
 import CoverArt from "@/components/ui/CoverArt";
+import GiftIcon from "@/components/gifts/GiftIcon";
+import GiftsSentSection from "@/components/gifts/GiftsSentSection";
 
 const SORT_STORAGE_KEY = "mymusic_sort_pref";
 
@@ -107,12 +109,12 @@ function LibraryCarousel({ title, items, accountState, userId, onPlay, onOpen, o
                     borderRadius: 20,
                     animation: "giftBadgePulse 3s ease-in-out infinite",
                   }}>
-                    <span style={{
-                      fontSize: 12,
-                      animation: "giftIconSpin 4s ease-in-out infinite",
-                      display: "inline-block",
-                      transformOrigin: "center",
-                    }}>🎁</span>
+                    <GiftIcon
+                      size={12}
+                      style={{
+                        animation: "giftIconSpin 4s ease-in-out infinite",
+                      }}
+                    />
                     <span style={{
                       fontSize: 10,
                       fontWeight: 700,
@@ -256,6 +258,7 @@ function MyMusicTab({
   singles = [],
   albums = [],
   isMobile,
+  isAdmin = false,
   onSwitchTab,
   onGoToAccount,
   onDiscoverSingles,
@@ -268,6 +271,7 @@ function MyMusicTab({
   const goVault = onDiscoverVault || (() => onSwitchTab?.("vault"));
   const {
     user,
+    library,
     accountState,
     loading,
     ownedSingles,
@@ -613,6 +617,37 @@ function MyMusicTab({
           isMobile={isMobile}
         />
       )}
+
+      {isAdmin ? (
+        <section style={{ marginBottom: 32 }}>
+          <GiftsSentSection compact title="Gifts sent" />
+        </section>
+      ) : null}
+
+      {library?.filter((item) => item.gifted || item.source === "gift").length > 0 ? (
+        <section style={{ marginBottom: 28 }}>
+          <div
+            style={{
+              fontSize: 11,
+              color: "#555",
+              letterSpacing: 2,
+              textTransform: "uppercase",
+              fontWeight: 700,
+              marginBottom: 12,
+            }}
+          >
+            Gifts received
+          </div>
+          <div style={{ fontSize: 12, color: "#666", lineHeight: 1.6 }}>
+            {library
+              .filter((item) => item.gifted || item.source === "gift")
+              .slice(0, 6)
+              .map((item) => item.title)
+              .filter(Boolean)
+              .join(" · ")}
+          </div>
+        </section>
+      ) : null}
 
       {!hasAnyContent && (
         <div style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 20, padding: "40px 28px", textAlign: "center" }}>

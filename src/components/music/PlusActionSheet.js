@@ -37,6 +37,7 @@ export default function PlusActionSheet({
   inLib,
   offlineQueued,
   access,
+  shareOnly = false,
   userId,
   playlists = [],
   currentPlaylist = null,
@@ -89,9 +90,11 @@ export default function PlusActionSheet({
         }}
       >
         <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>{track?.title}</div>
-        <div style={{ fontSize: 11, color: "#555", marginBottom: 16 }}>Library actions</div>
+        <div style={{ fontSize: 11, color: "#555", marginBottom: 16 }}>
+          {shareOnly ? "Share" : "Library actions"}
+        </div>
 
-        {canAddLibrary ? (
+        {!shareOnly && canAddLibrary ? (
           <ActionRow
             label={inLib ? "In Library" : "Add to Library"}
             onClick={onAddToLibrary}
@@ -100,7 +103,7 @@ export default function PlusActionSheet({
           />
         ) : null}
 
-        {canAddPlaylist ? (
+        {!shareOnly && canAddPlaylist ? (
           <>
             {currentPlaylist && onAddToCurrentPlaylist ? (
               <ActionRow
@@ -168,7 +171,7 @@ export default function PlusActionSheet({
           </>
         ) : null}
 
-        {showOfflineDownload ? (
+        {!shareOnly && showOfflineDownload ? (
           <ActionRow
             label={offlineQueued ? "Offline queued" : "Download for Offline Playback"}
             hint={

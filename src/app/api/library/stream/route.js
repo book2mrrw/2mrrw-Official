@@ -18,7 +18,7 @@ export async function GET(req) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const canStream = await userCanStreamProduct(user.id, slug);
+  const canStream = await userCanStreamProduct(user.id, slug, user);
   if (!canStream) {
     return NextResponse.json({ error: "Not entitled to stream this item" }, { status: 403 });
   }

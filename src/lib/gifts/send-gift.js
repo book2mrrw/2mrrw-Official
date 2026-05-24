@@ -50,6 +50,7 @@ export async function sendStorefrontGift({
   releaseTitle,
   releaseType,
   recipientEmail,
+  recipientPhone,
   recipientName,
   message,
 }) {
@@ -78,6 +79,7 @@ export async function sendStorefrontGift({
       sender_id: senderUser.id,
       recipient_id: recipientProfile?.id ?? null,
       recipient_email: email,
+      recipient_phone: recipientPhone?.trim() || null,
       item_type: itemType,
       item_id: product.id,
       item_title: releaseTitle || product.title,

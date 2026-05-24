@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import crypto from "crypto";
+import { isAdminUser } from "@/lib/auth/constants";
 import { userOwnsProductViaEntitlements } from "@/lib/commerce/unified-entitlements";
 
 async function slugsFromEntitlements(admin, userId) {
@@ -73,11 +74,22 @@ export async function userOwnsProduct(userId, productSlug) {
 }
 
 /** True when the user may stream full audio for this catalog slug (purchase, membership, or collector). */
-export async function userCanStreamProduct(userId, productSlug) {
+export async function userCanStreamProduct(userId, productSlug, user = null) {
   if (!userId || !productSlug) return false;
+  if (user && isAdminUser(user)) return true;
+  const admin = createAdminClient();
+  if (!user) {
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("id, email, role")
+      .eq("id", userId)
+      .maybeSingle();
+    if (profile && isAdminUser({ id: profile.id, email: profile.email, role: profile.role })) {
+      return true;
+    }
+  }
   if (await userOwnsProduct(userId, productSlug)) return true;
 
-  const admin = createAdminClient();
   const membership = await getActiveMembership(userId);
   const ownedSlugs = await getOwnedSlugs(userId);
   const collector = await getCollectorAccessState(admin, userId, [...ownedSlugs]);

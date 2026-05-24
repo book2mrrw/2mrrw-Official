@@ -11,6 +11,8 @@ export function catalogSlugIsOwned(slug, ownedSlugs = []) {
 }
 
 export function catalogItemAllowsFullPlayback(item, track, accountState = {}) {
+  if (accountState?.permissions?.admin) return true;
+
   const slug =
     item?.productSlug ||
     item?.product_slug ||

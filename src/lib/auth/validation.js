@@ -17,6 +17,18 @@ export function validatePhone(phone) {
   return { ok: true, value: phone.trim(), digits };
 }
 
+/** US-style display formatting while typing (optional field). */
+export function formatPhoneInput(phone) {
+  const digits = normalizePhoneDigits(phone).slice(0, 11);
+  if (!digits.length) return "";
+  if (digits.length <= 3) return `(${digits}`;
+  if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+  if (digits.length <= 10) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  return `+${digits.slice(0, 1)} (${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7, 11)}`;
+}
+
 export function formatResendCountdown(seconds) {
   const s = Math.max(0, Math.floor(seconds));
   const mins = Math.floor(s / 60);

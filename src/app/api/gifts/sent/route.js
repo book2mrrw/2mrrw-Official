@@ -16,7 +16,7 @@ export async function GET() {
     const admin = createAdminClient();
     const { data: gifts, error } = await admin
       .from("gifts")
-      .select("id, created_at, recipient_email, item_title, item_type, item_id, status, sender_id")
+      .select("id, created_at, recipient_email, recipient_phone, item_title, item_type, item_id, status, claimed, claimed_at, sender_id")
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -38,8 +38,12 @@ export async function GET() {
       id: gift.id,
       title: gift.item_title || "Gift",
       recipientEmail: gift.recipient_email,
+      recipientPhone: gift.recipient_phone || null,
       createdAt: gift.created_at,
       status: gift.status,
+      claimed: Boolean(gift.claimed),
+      claimedAt: gift.claimed_at || null,
+      redemptionStatus: gift.claimed ? "redeemed" : gift.status,
       coverUrl: coverByProductId[gift.item_id] || null,
     }));
 

@@ -37,6 +37,8 @@ export default function MusicPlusButton({
   const slug = track?.slug;
   const canAddLibrary = Boolean(access?.canAddToLibrary);
   const canAddPlaylist = Boolean(access?.canAddToPlaylist);
+  const canShare = Boolean(userId);
+  const shareOnly = canShare && !canAddLibrary && !canAddPlaylist;
   const canAdd = canAddLibrary || canAddPlaylist;
 
   const currentPlaylist = useMemo(
@@ -145,8 +147,8 @@ export default function MusicPlusButton({
     setTimeout(() => setOpen(false), 350);
   };
 
-  const showCheck = inLib || flashCheck;
-  const showPlus = canAdd || Boolean(userId);
+  const showCheck = (canAddLibrary && inLib) || flashCheck;
+  const showPlus = canShare;
 
   if (!showPlus) return null;
 
@@ -183,6 +185,7 @@ export default function MusicPlusButton({
         inLib={inLib}
         offlineQueued={offlineQueued}
         access={access}
+        shareOnly={shareOnly}
         userId={userId}
         playlists={playlists}
         currentPlaylist={currentPlaylist}

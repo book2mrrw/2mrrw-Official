@@ -137,7 +137,8 @@ export async function GET() {
     const hasCollectorAccess = collectorAccess.hasCollectorAccess;
     const hasVaultPass = vaultPassAccess.hasVaultPass || hasCollectorAccess;
 
-    if (membershipHasPremiumAccess(membership) || hasCollectorAccess) {
+    const adminFullLibrary = isAdminUser(user);
+    if (adminFullLibrary || membershipHasPremiumAccess(membership) || hasCollectorAccess) {
       (productsResult.data || [])
         .filter(isDigitalProduct)
         .forEach((product) => {
@@ -147,9 +148,13 @@ export async function GET() {
               title: product.title,
               product_type: product.product_type,
               cover: product.cover_url,
-              source: membershipHasPremiumAccess(membership) ? "membership" : "collector_access",
+              source: adminFullLibrary
+                ? "admin"
+                : membershipHasPremiumAccess(membership)
+                  ? "membership"
+                  : "collector_access",
               gifted: false,
-              membershipAccess: true,
+              membershipAccess: !adminFullLibrary && membershipHasPremiumAccess(membership),
               collectorAccess: hasCollectorAccess,
               purchasedAt: null,
             });

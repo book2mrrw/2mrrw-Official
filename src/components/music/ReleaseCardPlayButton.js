@@ -58,27 +58,39 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
   );
 }
 
-export function ReleaseCardActions({ item, accountState, userId, source, onAddToCart, onPlayClick, cartButtonStyle, cartLabel = "+ Cart" }) {
+export function ReleaseCardActions({
+  item,
+  accountState,
+  userId,
+  source,
+  onAddToCart,
+  onPlayClick,
+  cartButtonStyle,
+  cartLabel = "+ Cart",
+  showCart = true,
+}) {
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
       <ReleaseCardPlayButton item={item} accountState={accountState} userId={userId} source={source} onPlayClick={onPlayClick} />
-      <button
-        type="button"
-        onClick={onAddToCart}
-        style={{
-          flex: 1,
-          height: 44,
-          padding: "7px 0",
-          fontSize: 11,
-          fontWeight: 600,
-          cursor: "pointer",
-          borderRadius: 7,
-          transition: "0.2s",
-          ...cartButtonStyle,
-        }}
-      >
-        {cartLabel}
-      </button>
+      {showCart ? (
+        <button
+          type="button"
+          onClick={onAddToCart}
+          style={{
+            flex: 1,
+            height: 44,
+            padding: "7px 0",
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: "pointer",
+            borderRadius: 7,
+            transition: "0.2s",
+            ...cartButtonStyle,
+          }}
+        >
+          {cartLabel}
+        </button>
+      ) : null}
     </div>
   );
 }

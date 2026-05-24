@@ -14,6 +14,7 @@ import {
 } from "@/components/audio/PlayerControlButton";
 import CoverArt from "@/components/ui/CoverArt";
 import CoverArtCS from "@/components/ui/CoverArtCS";
+import GiftIcon from "@/components/gifts/GiftIcon";
 
 const formatTime = (seconds) => {
   if (!seconds || !isFinite(seconds)) return "0:00";
@@ -662,14 +663,15 @@ function GlobalAudioPlayerBar() {
                   {currentTrack.title}
                   {currentTrack?.source === "gift" ||
                   currentTrack?.gifted ? (
-                    <span style={{
-                      fontSize: 12,
-                      marginLeft: 4,
-                      animation: "giftIconSpin 4s ease-in-out infinite",
-                      display: "inline-block",
-                      transformOrigin: "center",
-                      flexShrink: 0,
-                    }}>🎁</span>
+                    <GiftIcon
+                      size={12}
+                      style={{
+                        marginLeft: 4,
+                        display: "inline-block",
+                        verticalAlign: "middle",
+                        animation: "giftIconSpin 4s ease-in-out infinite",
+                      }}
+                    />
                   ) : null}
                 </div>
                 <div className="player-track-meta" style={{ fontSize: 14, marginBottom: 4, opacity: 0.55 }}>
@@ -823,14 +825,15 @@ function GlobalAudioPlayerBar() {
                       {currentTrack.title}
                       {currentTrack?.source === "gift" ||
                       currentTrack?.gifted ? (
-                        <span style={{
-                          fontSize: 12,
-                          marginLeft: 4,
-                          animation: "giftIconSpin 4s ease-in-out infinite",
-                          display: "inline-block",
-                          transformOrigin: "center",
-                          flexShrink: 0,
-                        }}>🎁</span>
+                        <GiftIcon
+                          size={12}
+                          style={{
+                            marginLeft: 4,
+                            display: "inline-block",
+                            verticalAlign: "middle",
+                            animation: "giftIconSpin 4s ease-in-out infinite",
+                          }}
+                        />
                       ) : null}
                     </div>
                     <div
@@ -904,14 +907,15 @@ function GlobalAudioPlayerBar() {
                       {currentTrack.title}
                       {currentTrack?.source === "gift" ||
                       currentTrack?.gifted ? (
-                        <span style={{
-                          fontSize: 12,
-                          marginLeft: 4,
-                          animation: "giftIconSpin 4s ease-in-out infinite",
-                          display: "inline-block",
-                          transformOrigin: "center",
-                          flexShrink: 0,
-                        }}>🎁</span>
+                        <GiftIcon
+                          size={12}
+                          style={{
+                            marginLeft: 4,
+                            display: "inline-block",
+                            verticalAlign: "middle",
+                            animation: "giftIconSpin 4s ease-in-out infinite",
+                          }}
+                        />
                       ) : null}
                     </div>
                     <div

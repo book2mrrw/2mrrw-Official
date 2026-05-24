@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
-import { validateEmail } from "@/lib/auth/validation";
+import { validateEmail, validatePhone } from "@/lib/auth/validation";
 import { sendStorefrontGift } from "@/lib/gifts/send-gift";
 
 export async function POST(req) {
@@ -25,12 +25,23 @@ export async function POST(req) {
       return NextResponse.json({ error: "Release is required" }, { status: 400 });
     }
 
+    let recipientPhone = null;
+    const rawPhone = String(body.recipientPhone || "").trim();
+    if (rawPhone) {
+      const phoneCheck = validatePhone(rawPhone);
+      if (!phoneCheck.ok) {
+        return NextResponse.json({ error: phoneCheck.error }, { status: 400 });
+      }
+      recipientPhone = phoneCheck.value;
+    }
+
     const result = await sendStorefrontGift({
       senderUser: user,
       releaseSlug,
       releaseTitle: body.releaseTitle || body.item_title,
       releaseType: body.releaseType || body.item_type,
       recipientEmail: emailCheck.value,
+      recipientPhone,
       recipientName: body.recipientName || null,
       message: body.message || null,
     });

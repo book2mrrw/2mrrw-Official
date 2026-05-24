@@ -58,6 +58,28 @@ export function isCollectorCardOwner(accountState = {}) {
   return activeCollectorOwnerships(accountState.collectorOwnerships).length > 0;
 }
 
+/** Platform admin — full catalog access, no purchase UI. */
+export function isAdminAccount(accountState = {}) {
+  return Boolean(accountState?.permissions?.admin);
+}
+
+export function adminTrackAccess() {
+  return {
+    owned: true,
+    subscription: true,
+    collector: true,
+    collectorCardOwner: true,
+    previewOnly: false,
+    canStream: true,
+    canAddToLibrary: true,
+    canAddToPlaylist: true,
+    canShare: true,
+    subscriptionLocked: false,
+    badge: null,
+    admin: true,
+  };
+}
+
 export function canAddToLibrary(access) {
   return Boolean(access?.canAddToLibrary);
 }
@@ -83,9 +105,14 @@ export function resolveTrackAccess(track, accountState = {}) {
     canStream: false,
     canAddToLibrary: false,
     canAddToPlaylist: false,
+    canShare: false,
     badge: null,
   };
   if (!slug && !albumSlug) return empty;
+
+  if (isAdminAccount(accountState)) {
+    return adminTrackAccess();
+  }
 
   const ownedSlugs = slugSet(accountState.ownedSlugs);
   const library = accountState.library || [];
@@ -125,6 +152,7 @@ export function resolveTrackAccess(track, accountState = {}) {
 
   const canAddToLibrary = owned || (subscription && subscriptionActive) || collectorCardOwner;
   const canAddToPlaylist = canAddToLibrary;
+  const canShare = true;
 
   const canStreamFull =
     owned || (subscription && subscriptionActive) || collector || collectorCardOwner;
@@ -145,6 +173,7 @@ export function resolveTrackAccess(track, accountState = {}) {
     canStream: canStreamFull,
     canAddToLibrary,
     canAddToPlaylist,
+    canShare,
     subscriptionLocked: subscriptionExpired,
     badge,
   };
@@ -216,6 +245,23 @@ export function resolveContentAccess(item, accountState = {}) {
   const membership = accountState.membership || null;
   const subscriptionActive = membershipHasPremiumAccess(membership);
 
+  if (trackAccess.admin) {
+    return {
+      ...trackAccess,
+      tier: "admin",
+      mode: "library",
+      canPreview: false,
+      canStream: true,
+      canAddToLibrary: true,
+      canAddToPlaylist: true,
+      canShare: true,
+      canOffline: true,
+      showPrice: false,
+      showCart: false,
+      badges: [],
+    };
+  }
+
   let tier = "discovery";
   if (trackAccess.collector) tier = "collector";
   else if (trackAccess.subscription && subscriptionActive) tier = "subscriber";
@@ -229,6 +275,7 @@ export function resolveContentAccess(item, accountState = {}) {
     canStream: trackAccess.canStream,
     canAddToLibrary: trackAccess.canAddToLibrary,
     canAddToPlaylist: trackAccess.canAddToPlaylist,
+    canShare: trackAccess.canShare,
     canOffline:
       trackAccess.canStream &&
       (tier === "subscriber" || tier === "collector" || trackAccess.owned),

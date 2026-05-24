@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { validateEmail } from "@/lib/auth/validation";
+import { formatPhoneInput, validateEmail, validatePhone } from "@/lib/auth/validation";
 
 const SPRING = { type: "spring", stiffness: 320, damping: 34 };
 
@@ -14,20 +14,24 @@ export default function GiftBottomSheet({
   onClose,
 }) {
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [message, setMessage] = useState(
     "Every day is a gift, gifted to you by tomorrow."
   );
   const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [sending, setSending] = useState(false);
   const [successEmail, setSuccessEmail] = useState("");
 
   const reset = useCallback(() => {
     setEmail("");
+    setPhone("");
     setName("");
-    setMessage("");
+    setMessage("Every day is a gift, gifted to you by tomorrow.");
     setEmailError("");
+    setPhoneError("");
     setSubmitError("");
     setSending(false);
     setSuccessEmail("");
@@ -55,6 +59,17 @@ export default function GiftBottomSheet({
       return;
     }
     setEmailError("");
+    let phonePayload = null;
+    const phoneTrim = phone.trim();
+    if (phoneTrim) {
+      const phoneCheck = validatePhone(phoneTrim);
+      if (!phoneCheck.ok) {
+        setPhoneError(phoneCheck.error);
+        return;
+      }
+      phonePayload = phoneCheck.value;
+    }
+    setPhoneError("");
     setSubmitError("");
     setSending(true);
     try {
@@ -67,6 +82,7 @@ export default function GiftBottomSheet({
           releaseTitle: release?.title,
           releaseType: release?.type || release?.releaseType,
           recipientEmail: check.value,
+          recipientPhone: phonePayload,
           recipientName: name.trim() || null,
           message: message.trim() || null,
           senderUserId,
@@ -223,6 +239,39 @@ export default function GiftBottomSheet({
                 {emailError ? (
                   <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 14 }}>{emailError}</div>
                 ) : null}
+
+                <label style={{ display: "block", fontSize: 11, color: "#666", marginBottom: 6 }}>
+                  Recipient phone (optional)
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => {
+                    setPhone(formatPhoneInput(e.target.value));
+                    if (phoneError) setPhoneError("");
+                  }}
+                  placeholder="(469) 203-9473"
+                  autoComplete="tel"
+                  style={{
+                    width: "100%",
+                    padding: "12px 14px",
+                    background: "#111",
+                    border: `1px solid ${phoneError ? "#ef4444" : "#2a2a2a"}`,
+                    color: "white",
+                    borderRadius: 10,
+                    fontSize: 14,
+                    marginBottom: phoneError ? 6 : 14,
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                />
+                {phoneError ? (
+                  <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 14 }}>{phoneError}</div>
+                ) : (
+                  <div style={{ fontSize: 10, color: "#444", marginBottom: 14, lineHeight: 1.5 }}>
+                    Saved for future SMS delivery — not sent yet.
+                  </div>
+                )}
 
                 <label style={{ display: "block", fontSize: 11, color: "#666", marginBottom: 6 }}>
                   Recipient name (optional)

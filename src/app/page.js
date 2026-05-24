@@ -10,6 +10,9 @@ import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
 import ImmersivePreviewModal from "@/components/preview/ImmersivePreviewModal";
 import GiftBottomSheet from "@/components/gifts/GiftBottomSheet";
 import GiftButton from "@/components/gifts/GiftButton";
+import GiftIcon from "@/components/gifts/GiftIcon";
+import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
+import GiftsSentSection from "@/components/gifts/GiftsSentSection";
 import MyMusicTab from "@/components/music/MyMusicTab";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
@@ -607,8 +610,6 @@ export default function Page() {
   const [donateOpen, setDonateOpen] = useState(false);
   const [giftSheetRelease, setGiftSheetRelease] = useState(null);
   const [albumTracklistRelease, setAlbumTracklistRelease] = useState(null);
-  const [giftsSent, setGiftsSent] = useState([]);
-  const [giftsSentLoading, setGiftsSentLoading] = useState(false);
   const [liveCountdown, setLiveCountdown]         = useState({ days:0, hours:0, minutes:0, seconds:0 });
   const [liveIsLive, setLiveIsLive]               = useState(false);
   const [innerCirclePost, setInnerCirclePost]     = useState(null);
@@ -825,27 +826,6 @@ export default function Page() {
       setCurrentUser(null);
     }
   }, [authUser, authLoading]);
-
-  useEffect(() => {
-    if (!isAdmin || activeTab !== "account") return;
-    let cancelled = false;
-    setGiftsSentLoading(true);
-    fetch("/api/gifts/sent", { credentials: "include", cache: "no-store" })
-      .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Could not load gifts");
-        if (!cancelled) setGiftsSent(data.gifts || []);
-      })
-      .catch(() => {
-        if (!cancelled) setGiftsSent([]);
-      })
-      .finally(() => {
-        if (!cancelled) setGiftsSentLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isAdmin, activeTab]);
 
   useEffect(() => {
     setMyPurchases(library || []);
@@ -1317,8 +1297,12 @@ export default function Page() {
     const coverW    = isMobile ? 120 : narrow ? 200 : 320;
     const infoPad   = isMobile ? "20px 16px" : narrow ? "28px 22px" : "36px 32px";
     const titleSize = isMobile ? 18 : narrow ? 24 : 34;
+    const radioAccess = resolveContentAccess(currentSlide, accountState);
     return (
       <div style={{position:"relative",borderRadius:22,overflow:"hidden",background:"linear-gradient(135deg,#080808,#0d0d0d)",border:"1px solid #1e1e1e",boxShadow:"0 8px 60px rgba(0,0,0,0.6)",height:"100%"}}>
+        {isAdmin ? (
+          <GiftOverlayButton onClick={() => openGiftSheet(currentSlide)} />
+        ) : null}
         <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 30% 50%,${currentSlide.tagColor}10 0%,transparent 55%)`,pointerEvents:"none",zIndex:0}}/>
         <div style={{display:"flex",alignItems:"stretch",minHeight:isMobile?180:320,position:"relative",zIndex:1}}>
           <div style={{flexShrink:0,width:coverW,position:"relative",overflow:"hidden"}}>
@@ -1333,9 +1317,16 @@ export default function Page() {
               <div style={{display:"flex",alignItems:"flex-end",gap:3,height:18}}>{[10,16,8,14].map((h,i)=><div key={i} style={{width:3,height:h,borderRadius:2,background:currentSlide.tagColor,boxShadow:`0 0 6px ${currentSlide.tagColor}88`}}/>)}</div>
               <div style={{fontSize:13,color:"#555",letterSpacing:1}}>SINGLE</div>
             </div>
-            <div style={{fontSize:isMobile?16:20,color:"#00ffff",fontWeight:700}}>${currentSlide.price.toFixed(2)}</div>
-            <div style={{display:"flex",gap:10,marginTop:4}}>
-              <button onClick={()=>addToCart({title:currentSlide.title,slug:currentSlide.slug,cover:currentSlide.cover,price:currentSlide.price})} onMouseEnter={e=>{e.currentTarget.style.opacity="0.85";e.currentTarget.style.transform="scale(1.04)";setFlowConversionActive(true);}} onMouseLeave={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.transform="scale(1)";setFlowConversionActive(false);}} style={{padding:isMobile?"10px 16px":"11px 22px",background:currentSlide.tagColor,color:"#000",border:"none",borderRadius:10,cursor:"pointer",fontSize:isMobile?12:13,fontWeight:900,transition:"0.25s",boxShadow:`0 0 20px ${currentSlide.tagColor}55`}}>+ Add to Cart</button>
+            {radioAccess?.showPrice ? (
+              <div style={{fontSize:isMobile?16:20,color:"#00ffff",fontWeight:700}}>${currentSlide.price.toFixed(2)}</div>
+            ) : null}
+            <div style={{display:"flex",gap:10,marginTop:4,alignItems:"center",flexWrap:"wrap"}}>
+              {radioAccess?.showCart ? (
+                <button onClick={()=>addToCart({title:currentSlide.title,slug:currentSlide.slug,cover:currentSlide.cover,price:currentSlide.price})} onMouseEnter={e=>{e.currentTarget.style.opacity="0.85";e.currentTarget.style.transform="scale(1.04)";setFlowConversionActive(true);}} onMouseLeave={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.transform="scale(1)";setFlowConversionActive(false);}} style={{padding:isMobile?"10px 16px":"11px 22px",background:currentSlide.tagColor,color:"#000",border:"none",borderRadius:10,cursor:"pointer",fontSize:isMobile?12:13,fontWeight:900,transition:"0.25s",boxShadow:`0 0 20px ${currentSlide.tagColor}55`}}>+ Add to Cart</button>
+              ) : null}
+              {currentUser?.id ? (
+                <MusicPlusButton track={currentSlide} userId={currentUser.id} access={radioAccess} isMobile={isMobile} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }} />
+              ) : null}
             </div>
             <div style={{display:"flex",gap:7,marginTop:isMobile?4:10}}>
               {radioSlides.map((s,i)=><div key={s.slug} onClick={()=>goRadio(i)} style={{width:i===radioIndex?22:6,height:6,borderRadius:4,background:i===radioIndex?currentSlide.tagColor:"#2a2a2a",cursor:"pointer",transition:"all 0.3s",boxShadow:i===radioIndex?`0 0 8px ${currentSlide.tagColor}88`:"none"}}/>)}
@@ -1661,6 +1652,7 @@ export default function Page() {
                       >
                         {singles.map((single, i) => {
                           const singleUi = withR2CatalogMedia(single);
+                          const singleAccess = resolveContentAccess(singleUi, accountState);
                           return (
                           <div
                             key={single.slug}
@@ -1692,6 +1684,9 @@ export default function Page() {
                               if (vid) { vid.style.transform = "scale(1)"; vid.style.filter = "brightness(1)"; }
                             }}
                           >
+                            {isAdmin ? (
+                              <GiftOverlayButton onClick={() => openGiftSheet(singleUi)} />
+                            ) : null}
                             {/* FIXED: src points to /videos/singles/, webkit-playsinline for iOS Safari */}
                             <video
                               data-single-carousel
@@ -1713,12 +1708,15 @@ export default function Page() {
                             />
                             <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
                               <div className="song-title-turquoise-glow" style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{single.title}</div>
-                              <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${single.price.toFixed(2)}</div>
+                              {singleAccess?.showPrice ? (
+                                <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${single.price.toFixed(2)}</div>
+                              ) : null}
                               <ReleaseCardActions
                                 item={singleUi}
                                 accountState={accountState}
                                 userId={authUser?.id}
                                 source="home_single_card"
+                                showCart={Boolean(singleAccess?.showCart)}
                                 onAddToCart={e => { e.stopPropagation(); addToCart(single); }}
                                 cartButtonStyle={{
                                   background:"#1a1a1a",
@@ -1760,7 +1758,7 @@ export default function Page() {
                   {/* Features */}
                   <div style={{marginTop:28,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)} accountState={accountState} userId={authUser?.id}/>
+                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)} accountState={accountState} userId={authUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Radio */}
@@ -1779,7 +1777,7 @@ export default function Page() {
                   {/* Albums */}
                   <div id="home-albums">
                     <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                    <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={authUser?.id}/>
+                    <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={authUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Audio Visuals */}
@@ -1896,6 +1894,7 @@ export default function Page() {
                         singles={singles}
                         albums={albums}
                         isMobile={isMobile}
+                        isAdmin={isAdmin}
                         onSwitchTab={switchTab}
                         onOpenSingle={openSingleModal}
                         onOpenAlbum={setSelectedAlbum}
@@ -2163,35 +2162,7 @@ export default function Page() {
                         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===currentUser.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Music Library",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
-                      {isAdmin ? (
-                        <div style={{background:"#0d0d0d",border:"1px solid rgba(162,89,255,0.25)",borderRadius:20,padding:isMobile?18:24}}>
-                          <div style={{fontSize:11,color:"#a259ff",letterSpacing:3,marginBottom:14,fontWeight:800}}>GIFTS SENT</div>
-                          {giftsSentLoading ? (
-                            <p style={{fontSize:13,color:"#555",margin:0}}>Loading…</p>
-                          ) : giftsSent.length === 0 ? (
-                            <p style={{fontSize:13,color:"#555",margin:0}}>No gifts sent yet.</p>
-                          ) : (
-                            <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                              {giftsSent.map((gift) => (
-                                <div key={gift.id} style={{display:"flex",alignItems:"center",gap:12}}>
-                                  {gift.coverUrl ? (
-                                    <img src={gift.coverUrl} alt="" style={{width:40,height:40,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
-                                  ) : (
-                                    <div style={{width:40,height:40,borderRadius:8,background:"#1a1a1a",flexShrink:0}}/>
-                                  )}
-                                  <div style={{minWidth:0,flex:1}}>
-                                    <div style={{fontSize:13,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{gift.title}</div>
-                                    <div style={{fontSize:11,color:"#666",marginTop:2}}>{gift.recipientEmail}</div>
-                                  </div>
-                                  <div style={{fontSize:11,color:"#555",flexShrink:0}}>
-                                    {gift.createdAt ? new Date(gift.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : ""}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ) : null}
+                      {isAdmin ? <GiftsSentSection /> : null}
                       <button onClick={handleSignOut} style={{width:"100%",height:44,padding:0,background:"transparent",color:"#444",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";}}>Sign Out</button>
                     </div>
                   ) : (
@@ -2546,29 +2517,7 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
     currentLibraryItem?.gifted === true;
   return (
     <div style={{display:"flex",flexDirection:isMobile?"column":"row",alignItems:isMobile?"stretch":"center",gap:isMobile?16:20,background:"linear-gradient(135deg,#0e0e0e,#111)",border:"1px solid #1e1e1e",borderRadius:isMobile?16:20,padding:isMobile?"20px 16px":large?"32px 28px":"28px 24px",position:"relative",overflow:"hidden",boxShadow:"0 4px 40px rgba(0,0,0,0.5)"}}>
-      {isAdmin && (
-        <div style={{
-          position: "absolute",
-          top: 8,
-          right: 8,
-          zIndex: 10,
-        }}>
-          <GiftButton
-            onClick={() => onGift?.(currentSingle)}
-            label="🎁"
-            style={{
-              background: "transparent",
-              border: "none",
-              fontSize: 20,
-              padding: "4px 8px",
-              borderRadius: 8,
-              cursor: "pointer",
-              color: "#a259ff",
-              lineHeight: 1,
-            }}
-          />
-        </div>
-      )}
+      {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(currentSingle)} /> : null}
       <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:360,height:360,background:"radial-gradient(circle,rgba(0,255,255,0.04) 0%,transparent 70%)",pointerEvents:"none"}}/>
       {isMobile ? (
         <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -2642,11 +2591,7 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
               color: "#a259ff",
               letterSpacing: 1,
             }}>
-              <span style={{
-                animation: "giftIconSpin 4s ease-in-out infinite",
-                display: "inline-block",
-                transformOrigin: "center",
-              }}>🎁</span>
+              <GiftIcon size={12} style={{ animation: "giftIconSpin 4s ease-in-out infinite" }} />
               <span style={{ textTransform: "uppercase" }}>
                 Gift from 2MRRW
               </span>
@@ -2677,29 +2622,7 @@ function FeaturesRail({ features, isMobile, addToCart, onPlay, accountState, use
         const coverDisplay = catalogCoverDisplay(feat);
         return (
         <div key={feat.slug} onClick={()=>onPlay(feat)} style={{flex:"0 0 auto",width:isMobile?160:220,scrollSnapAlign:"start",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,transition:"border-color 0.25s",position:"relative"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#a259ff55"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
-          {isAdmin && (
-            <div style={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              zIndex: 10,
-            }}>
-              <GiftButton
-                onClick={() => onGift?.(feat)}
-                label="🎁"
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: 20,
-                  padding: "4px 8px",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  color: "#a259ff",
-                  lineHeight: 1,
-                }}
-              />
-            </div>
-          )}
+          {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(feat)} /> : null}
           <CoverArt
             src={coverDisplay.src}
             type={coverDisplay.type || "image"}
@@ -2758,29 +2681,7 @@ function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, button
           albumLibraryItem?.gifted === true;
         return (
         <div key={item.slug} style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
-          {isAdmin && (
-            <div style={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              zIndex: 10,
-            }}>
-              <GiftButton
-                onClick={() => onGift?.(item)}
-                label="🎁"
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  fontSize: 20,
-                  padding: "4px 8px",
-                  borderRadius: 8,
-                  cursor: "pointer",
-                  color: "#a259ff",
-                  lineHeight: 1,
-                }}
-              />
-            </div>
-          )}
+          {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(item)} /> : null}
           <div onMouseEnter={hoverIn} onMouseLeave={hoverOut} onClick={() => onCardClick?.(item)} style={{ cursor: "pointer" }}>
             <CoverArt
               src={item.cover}
@@ -2818,11 +2719,7 @@ function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, button
                 color: "#a259ff",
                 letterSpacing: 1,
               }}>
-                <span style={{
-                  animation: "giftIconSpin 4s ease-in-out infinite",
-                  display: "inline-block",
-                  transformOrigin: "center",
-                }}>🎁</span>
+                <GiftIcon size={12} style={{ animation: "giftIconSpin 4s ease-in-out infinite" }} />
                 <span style={{ textTransform: "uppercase" }}>
                   Gift from 2MRRW
                 </span>
