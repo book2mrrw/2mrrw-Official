@@ -2483,3 +2483,246 @@ body.is-player-modal-open::before {
   90% { transform: rotate(-15deg) scale(1.2); }
   95% { transform: rotate(15deg) scale(1.2); }
 }
+
+/* ── Immersive gift reveal (one-time cinematic) ── */
+.gift-reveal-root {
+  position: fixed;
+  inset: 0;
+  z-index: 99990;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #030303;
+  touch-action: manipulation;
+}
+
+.gift-reveal-veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 80% 60% at 50% 40%, rgba(162, 89, 255, 0.12), transparent 70%),
+    #030303;
+  pointer-events: none;
+}
+
+.gift-reveal-ambient {
+  position: absolute;
+  inset: -20%;
+  background: radial-gradient(circle at 50% 45%, rgba(0, 255, 255, 0.08), transparent 55%),
+    radial-gradient(circle at 30% 60%, rgba(162, 89, 255, 0.14), transparent 50%);
+  filter: blur(40px);
+  pointer-events: none;
+  will-change: opacity;
+}
+
+.gift-reveal-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.gift-reveal-particle {
+  position: absolute;
+  bottom: -8px;
+  border-radius: 50%;
+  opacity: 0;
+  animation: giftRevealParticleRise 2.4s ease-out infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes giftRevealParticleRise {
+  0% {
+    transform: translateY(0) scale(0.6);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translateY(-100vh) scale(1);
+    opacity: 0;
+  }
+}
+
+.gift-reveal-artifact {
+  position: relative;
+  width: min(120px, 28vw);
+  height: min(120px, 28vw);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  z-index: 2;
+}
+
+.gift-reveal-artifact-core {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 22%;
+  background: linear-gradient(145deg, rgba(162, 89, 255, 0.35), rgba(0, 255, 255, 0.12));
+  border: 1px solid rgba(162, 89, 255, 0.55);
+  box-shadow: 0 0 48px rgba(162, 89, 255, 0.25), inset 0 0 32px rgba(0, 255, 255, 0.08);
+  animation: giftRevealArtifactFloat 3.2s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes giftRevealArtifactFloat {
+  0%, 100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(2deg);
+  }
+}
+
+.gift-reveal-touch-hint {
+  position: absolute;
+  left: 50%;
+  bottom: -36px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #00ffff;
+  white-space: nowrap;
+  animation: giftRevealHintPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes giftRevealHintPulse {
+  0%, 100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.gift-reveal-burst-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 255, 255, 0.35), transparent 62%);
+  animation: giftRevealBurst 0.45s ease-out forwards;
+  pointer-events: none;
+  z-index: 3;
+}
+
+@keyframes giftRevealBurst {
+  0% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.8);
+  }
+}
+
+.gift-reveal-artwork-wrap {
+  position: relative;
+  z-index: 4;
+  width: min(280px, 78vw);
+}
+
+.gift-reveal-artwork,
+.gift-reveal-artwork-fallback {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  object-fit: cover;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.65), 0 0 60px rgba(162, 89, 255, 0.2);
+  border: 1px solid rgba(162, 89, 255, 0.35);
+  will-change: transform;
+}
+
+.gift-reveal-artwork-fallback {
+  background: linear-gradient(135deg, #1a1030, #0a0a12);
+}
+
+.gift-reveal-tagline {
+  position: absolute;
+  left: 50%;
+  bottom: max(28px, env(safe-area-inset-bottom, 0px) + 24px);
+  transform: translateX(-50%);
+  width: min(420px, 92vw);
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #ccc;
+  z-index: 5;
+}
+
+.gift-reveal-tagline strong {
+  color: #00ffff;
+  font-weight: 800;
+}
+
+.gift-reveal-tagline-title {
+  display: block;
+  margin-top: 8px;
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.gift-reveal-tagline-message {
+  display: block;
+  margin-top: 10px;
+  font-size: 13px;
+  color: #a89cc8;
+  font-style: italic;
+}
+
+.gift-reveal-dock-trail {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 6;
+}
+
+.gift-reveal-dock-orb {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #00ffff 0%, rgba(162, 89, 255, 0.4) 55%, transparent 70%);
+  box-shadow: 0 0 40px rgba(0, 255, 255, 0.55), 0 0 80px rgba(162, 89, 255, 0.35);
+  animation: giftRevealDockGlow 0.9s ease-in-out infinite;
+}
+
+@keyframes giftRevealDockGlow {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.85;
+  }
+}
+
+.gift-reveal-reduced .gift-reveal-artifact-core {
+  animation: none;
+}
+
+.gift-collection-highlight {
+  animation: giftCollectionHighlight 2.8s ease-in-out 2;
+  border-color: rgba(0, 255, 255, 0.55) !important;
+  box-shadow: 0 0 28px rgba(0, 255, 255, 0.18), 0 0 48px rgba(162, 89, 255, 0.12);
+}
+
+@keyframes giftCollectionHighlight {
+  0%, 100% {
+    box-shadow: 0 0 0 rgba(0, 255, 255, 0);
+  }
+  50% {
+    box-shadow: 0 0 32px rgba(0, 255, 255, 0.28), 0 0 56px rgba(162, 89, 255, 0.15);
+  }
+}

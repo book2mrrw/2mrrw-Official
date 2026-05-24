@@ -64,9 +64,12 @@ export async function POST(req, { params }) {
 
     return NextResponse.json({
       success: true,
+      gift_id: result.gift.id,
       item_type: result.gift.item_type,
       item_id: result.product.id,
       item_title: result.gift.item_title || result.product.title,
+      product_slug: result.product.slug,
+      cover_url: result.product.cover_url || null,
     });
   } catch (err) {
     console.error("gift claim error:", err);

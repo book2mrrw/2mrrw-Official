@@ -19,6 +19,7 @@ import MyMusicTab from "@/components/music/MyMusicTab";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/lib/deep-links";
+import { consumeGiftHighlightSlug } from "@/lib/gifts/session-keys";
 import { resolveContentAccess, resolvePlaybackSrc, isAdminAccount } from "@/lib/music-access";
 import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
 import { useAudioPlayer } from "@/context/AudioContext";
@@ -615,6 +616,7 @@ export default function Page() {
   const [membershipUpsellOpen, setMembershipUpsellOpen] = useState(false);
   const [donateOpen, setDonateOpen] = useState(false);
   const [giftSheetRelease, setGiftSheetRelease] = useState(null);
+  const [giftHighlightSlug, setGiftHighlightSlug] = useState(null);
   const [albumTracklistRelease, setAlbumTracklistRelease] = useState(null);
   const [liveCountdown, setLiveCountdown]         = useState({ days:0, hours:0, minutes:0, seconds:0 });
   const [liveIsLive, setLiveIsLive]               = useState(false);
@@ -1187,6 +1189,11 @@ export default function Page() {
       return;
     }
     const openTab = sessionStorage.getItem("openTab");
+    const highlightSlug = consumeGiftHighlightSlug();
+    if (highlightSlug) {
+      setGiftHighlightSlug(highlightSlug);
+      window.setTimeout(() => setGiftHighlightSlug(null), 9000);
+    }
     if (!openTab) return;
     sessionStorage.removeItem("openTab");
     switchTab(openTab);
@@ -1945,6 +1952,7 @@ export default function Page() {
                         albums={albums}
                         isMobile={isMobile}
                         isAdmin={isAdmin}
+                        highlightSlug={giftHighlightSlug}
                         onSwitchTab={switchTab}
                         onOpenSingle={openSingleModal}
                         onOpenAlbum={setSelectedAlbum}

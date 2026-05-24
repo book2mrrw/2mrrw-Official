@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import GiftRevealExperience from "@/components/gifts/GiftRevealExperience";
+import { hasSeenGiftReveal } from "@/lib/gifts/session-keys";
 
 function formatDate(iso) {
   if (!iso) return "";
@@ -18,7 +20,8 @@ export default function GiftClaimPage() {
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
   const [error, setError] = useState("");
-  const [toast, setToast] = useState("");
+  const [revealPayload, setRevealPayload] = useState(null);
+  const claimAttemptedRef = useRef(false);
 
   const loadPreview = useCallback(async () => {
     setLoading(true);
@@ -40,7 +43,22 @@ export default function GiftClaimPage() {
     if (token) void loadPreview();
   }, [token, loadPreview]);
 
-  const claim = async () => {
+  const beginReveal = useCallback(
+    (payload) => {
+      const giftMeta = preview?.gift;
+      if (!giftMeta?.id) return;
+      setRevealPayload({
+        giftId: giftMeta.id,
+        title: payload?.item_title || giftMeta.item_title,
+        message: giftMeta.message,
+        coverUrl: payload?.cover_url || preview?.cover_url,
+        productSlug: payload?.product_slug || preview?.product_slug,
+      });
+    },
+    [preview]
+  );
+
+  const claim = useCallback(async () => {
     setClaiming(true);
     setError("");
     try {
@@ -55,19 +73,64 @@ export default function GiftClaimPage() {
       }
       if (!res.ok) throw new Error(data.message || data.error || "Could not claim gift");
       await refreshAccountState();
-      setToast("Your gift is in your library");
-      setTimeout(() => router.push("/?tab=mymusic"), 900);
+      beginReveal(data);
     } catch (err) {
       setError(err.message);
     } finally {
       setClaiming(false);
     }
-  };
+  }, [token, router, refreshAccountState, beginReveal]);
 
   const state = preview?.state || "invalid";
   const gift = preview?.gift;
   const cover = preview?.cover_url;
-  const isRecipient = user?.id && gift?.recipient_id === user.id;
+  const isRecipient = Boolean(user?.id && gift?.recipient_id === user.id);
+  const revealSeen = gift?.id ? hasSeenGiftReveal(gift.id) : false;
+
+  useEffect(() => {
+    if (authLoading || loading || !user || !preview?.gift || revealSeen || revealPayload) return;
+    if (state !== "valid" && !(state === "claimed" && isRecipient)) return;
+    if (claimAttemptedRef.current) return;
+    claimAttemptedRef.current = true;
+    if (state === "claimed" && isRecipient) {
+      beginReveal({
+        item_title: gift.item_title,
+        cover_url: preview.cover_url,
+        product_slug: preview.product_slug,
+      });
+      return;
+    }
+    void claim();
+  }, [
+    authLoading,
+    loading,
+    user,
+    preview,
+    revealSeen,
+    revealPayload,
+    state,
+    isRecipient,
+    claim,
+    beginReveal,
+    gift,
+  ]);
+
+  const handleRevealFinished = useCallback(() => {
+    router.push("/");
+  }, [router]);
+
+  if (revealPayload?.giftId) {
+    return (
+      <GiftRevealExperience
+        giftId={revealPayload.giftId}
+        title={revealPayload.title}
+        message={revealPayload.message}
+        coverUrl={revealPayload.coverUrl}
+        productSlug={revealPayload.productSlug}
+        onFinished={handleRevealFinished}
+      />
+    );
+  }
 
   return (
     <main
@@ -94,11 +157,21 @@ export default function GiftClaimPage() {
         {!loading && state === "valid" ? (
           <>
             <p style={{ fontSize: 11, letterSpacing: 3, color: "#a259ff", textTransform: "uppercase", marginBottom: 8 }}>
-              Gift
+              Gift from 2MRRW
             </p>
-            <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 8px" }}>Tomorrow gifted you this</h1>
+            <h1 style={{ fontSize: 28, fontWeight: 900, margin: "0 0 8px" }}>You have a gift waiting</h1>
             {gift?.item_title ? (
-              <div style={{ display: "inline-block", marginBottom: 16, padding: "4px 10px", borderRadius: 999, background: "#1a1a1a", fontSize: 11, color: "#aaa" }}>
+              <div
+                style={{
+                  display: "inline-block",
+                  marginBottom: 16,
+                  padding: "4px 10px",
+                  borderRadius: 999,
+                  background: "#1a1a1a",
+                  fontSize: 11,
+                  color: "#aaa",
+                }}
+              >
                 {gift.item_type || "release"} · {gift.item_title}
               </div>
             ) : null}
@@ -137,7 +210,7 @@ export default function GiftClaimPage() {
                   opacity: claiming ? 0.7 : 1,
                 }}
               >
-                {claiming ? "Claiming…" : "Claim Gift"}
+                {claiming ? "Opening your gift…" : "Open Your Gift"}
               </button>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -177,19 +250,18 @@ export default function GiftClaimPage() {
           <h1 style={{ fontSize: 24, fontWeight: 800 }}>This gift is no longer available</h1>
         ) : null}
 
-        {state === "claimed" ? (
+        {state === "claimed" && !revealPayload ? (
           <>
             <h1 style={{ fontSize: 24, fontWeight: 800, marginBottom: 12 }}>This gift has already been claimed</h1>
             {isRecipient ? (
               <Link href="/?tab=mymusic" style={{ color: "#00ffff", fontSize: 14 }}>
-                View in your library →
+                View in your collection →
               </Link>
             ) : null}
           </>
         ) : null}
 
         {error ? <p style={{ color: "#ff6b6b", fontSize: 13, marginTop: 16 }}>{error}</p> : null}
-        {toast ? <p style={{ color: "#00ffff", fontSize: 13, marginTop: 16 }}>{toast}</p> : null}
       </div>
     </main>
   );

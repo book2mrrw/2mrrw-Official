@@ -66,7 +66,17 @@ function CollectionRailPlaceholder({ label }) {
   );
 }
 
-function LibraryCarousel({ title, items, accountState, userId, onPlay, onOpen, onLibraryChange, isMobile }) {
+function LibraryCarousel({
+  title,
+  items,
+  accountState,
+  userId,
+  onPlay,
+  onOpen,
+  onLibraryChange,
+  isMobile,
+  highlightSlug,
+}) {
   if (!items?.length) return null;
   return (
     <section style={{ marginBottom: 32 }}>
@@ -84,9 +94,11 @@ function LibraryCarousel({ title, items, accountState, userId, onPlay, onOpen, o
         {items.map((item) => {
           const access = resolveContentAccess(item, accountState);
           const locked = access.subscriptionLocked && !access.owned;
+          const highlighted = highlightSlug && item.slug === highlightSlug;
           return (
             <div
               key={item.slug}
+              className={highlighted ? "gift-collection-highlight" : undefined}
               style={{
                 flex: "0 0 auto",
                 width: isMobile ? 148 : 168,
@@ -279,6 +291,7 @@ function MyMusicTab({
   albums = [],
   isMobile,
   isAdmin = false,
+  highlightSlug = null,
   onSwitchTab,
   onGoToAccount,
   onDiscoverSingles,
@@ -619,6 +632,7 @@ function MyMusicTab({
         onOpen={(item) => onOpenSingle?.(singles.find((s) => s.slug === item.slug) || item)}
         onLibraryChange={refresh}
         isMobile={isMobile}
+        highlightSlug={highlightSlug}
       />
 
       <section style={{ marginBottom: 32 }}>

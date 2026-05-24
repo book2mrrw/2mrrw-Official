@@ -124,6 +124,7 @@ export async function sendStorefrontGift({
     message,
     giftLink,
     expiresAt: gift.expires_at,
+    coverUrl: product.cover_url || null,
   });
 
   let delivered = false;

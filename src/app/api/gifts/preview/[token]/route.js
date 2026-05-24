@@ -40,6 +40,7 @@ export async function GET(req, { params }) {
         recipient_id: gift.recipient_id,
       },
       cover_url: product?.cover_url || null,
+      product_slug: product?.slug || null,
     });
   } catch (err) {
     console.error("gift preview error:", err);
