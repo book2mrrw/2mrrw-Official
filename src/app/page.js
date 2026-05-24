@@ -32,10 +32,10 @@ import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
 const MOBILE_NAV_TABS = [
   { id: "home", label: "Home" },
   { id: "singles", label: "Music" },
+  { id: "mymusic", label: "Collection" },
   { id: "shop", label: "Shop" },
   { id: "cards", label: "Cards" },
   { id: "vault", label: "Vault", vault: true },
-  { id: "shows", label: "Shows" },
   { id: "more", label: "More", more: true },
 ];
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
@@ -613,7 +613,8 @@ export default function Page() {
   const [liveCountdown, setLiveCountdown]         = useState({ days:0, hours:0, minutes:0, seconds:0 });
   const [liveIsLive, setLiveIsLive]               = useState(false);
   const [innerCirclePost, setInnerCirclePost]     = useState(null);
-  const [expandedGroup, setExpandedGroup]         = useState("g-home");
+  const [expandedGroup, setExpandedGroup]         = useState(null);
+  const [mobileNavExpandedGroups, setMobileNavExpandedGroups] = useState(() => new Set());
   const [tabKey, setTabKey]                       = useState(0);
   const [nowPlaying, setNowPlaying]               = useState(null);
   const [nowPlayingPlaying, setNowPlayingPlaying] = useState(false);
@@ -883,19 +884,6 @@ export default function Page() {
   }, [activeTab, soundOn]);
 
   useEffect(() => {
-    const map = {
-      home:"g-home",
-      singles:"g-music",albums:"g-music",mymusic:"g-music",
-      shop:"g-shop",
-      blog:"g-community",vision:"g-community",circle:"g-community",innercircle:"g-community",
-      vault:"g-vault",
-      shows:"g-shows",
-      live:"g-live",
-    };
-    if (map[activeTab]) setExpandedGroup(map[activeTab]);
-  }, [activeTab]);
-
-  useEffect(() => {
     if (!nowPlaying || !nowPlayingAudioRef.current) return;
     const audio = nowPlayingAudioRef.current;
     audio.pause();
@@ -1129,7 +1117,17 @@ export default function Page() {
 
   const openMobileNav = useCallback(() => {
     setMobileNavClosing(false);
+    setMobileNavExpandedGroups(new Set());
     setMobileNavOpen(true);
+  }, []);
+
+  const toggleMobileNavGroup = useCallback((groupId) => {
+    setMobileNavExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
   }, []);
 
   const switchTab = tabId => {
@@ -1140,14 +1138,48 @@ export default function Page() {
     setHomeScrollSection(null);
     setTabKey(p => p + 1);
     setActiveTab(tabId);
+    const navGroupByTab = {
+      singles: "g-music",
+      albums: "g-music",
+      mymusic: "g-music",
+      shop: "g-shop",
+      blog: "g-community",
+      vision: "g-community",
+      circle: "g-community",
+      innercircle: "g-community",
+      vault: "g-vault",
+      shows: "g-shows",
+      live: "g-live",
+      home: "g-home",
+    };
+    if (navGroupByTab[tabId]) setExpandedGroup(navGroupByTab[tabId]);
     if (isMobile) {
       setMobileNavOpen(false);
       setMobileNavClosing(false);
+      setMobileNavExpandedGroups(new Set());
     }
+  };
+
+  const openCollection = () => {
+    switchTab("mymusic");
   };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get("tab");
+    if (tabParam) {
+      switchTab(tabParam);
+      const next = new URL(window.location.href);
+      next.searchParams.delete("tab");
+      window.history.replaceState({}, "", next.pathname + (next.search || ""));
+      if (tabParam === "mymusic") {
+        window.setTimeout(() => {
+          mainScrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+        }, 0);
+      }
+      return;
+    }
     const openTab = sessionStorage.getItem("openTab");
     if (!openTab) return;
     sessionStorage.removeItem("openTab");
@@ -1163,7 +1195,8 @@ export default function Page() {
     if (tabId === "cards") return activeTab === "cards" || (activeTab === "home" && homeScrollSection === "cards");
     if (tabId === "vault") return activeTab === "vault" || (activeTab === "home" && homeScrollSection === "vault");
     if (tabId === "shows") return activeTab === "shows" || (activeTab === "home" && homeScrollSection === "shows");
-    if (tabId === "singles") return activeTab === "singles" || activeTab === "albums" || activeTab === "mymusic";
+    if (tabId === "singles") return activeTab === "singles" || activeTab === "albums";
+    if (tabId === "mymusic") return activeTab === "mymusic";
     return activeTab === tabId;
   };
 
@@ -1557,9 +1590,9 @@ export default function Page() {
                 const isExpanded    = expandedGroup === group.groupId;
                 return (
                   <div key={group.groupId} style={{marginBottom:2}}>
-                    <button onClick={()=>{ if(group.subTabs.length===0){switchTab(group.directTab);}else{setExpandedGroup(isExpanded?null:group.groupId);if(!isExpanded)switchTab(group.subTabs[0].id);}}} style={{width:"100%",padding:"13px 18px 13px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",background:isGroupActive?"linear-gradient(90deg,rgba(0,255,255,0.09) 0%,transparent 100%)":"transparent",border:"none",borderLeft:isGroupActive?"2px solid #00ffff":"2px solid transparent",color:isGroupActive?"#00ffff":"#b0b0b0",fontSize:11,fontWeight:700,letterSpacing:2.5,cursor:"pointer",textAlign:"left",transition:"all 0.18s",textShadow:isGroupActive?"0 0 12px rgba(0,255,255,0.4)":"none"}} onMouseEnter={e=>{if(!isGroupActive){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.035)";}}} onMouseLeave={e=>{if(!isGroupActive){e.currentTarget.style.color="#b0b0b0";e.currentTarget.style.background="transparent";}}}>
+                    <button onClick={()=>{ if(group.subTabs.length===0){switchTab(group.directTab);}else{setExpandedGroup(isExpanded?null:group.groupId);}}} style={{width:"100%",padding:"13px 18px 13px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",background:isGroupActive?"linear-gradient(90deg,rgba(0,255,255,0.09) 0%,transparent 100%)":"transparent",border:"none",borderLeft:isGroupActive?"2px solid #00ffff":"2px solid transparent",color:isGroupActive?"#00ffff":"#b0b0b0",fontSize:11,fontWeight:700,letterSpacing:2.5,cursor:"pointer",textAlign:"left",transition:"all 0.18s",textShadow:isGroupActive?"0 0 12px rgba(0,255,255,0.4)":"none"}} onMouseEnter={e=>{if(!isGroupActive){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.035)";}}} onMouseLeave={e=>{if(!isGroupActive){e.currentTarget.style.color="#b0b0b0";e.currentTarget.style.background="transparent";}}}>
                       <span>{group.label}</span>
-                      {group.subTabs.length>0 && <span style={{fontSize:12,color:isExpanded?"#888":"#555",display:"inline-block",transform:isExpanded?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.22s"}}>›</span>}
+                      {group.subTabs.length>0 && <span style={{fontSize:14,color:isExpanded?"#888":"#555",display:"inline-block",transform:isExpanded?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.22s ease",lineHeight:1}}>›</span>}
                     </button>
                     {isExpanded && group.subTabs.length>0 && (
                       <div style={{animation:"expandDown 0.2s ease forwards"}}>
@@ -1628,8 +1661,15 @@ export default function Page() {
               {activeTab==="home" && (
                 <>
                   {/* Latest Singles */}
-                  <div style={{marginTop:20,marginBottom:4}}>
-                    <h2 className="section-heading" style={{marginBottom:14}}>Latest Singles</h2>
+                  <motion.div style={{marginTop:20,marginBottom:4}}>
+                    <motion.div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:14,flexWrap:"wrap"}}>
+                      <h2 className="section-heading" style={{margin:0}}>Latest Singles</h2>
+                      {(currentUser || isAdmin) ? (
+                        <button type="button" className="collection-portal-link" onClick={openCollection} aria-label="Open my music collection">
+                          My Music Collection
+                        </button>
+                      ) : null}
+                    </motion.div>
 
                     <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:18,alignItems:"flex-start"}}>
 
@@ -1753,7 +1793,7 @@ export default function Page() {
                         )}
                       </div>
                     )}
-                  </div>
+                  </motion.div>
 
                   {/* Features */}
                   <div style={{marginTop:28,marginBottom:4}}>
@@ -2161,7 +2201,7 @@ export default function Page() {
                         <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{currentUser.name[0].toUpperCase()}</div><div><div style={{fontSize:18,fontWeight:800}}>{currentUser.name}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{currentUser.email}</div></div>{userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`}}>{userStatus.label}</div>}</div>
                         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===currentUser.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Music Library",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Collection",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
                       {isAdmin ? <GiftsSentSection /> : null}
                       <button onClick={handleSignOut} style={{width:"100%",height:44,padding:0,background:"transparent",color:"#444",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";}}>Sign Out</button>
                     </div>
@@ -2369,12 +2409,64 @@ export default function Page() {
                     }}
                   />
                   {currentUser&&userStatus&&<motion.div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}><motion.div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>{currentUser.name[0].toUpperCase()}</motion.div><motion.div><motion.div style={{fontSize:13,fontWeight:700,color:"white"}}>{currentUser.name}</motion.div><motion.div style={{fontSize:9,color:userStatus.color,fontWeight:700,letterSpacing:1}}>{userStatus.label}</motion.div></motion.div></motion.div>}
-                  {sidebarNav.map(group=>(
-                    <motion.div key={group.groupId}>
-                      <button onClick={()=>switchTab(group.directTab)} style={{width:"100%",padding:"13px 24px",background:"none",border:"none",color:activeTab===group.directTab||group.subTabs.some(st=>st.id===activeTab)?"#00ffff":"#ccc",fontSize:13,fontWeight:700,letterSpacing:2,textAlign:"left",cursor:"pointer",textTransform:"uppercase",transition:"color 0.2s"}}>{group.label}</button>
-                      {group.subTabs.length>0 && <motion.div style={{paddingLeft:16,paddingBottom:4}}>{group.subTabs.map(st=><button key={st.id} onClick={()=>switchTab(st.id)} style={{width:"100%",padding:"9px 24px",background:"none",border:"none",color:activeTab===st.id?"#00ffff":"#666",fontSize:12,textAlign:"left",cursor:"pointer",letterSpacing:1,transition:"color 0.2s"}}>{st.label}</button>)}</motion.div>}
+                  {sidebarNav.map(group=>{
+                    const hasSubs = group.subTabs.length > 0;
+                    const isSheetExpanded = mobileNavExpandedGroups.has(group.groupId);
+                    const isGroupActive = hasSubs
+                      ? group.subTabs.some(st => st.id === activeTab)
+                      : activeTab === group.directTab;
+                    return (
+                    <motion.div key={group.groupId} style={{marginBottom:2}}>
+                      <button
+                        type="button"
+                        onClick={()=>{
+                          if (!hasSubs) switchTab(group.directTab);
+                          else toggleMobileNavGroup(group.groupId);
+                        }}
+                        style={{
+                          width:"100%",
+                          padding:"14px 24px",
+                          background:"none",
+                          border:"none",
+                          color:isGroupActive?"#00ffff":"#ccc",
+                          fontSize:13,
+                          fontWeight:700,
+                          letterSpacing:2,
+                          textAlign:"left",
+                          cursor:"pointer",
+                          textTransform:"uppercase",
+                          transition:"color 0.2s",
+                          display:"flex",
+                          alignItems:"center",
+                          justifyContent:"space-between",
+                          gap:12,
+                        }}
+                      >
+                        <span>{group.label}</span>
+                        {hasSubs ? (
+                          <span style={{fontSize:16,color:"#555",lineHeight:1,transform:isSheetExpanded?"rotate(45deg)":"rotate(0deg)",transition:"transform 0.22s ease"}}>+</span>
+                        ) : null}
+                      </button>
+                      <AnimatePresence initial={false}>
+                        {hasSubs && isSheetExpanded ? (
+                          <motion.div
+                            key={`${group.groupId}-subs`}
+                            className="nav-sub-reveal"
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                            style={{paddingLeft:12,paddingBottom:6}}
+                          >
+                            {group.subTabs.map(st=>(
+                              <button key={st.id} type="button" onClick={()=>switchTab(st.id)} style={{width:"100%",padding:"10px 24px 10px 32px",background:"none",border:"none",color:activeTab===st.id?"#00ffff":"#666",fontSize:12,textAlign:"left",cursor:"pointer",letterSpacing:1,transition:"color 0.2s"}}>{st.label}</button>
+                            ))}
+                          </motion.div>
+                        ) : null}
+                      </AnimatePresence>
                     </motion.div>
-                  ))}
+                    );
+                  })}
                   <motion.div style={{padding:"14px 24px",borderTop:"1px solid #111",marginTop:4,display:"flex",flexDirection:"column",gap:10}}>
                     <button onClick={()=>switchTab("account")} style={{width:"100%",padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1}}>My Account</button>
                     <button onClick={()=>setSoundOn(!soundOn)} style={{width:"100%",padding:"11px 0",background:"transparent",color:soundOn?"#00ffff":"#666",fontWeight:700,border:"1px solid #2a2a2a",borderRadius:10,cursor:"pointer",fontSize:13,letterSpacing:1}}>{soundOn?"♫ Sound On":"♫ Sound Off"}</button>

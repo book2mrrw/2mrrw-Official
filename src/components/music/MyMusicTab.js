@@ -12,6 +12,7 @@ import PlaylistSection from "@/components/music/PlaylistSection";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import GiftsSentSection from "@/components/gifts/GiftsSentSection";
+import { useListeningHistory } from "@/hooks/useListeningHistory";
 
 const SORT_STORAGE_KEY = "mymusic_sort_pref";
 
@@ -44,6 +45,25 @@ function sortOwnedSingles(items, sortId) {
     const tb = b.purchasedAt ? new Date(b.purchasedAt).getTime() : 0;
     return tb - ta;
   });
+}
+
+function CollectionRailPlaceholder({ label }) {
+  return (
+    <div
+      style={{
+        padding: "18px 16px",
+        borderRadius: 14,
+        border: "1px dashed #222",
+        background: "rgba(255,255,255,0.015)",
+        color: "#555",
+        fontSize: 12,
+        letterSpacing: 0.3,
+        marginBottom: 28,
+      }}
+    >
+      {label}
+    </div>
+  );
 }
 
 function LibraryCarousel({ title, items, accountState, userId, onPlay, onOpen, onLibraryChange, isMobile }) {
@@ -283,6 +303,15 @@ function MyMusicTab({
     refresh,
   } = useMusicLibrary({ singles, albums });
 
+  const {
+    continueListening,
+    recentlyPlayedRail,
+    recentlyAddedRail,
+  } = useListeningHistory({ accountState, singles, albums });
+
+  const activeContinue = continueListening || lastPlayed;
+  const activeRecentlyPlayed = recentlyPlayedRail.length ? recentlyPlayedRail : recentlyPlayed;
+
   const { playTrack, playQueue, resume, setShuffle } = useAudioPlayer();
   const membershipActive = membershipHasPremiumAccess(accountState?.membership);
   const subscriptionLocked = Boolean(accountState?.membership && !membershipActive);
@@ -390,17 +419,17 @@ function MyMusicTab({
   );
 
   const resumeLast = useCallback(() => {
-    if (!lastPlayed) return;
-    const catalog = singles.find((s) => s.slug === lastPlayed.slug) || lastPlayed;
+    if (!activeContinue) return;
+    const catalog = singles.find((s) => s.slug === activeContinue.slug) || activeContinue;
     const access = resolveTrackAccess(catalog, accountState);
-    playItem(catalog, access, lastPlayed.completed ? 0 : Number(lastPlayed.positionSeconds || 0));
+    playItem(catalog, access, activeContinue.completed ? 0 : Number(activeContinue.positionSeconds || 0));
     void resume();
-  }, [accountState, lastPlayed, playItem, resume, singles]);
+  }, [accountState, activeContinue, playItem, resume, singles]);
 
   const sortLabel = SORT_OPTIONS.find((o) => o.id === sortPref)?.label || "Recently Added";
 
   if (loading) {
-    return <div style={{ padding: 40, textAlign: "center", color: "#555", fontSize: 13 }}>Loading your library…</div>;
+    return <div style={{ padding: 40, textAlign: "center", color: "#555", fontSize: 13 }}>Loading your collection…</div>;
   }
 
   const hasAnyContent =
@@ -408,7 +437,8 @@ function MyMusicTab({
     ownedAlbums.length > 0 ||
     subscriptionItems.length > 0 ||
     collectorItems.length > 0 ||
-    recentlyPlayed.length > 0;
+    activeRecentlyPlayed.length > 0 ||
+    isAdmin;
 
   return (
     <div style={{ paddingBottom: isMobile ? 160 : 40 }}>
@@ -422,9 +452,12 @@ function MyMusicTab({
           flexWrap: "wrap",
         }}
       >
-        <h2 className="section-heading" style={{ margin: 0, fontSize: isMobile ? 17 : 22 }}>
-          My Music Collection
-        </h2>
+        <div>
+          <h2 className="section-heading" style={{ margin: 0, fontSize: isMobile ? 17 : 22 }}>
+            My Music Collection
+          </h2>
+          <div className="collection-vault-frame">Owned · Playlists · Gifts</div>
+        </div>
         <button
           type="button"
           onClick={() => setSortSheetOpen(true)}
@@ -499,21 +532,10 @@ function MyMusicTab({
         </div>
       )}
 
-      <LibraryCarousel
-        title="Recently Played"
-        items={recentlyPlayed}
-        accountState={accountState}
-        userId={user?.id}
-        onPlay={playItem}
-        onOpen={(item) => onOpenSingle?.(singles.find((s) => s.slug === item.slug) || item)}
-        onLibraryChange={refresh}
-        isMobile={isMobile}
-      />
-
-      {lastPlayed && (
+      {activeContinue ? (
         <section
           style={{
-            marginBottom: 28,
+            marginBottom: 32,
             padding: "18px 20px",
             borderRadius: 16,
             background: "linear-gradient(135deg, rgba(0,255,255,0.08), rgba(162,89,255,0.06))",
@@ -522,9 +544,9 @@ function MyMusicTab({
         >
           <div style={{ fontSize: 10, color: "#00ffff", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8, fontWeight: 700 }}>Continue Listening</div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {lastPlayed.cover && <img src={lastPlayed.cover} alt="" style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover" }} />}
+            {activeContinue.cover && <img src={activeContinue.cover} alt="" style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover" }} />}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 800 }}>{lastPlayed.title}</div>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>{activeContinue.title}</div>
               <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>Pick up where you left off</div>
             </div>
             <button type="button" onClick={resumeLast} style={{ padding: "10px 18px", background: "#00ffff", color: "#000", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer", fontSize: 12 }}>
@@ -532,16 +554,37 @@ function MyMusicTab({
             </button>
           </div>
         </section>
+      ) : (
+        <CollectionRailPlaceholder label="Continue Listening — your last session will appear here." />
       )}
 
-      <RecentlyAddedRow
-        items={recentlyAddedSingles}
-        accountState={accountState}
-        onPlay={(item) => {
-          const access = resolveTrackAccess(item, accountState);
-          playItem(item, access);
-        }}
-      />
+      {activeRecentlyPlayed.length > 0 ? (
+        <LibraryCarousel
+          title="Recently Played"
+          items={activeRecentlyPlayed}
+          accountState={accountState}
+          userId={user?.id}
+          onPlay={playItem}
+          onOpen={(item) => onOpenSingle?.(singles.find((s) => s.slug === item.slug) || item)}
+          onLibraryChange={refresh}
+          isMobile={isMobile}
+        />
+      ) : (
+        <CollectionRailPlaceholder label="Recently Played — tracks you stream will collect here." />
+      )}
+
+      {recentlyAddedSingles.length > 0 || recentlyAddedRail.length > 0 ? (
+        <RecentlyAddedRow
+          items={recentlyAddedSingles.length ? recentlyAddedSingles : recentlyAddedRail}
+          accountState={accountState}
+          onPlay={(item) => {
+            const access = resolveTrackAccess(item, accountState);
+            playItem(item, access);
+          }}
+        />
+      ) : (
+        <CollectionRailPlaceholder label="Recently Added — new collection items will land here." />
+      )}
 
       <PlaylistSection
         userId={user?.id}
@@ -651,8 +694,8 @@ function MyMusicTab({
 
       {!hasAnyContent && (
         <div style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 20, padding: "40px 28px", textAlign: "center" }}>
-          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Your library is empty</div>
-          <div style={{ fontSize: 13, color: "#555", marginBottom: 20 }}>Purchase singles or albums to start streaming here.</div>
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Your collection is empty</div>
+          <div style={{ fontSize: 13, color: "#555", marginBottom: 20 }}>Own singles or albums to build your personal collection.</div>
           <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
             <button type="button" onClick={goSingles} style={{ padding: "10px 22px", background: "#111", color: "#00ffff", border: "1px solid #00ffff44", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
               Discover Singles
@@ -665,7 +708,7 @@ function MyMusicTab({
       )}
 
       <button type="button" onClick={() => refresh()} style={{ marginTop: 8, background: "none", border: "none", color: "#444", fontSize: 11, cursor: "pointer", letterSpacing: 1 }}>
-        Refresh library
+        Refresh collection
       </button>
     </div>
   );

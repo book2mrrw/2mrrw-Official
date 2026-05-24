@@ -76,9 +76,20 @@ function CardsIcon() {
   );
 }
 
+function CollectionIcon() {
+  return (
+    <NavIconSvg>
+      <path d="M4 6h16v12H4z" />
+      <path d="M8 6V4h8v2" />
+      <path d="M9 11h6M9 14h4" />
+    </NavIconSvg>
+  );
+}
+
 const ICON_BY_TAB = {
   home: HomeIcon,
   singles: MusicIcon,
+  mymusic: CollectionIcon,
   shop: ShopShirtIcon,
   shows: ShowsIcon,
   cards: CardsIcon,
