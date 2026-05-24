@@ -131,8 +131,8 @@ const radioSlides = [
 ];
 
 const features = [
-  { title:"I Don't Believe You", slug:"i-dont-believe-you", cover:"/images/features/idbu.jpg",   price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/i-dont-believe-you-preview.wav" },
-  { title:"2 Heavy",             slug:"2-heavy",            cover:"/images/features/2heavy.jpg", price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/2-heavy-preview.wav" },
+  { title:"I Don't Believe You", slug:"i-dont-believe-you", type:"feature", cover:"/images/features/idbu.jpg",   price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/i-dont-believe-you-preview.wav" },
+  { title:"2 Heavy",             slug:"2-heavy",            type:"feature", cover:"/images/features/2heavy.jpg", price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/2-heavy-preview.wav" },
 ];
 
 // ── SINGLES — FIXED: all paths point to /videos/singles/, wdaguys removed ────
@@ -172,9 +172,9 @@ const singles = [
 ];
 
 const albums = [
-  { title:"T.B.H.",        slug:"tbh",     cover:"/images/albums/tbh.jpg",    price:9.99,  date:"July 7, 2022",   vinyl:47.99, tracks:["Glass Full","Up 2 Me","Unexpcted","All Yours","Locomotive","LEFT","Was Wrong","ArTiFICiaL"] },
-  { title:"(A.D)",         slug:"ad",      cover:"/images/albums/ad.jpg",     price:9.99,  date:"March 24, 2024", vinyl:47.99, tracks:["2mrrw's Ntro","Said N' Done","A.D.D","Perspective (2018)","Grand Scheme","A2B","Life Changes (2018)","Itself (2018)","Wastin Time","Like Me Or Not"] },
-  { title:"Love Hz Vol.1", slug:"love-hz", cover:"/images/albums/lovehz.jpg", price:12.99, date:"August 2026",    vinyl:47.99, tracks:["Roll Call","W.2.D","All Of It","Knock On Wood","Stayed 2 Long","Hour Glass"] },
+  { title:"T.B.H.",        slug:"tbh",     type:"album", cover:"/images/albums/tbh.jpg",    price:9.99,  date:"July 7, 2022",   vinyl:47.99, tracks:["Glass Full","Up 2 Me","Unexpcted","All Yours","Locomotive","LEFT","Was Wrong","ArTiFICiaL"] },
+  { title:"(A.D)",         slug:"ad",      type:"album", cover:"/images/albums/ad.jpg",     price:9.99,  date:"March 24, 2024", vinyl:47.99, tracks:["2mrrw's Ntro","Said N' Done","A.D.D","Perspective (2018)","Grand Scheme","A2B","Life Changes (2018)","Itself (2018)","Wastin Time","Like Me Or Not"] },
+  { title:"Love Hz Vol.1", slug:"love-hz", type:"album", cover:"/images/albums/lovehz.jpg", price:12.99, date:"August 2026",    vinyl:47.99, tracks:["Roll Call","W.2.D","All Of It","Knock On Wood","Stayed 2 Long","Hour Glass"] },
 ];
 
 /** Resolve storefront catalog media to R2 public URLs when configured (ingestion reads literal const arrays above). */
@@ -2538,8 +2538,37 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
   const [previewHover, setPreviewHover] = useState(false);
   const access = currentSingleAccess || (currentSingle ? resolveContentAccess(currentSingle, accountState) : null);
   const coverDisplay = catalogCoverDisplay(currentSingle);
+  const currentLibraryItem = accountState?.library?.find(
+    (lib) => lib.slug === currentSingle?.slug
+  );
+  const currentSingleIsGifted =
+    currentLibraryItem?.source === "gift" ||
+    currentLibraryItem?.gifted === true;
   return (
     <div style={{display:"flex",flexDirection:isMobile?"column":"row",alignItems:isMobile?"stretch":"center",gap:isMobile?16:20,background:"linear-gradient(135deg,#0e0e0e,#111)",border:"1px solid #1e1e1e",borderRadius:isMobile?16:20,padding:isMobile?"20px 16px":large?"32px 28px":"28px 24px",position:"relative",overflow:"hidden",boxShadow:"0 4px 40px rgba(0,0,0,0.5)"}}>
+      {isAdmin && (
+        <div style={{
+          position: "absolute",
+          top: 8,
+          right: 8,
+          zIndex: 10,
+        }}>
+          <GiftButton
+            onClick={() => onGift?.(currentSingle)}
+            label="🎁"
+            style={{
+              background: "transparent",
+              border: "none",
+              fontSize: 20,
+              padding: "4px 8px",
+              borderRadius: 8,
+              cursor: "pointer",
+              color: "#a259ff",
+              lineHeight: 1,
+            }}
+          />
+        </div>
+      )}
       <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:360,height:360,background:"radial-gradient(circle,rgba(0,255,255,0.04) 0%,transparent 70%)",pointerEvents:"none"}}/>
       {isMobile ? (
         <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -2598,6 +2627,31 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
         <div style={{fontSize:13,color:"#555",letterSpacing:1,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <span>SINGLE{large&&!isMobile?` · ${singleIndex+1} of ${singles.length}`:""}</span>
           <MusicAccessBadge access={access} label={access?.badge} compact />
+          {currentSingleIsGifted ? (
+            <div style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 3,
+              padding: "2px 7px",
+              background: "linear-gradient(135deg,rgba(162,89,255,0.15),rgba(0,191,255,0.08))",
+              border: "1px solid rgba(162,89,255,0.3)",
+              borderRadius: 20,
+              animation: "giftBadgePulse 3s ease-in-out infinite",
+              fontSize: 10,
+              fontWeight: 700,
+              color: "#a259ff",
+              letterSpacing: 1,
+            }}>
+              <span style={{
+                animation: "giftIconSpin 4s ease-in-out infinite",
+                display: "inline-block",
+                transformOrigin: "center",
+              }}>🎁</span>
+              <span style={{ textTransform: "uppercase" }}>
+                Gift from 2MRRW
+              </span>
+            </div>
+          ) : null}
         </div>
         {access?.showPrice && <div style={{fontSize:isMobile?16:large?18:16,color:"#00ffff",fontWeight:700}}>${currentSingle.price.toFixed(2)}</div>}
         <div style={{display:"flex",gap:6}}>
@@ -2607,7 +2661,6 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
           {access?.showCart && <button onClick={()=>addToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"12px 0":large?"11px 20px":"10px 18px",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold",transition:"0.25s",width:isMobile?"100%":"auto"}}>+ Add to Cart</button>}
           {access?.showCart && (large||isMobile) && <button onClick={()=>addVinylToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"12px 0":"11px 20px",background:"#0a0a0a",color:"#aaa",border:"1px solid #2a2a2a",borderRadius:8,cursor:"pointer",fontSize:13,transition:"0.25s",width:isMobile?"100%":"auto"}}>+ Vinyl $47.99</button>}
           {userId && <MusicPlusButton track={currentSingle} userId={userId} access={access} isMobile={isMobile} onLibraryChange={onLibraryChange} />}
-          {isAdmin && <GiftButton onClick={() => onGift?.(currentSingle)} />}
         </div>
       </div>
       {!isMobile && <button onClick={nextSingle} style={{width:large?50:44,height:large?50:44,borderRadius:"50%",background:"rgba(255,255,255,0.04)",border:"1px solid #2a2a2a",color:"#555",fontSize:large?22:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";e.currentTarget.style.boxShadow="0 0 10px rgba(0,255,255,0.3)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#555";e.currentTarget.style.boxShadow="none";}}>›</button>}
@@ -2623,7 +2676,30 @@ function FeaturesRail({ features, isMobile, addToCart, onPlay, accountState, use
         const access = resolveContentAccess(feat, accountState);
         const coverDisplay = catalogCoverDisplay(feat);
         return (
-        <div key={feat.slug} onClick={()=>onPlay(feat)} style={{flex:"0 0 auto",width:isMobile?160:220,scrollSnapAlign:"start",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#a259ff55"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
+        <div key={feat.slug} onClick={()=>onPlay(feat)} style={{flex:"0 0 auto",width:isMobile?160:220,scrollSnapAlign:"start",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,transition:"border-color 0.25s",position:"relative"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#a259ff55"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
+          {isAdmin && (
+            <div style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 10,
+            }}>
+              <GiftButton
+                onClick={() => onGift?.(feat)}
+                label="🎁"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: 20,
+                  padding: "4px 8px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  color: "#a259ff",
+                  lineHeight: 1,
+                }}
+              />
+            </div>
+          )}
           <CoverArt
             src={coverDisplay.src}
             type={coverDisplay.type || "image"}
@@ -2656,7 +2732,6 @@ function FeaturesRail({ features, isMobile, addToCart, onPlay, accountState, use
                 </div>
               )}
               {userId && <span onClick={e=>e.stopPropagation()}><MusicPlusButton track={feat} userId={userId} access={access} isMobile={isMobile} deepLinkType="feature" onLibraryChange={onLibraryChange} /></span>}
-              {isAdmin && <GiftButton onClick={() => onGift?.(feat)} />}
             </div>
           </div>
         </div>
@@ -2675,8 +2750,37 @@ function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, button
     <div className={isMobile?`${type}-row`:""} style={containerStyle}>
       {items.map(item=>{
         const access = resolveContentAccess(item, accountState);
+        const albumLibraryItem = accountState?.library?.find(
+          (lib) => lib.slug === item?.slug
+        );
+        const albumIsGifted =
+          albumLibraryItem?.source === "gift" ||
+          albumLibraryItem?.gifted === true;
         return (
         <div key={item.slug} style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
+          {isAdmin && (
+            <div style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              zIndex: 10,
+            }}>
+              <GiftButton
+                onClick={() => onGift?.(item)}
+                label="🎁"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: 20,
+                  padding: "4px 8px",
+                  borderRadius: 8,
+                  cursor: "pointer",
+                  color: "#a259ff",
+                  lineHeight: 1,
+                }}
+              />
+            </div>
+          )}
           <div onMouseEnter={hoverIn} onMouseLeave={hoverOut} onClick={() => onCardClick?.(item)} style={{ cursor: "pointer" }}>
             <CoverArt
               src={item.cover}
@@ -2698,6 +2802,32 @@ function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, button
             <div className={type==="albums"&&isUpcomingReleaseDate(item.date)?"song-title-turquoise-glow":undefined} style={{fontSize:isMobile?12:14,fontWeight:700,marginBottom:4,lineHeight:1.3}}>{item.title}</div>
             {item.date && <div style={{fontSize:isMobile?9:11,color:"#444",marginBottom:6,letterSpacing:1}}>{item.date}</div>}
             {access?.badge && <div style={{marginBottom:6}}><MusicAccessBadge access={access} label={access.badge} compact /></div>}
+            {albumIsGifted ? (
+              <div style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 3,
+                marginBottom: 6,
+                padding: "2px 7px",
+                background: "linear-gradient(135deg,rgba(162,89,255,0.15),rgba(0,191,255,0.08))",
+                border: "1px solid rgba(162,89,255,0.3)",
+                borderRadius: 20,
+                animation: "giftBadgePulse 3s ease-in-out infinite",
+                fontSize: 10,
+                fontWeight: 700,
+                color: "#a259ff",
+                letterSpacing: 1,
+              }}>
+                <span style={{
+                  animation: "giftIconSpin 4s ease-in-out infinite",
+                  display: "inline-block",
+                  transformOrigin: "center",
+                }}>🎁</span>
+                <span style={{ textTransform: "uppercase" }}>
+                  Gift from 2MRRW
+                </span>
+              </div>
+            ) : null}
             {access?.showPrice && <div style={{fontSize:isMobile?12:13,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${item.price.toFixed(2)}</div>}
             <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}} onClick={type==="albums"?e=>e.stopPropagation():undefined}>
               {access?.showCart && type==="albums" ? (
@@ -2724,7 +2854,6 @@ function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, button
                 <button onClick={()=>addToCart(item)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>
               ) : null}
               {userId && type==="albums" && <span onClick={e=>e.stopPropagation()}><MusicPlusButton track={item} userId={userId} access={access} isMobile={isMobile} deepLinkType="album" onLibraryChange={onLibraryChange} /></span>}
-              {isAdmin && <GiftButton onClick={() => onGift?.(item)} />}
             </div>
           </div>
         </div>

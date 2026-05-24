@@ -15,7 +15,9 @@ export default function GiftBottomSheet({
 }) {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(
+    "Every day is a gift, gifted to you by tomorrow."
+  );
   const [emailError, setEmailError] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [sending, setSending] = useState(false);

@@ -660,6 +660,17 @@ function GlobalAudioPlayerBar() {
               <div style={{ textAlign: "center", width: "100%", maxWidth: 400, padding: "0 8px" }}>
                 <div className="player-track-title" style={{ fontSize: 24, lineHeight: 1.2, marginBottom: 6 }}>
                   {currentTrack.title}
+                  {currentTrack?.source === "gift" ||
+                  currentTrack?.gifted ? (
+                    <span style={{
+                      fontSize: 12,
+                      marginLeft: 4,
+                      animation: "giftIconSpin 4s ease-in-out infinite",
+                      display: "inline-block",
+                      transformOrigin: "center",
+                      flexShrink: 0,
+                    }}>🎁</span>
+                  ) : null}
                 </div>
                 <div className="player-track-meta" style={{ fontSize: 14, marginBottom: 4, opacity: 0.55 }}>
                   {currentTrack.artist}
@@ -810,6 +821,17 @@ function GlobalAudioPlayerBar() {
                       style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                     >
                       {currentTrack.title}
+                      {currentTrack?.source === "gift" ||
+                      currentTrack?.gifted ? (
+                        <span style={{
+                          fontSize: 12,
+                          marginLeft: 4,
+                          animation: "giftIconSpin 4s ease-in-out infinite",
+                          display: "inline-block",
+                          transformOrigin: "center",
+                          flexShrink: 0,
+                        }}>🎁</span>
+                      ) : null}
                     </div>
                     <div
                       className="player-track-meta"
@@ -880,6 +902,17 @@ function GlobalAudioPlayerBar() {
                       style={{ fontSize: 13, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                     >
                       {currentTrack.title}
+                      {currentTrack?.source === "gift" ||
+                      currentTrack?.gifted ? (
+                        <span style={{
+                          fontSize: 12,
+                          marginLeft: 4,
+                          animation: "giftIconSpin 4s ease-in-out infinite",
+                          display: "inline-block",
+                          transformOrigin: "center",
+                          flexShrink: 0,
+                        }}>🎁</span>
+                      ) : null}
                     </div>
                     <div
                       className="player-track-meta"

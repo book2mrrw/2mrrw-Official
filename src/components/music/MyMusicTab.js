@@ -96,7 +96,33 @@ function LibraryCarousel({ title, items, accountState, userId, onPlay, onOpen, o
               <div style={{ padding: "10px 12px 12px" }}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: item.gifted || item.source === "gift" ? 4 : 8, lineHeight: 1.3 }}>{item.title}</div>
                 {item.gifted || item.source === "gift" ? (
-                  <div style={{ fontSize: 11, color: "#9b7abf", marginBottom: 8, letterSpacing: 0.3 }}>Gifted by 2MRRW</div>
+                  <div style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 4,
+                    marginBottom: 8,
+                    padding: "3px 8px",
+                    background: "linear-gradient(135deg,rgba(162,89,255,0.15),rgba(0,191,255,0.08))",
+                    border: "1px solid rgba(162,89,255,0.3)",
+                    borderRadius: 20,
+                    animation: "giftBadgePulse 3s ease-in-out infinite",
+                  }}>
+                    <span style={{
+                      fontSize: 12,
+                      animation: "giftIconSpin 4s ease-in-out infinite",
+                      display: "inline-block",
+                      transformOrigin: "center",
+                    }}>🎁</span>
+                    <span style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      color: "#a259ff",
+                      letterSpacing: 1,
+                      textTransform: "uppercase",
+                    }}>
+                      Gift from 2MRRW
+                    </span>
+                  </div>
                 ) : null}
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <button
