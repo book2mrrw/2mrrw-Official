@@ -47,6 +47,10 @@ function GlobalAudioPlayerBar() {
     currentTime,
     duration,
     error,
+    isBuffering,
+    accessDenied,
+    streamRetryable,
+    streamConflict,
     toggle,
     seek,
     stop,
@@ -64,6 +68,10 @@ function GlobalAudioPlayerBar() {
     seekForward,
     audioRef,
     suppressPauseInterruptionRef,
+    overrideConcurrentStream,
+    dismissStreamConflict,
+    retryStreamPlayback,
+    storeLinkHref,
   } = useAudioPlayer();
   const [isMobile, setIsMobile] = useState(false);
   const [windowWidth, setWindowWidth] = useState(
@@ -413,12 +421,83 @@ function GlobalAudioPlayerBar() {
   const handlePlayToggle = useCallback(
     (e) => {
       e?.stopPropagation?.();
+      if (streamRetryable && error) {
+        void retryStreamPlayback();
+        return;
+      }
       toggle();
     },
-    [toggle]
+    [toggle, streamRetryable, error, retryStreamPlayback]
   );
 
   if (!hasStarted || !currentTrack) return null;
+
+  const conflictDialog = streamConflict ? (
+    <div
+      role="alertdialog"
+      aria-label="Concurrent stream"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9200,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.72)",
+        padding: 24,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: 360,
+          width: "100%",
+          background: "#111",
+          border: "1px solid #2a2a2a",
+          borderRadius: 14,
+          padding: "20px 22px",
+        }}
+      >
+        <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 8 }}>Already streaming</div>
+        <p style={{ fontSize: 13, color: "#888", lineHeight: 1.5, margin: "0 0 18px" }}>
+          Already streaming on another device — stop other session?
+        </p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            onClick={dismissStreamConflict}
+            style={{
+              padding: "10px 14px",
+              background: "transparent",
+              border: "1px solid #333",
+              borderRadius: 8,
+              color: "#aaa",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 700,
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={() => void overrideConcurrentStream()}
+            style={{
+              padding: "10px 14px",
+              background: "#00ffff",
+              border: "none",
+              borderRadius: 8,
+              color: "#000",
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 800,
+            }}
+          >
+            Stop other &amp; play
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   const csOpacity = csMode ? 1 : csHoldOpacity;
   const baseCoverUrl = resolveAbsoluteArtworkUrl(baseCover);
@@ -514,8 +593,39 @@ function GlobalAudioPlayerBar() {
     />
   );
 
+  const errorMessage = accessDenied ? (
+    <span>
+      Access unavailable —{" "}
+      <a href={storeLinkHref || "/subscribe"} style={{ color: "#00ffff", textDecoration: "underline" }}>
+        get access
+      </a>
+    </span>
+  ) : (
+    error
+  );
+
   return (
     <>
+      {conflictDialog}
+      {isBuffering && (
+        <div
+          aria-live="polite"
+          aria-label="Buffering"
+          style={{
+            position: "fixed",
+            left: "50%",
+            bottom: isMobile ? "calc(120px + env(safe-area-inset-bottom, 0px))" : 72,
+            transform: "translateX(-50%)",
+            zIndex: 7700,
+            width: 28,
+            height: 28,
+            border: "2px solid rgba(0,255,255,0.25)",
+            borderTopColor: "#00ffff",
+            borderRadius: "50%",
+            animation: "playerBufferSpin 0.8s linear infinite",
+          }}
+        />
+      )}
       {isMobile && !expanded && (
         <button
           type="button"
@@ -745,7 +855,9 @@ function GlobalAudioPlayerBar() {
                 </div>
               )}
 
-              {error && <div style={{ fontSize: 12, color: "#ff8a8a", textAlign: "center" }}>{error}</div>}
+              {(error || accessDenied) && (
+                <div style={{ fontSize: 12, color: "#ff8a8a", textAlign: "center" }}>{errorMessage}</div>
+              )}
             </div>
           </div>
         </div>
@@ -840,15 +952,17 @@ function GlobalAudioPlayerBar() {
                       className="player-track-meta"
                       style={{
                         fontSize: 10,
-                        color: error ? "#ff8a8a" : undefined,
-                        opacity: error ? 1 : 0.48,
+                        color: error || accessDenied ? "#ff8a8a" : undefined,
+                        opacity: error || accessDenied ? 1 : 0.48,
                         fontVariantNumeric: "tabular-nums",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                       }}
                     >
-                      {error || `${currentTrack.artist} · ${formatTime(currentTime)} / ${formatTime(duration)}`}
+                      {error || accessDenied
+                        ? errorMessage
+                        : `${currentTrack.artist} · ${formatTime(currentTime)} / ${formatTime(duration)}`}
                     </div>
                   </button>
                   <ClosePlayerButton onClick={stop} size={18} />
@@ -922,15 +1036,17 @@ function GlobalAudioPlayerBar() {
                       className="player-track-meta"
                       style={{
                         fontSize: 10,
-                        color: error ? "#ff8a8a" : undefined,
-                        opacity: error ? 1 : 0.45,
+                        color: error || accessDenied ? "#ff8a8a" : undefined,
+                        opacity: error || accessDenied ? 1 : 0.45,
                         fontVariantNumeric: "tabular-nums",
                         whiteSpace: "nowrap",
                         overflow: "hidden",
                         textOverflow: "ellipsis",
                       }}
                     >
-                      {error || `${currentTrack.artist} · ${formatTime(currentTime)} / ${formatTime(duration)}`}
+                      {error || accessDenied
+                        ? errorMessage
+                        : `${currentTrack.artist} · ${formatTime(currentTime)} / ${formatTime(duration)}`}
                     </div>
                   </button>
                   <ClosePlayerButton onClick={stop} size={18} />

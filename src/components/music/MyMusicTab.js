@@ -547,7 +547,23 @@ function MyMusicTab({
             {activeContinue.cover && <img src={activeContinue.cover} alt="" style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover" }} />}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 800 }}>{activeContinue.title}</div>
-              <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>Pick up where you left off</div>
+              {activeContinue.positionSeconds > 0 && activeContinue.durationSeconds > 0 ? (
+                <div style={{ marginTop: 8 }}>
+                  <div style={{ height: 3, background: "rgba(0,0,0,0.35)", borderRadius: 2, overflow: "hidden" }}>
+                    <div
+                      style={{
+                        width: `${Math.min(100, (activeContinue.positionSeconds / activeContinue.durationSeconds) * 100)}%`,
+                        height: "100%",
+                        background: "#00ffff",
+                        borderRadius: 2,
+                      }}
+                    />
+                  </div>
+                  <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>Pick up where you left off</div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>Pick up where you left off</div>
+              )}
             </div>
             <button type="button" onClick={resumeLast} style={{ padding: "10px 18px", background: "#00ffff", color: "#000", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer", fontSize: 12 }}>
               Resume

@@ -376,6 +376,12 @@ body {
   animation-delay: 0.24s;
 }
 
+@keyframes playerBufferSpin {
+  to {
+    transform: translateX(-50%) rotate(360deg);
+  }
+}
+
 @keyframes audioIslandWave {
   0%,
   100% {

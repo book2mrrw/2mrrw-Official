@@ -9,6 +9,58 @@ export const LISTENING_HISTORY_EVENT = "2mrrw:listening-history-updated";
 
 const MAX_RAIL_ITEMS = 20;
 
+/** Per-user playback position map for resume (slug → { positionSeconds, durationSeconds, updatedAt }). */
+export function getPlaybackPositionKey(userId) {
+  if (!userId) return null;
+  return `listening_history_${userId}`;
+}
+
+function readPlaybackPositionStore(userId) {
+  const key = getPlaybackPositionKey(userId);
+  if (!key || typeof window === "undefined") return {};
+  const parsed = safeParse(localStorage.getItem(key));
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+}
+
+function writePlaybackPositionStore(userId, store) {
+  const key = getPlaybackPositionKey(userId);
+  if (!key || typeof window === "undefined") return;
+  try {
+    localStorage.setItem(key, JSON.stringify(store));
+  } catch {
+    /* quota */
+  }
+}
+
+/** Save in-progress playback position for a slug (used every ~15s during play). */
+export function savePlaybackPosition(userId, slug, positionSeconds, durationSeconds = 0) {
+  if (!userId || !slug || typeof window === "undefined") return;
+  const store = readPlaybackPositionStore(userId);
+  store[slug] = {
+    positionSeconds: Math.max(0, Number(positionSeconds) || 0),
+    durationSeconds: Math.max(0, Number(durationSeconds) || 0),
+    updatedAt: new Date().toISOString(),
+  };
+  writePlaybackPositionStore(userId, store);
+}
+
+/** Read saved position for resume on stream start. */
+export function getSavedPlaybackPosition(userId, slug) {
+  if (!userId || !slug) return null;
+  const entry = readPlaybackPositionStore(userId)[slug];
+  if (!entry || entry.positionSeconds <= 0) return null;
+  return entry;
+}
+
+/** Clear saved position after track completion or explicit stop. */
+export function clearPlaybackPosition(userId, slug) {
+  if (!userId || !slug || typeof window === "undefined") return;
+  const store = readPlaybackPositionStore(userId);
+  if (!store[slug]) return;
+  delete store[slug];
+  writePlaybackPositionStore(userId, store);
+}
+
 /** Per-user scoped localStorage keys. */
 export function getListeningKeys(userId) {
   if (!userId) return null;

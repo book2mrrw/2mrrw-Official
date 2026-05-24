@@ -1,0 +1,50 @@
+Streaming Pipeline Hardening — 2026-05-24
+=========================================
+
+Summary
+-------
+Hardened the master library streaming path: signed URL refresh on resume, playback error recovery, per-request entitlement checks, local position persistence, mobile visibility suspend/resume, concurrent session guard, buffering UI, and stream analytics tables/APIs.
+
+Migrations (apply manually in Supabase SQL editor or CLI)
+---------------------------------------------------------
+- supabase/migrations/20260603000000_stream_sessions.sql
+- supabase/migrations/20260603000001_stream_events.sql
+
+Until applied, stream session/event writes fail gracefully when tables are missing (42P01); entitlement and signed URL delivery still work.
+
+Files changed
+-------------
+Server
+- src/app/api/library/stream/route.js — entitlement via userCanStreamProduct every request; session + event on start; 409 concurrent; force=true; DELETE clear
+- src/app/api/stream/end/route.js — end analytics + clear session
+- src/lib/playback/stream-pipeline.js — session/event DB helpers
+- src/lib/playback/stream-client.js — client fetch/clear/end helpers
+
+Client
+- src/context/AudioContext.js — URL meta, resume refresh, error retry, 403/409, position save 15s, visibility, analytics end calls
+- src/components/audio/GlobalAudioPlayerBar.js — buffering spinner, concurrent dialog, access link, tap-to-retry
+- src/lib/listening-history.js — listening_history_{userId} position map
+- src/components/music/ContinueListening.js — progress bar on continue card
+- src/components/music/MyMusicTab.js — progress bar on continue section
+- src/app/globals.css — playerBufferSpin keyframe
+
+Integration with listening-history (ac004d1f pattern)
+-----------------------------------------------------
+- Existing rails: 2mrrw_continue_listening:{userId}, recently played/added — unchanged
+- New key: listening_history_{userId} — per-slug positionSeconds for resume during playback (15s interval)
+- recordListeningEvent still updates continue/recently played rails; clearPlaybackPosition on completion aligns continue rail clear
+
+Checklist
+---------
+[ ] Apply both migrations in Supabase production
+[ ] Smoke: play entitled track — stream starts, streamEventId in network JSON
+[ ] Smoke: pause >55min or mock expiry — resume refreshes URL
+[ ] Smoke: airplane mode mid-play — one auto retry, then tap to retry
+[ ] Smoke: revoke entitlement — 403, "Access unavailable" + subscribe link
+[ ] Smoke: two tabs same track <30s — 409 dialog, force play clears other session
+[ ] Smoke: background tab — pauses, no complete event; foreground resumes position
+[ ] Smoke: Continue Listening shows progress bar when duration known
+
+Not in scope (per request)
+--------------------------
+Stripe, auth, purchase, gift flows untouched.

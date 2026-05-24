@@ -38,11 +38,34 @@ export default function ContinueListening({ lastPlayed, access, isMobile }) {
         <div style={{ fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
           {lastPlayed.title}
         </div>
-        {lastPlayed.positionSeconds > 0 && (
+        {lastPlayed.positionSeconds > 0 && lastPlayed.durationSeconds > 0 ? (
+          <div style={{ marginTop: 8 }}>
+            <div
+              style={{
+                height: 3,
+                background: "#1a1a1a",
+                borderRadius: 2,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.min(100, (lastPlayed.positionSeconds / lastPlayed.durationSeconds) * 100)}%`,
+                  height: "100%",
+                  background: "#00ffff",
+                  borderRadius: 2,
+                }}
+              />
+            </div>
+            <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>
+              Resume at {formatResume(lastPlayed.positionSeconds)}
+            </div>
+          </div>
+        ) : lastPlayed.positionSeconds > 0 ? (
           <div style={{ fontSize: 11, color: "#444", marginTop: 4 }}>
             Resume at {formatResume(lastPlayed.positionSeconds)}
           </div>
-        )}
+        ) : null}
       </div>
       <button
         type="button"
