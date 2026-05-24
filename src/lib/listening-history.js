@@ -1,11 +1,23 @@
 /** Local storage keys for listening rails — complements account-state mediaProgress. */
-export const LISTENING_KEYS = {
+export const LISTENING_KEY_BASES = {
   continue: "2mrrw_continue_listening",
   recentlyPlayed: "2mrrw_recently_played",
   recentlyAdded: "2mrrw_recently_added",
 };
 
+export const LISTENING_HISTORY_EVENT = "2mrrw:listening-history-updated";
+
 const MAX_RAIL_ITEMS = 20;
+
+/** Per-user scoped localStorage keys. */
+export function getListeningKeys(userId) {
+  if (!userId) return null;
+  return {
+    continue: `${LISTENING_KEY_BASES.continue}:${userId}`,
+    recentlyPlayed: `${LISTENING_KEY_BASES.recentlyPlayed}:${userId}`,
+    recentlyAdded: `${LISTENING_KEY_BASES.recentlyAdded}:${userId}`,
+  };
+}
 
 function safeParse(raw) {
   try {
@@ -15,9 +27,14 @@ function safeParse(raw) {
   }
 }
 
+function notifyListeningHistoryChange(userId) {
+  if (typeof window === "undefined" || !userId) return;
+  window.dispatchEvent(new CustomEvent(LISTENING_HISTORY_EVENT, { detail: { userId } }));
+}
+
 /** Read a listening rail from localStorage. */
 export function readListeningRail(key) {
-  if (typeof window === "undefined") return [];
+  if (typeof window === "undefined" || !key) return [];
   try {
     const parsed = safeParse(localStorage.getItem(key));
     return Array.isArray(parsed) ? parsed : [];
@@ -27,18 +44,22 @@ export function readListeningRail(key) {
 }
 
 /** Persist a listening rail (capped). */
-export function writeListeningRail(key, items) {
-  if (typeof window === "undefined") return;
+export function writeListeningRail(key, items, userId) {
+  if (typeof window === "undefined" || !key) return;
   try {
     localStorage.setItem(key, JSON.stringify((items || []).slice(0, MAX_RAIL_ITEMS)));
+    notifyListeningHistoryChange(userId);
   } catch {
     /* ignore quota */
   }
 }
 
 /** Record a play/resume event for offline or pre-sync rails. */
-export function recordListeningEvent(slug, meta = {}) {
-  if (!slug || typeof window === "undefined") return;
+export function recordListeningEvent(slug, meta = {}, userId) {
+  if (!slug || !userId || typeof window === "undefined") return;
+  const keys = getListeningKeys(userId);
+  if (!keys) return;
+
   const entry = {
     slug,
     title: meta.title || slug,
@@ -49,25 +70,28 @@ export function recordListeningEvent(slug, meta = {}) {
     lastPlayedAt: meta.lastPlayedAt || new Date().toISOString(),
   };
 
-  const recent = readListeningRail(LISTENING_KEYS.recentlyPlayed).filter((r) => r.slug !== slug);
-  writeListeningRail(LISTENING_KEYS.recentlyPlayed, [entry, ...recent]);
+  const recent = readListeningRail(keys.recentlyPlayed).filter((r) => r.slug !== slug);
+  writeListeningRail(keys.recentlyPlayed, [entry, ...recent], userId);
 
   if (!entry.completed && entry.positionSeconds > 0) {
-    writeListeningRail(LISTENING_KEYS.continue, [entry]);
+    writeListeningRail(keys.continue, [entry], userId);
   } else if (entry.completed) {
-    writeListeningRail(LISTENING_KEYS.continue, []);
+    writeListeningRail(keys.continue, [], userId);
   }
 }
 
 /** Record a newly acquired item for the Recently Added rail. */
-export function recordRecentlyAdded(slug, meta = {}) {
-  if (!slug || typeof window === "undefined") return;
+export function recordRecentlyAdded(slug, meta = {}, userId) {
+  if (!slug || !userId || typeof window === "undefined") return;
+  const keys = getListeningKeys(userId);
+  if (!keys) return;
+
   const entry = {
     slug,
     title: meta.title || slug,
     cover: meta.cover || null,
     addedAt: meta.addedAt || new Date().toISOString(),
   };
-  const list = readListeningRail(LISTENING_KEYS.recentlyAdded).filter((r) => r.slug !== slug);
-  writeListeningRail(LISTENING_KEYS.recentlyAdded, [entry, ...list]);
+  const list = readListeningRail(keys.recentlyAdded).filter((r) => r.slug !== slug);
+  writeListeningRail(keys.recentlyAdded, [entry, ...list], userId);
 }

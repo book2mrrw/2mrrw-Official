@@ -1,7 +1,9 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "@/context/AuthContext";
 import { sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
+import { recordListeningEvent } from "@/lib/listening-history";
 import {
   clearPersistedMediaSessionTrack,
   getArtworkEntriesForTrack,
@@ -143,6 +145,7 @@ function preloadCsAssets(track, refs) {
 }
 
 export function AudioProvider({ children }) {
+  const { user } = useAuth();
   const csImgRef = useRef(null);
   const csVidRef = useRef(null);
   const csAudioRef = useRef(null);
@@ -161,7 +164,29 @@ export function AudioProvider({ children }) {
   const userPausedRef = useRef(false);
   const skipPauseInterruptionRef = useRef(false);
   const lastPositionStateAtRef = useRef(0);
+  const listeningUserIdRef = useRef(null);
+  const listeningProgressRef = useRef({ slug: null, recorded30s: false });
   const [state, setState] = useState(EMPTY_STATE);
+
+  useEffect(() => {
+    listeningUserIdRef.current = user?.id || null;
+  }, [user?.id]);
+
+  const recordLocalListening = useCallback((track, meta = {}) => {
+    const userId = listeningUserIdRef.current;
+    if (!userId || !track?.slug) return;
+    recordListeningEvent(
+      track.slug,
+      {
+        title: track.title,
+        cover: track.cover,
+        positionSeconds: meta.positionSeconds ?? 0,
+        durationSeconds: meta.durationSeconds ?? 0,
+        completed: Boolean(meta.completed),
+      },
+      userId
+    );
+  }, []);
 
   const patchState = useCallback((patch) => {
     setState(prev => ({ ...prev, ...patch }));
@@ -282,7 +307,15 @@ export function AudioProvider({ children }) {
       patchState({ isPlaying: true, error: null, hasStarted: true });
       persistPlayback("play");
       const track = stateRef.current.currentTrack;
-      if (track) void updateMediaSession(track, { playing: true });
+      if (track) {
+        listeningProgressRef.current = { slug: track.slug, recorded30s: false };
+        recordLocalListening(track, {
+          positionSeconds: audio.currentTime || 0,
+          durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
+          completed: false,
+        });
+        void updateMediaSession(track, { playing: true });
+      }
     };
 
     const onPause = () => {
@@ -313,10 +346,34 @@ export function AudioProvider({ children }) {
       patchState({ currentTime: audio.currentTime || 0 });
       persistPlayback("progress");
       syncPositionState(false);
+
+      const track = stateRef.current.currentTrack;
+      if (track?.slug && audio.currentTime >= 30) {
+        if (listeningProgressRef.current.slug !== track.slug) {
+          listeningProgressRef.current = { slug: track.slug, recorded30s: false };
+        }
+        if (!listeningProgressRef.current.recorded30s) {
+          listeningProgressRef.current.recorded30s = true;
+          recordLocalListening(track, {
+            positionSeconds: audio.currentTime,
+            durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
+            completed: false,
+          });
+        }
+      }
     };
 
     const onDuration = () => patchState({ duration: isFinite(audio.duration) ? audio.duration : 0 });
     const onEnded = () => {
+      const track = stateRef.current.currentTrack;
+      if (track?.slug) {
+        recordLocalListening(track, {
+          positionSeconds: isFinite(audio.duration) ? audio.duration : audio.currentTime,
+          durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
+          completed: true,
+        });
+        listeningProgressRef.current = { slug: null, recorded30s: false };
+      }
       persistPlayback("complete");
       const repeatMode = repeatModeRef.current;
       const queue = queueRef.current;
@@ -340,7 +397,6 @@ export function AudioProvider({ children }) {
           if (repeatMode === "all") nextIndex = 0;
           else {
             patchState({ isPlaying: false, currentTime: 0 });
-            const track = stateRef.current.currentTrack;
             if (track) void updateMediaSession(track, { playing: false });
             return;
           }
@@ -357,7 +413,6 @@ export function AudioProvider({ children }) {
       }
 
       patchState({ isPlaying: false, currentTime: 0 });
-      const track = stateRef.current.currentTrack;
       if (track) void updateMediaSession(track, { playing: false });
     };
     const onError = () => patchState({
@@ -385,7 +440,7 @@ export function AudioProvider({ children }) {
       audio.removeEventListener("error", onError);
       audio.removeEventListener("emptied", onEmptied);
     };
-  }, [patchState, updateMediaSession, syncPositionState]);
+  }, [patchState, updateMediaSession, syncPositionState, recordLocalListening]);
 
   const applyCsToElement = useCallback((audio, presentation, resumeAt = null) => {
     if (!audio || !presentation) return;
@@ -433,6 +488,21 @@ export function AudioProvider({ children }) {
     const isSameTrack = stateRef.current.currentTrackId === nextTrack.id && currentSrc === nextUrl;
     const isReplay = isSameTrack && audio.ended;
     const resumeAt = options.resumeAt && options.resumeAt > 5 ? options.resumeAt : null;
+    const previousTrack = stateRef.current.currentTrack;
+
+    if (
+      previousTrack?.slug &&
+      previousTrack.slug !== nextTrack.slug &&
+      stateRef.current.hasStarted &&
+      !isSameTrack
+    ) {
+      recordLocalListening(previousTrack, {
+        positionSeconds: audio.currentTime || 0,
+        durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
+        completed: true,
+      });
+      listeningProgressRef.current = { slug: null, recorded30s: false };
+    }
 
     patchState({
       currentTrackId: nextTrack.id,
@@ -486,7 +556,7 @@ export function AudioProvider({ children }) {
       void updateMediaSession(nextTrack, { playing: false });
       return false;
     }
-  }, [patchState, updateMediaSession, applyCsToElement]);
+  }, [patchState, updateMediaSession, applyCsToElement, recordLocalListening]);
 
   const applyCSModeToTrack = useCallback(
     async (track) => {

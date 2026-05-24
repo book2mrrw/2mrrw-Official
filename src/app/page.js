@@ -1670,7 +1670,7 @@ export default function Page() {
                   <motion.div style={{marginTop:20,marginBottom:4}}>
                     <motion.div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:14,flexWrap:"wrap"}}>
                       <h2 className="section-heading" style={{margin:0}}>Latest Singles</h2>
-                      {(currentUser || isAdmin) ? (
+                      {currentUser ? (
                         <button type="button" className="collection-portal-link" onClick={openCollection} aria-label="Open my music collection">
                           My Music Collection
                         </button>

@@ -307,7 +307,7 @@ function MyMusicTab({
     continueListening,
     recentlyPlayedRail,
     recentlyAddedRail,
-  } = useListeningHistory({ accountState, singles, albums });
+  } = useListeningHistory({ accountState, singles, albums, userId: user?.id });
 
   const activeContinue = continueListening || lastPlayed;
   const activeRecentlyPlayed = recentlyPlayedRail.length ? recentlyPlayedRail : recentlyPlayed;

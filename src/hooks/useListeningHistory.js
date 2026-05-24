@@ -1,13 +1,30 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
-import { LISTENING_KEYS, readListeningRail } from "@/lib/listening-history";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  getListeningKeys,
+  LISTENING_HISTORY_EVENT,
+  readListeningRail,
+} from "@/lib/listening-history";
 
 /**
  * Scalable listening rails — merges server mediaProgress with localStorage stubs.
  * UI can consume continueListening, recentlyPlayedRail, recentlyAddedRail.
  */
-export function useListeningHistory({ accountState, singles = [], albums = [] } = {}) {
+export function useListeningHistory({ accountState, singles = [], albums = [], userId } = {}) {
+  const [revision, setRevision] = useState(0);
+
+  useEffect(() => {
+    if (!userId || typeof window === "undefined") return undefined;
+    const handler = (event) => {
+      if (!event.detail?.userId || event.detail.userId === userId) {
+        setRevision((value) => value + 1);
+      }
+    };
+    window.addEventListener(LISTENING_HISTORY_EVENT, handler);
+    return () => window.removeEventListener(LISTENING_HISTORY_EVENT, handler);
+  }, [userId]);
+
   const slugToItem = useMemo(() => {
     const map = new Map();
     [...singles, ...albums].forEach((item) => {
@@ -44,25 +61,27 @@ export function useListeningHistory({ accountState, singles = [], albums = [] } 
       .filter(Boolean);
   }, [accountState?.mediaProgress, enrichRow]);
 
+  const listeningKeys = useMemo(() => getListeningKeys(userId), [userId]);
+
   const localRecentlyPlayed = useMemo(() => {
-    if (typeof window === "undefined") return [];
-    return readListeningRail(LISTENING_KEYS.recentlyPlayed).map(enrichRow).filter(Boolean);
-  }, [enrichRow]);
+    if (!listeningKeys) return [];
+    return readListeningRail(listeningKeys.recentlyPlayed).map(enrichRow).filter(Boolean);
+  }, [enrichRow, listeningKeys, revision]);
 
   const localContinue = useMemo(() => {
-    if (typeof window === "undefined") return [];
-    return readListeningRail(LISTENING_KEYS.continue).map(enrichRow).filter(Boolean);
-  }, [enrichRow]);
+    if (!listeningKeys) return [];
+    return readListeningRail(listeningKeys.continue).map(enrichRow).filter(Boolean);
+  }, [enrichRow, listeningKeys, revision]);
 
   const localRecentlyAdded = useMemo(() => {
-    if (typeof window === "undefined") return [];
-    return readListeningRail(LISTENING_KEYS.recentlyAdded).map(enrichRow).filter(Boolean);
-  }, [enrichRow]);
+    if (!listeningKeys) return [];
+    return readListeningRail(listeningKeys.recentlyAdded).map(enrichRow).filter(Boolean);
+  }, [enrichRow, listeningKeys, revision]);
 
   const recentlyPlayedRail = useMemo(() => {
     const seen = new Set();
     const merged = [];
-    for (const row of [...serverProgress, ...localRecentlyPlayed]) {
+    for (const row of [...localRecentlyPlayed, ...serverProgress]) {
       if (seen.has(row.slug)) continue;
       seen.add(row.slug);
       merged.push(row);
@@ -72,6 +91,7 @@ export function useListeningHistory({ accountState, singles = [], albums = [] } 
 
   const continueListening = useMemo(() => {
     const candidate =
+      localContinue.find((r) => !r.completed && r.positionSeconds > 0) ||
       recentlyPlayedRail.find((r) => !r.completed && r.positionSeconds > 0) ||
       localContinue[0] ||
       recentlyPlayedRail[0] ||
