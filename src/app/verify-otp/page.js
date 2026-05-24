@@ -7,9 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
 import { formatResendCountdown } from "@/lib/auth/validation";
 import { useAuth } from "@/context/AuthContext";
-import AuthScreenCard from "@/components/auth/AuthScreenCard";
 
-/** UI expects 6 digits; Supabase Auth email OTP length defaults to 6. */
 const OTP_LENGTH = 8;
 const EMPTY_DIGITS = () => Array(OTP_LENGTH).fill("");
 
@@ -31,9 +29,7 @@ function VerifyOtpForm() {
   const code = useMemo(() => digits.join(""), [digits]);
 
   useEffect(() => {
-    if (!email) {
-      router.replace("/join");
-    }
+    if (!email) router.replace("/join");
   }, [email, router]);
 
   useEffect(() => {
@@ -91,11 +87,7 @@ function VerifyOtpForm() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({
-              email,
-              phone: pendingPhone,
-              name: pendingName || undefined,
-            }),
+            body: JSON.stringify({ email, phone: pendingPhone, name: pendingName || undefined }),
           });
         }
         if (typeof window !== "undefined") {
@@ -146,169 +138,139 @@ function VerifyOtpForm() {
   };
 
   if (!email) {
-    return (
-      <main
-        style={{
-          minHeight: "100vh",
-          background: "#000",
-          color: "#fff",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "24px",
-          boxSizing: "border-box",
-        }}
-      />
-    );
+    return <main style={{ minHeight: "100vh", background: "#050505" }} />;
   }
 
   return (
     <main
       style={{
         minHeight: "100vh",
-        background: "#000",
-        color: "#fff",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px",
-        boxSizing: "border-box",
+        background: "#050505",
+        color: "white",
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+        fontFamily: "sans-serif",
       }}
     >
-      <form onSubmit={verifyOtp} style={{ width: "100%", maxWidth: 420 }}>
-        <AuthScreenCard variant="root">
-          <h1
-            style={{
-              margin: "0 0 8px",
-              fontSize: "1.5rem",
-              fontWeight: "700",
-              color: "#fff",
-            }}
-          >
-            Check your email
-          </h1>
-          <p
-            style={{
-              margin: "0 0 20px",
-              color: "#666",
-              fontSize: "13px",
-              lineHeight: "1.6",
-            }}
-          >
-            Enter the 8-digit code we sent to {email}
-          </p>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "row",
-              flexWrap: "nowrap",
-              width: "100%",
-              gap: "8px",
-              marginBottom: "16px",
-            }}
-          >
-            {digits.map((digit, index) => (
-              <input
-                key={index}
-                ref={(el) => {
-                  inputsRef.current[index] = el;
-                }}
-                className=""
-                style={{
-                  flex: "1 1 0",
-                  minWidth: "0",
-                  aspectRatio: "1",
-                  height: "auto",
-                  background: "#1a1a1a",
-                  border: "1px solid #333",
-                  borderRadius: "10px",
-                  color: "#fff",
-                  textAlign: "center",
-                  fontSize: "20px",
-                  fontWeight: "600",
-                  outline: "none",
-                  boxSizing: "border-box",
-                  padding: "0",
-                }}
-                inputMode="numeric"
-                maxLength={1}
-                value={digit}
-                onChange={(e) => updateDigit(index, e.target.value)}
-                onPaste={handlePaste}
-                onKeyDown={(e) => {
-                  if (e.key === "Backspace" && !digit && index > 0) {
-                    inputsRef.current[index - 1]?.focus();
-                  }
-                }}
-                aria-label={`Digit ${index + 1} of ${OTP_LENGTH}`}
-              />
-            ))}
-          </div>
-          {otpError ? (
-            <div
-              style={{
-                color: "#ff4444",
-                fontSize: "12px",
-                marginBottom: "8px",
+      <form
+        onSubmit={verifyOtp}
+        style={{
+          width: "100%",
+          maxWidth: 420,
+          background: "#0d0d0d",
+          border: "1px solid #222",
+          borderRadius: 20,
+          padding: 28,
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+        }}
+      >
+        <div style={{
+          fontSize: 28,
+          fontWeight: 900,
+          letterSpacing: 6,
+          color: "#00ffff",
+        }}>
+          2MRRW
+        </div>
+        <h1 style={{ margin: 0, fontSize: 22 }}>Check your email</h1>
+        <p style={{ margin: 0, color: "#888", fontSize: 13, lineHeight: 1.6 }}>
+          Enter the 8-digit code we sent to {email}
+        </p>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            flexWrap: "nowrap",
+            width: "100%",
+            gap: 6,
+          }}
+        >
+          {digits.map((digit, index) => (
+            <input
+              key={index}
+              ref={(el) => { inputsRef.current[index] = el; }}
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => updateDigit(index, e.target.value)}
+              onPaste={handlePaste}
+              onKeyDown={(e) => {
+                if (e.key === "Backspace" && !digit && index > 0) {
+                  inputsRef.current[index - 1]?.focus();
+                }
               }}
-            >
-              ⚠ {otpError}
-            </div>
-          ) : null}
-          <button
-            type="submit"
-            disabled={otpLoading}
-            className=""
-            style={{
-              width: "100%",
-              marginTop: "4px",
-              padding: "16px 0",
-              background: "#00b4b4",
-              color: "#000",
-              fontWeight: "700",
-              border: "none",
-              borderRadius: "12px",
-              cursor: "pointer",
-              fontSize: "14px",
-            }}
-          >
-            {otpLoading ? "Verifying…" : "Verify"}
-          </button>
-          <button
-            type="button"
-            onClick={() => void resendOtp()}
-            disabled={resendIn > 0}
-            className=""
-            style={{
-              display: "block",
-              textAlign: "center",
-              marginTop: "12px",
-              fontSize: "13px",
-              color: "#00b4b4",
-              background: "none",
-              border: "none",
-              cursor: resendIn > 0 ? "default" : "pointer",
-              opacity: resendIn > 0 ? 0.6 : 1,
-            }}
-          >
-            {resendIn > 0 ? `Resend code in ${formatResendCountdown(resendIn)}` : "Resend code"}
-          </button>
-          <Link
-            href="/join"
-            className=""
-            style={{
-              display: "block",
-              textAlign: "center",
-              marginTop: "8px",
-              fontSize: "13px",
-              color: "#00b4b4",
-              textDecoration: "none",
-              opacity: 0.7,
-            }}
-          >
-            Back
-          </Link>
-        </AuthScreenCard>
+              aria-label={`Digit ${index + 1} of ${OTP_LENGTH}`}
+              style={{
+                flex: "1 1 0",
+                minWidth: 0,
+                maxWidth: 44,
+                aspectRatio: "1",
+                height: "auto",
+                background: "#111",
+                border: "1px solid #2a2a2a",
+                borderRadius: 10,
+                color: "white",
+                textAlign: "center",
+                fontSize: 20,
+                fontWeight: 700,
+                outline: "none",
+                boxSizing: "border-box",
+                padding: 0,
+              }}
+            />
+          ))}
+        </div>
+        {otpError ? (
+          <div style={{ color: "#ef4444", fontSize: 12 }}>
+            {otpError}
+          </div>
+        ) : null}
+        <button
+          type="submit"
+          disabled={otpLoading}
+          style={{
+            padding: "13px 0",
+            background: "#00ffff",
+            color: "#000",
+            fontWeight: 900,
+            border: "none",
+            borderRadius: 10,
+            cursor: "pointer",
+            opacity: otpLoading ? 0.7 : 1,
+          }}
+        >
+          {otpLoading ? "Verifying…" : "Verify"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void resendOtp()}
+          disabled={resendIn > 0}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#00ffff",
+            fontSize: 13,
+            textAlign: "center",
+            cursor: resendIn > 0 ? "default" : "pointer",
+            opacity: resendIn > 0 ? 0.5 : 1,
+            padding: 0,
+          }}
+        >
+          {resendIn > 0 ? `Resend code in ${formatResendCountdown(resendIn)}` : "Resend code"}
+        </button>
+        <Link
+          href="/join"
+          style={{
+            color: "#777",
+            fontSize: 13,
+            textAlign: "center",
+          }}
+        >
+          Back
+        </Link>
       </form>
     </main>
   );
@@ -316,22 +278,7 @@ function VerifyOtpForm() {
 
 export default function VerifyOtpPage() {
   return (
-    <Suspense
-      fallback={
-        <main
-          style={{
-            minHeight: "100vh",
-            background: "#000",
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "24px",
-            boxSizing: "border-box",
-          }}
-        />
-      }
-    >
+    <Suspense fallback={<main style={{ minHeight: "100vh", background: "#050505" }} />}>
       <VerifyOtpForm />
     </Suspense>
   );

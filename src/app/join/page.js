@@ -6,7 +6,18 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { writePendingPhone } from "@/lib/auth/otp-pending";
 import { validateEmail, validatePhone } from "@/lib/auth/validation";
-import AuthScreenCard from "@/components/auth/AuthScreenCard";
+
+const inputStyle = {
+  padding: "12px 14px",
+  background: "#111",
+  border: "1px solid #2a2a2a",
+  color: "white",
+  borderRadius: 10,
+  fontSize: 14,
+  outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
+};
 
 function JoinForm() {
   const router = useRouter();
@@ -108,75 +119,64 @@ function JoinForm() {
     <main
       style={{
         minHeight: "100vh",
-        background: "#000",
-        color: "#fff",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "24px",
-        boxSizing: "border-box",
+        background: "#050505",
+        color: "white",
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+        fontFamily: "sans-serif",
       }}
     >
-      <form onSubmit={submit} style={{ width: "100%", maxWidth: 420 }}>
-        <AuthScreenCard variant="root">
-          {giftPreview?.gift ? (
-            <div
-              style={{
-                padding: 14,
-                borderRadius: 12,
-                background: "rgba(162,89,255,0.08)",
-                border: "1px solid rgba(162,89,255,0.25)",
-                marginBottom: 16,
-              }}
-            >
-              <p style={{ margin: 0, fontSize: 13, color: "#c9b8ff", lineHeight: 1.6 }}>
-                You have a gift waiting — create your account to claim it
-                {giftPreview.gift.item_title ? `: ${giftPreview.gift.item_title}` : ""}.
-              </p>
-            </div>
-          ) : null}
-          <h1
+      <form
+        onSubmit={submit}
+        style={{
+          width: "100%",
+          maxWidth: 420,
+          background: "#0d0d0d",
+          border: "1px solid #222",
+          borderRadius: 20,
+          padding: 28,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}
+      >
+        <div style={{
+          fontSize: 28,
+          fontWeight: 900,
+          letterSpacing: 6,
+          color: "#00ffff",
+        }}>
+          2MRRW
+        </div>
+        {giftPreview?.gift ? (
+          <div
             style={{
-              margin: "0 0 8px",
-              fontSize: "1.5rem",
-              fontWeight: "700",
-              fontFamily: "Georgia,'Times New Roman',Times,serif",
-              color: "#fff",
-              textShadow:
-                "0 0 14px rgba(0,255,255,0.55), 0 0 28px rgba(0,255,255,0.22)",
+              padding: 14,
+              borderRadius: 12,
+              background: "rgba(162,89,255,0.08)",
+              border: "1px solid rgba(162,89,255,0.25)",
+              marginBottom: 4,
             }}
           >
-            Join 2MRRW Music
-          </h1>
-          <p
-            style={{
-              margin: "0 0 20px",
-              color: "#666",
-              fontSize: "13px",
-              lineHeight: "1.6",
-            }}
-          >
-            Email + phone verification. No password.
-          </p>
-          <input
-            placeholder="Full Name (optional)"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className=""
-            style={{
-              padding: "16px",
-              background: "#1a1a1a",
-              border: "1px solid #333",
-              color: "#fff",
-              borderRadius: "12px",
-              fontSize: "14px",
-              outline: "none",
-              width: "100%",
-              boxSizing: "border-box",
-              marginBottom: "12px",
-            }}
-          />
+            <p style={{ margin: 0, fontSize: 13, color: "#c9b8ff", lineHeight: 1.6 }}>
+              You have a gift waiting — create your account to claim it
+              {giftPreview.gift.item_title ? `: ${giftPreview.gift.item_title}` : ""}.
+            </p>
+          </div>
+        ) : null}
+        <h1 style={{ margin: "6px 0 0", fontSize: 24 }}>Join 2MRRW</h1>
+        <p style={{ margin: "0 0 8px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
+          Email + phone verification. No password.
+        </p>
+        <input
+          placeholder="Full Name (optional)"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          style={inputStyle}
+        />
+        <div>
           <input
             placeholder="Email"
             type="email"
@@ -186,32 +186,15 @@ function JoinForm() {
               if (emailError) setEmailError("");
             }}
             required
-            className=""
-            style={{
-              padding: "16px",
-              background: "#1a1a1a",
-              border: emailError ? "1px solid #ff4444" : "1px solid #333",
-              color: "#fff",
-              borderRadius: "12px",
-              fontSize: "14px",
-              outline: "none",
-              width: "100%",
-              boxSizing: "border-box",
-              marginBottom: emailError ? "8px" : "12px",
-            }}
+            style={{ ...inputStyle, borderColor: emailError ? "#ef4444" : "#2a2a2a" }}
           />
           {emailError ? (
-            <div
-              style={{
-                color: "#ff4444",
-                fontSize: "12px",
-                marginBottom: "8px",
-                marginTop: "-4px",
-              }}
-            >
+            <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>
               {emailError}
             </div>
           ) : null}
+        </div>
+        <div>
           <input
             placeholder="Phone number"
             type="tel"
@@ -221,96 +204,49 @@ function JoinForm() {
               if (phoneError) setPhoneError("");
             }}
             required
-            className=""
-            style={{
-              padding: "16px",
-              background: "#1a1a1a",
-              border: phoneError ? "1px solid #ff4444" : "1px solid #333",
-              color: "#fff",
-              borderRadius: "12px",
-              fontSize: "14px",
-              outline: "none",
-              width: "100%",
-              boxSizing: "border-box",
-              marginBottom: phoneError ? "8px" : "12px",
-            }}
+            style={{ ...inputStyle, borderColor: phoneError ? "#ef4444" : "#2a2a2a" }}
           />
           {phoneError ? (
-            <div
-              style={{
-                color: "#ff4444",
-                fontSize: "12px",
-                marginBottom: "8px",
-                marginTop: "-4px",
-              }}
-            >
+            <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>
               {phoneError}
             </div>
           ) : null}
-          {error ? (
-            <div
-              style={{
-                color: "#ff4444",
-                fontSize: "12px",
-                marginBottom: "8px",
-              }}
-            >
-              ⚠ {error}
-            </div>
-          ) : null}
-          {existsHint ? (
-            <Link
-              href={giftToken ? `/login?gift=${giftToken}` : "/login"}
-              className=""
-              style={{
-                display: "block",
-                textAlign: "center",
-                marginTop: "0",
-                marginBottom: "12px",
-                fontSize: "13px",
-                color: "#00b4b4",
-                textDecoration: "none",
-                cursor: "pointer",
-              }}
-            >
-              Sign in instead →
-            </Link>
-          ) : null}
-          <button
-            type="submit"
-            disabled={loading}
-            className=""
-            style={{
-              width: "100%",
-              marginTop: "4px",
-              padding: "16px 0",
-              background: "#00b4b4",
-              color: "#000",
-              fontWeight: "700",
-              border: "none",
-              borderRadius: "12px",
-              cursor: "pointer",
-              fontSize: "14px",
-            }}
-          >
-            {loading ? "Sending code…" : "Send Verification Code"}
-          </button>
+        </div>
+        {error ? (
+          <div style={{ color: "#ff4d4d", fontSize: 13 }}>
+            {error}
+          </div>
+        ) : null}
+        {existsHint ? (
           <Link
             href={giftToken ? `/login?gift=${giftToken}` : "/login"}
-            className=""
-            style={{
-              display: "block",
-              textAlign: "center",
-              marginTop: "12px",
-              fontSize: "13px",
-              color: "#00b4b4",
-              textDecoration: "none",
-              cursor: "pointer",
-            }}
+            style={{ color: "#00ffff", fontSize: 13 }}
           >
-            Sign in
+            Sign in instead →
           </Link>
-        </AuthScreenCard>
+        ) : null}
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            padding: "13px 0",
+            background: "#00ffff",
+            color: "#000",
+            fontWeight: 900,
+            border: "none",
+            borderRadius: 10,
+            cursor: "pointer",
+            opacity: loading ? 0.7 : 1,
+          }}
+        >
+          {loading ? "Sending code…" : "Send Verification Code"}
+        </button>
+        <Link
+          href={giftToken ? `/login?gift=${giftToken}` : "/login"}
+          style={{ color: "#00ffff", fontSize: 13, textAlign: "center", marginTop: 4 }}
+        >
+          Sign in
+        </Link>
       </form>
     </main>
   );
@@ -318,22 +254,7 @@ function JoinForm() {
 
 export default function JoinPage() {
   return (
-    <Suspense
-      fallback={
-        <main
-          style={{
-            minHeight: "100vh",
-            background: "#000",
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: "24px",
-            boxSizing: "border-box",
-          }}
-        />
-      }
-    >
+    <Suspense fallback={<main style={{ minHeight: "100vh", background: "#050505" }} />}>
       <JoinForm />
     </Suspense>
   );
