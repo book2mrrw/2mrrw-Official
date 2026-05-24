@@ -1,9 +1,34 @@
 "use client";
 
+const CARD_STYLE = {
+  width: "min(420px, calc(100vw - 32px))",
+  background: "#111",
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: "1rem",
+  padding: "2rem",
+  boxSizing: "border-box",
+};
+
+const BRAND_BLOCK_STYLE = {
+  textAlign: "center",
+  marginBottom: "24px",
+};
+
+const BRAND_STYLE = {
+  fontSize: "22px",
+  fontWeight: "300",
+  letterSpacing: "0.3em",
+  color: "#fff",
+  lineHeight: "1",
+  whiteSpace: "nowrap",
+  textShadow:
+    "0 0 14px rgba(0,255,255,0.55), 0 0 28px rgba(0,255,255,0.22)",
+};
+
 export function AuthBrandBlock() {
   return (
-    <div className="auth-brand-block">
-      <div className="auth-brand auth-brand-refined hero-title-glow">2MRRW</div>
+    <div style={BRAND_BLOCK_STYLE}>
+      <div style={BRAND_STYLE}>2MRRW</div>
     </div>
   );
 }
@@ -21,23 +46,40 @@ export default function AuthScreenCard({
 
   return (
     <div
-      className={isRoot ? "auth-card auth-card--elevated auth-card--ref" : "auth-card auth-card--sheet auth-card--elevated auth-card--ref"}
+      style={{
+        ...CARD_STYLE,
+        ...(isRoot
+          ? {}
+          : {
+              transform:
+                sheetDragY > 0
+                  ? `translateY(${sheetDragY}px)`
+                  : undefined,
+              transition:
+                sheetDragY > 0 ? "none" : "transform 0.2s ease",
+            }),
+      }}
       onTouchStart={isRoot ? undefined : onTouchStart}
       onTouchMove={isRoot ? undefined : onTouchMove}
       onTouchEnd={isRoot ? undefined : onTouchEnd}
       onTouchCancel={isRoot ? undefined : onTouchCancel}
-      style={
-        isRoot
-          ? undefined
-          : {
-              transform: sheetDragY > 0 ? `translateY(${sheetDragY}px)` : undefined,
-              transition: sheetDragY > 0 ? "none" : "transform 0.2s ease",
-            }
-      }
     >
-      {!isRoot ? <div className="auth-sheet-handle" aria-hidden="true" /> : null}
+      {!isRoot ? (
+        <div
+          style={{
+            width: 36,
+            height: 4,
+            borderRadius: 2,
+            background: "rgba(255,255,255,0.2)",
+            margin: "0 auto 16px",
+          }}
+          aria-hidden="true"
+        />
+      ) : null}
       <AuthBrandBlock />
-      <div className="auth-card-body">{children}</div>
+      <div style={{ display: "flex", flexDirection: "column" }}>
+        {children}
+      </div>
     </div>
   );
 }

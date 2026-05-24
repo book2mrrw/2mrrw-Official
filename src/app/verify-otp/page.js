@@ -9,8 +9,8 @@ import { formatResendCountdown } from "@/lib/auth/validation";
 import { useAuth } from "@/context/AuthContext";
 import AuthScreenCard from "@/components/auth/AuthScreenCard";
 
-/** UI expects 8 digits; set Supabase Auth email OTP length to 8 (default is 6). */
-const OTP_LENGTH = 8;
+/** UI expects 6 digits; Supabase Auth email OTP length defaults to 6. */
+const OTP_LENGTH = 6;
 const EMPTY_DIGITS = () => Array(OTP_LENGTH).fill("");
 
 function VerifyOtpForm() {
@@ -69,7 +69,7 @@ function VerifyOtpForm() {
     async (e) => {
       e?.preventDefault?.();
       if (code.length !== OTP_LENGTH) {
-        setOtpError("Enter the 8-digit code.");
+        setOtpError("Enter the 6-digit code.");
         return;
       }
       setOtpLoading(true);
@@ -146,25 +146,90 @@ function VerifyOtpForm() {
   };
 
   if (!email) {
-    return <main className="auth-page auth-page--ref" />;
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          background: "#000",
+          color: "#fff",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px",
+          boxSizing: "border-box",
+        }}
+      />
+    );
   }
 
   return (
-    <main className="auth-page auth-page--ref">
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#000",
+        color: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "24px",
+        boxSizing: "border-box",
+      }}
+    >
       <form onSubmit={verifyOtp} style={{ width: "100%", maxWidth: 420 }}>
         <AuthScreenCard variant="root">
-          <h1 className="auth-heading auth-heading--elevated">Check your email</h1>
-          <p className="auth-subtext">
-            Enter the 8-digit code we sent to {email}
+          <h1
+            style={{
+              margin: "0 0 8px",
+              fontSize: "1.5rem",
+              fontWeight: "700",
+              color: "#fff",
+            }}
+          >
+            Check your email
+          </h1>
+          <p
+            style={{
+              margin: "0 0 20px",
+              color: "#666",
+              fontSize: "13px",
+              lineHeight: "1.6",
+            }}
+          >
+            Enter the 6-digit code we sent to {email}
           </p>
-          <div className="auth-otp-row auth-otp-row-8">
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              flexWrap: "nowrap",
+              width: "100%",
+              gap: "8px",
+              marginBottom: "16px",
+            }}
+          >
             {digits.map((digit, index) => (
               <input
                 key={index}
                 ref={(el) => {
                   inputsRef.current[index] = el;
                 }}
-                className={`auth-otp-box auth-otp-box--square auth-otp-box--focus-teal${digit ? " auth-otp-box--filled" : ""}`}
+                className=""
+                style={{
+                  flex: "1 1 0",
+                  minWidth: "0",
+                  aspectRatio: "1",
+                  height: "auto",
+                  background: "#1a1a1a",
+                  border: "1px solid #333",
+                  borderRadius: "10px",
+                  color: "#fff",
+                  textAlign: "center",
+                  fontSize: "20px",
+                  fontWeight: "600",
+                  outline: "none",
+                  boxSizing: "border-box",
+                  padding: "0",
+                }}
                 inputMode="numeric"
                 maxLength={1}
                 value={digit}
@@ -179,20 +244,68 @@ function VerifyOtpForm() {
               />
             ))}
           </div>
-          {otpError ? <div className="auth-error">⚠ {otpError}</div> : null}
-          <button type="submit" disabled={otpLoading} className="auth-cta">
+          {otpError ? (
+            <div
+              style={{
+                color: "#ff4444",
+                fontSize: "12px",
+                marginBottom: "8px",
+              }}
+            >
+              ⚠ {otpError}
+            </div>
+          ) : null}
+          <button
+            type="submit"
+            disabled={otpLoading}
+            className=""
+            style={{
+              width: "100%",
+              marginTop: "4px",
+              padding: "16px 0",
+              background: "#00b4b4",
+              color: "#000",
+              fontWeight: "700",
+              border: "none",
+              borderRadius: "12px",
+              cursor: "pointer",
+              fontSize: "14px",
+            }}
+          >
             {otpLoading ? "Verifying…" : "Verify"}
           </button>
           <button
             type="button"
             onClick={() => void resendOtp()}
             disabled={resendIn > 0}
-            className="auth-link"
-            style={{ opacity: resendIn > 0 ? 0.85 : 1, cursor: resendIn > 0 ? "default" : "pointer" }}
+            className=""
+            style={{
+              display: "block",
+              textAlign: "center",
+              marginTop: "12px",
+              fontSize: "13px",
+              color: "#00b4b4",
+              background: "none",
+              border: "none",
+              cursor: resendIn > 0 ? "default" : "pointer",
+              opacity: resendIn > 0 ? 0.6 : 1,
+            }}
           >
             {resendIn > 0 ? `Resend code in ${formatResendCountdown(resendIn)}` : "Resend code"}
           </button>
-          <Link href="/join" className="auth-link" style={{ opacity: 0.7 }}>
+          <Link
+            href="/join"
+            className=""
+            style={{
+              display: "block",
+              textAlign: "center",
+              marginTop: "8px",
+              fontSize: "13px",
+              color: "#00b4b4",
+              textDecoration: "none",
+              opacity: 0.7,
+            }}
+          >
             Back
           </Link>
         </AuthScreenCard>
@@ -203,7 +316,22 @@ function VerifyOtpForm() {
 
 export default function VerifyOtpPage() {
   return (
-    <Suspense fallback={<main className="auth-page auth-page--ref" />}>
+    <Suspense
+      fallback={
+        <main
+          style={{
+            minHeight: "100vh",
+            background: "#000",
+            color: "#fff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
+            boxSizing: "border-box",
+          }}
+        />
+      }
+    >
       <VerifyOtpForm />
     </Suspense>
   );
