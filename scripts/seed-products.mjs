@@ -1,6 +1,8 @@
 import { readFileSync } from "fs";
 import { createClient } from "@supabase/supabase-js";
 
+// Canonical slugs live in src/lib/commerce/catalog.js (PRODUCT_CATALOG). Keep this list in sync.
+
 const env = Object.fromEntries(
   readFileSync(".env.local", "utf8")
     .split("\n")
@@ -27,6 +29,7 @@ const CATALOG = [
   { slug: "love-hz-vinyl", title: "Love Hz Vol.1 – Vinyl", product_type: "vinyl", price_cents: 4799, cover_url: "/images/albums/lovehz.jpg" },
   { slug: "exc-card-tbh", title: "T.B.H. Collector Art Card", product_type: "vault", price_cents: 8999, cover_url: "/images/albums/tbh.jpg" },
   { slug: "exc-card-ad", title: "2MRRW: (A.D) Collector Card", product_type: "vault", price_cents: 9999, cover_url: "/images/albums/ad.jpg" },
+  { slug: "exc-card-lovehz", title: "Love Hz Vol.1 Collector Card", product_type: "vault", price_cents: 12999, cover_url: "/images/albums/lovehz.jpg" },
   { slug: "exc-bundle-lovehz", title: "Love Hz Vol.1 Launch Bundle", product_type: "bundle", price_cents: 14999, cover_url: "/images/albums/lovehz.jpg" },
   { slug: "exc-signed-vinyl", title: "Signed Vinyl — T.B.H.", product_type: "vault", price_cents: 7499, cover_url: "/images/albums/tbh.jpg" },
   { slug: "hoodie", title: "2MRRW HOODIE", product_type: "merch", price_cents: 5999, cover_url: "/images/merch/hoodie.jpg" },

@@ -17,7 +17,7 @@ import MyMusicTab from "@/components/music/MyMusicTab";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/lib/deep-links";
-import { resolveContentAccess, resolvePlaybackSrc } from "@/lib/music-access";
+import { resolveContentAccess, resolvePlaybackSrc, isAdminAccount } from "@/lib/music-access";
 import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
@@ -1249,6 +1249,8 @@ export default function Page() {
   const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
   const currentSlide   = useMemo(() => withR2CatalogMedia(radioSlides[radioIndex]), [radioIndex]);
   const activeFlowMode = flowConversionActive ? "conversion" : nowPlaying ? "nowplaying" : "idle";
+  const accountStateReady = !authLoading;
+  const showOwnTrackConversion = accountStateReady && !isAdminAccount(accountState);
 
   const exclusiveItems = exclusiveCatalog.map(item => ({
     ...item,
@@ -1296,7 +1298,7 @@ export default function Page() {
           <div style={{marginTop:4,padding:"4px 14px",background:currentSlide.tagColor+"18",border:`1px solid ${currentSlide.tagColor}30`,borderRadius:20,fontSize:10,fontWeight:700,color:currentSlide.tagColor,letterSpacing:1.5}}>{currentSlide.tag}</div>
         </div>
       </div>
-      {!isAdmin ? (
+      {showOwnTrackConversion ? (
       <div style={{position:"absolute",inset:0,opacity:activeFlowMode==="conversion"?1:0,pointerEvents:activeFlowMode==="conversion"?"auto":"none",transition:"opacity 0.45s"}}>
         <div style={{position:"absolute",inset:0,background:`radial-gradient(ellipse at 50% 45%,${currentSlide.tagColor}16 0%,transparent 60%)`,pointerEvents:"none"}}/>
         <div style={{position:"absolute",inset:0,zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 20px",gap:12,textAlign:"center"}}>
