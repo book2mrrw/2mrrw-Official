@@ -195,7 +195,8 @@ body {
   border-bottom: none;
   box-shadow:
     0 -8px 40px rgba(0, 0, 0, 0.55),
-    0 0 48px var(--modal-accent-glow, rgba(0, 220, 210, 0.12));
+    0 0 48px var(--modal-edge-glow, var(--modal-accent-glow, rgba(0, 220, 210, 0.12))),
+    inset 0 1px 0 var(--modal-accent-muted, rgba(0, 220, 210, 0.06));
   will-change: transform;
   touch-action: pan-y;
 }
@@ -232,6 +233,14 @@ body {
   height: 4px;
   border-radius: 99px;
   background: rgba(148, 148, 156, 0.55);
+  box-shadow: 0 0 12px var(--modal-accent-glow, rgba(0, 220, 210, 0.22));
+  transition: box-shadow 0.25s ease, background 0.25s ease;
+}
+
+.modal-immersive-sheet-handle:focus-visible::before,
+.modal-immersive-sheet-handle:hover::before {
+  background: var(--modal-accent, #00dcd2);
+  box-shadow: 0 0 16px var(--modal-accent-glow, rgba(0, 220, 210, 0.45));
 }
 
 .modal-immersive-close {
@@ -240,7 +249,7 @@ body {
   right: 14px;
   z-index: 24;
   background: rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--modal-accent-outline, rgba(255, 255, 255, 0.12));
   border-radius: 50%;
   width: 34px;
   height: 34px;
@@ -252,6 +261,14 @@ body {
   justify-content: center;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.modal-immersive-close:hover,
+.modal-immersive-close:focus-visible {
+  border-color: var(--modal-accent, #00dcd2);
+  box-shadow: 0 0 14px var(--modal-accent-glow, rgba(0, 220, 210, 0.35));
+  outline: none;
 }
 
 .modal-immersive-stage {
@@ -273,13 +290,62 @@ body {
 
 .modal-immersive-ambient__blur {
   position: absolute;
-  inset: -18%;
+  inset: -22%;
   background-size: cover;
   background-position: center;
   filter: blur(28px) saturate(1.35) brightness(0.42);
-  transform: scale(1.08) translateZ(0);
-  will-change: transform;
-  opacity: 0.72;
+  transform: scale(1.12) translateZ(0);
+  will-change: transform, opacity;
+  opacity: 0.68;
+}
+
+.modal-immersive-ambient__blur--static {
+  animation: modalAmbientPulse 5s ease-in-out infinite;
+}
+
+.modal-immersive-ambient__blur--motion {
+  inset: -28%;
+  overflow: hidden;
+  filter: none;
+  background: none;
+  opacity: 1;
+}
+
+.modal-immersive-ambient__blur--motion .modal-immersive-ambient__media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(32px) saturate(1.28) brightness(0.38);
+  transform: scale(1.18) translateZ(0);
+  opacity: 0.62;
+  will-change: transform, opacity;
+}
+
+.modal-immersive-ambient__pulse {
+  position: absolute;
+  inset: -8%;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 70% 55% at 50% 38%,
+    var(--modal-accent-glow, rgba(0, 220, 210, 0.22)) 0%,
+    transparent 62%
+  );
+  mix-blend-mode: screen;
+  animation: modalAmbientPulse 5.5s ease-in-out infinite;
+  will-change: opacity, transform;
+}
+
+@keyframes modalAmbientPulse {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: scale(1) translateZ(0);
+  }
+  50% {
+    opacity: 0.78;
+    transform: scale(1.04) translateZ(0);
+  }
 }
 
 .modal-immersive-ambient__blur::after {
@@ -293,14 +359,6 @@ body {
   );
   mix-blend-mode: screen;
   opacity: 0.65;
-}
-
-.modal-immersive-ambient__media {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(32px) brightness(0.35);
-  transform: scale(1.12);
 }
 
 .modal-immersive-ambient__wash {
@@ -333,6 +391,25 @@ body {
   box-shadow:
     0 18px 48px rgba(0, 0, 0, 0.55),
     0 0 32px var(--modal-accent-glow, rgba(0, 220, 210, 0.22));
+  transition: box-shadow 0.35s ease;
+}
+
+.modal-immersive-art--pulse {
+  animation: modalArtGlowPulse 5.2s ease-in-out infinite;
+}
+
+@keyframes modalArtGlowPulse {
+  0%,
+  100% {
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.55),
+      0 0 28px var(--modal-accent-glow, rgba(0, 220, 210, 0.18));
+  }
+  50% {
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.55),
+      0 0 40px var(--modal-accent-glow, rgba(0, 220, 210, 0.32));
+  }
 }
 
 .modal-immersive-art__cover {
@@ -360,7 +437,7 @@ body {
   z-index: 8;
   padding: 8px 14px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--modal-accent-outline, rgba(255, 255, 255, 0.12));
   background: rgba(8, 8, 10, 0.42);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -373,7 +450,16 @@ body {
   box-shadow:
     0 4px 20px rgba(0, 0, 0, 0.35),
     0 0 16px var(--modal-accent-glow, rgba(0, 220, 210, 0.15));
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, transform 0.18s;
+}
+
+.modal-immersive-view-more:hover,
+.modal-immersive-view-more:focus-visible {
+  border-color: var(--modal-accent, #00dcd2);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.35),
+    0 0 22px var(--modal-accent-glow, rgba(0, 220, 210, 0.28));
+  outline: none;
 }
 
 .modal-immersive-view-more:active {
@@ -393,7 +479,8 @@ body {
     rgba(6, 6, 8, 0.98) 78%,
     rgba(6, 6, 8, 0.88) 100%
   );
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--modal-accent-outline, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 -8px 32px var(--modal-edge-glow, rgba(0, 0, 0, 0.35));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   overflow-y: auto;
@@ -405,11 +492,20 @@ body {
   height: 4px;
   border-radius: 99px;
   background: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 0 10px var(--modal-accent-glow, rgba(0, 220, 210, 0.2));
   margin: 0 auto 12px;
   display: block;
   border: none;
   cursor: pointer;
   padding: 0;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.modal-immersive-drawer__handle:hover,
+.modal-immersive-drawer__handle:focus-visible {
+  background: var(--modal-accent, #00dcd2);
+  box-shadow: 0 0 14px var(--modal-accent-glow, rgba(0, 220, 210, 0.4));
+  outline: none;
 }
 
 .modal-immersive-drawer__row {
@@ -476,6 +572,7 @@ body {
   letter-spacing: 2px;
   text-transform: uppercase;
   opacity: 0.88;
+  color: var(--modal-accent, #00dcd2);
 }
 
 .modal-immersive-meta__glyphs {
@@ -559,11 +656,18 @@ body {
   padding: 8px 10px;
   border-radius: 12px;
   cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--modal-accent-outline, rgba(255, 255, 255, 0.1));
   background: rgba(18, 18, 22, 0.72);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  transition: transform 0.18s, border-color 0.18s;
+  transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+}
+
+.modal-immersive-action-card:hover,
+.modal-immersive-action-card:focus-visible {
+  border-color: var(--modal-accent, #00dcd2);
+  box-shadow: 0 0 20px var(--modal-accent-glow, rgba(0, 220, 210, 0.18));
+  outline: none;
 }
 
 .modal-immersive-action-card:active {
@@ -609,6 +713,40 @@ body {
   cursor: pointer;
   text-align: center;
   opacity: 0.75;
+  transition: opacity 0.2s ease, text-shadow 0.2s ease;
+}
+
+.modal-immersive-vinyl-link:hover,
+.modal-immersive-vinyl-link:focus-visible {
+  opacity: 1;
+  text-shadow: 0 0 12px var(--modal-accent-glow, rgba(0, 220, 210, 0.35));
+  outline: none;
+}
+
+.modal-immersive-player--accent .player-hero-ambient {
+  background: radial-gradient(
+    circle,
+    var(--modal-accent-glow, rgba(0, 220, 210, 0.35)) 0%,
+    transparent 70%
+  );
+}
+
+.modal-immersive-player--accent .player-hero-btn--playing .player-hero-core {
+  box-shadow:
+    0 0 0 1px var(--modal-accent-outline, rgba(0, 220, 210, 0.35)),
+    0 0 18px var(--modal-accent-glow, rgba(0, 220, 210, 0.45));
+}
+
+.modal-immersive-player--accent .player-hero-ring {
+  border-color: var(--modal-accent-muted, rgba(0, 220, 210, 0.2));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-immersive-ambient__blur--static,
+  .modal-immersive-ambient__pulse,
+  .modal-immersive-art--pulse {
+    animation: none !important;
+  }
 }
 
 @media (max-width: 768px) {

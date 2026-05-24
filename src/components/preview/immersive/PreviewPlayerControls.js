@@ -2,6 +2,7 @@
 
 import { useEffect, useState, memo, useCallback } from "react";
 import { PlayPauseHero } from "@/components/audio/PlayerControlButton";
+import { paletteToCssVars } from "@/hooks/useCoverPalette";
 
 const formatTime = (s) => {
   if (!s || isNaN(s) || !isFinite(s)) return "0:00";
@@ -14,9 +15,6 @@ function PreviewPlayerControls({ audioRef, palette, compact = true }) {
   const [playing, setPlaying] = useState(false);
   const [current, setCurrent] = useState(0);
   const [duration, setDuration] = useState(0);
-
-  const accent = palette?.primaryCss || "#00dcd2";
-  const glow = palette?.primaryGlow || "rgba(0,220,210,0.45)";
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -72,15 +70,10 @@ function PreviewPlayerControls({ audioRef, palette, compact = true }) {
 
   const progress = duration ? Math.max(0, Math.min(100, (current / duration) * 100)) : 0;
   const playSize = compact ? 48 : 56;
+  const cssVars = paletteToCssVars(palette);
 
   return (
-    <div
-      className="modal-immersive-player"
-      style={{
-        ["--modal-accent"]: accent,
-        ["--modal-accent-glow"]: glow,
-      }}
-    >
+    <div className="modal-immersive-player modal-immersive-player--accent" style={cssVars}>
       <div
         className="modal-immersive-player__track"
         onClick={seekTo}

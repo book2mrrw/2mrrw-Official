@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import GlyphLyricsPanel from "@/components/preview/GlyphLyricsPanel";
 import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview/releaseMetadata";
 import { extractLrcFromRelease } from "@/lib/lrc";
-import { useCoverPalette } from "@/hooks/useCoverPalette";
+import { useCoverPalette, paletteToCssVars } from "@/hooks/useCoverPalette";
 import AmbientArtworkBackground from "@/components/preview/immersive/AmbientArtworkBackground";
 import TrackMeta from "@/components/preview/immersive/TrackMeta";
 import PreviewPlayerControls from "@/components/preview/immersive/PreviewPlayerControls";
@@ -112,12 +112,7 @@ function ImmersivePreviewModal({
   const coverType = single.coverArtType || (single.video ? "video" : "image");
   const palette = useCoverPalette(coverSrc, coverType);
 
-  const paletteVars = {
-    ["--modal-accent"]: palette.primaryCss,
-    ["--modal-accent-secondary"]: palette.secondaryCss,
-    ["--modal-accent-glow"]: palette.primaryGlow,
-    ["--modal-secondary-glow"]: palette.secondaryGlow,
-  };
+  const paletteVars = paletteToCssVars(palette);
 
   const handleAddToCart = () => {
     onAddToCart(single);
@@ -167,9 +162,9 @@ function ImmersivePreviewModal({
           </button>
 
           <section className="modal-immersive-stage">
-            <AmbientArtworkBackground src={coverSrc} type={coverType} alt={single.title} palette={palette} />
+            <AmbientArtworkBackground src={coverSrc} type={coverType} palette={palette} />
 
-            <div className="modal-immersive-art">
+            <div className={`modal-immersive-art${palette.animated ? "" : " modal-immersive-art--pulse"}`}>
               <CoverArt
                 key={single.slug}
                 src={coverSrc}
@@ -294,7 +289,7 @@ function ImmersivePreviewModal({
             background: "#000",
           }}
         >
-          <AmbientArtworkBackground src={coverSrc} type={coverType} alt={single.title} palette={palette} />
+          <AmbientArtworkBackground src={coverSrc} type={coverType} palette={palette} />
           <CoverArt
             key={single.slug}
             src={coverSrc}

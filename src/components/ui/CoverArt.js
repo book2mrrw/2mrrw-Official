@@ -1,9 +1,9 @@
 "use client";
 
 export function resolveCoverMediaType(src, type = "image") {
-  if (type === "video" || (src && String(src).toLowerCase().endsWith(".mp4"))) {
-    return "video";
-  }
+  if (type === "video" || type === "motion") return "video";
+  const s = String(src || "").toLowerCase();
+  if (/\.(mp4|webm)(\?|#|$)/.test(s)) return "video";
   return "image";
 }
 
@@ -14,6 +14,7 @@ export default function CoverArt({
   width,
   height,
   borderRadius,
+  className,
   style,
   onClick,
   onTouchStart,
@@ -23,6 +24,7 @@ export default function CoverArt({
     return (
       <div
         aria-hidden
+        className={className}
         style={{
           width: width ?? "100%",
           height: height ?? "100%",
@@ -55,6 +57,7 @@ export default function CoverArt({
         loop
         muted
         playsInline
+        className={className}
         {...touchProps}
         style={baseStyle}
       />
@@ -66,6 +69,7 @@ export default function CoverArt({
       src={src}
       alt={alt}
       draggable={false}
+      className={className}
       {...touchProps}
       style={baseStyle}
     />

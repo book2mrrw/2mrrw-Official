@@ -3,6 +3,7 @@
 import { memo } from "react";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import { giftIconColor } from "@/components/gifts/GiftIcon";
+import { paletteToCssVars } from "@/hooks/useCoverPalette";
 
 function ModalActionButtons({
   showPurchase,
@@ -15,13 +16,7 @@ function ModalActionButtons({
   if (!showPurchase && !showGift) return null;
 
   return (
-    <div
-      className="modal-immersive-actions"
-      style={{
-        ["--modal-accent"]: palette?.primaryCss || "#00dcd2",
-        ["--modal-accent-glow"]: palette?.primaryGlow || "rgba(0,220,210,0.35)",
-      }}
-    >
+    <div className="modal-immersive-actions" style={paletteToCssVars(palette)}>
       {showPurchase ? (
         <button
           type="button"

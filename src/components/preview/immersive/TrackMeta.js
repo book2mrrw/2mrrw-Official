@@ -3,6 +3,7 @@
 import { memo } from "react";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
+import { paletteToCssVars } from "@/hooks/useCoverPalette";
 
 function TrackMeta({
   title,
@@ -21,20 +22,10 @@ function TrackMeta({
   const statusLabel = canStream ? "FULL STREAM" : "PREVIEW TRACK";
 
   return (
-    <div className="modal-immersive-meta">
-      <h2
-        className="modal-immersive-meta__title"
-        style={{
-          ["--modal-title-glow"]: palette?.primaryGlow || "rgba(0,220,210,0.35)",
-        }}
-      >
-        {title}
-      </h2>
+    <div className="modal-immersive-meta" style={paletteToCssVars(palette)}>
+      <h2 className="modal-immersive-meta__title">{title}</h2>
       <div className="modal-immersive-meta__row">
-        <span
-          className="modal-immersive-meta__status"
-          style={{ color: palette?.primaryCss || "#00dcd2" }}
-        >
+        <span className="modal-immersive-meta__status">
           {statusLabel}
           {showPurchase && priceLabel ? ` · ${priceLabel}` : ""}
         </span>
