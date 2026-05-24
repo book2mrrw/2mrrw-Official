@@ -27,10 +27,12 @@ export function catalogItemAllowsFullPlayback(item, track, accountState = {}) {
   }
 
   const membership = accountState.membership || null;
-  if (!membershipHasPremiumAccess(membership)) return false;
+  const subscriptionActive =
+    Boolean(accountState.subscriberActive) || membershipHasPremiumAccess(membership);
+  if (!subscriptionActive) return false;
 
   const permissions = accountState.permissions || {};
-  if (permissions.subscriber) return true;
+  if (permissions.subscriber || accountState.subscriberActive) return true;
 
   const collectorRecords = accountState.collectorOwnerships || [];
   if (permissions.collectorAccess || permissions.collector) {

@@ -10,7 +10,7 @@ import {
   membershipHasPremiumAccess,
   vaultTierFor,
 } from "@/lib/commerce/entitlements";
-import { getUserEntitlements, hasEntitlement } from "@/lib/entitlements";
+import { getUserEntitlements, hasEntitlement, hasVaultAccess } from "@/lib/entitlements";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import {
@@ -68,7 +68,10 @@ export async function GET() {
         ownedSlugs: [],
         membership: null,
         collectorOwnerships: [],
-        vaultAccess: { tier: "public", hasVaultPass: false, hasInnerCircleAccess: false },
+        vaultAccess: false,
+        vaultAccessDetail: { tier: "public", hasVaultPass: false, hasInnerCircleAccess: false },
+        subscriberActive: false,
+        collectorCard: false,
         mediaProgress: [],
         notifications: {
           preferences: DEFAULT_NOTIFICATION_PREFERENCES,
@@ -175,8 +178,23 @@ export async function GET() {
     }
 
     const library = [...bySlug.values()];
-    const ownedSlugs = library.map((item) => item.slug).filter(Boolean);
-    const hasInnerCircleAccess = membershipHasPremiumAccess(membership) || hasCollectorAccess;
+    const ledgerActiveSlugs = (collectorResult.data || [])
+      .filter((item) => {
+        const status = String(item.entitlement_status || item.verification_status || "").toLowerCase();
+        return status === "active" || status === "verified" || status === "granted";
+      })
+      .map((item) => item.product_slug)
+      .filter(Boolean);
+    const ownedSlugs = [
+      ...new Set([...legacyOwnedSlugs, ...ledgerActiveSlugs]),
+    ];
+    const subscriberActive =
+      membershipHasPremiumAccess(membership) || hasEntitlement(userEntitlements, "subscriber");
+    const collectorCard =
+      hasCollectorAccess || hasEntitlement(userEntitlements, "collector_card");
+    const vaultAccessFlag =
+      hasVaultPass || hasEntitlement(userEntitlements, "vault_access") || hasVaultAccess(userEntitlements);
+    const hasInnerCircleAccess = subscriberActive || collectorCard;
     const vaultTier = vaultTierFor({ hasVaultPass, hasInnerCircleAccess });
     const ledgerOwnerships = (collectorResult.data || []).map((item) => ({
       id: item.id,
@@ -221,6 +239,9 @@ export async function GET() {
       user,
       library,
       ownedSlugs,
+      subscriberActive,
+      collectorCard,
+      vaultAccess: vaultAccessFlag,
       collectorOwnerships,
       membership,
       mediaProgress: (mediaProgressResult.data || []).map((row) => ({
@@ -232,7 +253,7 @@ export async function GET() {
         replayCount: row.replay_count,
         lastPlayedAt: row.last_played_at,
       })),
-      vaultAccess: {
+      vaultAccessDetail: {
         tier: vaultTier,
         hasVaultPass,
         hasInnerCircleAccess,

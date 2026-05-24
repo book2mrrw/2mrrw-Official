@@ -6,11 +6,14 @@ import { isAdminUser } from "@/lib/auth/constants";
 const EMPTY_ACCOUNT_STATE = {
   library: [],
   ownedSlugs: [],
+  subscriberActive: false,
+  collectorCard: false,
+  vaultAccess: false,
   membership: null,
   collectorOwnerships: [],
   mediaProgress: [],
   permissions: {},
-  vaultAccess: null,
+  vaultAccessDetail: null,
   user: null,
   isAdmin: false,
 };
@@ -36,14 +39,23 @@ export function AuthProvider({ children }) {
     const slugs = data.ownedSlugs || items.map((i) => i.slug).filter(Boolean);
     setLibrary(items);
     setOwnedSlugs(new Set(slugs));
+    const vaultDetail =
+      data.vaultAccessDetail ||
+      (typeof data.vaultAccess === "object" && data.vaultAccess !== null ? data.vaultAccess : null);
     setAccountState({
       library: items,
       ownedSlugs: slugs,
+      subscriberActive: Boolean(data.subscriberActive),
+      collectorCard: Boolean(data.collectorCard),
+      vaultAccess: Boolean(
+        typeof data.vaultAccess === "boolean" ? data.vaultAccess : vaultDetail?.fullAccess || vaultDetail?.hasVaultPass
+      ),
       membership: data.membership || null,
       collectorOwnerships: data.collectorOwnerships || [],
       mediaProgress: data.mediaProgress || [],
       permissions: data.permissions || {},
-      vaultAccess: data.vaultAccess || null,
+      vaultAccessDetail: vaultDetail,
+      userEntitlements: data.userEntitlements || null,
       user: data.user || null,
       isAdmin: Boolean(data.permissions?.admin) || (data.user ? isAdminUser(data.user) : false),
       syncedAt: data.syncedAt || null,

@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { useMusicLibrary } from "@/hooks/useMusicLibrary";
 import { membershipHasPremiumAccess } from "@/lib/commerce/entitlements";
@@ -326,8 +327,11 @@ function MyMusicTab({
   const activeRecentlyPlayed = recentlyPlayedRail.length ? recentlyPlayedRail : recentlyPlayed;
 
   const { playTrack, playQueue, resume, setShuffle } = useAudioPlayer();
-  const membershipActive = membershipHasPremiumAccess(accountState?.membership);
+  const membershipActive =
+    Boolean(accountState?.subscriberActive) || membershipHasPremiumAccess(accountState?.membership);
   const subscriptionLocked = Boolean(accountState?.membership && !membershipActive);
+  const hasVaultAccess = Boolean(accountState?.vaultAccess);
+  const hasCollectorCard = Boolean(accountState?.collectorCard);
   const [sortPref, setSortPref] = useState("recent");
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
 
@@ -366,8 +370,9 @@ function MyMusicTab({
   );
 
   const recentlyAddedSingles = useMemo(() => {
-    if (!ownedSingles.length) return [];
-    const byPurchase = [...ownedSingles].sort((a, b) => {
+    const permanent = library?.filter((item) => item.source === "purchase" || item.source === "gift" || item.gifted) || ownedSingles;
+    if (!permanent.length) return [];
+    const byPurchase = [...permanent].sort((a, b) => {
       const ta = a.purchasedAt ? new Date(a.purchasedAt).getTime() : 0;
       const tb = b.purchasedAt ? new Date(b.purchasedAt).getTime() : 0;
       return tb - ta;
@@ -375,7 +380,7 @@ function MyMusicTab({
     return byPurchase
       .slice(0, 5)
       .map((item) => ({ ...item, ...(singles.find((s) => s.slug === item.slug) || {}) }));
-  }, [ownedSingles, singles]);
+  }, [library, ownedSingles, singles]);
 
   const catalogTracks = useMemo(() => {
     const map = new Map();
@@ -469,7 +474,7 @@ function MyMusicTab({
           <h2 className="section-heading" style={{ margin: 0, fontSize: isMobile ? 17 : 22 }}>
             My Music Collection
           </h2>
-          <div className="collection-vault-frame">Owned · Playlists · Gifts</div>
+          <div className="collection-vault-frame">Owned · Streaming · Collector</div>
         </div>
         <button
           type="button"
@@ -615,13 +620,45 @@ function MyMusicTab({
         <CollectionRailPlaceholder label="Recently Added — new collection items will land here." />
       )}
 
-      <PlaylistSection
-        userId={user?.id}
-        catalogTracks={catalogTracks}
-        onPlayPlaylist={playPlaylist}
-        subscriptionLocked={subscriptionLocked}
-        isMobile={isMobile}
-      />
+      <section style={{ marginBottom: 36 }}>
+        <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>
+          Streaming Library
+        </div>
+        <div style={{ fontSize: 12, color: "#666", marginBottom: 16, lineHeight: 1.5 }}>
+          {membershipActive
+            ? "Playlists and catalog access included with your subscription."
+            : "Subscribe to build playlists and stream the full catalog."}
+        </div>
+        <PlaylistSection
+          userId={user?.id}
+          catalogTracks={catalogTracks}
+          onPlayPlaylist={playPlaylist}
+          subscriptionLocked={subscriptionLocked}
+          isMobile={isMobile}
+        />
+        {subscriptionItems.length > 0 ? (
+          <LibraryCarousel
+            title="Included with subscription"
+            items={subscriptionItems.map((item) => ({
+              ...item,
+              ...(singles.find((s) => s.slug === item.slug) || albums.find((a) => a.slug === item.slug) || {}),
+            }))}
+            accountState={accountState}
+            userId={user?.id}
+            onPlay={playItem}
+            onLibraryChange={refresh}
+            isMobile={isMobile}
+          />
+        ) : null}
+      </section>
+
+      <section style={{ marginBottom: 36 }}>
+        <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>
+          Purchased / Owned
+        </div>
+        <div style={{ fontSize: 12, color: "#666", marginBottom: 16, lineHeight: 1.5 }}>
+          Permanent purchases and gifts — yours even if your subscription ends.
+        </div>
 
       <LibraryCarousel
         title="Owned Singles"
@@ -666,30 +703,64 @@ function MyMusicTab({
           </div>
         )}
       </section>
+      </section>
 
-      {subscriptionItems.length > 0 && (
-        <LibraryCarousel
-          title="Subscription Library"
-          items={subscriptionItems.map((item) => ({ ...item, ...(singles.find((s) => s.slug === item.slug) || albums.find((a) => a.slug === item.slug) || {}) }))}
-          accountState={accountState}
-          userId={user?.id}
-          onPlay={playItem}
-          onLibraryChange={refresh}
-          isMobile={isMobile}
-        />
-      )}
-
-      {collectorItems.length > 0 && (
-        <LibraryCarousel
-          title="Collector Unlocks"
-          items={collectorItems.map((item) => ({ ...item, ...(singles.find((s) => s.slug === item.slug) || {}) }))}
-          accountState={accountState}
-          userId={user?.id}
-          onPlay={playItem}
-          onLibraryChange={refresh}
-          isMobile={isMobile}
-        />
-      )}
+      <section style={{ marginBottom: 36 }}>
+        <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, marginBottom: 6 }}>
+          Collector / Vault
+        </div>
+        <div style={{ fontSize: 12, color: "#666", marginBottom: 16, lineHeight: 1.5 }}>
+          {hasCollectorCard || hasVaultAccess
+            ? "Collector card and vault-tier exclusives."
+            : "Activate a collector card or unlock vault access for exclusive releases."}
+        </div>
+        {collectorItems.length > 0 ? (
+          <LibraryCarousel
+            title="Collector unlocks"
+            items={collectorItems.map((item) => ({ ...item, ...(singles.find((s) => s.slug === item.slug) || {}) }))}
+            accountState={accountState}
+            userId={user?.id}
+            onPlay={playItem}
+            onLibraryChange={refresh}
+            isMobile={isMobile}
+          />
+        ) : (
+          <CollectionRailPlaceholder label="Collector unlocks appear here after card activation." />
+        )}
+        {(hasCollectorCard || hasVaultAccess) && (
+          <button
+            type="button"
+            onClick={goVault}
+            style={{
+              marginTop: 12,
+              padding: "10px 18px",
+              background: "#111",
+              color: "#a259ff",
+              border: "1px solid #a259ff44",
+              borderRadius: 8,
+              cursor: "pointer",
+              fontSize: 12,
+              fontWeight: 700,
+            }}
+          >
+            Open Vault
+          </button>
+        )}
+        {!hasCollectorCard ? (
+          <Link
+            href="/collector/activate"
+            style={{
+              display: "inline-block",
+              marginTop: 10,
+              fontSize: 11,
+              color: "#666",
+              letterSpacing: 0.5,
+            }}
+          >
+            Activate collector card →
+          </Link>
+        ) : null}
+      </section>
 
       {isAdmin ? (
         <section style={{ marginBottom: 32 }}>

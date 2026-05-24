@@ -3,6 +3,11 @@
 import { useCallback, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { partitionLibraryByType } from "@/lib/music-access";
+import {
+  isCollectorLibraryItem,
+  isPermanentLibraryItem,
+  isStreamingLibraryItem,
+} from "@/lib/library-ownership";
 
 export function useMusicLibrary({ singles = [], albums = [] } = {}) {
   const {
@@ -44,24 +49,23 @@ export function useMusicLibrary({ singles = [], albums = [] } = {}) {
       });
   }, [accountState?.mediaProgress, singles, albums, library]);
 
+  const permanentLibrary = useMemo(
+    () => (library || []).filter(isPermanentLibraryItem),
+    [library]
+  );
+
   const { ownedSingles, ownedAlbums } = useMemo(
-    () => partitionLibraryByType(library, { singles, albums }),
-    [library, singles, albums]
+    () => partitionLibraryByType(permanentLibrary, { singles, albums }),
+    [permanentLibrary, singles, albums]
   );
 
   const subscriptionItems = useMemo(
-    () =>
-      (library || []).filter(
-        (item) => item.membershipAccess || item.source === "membership"
-      ),
+    () => (library || []).filter(isStreamingLibraryItem),
     [library]
   );
 
   const collectorItems = useMemo(
-    () =>
-      (library || []).filter(
-        (item) => item.collectorAccess || item.source === "collector_access"
-      ),
+    () => (library || []).filter(isCollectorLibraryItem),
     [library]
   );
 

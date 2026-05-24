@@ -1,5 +1,6 @@
 import { membershipHasPremiumAccess } from "@/lib/commerce/entitlements";
 import { isAdminUser } from "@/lib/auth/constants";
+import { permanentOwnedSlugsFromState } from "@/lib/library-ownership";
 import { getOfflinePlaybackUrl } from "@/lib/offline-cache";
 import { catalogPreviewAudioUrl } from "@/lib/media-urls";
 
@@ -54,6 +55,7 @@ function activeCollectorOwnerships(collectorOwnerships = []) {
 
 /** Active collector card / ledger owner — unlocks full-catalog library + playlist adds. */
 export function isCollectorCardOwner(accountState = {}) {
+  if (Boolean(accountState.collectorCard)) return true;
   const permissions = accountState.permissions || {};
   if (Boolean(permissions.collectorAccess || permissions.collector)) return true;
   return activeCollectorOwnerships(accountState.collectorOwnerships).length > 0;
@@ -119,19 +121,19 @@ export function resolveTrackAccess(track, accountState = {}) {
     return adminTrackAccess();
   }
 
-  const ownedSlugs = slugSet(accountState.ownedSlugs);
+  const ownedSlugs = slugSet(permanentOwnedSlugsFromState(accountState));
   const library = accountState.library || [];
   const purchased = purchasedSlugsFromLibrary(library);
   const subscriptionLibrary = subscriptionSlugsFromLibrary(library);
   const collectorLibrary = collectorSlugsFromLibrary(library);
 
-  (accountState.ownedSlugs || []).forEach((s) => ownedSlugs.add(s));
-
   const membership = accountState.membership || null;
-  const subscriptionActive = membershipHasPremiumAccess(membership);
+  const subscriptionActive =
+    Boolean(accountState.subscriberActive) || membershipHasPremiumAccess(membership);
   const permissions = accountState.permissions || {};
   const collectorRecords = activeCollectorOwnerships(accountState.collectorOwnerships);
-  const collectorCardOwner = isCollectorCardOwner(accountState);
+  const collectorCardOwner =
+    Boolean(accountState.collectorCard) || isCollectorCardOwner(accountState);
   const hasCollectorEntitlement =
     collectorCardOwner || collectorRecords.length > 0;
 

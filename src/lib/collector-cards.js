@@ -336,6 +336,183 @@ export async function claimCollectorCard({ userId, token, deviceInfo = {}, ipHas
   };
 }
 
+function assignedUserIdFromCard(card = {}) {
+  const meta = card.metadata || {};
+  return meta.assigned_user_id || meta.preassigned_user_id || meta.assignedUserId || null;
+}
+
+function normalizeVisibleSerial(value) {
+  return String(value || "").trim();
+}
+
+/**
+ * Manual activation by visible serial + legal name (authenticated user required).
+ * NFC/hidden token verify remains at /api/collector-card/verify; claim via hidden token at /api/collector/cards/claim.
+ */
+export async function activateCollectorCardBySerial({
+  userId,
+  visibleSerial,
+  legalName,
+  deviceInfo = {},
+  ipHash = null,
+}) {
+  const serial = normalizeVisibleSerial(visibleSerial);
+  const name = String(legalName || "").trim();
+  if (!userId) return { ok: false, status: 401, reason: "auth_required" };
+  if (!serial || serial.length < 4) return { ok: false, status: 400, reason: "invalid_serial" };
+  if (!name || name.length < 2) return { ok: false, status: 400, reason: "legal_name_required" };
+
+  const admin = createAdminClient();
+  const { data: card, error } = await admin
+    .from("collector_cards")
+    .select("*")
+    .eq("visible_serial", serial)
+    .maybeSingle();
+
+  if (error) {
+    if (isSchemaUnavailableError(error)) return { ok: false, status: 503, reason: "unavailable" };
+    throw error;
+  }
+
+  if (!card) {
+    await logCollectorActivity(admin, {
+      user_id: userId,
+      event_type: "activation_attempt",
+      status: "blocked",
+      device_info: deviceInfo,
+      ip_hash: ipHash,
+      metadata: { reason: "not_found", visibleSerial: serial },
+    });
+    return { ok: false, status: 404, reason: "not_found" };
+  }
+
+  if (cardVerificationStatus(card) === "revoked" || card.revoked_at) {
+    return { ok: false, status: 403, reason: "revoked", visibleSerial: card.visible_serial };
+  }
+
+  const assignedUserId = assignedUserIdFromCard(card);
+  if (assignedUserId && assignedUserId !== userId && !card.claimed) {
+    return { ok: false, status: 403, reason: "assigned_to_other", visibleSerial: card.visible_serial };
+  }
+
+  if (card.claimed && card.claimed_by_user_id && card.claimed_by_user_id !== userId) {
+    if (assignedUserId !== userId) {
+      return { ok: false, status: 409, reason: "already_claimed", visibleSerial: card.visible_serial };
+    }
+  }
+
+  if (card.claimed && card.claimed_by_user_id === userId) {
+    await admin
+      .from("profiles")
+      .update({ legal_name: name, updated_at: new Date().toISOString() })
+      .eq("id", userId);
+    const access = await grantCollectorAccess(admin, { userId, card });
+    await grantEntitlementFlag(admin, userId, "collector_card", "serial_activation", {
+      collector_card_id: card.id,
+    });
+    return {
+      ok: true,
+      status: 200,
+      alreadyActive: true,
+      card: {
+        visibleSerial: card.visible_serial,
+        releaseName: cardReleaseTitle(card),
+        accessTier: cardAccessTier(card),
+      },
+      access: access ? mapCollectorAccessRecord(access) : null,
+    };
+  }
+
+  const { data: updated, error: updateError } = await admin
+    .from("collector_cards")
+    .update({
+      claimed: true,
+      claimed_by_user_id: userId,
+      verification_status: "claimed",
+      claim_timestamp: new Date().toISOString(),
+      digital_access_granted: true,
+    })
+    .eq("id", card.id)
+    .eq("claimed", false)
+    .select("*")
+    .maybeSingle();
+
+  if (updateError) {
+    if (isSchemaUnavailableError(updateError)) return { ok: false, status: 503, reason: "unavailable" };
+    throw updateError;
+  }
+
+  if (!updated) {
+    const { data: refreshed } = await admin.from("collector_cards").select("*").eq("id", card.id).maybeSingle();
+    if (refreshed?.claimed_by_user_id === userId) {
+      await admin
+        .from("profiles")
+        .update({ legal_name: name, updated_at: new Date().toISOString() })
+        .eq("id", userId);
+      const access = await grantCollectorAccess(admin, { userId, card: refreshed });
+      await grantEntitlementFlag(admin, userId, "collector_card", "serial_activation", {
+        collector_card_id: refreshed.id,
+      });
+      return {
+        ok: true,
+        status: 200,
+        alreadyActive: true,
+        card: {
+          visibleSerial: refreshed.visible_serial,
+          releaseName: cardReleaseTitle(refreshed),
+          accessTier: cardAccessTier(refreshed),
+        },
+        access: access ? mapCollectorAccessRecord(access) : null,
+      };
+    }
+    return { ok: false, status: 409, reason: "claim_race", visibleSerial: card.visible_serial };
+  }
+
+  await admin
+    .from("profiles")
+    .update({ legal_name: name, updated_at: new Date().toISOString() })
+    .eq("id", userId);
+
+  const [access] = await Promise.all([
+    grantCollectorAccess(admin, { userId, card: updated }),
+    mirrorCollectorOwnership(admin, { userId, card: updated }),
+    grantEntitlementFlag(admin, userId, "collector_card", "serial_activation", {
+      collector_card_id: updated.id,
+    }),
+    grantEntitlementFlag(admin, userId, "vault_access", "collector_card", {
+      metadata: { collector_card_id: updated.id },
+    }),
+    admin.from("collector_claims").insert({
+      collector_card_id: updated.id,
+      user_id: userId,
+      device_info: deviceInfo,
+      ip_hash: ipHash,
+      status: "claimed",
+      metadata: { method: "visible_serial_activation", visibleSerial: serial },
+    }),
+    logCollectorActivity(admin, {
+      collector_card_id: updated.id,
+      user_id: userId,
+      event_type: "activation",
+      status: "allowed",
+      device_info: deviceInfo,
+      ip_hash: ipHash,
+      metadata: { visibleSerial: serial },
+    }),
+  ]);
+
+  return {
+    ok: true,
+    status: 200,
+    card: {
+      visibleSerial: updated.visible_serial,
+      releaseName: cardReleaseTitle(updated),
+      accessTier: cardAccessTier(updated),
+    },
+    access: access ? mapCollectorAccessRecord(access) : null,
+  };
+}
+
 export async function verifyCollectorCardToken({ token, userId = null, deviceInfo = {}, ipHash = null }) {
   const hiddenSecureId = hashCollectorSecret(token);
   if (!hiddenSecureId) {

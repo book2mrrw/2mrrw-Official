@@ -3,6 +3,27 @@ import { isMissingSupabaseTable } from "@/lib/commerce/entitlements";
 
 export const ENTITLEMENT_TYPES = ["vault_access", "subscriber", "collector_card"];
 
+/**
+ * Entitlement matrix (stream / vault / full digital catalog)
+ *
+ * | Capability              | Owned (purchase/gift) | Subscriber | Collector card | Vault gift/pass | Admin |
+ * |-------------------------|----------------------|------------|----------------|-----------------|-------|
+ * | Stream owned slug       | yes                  | —          | yes            | —               | yes   |
+ * | Stream full catalog     | —                    | yes        | yes            | —               | yes   |
+ * | Vault tier content      | —                    | inner*     | yes            | yes             | yes   |
+ * | Full digital (all SKUs) | —                    | —          | yes            | —               | yes   |
+ *
+ * * Subscriber inner_circle vault tier via membership; vault_pass requires vault_access or collector.
+ *
+ * Legacy rule: library_items from purchase/gift/grant are never removed when subscription ends.
+ */
+export const ENTITLEMENT_MATRIX = {
+  streamOwned: ["owned", "collector_card", "admin"],
+  streamCatalog: ["subscriber", "collector_card", "admin"],
+  vault: ["vault_access", "collector_card", "admin"],
+  fullDigital: ["collector_card", "admin"],
+};
+
 const LOG_PREFIX = "[entitlements]";
 
 export function hasEntitlement(row, type) {
@@ -17,9 +38,10 @@ export function hasVaultAccess(row) {
   return hasEntitlement(row, "vault_access");
 }
 
+/** Full digital catalog unlock — collector card (or admin) only per product spec. */
 export function hasDigitalAccess(row) {
   if (!row) return false;
-  return Boolean(row.vault_access || row.subscriber || row.collector_card);
+  return Boolean(row.collector_card);
 }
 
 export async function getUserEntitlements(userId, admin = null) {
