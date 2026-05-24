@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, memo } from "react";
+import { memo, useCallback } from "react";
+import { useImmersivePlayback } from "@/lib/player/useImmersivePlayback";
 
 const formatTime = (s) => {
   if (!s || isNaN(s) || !isFinite(s)) return "0:00";
@@ -9,55 +10,35 @@ const formatTime = (s) => {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 };
 
-function PreviewModalPlayer({ audioRef, compact }) {
-  const [playing, setPlaying] = useState(false);
-  const [current, setCurrent] = useState(0);
-  const [duration, setDuration] = useState(0);
+function PreviewModalPlayer({ compact }) {
+  const {
+    isPlaying,
+    currentTime,
+    duration,
+    error,
+    streamRetryable,
+    handlePlayToggle,
+    seek,
+    retryStreamPlayback,
+  } = useImmersivePlayback();
 
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onTime = () => setCurrent(audio.currentTime);
-    const onDuration = () => setDuration(isFinite(audio.duration) ? audio.duration : 0);
-    const onEnded = () => {
-      setPlaying(false);
-      setCurrent(0);
-    };
-    const onLoaded = () => setDuration(isFinite(audio.duration) ? audio.duration : 0);
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("timeupdate", onTime);
-    audio.addEventListener("durationchange", onDuration);
-    audio.addEventListener("loadedmetadata", onLoaded);
-    audio.addEventListener("ended", onEnded);
-    if (!audio.paused) setPlaying(true);
-    if (isFinite(audio.duration)) setDuration(audio.duration);
-    return () => {
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("timeupdate", onTime);
-      audio.removeEventListener("durationchange", onDuration);
-      audio.removeEventListener("loadedmetadata", onLoaded);
-      audio.removeEventListener("ended", onEnded);
-    };
-  }, [audioRef]);
+  const seekTo = useCallback(
+    (e) => {
+      if (!duration) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      seek(ratio * duration);
+    },
+    [duration, seek]
+  );
 
-  const seekTo = (e) => {
-    const audio = audioRef.current;
-    if (!audio || !duration) return;
-    const rect = e.currentTarget.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    audio.currentTime = ratio * duration;
-  };
-
-  const togglePlay = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (playing) audio.pause();
-    else audio.play().catch(() => {});
-  };
+  const togglePlay = useCallback(() => {
+    if (streamRetryable && error) {
+      void retryStreamPlayback();
+      return;
+    }
+    handlePlayToggle();
+  }, [error, handlePlayToggle, retryStreamPlayback, streamRetryable]);
 
   const btnSize = compact ? 40 : 44;
 
@@ -77,7 +58,7 @@ function PreviewModalPlayer({ audioRef, compact }) {
       >
         <div
           style={{
-            width: duration ? `${(current / duration) * 100}%` : "0%",
+            width: duration ? `${(currentTime / duration) * 100}%` : "0%",
             height: "100%",
             background: "#00ffff",
             borderRadius: 3,
@@ -88,7 +69,7 @@ function PreviewModalPlayer({ audioRef, compact }) {
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <span style={{ fontSize: 10, color: "#555", fontVariantNumeric: "tabular-nums", minWidth: 32 }}>
-          {formatTime(current)}
+          {formatTime(currentTime)}
         </span>
         <button
           type="button"
@@ -107,7 +88,7 @@ function PreviewModalPlayer({ audioRef, compact }) {
             boxShadow: "0 0 16px rgba(0,255,255,0.4)",
           }}
         >
-          {playing ? (
+          {isPlaying ? (
             <svg viewBox="0 0 24 24" fill="#000" width="16" height="16">
               <path d="M6 19h4V5H6zm8-14v14h4V5z" />
             </svg>

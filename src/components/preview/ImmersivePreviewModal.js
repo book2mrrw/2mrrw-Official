@@ -27,7 +27,6 @@ function ImmersivePreviewModal({
   releaseDetail,
   isMobile,
   onClose,
-  audioRef,
   onAddToCart,
   onAddVinyl,
   trackAccess = null,
@@ -83,18 +82,17 @@ function ImmersivePreviewModal({
     [closeModal]
   );
 
+  const coverSrc = single?.video || single?.cover || null;
+  const coverType = single?.coverArtType || (single?.video ? "video" : "image");
+  const palette = useCoverPalette(coverSrc, coverType);
+  const paletteVars = paletteToCssVars(palette);
+
   if (!single) return null;
 
   const canStream = Boolean(trackAccess?.canStream);
   const showPurchase = trackAccess ? Boolean(trackAccess.showCart) : true;
   const priceLabel =
     single?.price != null && showPurchase ? `$${Number(single.price).toFixed(2)}` : null;
-
-  const coverSrc = single.video || single.cover;
-  const coverType = single.coverArtType || (single.video ? "video" : "image");
-  const palette = useCoverPalette(coverSrc, coverType);
-
-  const paletteVars = paletteToCssVars(palette);
 
   const handleAddToCart = () => {
     onAddToCart(single);
@@ -165,7 +163,6 @@ function ImmersivePreviewModal({
             <GlyphLyricsPanel
               open={glyphsOpen}
               lrcText={lrcText}
-              audioRef={audioRef}
               isMobile
               onClose={() => setGlyphsOpen(false)}
             />
@@ -193,7 +190,7 @@ function ImmersivePreviewModal({
               palette={palette}
             />
 
-            <PreviewPlayerControls audioRef={audioRef} palette={palette} compact />
+            <PreviewPlayerControls palette={palette} compact />
 
             <ModalActionButtons
               showPurchase={showPurchase}
@@ -268,7 +265,6 @@ function ImmersivePreviewModal({
           <GlyphLyricsPanel
             open={glyphsOpen}
             lrcText={lrcText}
-            audioRef={audioRef}
             isMobile={false}
             onClose={() => setGlyphsOpen(false)}
           />
@@ -333,7 +329,7 @@ function ImmersivePreviewModal({
             </div>
           ) : null}
 
-          <PreviewModalPlayer audioRef={audioRef} compact={false} />
+          <PreviewModalPlayer compact={false} />
 
           {isAdmin ? <GiftButton onClick={() => onGift?.(single)} style={{ width: "100%", marginBottom: 8 }} /> : null}
           {showPurchase ? (

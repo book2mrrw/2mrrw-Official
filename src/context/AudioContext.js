@@ -190,6 +190,8 @@ export function AudioProvider({ children }) {
   const visibilityPausedRef = useRef(false);
   const wasPlayingBeforeHideRef = useRef(false);
   const positionSaveTimerRef = useRef(null);
+  const csHoldSavedRef = useRef(null);
+  const csHoldActiveRef = useRef(false);
   const [state, setState] = useState(EMPTY_STATE);
 
   useEffect(() => {
@@ -1290,6 +1292,81 @@ export function AudioProvider({ children }) {
     };
   }, [rehydrateMediaSession, patchState, updateMediaSession]);
 
+  const beginCsHoldPreview = useCallback((csAudioUrl) => {
+    const audio = audioRef.current;
+    if (!audio || !csAudioUrl || csModeRef.current || csHoldActiveRef.current) return;
+
+    csHoldSavedRef.current = {
+      src: audio.currentSrc || audio.src,
+      currentTime: audio.currentTime,
+      playbackRate: audio.playbackRate,
+      wasPlaying: !audio.paused,
+    };
+    skipPauseInterruptionRef.current = true;
+    audio.pause();
+    audio.src = csAudioUrl;
+    audio.load();
+    const seekTo = csHoldSavedRef.current.currentTime;
+    const applySeek = () => {
+      if (seekTo > 0 && isFinite(audio.duration)) {
+        audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
+      }
+      audio.removeEventListener("loadedmetadata", applySeek);
+    };
+    audio.addEventListener("loadedmetadata", applySeek);
+    if (isFinite(audio.duration) && audio.duration > 0) applySeek();
+    audio.playbackRate = 1;
+    if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+    if (csHoldSavedRef.current.wasPlaying) audio.play().catch(() => {});
+    csHoldActiveRef.current = true;
+  }, []);
+
+  const setCsHoldPlaybackRate = useCallback((progress) => {
+    const audio = audioRef.current;
+    if (!audio || csModeRef.current || csHoldActiveRef.current) return;
+    audio.playbackRate = 1 - (1 - CS_PLAYBACK_RATE) * progress;
+    if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+  }, []);
+
+  const endCsHoldPreview = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio || csModeRef.current) return;
+
+    const saved = csHoldSavedRef.current;
+    if (csHoldActiveRef.current && saved) {
+      const currentUrl = audio.currentSrc || audio.src;
+      const savedUrl = saved.src ? new URL(saved.src, window.location.href).href : "";
+      const track = stateRef.current.currentTrack;
+      const csAudio = track?.csAudio || null;
+      const needsSwap = csAudio && savedUrl && currentUrl !== savedUrl;
+      if (needsSwap) {
+        skipPauseInterruptionRef.current = true;
+        audio.pause();
+        audio.src = saved.src;
+        audio.load();
+        const seekTo = saved.currentTime;
+        const applySeek = () => {
+          if (seekTo > 0 && isFinite(audio.duration)) {
+            audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
+          }
+          audio.removeEventListener("loadedmetadata", applySeek);
+        };
+        audio.addEventListener("loadedmetadata", applySeek);
+      } else if (saved.currentTime > 0) {
+        audio.currentTime = saved.currentTime;
+      }
+      audio.playbackRate = saved.playbackRate ?? 1;
+      if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+      if (saved.wasPlaying && audio.paused) audio.play().catch(() => {});
+    } else if (audio) {
+      audio.playbackRate = 1;
+      if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+    }
+
+    csHoldActiveRef.current = false;
+    csHoldSavedRef.current = null;
+  }, []);
+
   const value = useMemo(() => ({
     ...state,
     playTrack,
@@ -1315,6 +1392,9 @@ export function AudioProvider({ children }) {
     dismissStreamConflict,
     retryStreamPlayback,
     storeLinkHref: STORE_LINK_HREF,
+    beginCsHoldPreview,
+    setCsHoldPlaybackRate,
+    endCsHoldPreview,
   }), [
     pause,
     playQueue,
@@ -1337,6 +1417,9 @@ export function AudioProvider({ children }) {
     overrideConcurrentStream,
     dismissStreamConflict,
     retryStreamPlayback,
+    beginCsHoldPreview,
+    setCsHoldPlaybackRate,
+    endCsHoldPreview,
   ]);
 
   return (

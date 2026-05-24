@@ -1,68 +1,45 @@
 "use client";
 
-import { useEffect, useState, memo, useCallback, useMemo } from "react";
+import { useMemo, memo, useCallback } from "react";
 import SignaturePlayRing from "@/components/player/ImmersivePlayerEngine/SignaturePlayRing";
+import { useImmersivePlayback } from "@/lib/player/useImmersivePlayback";
 import { playerPaletteToCssVars } from "@/lib/player/usePlayerAmbience";
 import { formatPlayerTime } from "@/lib/player/formatTime";
 
-function PreviewPlayerControls({ audioRef, palette, compact = true }) {
-  const [playing, setPlaying] = useState(false);
-  const [current, setCurrent] = useState(0);
-  const [duration, setDuration] = useState(0);
-
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return undefined;
-
-    const onPlay = () => setPlaying(true);
-    const onPause = () => setPlaying(false);
-    const onTime = () => setCurrent(audio.currentTime);
-    const onDuration = () => setDuration(isFinite(audio.duration) ? audio.duration : 0);
-    const onEnded = () => {
-      setPlaying(false);
-      setCurrent(0);
-    };
-    const onLoaded = () => setDuration(isFinite(audio.duration) ? audio.duration : 0);
-
-    audio.addEventListener("play", onPlay);
-    audio.addEventListener("pause", onPause);
-    audio.addEventListener("timeupdate", onTime);
-    audio.addEventListener("durationchange", onDuration);
-    audio.addEventListener("loadedmetadata", onLoaded);
-    audio.addEventListener("ended", onEnded);
-
-    if (!audio.paused) setPlaying(true);
-    if (isFinite(audio.duration)) setDuration(audio.duration);
-
-    return () => {
-      audio.removeEventListener("play", onPlay);
-      audio.removeEventListener("pause", onPause);
-      audio.removeEventListener("timeupdate", onTime);
-      audio.removeEventListener("durationchange", onDuration);
-      audio.removeEventListener("loadedmetadata", onLoaded);
-      audio.removeEventListener("ended", onEnded);
-    };
-  }, [audioRef]);
+function PreviewPlayerControls({ palette, compact = true }) {
+  const {
+    isPlaying,
+    currentTime,
+    duration,
+    error,
+    streamRetryable,
+    handlePlayToggle,
+    seek,
+    retryStreamPlayback,
+  } = useImmersivePlayback();
 
   const seekTo = useCallback(
     (e) => {
-      const audio = audioRef.current;
-      if (!audio || !duration) return;
+      if (!duration) return;
       const rect = e.currentTarget.getBoundingClientRect();
       const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      audio.currentTime = ratio * duration;
+      seek(ratio * duration);
     },
-    [audioRef, duration]
+    [duration, seek]
   );
 
-  const togglePlay = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    if (playing) audio.pause();
-    else audio.play().catch(() => {});
-  }, [audioRef, playing]);
+  const togglePlay = useCallback(
+    (e) => {
+      if (streamRetryable && error) {
+        void retryStreamPlayback();
+        return;
+      }
+      handlePlayToggle(e);
+    },
+    [error, handlePlayToggle, retryStreamPlayback, streamRetryable]
+  );
 
-  const progress = duration ? Math.max(0, Math.min(100, (current / duration) * 100)) : 0;
+  const progress = duration ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
   const playSize = compact ? 52 : 60;
   const cssVars = useMemo(() => playerPaletteToCssVars(palette), [palette]);
 
@@ -74,16 +51,16 @@ function PreviewPlayerControls({ audioRef, palette, compact = true }) {
         role="slider"
         aria-valuemin={0}
         aria-valuemax={duration || 0}
-        aria-valuenow={current}
+        aria-valuenow={currentTime}
         tabIndex={0}
       >
         <div className="player-immersive-progress-rail__fill" style={{ width: `${progress}%` }} />
       </div>
       <div className="modal-immersive-player__row player-immersive-modal-controls__row">
-        <span className="modal-immersive-player__time">{formatPlayerTime(current)}</span>
+        <span className="modal-immersive-player__time">{formatPlayerTime(currentTime)}</span>
         <SignaturePlayRing
-          isPlaying={playing}
-          hasError={false}
+          isPlaying={isPlaying}
+          hasError={Boolean(error)}
           progress={progress}
           size={playSize}
           onClick={togglePlay}

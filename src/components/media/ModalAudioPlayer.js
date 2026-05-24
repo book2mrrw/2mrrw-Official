@@ -1,5 +1,10 @@
 "use client";
 
+/**
+ * @deprecated Unused in app tree — preview/global UI uses AudioContext via useImmersivePlayback.
+ * Kept as a thin reference wrapper; safe to remove after confirming no external imports.
+ */
+
 import { memo, useEffect, useState } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 

@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { parseLrc, getActiveLrcIndex } from "@/lib/lrc";
+import { useAudioPlayer } from "@/context/AudioContext";
 
-function GlyphLyricsPanel({ open, lrcText, audioRef, onClose, isMobile = false }) {
+function GlyphLyricsPanel({ open, lrcText, onClose, isMobile = false }) {
+  const { currentTime } = useAudioPlayer();
   const lines = useMemo(() => parseLrc(lrcText), [lrcText]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const scrollRef = useRef(null);
@@ -12,15 +14,8 @@ function GlyphLyricsPanel({ open, lrcText, audioRef, onClose, isMobile = false }
 
   useEffect(() => {
     if (!open || !lines.length) return;
-    let frame = 0;
-    const tick = () => {
-      const t = audioRef.current?.currentTime ?? 0;
-      setActiveIndex(getActiveLrcIndex(lines, t));
-      frame = requestAnimationFrame(tick);
-    };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [open, lines, audioRef]);
+    setActiveIndex(getActiveLrcIndex(lines, currentTime));
+  }, [open, lines, currentTime]);
 
   useEffect(() => {
     if (!open || activeIndex < 0) return;

@@ -18,7 +18,6 @@ import {
   MOVE_CANCEL_PX,
   SWIPE_DISMISS_PX,
   EXPAND_SWIPE_CLOSE_MS,
-  CS_PLAYBACK_RATE,
 } from "@/lib/player/constants";
 
 function WaveformBars({ playing }) {
@@ -58,8 +57,9 @@ function GlobalAudioPlayerBar() {
     toggleRepeat,
     csMode,
     toggleCSMode,
-    audioRef,
-    suppressPauseInterruptionRef,
+    beginCsHoldPreview,
+    setCsHoldPlaybackRate,
+    endCsHoldPreview,
     overrideConcurrentStream,
     dismissStreamConflict,
     storeLinkHref,
@@ -80,8 +80,6 @@ function GlobalAudioPlayerBar() {
   const lastTapTimeRef = useRef(0);
   const holdRafRef = useRef(null);
   const holdActiveRef = useRef(false);
-  const previewActiveRef = useRef(false);
-  const savedAudioRef = useRef(null);
   const touchMovedRef = useRef(false);
   const touchStartRef = useRef(null);
   const tapTimeoutRef = useRef(null);
@@ -105,7 +103,6 @@ function GlobalAudioPlayerBar() {
     if (csMode) {
       setCsHoldOpacity(0);
       holdActiveRef.current = false;
-      previewActiveRef.current = false;
     }
   }, [csMode]);
 
@@ -170,88 +167,21 @@ function GlobalAudioPlayerBar() {
     }
   }, []);
 
-  const markProgrammaticPause = useCallback(() => {
-    if (suppressPauseInterruptionRef) suppressPauseInterruptionRef.current = true;
-  }, [suppressPauseInterruptionRef]);
-
   const applyHoldAudio = useCallback(
     (progressVal) => {
-      const audio = audioRef?.current;
-      if (!audio || csModeRef.current) return;
-
-      if (csAudio) {
-        if (!previewActiveRef.current) {
-          savedAudioRef.current = {
-            src: audio.currentSrc || audio.src,
-            currentTime: audio.currentTime,
-            playbackRate: audio.playbackRate,
-            wasPlaying: !audio.paused,
-          };
-          markProgrammaticPause();
-          audio.pause();
-          audio.src = csAudio;
-          audio.load();
-          const seekTo = savedAudioRef.current.currentTime;
-          const applySeek = () => {
-            if (seekTo > 0 && isFinite(audio.duration)) {
-              audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
-            }
-            audio.removeEventListener("loadedmetadata", applySeek);
-          };
-          audio.addEventListener("loadedmetadata", applySeek);
-          if (isFinite(audio.duration) && audio.duration > 0) applySeek();
-          audio.playbackRate = 1;
-          if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
-          if (savedAudioRef.current.wasPlaying) audio.play().catch(() => {});
-          previewActiveRef.current = true;
-        }
-      } else {
-        audio.playbackRate = 1 - (1 - CS_PLAYBACK_RATE) * progressVal;
-        if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
-      }
+      if (csModeRef.current) return;
+      if (csAudio) beginCsHoldPreview(csAudio);
+      else setCsHoldPlaybackRate(progressVal);
     },
-    [audioRef, csAudio, markProgrammaticPause]
+    [beginCsHoldPreview, csAudio, setCsHoldPlaybackRate]
   );
 
   const revertHoldPreview = useCallback(() => {
-    const audio = audioRef?.current;
-    if (!audio || csModeRef.current) return;
-
+    if (csModeRef.current) return;
     cancelHoldAnim();
     holdActiveRef.current = false;
-
-    const saved = savedAudioRef.current;
-    if (previewActiveRef.current && saved) {
-      const currentUrl = audio.currentSrc || audio.src;
-      const savedUrl = saved.src ? new URL(saved.src, window.location.href).href : "";
-      const needsSwap = csAudio && savedUrl && currentUrl !== savedUrl;
-      if (needsSwap) {
-        markProgrammaticPause();
-        audio.pause();
-        audio.src = saved.src;
-        audio.load();
-        const seekTo = saved.currentTime;
-        const applySeek = () => {
-          if (seekTo > 0 && isFinite(audio.duration)) {
-            audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
-          }
-          audio.removeEventListener("loadedmetadata", applySeek);
-        };
-        audio.addEventListener("loadedmetadata", applySeek);
-      } else if (saved.currentTime > 0) {
-        audio.currentTime = saved.currentTime;
-      }
-      audio.playbackRate = saved.playbackRate ?? 1;
-      if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
-      if (saved.wasPlaying && audio.paused) audio.play().catch(() => {});
-    } else if (audio) {
-      audio.playbackRate = 1;
-      if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
-    }
-
-    previewActiveRef.current = false;
-    savedAudioRef.current = null;
-  }, [audioRef, cancelHoldAnim, csAudio, markProgrammaticPause]);
+    endCsHoldPreview();
+  }, [cancelHoldAnim, endCsHoldPreview]);
 
   const animateHoldOpacity = useCallback(
     (from, to, duration, onFrame, onComplete) => {

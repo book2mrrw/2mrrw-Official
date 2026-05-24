@@ -583,7 +583,19 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
   const { currentUser: authUser, library, owns, accountState, isAdmin, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
-  const { playTrack, playQueue, hasStarted, currentTrack, csMode } = useAudioPlayer();
+  const {
+    playTrack,
+    playQueue,
+    hasStarted,
+    currentTrack,
+    csMode,
+    isPlaying,
+    currentTime,
+    duration,
+    pause,
+    toggle,
+    seek,
+  } = useAudioPlayer();
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState([]);
   const [activeTab, setActiveTab]                 = useState("home");
@@ -625,13 +637,10 @@ export default function Page() {
   const [mobileNavExpandedGroups, setMobileNavExpandedGroups] = useState(() => new Set());
   const [tabKey, setTabKey]                       = useState(0);
   const [nowPlaying, setNowPlaying]               = useState(null);
-  const [nowPlayingPlaying, setNowPlayingPlaying] = useState(false);
   const [radioIndex, setRadioIndex]               = useState(0);
   const [flowConversionActive, setFlowConversionActive] = useState(false);
   const [printfulProducts, setPrintfulProducts]   = useState([]);
   const [printfulLoading, setPrintfulLoading]     = useState(true);
-  const [audioCurrentTime, setAudioCurrentTime]   = useState(0);
-  const [audioDuration, setAudioDuration]         = useState(0);
   const [inventory, setInventory]                 = useState({});
   const [exclusiveCatalog, setExclusiveCatalog] = useState(exclusiveItemsBase);
   const [publicVault, setPublicVault]             = useState(null);
@@ -645,11 +654,9 @@ export default function Page() {
   // ── REFS ──────────────────────────────────────────────────────────────────
   const cursorRef          = useRef(null);
   const cursorTrailRef     = useRef(null);
-  const nowPlayingAudioRef = useRef(null);
   const ambientRefs        = useRef({});
   const ytPlayerRef        = useRef(null);
   const ytIframeRef        = useRef(null);
-  const modalAudioRef      = useRef(null);
   const mainScrollRef      = useRef(null);
   const singlesRowRef      = useRef(null);
 
@@ -668,12 +675,8 @@ export default function Page() {
 
   // ── AUDIO FOCUS HANDLER ───────────────────────────────────────────────────
   const handleAudioVisualsFocused = useCallback(() => {
-    const audio = nowPlayingAudioRef.current;
-    if (audio && !audio.paused) {
-      audio.pause();
-      setNowPlayingPlaying(false);
-    }
-  }, []);
+    if (isPlaying) pause();
+  }, [isPlaying, pause]);
 
   // ── EFFECTS ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -787,27 +790,6 @@ export default function Page() {
   }, [activeTab]);
 
   useEffect(() => {
-    const audio = nowPlayingAudioRef.current;
-    if (!audio) return;
-    const onTime     = () => setAudioCurrentTime(audio.currentTime);
-    const onDuration = () => setAudioDuration(isFinite(audio.duration) ? audio.duration : 0);
-    const onEnded    = () => { setNowPlayingPlaying(false); setAudioCurrentTime(0); };
-    const onReset    = () => { setAudioCurrentTime(0); setAudioDuration(0); };
-    audio.addEventListener("timeupdate",     onTime);
-    audio.addEventListener("durationchange", onDuration);
-    audio.addEventListener("loadedmetadata", onDuration);
-    audio.addEventListener("ended",          onEnded);
-    audio.addEventListener("emptied",        onReset);
-    return () => {
-      audio.removeEventListener("timeupdate",     onTime);
-      audio.removeEventListener("durationchange", onDuration);
-      audio.removeEventListener("loadedmetadata", onDuration);
-      audio.removeEventListener("ended",          onEnded);
-      audio.removeEventListener("emptied",        onReset);
-    };
-  }, []);
-
-  useEffect(() => {
     setPrintfulLoading(true);
     fetch("/api/printful/products")
       .then(r => r.json())
@@ -892,48 +874,24 @@ export default function Page() {
   }, [activeTab, soundOn]);
 
   useEffect(() => {
-    if (!nowPlaying || !nowPlayingAudioRef.current) return;
-    const audio = nowPlayingAudioRef.current;
-    audio.pause();
-    setAudioCurrentTime(0);
-    setAudioDuration(0);
-    const access = resolveContentAccess(nowPlaying, accountState);
-    audio.src =
-      resolvePlaybackSrc(nowPlaying, access, { userId: authUser?.id }) ||
-      nowPlaying.preview ||
-      "";
-    audio.play()
-      .then(() => setNowPlayingPlaying(true))
-      .catch(() => setNowPlayingPlaying(false));
-  }, [nowPlaying, accountState, authUser?.id]);
+    if (!nowPlaying) return;
+    void playTrack(
+      toPlaybackTrack(nowPlaying, { ...accountState, userId: authUser?.id }, "feature")
+    );
+  }, [nowPlaying, accountState, authUser?.id, playTrack]);
+
+  useEffect(() => {
+    if (!selectedSingle) return;
+    void playTrack(
+      toPlaybackTrack(selectedSingle, { ...accountState, userId: authUser?.id }, "preview_modal")
+    );
+  }, [selectedSingle, accountState, authUser?.id, playTrack]);
 
   useEffect(() => {
     if (activeTab !== "live") {
       if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch {} ytPlayerRef.current = null; }
     }
   }, [activeTab]);
-
-  // ── Modal audio autoplay ──────────────────────────────────────────────────
-  useEffect(() => {
-    const audio = modalAudioRef.current;
-    if (!audio) return;
-    if (selectedSingle) {
-      if (nowPlayingAudioRef.current && !nowPlayingAudioRef.current.paused) {
-        nowPlayingAudioRef.current.pause();
-        setNowPlayingPlaying(false);
-      }
-      const access = resolveContentAccess(selectedSingle, accountState);
-      audio.src =
-        resolvePlaybackSrc(selectedSingle, access, { userId: authUser?.id }) ||
-        selectedSingle.preview ||
-        "";
-      audio.currentTime = 0;
-      audio.play().catch(() => {});
-    } else {
-      audio.pause();
-      audio.src = "";
-    }
-  }, [selectedSingle, accountState, authUser?.id]);
 
   const playAlbumTracks = useCallback(
     (album, startIndex = 0) => {
@@ -1005,20 +963,43 @@ export default function Page() {
   const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
 
   const openSingleModal = useCallback((single) => {
+    if (nowPlaying) setNowPlaying(null);
     setSelectedSingle(single);
     setSelectedReleaseDetail(null);
     if (!single?.slug) return;
     void getControlSystemReleaseDetail({ slug: single.slug, fallbackRelease: single }).then((detail) => {
       if (detail) setSelectedReleaseDetail(detail);
     });
+  }, [nowPlaying]);
+
+  const closeSingleModal = useCallback(() => {
+    pause();
+    setSelectedSingle(null);
+    setSelectedReleaseDetail(null);
+  }, [pause]);
+
+  const playFeature = useCallback((feat) => {
+    setNowPlaying(feat);
   }, []);
 
-  const seekTo = useCallback(e => {
-    if (!nowPlayingAudioRef.current || !audioDuration) return;
-    const rect  = e.currentTarget.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    nowPlayingAudioRef.current.currentTime = ratio * audioDuration;
-  }, [audioDuration]);
+  const dismissNowPlaying = useCallback(() => {
+    setNowPlaying(null);
+    pause();
+  }, [pause]);
+
+  const seekTo = useCallback(
+    (e) => {
+      if (!duration) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      seek(ratio * duration);
+    },
+    [duration, seek]
+  );
+
+  const nowPlayingMatchesTrack =
+    nowPlaying && currentTrack?.slug === nowPlaying.slug;
+  const miniPlayerPlaying = Boolean(nowPlayingMatchesTrack && isPlaying);
 
   const openGiftSheet = useCallback((release) => {
     if (!isAdmin) return;
@@ -1415,9 +1396,6 @@ export default function Page() {
       <div ref={cursorRef} style={{position:"fixed",width:28,height:28,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.22) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99999,mixBlendMode:"screen",transition:"left 0.045s linear,top 0.045s linear",display:isMobile?"none":undefined}}/>
       <div ref={cursorTrailRef} style={{position:"fixed",width:16,height:16,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.10) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99998,mixBlendMode:"screen",transition:"left 0.18s ease,top 0.18s ease",display:isMobile?"none":undefined}}/>
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(circle at 18% 18%,rgba(0,255,255,0.026) 0%,transparent 55%),radial-gradient(circle at 82% 80%,rgba(162,89,255,0.018) 0%,transparent 52%)"}}/>
-      <audio ref={nowPlayingAudioRef} style={{display:"none"}}/>
-      <audio ref={modalAudioRef} style={{display:"none"}}/>
-
       {/* ── SINGLE PREVIEW MODAL (immersive) ── */}
       <AnimatePresence>
         {selectedSingle && (
@@ -1426,13 +1404,12 @@ export default function Page() {
             single={selectedSingle}
             releaseDetail={selectedReleaseDetail}
             isMobile={isMobile}
-            audioRef={modalAudioRef}
             trackAccess={selectedSingleAccess}
             userId={currentUser?.id}
             isAdmin={isAdmin}
             onGift={() => openGiftSheet(selectedSingle)}
             onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
-            onClose={() => setSelectedSingle(null)}
+            onClose={closeSingleModal}
             onAddToCart={addToCart}
             onAddVinyl={addVinylToCart}
           />
@@ -1815,7 +1792,7 @@ export default function Page() {
                   {/* Features */}
                   <div style={{marginTop:28,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)} accountState={accountState} userId={authUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={playFeature} accountState={accountState} userId={authUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Radio */}
@@ -1930,7 +1907,7 @@ export default function Page() {
                       <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={singles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} openSingleModal={openSingleModal} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       <div style={{marginTop:32,marginBottom:4}}>
                         <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                        <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={feat=>setNowPlaying(feat)} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                        <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={playFeature} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       </div>
                       <AudioVisualsSection isMobile={isMobile} onAudioVisualsFocused={handleAudioVisualsFocused}/>
                     </>
@@ -2246,24 +2223,20 @@ export default function Page() {
           {nowPlaying && !isMobile && (
             <div style={{flexShrink:0,borderTop:"1px solid #141414",background:"rgba(4,4,4,0.97)",backdropFilter:"blur(20px)",zIndex:isMobile?6500:1,marginBottom:isMobile?60:0}}>
               <div onClick={seekTo} style={{width:"100%",height:3,background:"#111",cursor:"pointer",position:"relative"}}>
-                <div style={{width:audioDuration?`${(audioCurrentTime/audioDuration)*100}%`:"0%",height:"100%",background:"#00ffff",transition:"width 0.1s linear",boxShadow:"0 0 4px rgba(0,255,255,0.5)"}}/>
+                <div style={{width:duration?`${(currentTime/duration)*100}%`:"0%",height:"100%",background:"#00ffff",transition:"width 0.1s linear",boxShadow:"0 0 4px rgba(0,255,255,0.5)"}}/>
               </div>
               <div style={{padding:isMobile?"8px 14px":"10px 20px",display:"flex",alignItems:"center",gap:14,boxShadow:"0 -4px 30px rgba(0,0,0,0.5)"}}>
-                <img src={nowPlaying.cover} style={{width:36,height:36,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
+                <img src={nowPlaying.cover} style={{width:36,height:36,borderRadius:8,objectFit:"cover",flexShrink:0}} alt=""/>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.title}</div>
-                  <div style={{fontSize:10,color:"#555",letterSpacing:1,fontVariantNumeric:"tabular-nums"}}>{formatTime(audioCurrentTime)} / {formatTime(audioDuration)}</div>
+                  <div style={{fontSize:10,color:"#555",letterSpacing:1,fontVariantNumeric:"tabular-nums"}}>{formatTime(currentTime)} / {formatTime(duration)}</div>
                 </div>
-                <button onClick={()=>{
-                  if (!nowPlayingAudioRef.current) return;
-                  if (nowPlayingPlaying) { nowPlayingAudioRef.current.pause(); setNowPlayingPlaying(false); }
-                  else { nowPlayingAudioRef.current.play().catch(()=>{}); setNowPlayingPlaying(true); }
-                }} style={{width:36,height:36,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
-                  {nowPlayingPlaying
+                <button onClick={() => { void toggle(); }} style={{width:36,height:36,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                  {miniPlayerPlaying
                     ? <svg viewBox="0 0 24 24" fill="#000" width="14" height="14"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
                     : <svg viewBox="0 0 24 24" fill="#000" width="14" height="14" style={{marginLeft:2}}><path d="M8 5v14l11-7z"/></svg>}
                 </button>
-                <button onClick={()=>{setNowPlaying(null);setNowPlayingPlaying(false);if(nowPlayingAudioRef.current)nowPlayingAudioRef.current.pause();}} style={{background:"none",border:"none",color:"#444",cursor:"pointer",fontSize:18,lineHeight:1,flexShrink:0}}>×</button>
+                <button onClick={dismissNowPlaying} style={{background:"none",border:"none",color:"#444",cursor:"pointer",fontSize:18,lineHeight:1,flexShrink:0}}>×</button>
               </div>
             </div>
           )}
@@ -2380,24 +2353,20 @@ export default function Page() {
                 }}
               >
                 <motion.div onClick={seekTo} style={{width:"100%",height:3,background:"#111",cursor:"pointer"}}>
-                  <motion.div style={{width:audioDuration?`${(audioCurrentTime/audioDuration)*100}%`:"0%",height:"100%",background:"#00ffff",transition:"width 0.1s linear"}}/>
+                  <motion.div style={{width:duration?`${(currentTime/duration)*100}%`:"0%",height:"100%",background:"#00ffff",transition:"width 0.1s linear"}}/>
                 </motion.div>
                 <motion.div style={{padding:"8px 12px",display:"flex",alignItems:"center",gap:10}}>
                   <img src={nowPlaying.cover} alt="" style={{width:40,height:40,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
                   <motion.div style={{flex:1,minWidth:0}}>
                     <motion.div style={{fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.title}</motion.div>
-                    <motion.div style={{fontSize:10,color:"#555",fontVariantNumeric:"tabular-nums"}}>{formatTime(audioCurrentTime)} / {formatTime(audioDuration)}</motion.div>
+                    <motion.div style={{fontSize:10,color:"#555",fontVariantNumeric:"tabular-nums"}}>{formatTime(currentTime)} / {formatTime(duration)}</motion.div>
                   </motion.div>
-                  <button onClick={()=>{
-                    if (!nowPlayingAudioRef.current) return;
-                    if (nowPlayingPlaying) { nowPlayingAudioRef.current.pause(); setNowPlayingPlaying(false); }
-                    else { nowPlayingAudioRef.current.play().catch(()=>{}); setNowPlayingPlaying(true); }
-                  }} style={{width:38,height:38,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
-                    {nowPlayingPlaying
+                  <button onClick={() => { void toggle(); }} style={{width:38,height:38,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                    {miniPlayerPlaying
                       ? <svg viewBox="0 0 24 24" fill="#000" width="14" height="14"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
                       : <svg viewBox="0 0 24 24" fill="#000" width="14" height="14" style={{marginLeft:2}}><path d="M8 5v14l11-7z"/></svg>}
                   </button>
-                  <button onClick={()=>{setNowPlaying(null);setNowPlayingPlaying(false);if(nowPlayingAudioRef.current)nowPlayingAudioRef.current.pause();}} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:20,lineHeight:1,padding:"0 4px"}}>×</button>
+                  <button onClick={dismissNowPlaying} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:20,lineHeight:1,padding:"0 4px"}}>×</button>
                 </motion.div>
               </motion.div>
             )}
