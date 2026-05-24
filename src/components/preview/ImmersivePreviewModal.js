@@ -1,15 +1,21 @@
 "use client";
 
 import { useMemo, useState, memo, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import PreviewModalPlayer from "@/components/preview/PreviewModalPlayer";
+import { motion } from "framer-motion";
 import GlyphLyricsPanel from "@/components/preview/GlyphLyricsPanel";
 import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview/releaseMetadata";
 import { extractLrcFromRelease } from "@/lib/lrc";
+import { useCoverPalette } from "@/hooks/useCoverPalette";
+import AmbientArtworkBackground from "@/components/preview/immersive/AmbientArtworkBackground";
+import TrackMeta from "@/components/preview/immersive/TrackMeta";
+import PreviewPlayerControls from "@/components/preview/immersive/PreviewPlayerControls";
+import ModalActionButtons from "@/components/preview/immersive/ModalActionButtons";
+import FloatingViewMore from "@/components/preview/immersive/FloatingViewMore";
+import PreviewModalPlayer from "@/components/preview/PreviewModalPlayer";
+import CoverArt from "@/components/ui/CoverArt";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import GiftButton from "@/components/gifts/GiftButton";
-import CoverArt from "@/components/ui/CoverArt";
 
 const SPRING_SOFT = { type: "spring", stiffness: 320, damping: 34 };
 const SPRING_EXIT = { type: "spring", stiffness: 380, damping: 36 };
@@ -20,9 +26,9 @@ const OVERLAY_FADE = {
   transition: { duration: 0.28 },
 };
 const SHEET_UP = {
-  initial: { y: "100%", scale: 0.92, opacity: 0.5 },
+  initial: { y: "100%", scale: 0.96, opacity: 0.55 },
   animate: { y: 0, scale: 1, opacity: 1 },
-  exit: { y: "100%", scale: 0.94, opacity: 0.4 },
+  exit: { y: "100%", scale: 0.97, opacity: 0.45 },
   transition: SPRING_SOFT,
 };
 const MODAL_CENTER = {
@@ -31,26 +37,8 @@ const MODAL_CENTER = {
   exit: { opacity: 0, scale: 0.94, y: 12 },
   transition: { duration: 0.48, ease: [0.22, 1, 0.36, 1] },
 };
-const DRAWER_SPRING = { type: "spring", stiffness: 340, damping: 36 };
 const DRAWER_COLLAPSE_THRESHOLD = 72;
 const MODAL_DISMISS_THRESHOLD = 56;
-
-const tabBtnStyle = (active) => ({
-  background: active ? "rgba(0,255,255,0.12)" : "rgba(255,255,255,0.06)",
-  border: `1px solid ${active ? "rgba(0,255,255,0.35)" : "rgba(255,255,255,0.1)"}`,
-  color: active ? "#e8ffff" : "rgba(255,255,255,0.72)",
-  fontSize: 10,
-  fontWeight: 700,
-  letterSpacing: 2,
-  textTransform: "uppercase",
-  padding: "8px 14px",
-  borderRadius: 20,
-  cursor: "pointer",
-  backdropFilter: "blur(10px)",
-  WebkitBackdropFilter: "blur(10px)",
-  boxShadow: active ? "0 0 14px rgba(0,255,255,0.2)" : "none",
-  transition: "all 0.22s",
-});
 
 function ImmersivePreviewModal({
   single,
@@ -80,7 +68,6 @@ function ImmersivePreviewModal({
   }, [release]);
   const hasLyrics = Boolean(lrcText?.trim());
 
-  const mediaHeight = isMobile ? "min(72vh, 75dvh)" : "min(52vh, 520px)";
   const shellVariant = isMobile ? SHEET_UP : MODAL_CENTER;
 
   const closeModal = useCallback(() => {
@@ -123,6 +110,143 @@ function ImmersivePreviewModal({
 
   const coverSrc = single.video || single.cover;
   const coverType = single.coverArtType || (single.video ? "video" : "image");
+  const palette = useCoverPalette(coverSrc, coverType);
+
+  const paletteVars = {
+    ["--modal-accent"]: palette.primaryCss,
+    ["--modal-accent-secondary"]: palette.secondaryCss,
+    ["--modal-accent-glow"]: palette.primaryGlow,
+    ["--modal-secondary-glow"]: palette.secondaryGlow,
+  };
+
+  const handleAddToCart = () => {
+    onAddToCart(single);
+    closeModal();
+  };
+
+  if (isMobile) {
+    return (
+      <motion.div
+        key="preview-overlay"
+        {...OVERLAY_FADE}
+        onClick={handleOverlayClick}
+        className="modal-immersive-overlay"
+      >
+        <motion.div
+          key="preview-shell-mobile"
+          {...shellVariant}
+          exit={{ ...shellVariant.exit, transition: SPRING_EXIT }}
+          onClick={(e) => e.stopPropagation()}
+          className="modal-immersive-shell"
+          style={paletteVars}
+          drag="y"
+          dragConstraints={{ top: 0, bottom: 0 }}
+          dragElastic={{ top: 0, bottom: 0.38 }}
+          onDragEnd={handleModalDismissDragEnd}
+        >
+          <button
+            type="button"
+            className="modal-immersive-sheet-handle"
+            aria-label="Close preview"
+            onClick={(e) => {
+              e.stopPropagation();
+              closeModal();
+            }}
+          />
+
+          <button
+            type="button"
+            className="preview-modal-close-btn modal-immersive-close"
+            aria-label="Close preview"
+            onClick={(e) => {
+              e.stopPropagation();
+              closeModal();
+            }}
+          >
+            ✕
+          </button>
+
+          <section className="modal-immersive-stage">
+            <AmbientArtworkBackground src={coverSrc} type={coverType} alt={single.title} palette={palette} />
+
+            <div className="modal-immersive-art">
+              <CoverArt
+                key={single.slug}
+                src={coverSrc}
+                type={coverType}
+                alt={single.title}
+                width="100%"
+                height="100%"
+                className="modal-immersive-art__cover"
+              />
+              <div className="modal-immersive-art__sheen" aria-hidden />
+            </div>
+
+            <FloatingViewMore
+              open={viewMoreOpen}
+              onToggle={() => {
+                setGlyphsOpen(false);
+                setViewMoreOpen((o) => !o);
+              }}
+              onCollapse={collapseDrawer}
+              isMobile
+              creditRows={creditRows}
+              handleDrawerDragEnd={handleDrawerDragEnd}
+              palette={palette}
+            />
+
+            <GlyphLyricsPanel
+              open={glyphsOpen}
+              lrcText={lrcText}
+              audioRef={audioRef}
+              isMobile
+              onClose={() => setGlyphsOpen(false)}
+            />
+          </section>
+
+          <section
+            className="modal-immersive-panel"
+            style={{ opacity: glyphsOpen ? 0 : 1, pointerEvents: glyphsOpen ? "none" : "auto" }}
+          >
+            <TrackMeta
+              title={single.title}
+              canStream={canStream}
+              showPurchase={showPurchase}
+              priceLabel={priceLabel}
+              trackAccess={trackAccess}
+              userId={userId}
+              single={single}
+              isMobile
+              onLibraryChange={onLibraryChange}
+              hasLyrics={hasLyrics}
+              onOpenGlyphs={() => {
+                setViewMoreOpen(false);
+                setGlyphsOpen(true);
+              }}
+              palette={palette}
+            />
+
+            <PreviewPlayerControls audioRef={audioRef} palette={palette} compact />
+
+            <ModalActionButtons
+              showPurchase={showPurchase}
+              showGift={isAdmin}
+              priceLabel={priceLabel}
+              palette={palette}
+              onAddToCart={handleAddToCart}
+              onGift={() => onGift?.(single)}
+            />
+
+            {showPurchase ? (
+              <button type="button" className="modal-immersive-vinyl-link" onClick={() => { onAddVinyl(single); closeModal(); }}>
+                + Add Vinyl – $47.99 (Optional)
+              </button>
+            ) : null}
+          </section>
+        </motion.div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -135,9 +259,9 @@ function ImmersivePreviewModal({
         background: "rgba(0,0,0,0.82)",
         zIndex: 8888,
         display: "flex",
-        alignItems: isMobile ? "flex-end" : "center",
+        alignItems: "center",
         justifyContent: "center",
-        padding: isMobile ? 0 : 16,
+        padding: 16,
       }}
     >
       <motion.div
@@ -145,71 +269,32 @@ function ImmersivePreviewModal({
         {...shellVariant}
         exit={{ ...shellVariant.exit, transition: SPRING_EXIT }}
         onClick={(e) => e.stopPropagation()}
+        className="modal-immersive-shell modal-immersive-shell--desktop"
         style={{
-          background: "#0a0a0a",
-          border: isMobile ? "1px solid #1e1e1e" : "1px solid #222",
-          borderRadius: isMobile ? "20px 20px 0 0" : 20,
-          width: isMobile ? "100%" : "min(420px, 96vw)",
+          ...paletteVars,
+          border: "1px solid #222",
+          borderRadius: 20,
+          width: "min(420px, 96vw)",
           maxWidth: "100%",
-          maxHeight: isMobile ? "96vh" : "94vh",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-          boxShadow: "0 0 48px rgba(0,255,255,0.12), 0 24px 80px rgba(0,0,0,0.65)",
-          willChange: "transform",
-          position: "relative",
+          maxHeight: "94vh",
+          boxShadow: `0 0 48px ${palette.primaryGlow}, 0 24px 80px rgba(0,0,0,0.65)`,
         }}
       >
-        {isMobile && (
-          <button
-            type="button"
-            className="preview-modal-close-btn"
-            aria-label="Close preview"
-            onClick={(e) => {
-              e.stopPropagation();
-              closeModal();
-            }}
-            style={{
-              position: "absolute",
-              top: 14,
-              right: 14,
-              zIndex: glyphsOpen || viewMoreOpen ? 30 : 20,
-              background: "rgba(0,0,0,0.55)",
-              border: "1px solid rgba(255,255,255,0.15)",
-              borderRadius: "50%",
-              width: 34,
-              height: 34,
-              color: "rgba(255,255,255,0.8)",
-              fontSize: 18,
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backdropFilter: "blur(8px)",
-              WebkitBackdropFilter: "blur(8px)",
-            }}
-          >
-            ✕
-          </button>
-        )}
         <motion.div
           layout
-          initial={isMobile ? { opacity: 0.88, scale: 0.97 } : { opacity: 0.85, scale: 0.96 }}
-          animate={{
-            opacity: 1,
-            scale: 1,
-            boxShadow: "0 0 36px rgba(0,255,255,0.18)",
-          }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: isMobile ? 0.06 : 0.12 }}
+          initial={{ opacity: 0.85, scale: 0.96 }}
+          animate={{ opacity: 1, scale: 1, boxShadow: `0 0 36px ${palette.primaryGlow}` }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
           style={{
             position: "relative",
             width: "100%",
-            height: mediaHeight,
+            height: "min(52vh, 520px)",
             flexShrink: 0,
             overflow: "hidden",
             background: "#000",
           }}
         >
+          <AmbientArtworkBackground src={coverSrc} type={coverType} alt={single.title} palette={palette} />
           <CoverArt
             key={single.slug}
             src={coverSrc}
@@ -217,146 +302,35 @@ function ImmersivePreviewModal({
             alt={single.title}
             width="100%"
             height="100%"
-            style={{
-              objectFit: isMobile ? "cover" : "contain",
-              objectPosition: "center top",
-              pointerEvents: "none",
-            }}
+            style={{ objectFit: "contain", objectPosition: "center top", pointerEvents: "none", position: "relative", zIndex: 2 }}
           />
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background:
-                "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.25) 42%, transparent 68%)",
-              pointerEvents: "none",
+          <FloatingViewMore
+            open={viewMoreOpen}
+            onToggle={() => {
+              setGlyphsOpen(false);
+              setViewMoreOpen((o) => !o);
             }}
+            onCollapse={collapseDrawer}
+            isMobile={false}
+            creditRows={creditRows}
+            handleDrawerDragEnd={handleDrawerDragEnd}
+            palette={palette}
           />
-          <div
-            style={{
-              position: "absolute",
-              left: 0,
-              right: 0,
-              bottom: 0,
-              padding: isMobile ? "10px 14px 12px" : "12px 16px 14px",
-              display: "flex",
-              gap: 8,
-              flexWrap: "wrap",
-              background: "rgba(8,8,8,0.35)",
-              backdropFilter: "blur(12px)",
-              WebkitBackdropFilter: "blur(12px)",
-              borderTop: "1px solid rgba(255,255,255,0.06)",
-              zIndex: 4,
-            }}
-          >
-            <button
-              type="button"
-              style={tabBtnStyle(viewMoreOpen)}
-              onClick={() => {
-                setGlyphsOpen(false);
-                setViewMoreOpen((o) => !o);
-              }}
-            >
-              View More
-            </button>
-          </div>
-
-          <AnimatePresence>
-            {viewMoreOpen ? (
-              <motion.div
-                key="view-more"
-                drag={isMobile ? "y" : false}
-                dragConstraints={{ top: 0, bottom: 0 }}
-                dragElastic={{ top: 0, bottom: 0.35 }}
-                onDragEnd={isMobile ? handleDrawerDragEnd : undefined}
-                initial={{ y: "100%" }}
-                animate={{ y: 0 }}
-                exit={{ y: "100%" }}
-                transition={DRAWER_SPRING}
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  maxHeight: "58%",
-                  zIndex: 5,
-                  background:
-                    "linear-gradient(to top, rgba(6,6,6,0.97) 72%, rgba(6,6,6,0.88) 100%)",
-                  borderTop: "1px solid rgba(0,255,255,0.15)",
-                  padding: isMobile ? "10px 18px 20px" : "16px 18px 20px",
-                  overflowY: "auto",
-                  WebkitOverflowScrolling: "touch",
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {isMobile ? (
-                  <button
-                    type="button"
-                    className="preview-drawer-handle"
-                    aria-label="Collapse credits"
-                    onClick={collapseDrawer}
-                  />
-                ) : null}
-                <div className="preview-credits-heading">CREDITS</div>
-                {creditRows.length ? (
-                  creditRows.map(({ key, label, value }) => (
-                    <div
-                      key={key}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        gap: 12,
-                        padding: "7px 0",
-                        borderBottom: "1px solid #141414",
-                        fontSize: 12,
-                      }}
-                    >
-                      <span style={{ color: "#666", flexShrink: 0 }}>{label}</span>
-                      <span style={{ color: "#ddd", textAlign: "right", lineHeight: 1.4 }}>
-                        {value}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <p style={{ fontSize: 12, color: "#555", margin: 0, fontStyle: "italic" }}>
-                    Credits available soon.
-                  </p>
-                )}
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
-
           <GlyphLyricsPanel
             open={glyphsOpen}
             lrcText={lrcText}
             audioRef={audioRef}
-            isMobile={isMobile}
+            isMobile={false}
             onClose={() => setGlyphsOpen(false)}
           />
         </motion.div>
-
-        {isMobile ? (
-          <motion.button
-            type="button"
-            className="preview-sheet-dismiss-handle"
-            aria-label="Close preview"
-            onClick={(e) => {
-              e.stopPropagation();
-              closeModal();
-            }}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={{ top: 0, bottom: 0.4 }}
-            onDragEnd={handleModalDismissDragEnd}
-          />
-        ) : null}
 
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: glyphsOpen ? 0 : 1, y: glyphsOpen ? 10 : 0 }}
           transition={{ delay: glyphsOpen ? 0 : 0.42, duration: 0.35 }}
           style={{
-            padding: isMobile ? "14px 18px 24px" : "16px 22px 22px",
+            padding: "16px 22px 22px",
             display: "flex",
             flexDirection: "column",
             gap: 10,
@@ -364,32 +338,24 @@ function ImmersivePreviewModal({
             pointerEvents: glyphsOpen ? "none" : "auto",
           }}
         >
-          <div
-            className={isMobile ? "song-title-turquoise-glow" : "hero-title-glow"}
-            style={{
-              fontSize: isMobile ? 22 : 20,
-              fontWeight: 800,
-              letterSpacing: 1,
-              lineHeight: 1.2,
-            }}
-          >
+          <div className="hero-title-glow" style={{ fontSize: 20, fontWeight: 800, letterSpacing: 1, lineHeight: 1.2 }}>
             {single.title}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <div style={{ fontSize: 11, opacity: 0.45, letterSpacing: 1 }}>
-              {canStream ? "FULL STREAM" : "SINGLE PREVIEW"}
+              {canStream ? "FULL STREAM" : "PREVIEW TRACK"}
               {showPurchase && priceLabel ? ` · ${priceLabel}` : ""}
             </div>
             <MusicAccessBadge access={trackAccess} label={trackAccess?.badge} compact />
-            {userId && (
+            {userId ? (
               <MusicPlusButton
                 track={single}
                 userId={userId}
                 access={trackAccess}
-                isMobile={isMobile}
+                isMobile={false}
                 onLibraryChange={onLibraryChange}
               />
-            )}
+            ) : null}
           </div>
 
           {hasLyrics ? (
@@ -418,21 +384,13 @@ function ImmersivePreviewModal({
             </div>
           ) : null}
 
-          <PreviewModalPlayer audioRef={audioRef} compact={isMobile} />
+          <PreviewModalPlayer audioRef={audioRef} compact={false} />
 
-          {isAdmin ? (
-            <GiftButton
-              onClick={() => onGift?.(single)}
-              style={{ width: "100%", marginBottom: 8 }}
-            />
-          ) : null}
+          {isAdmin ? <GiftButton onClick={() => onGift?.(single)} style={{ width: "100%", marginBottom: 8 }} /> : null}
           {showPurchase ? (
             <button
               type="button"
-              onClick={() => {
-                onAddToCart(single);
-                closeModal();
-              }}
+              onClick={handleAddToCart}
               style={{
                 width: "100%",
                 padding: "12px 0",
@@ -459,8 +417,8 @@ function ImmersivePreviewModal({
                 width: "100%",
                 padding: "12px 0",
                 background: "#0a0a0a",
-                color: "#00ffff",
-                border: "1px solid #00ffff",
+                color: palette.primaryCss,
+                border: `1px solid ${palette.primaryCss}`,
                 borderRadius: 10,
                 cursor: "pointer",
                 fontSize: 13,
@@ -470,22 +428,13 @@ function ImmersivePreviewModal({
               + Add Vinyl – $47.99 (Optional)
             </button>
           ) : null}
-          {!isMobile ? (
-            <button
-              type="button"
-              onClick={closeModal}
-              style={{
-                background: "none",
-                border: "none",
-                color: "#555",
-                cursor: "pointer",
-                fontSize: 12,
-                marginTop: 2,
-              }}
-            >
-              Close
-            </button>
-          ) : null}
+          <button
+            type="button"
+            onClick={closeModal}
+            style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 12, marginTop: 2 }}
+          >
+            Close
+          </button>
         </motion.div>
       </motion.div>
     </motion.div>

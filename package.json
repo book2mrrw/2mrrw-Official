@@ -27,6 +27,7 @@
     "@supabase/supabase-js": "2.105.4",
     "@types/howler": "2.2.13",
     "@types/three": "0.184.1",
+    "colorthief": "^3.3.1",
     "framer-motion": "12.38.0",
     "howler": "2.2.4",
     "lucide-react": "1.16.0",

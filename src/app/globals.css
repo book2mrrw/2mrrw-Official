@@ -168,6 +168,456 @@ body {
   }
 }
 
+/* ── Immersive mobile release preview modal ── */
+.modal-immersive-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8888;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.modal-immersive-shell {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #050506;
+  border-radius: 22px 22px 0 0;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: none;
+  box-shadow:
+    0 -8px 40px rgba(0, 0, 0, 0.55),
+    0 0 48px var(--modal-accent-glow, rgba(0, 220, 210, 0.12));
+  will-change: transform;
+  touch-action: pan-y;
+}
+
+.modal-immersive-shell--desktop {
+  height: auto;
+  max-height: 94vh;
+  border-radius: 20px;
+  border-bottom: 1px solid #222;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0a;
+}
+
+.modal-immersive-sheet-handle {
+  flex-shrink: 0;
+  width: 100%;
+  padding: 10px 0 6px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  touch-action: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 12;
+}
+
+.modal-immersive-sheet-handle::before {
+  content: "";
+  display: block;
+  width: 36px;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(148, 148, 156, 0.55);
+}
+
+.modal-immersive-close {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  right: 14px;
+  z-index: 24;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.modal-immersive-stage {
+  position: relative;
+  flex: 1 1 56%;
+  min-height: 0;
+  max-height: clamp(240px, 58dvh, 420px);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.modal-immersive-ambient {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  transform: translateZ(0);
+}
+
+.modal-immersive-ambient__blur {
+  position: absolute;
+  inset: -18%;
+  background-size: cover;
+  background-position: center;
+  filter: blur(28px) saturate(1.35) brightness(0.42);
+  transform: scale(1.08) translateZ(0);
+  will-change: transform;
+  opacity: 0.72;
+}
+
+.modal-immersive-ambient__blur::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at 50% 30%,
+    var(--modal-accent-glow, rgba(0, 220, 210, 0.18)) 0%,
+    transparent 55%
+  );
+  mix-blend-mode: screen;
+  opacity: 0.65;
+}
+
+.modal-immersive-ambient__media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(32px) brightness(0.35);
+  transform: scale(1.12);
+}
+
+.modal-immersive-ambient__wash {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.modal-immersive-ambient__noise {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 0.04;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.modal-immersive-art {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(8px, 2.5dvh, 18px);
+  transform: translateX(-50%) translateZ(0);
+  width: min(78vw, 300px);
+  height: min(78vw, 300px);
+  max-height: calc(100% - 24px);
+  aspect-ratio: 1;
+  z-index: 4;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.55),
+    0 0 32px var(--modal-accent-glow, rgba(0, 220, 210, 0.22));
+}
+
+.modal-immersive-art__cover {
+  object-fit: cover;
+  object-position: center;
+}
+
+.modal-immersive-art__sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    transparent 42%,
+    transparent 58%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+}
+
+.modal-immersive-view-more {
+  position: absolute;
+  top: clamp(52px, 12dvh, 72px);
+  right: 14px;
+  z-index: 8;
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(8, 8, 10, 0.42);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.35),
+    0 0 16px var(--modal-accent-glow, rgba(0, 220, 210, 0.15));
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.modal-immersive-view-more:active {
+  transform: scale(0.98);
+}
+
+.modal-immersive-drawer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: 52%;
+  z-index: 9;
+  padding: 10px 18px max(16px, env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(
+    to top,
+    rgba(6, 6, 8, 0.98) 78%,
+    rgba(6, 6, 8, 0.88) 100%
+  );
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.modal-immersive-drawer__handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.28);
+  margin: 0 auto 12px;
+  display: block;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.modal-immersive-drawer__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid #141414;
+  font-size: 12px;
+}
+
+.modal-immersive-drawer__label {
+  color: #666;
+  flex-shrink: 0;
+}
+
+.modal-immersive-drawer__value {
+  color: #ddd;
+  text-align: right;
+  line-height: 1.4;
+}
+
+.modal-immersive-drawer__empty {
+  font-size: 12px;
+  color: #555;
+  margin: 0;
+  font-style: italic;
+}
+
+.modal-immersive-panel {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 1.2dvh, 10px);
+  padding: clamp(10px, 2dvh, 14px) 18px max(14px, env(safe-area-inset-bottom, 12px));
+  background: linear-gradient(180deg, rgba(6, 6, 8, 0.55) 0%, rgba(4, 4, 6, 0.98) 28%);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.modal-immersive-meta__title {
+  margin: 0;
+  font-size: clamp(18px, 4.8vw, 22px);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+  color: rgba(255, 255, 255, 0.96);
+  text-shadow: 0 0 18px var(--modal-title-glow, rgba(0, 220, 210, 0.28));
+}
+
+.modal-immersive-meta__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.modal-immersive-meta__status {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  opacity: 0.88;
+}
+
+.modal-immersive-meta__glyphs {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.modal-immersive-glyphs-btn {
+  background: rgba(162, 89, 255, 0.12);
+  border: 1px solid rgba(162, 89, 255, 0.35);
+  color: #d4b8ff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  padding: 6px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+}
+
+.modal-immersive-player {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(12, 12, 14, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 0 20px var(--modal-accent-glow, rgba(0, 220, 210, 0.08));
+}
+
+.modal-immersive-player__track {
+  width: 100%;
+  height: 5px;
+  background: #1a1a1e;
+  border-radius: 3px;
+  cursor: pointer;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.modal-immersive-player__fill {
+  height: 100%;
+  background: var(--modal-accent, #00dcd2);
+  border-radius: 3px;
+  transition: width 0.1s linear;
+  box-shadow: 0 0 8px var(--modal-accent-glow, rgba(0, 220, 210, 0.45));
+}
+
+.modal-immersive-player__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modal-immersive-player__time {
+  font-size: 10px;
+  color: #666;
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+}
+
+.modal-immersive-player__time--end {
+  text-align: right;
+}
+
+.modal-immersive-actions {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.modal-immersive-action-card {
+  flex: 1;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(18, 18, 22, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: transform 0.18s, border-color 0.18s;
+}
+
+.modal-immersive-action-card:active {
+  transform: scale(0.98);
+}
+
+.modal-immersive-action-card--cart {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 18px var(--modal-accent-glow, rgba(0, 220, 210, 0.1));
+}
+
+.modal-immersive-action-card--gift {
+  border-color: rgba(212, 168, 83, 0.35);
+  flex-direction: row;
+  gap: 6px;
+}
+
+.modal-immersive-action-card__label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.modal-immersive-action-card__sub {
+  font-size: 10px;
+  color: var(--modal-accent, #00dcd2);
+  font-weight: 600;
+  opacity: 0.9;
+}
+
+.modal-immersive-vinyl-link {
+  width: 100%;
+  padding: 0;
+  margin-top: 2px;
+  background: none;
+  border: none;
+  color: var(--modal-accent, #00dcd2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  text-align: center;
+  opacity: 0.75;
+}
+
+@media (max-width: 768px) {
+  .modal-immersive-shell .preview-modal-close-btn {
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+}
+
 @keyframes livingScrollDrift {
   0%,
   100% {
