@@ -9,7 +9,7 @@ import { formatPlayerTime } from "@/lib/player/formatTime";
 import { useRenderTracker } from "@/lib/dev/useRenderTracker";
 import { PREVIEW_DISPLAY_CAP_SEC } from "@/components/preview/immersive/constants";
 
-function PreviewPlayerControls({ palette, compact = true, canStream = true }) {
+function PreviewPlayerControls({ palette, compact = true, canStream = true, previewOnly = false }) {
   useRenderTracker("PreviewPlayerControls");
   const {
     state: { isPlaying, currentTime, duration, volume },
@@ -19,14 +19,21 @@ function PreviewPlayerControls({ palette, compact = true, canStream = true }) {
   } = useMediaEngine();
   const { isBuffering, error, streamRetryable, retryStreamPlayback } = useAudioPlayer();
 
+  const displayDuration = useMemo(() => {
+    if (canStream && !previewOnly) return duration;
+    if (!duration) return PREVIEW_DISPLAY_CAP_SEC;
+    return Math.min(duration, PREVIEW_DISPLAY_CAP_SEC);
+  }, [canStream, duration, previewOnly]);
+
   const seekTo = useCallback(
     (e) => {
       if (!displayDuration) return;
       const rect = e.currentTarget.getBoundingClientRect();
       const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      seek(ratio * displayDuration);
+      const maxSeek = previewOnly ? PREVIEW_DISPLAY_CAP_SEC : displayDuration;
+      seek(ratio * maxSeek);
     },
-    [displayDuration, seek]
+    [displayDuration, previewOnly, seek]
   );
 
   const togglePlay = useCallback(
@@ -41,18 +48,12 @@ function PreviewPlayerControls({ palette, compact = true, canStream = true }) {
     [error, toggle, retryStreamPlayback, streamRetryable]
   );
 
-  const displayDuration = useMemo(() => {
-    if (canStream) return duration;
-    if (!duration) return PREVIEW_DISPLAY_CAP_SEC;
-    return Math.min(duration, PREVIEW_DISPLAY_CAP_SEC);
-  }, [canStream, duration]);
-
   const progress = displayDuration
     ? Math.max(0, Math.min(100, (currentTime / displayDuration) * 100))
     : 0;
   const playSize = compact ? 52 : 60;
   const cssVars = useMemo(() => playerPaletteToCssVars(palette), [palette]);
-  const streamHint = canStream ? "Full stream" : `Preview · ${PREVIEW_DISPLAY_CAP_SEC}s`;
+  const streamHint = canStream && !previewOnly ? "Full stream" : `Preview · ${PREVIEW_DISPLAY_CAP_SEC}s`;
 
   const handleVolume = useCallback(
     (e) => {

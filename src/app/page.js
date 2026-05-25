@@ -24,6 +24,7 @@ import { consumeGiftHighlightSlug } from "@/lib/gifts/session-keys";
 import { resolveContentAccess, resolvePlaybackSrc, isAdminAccount } from "@/lib/music-access";
 import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
 import { useAudioPlayer } from "@/context/AudioContext";
+import { useMediaEngine } from "@/media/useMediaEngine";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
 import AlbumTracklistSheet from "@/components/music/AlbumTracklistSheet";
 import { VaultUnlockedRoom } from "@/components/vault/VaultUnlockedRoom";
@@ -491,6 +492,7 @@ export default function Page() {
   const {
     playTrack,
     playQueue,
+    upgradeToFullStream,
     hasStarted,
     currentTrack,
     csMode,
@@ -816,23 +818,26 @@ export default function Page() {
     return () => { Object.values(ambientRefs.current).forEach(a => { try { a.pause(); } catch {} }); };
   }, [activeTab, soundOn]);
 
-  useEffect(() => {
-    if (!nowPlaying) return;
-    void playTrack(
-      toPlaybackTrack(nowPlaying, { ...accountState, userId: currentUser?.id }, "feature")
-    );
-  }, [nowPlaying, accountState, currentUser?.id, playTrack]);
-
-  const previewPlaybackSlug = selectedSingle?.slug ?? null;
+  const { state: { isPlaying: engineIsPlaying } } = useMediaEngine();
 
   useEffect(() => {
-    if (!previewModalOpen || !previewPlaybackSlug || !selectedSingle) return;
-    void playTrack(
-      toPlaybackTrack(selectedSingle, { ...accountState, userId: currentUser?.id }, "preview_modal")
-    );
-    // Replay only when modal opens or preview track slug changes — not on release-detail hydration.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedSingle read at slug-change time only
-  }, [previewModalOpen, previewPlaybackSlug, accountState, currentUser?.id, playTrack]);
+    if (!engineIsPlaying) return;
+    Object.values(ambientRefs.current).forEach((a) => {
+      try {
+        a.pause();
+      } catch {
+        /* ambient refs are best-effort */
+      }
+    });
+  }, [engineIsPlaying]);
+
+  useEffect(() => {
+    if (!previewModalOpen || !selectedSingle?.slug) return;
+    const access = resolveContentAccess(selectedSingle, accountState);
+    if (!access?.canStream) return;
+    if (currentTrack?.slug !== selectedSingle.slug) return;
+    void upgradeToFullStream();
+  }, [previewModalOpen, selectedSingle, accountState, currentTrack?.slug, upgradeToFullStream]);
 
   useEffect(() => {
     if (activeTab !== "live") {
@@ -924,10 +929,20 @@ export default function Page() {
     setPreviewModalOpen(true);
     setSelectedReleaseDetail(null);
     if (!single?.slug) return;
+    void playTrack(
+      toPlaybackTrack(single, { ...accountState, userId: currentUser?.id }, "preview_modal")
+    );
     void getControlSystemReleaseDetail({ slug: single.slug, fallbackRelease: single }).then((detail) => {
       if (detail) setSelectedReleaseDetail(detail);
     });
-  }, [nowPlaying]);
+  }, [nowPlaying, accountState, currentUser?.id, playTrack]);
+
+  const handleSingleClick = useCallback(
+    (single) => {
+      openSingleModal(single);
+    },
+    [openSingleModal]
+  );
 
   const closeSingleModal = useCallback(() => {
     setPreviewModalOpen(false);
@@ -936,9 +951,13 @@ export default function Page() {
     setSelectedReleaseDetail(null);
   }, [pause]);
 
-  const playFeature = useCallback((feat) => {
-    setNowPlaying(feat);
-  }, []);
+  const handleFeatureClick = useCallback(
+    (feat) => {
+      setNowPlaying(feat);
+      void playTrack(toPlaybackTrack(feat, { ...accountState, userId: currentUser?.id }, "feature"));
+    },
+    [accountState, currentUser?.id, playTrack]
+  );
 
   const dismissNowPlaying = useCallback(() => {
     setNowPlaying(null);
@@ -1221,10 +1240,10 @@ export default function Page() {
       const feat = features.find((f) => f.slug === parsed.slug);
       if (feat) {
         switchTab("singles");
-        setNowPlaying(feat);
+        handleFeatureClick(feat);
       }
     }
-  }, [authLoading, currentUser, openSingleModal]);
+  }, [authLoading, currentUser, openSingleModal, handleFeatureClick]);
 
   const shopItems      = printfulProducts.length > 0 ? printfulProducts : fallbackMerch;
   const shopIsFallback = !printfulLoading && printfulProducts.length === 0;
@@ -1698,7 +1717,7 @@ export default function Page() {
                   {/* Features */}
                   <div style={{marginTop:28,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={playFeature} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={handleFeatureClick} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Radio */}
@@ -1846,10 +1865,10 @@ export default function Page() {
                         </div>
                       </div>
                       <h2 className="section-heading" style={{marginBottom:14}}>Singles</h2>
-                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} openSingleModal={openSingleModal} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} onSingleClick={handleSingleClick} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       <div style={{marginTop:32,marginBottom:4}}>
                         <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                        <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={playFeature} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                        <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={handleFeatureClick} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       </div>
                       <AudioVisualsSection isMobile={isMobile} onAudioVisualsFocused={handleAudioVisualsFocused}/>
                     </>

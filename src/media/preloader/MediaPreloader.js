@@ -2,6 +2,7 @@ import { imagePipeline } from "@/media/imagePipeline";
 import * as budget from "./preloadBudget";
 
 let audioLink = null;
+const warmedPreviewUrls = new Set();
 
 function preloadAudioLink(url, trackId) {
   if (typeof document === "undefined" || !url) return;
@@ -14,6 +15,18 @@ function preloadAudioLink(url, trackId) {
   link.crossOrigin = "anonymous";
   document.head.appendChild(link);
   audioLink = link;
+
+  if (!warmedPreviewUrls.has(url)) {
+    warmedPreviewUrls.add(url);
+    try {
+      const warm = new Audio();
+      warm.preload = "auto";
+      warm.src = url;
+      warm.load();
+    } catch {
+      /* preview warm-up is best-effort */
+    }
+  }
 }
 
 export function preloadTrack(trackId, audioUrl, artworkUrl, coverArtType) {

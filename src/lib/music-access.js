@@ -186,6 +186,12 @@ export function resolveTrackAccess(track, accountState = {}) {
   };
 }
 
+/** Fast-path library stream URL — browser follows redirect to signed R2 without JSON prefetch. */
+export function libraryStreamRedirectSrc(slug) {
+  if (!slug) return "";
+  return `/api/library/stream?slug=${encodeURIComponent(slug)}&redirect=1`;
+}
+
 /**
  * Playback URL resolution (no UI changes).
  * - Entitled full audio → /api/library/stream (redirects to signed R2 GET)
@@ -198,7 +204,7 @@ export function resolvePlaybackSrc(track, access, { userId } = {}) {
     if (offline) return offline;
   }
   if (access?.canStream && track.slug) {
-    return `/api/library/stream?slug=${encodeURIComponent(track.slug)}&redirect=1`;
+    return libraryStreamRedirectSrc(track.slug);
   }
   const previewPath = track.preview || track.preview_path || track.previewPath;
   if (previewPath) {

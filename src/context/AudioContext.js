@@ -22,10 +22,12 @@ import {
   clearLibraryStreamSession,
   endStreamAnalytics,
   fetchLibraryStream,
+  isLibraryStreamRedirectSrc,
   isLibraryStreamSrc,
   parseStreamSlugFromSrc,
   streamUrlNeedsRefresh,
 } from "@/lib/playback/stream-client";
+import { catalogPreviewAudioUrl } from "@/lib/media-urls";
 import {
   clearPersistedMediaSessionTrack,
   getArtworkEntriesForTrack,
@@ -51,6 +53,23 @@ const SLOWED_SUFFIX = " · Slowed";
 const CS_PLAYBACK_RATE = 0.75;
 const POSITION_SAVE_INTERVAL_MS = 15000;
 const STORE_LINK_HREF = "/subscribe";
+const PREVIEW_HARD_CAP_SEC = 30;
+
+function getTrackPreviewSrc(track) {
+  const previewPath =
+    track?.preview ||
+    track?.preview_path ||
+    track?.previewPath ||
+    track?.metadata?.previewPath;
+  if (previewPath) return catalogPreviewAudioUrl(previewPath);
+  if (track?.src && !isLibraryStreamSrc(track.src)) return track.src;
+  return null;
+}
+
+function dispatchPreviewEnded(slug) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent("preview:ended", { detail: { slug } }));
+}
 
 const EMPTY_STATE = {
   currentTrackId: null,
@@ -71,6 +90,7 @@ const EMPTY_STATE = {
   shuffle: false,
   csMode: false,
   csTrack: null,
+  playbackState: null,
 };
 
 function stripSlowedSuffix(title) {
@@ -107,6 +127,8 @@ const normalizeTrack = (track = {}) => {
     csCoverType,
     source: track.source || "unknown",
     metadata: track.metadata || {},
+    preview: track.preview || track.preview_path || track.previewPath || null,
+    preview_path: track.preview_path || track.previewPath || track.preview || null,
   };
 };
 
@@ -206,6 +228,7 @@ export function AudioProvider({ children }) {
   const listeningProgressRef = useRef({ slug: null, recorded30s: false });
   const streamMetaRef = useRef(null);
   const streamErrorRetriedRef = useRef(false);
+  const onPreviewEndedRef = useRef(null);
   const visibilityPausedRef = useRef(false);
   const wasPlayingBeforeHideRef = useRef(false);
   const positionSaveTimerRef = useRef(null);
@@ -487,6 +510,22 @@ export function AudioProvider({ children }) {
       syncPositionState(false);
 
       const track = stateRef.current.currentTrack;
+      const previewOnly = track?.metadata?.access?.previewOnly;
+
+      if (previewOnly && audio.currentTime >= PREVIEW_HARD_CAP_SEC) {
+        skipPauseInterruptionRef.current = true;
+        audio.pause();
+        audio.currentTime = PREVIEW_HARD_CAP_SEC;
+        patchState({
+          isPlaying: false,
+          currentTime: PREVIEW_HARD_CAP_SEC,
+          playbackState: "ended_preview",
+        });
+        onPreviewEndedRef.current?.(track);
+        dispatchPreviewEnded(track.slug);
+        return;
+      }
+
       if (track?.slug && audio.currentTime >= 30) {
         if (listeningProgressRef.current.slug !== track.slug) {
           listeningProgressRef.current = { slug: track.slug, recorded30s: false };
@@ -505,6 +544,18 @@ export function AudioProvider({ children }) {
     const onDuration = () => patchState({ duration: isFinite(audio.duration) ? audio.duration : 0 });
     const onEnded = () => {
       const track = stateRef.current.currentTrack;
+      const previewOnly = track?.metadata?.access?.previewOnly;
+
+      if (previewOnly) {
+        stopProgressRaf();
+        stopPositionSaveTimer();
+        patchState({ isPlaying: false, currentTime: PREVIEW_HARD_CAP_SEC, playbackState: "ended_preview" });
+        onPreviewEndedRef.current?.(track);
+        dispatchPreviewEnded(track?.slug);
+        if (track) void updateMediaSession(track, { playing: false });
+        return;
+      }
+
       const meta = streamMetaRef.current;
       if (meta) {
         finalizeStreamSession(meta, {
@@ -745,52 +796,100 @@ export function AudioProvider({ children }) {
 
     const streamSlug = parseStreamSlugFromSrc(nextTrack.src) || nextTrack.slug;
     const usesLibraryStream = isLibraryStreamSrc(nextTrack.src);
+    const redirectFastPath = isLibraryStreamRedirectSrc(nextTrack.src);
+    const previewSrc = getTrackPreviewSrc(nextTrack);
+
+    let syncSrc = nextTrack.src;
+    let backgroundStreamResolve = false;
 
     if (usesLibraryStream && streamSlug) {
-      try {
-        const resolved = await resolveLibraryStreamForTrack(nextTrack, { force: options.forceStream });
-        nextTrack = resolved.track;
-      } catch (err) {
-        if (err?.code === "ACCESS_DENIED") {
-          const prevMeta = streamMetaRef.current;
-          if (prevMeta) finalizeStreamSession(prevMeta, { completed: false, durationSeconds: audio.currentTime || 0 });
-          skipPauseInterruptionRef.current = true;
-          audio.pause();
-          patchState({
-            isPlaying: false,
-            accessDenied: true,
-            streamRetryable: false,
-            error: "Access unavailable",
-            hasStarted: true,
-            currentTrack: nextTrack,
-            currentTrackId: nextTrack.id,
-          });
-          return false;
-        }
-        if (err?.code === "CONCURRENT_STREAM") {
-          patchState({
-            streamConflict: {
-              slug: streamSlug,
-              sessionId: err.sessionId || null,
-              track: nextTrack,
-              resumeAt: options.resumeAt,
-            },
-            hasStarted: true,
-            currentTrack: nextTrack,
-            currentTrackId: nextTrack.id,
-          });
-          return false;
-        }
+      if (previewSrc) {
+        syncSrc = previewSrc;
+        backgroundStreamResolve = true;
+      } else if (redirectFastPath) {
+        syncSrc = nextTrack.src;
+      } else {
+        backgroundStreamResolve = true;
+      }
+    }
+
+    const applyStreamResolveError = (err) => {
+      if (err?.code === "ACCESS_DENIED") {
+        const prevMeta = streamMetaRef.current;
+        if (prevMeta) finalizeStreamSession(prevMeta, { completed: false, durationSeconds: audio.currentTime || 0 });
+        skipPauseInterruptionRef.current = true;
+        audio.pause();
         patchState({
           isPlaying: false,
-          error: "Stream unavailable — tap to retry",
-          streamRetryable: true,
+          accessDenied: true,
+          streamRetryable: false,
+          error: "Access unavailable",
           hasStarted: true,
           currentTrack: nextTrack,
           currentTrackId: nextTrack.id,
         });
-        return false;
+        return;
       }
+      if (err?.code === "CONCURRENT_STREAM") {
+        patchState({
+          streamConflict: {
+            slug: streamSlug,
+            sessionId: err.sessionId || null,
+            track: nextTrack,
+            resumeAt: options.resumeAt,
+          },
+          hasStarted: true,
+          currentTrack: nextTrack,
+          currentTrackId: nextTrack.id,
+        });
+        return;
+      }
+      patchState({
+        isPlaying: false,
+        error: "Stream unavailable — tap to retry",
+        streamRetryable: true,
+        hasStarted: true,
+        currentTrack: nextTrack,
+        currentTrackId: nextTrack.id,
+      });
+    };
+
+    const swapToSignedStream = (resolved) => {
+      const signedUrl = resolved.track?.src;
+      if (!signedUrl || signedUrl === syncSrc) return;
+      const resumeAt = audio.currentTime || 0;
+      skipPauseInterruptionRef.current = true;
+      audio.src = signedUrl;
+      audio.load();
+      const applySeek = () => {
+        if (resumeAt > 0 && isFinite(audio.duration)) {
+          audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
+        }
+        audio.removeEventListener("loadedmetadata", applySeek);
+      };
+      audio.addEventListener("loadedmetadata", applySeek);
+      if (isFinite(audio.duration) && audio.duration > 0) applySeek();
+      if (stateRef.current.isPlaying) void audio.play().catch(() => {});
+      patchState({
+        currentTrack: {
+          ...nextTrack,
+          src: signedUrl,
+          metadata: {
+            ...nextTrack.metadata,
+            access: {
+              ...(nextTrack.metadata?.access || {}),
+              previewOnly: false,
+              canStream: true,
+            },
+          },
+        },
+      });
+    };
+
+    if (backgroundStreamResolve && streamSlug) {
+      void resolveLibraryStreamForTrack(nextTrack, { force: options.forceStream })
+        .then((resolved) => swapToSignedStream(resolved))
+        .catch(applyStreamResolveError);
     }
 
     const userId = listeningUserIdRef.current;
@@ -803,7 +902,7 @@ export function AudioProvider({ children }) {
     }
 
     const currentSrc = audio.currentSrc || audio.src;
-    const nextUrl = new URL(nextTrack.src, window.location.href).href;
+    const nextUrl = new URL(syncSrc, window.location.href).href;
     const prevTrack = stateRef.current.currentTrack;
     const sameIdentity =
       (prevTrack?.slug && nextTrack.slug && prevTrack.slug === nextTrack.slug) ||
@@ -835,7 +934,7 @@ export function AudioProvider({ children }) {
 
     patchState({
       currentTrackId: nextTrack.id,
-      currentTrack: nextTrack,
+      currentTrack: { ...nextTrack, src: syncSrc },
       source: nextTrack.source,
       error: null,
       accessDenied: false,
@@ -843,6 +942,7 @@ export function AudioProvider({ children }) {
       streamConflict: null,
       hasStarted: true,
       csTrack: csModeRef.current ? normalized : null,
+      playbackState: null,
     });
 
     preloadCsAssets(normalized, { csImgRef, csVidRef, csAudioRef });
@@ -851,7 +951,7 @@ export function AudioProvider({ children }) {
       if (!isSameTrack) {
         skipPauseInterruptionRef.current = true;
         audio.pause();
-        audio.src = nextTrack.src;
+        audio.src = syncSrc;
         audio.load();
         pendingSeekRef.current = resumeAt;
       } else if (resumeAt && Math.abs(audio.currentTime - resumeAt) > 2) {
@@ -872,7 +972,7 @@ export function AudioProvider({ children }) {
       }
 
       await audio.play();
-      void updateMediaSession(nextTrack, { playing: true });
+      void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: true });
 
       if (isReplay) {
         sendControlSystemPlaybackEvent(nextTrack, "replay", {
@@ -881,10 +981,10 @@ export function AudioProvider({ children }) {
           durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
         });
       }
-      patchState({ isPlaying: true, error: null });
+      patchState({ isPlaying: true, error: null, playbackState: "playing" });
       return true;
     } catch {
-      patchState({ isPlaying: false, error: "Audio playback failed. Try again in a moment." });
+      patchState({ isPlaying: false, error: "Audio playback failed. Try again in a moment.", playbackState: "paused" });
       void updateMediaSession(nextTrack, { playing: false });
       return false;
     }
@@ -896,6 +996,62 @@ export function AudioProvider({ children }) {
     resolveLibraryStreamForTrack,
     finalizeStreamSession,
   ]);
+
+  const upgradeToFullStream = useCallback(async () => {
+    const audio = audioRef.current;
+    const track = stateRef.current.currentTrack;
+    if (!audio || !track?.slug) return false;
+    if (!track.metadata?.access?.previewOnly && streamMetaRef.current?.url) return true;
+
+    const libraryTrack = {
+      ...track,
+      src: `/api/library/stream?slug=${encodeURIComponent(track.slug)}&redirect=1`,
+    };
+
+    try {
+      const resolved = await resolveLibraryStreamForTrack(libraryTrack, { force: false });
+      const resumeAt = audio.currentTime || 0;
+      skipPauseInterruptionRef.current = true;
+      audio.src = resolved.track.src;
+      audio.load();
+      const applySeek = () => {
+        if (resumeAt > 0 && isFinite(audio.duration)) {
+          audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
+        }
+        audio.removeEventListener("loadedmetadata", applySeek);
+      };
+      audio.addEventListener("loadedmetadata", applySeek);
+      if (isFinite(audio.duration) && audio.duration > 0) applySeek();
+      patchState({
+        currentTrack: {
+          ...track,
+          src: resolved.track.src,
+          metadata: {
+            ...track.metadata,
+            access: {
+              ...(track.metadata?.access || {}),
+              previewOnly: false,
+              canStream: true,
+            },
+          },
+        },
+        playbackState: audio.paused ? "paused" : "playing",
+        error: null,
+        accessDenied: false,
+      });
+      if (!audio.paused) void audio.play().catch(() => {});
+      return true;
+    } catch (err) {
+      if (err?.code === "ACCESS_DENIED") {
+        patchState({ accessDenied: true, error: "Access unavailable" });
+      }
+      return false;
+    }
+  }, [patchState, resolveLibraryStreamForTrack]);
+
+  const setOnPreviewEnded = useCallback((handler) => {
+    onPreviewEndedRef.current = typeof handler === "function" ? handler : null;
+  }, []);
 
   const overrideConcurrentStream = useCallback(async () => {
     const conflict = stateRef.current.streamConflict;
@@ -1105,38 +1261,47 @@ export function AudioProvider({ children }) {
     const track = stateRef.current.currentTrack;
     if (!audio || !track) return false;
 
+    userPausedRef.current = false;
+
     try {
+      await audio.play();
+      if (track) void updateMediaSession(track, { playing: true });
+      patchState({ isPlaying: true, error: null, accessDenied: false, playbackState: "playing" });
+
       const meta = streamMetaRef.current;
       const slug = meta?.slug || parseStreamSlugFromSrc(track.src) || track.slug;
       if (slug && meta && streamUrlNeedsRefresh(meta)) {
-        const data = await fetchLibraryStream(slug, { force: false });
-        streamMetaRef.current = {
-          ...meta,
-          url: data.url,
-          fetchedAt: Date.now(),
-          expiresIn: data.expiresIn || 3600,
-          streamEventId: data.streamEventId || meta.streamEventId,
-          sessionId: data.sessionId || meta.sessionId,
-        };
-        const resumeAt = audio.currentTime || 0;
-        skipPauseInterruptionRef.current = true;
-        audio.src = data.url;
-        audio.load();
-        if (resumeAt > 0) {
-          const seekAfterLoad = () => {
-            if (resumeAt > 0 && isFinite(audio.duration)) {
-              audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
+        void (async () => {
+          try {
+            const data = await fetchLibraryStream(slug, { force: false });
+            streamMetaRef.current = {
+              ...meta,
+              url: data.url,
+              fetchedAt: Date.now(),
+              expiresIn: data.expiresIn || 3600,
+              streamEventId: data.streamEventId || meta.streamEventId,
+              sessionId: data.sessionId || meta.sessionId,
+            };
+            const resumeAt = audio.currentTime || 0;
+            skipPauseInterruptionRef.current = true;
+            audio.src = data.url;
+            audio.load();
+            if (resumeAt > 0) {
+              const seekAfterLoad = () => {
+                if (resumeAt > 0 && isFinite(audio.duration)) {
+                  audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
+                }
+                audio.removeEventListener("loadedmetadata", seekAfterLoad);
+              };
+              audio.addEventListener("loadedmetadata", seekAfterLoad);
             }
-            audio.removeEventListener("loadedmetadata", seekAfterLoad);
-          };
-          audio.addEventListener("loadedmetadata", seekAfterLoad);
-        }
+            if (!audio.paused) void audio.play().catch(() => {});
+          } catch {
+            /* stale URL refresh is best-effort */
+          }
+        })();
       }
 
-      userPausedRef.current = false;
-      await audio.play();
-      if (track) void updateMediaSession(track, { playing: true });
-      patchState({ isPlaying: true, error: null, accessDenied: false });
       return true;
     } catch (err) {
       if (err?.code === "ACCESS_DENIED") {
@@ -1146,10 +1311,11 @@ export function AudioProvider({ children }) {
           isPlaying: false,
           accessDenied: true,
           error: "Access unavailable",
+          playbackState: "paused",
         });
         return false;
       }
-      patchState({ isPlaying: false, error: "Audio playback failed. Try again in a moment." });
+      patchState({ isPlaying: false, error: "Audio playback failed. Try again in a moment.", playbackState: "paused" });
       return false;
     }
   }, [patchState, updateMediaSession, finalizeStreamSession]);
@@ -1163,7 +1329,12 @@ export function AudioProvider({ children }) {
   const seek = useCallback((time) => {
     const audio = audioRef.current;
     if (!audio || !Number.isFinite(time)) return;
-    audio.currentTime = Math.max(0, Math.min(time, isFinite(audio.duration) ? audio.duration : time));
+    const track = stateRef.current.currentTrack;
+    let capped = time;
+    if (track?.metadata?.access?.previewOnly) {
+      capped = Math.min(time, PREVIEW_HARD_CAP_SEC);
+    }
+    audio.currentTime = Math.max(0, Math.min(capped, isFinite(audio.duration) ? audio.duration : capped));
     patchState({ currentTime: audio.currentTime });
     syncPositionState(true);
     if (stateRef.current.currentTrack) {
@@ -1488,6 +1659,8 @@ export function AudioProvider({ children }) {
     beginCsHoldPreview,
     setCsHoldPlaybackRate,
     endCsHoldPreview,
+    upgradeToFullStream,
+    setOnPreviewEnded,
   }), [
     pause,
     playQueue,
@@ -1513,6 +1686,8 @@ export function AudioProvider({ children }) {
     beginCsHoldPreview,
     setCsHoldPlaybackRate,
     endCsHoldPreview,
+    upgradeToFullStream,
+    setOnPreviewEnded,
   ]);
 
   useEffect(() => () => stopProgressRaf(), [stopProgressRaf]);

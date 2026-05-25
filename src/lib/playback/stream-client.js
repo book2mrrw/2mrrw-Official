@@ -13,6 +13,17 @@ export function isLibraryStreamSrc(src) {
   }
 }
 
+/** True when the browser can load the stream URL directly (302 to signed R2) without a JSON prefetch. */
+export function isLibraryStreamRedirectSrc(src) {
+  if (!isLibraryStreamSrc(src)) return false;
+  try {
+    const url = new URL(src, typeof window !== "undefined" ? window.location.origin : "http://localhost");
+    return url.searchParams.get("redirect") === "1";
+  } catch {
+    return String(src).includes("redirect=1");
+  }
+}
+
 export function parseStreamSlugFromSrc(src) {
   if (!src) return null;
   try {

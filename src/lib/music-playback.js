@@ -26,6 +26,8 @@ export function toPlaybackTrack(item, accountState, source = "library", override
   return {
     id: item?.slug || item?.id,
     slug: item?.slug,
+    preview: item?.preview || item?.preview_path || item?.previewPath || null,
+    preview_path: item?.preview_path || item?.previewPath || item?.preview || null,
     title: item?.title || "Untitled",
     artist: item?.artist || "2MRRW",
     cover,

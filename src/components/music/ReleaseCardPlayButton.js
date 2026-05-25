@@ -1,11 +1,26 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { toPlaybackTrack } from "@/lib/music-playback";
+import { preloadTrack } from "@/media/preloader/MediaPreloader";
+import { catalogPreviewAudioUrl } from "@/lib/media-urls";
+import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 
 export default function ReleaseCardPlayButton({ item, accountState, userId, source = "home_card", onPlayClick }) {
   const { playQueue, toggle, currentTrack, isPlaying, hasStarted } = useAudioPlayer();
+
+  useEffect(() => {
+    const previewPath = item?.preview || item?.preview_path || item?.previewPath;
+    const previewUrl = previewPath
+      ? catalogPreviewAudioUrl(previewPath)
+      : typeof item?.preview === "string" && item.preview.startsWith("http")
+        ? item.preview
+        : "";
+    if (!previewUrl) return;
+    const coverDisplay = catalogCoverDisplay(item);
+    preloadTrack(item?.slug || item?.id, previewUrl, coverDisplay.src, coverDisplay.type);
+  }, [item]);
 
   const handlePlay = useCallback(
     (e) => {
