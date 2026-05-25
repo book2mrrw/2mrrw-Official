@@ -124,6 +124,14 @@ function ImmersivePreviewModal({
     onClose();
   }, [onClose]);
 
+  const handleCloseClick = useCallback(
+    (e) => {
+      e.stopPropagation();
+      closeModal();
+    },
+    [closeModal]
+  );
+
   const collapseDrawer = useCallback(() => setViewMoreOpen(false), []);
 
   const handleOverlayClick = useCallback(() => {
@@ -222,7 +230,6 @@ function ImmersivePreviewModal({
       display: "flex",
       flexDirection: "column",
       gap: 10,
-      overflowY: "auto",
       pointerEvents: glyphsOpen ? "none" : "auto",
     }),
     [glyphsOpen]
@@ -288,20 +295,14 @@ function ImmersivePreviewModal({
             type="button"
             className="modal-immersive-sheet-handle"
             aria-label="Close preview"
-            onClick={(e) => {
-              e.stopPropagation();
-              closeModal();
-            }}
+            onClick={handleCloseClick}
           />
 
           <button
             type="button"
             className="preview-modal-close-btn modal-immersive-close"
             aria-label="Close preview"
-            onClick={(e) => {
-              e.stopPropagation();
-              closeModal();
-            }}
+            onClick={handleCloseClick}
           >
             ✕
           </button>
@@ -417,6 +418,7 @@ function ImmersivePreviewModal({
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: glyphsOpen ? 0 : 1, y: glyphsOpen ? 10 : 0 }}
             transition={{ delay: glyphsOpen ? 0 : 0.42, duration: 0.35 }}
+            className="modal-immersive-panel modal-immersive-panel--scroll"
             style={desktopPanelStyle}
           >
             <div className="hero-title-glow" style={desktopTitleStyle}>

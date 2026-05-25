@@ -169,6 +169,18 @@ body {
 }
 
 /* ── Immersive mobile release preview modal ── */
+@property --modal-accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgb(0, 220, 210);
+}
+
+@property --modal-accent-glow {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: rgba(0, 220, 210, 0.44);
+}
+
 .modal-immersive-overlay {
   position: fixed;
   inset: 0;
@@ -176,10 +188,14 @@ body {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.78);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.76);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   will-change: opacity;
+  transition:
+    background-color 0.44s cubic-bezier(0.33, 0, 0.2, 1),
+    backdrop-filter 0.52s cubic-bezier(0.33, 0, 0.2, 1),
+    -webkit-backdrop-filter 0.52s cubic-bezier(0.33, 0, 0.2, 1);
 }
 
 .modal-immersive-shell {
@@ -194,12 +210,18 @@ body {
   border-radius: 22px 22px 0 0;
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-bottom: none;
+  padding-top: env(safe-area-inset-top, 0px);
   box-shadow:
     0 -8px 40px rgba(0, 0, 0, 0.55),
     0 0 48px var(--modal-edge-glow, var(--modal-accent-glow, rgba(0, 220, 210, 0.12))),
     inset 0 1px 0 var(--modal-accent-muted, rgba(0, 220, 210, 0.06));
   will-change: transform;
   touch-action: pan-y;
+  transition:
+    --modal-accent 0.48s cubic-bezier(0.22, 1, 0.36, 1),
+    --modal-accent-glow 0.48s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.52s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.48s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .modal-immersive-shell--desktop {
@@ -548,6 +570,12 @@ body {
   -webkit-backdrop-filter: blur(14px);
   min-height: 0;
   overflow: hidden;
+}
+
+.modal-immersive-panel--scroll {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
 .modal-immersive-meta__title {

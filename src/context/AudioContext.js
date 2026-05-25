@@ -29,6 +29,8 @@ import {
   notifyMediaEngineBridge,
   registerMediaEngineBridge,
 } from "@/media/mediaEngineBridge";
+import { preloadCoverImage } from "@/lib/media/preload";
+import { logPlayback } from "@/lib/observability/client-log";
 
 const AudioContext = createContext(null);
 
@@ -705,6 +707,11 @@ export function AudioProvider({ children }) {
       src: presentation.src,
       cover: presentation.cover,
     };
+
+    preloadCoverImage(nextTrack.cover || nextTrack.baseCover, {
+      coverArtType: nextTrack.coverArtType,
+    });
+    logPlayback("play_track", { trackId: nextTrack.id, source: nextTrack.source });
     const audio = audioRef.current;
     if (!audio || !nextTrack.src) {
       patchState({
