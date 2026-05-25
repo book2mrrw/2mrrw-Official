@@ -1,0 +1,130 @@
+full-system-audit.zip report
+==============================
+UTC timestamp: 2026-05-24T18:17:07Z
+git HEAD: aece1b581ebafc1742b313d5ca346c40f09533c0
+
+Requested command (user spec; macOS zip --include on dirs may omit files):
+zip -r full-system-audit.zip \
+  src/app/page.js \
+  src/app/api/library \
+  src/app/api/vault \
+  src/app/api/checkout \
+  src/app/api/webhooks \
+  src/components/music \
+  src/components/preview \
+  src/components/audio \
+  src/components/vault \
+  src/lib/commerce \
+  src/lib/vault \
+  src/context \
+  src/hooks \
+  --include="*.js" --include="*.ts" --include="*.tsx" --include="*.jsx"
+
+Actual command used:
+1) find src/app/page.js src/app/api/library src/app/api/vault src/app/api/checkout src/app/api/webhooks src/components/music src/components/preview src/components/audio src/components/vault src/lib/commerce src/lib/vault src/context src/hooks \( -path '*/node_modules/*' -o -path '*/.next/*' \) -prune -o \( -name '*.js' -o -name '*.ts' -o -name '*.tsx' -o -name '*.jsx' \) -type f -print | zip -@ full-system-audit.zip
+2) cp full-system-audit-zip-report.txt AUDIT-ZIP-REPORT.txt && zip -j full-system-audit.zip AUDIT-ZIP-REPORT.txt
+
+Path existence check:
+  EXISTS: src/app/page.js
+  EXISTS: src/app/api/library
+  EXISTS: src/app/api/vault
+  EXISTS: src/app/api/checkout
+  EXISTS: src/app/api/webhooks
+  EXISTS: src/components/music
+  EXISTS: src/components/preview
+  EXISTS: src/components/audio
+  EXISTS: src/components/vault
+  EXISTS: src/lib/commerce
+  EXISTS: src/lib/vault
+  EXISTS: src/context
+  EXISTS: src/hooks
+  (none missing)
+
+Zip file (ls -la):
+-rw-r--r--@ 1 recharge  staff  135217 May 24 13:16 full-system-audit.zip
+
+unzip -l (full listing):
+Archive:  full-system-audit.zip
+  Length      Date    Time    Name
+---------  ---------- -----   ----
+   206214  05-24-2026 12:36   src/app/page.js
+     2902  05-23-2026 01:45   src/app/api/library/route.js
+     1453  05-23-2026 03:33   src/app/api/library/stream/route.js
+     2850  05-19-2026 19:24   src/app/api/vault/progress/route.js
+     1231  05-19-2026 19:24   src/app/api/vault/content/route.js
+     2866  05-22-2026 12:27   src/app/api/vault/media/route.js
+     2300  05-19-2026 15:44   src/app/api/checkout/session/route.js
+      375  05-15-2026 11:48   src/app/api/webhooks/stripe/route.js
+    23752  05-24-2026 12:36   src/components/music/MyMusicTab.js
+     1184  05-22-2026 19:06   src/components/music/ChoppedSlowedToggle.js
+     2411  05-22-2026 13:27   src/components/music/PlaylistCard.js
+    20259  05-22-2026 13:27   src/components/music/PlaylistSection.js
+     6252  05-22-2026 12:56   src/components/music/MusicPlusButton.js
+      739  05-21-2026 21:28   src/components/music/DeepLinkRedirect.js
+     3317  05-21-2026 21:28   src/components/music/PlaylistDetail.js
+     2485  05-22-2026 19:07   src/components/music/ReleaseCardPlayButton.js
+    12699  05-22-2026 21:06   src/components/music/AlbumTracklistSheet.js
+     2151  05-21-2026 21:28   src/components/music/ContinueListening.js
+     6135  05-22-2026 12:55   src/components/music/PlusActionSheet.js
+      714  05-22-2026 07:53   src/components/music/MusicAccessBadge.js
+     5999  05-22-2026 12:55   src/components/preview/GlyphLyricsPanel.js
+     4796  05-21-2026 21:28   src/components/preview/releaseMetadata.js
+     4322  05-21-2026 21:28   src/components/preview/PreviewModalPlayer.js
+    16270  05-23-2026 01:07   src/components/preview/ImmersivePreviewModal.js
+     3496  05-22-2026 21:07   src/components/audio/CSModeButton.js
+    32734  05-24-2026 12:36   src/components/audio/GlobalAudioPlayerBar.js
+     7749  05-22-2026 21:07   src/components/audio/PlayerControlButton.js
+     2692  05-21-2026 15:06   src/components/vault/VaultUnlockedRoom.jsx
+     2139  05-23-2026 03:33   src/lib/commerce/entitlements-parity.js
+     1863  05-19-2026 19:24   src/lib/commerce/vault-entitlements.js
+     2890  05-21-2026 15:06   src/lib/commerce/gift-transactions.js
+     3131  05-22-2026 12:32   src/lib/commerce/catalog.js
+     3562  05-19-2026 19:24   src/lib/commerce/collector-ownerships.js
+      168  05-15-2026 10:55   src/lib/commerce/stripe.js
+     3216  05-19-2026 19:24   src/lib/commerce/stripe-customers.js
+     1191  05-19-2026 19:24   src/lib/commerce/cart-lines.js
+     4219  05-23-2026 02:59   src/lib/commerce/unified-entitlements.js
+     3005  05-23-2026 02:42   src/lib/commerce/revoke-entitlements.js
+     1106  05-19-2026 15:44   src/lib/commerce/resolve-cart.js
+     9781  05-23-2026 02:59   src/lib/commerce/entitlements.js
+     3568  05-23-2026 02:36   src/lib/commerce/fulfill-purchase.js
+     7989  05-23-2026 02:36   src/lib/commerce/handle-stripe-webhook.js
+     3204  05-19-2026 19:24   src/lib/vault/access.js
+    29025  05-22-2026 19:57   src/context/AudioContext.js
+     7507  05-22-2026 19:56   src/context/AuthContext.js
+      980  05-22-2026 20:49   src/context/AuthGateContext.js
+     2210  05-19-2026 19:24   src/hooks/releases/useReleases.js
+       58  05-19-2026 19:24   src/hooks/releases/useAlbums.js
+       60  05-19-2026 19:24   src/hooks/releases/useFeatures.js
+       59  05-19-2026 19:24   src/hooks/releases/useSingles.js
+     2251  05-23-2026 01:07   src/hooks/useMusicLibrary.js
+     3583  05-22-2026 08:29   src/hooks/sync/useSyncEngine.js
+      516  05-19-2026 19:24   src/hooks/sync/useConnectionHealth.js
+      526  05-19-2026 19:24   src/hooks/sync/useResync.js
+     6518  05-22-2026 08:29   src/hooks/sync/useRealtimeEvents.js
+     1773  05-22-2026 07:53   src/hooks/usePlaylists.js
+       65  05-19-2026 19:24   src/hooks/media/useVaultMedia.js
+       64  05-19-2026 19:24   src/hooks/media/useHeroMedia.js
+     3817  05-19-2026 19:24   src/hooks/media/useMediaAssets.js
+       67  05-19-2026 19:24   src/hooks/media/useAudioVisuals.js
+     6121  05-24-2026 13:16   AUDIT-ZIP-REPORT.txt
+---------                     -------
+   496579                     61 files
+
+Archive file count (from unzip -l footer): 61
+  (includes AUDIT-ZIP-REPORT.txt at archive root)
+
+Per-root-scope source file counts (excludes AUDIT-ZIP-REPORT.txt):
+  src/app/page.js: 1
+  src/app/api/library: 2
+  src/app/api/vault: 3
+  src/app/api/checkout: 1
+  src/app/api/webhooks: 1
+  src/components/music: 12
+  src/components/preview: 4
+  src/components/audio: 3
+  src/components/vault: 1
+  src/lib/commerce: 14
+  src/lib/vault: 1
+  src/context: 3
+  src/hooks: 14

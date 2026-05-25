@@ -1,0 +1,50 @@
+"use client";
+
+import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { writePendingPhone } from "@/lib/auth/otp-pending";
+import { validateEmail, validatePhone } from "@/lib/auth/validation";
+
+const inputStyle = {
+  padding: "12px 14px",
+  background: "#111",
+  border: "1px solid #2a2a2a",
+  color: "white",
+  borderRadius: 10,
+  fontSize: 14,
+  outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+function JoinForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const giftToken = searchParams.get("gift") || "";
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [existsHint, setExistsHint] = useState(false);
+  const [giftPreview, setGiftPreview] = useState(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const pendingEmail = sessionStorage.getItem("pendingJoinEmail");
+    const pendingPhone = sessionStorage.getItem("pendingJoinPhone");
+    if (pendingEmail) {
+      setEmail(pendingEmail);
+      sessionStorage.removeItem("pendingJoinEmail");
+    }
+    if (pendingPhone) {
+      setPhone(pendingPhone);
+      sessionStorage.removeItem("pendingJoinPhone");
+    }
+    const pendingName = sessionStorage.getItem("pendingProfileName");
+    if (pendingName) {
+      setName(pendingName);
