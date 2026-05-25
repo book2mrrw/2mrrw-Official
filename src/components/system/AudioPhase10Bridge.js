@@ -25,12 +25,15 @@ export default function AudioPhase10Bridge() {
     const handler = (e) => {
       const detail = e.detail;
       if (!detail?.queueIds?.length) return;
-      const tracks = detail.queueIds.map((id) => ({
-        id,
-        slug: id,
-        title: "Restored",
-        src: `/api/library/stream?slug=${encodeURIComponent(id)}`,
-      }));
+      const tracks =
+        Array.isArray(detail.tracks) && detail.tracks.length
+          ? detail.tracks
+          : detail.queueIds.map((id) => ({
+              id,
+              slug: id,
+              title: "Restored",
+              src: `/api/library/stream?slug=${encodeURIComponent(id)}`,
+            }));
       setQueue(tracks, detail.queueIndex ?? 0);
       if (detail.currentTime > 0) {
         seek(detail.currentTime);

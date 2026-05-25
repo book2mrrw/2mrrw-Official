@@ -28,7 +28,31 @@ function getBuffer() {
 }
 
 function flush() {
-  /* no-op — external analytics not wired */
+  const events = buffer.drain();
+  if (!events.length) return;
+  const urgent = events.filter((e) => {
+    const level = levelForEvent(e);
+    return level === "error" || level === "warn";
+  });
+  const info = events.filter((e) => levelForEvent(e) === "info");
+
+  if (urgent.length) {
+    import("./posthogAdapter")
+      .then(({ flushToPosthog }) => flushToPosthog(urgent))
+      .catch(() => {});
+  }
+
+  if (info.length && typeof window !== "undefined") {
+    const schedule =
+      typeof requestIdleCallback === "function"
+        ? requestIdleCallback
+        : (cb) => setTimeout(cb, 200);
+    schedule(() => {
+      import("./posthogAdapter")
+        .then(({ flushToPosthog }) => flushToPosthog(info))
+        .catch(() => {});
+    });
+  }
 }
 
 export const telemetry = { log, getBuffer, flush };

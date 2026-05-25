@@ -1,10 +1,11 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition, Suspense } from "react";
+import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "@/components/payments/CheckoutForm";
-import DonateModal from "@/components/payments/DonateModal";
+const DonateModal = dynamic(() => import("@/components/payments/DonateModal"), { ssr: false });
 import { useAuth } from "@/context/AuthContext";
 import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
 import ImmersivePreviewModal from "@/components/preview/ImmersivePreviewModal";
@@ -34,8 +35,15 @@ import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
 import LivePanel from "@/components/home/LivePanel";
 import FlowState from "@/components/home/FlowState";
 import RadioCarousel from "@/components/home/RadioCarousel";
+import AmbientPlaybackBackground from "@/components/home/AmbientPlaybackBackground";
+import CarouselUI from "@/components/home/CarouselUI";
+import FeaturesRail from "@/components/home/FeaturesRail";
+import CatalogGrid from "@/components/home/CatalogGrid";
+import { withR2CatalogMedia, catalogCoverDisplay } from "@/components/home/catalogMedia";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { ModalErrorBoundary } from "@/system/errors";
+import { useAbortController } from "@/system/guards/useAbortController";
+import { TrackCardSkeleton } from "@/ui/skeletons";
 
 const MOBILE_NAV_TABS = [
   { id: "home", label: "Home" },
@@ -48,14 +56,6 @@ const MOBILE_NAV_TABS = [
 ];
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
-function isUpcomingReleaseDate(dateStr) {
-  if (!dateStr) return false;
-  const parsed = Date.parse(dateStr);
-  if (!Number.isNaN(parsed)) return parsed > Date.now();
-  const yearMatch = String(dateStr).match(/\b(20\d{2})\b/);
-  if (!yearMatch) return false;
-  return Number(yearMatch[1]) >= new Date().getFullYear();
-}
 
 const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
 const MOBILE_NAV_SHEET_MS = 300;
@@ -191,106 +191,6 @@ const albums = [
   { title:"(A.D)",         slug:"ad",      type:"album", cover:"/images/albums/ad.jpg",     price:9.99,  date:"March 24, 2024", vinyl:47.99, tracks:["2mrrw's Ntro","Said N' Done","A.D.D","Perspective (2018)","Grand Scheme","A2B","Life Changes (2018)","Itself (2018)","Wastin Time","Like Me Or Not"] },
   { title:"Love Hz Vol.1", slug:"love-hz", type:"album", cover:"/images/albums/lovehz.jpg", price:12.99, date:"August 2026",    vinyl:47.99, tracks:["Roll Call","W.2.D","All Of It","Knock On Wood","Stayed 2 Long","Hour Glass"] },
 ];
-
-/** Resolve storefront catalog media to R2 public URLs when configured (ingestion reads literal const arrays above). */
-function withR2CatalogMedia(item) {
-  if (!item) return item;
-  const next = { ...item };
-  if (next.cover) next.cover = catalogCoverUrl(String(next.cover).replace(/^\//, ""));
-  if (next.video) next.video = catalogMotionVideoUrl(String(next.video).replace(/^\//, ""));
-  if (next.preview) next.preview = catalogPreviewAudioUrl(String(next.preview).replace(/^\//, ""));
-  if (next.csAudio) next.csAudio = catalogPublicMediaUrl(String(next.csAudio).replace(/^\//, ""));
-  if (next.csCover) next.csCover = catalogCoverUrl(String(next.csCover).replace(/^\//, ""));
-  if (!next.coverArtType) next.coverArtType = next.video ? "video" : "image";
-  return next;
-}
-
-function catalogCoverDisplay(item) {
-  const resolved = withR2CatalogMedia(item);
-  const type = resolved.coverArtType || "image";
-  const src = type === "video" && resolved.video ? resolved.video : resolved.cover;
-  return { src, type };
-}
-
-function AmbientPlaybackBackground({ currentTrack, csMode }) {
-  if (!currentTrack?.cover) return null;
-
-  const baseSrc = currentTrack.cover;
-  const baseType = currentTrack.coverArtType || "image";
-  const csSrc = currentTrack.csCover || null;
-  const csType = currentTrack.csCoverType || "image";
-  const showCs = Boolean(csMode && csSrc);
-
-  const mediaStyle = {
-    position: "fixed",
-    inset: 0,
-    zIndex: -1,
-    pointerEvents: "none",
-    width: "100%",
-    height: "100%",
-    objectFit: "cover",
-    filter: "blur(120px) saturate(1.2) brightness(0.15)",
-    transition: "opacity 500ms ease",
-  };
-
-  const imageLayerStyle = {
-    position: "fixed",
-    inset: 0,
-    zIndex: -1,
-    pointerEvents: "none",
-    backgroundSize: "cover",
-    backgroundPosition: "center",
-    filter: "blur(72px) brightness(0.32)",
-    transform: "scale(1.08)",
-    transition: "opacity 500ms ease",
-  };
-
-  return (
-    <>
-      {resolveCoverMediaType(baseSrc, baseType) === "video" ? (
-        <video
-          src={baseSrc}
-          autoPlay
-          loop
-          muted
-          playsInline
-          aria-hidden
-          style={{ ...mediaStyle, opacity: showCs ? 0 : 0.4 }}
-        />
-      ) : (
-        <div
-          aria-hidden
-          style={{
-            ...imageLayerStyle,
-            backgroundImage: `url(${baseSrc})`,
-            opacity: showCs ? 0 : 0.45,
-          }}
-        />
-      )}
-      {csSrc &&
-        (resolveCoverMediaType(csSrc, csType) === "video" ? (
-          <video
-            src={csSrc}
-            autoPlay
-            loop
-            muted
-            playsInline
-            aria-hidden
-            style={{ ...mediaStyle, opacity: showCs ? 0.4 : 0 }}
-          />
-        ) : (
-          <div
-            aria-hidden
-            style={{
-              ...imageLayerStyle,
-              backgroundImage: `url(${csSrc})`,
-              opacity: showCs ? 0.45 : 0,
-            }}
-          />
-        ))}
-    </>
-  );
-}
 
 const fallbackMerch = [
   { title:"2MRRW HOODIE",  slug:"hoodie", cover:"/images/albums/tbh.jpg",    price:59.99 },
@@ -663,6 +563,11 @@ export default function Page() {
   const [mobileNavClosing, setMobileNavClosing]   = useState(false);
   const [homeScrollSection, setHomeScrollSection] = useState(null);
   const [heroScrollY, setHeroScrollY]             = useState(0);
+  const [browseSingles, setBrowseSingles]         = useState(singles);
+  const [catalogPage, setCatalogPage]             = useState(1);
+  const [catalogHasMore, setCatalogHasMore]       = useState(false);
+  const [catalogLoading, setCatalogLoading]       = useState(false);
+  const catalogFetchAbort = useAbortController([catalogPage]);
 
   // ── REFS ──────────────────────────────────────────────────────────────────
   const cursorRef          = useRef(null);
@@ -739,6 +644,48 @@ export default function Page() {
   useEffect(() => {
     setInventory(loadInventory());
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setCatalogLoading(true);
+      try {
+        const res = await fetch(`/api/catalog/releases?page=${catalogPage}&limit=20`, {
+          cache: "no-store",
+          signal: catalogFetchAbort.signal,
+        });
+        const data = await res.json();
+        if (cancelled || !res.ok) return;
+        const incoming = (data.tracks || []).map((t) => withR2CatalogMedia(t));
+        setBrowseSingles((prev) => {
+          const merged = catalogPage === 1 ? [...singles] : [...prev];
+          const seen = new Set(merged.map((s) => s.slug));
+          incoming.forEach((t) => {
+            if (t?.slug && !seen.has(t.slug)) {
+              seen.add(t.slug);
+              merged.push(t);
+            }
+          });
+          return merged;
+        });
+        setCatalogHasMore(Boolean(data.hasMore));
+      } catch {
+        /* keep static singles */
+      } finally {
+        if (!cancelled) setCatalogLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [catalogPage, catalogFetchAbort.signal]);
+
+  const loadMoreCatalog = useCallback(() => {
+    if (!catalogHasMore || catalogLoading) return;
+    setCatalogPage((p) => p + 1);
+  }, [catalogHasMore, catalogLoading]);
+
+  const displaySingles = browseSingles.length ? browseSingles : singles;
 
   useEffect(() => {
     if (activeTab !== "home") return undefined;
@@ -907,7 +854,10 @@ export default function Page() {
     [accountState, currentUser?.id, playQueue, playTrack]
   );
 
-  const goRadio = useCallback(i => setRadioIndex(i), []);
+  const goRadio = useCallback((i) => {
+    // phase11: startTransition — carousel index is non-urgent
+    startTransition(() => setRadioIndex(i));
+  }, []);
 
   // ── HELPERS ───────────────────────────────────────────────────────────────
   const addToCartRaw   = useCallback(item => {
@@ -940,14 +890,20 @@ export default function Page() {
   const goToSingle = useCallback((newIndex, direction) => {
     setAnimating(cur => {
       if (cur) return cur;
-      setTimeout(() => { setSingleIndex(newIndex); setAnimating(false); }, 320);
+      setTimeout(() => {
+        // phase11: startTransition — carousel index is non-urgent
+        startTransition(() => {
+          setSingleIndex(newIndex);
+          setAnimating(false);
+        });
+      }, 320);
       setSlideDir(direction);
       return true;
     });
   }, []);
-  const prevSingle    = useCallback(() => goToSingle(singleIndex === 0 ? singles.length-1 : singleIndex-1, "left"),  [goToSingle, singleIndex]);
-  const nextSingle    = useCallback(() => goToSingle(singleIndex === singles.length-1 ? 0 : singleIndex+1, "right"), [goToSingle, singleIndex]);
-  const currentSingle = useMemo(() => withR2CatalogMedia(singles[singleIndex]), [singleIndex]);
+  const prevSingle    = useCallback(() => goToSingle(singleIndex === 0 ? displaySingles.length-1 : singleIndex-1, "left"),  [goToSingle, singleIndex, displaySingles.length]);
+  const nextSingle    = useCallback(() => goToSingle(singleIndex === displaySingles.length-1 ? 0 : singleIndex+1, "right"), [goToSingle, singleIndex, displaySingles.length]);
+  const currentSingle = useMemo(() => withR2CatalogMedia(displaySingles[singleIndex]), [singleIndex, displaySingles]);
   const currentSingleAccess = useMemo(
     () => (currentSingle ? resolveContentAccess(currentSingle, accountState) : null),
     [currentSingle, accountState]
@@ -1153,6 +1109,8 @@ export default function Page() {
       window.location.assign(COLLECTORS_CARDS_ROUTE);
       return;
     }
+    // phase11: startTransition — non-urgent UI update
+    startTransition(() => {
     setHomeScrollSection(null);
     setTabKey(p => p + 1);
     setActiveTab(tabId);
@@ -1176,6 +1134,7 @@ export default function Page() {
       setMobileNavClosing(false);
       setMobileNavExpandedGroups(new Set());
     }
+    });
   };
 
   const openCollection = () => {
@@ -1223,7 +1182,13 @@ export default function Page() {
     return activeTab === tabId;
   };
 
-  const switchMusicSubTab = sub => { setMusicSubTab(sub); setTabKey(p => p+1); };
+  const switchMusicSubTab = sub => {
+    // phase11: startTransition — browse sub-tab switch
+    startTransition(() => {
+      setMusicSubTab(sub);
+      setTabKey((p) => p + 1);
+    });
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1602,7 +1567,7 @@ export default function Page() {
                           minWidth:0,
                         }}
                       >
-                        {singles.map((single, i) => {
+                        {displaySingles.map((single, i) => {
                           const singleUi = withR2CatalogMedia(single);
                           const singleAccess = resolveContentAccess(singleUi, accountState);
                           return (
@@ -1680,7 +1645,23 @@ export default function Page() {
                             </div>
                           </div>
                         );})}
+                        {catalogLoading ? (
+                          <>
+                            <TrackCardSkeleton />
+                            <TrackCardSkeleton />
+                          </>
+                        ) : null}
                       </div>
+                      {catalogHasMore ? (
+                        <button
+                          type="button"
+                          onClick={loadMoreCatalog}
+                          disabled={catalogLoading}
+                          style={{marginTop:12,padding:"10px 18px",background:"transparent",border:"1px solid #333",color:"#888",borderRadius:8,cursor:catalogLoading?"default":"pointer",fontSize:12,letterSpacing:1.5}}
+                        >
+                          {catalogLoading ? "Loading…" : "Load more"}
+                        </button>
+                      ) : null}
 
                       {!isMobile && (
                         <LivePanel
@@ -1772,7 +1753,7 @@ export default function Page() {
                   {/* Albums */}
                   <div id="home-albums">
                     <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                    <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                    <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Audio Visuals */}
@@ -1787,7 +1768,7 @@ export default function Page() {
                     {printfulLoading ? <div style={{padding:"32px 0",textAlign:"center",fontSize:13,color:"#333",letterSpacing:2}}>Loading products…</div> : (
                       <>
                         {shopIsFallback && <div style={{fontSize:11,color:"#333",letterSpacing:1,marginBottom:16}}>Store coming soon — preview below</div>}
-                        <Grid items={shopItems} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} isMobile={isMobile}/>
+                        <CatalogGrid items={shopItems} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} isMobile={isMobile}/>
                       </>
                     )}
                   </div>
@@ -1865,7 +1846,7 @@ export default function Page() {
                         </div>
                       </div>
                       <h2 className="section-heading" style={{marginBottom:14}}>Singles</h2>
-                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={singles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} openSingleModal={openSingleModal} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} openSingleModal={openSingleModal} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       <div style={{marginTop:32,marginBottom:4}}>
                         <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
                         <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={playFeature} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
@@ -1878,7 +1859,7 @@ export default function Page() {
                   {activeTab==="albums" && (
                     <>
                       <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                      <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                      <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                     </>
                   )}
 
@@ -1886,7 +1867,7 @@ export default function Page() {
                   {activeTab==="mymusic" && (
                     <>
                       <MyMusicTab
-                        singles={singles}
+                        singles={displaySingles}
                         albums={albums}
                         isMobile={isMobile}
                         isAdmin={isAdmin}
@@ -1907,7 +1888,7 @@ export default function Page() {
                   {printfulLoading ? <div style={{padding:"60px 0",textAlign:"center",fontSize:13,color:"#333",letterSpacing:2}}>Loading products…</div> : (
                     <>
                       {shopIsFallback && <div style={{marginBottom:20,padding:"12px 16px",background:"rgba(255,255,255,0.02)",border:"1px solid #1a1a1a",borderRadius:10,fontSize:11,color:"#444",letterSpacing:1,lineHeight:1.7}}>Store inventory is syncing. Showing preview items — check back soon for the full Printful catalog.</div>}
-                      <Grid items={shopItems} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} isMobile={isMobile}/>
+                      <CatalogGrid items={shopItems} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} isMobile={isMobile}/>
                     </>
                   )}
                 </>
@@ -2512,7 +2493,9 @@ export default function Page() {
         )}
       </AnimatePresence>
 
-      <DonateModal open={donateOpen} onClose={()=>setDonateOpen(false)} isMobile={isMobile}/>
+      <Suspense fallback={null}>
+        <DonateModal open={donateOpen} onClose={()=>setDonateOpen(false)} isMobile={isMobile}/>
+      </Suspense>
       <GiftBottomSheet
         open={Boolean(giftSheetRelease)}
         release={giftSheetRelease}
@@ -2560,257 +2543,3 @@ export default function Page() {
   );
 }
 
-// ── CAROUSEL UI ───────────────────────────────────────────────────────────────
-function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singleIndex, singles, prevSingle, nextSingle, goToSingle, openSingleModal, addToCart, addVinylToCart, buttonHoverIn, buttonHoverOut, accountState, userId, isAdmin, onGift, onLibraryChange }) {
-  const [previewHover, setPreviewHover] = useState(false);
-  const access = currentSingleAccess || (currentSingle ? resolveContentAccess(currentSingle, accountState) : null);
-  const coverDisplay = catalogCoverDisplay(currentSingle);
-  const currentLibraryItem = accountState?.library?.find(
-    (lib) => lib.slug === currentSingle?.slug
-  );
-  const currentSingleIsGifted =
-    currentLibraryItem?.source === "gift" ||
-    currentLibraryItem?.gifted === true;
-  return (
-    <div style={{display:"flex",flexDirection:isMobile?"column":"row",alignItems:isMobile?"stretch":"center",gap:isMobile?16:20,background:"linear-gradient(135deg,#0e0e0e,#111)",border:"1px solid #1e1e1e",borderRadius:isMobile?16:20,padding:isMobile?"20px 16px":large?"32px 28px":"28px 24px",position:"relative",overflow:"hidden",boxShadow:"0 4px 40px rgba(0,0,0,0.5)"}}>
-      {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(currentSingle)} /> : null}
-      <div style={{position:"absolute",top:"50%",left:"50%",transform:"translate(-50%,-50%)",width:360,height:360,background:"radial-gradient(circle,rgba(0,255,255,0.04) 0%,transparent 70%)",pointerEvents:"none"}}/>
-      {isMobile ? (
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <button onClick={prevSingle} style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.06)",border:"1px solid #2a2a2a",color:"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>‹</button>
-          <div style={{flex:1,position:"relative",aspectRatio:"1/1"}} onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
-            <CoverArt
-              key={currentSingle.slug}
-              src={coverDisplay.src}
-              type={coverDisplay.type || "image"}
-              alt=""
-              width="100%"
-              height="100%"
-              borderRadius={14}
-              style={{
-                boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
-                transition: "filter 0.3s",
-                filter: previewHover ? "brightness(0.55)" : "brightness(1)",
-                animation: "fadeInCover 0.4s ease forwards",
-              }}
-            />
-            <div onClick={()=>openSingleModal(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,borderRadius:14,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
-              <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(8px)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg viewBox="0 0 24 24" fill="white" width="24" height="24" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg></div>
-              <div style={{fontSize:11,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>Preview</div>
-            </div>
-          </div>
-          <button onClick={nextSingle} style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.06)",border:"1px solid #2a2a2a",color:"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>›</button>
-        </div>
-      ) : (
-        <button onClick={prevSingle} style={{width:large?50:44,height:large?50:44,borderRadius:"50%",background:"rgba(255,255,255,0.04)",border:"1px solid #2a2a2a",color:"#555",fontSize:large?22:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";e.currentTarget.style.boxShadow="0 0 10px rgba(0,255,255,0.3)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#555";e.currentTarget.style.boxShadow="none";}}>‹</button>
-      )}
-      {!isMobile && (
-        <div style={{flexShrink:0,width:large?340:300,height:large?340:300,position:"relative"}} onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
-          <CoverArt
-            key={currentSingle.slug}
-            src={coverDisplay.src}
-            type={coverDisplay.type || "image"}
-            alt=""
-            width="100%"
-            height="100%"
-            borderRadius={large ? 18 : 16}
-            style={{
-              boxShadow: large ? "0 10px 50px rgba(0,0,0,0.7)" : "0 8px 40px rgba(0,0,0,0.6)",
-              transition: "filter 0.3s",
-              filter: previewHover ? "brightness(0.55)" : "brightness(1)",
-              animation: "fadeInCover 0.4s ease forwards",
-            }}
-          />
-          <div onClick={()=>openSingleModal(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,borderRadius:large?18:16,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
-            <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(0,0,0,0.55)",backdropFilter:"blur(8px)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 30px rgba(0,0,0,0.5)"}}><svg viewBox="0 0 24 24" fill="white" width="28" height="28" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg></div>
-            <div style={{fontSize:12,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>Preview</div>
-          </div>
-        </div>
-      )}
-      <div style={{flex:1,display:"flex",flexDirection:"column",gap:isMobile?10:large?14:12}}>
-        <div key={`title-${currentSingle.slug}`} className={isMobile?"song-title-turquoise-glow":"hero-title-glow"} style={{fontSize:isMobile?22:large?30:26,fontWeight:900,letterSpacing:2,animation:"fadeInUp 0.35s ease forwards"}}>{currentSingle.title}</div>
-        <div style={{fontSize:13,color:"#555",letterSpacing:1,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-          <span>SINGLE{large&&!isMobile?` · ${singleIndex+1} of ${singles.length}`:""}</span>
-          <MusicAccessBadge access={access} label={access?.badge} compact />
-          {currentSingleIsGifted ? (
-            <div style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 3,
-              padding: "2px 7px",
-              background: "linear-gradient(135deg,rgba(162,89,255,0.15),rgba(0,191,255,0.08))",
-              border: "1px solid rgba(162,89,255,0.3)",
-              borderRadius: 20,
-              animation: "giftBadgePulse 3s ease-in-out infinite",
-              fontSize: 10,
-              fontWeight: 700,
-              color: "#a259ff",
-              letterSpacing: 1,
-            }}>
-              <GiftIcon size={12} style={{ animation: "giftIconSpin 4s ease-in-out infinite" }} />
-              <span style={{ textTransform: "uppercase" }}>
-                Gift from 2MRRW
-              </span>
-            </div>
-          ) : null}
-        </div>
-        {access?.showPrice && <div style={{fontSize:isMobile?16:large?18:16,color:"#00ffff",fontWeight:700}}>${currentSingle.price.toFixed(2)}</div>}
-        <div style={{display:"flex",gap:6}}>
-          {singles.map((s,i)=><div key={s.slug} onClick={()=>goToSingle(i,i>singleIndex?"right":"left")} style={{width:i===singleIndex?(isMobile?20:large?24:20):(isMobile?6:large?7:6),height:isMobile?6:large?7:6,borderRadius:4,background:i===singleIndex?"#00ffff":"#333",cursor:"pointer",transition:"all 0.3s",boxShadow:i===singleIndex?"0 0 8px rgba(0,255,255,0.6)":"none"}}/>)}
-        </div>
-        <div style={{display:"flex",gap:10,marginTop:isMobile?4:large?8:6,flexWrap:"wrap",alignItems:"center"}}>
-          {access?.showCart && <button onClick={()=>addToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"12px 0":large?"11px 20px":"10px 18px",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold",transition:"0.25s",width:isMobile?"100%":"auto"}}>+ Add to Cart</button>}
-          {access?.showCart && (large||isMobile) && <button onClick={()=>addVinylToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"12px 0":"11px 20px",background:"#0a0a0a",color:"#aaa",border:"1px solid #2a2a2a",borderRadius:8,cursor:"pointer",fontSize:13,transition:"0.25s",width:isMobile?"100%":"auto"}}>+ Vinyl $47.99</button>}
-          {userId && <MusicPlusButton track={currentSingle} userId={userId} access={access} isMobile={isMobile} onLibraryChange={onLibraryChange} />}
-        </div>
-      </div>
-      {!isMobile && <button onClick={nextSingle} style={{width:large?50:44,height:large?50:44,borderRadius:"50%",background:"rgba(255,255,255,0.04)",border:"1px solid #2a2a2a",color:"#555",fontSize:large?22:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";e.currentTarget.style.boxShadow="0 0 10px rgba(0,255,255,0.3)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#555";e.currentTarget.style.boxShadow="none";}}>›</button>}
-    </div>
-  );
-}
-
-// ── FEATURES RAIL ─────────────────────────────────────────────────────────────
-function FeaturesRail({ features, isMobile, addToCart, onPlay, accountState, userId, isAdmin, onGift, onLibraryChange }) {
-  return (
-    <div className="features-row" style={{display:"flex",flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollSnapType:"x mandatory",overscrollBehaviorX:"contain",gap:isMobile?12:18,paddingBottom:14}}>
-      {features.map((feat,i)=>{
-        const access = resolveContentAccess(feat, accountState);
-        const coverDisplay = catalogCoverDisplay(feat);
-        return (
-        <div key={feat.slug} onClick={()=>onPlay(feat)} style={{flex:"0 0 auto",width:isMobile?160:220,scrollSnapAlign:"start",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,transition:"border-color 0.25s",position:"relative"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#a259ff55"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
-          {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(feat)} /> : null}
-          <CoverArt
-            src={coverDisplay.src}
-            type={coverDisplay.type || "image"}
-            alt=""
-            width="100%"
-            height="auto"
-            borderRadius="13px 13px 0 0"
-            style={{ aspectRatio: "1/1", display: "block" }}
-          />
-          <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
-            <div className="hero-title-glow" style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{feat.title}</div>
-            <div style={{fontSize:10,color:"#a259ff",fontWeight:700,letterSpacing:1.5,marginBottom:6}}>{feat.featuring}</div>
-            {access?.showPrice && <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${feat.price.toFixed(2)}</div>}
-            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}} onClick={e=>e.stopPropagation()}>
-              {access?.showCart && (
-                <div style={{flex:1,minWidth:0}}>
-                  <ReleaseCardActions
-                    item={feat}
-                    accountState={accountState}
-                    userId={userId}
-                    source="home_feature_card"
-                    onAddToCart={e => { e.stopPropagation(); addToCart(feat); }}
-                    cartButtonStyle={{
-                      background:"#1a1a1a",
-                      color:"white",
-                      border:"1px solid #2a2a2a",
-                    }}
-                    cartLabel="+ Cart"
-                  />
-                </div>
-              )}
-              {userId && <span onClick={e=>e.stopPropagation()}><MusicPlusButton track={feat} userId={userId} access={access} isMobile={isMobile} deepLinkType="feature" onLibraryChange={onLibraryChange} /></span>}
-            </div>
-          </div>
-        </div>
-      );})}
-    </div>
-  );
-}
-
-// ── GRID ──────────────────────────────────────────────────────────────────────
-function Grid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, onOpenAlbumTracklist, isMobile, accountState, userId, isAdmin, onGift, onLibraryChange }) {
-  if (!items || items.length === 0) return null;
-  const containerStyle = isMobile
-    ? { display:"flex", flexWrap:"nowrap", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollSnapType:"x mandatory", overscrollBehaviorX:"contain", gap:12, paddingBottom:10 }
-    : { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:22 };
-  return (
-    <div className={isMobile?`${type}-row`:""} style={containerStyle}>
-      {items.map(item=>{
-        const access = resolveContentAccess(item, accountState);
-        const albumLibraryItem = accountState?.library?.find(
-          (lib) => lib.slug === item?.slug
-        );
-        const albumIsGifted =
-          albumLibraryItem?.source === "gift" ||
-          albumLibraryItem?.gifted === true;
-        return (
-        <div key={item.slug} style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
-          {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(item)} /> : null}
-          <div onMouseEnter={hoverIn} onMouseLeave={hoverOut} onClick={() => onCardClick?.(item)} style={{ cursor: "pointer" }}>
-            <CoverArt
-              src={item.cover}
-              type={item.coverArtType}
-              alt=""
-              width="100%"
-              height="auto"
-              style={{
-                aspectRatio: "1/1",
-                transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s",
-                display: "block",
-              }}
-            />
-          </div>
-          {type==="albums"&&(item.type==="deluxe"||item.releaseType==="deluxe")?(
-            <span style={{position:"absolute",top:8,right:8,fontSize:9,fontWeight:800,letterSpacing:1.2,padding:"4px 7px",borderRadius:6,background:"rgba(245,158,11,0.92)",color:"#111"}}>DELUXE</span>
-          ):null}
-          <div style={{padding:isMobile?"10px 10px 14px":"14px 16px 18px"}}>
-            <div className={type==="albums"&&isUpcomingReleaseDate(item.date)?"song-title-turquoise-glow":undefined} style={{fontSize:isMobile?12:14,fontWeight:700,marginBottom:4,lineHeight:1.3}}>{item.title}</div>
-            {item.date && <div style={{fontSize:isMobile?9:11,color:"#444",marginBottom:6,letterSpacing:1}}>{item.date}</div>}
-            {access?.badge && <div style={{marginBottom:6}}><MusicAccessBadge access={access} label={access.badge} compact /></div>}
-            {albumIsGifted ? (
-              <div style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 3,
-                marginBottom: 6,
-                padding: "2px 7px",
-                background: "linear-gradient(135deg,rgba(162,89,255,0.15),rgba(0,191,255,0.08))",
-                border: "1px solid rgba(162,89,255,0.3)",
-                borderRadius: 20,
-                animation: "giftBadgePulse 3s ease-in-out infinite",
-                fontSize: 10,
-                fontWeight: 700,
-                color: "#a259ff",
-                letterSpacing: 1,
-              }}>
-                <GiftIcon size={12} style={{ animation: "giftIconSpin 4s ease-in-out infinite" }} />
-                <span style={{ textTransform: "uppercase" }}>
-                  Gift from 2MRRW
-                </span>
-              </div>
-            ) : null}
-            {access?.showPrice && <div style={{fontSize:isMobile?12:13,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${item.price.toFixed(2)}</div>}
-            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}} onClick={type==="albums"?e=>e.stopPropagation():undefined}>
-              {access?.showCart && type==="albums" ? (
-                <div style={{flex:1,minWidth:0}}>
-                  <ReleaseCardActions
-                    item={withR2CatalogMedia(item)}
-                    accountState={accountState}
-                    userId={userId}
-                    source="home_album_card"
-                    onPlayClick={(e) => {
-                      e.stopPropagation();
-                      onOpenAlbumTracklist?.(withR2CatalogMedia(item));
-                    }}
-                    onAddToCart={e => { e.stopPropagation(); addToCart(item); }}
-                    cartButtonStyle={{
-                      background:"#1a1a1a",
-                      color:"white",
-                      border:"1px solid #2a2a2a",
-                    }}
-                    cartLabel="+ Cart"
-                  />
-                </div>
-              ) : access?.showCart ? (
-                <button onClick={()=>addToCart(item)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>
-              ) : null}
-              {userId && type==="albums" && <span onClick={e=>e.stopPropagation()}><MusicPlusButton track={item} userId={userId} access={access} isMobile={isMobile} deepLinkType="album" onLibraryChange={onLibraryChange} /></span>}
-            </div>
-          </div>
-        </div>
-      );})}
-    </div>
-  );
-}

@@ -5,8 +5,9 @@ import * as store from "./recoveryStore";
 import { refreshSignedUrlsForQueue } from "./signedUrlRefresher";
 
 /**
- * Orchestrates session recovery on mount.
- * Playback restore is delegated to AudioProvider via window event to avoid circular deps.
+ * Orchestrates session recovery on mount:
+ * playback snapshot → signed URL refresh → track metadata hydration → dispatch.
+ * Hydration uses /api/catalog/hydrate (see useTrackHydration); partial results are OK.
  */
 export function useSessionRecovery() {
   const [isRecovering, setIsRecovering] = useState(true);
@@ -16,13 +17,28 @@ export function useSessionRecovery() {
     (async () => {
       const playback = store.load("playback");
       if (playback?.queueIds?.length) {
-        const tracks = playback.queueIds.map((id) => ({ id, slug: id }));
-        await refreshSignedUrlsForQueue(tracks);
-        window.dispatchEvent(
-          new CustomEvent("2mrrw:playback-recovery", {
-            detail: playback,
-          })
-        );
+        let hydratedTracks = playback.queueIds.map((id) => ({ id, slug: id }));
+        try {
+          const qs = encodeURIComponent(playback.queueIds.join(","));
+          const res = await fetch(`/api/catalog/hydrate?ids=${qs}`, {
+            credentials: "include",
+            cache: "no-store",
+          });
+          const data = await res.json();
+          if (res.ok && Array.isArray(data.tracks) && data.tracks.length) {
+            hydratedTracks = data.tracks;
+          }
+        } catch {
+          /* fallback IDs preserved */
+        }
+        await refreshSignedUrlsForQueue(hydratedTracks);
+        if (!cancelled) {
+          window.dispatchEvent(
+            new CustomEvent("2mrrw:playback-recovery", {
+              detail: { ...playback, tracks: hydratedTracks },
+            })
+          );
+        }
       }
       if (!cancelled) setIsRecovering(false);
     })();
