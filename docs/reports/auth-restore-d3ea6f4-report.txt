@@ -1,0 +1,971 @@
+AUTH RESTORE d3ea6f4 — REPORT
+Generated: 2026-05-24 19:09:34 UTC
+
+=== CHECKLIST (user spec) ===
+[x] TASK 1 join/page.js: Remove AuthScreenCard import if present (none)
+[x] TASK 1 join/page.js: inputStyle before JoinForm with boxSizing border-box
+[x] TASK 1 join/page.js: JoinForm return() inline JSX (no AuthScreenCard)
+[x] TASK 1 join/page.js: Button text "Continue" (not Send Verification Code)
+[x] TASK 1 join/page.js: Suspense fallback minHeight 100vh background #050505
+[x] TASK 1 join/page.js: Logic/state/handlers above return unchanged
+[x] TASK 2 verify-otp/page.js: Full file — 8 OTP boxes, inline styles, no AuthScreenCard
+[x] Commit message: fix: restore auth screens to original d3ea6f4 state with 8-digit OTP
+[x] Only committed: src/app/join/page.js, src/app/verify-otp/page.js
+
+=== COMMIT HASH ===
+Latest (join button/footer): 9fdd90e
+Prior (verify-otp 8-digit UI): 884fefd
+
+=== GIT DIFF STAT ===
+ src/app/join/page.js       | 284 +++++++++++++++--------------------------
+ src/app/verify-otp/page.js | 305 +++++++++++++++++++--------------------------
+ 2 files changed, 227 insertions(+), 362 deletions(-)
+
+=== NOTE: d3ea6f4 vs current restore ===
+At git commit d3ea6f4, src/app/verify-otp/page.js was a redirect-only route
+(VerifyOtpRedirect → home/AuthGate). join/page.js at d3ea6f4 already used inline
+styles with "Continue" and Back to site. Current restore keeps join inline UI per
+d3ea6f4 snapshot but implements full 8-box verify-otp UI per user spec (not redirect).
+
+=== GIT SHOW 9fdd90e (patch) ===
+commit 9fdd90e3ceb888200e6c30c90c7b54d251b01e1b
+Author: 2mrrw <recharge@2mrrws-Vault.local>
+Date:   Sun May 24 14:09:26 2026 -0500
+
+    fix: restore auth screens to original d3ea6f4 state with 8-digit OTP
+    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+diff --git a/src/app/join/page.js b/src/app/join/page.js
+index 3fcf482..04bd17f 100644
+--- a/src/app/join/page.js
++++ b/src/app/join/page.js
+@@ -239,13 +239,10 @@ function JoinForm() {
+             opacity: loading ? 0.7 : 1,
+           }}
+         >
+-          {loading ? "Sending code…" : "Send Verification Code"}
++          {loading ? "Sending code…" : "Continue"}
+         </button>
+-        <Link
+-          href={giftToken ? `/login?gift=${giftToken}` : "/login"}
+-          style={{ color: "#00ffff", fontSize: 13, textAlign: "center", marginTop: 4 }}
+-        >
+-          Sign in
++        <Link href="/" style={{ color: "#777", fontSize: 13, textAlign: "center", marginTop: 4 }}>
++          Back to site
+         </Link>
+       </form>
+     </main>
+
+=== GIT SHOW 884fefd (verify-otp restore patch) ===
+commit 884fefdc0e7399d3a06c7666a9294bc254ad3f8c
+Author: 2mrrw <recharge@2mrrws-Vault.local>
+Date:   Sun May 24 14:03:51 2026 -0500
+
+    fix: restore auth screens to original working state, 8-digit OTP
+    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+diff --git a/src/app/verify-otp/page.js b/src/app/verify-otp/page.js
+index b0f3876..57d4c32 100644
+--- a/src/app/verify-otp/page.js
++++ b/src/app/verify-otp/page.js
+@@ -7,9 +7,7 @@ import { createClient } from "@/lib/supabase/client";
+ import { clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
+ import { formatResendCountdown } from "@/lib/auth/validation";
+ import { useAuth } from "@/context/AuthContext";
+-import AuthScreenCard from "@/components/auth/AuthScreenCard";
+ 
+-/** UI expects 6 digits; Supabase Auth email OTP length defaults to 6. */
+ const OTP_LENGTH = 8;
+ const EMPTY_DIGITS = () => Array(OTP_LENGTH).fill("");
+ 
+@@ -31,9 +29,7 @@ function VerifyOtpForm() {
+   const code = useMemo(() => digits.join(""), [digits]);
+ 
+   useEffect(() => {
+-    if (!email) {
+-      router.replace("/join");
+-    }
++    if (!email) router.replace("/join");
+   }, [email, router]);
+ 
+   useEffect(() => {
+@@ -91,11 +87,7 @@ function VerifyOtpForm() {
+             method: "POST",
+             headers: { "Content-Type": "application/json" },
+             credentials: "include",
+-            body: JSON.stringify({
+-              email,
+-              phone: pendingPhone,
+-              name: pendingName || undefined,
+-            }),
++            body: JSON.stringify({ email, phone: pendingPhone, name: pendingName || undefined }),
+           });
+         }
+         if (typeof window !== "undefined") {
+@@ -146,169 +138,139 @@ function VerifyOtpForm() {
+   };
+ 
+   if (!email) {
+-    return (
+-      <main
+-        style={{
+-          minHeight: "100vh",
+-          background: "#000",
+-          color: "#fff",
+-          display: "flex",
+-          alignItems: "center",
+-          justifyContent: "center",
+-          padding: "24px",
+-          boxSizing: "border-box",
+-        }}
+-      />
+-    );
++    return <main style={{ minHeight: "100vh", background: "#050505" }} />;
+   }
+ 
+   return (
+     <main
+       style={{
+         minHeight: "100vh",
+-        background: "#000",
+-        color: "#fff",
+-        display: "flex",
+-        alignItems: "center",
+-        justifyContent: "center",
+-        padding: "24px",
+-        boxSizing: "border-box",
++        background: "#050505",
++        color: "white",
++        display: "grid",
++        placeItems: "center",
++        padding: 24,
++        fontFamily: "sans-serif",
+       }}
+     >
+-      <form onSubmit={verifyOtp} style={{ width: "100%", maxWidth: 420 }}>
+-        <AuthScreenCard variant="root">
+-          <h1
+-            style={{
+-              margin: "0 0 8px",
+-              fontSize: "1.5rem",
+-              fontWeight: "700",
+-              color: "#fff",
+-            }}
+-          >
+-            Check your email
+-          </h1>
+-          <p
+-            style={{
+-              margin: "0 0 20px",
+-              color: "#666",
+-              fontSize: "13px",
+-              lineHeight: "1.6",
+-            }}
+-          >
+-            Enter the 8-digit code we sent to {email}
+-          </p>
+-          <div
+-            style={{
+-              display: "flex",
+-              flexDirection: "row",
+-              flexWrap: "nowrap",
+-              width: "100%",
+-              gap: "8px",
+-              marginBottom: "16px",
+-            }}
+-          >
+-            {digits.map((digit, index) => (
+-              <input
+-                key={index}
+-                ref={(el) => {
+-                  inputsRef.current[index] = el;
+-                }}
+-                className=""
+-                style={{
+-                  flex: "1 1 0",
+-                  minWidth: "0",
+-                  aspectRatio: "1",
+-                  height: "auto",
+-                  background: "#1a1a1a",
+-                  border: "1px solid #333",
+-                  borderRadius: "10px",
+-                  color: "#fff",
+-                  textAlign: "center",
+-                  fontSize: "20px",
+-                  fontWeight: "600",
+-                  outline: "none",
+-                  boxSizing: "border-box",
+-                  padding: "0",
+-                }}
+-                inputMode="numeric"
+-                maxLength={1}
+-                value={digit}
+-                onChange={(e) => updateDigit(index, e.target.value)}
+-                onPaste={handlePaste}
+-                onKeyDown={(e) => {
+-                  if (e.key === "Backspace" && !digit && index > 0) {
+-                    inputsRef.current[index - 1]?.focus();
+-                  }
+-                }}
+-                aria-label={`Digit ${index + 1} of ${OTP_LENGTH}`}
+-              />
+-            ))}
+-          </div>
+-          {otpError ? (
+-            <div
++      <form
++        onSubmit={verifyOtp}
++        style={{
++          width: "100%",
++          maxWidth: 420,
++          background: "#0d0d0d",
++          border: "1px solid #222",
++          borderRadius: 20,
++          padding: 28,
++          display: "flex",
++          flexDirection: "column",
++          gap: 16,
++        }}
++      >
++        <div style={{
++          fontSize: 28,
++          fontWeight: 900,
++          letterSpacing: 6,
++          color: "#00ffff",
++        }}>
++          2MRRW
++        </div>
++        <h1 style={{ margin: 0, fontSize: 22 }}>Check your email</h1>
++        <p style={{ margin: 0, color: "#888", fontSize: 13, lineHeight: 1.6 }}>
++          Enter the 8-digit code we sent to {email}
++        </p>
++        <div
++          style={{
++            display: "flex",
++            flexDirection: "row",
++            flexWrap: "nowrap",
++            width: "100%",
++            gap: 6,
++          }}
++        >
++          {digits.map((digit, index) => (
++            <input
++              key={index}
++              ref={(el) => { inputsRef.current[index] = el; }}
++              inputMode="numeric"
++              maxLength={1}
++              value={digit}
++              onChange={(e) => updateDigit(index, e.target.value)}
++              onPaste={handlePaste}
++              onKeyDown={(e) => {
++                if (e.key === "Backspace" && !digit && index > 0) {
++                  inputsRef.current[index - 1]?.focus();
++                }
++              }}
++              aria-label={`Digit ${index + 1} of ${OTP_LENGTH}`}
+               style={{
+-                color: "#ff4444",
+-                fontSize: "12px",
+-                marginBottom: "8px",
++                flex: "1 1 0",
++                minWidth: 0,
++                maxWidth: 44,
++                aspectRatio: "1",
++                height: "auto",
++                background: "#111",
++                border: "1px solid #2a2a2a",
++                borderRadius: 10,
++                color: "white",
++                textAlign: "center",
++                fontSize: 20,
++                fontWeight: 700,
++                outline: "none",
++                boxSizing: "border-box",
++                padding: 0,
+               }}
+-            >
+-              ⚠ {otpError}
+-            </div>
+-          ) : null}
+-          <button
+-            type="submit"
+-            disabled={otpLoading}
+-            className=""
+-            style={{
+-              width: "100%",
+-              marginTop: "4px",
+-              padding: "16px 0",
+-              background: "#00b4b4",
+-              color: "#000",
+-              fontWeight: "700",
+-              border: "none",
+-              borderRadius: "12px",
+-              cursor: "pointer",
+-              fontSize: "14px",
+-            }}
+-          >
+-            {otpLoading ? "Verifying…" : "Verify"}
+-          </button>
+-          <button
+-            type="button"
+-            onClick={() => void resendOtp()}
+-            disabled={resendIn > 0}
+-            className=""
+-            style={{
+-              display: "block",
+-              textAlign: "center",
+-              marginTop: "12px",
+-              fontSize: "13px",
+-              color: "#00b4b4",
+-              background: "none",
+-              border: "none",
+-              cursor: resendIn > 0 ? "default" : "pointer",
+-              opacity: resendIn > 0 ? 0.6 : 1,
+-            }}
+-          >
+-            {resendIn > 0 ? `Resend code in ${formatResendCountdown(resendIn)}` : "Resend code"}
+-          </button>
+-          <Link
+-            href="/join"
+-            className=""
+-            style={{
+-              display: "block",
+-              textAlign: "center",
+-              marginTop: "8px",
+-              fontSize: "13px",
+-              color: "#00b4b4",
+-              textDecoration: "none",
+-              opacity: 0.7,
+-            }}
+-          >
+-            Back
+-          </Link>
+-        </AuthScreenCard>
++            />
++          ))}
++        </div>
++        {otpError ? (
++          <div style={{ color: "#ef4444", fontSize: 12 }}>
++            {otpError}
++          </div>
++        ) : null}
++        <button
++          type="submit"
++          disabled={otpLoading}
++          style={{
++            padding: "13px 0",
++            background: "#00ffff",
++            color: "#000",
++            fontWeight: 900,
++            border: "none",
++            borderRadius: 10,
++            cursor: "pointer",
++            opacity: otpLoading ? 0.7 : 1,
++          }}
++        >
++          {otpLoading ? "Verifying…" : "Verify"}
++        </button>
++        <button
++          type="button"
++          onClick={() => void resendOtp()}
++          disabled={resendIn > 0}
++          style={{
++            background: "none",
++            border: "none",
++            color: "#00ffff",
++            fontSize: 13,
++            textAlign: "center",
++            cursor: resendIn > 0 ? "default" : "pointer",
++            opacity: resendIn > 0 ? 0.5 : 1,
++            padding: 0,
++          }}
++        >
++          {resendIn > 0 ? `Resend code in ${formatResendCountdown(resendIn)}` : "Resend code"}
++        </button>
++        <Link
++          href="/join"
++          style={{
++            color: "#777",
++            fontSize: 13,
++            textAlign: "center",
++          }}
++        >
++          Back
++        </Link>
+       </form>
+     </main>
+   );
+@@ -316,22 +278,7 @@ function VerifyOtpForm() {
+ 
+ export default function VerifyOtpPage() {
+   return (
+-    <Suspense
+-      fallback={
+-        <main
+-          style={{
+-            minHeight: "100vh",
+-            background: "#000",
+-            color: "#fff",
+-            display: "flex",
+-            alignItems: "center",
+-            justifyContent: "center",
+-            padding: "24px",
+-            boxSizing: "border-box",
+-          }}
+-        />
+-      }
+-    >
++    <Suspense fallback={<main style={{ minHeight: "100vh", background: "#050505" }} />}>
+       <VerifyOtpForm />
+     </Suspense>
+   );
+
+=== FILE: src/app/join/page.js ===
+"use client";
+
+import { Suspense, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { writePendingPhone } from "@/lib/auth/otp-pending";
+import { validateEmail, validatePhone } from "@/lib/auth/validation";
+
+const inputStyle = {
+  padding: "12px 14px",
+  background: "#111",
+  border: "1px solid #2a2a2a",
+  color: "white",
+  borderRadius: 10,
+  fontSize: 14,
+  outline: "none",
+  width: "100%",
+  boxSizing: "border-box",
+};
+
+function JoinForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const giftToken = searchParams.get("gift") || "";
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+  const [existsHint, setExistsHint] = useState(false);
+  const [giftPreview, setGiftPreview] = useState(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const pendingEmail = sessionStorage.getItem("pendingJoinEmail");
+    const pendingPhone = sessionStorage.getItem("pendingJoinPhone");
+    if (pendingEmail) {
+      setEmail(pendingEmail);
+      sessionStorage.removeItem("pendingJoinEmail");
+    }
+    if (pendingPhone) {
+      setPhone(pendingPhone);
+      sessionStorage.removeItem("pendingJoinPhone");
+    }
+    const pendingName = sessionStorage.getItem("pendingProfileName");
+    if (pendingName) {
+      setName(pendingName);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!giftToken) return;
+    fetch(`/api/gifts/preview/${giftToken}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.gift) setGiftPreview(data);
+      })
+      .catch(() => {});
+  }, [giftToken]);
+
+  const nextPath = giftToken ? `/gift/${giftToken}` : "/?tab=mymusic";
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setEmailError("");
+    setPhoneError("");
+    setExistsHint(false);
+
+    const emailCheck = validateEmail(email);
+    const phoneCheck = validatePhone(phone);
+    if (!emailCheck.ok) {
+      setEmailError(emailCheck.error);
+    }
+    if (!phoneCheck.ok) {
+      setPhoneError(phoneCheck.error);
+    }
+    if (!emailCheck.ok || !phoneCheck.ok) return;
+
+    setLoading(true);
+
+    try {
+      writePendingPhone(phoneCheck.value);
+      if (name.trim()) {
+        sessionStorage.setItem("pendingProfileName", name.trim());
+      }
+      const supabase = createClient();
+      const { error: otpError } = await supabase.auth.signInWithOtp({
+        email: emailCheck.value,
+        options: { shouldCreateUser: true },
+      });
+
+      if (otpError) {
+        if (/already|exists|registered/i.test(otpError.message)) {
+          setExistsHint(true);
+          setError("You already have an account. Sign in instead.");
+        } else {
+          setError(otpError.message);
+        }
+        return;
+      }
+
+      const params = new URLSearchParams({
+        email: emailCheck.value,
+        next: nextPath,
+      });
+      router.push(`/verify-otp?${params.toString()}`);
+    } catch (err) {
+      setError(err.message || "Could not send code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#050505",
+        color: "white",
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+        fontFamily: "sans-serif",
+      }}
+    >
+      <form
+        onSubmit={submit}
+        style={{
+          width: "100%",
+          maxWidth: 420,
+          background: "#0d0d0d",
+          border: "1px solid #222",
+          borderRadius: 20,
+          padding: 28,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}
+      >
+        <div style={{
+          fontSize: 28,
+          fontWeight: 900,
+          letterSpacing: 6,
+          color: "#00ffff",
+        }}>
+          2MRRW
+        </div>
+        {giftPreview?.gift ? (
+          <div
+            style={{
+              padding: 14,
+              borderRadius: 12,
+              background: "rgba(162,89,255,0.08)",
+              border: "1px solid rgba(162,89,255,0.25)",
+              marginBottom: 4,
+            }}
+          >
+            <p style={{ margin: 0, fontSize: 13, color: "#c9b8ff", lineHeight: 1.6 }}>
+              You have a gift waiting — create your account to claim it
+              {giftPreview.gift.item_title ? `: ${giftPreview.gift.item_title}` : ""}.
+            </p>
+          </div>
+        ) : null}
+        <h1 style={{ margin: "6px 0 0", fontSize: 24 }}>Join 2MRRW</h1>
+        <p style={{ margin: "0 0 8px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
+          Email + phone verification. No password.
+        </p>
+        <input
+          placeholder="Full Name (optional)"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          style={inputStyle}
+        />
+        <div>
+          <input
+            placeholder="Email"
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (emailError) setEmailError("");
+            }}
+            required
+            style={{ ...inputStyle, borderColor: emailError ? "#ef4444" : "#2a2a2a" }}
+          />
+          {emailError ? (
+            <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>
+              {emailError}
+            </div>
+          ) : null}
+        </div>
+        <div>
+          <input
+            placeholder="Phone number"
+            type="tel"
+            value={phone}
+            onChange={(e) => {
+              setPhone(e.target.value);
+              if (phoneError) setPhoneError("");
+            }}
+            required
+            style={{ ...inputStyle, borderColor: phoneError ? "#ef4444" : "#2a2a2a" }}
+          />
+          {phoneError ? (
+            <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>
+              {phoneError}
+            </div>
+          ) : null}
+        </div>
+        {error ? (
+          <div style={{ color: "#ff4d4d", fontSize: 13 }}>
+            {error}
+          </div>
+        ) : null}
+        {existsHint ? (
+          <Link
+            href={giftToken ? `/login?gift=${giftToken}` : "/login"}
+            style={{ color: "#00ffff", fontSize: 13 }}
+          >
+            Sign in instead →
+          </Link>
+        ) : null}
+        <button
+          type="submit"
+          disabled={loading}
+          style={{
+            padding: "13px 0",
+            background: "#00ffff",
+            color: "#000",
+            fontWeight: 900,
+            border: "none",
+            borderRadius: 10,
+            cursor: "pointer",
+            opacity: loading ? 0.7 : 1,
+          }}
+        >
+          {loading ? "Sending code…" : "Continue"}
+        </button>
+        <Link href="/" style={{ color: "#777", fontSize: 13, textAlign: "center", marginTop: 4 }}>
+          Back to site
+        </Link>
+      </form>
+    </main>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={<main style={{ minHeight: "100vh", background: "#050505" }} />}>
+      <JoinForm />
+    </Suspense>
+  );
+}
+
+=== FILE: src/app/verify-otp/page.js ===
+"use client";
+
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
+import { formatResendCountdown } from "@/lib/auth/validation";
+import { useAuth } from "@/context/AuthContext";
+
+const OTP_LENGTH = 8;
+const EMPTY_DIGITS = () => Array(OTP_LENGTH).fill("");
+
+function VerifyOtpForm() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { applySessionUser, refreshAccountState } = useAuth();
+  const email = (searchParams.get("email") || "").trim();
+  const nextPath = searchParams.get("next") || "/?tab=mymusic";
+  const shouldCreateUser = searchParams.get("createUser") !== "0";
+
+  const [digits, setDigits] = useState(EMPTY_DIGITS);
+  const [otpError, setOtpError] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [resendIn, setResendIn] = useState(30);
+  const inputsRef = useRef([]);
+  const otpAutoSubmittedRef = useRef(false);
+
+  const code = useMemo(() => digits.join(""), [digits]);
+
+  useEffect(() => {
+    if (!email) router.replace("/join");
+  }, [email, router]);
+
+  useEffect(() => {
+    if (resendIn <= 0) return undefined;
+    const timer = setInterval(() => setResendIn((v) => Math.max(0, v - 1)), 1000);
+    return () => clearInterval(timer);
+  }, [resendIn]);
+
+  const updateDigit = (index, value) => {
+    const char = value.replace(/\D/g, "").slice(-1);
+    const next = [...digits];
+    next[index] = char;
+    setDigits(next);
+    setOtpError("");
+    otpAutoSubmittedRef.current = false;
+    if (char && index < OTP_LENGTH - 1) inputsRef.current[index + 1]?.focus();
+  };
+
+  const handlePaste = (e) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, OTP_LENGTH);
+    if (!pasted) return;
+    const next = EMPTY_DIGITS();
+    for (let i = 0; i < pasted.length; i += 1) next[i] = pasted[i];
+    setDigits(next);
+    setOtpError("");
+    otpAutoSubmittedRef.current = false;
+    const focusIndex = Math.min(pasted.length, OTP_LENGTH - 1);
+    inputsRef.current[focusIndex]?.focus();
+  };
+
+  const verifyOtp = useCallback(
+    async (e) => {
+      e?.preventDefault?.();
+      if (code.length !== OTP_LENGTH) {
+        setOtpError("Enter the 8-digit code.");
+        return;
+      }
+      setOtpLoading(true);
+      setOtpError("");
+      try {
+        const supabase = createClient();
+        const { data, error: verifyError } = await supabase.auth.verifyOtp({
+          email,
+          token: code,
+          type: "email",
+        });
+        if (verifyError) throw verifyError;
+
+        const pendingPhone = readPendingPhone() || undefined;
+        const pendingName =
+          typeof window !== "undefined" ? sessionStorage.getItem("pendingProfileName") : "";
+        if (pendingPhone || pendingName) {
+          await fetch("/api/auth/complete-profile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ email, phone: pendingPhone, name: pendingName || undefined }),
+          });
+        }
+        if (typeof window !== "undefined") {
+          sessionStorage.removeItem("pendingProfileName");
+        }
+        clearPendingPhone();
+
+        if (data?.session) {
+          await applySessionUser(data.session);
+        } else if (data?.user) {
+          await applySessionUser({ user: data.user });
+        }
+        await refreshAccountState();
+        router.push(nextPath);
+        router.refresh();
+      } catch {
+        setOtpError("Invalid or expired code. Try again.");
+        otpAutoSubmittedRef.current = false;
+      } finally {
+        setOtpLoading(false);
+      }
+    },
+    [code, email, applySessionUser, refreshAccountState, router, nextPath]
+  );
+
+  useEffect(() => {
+    if (code.length !== OTP_LENGTH || otpLoading || otpAutoSubmittedRef.current) return;
+    otpAutoSubmittedRef.current = true;
+    void verifyOtp();
+  }, [code, otpLoading, verifyOtp]);
+
+  const resendOtp = async () => {
+    if (resendIn > 0 || !email) return;
+    setOtpError("");
+    otpAutoSubmittedRef.current = false;
+    try {
+      const supabase = createClient();
+      const { error: otpErr } = await supabase.auth.signInWithOtp({
+        email,
+        options: { shouldCreateUser },
+      });
+      if (otpErr) throw otpErr;
+      setDigits(EMPTY_DIGITS());
+      setResendIn(30);
+    } catch (err) {
+      setOtpError(err.message || "Could not resend code");
+    }
+  };
+
+  if (!email) {
+    return <main style={{ minHeight: "100vh", background: "#050505" }} />;
+  }
+
+  return (
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "#050505",
+        color: "white",
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+        fontFamily: "sans-serif",
+      }}
+    >
+      <form
+        onSubmit={verifyOtp}
+        style={{
+          width: "100%",
+          maxWidth: 420,
+          background: "#0d0d0d",
+          border: "1px solid #222",
+          borderRadius: 20,
+          padding: 28,
+          display: "flex",
+          flexDirection: "column",
+          gap: 16,
+        }}
+      >
+        <div style={{
+          fontSize: 28,
+          fontWeight: 900,
+          letterSpacing: 6,
+          color: "#00ffff",
+        }}>
+          2MRRW
+        </div>
+        <h1 style={{ margin: 0, fontSize: 22 }}>Check your email</h1>
+        <p style={{ margin: 0, color: "#888", fontSize: 13, lineHeight: 1.6 }}>
+          Enter the 8-digit code we sent to {email}
+        </p>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "row",
+            flexWrap: "nowrap",
+            width: "100%",
+            gap: 6,
+          }}
+        >
+          {digits.map((digit, index) => (
+            <input
+              key={index}
+              ref={(el) => { inputsRef.current[index] = el; }}
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => updateDigit(index, e.target.value)}
+              onPaste={handlePaste}
+              onKeyDown={(e) => {
+                if (e.key === "Backspace" && !digit && index > 0) {
+                  inputsRef.current[index - 1]?.focus();
+                }
+              }}
+              aria-label={`Digit ${index + 1} of ${OTP_LENGTH}`}
+              style={{
+                flex: "1 1 0",
+                minWidth: 0,
+                maxWidth: 44,
+                aspectRatio: "1",
+                height: "auto",
+                background: "#111",
+                border: "1px solid #2a2a2a",
+                borderRadius: 10,
+                color: "white",
+                textAlign: "center",
+                fontSize: 20,
+                fontWeight: 700,
+                outline: "none",
+                boxSizing: "border-box",
+                padding: 0,
+              }}
+            />
+          ))}
+        </div>
+        {otpError ? (
+          <div style={{ color: "#ef4444", fontSize: 12 }}>
+            {otpError}
+          </div>
+        ) : null}
+        <button
+          type="submit"
+          disabled={otpLoading}
+          style={{
+            padding: "13px 0",
+            background: "#00ffff",
+            color: "#000",
+            fontWeight: 900,
+            border: "none",
+            borderRadius: 10,
+            cursor: "pointer",
+            opacity: otpLoading ? 0.7 : 1,
+          }}
+        >
+          {otpLoading ? "Verifying…" : "Verify"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void resendOtp()}
+          disabled={resendIn > 0}
+          style={{
+            background: "none",
+            border: "none",
+            color: "#00ffff",
+            fontSize: 13,
+            textAlign: "center",
+            cursor: resendIn > 0 ? "default" : "pointer",
+            opacity: resendIn > 0 ? 0.5 : 1,
+            padding: 0,
+          }}
+        >
+          {resendIn > 0 ? `Resend code in ${formatResendCountdown(resendIn)}` : "Resend code"}
+        </button>
+        <Link
+          href="/join"
+          style={{
+            color: "#777",
+            fontSize: 13,
+            textAlign: "center",
+          }}
+        >
+          Back
+        </Link>
+      </form>
+    </main>
+  );
+}
+
+export default function VerifyOtpPage() {
+  return (
+    <Suspense fallback={<main style={{ minHeight: "100vh", background: "#050505" }} />}>
+      <VerifyOtpForm />
+    </Suspense>
+  );
+}

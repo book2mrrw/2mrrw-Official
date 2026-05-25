@@ -1,0 +1,29 @@
+HEAD: 9fdd90e3ceb888200e6c30c90c7b54d251b01e1b
+branch: main
+UTC: 2026-05-24T19:18:37Z
+---
+9fdd90e fix: restore auth screens to original d3ea6f4 state with 8-digit OTP
+884fefd fix: restore auth screens to original working state, 8-digit OTP
+1912d52 fix: auth card body full width, OTP back to 8 digits
+aece1b5 chore: frontend checkpoint 20260524-1255 manifest
+eae082b feat: gift icon on release cards, animated gift badge in library and player, preset message
+11ede22 fix: auth screens inline styles, 6-digit OTP, guaranteed render
+d56874e chore: frontend checkpoint 20260523-1000 manifest
+a501936 docs: fix E2E control-storefront audit report link
+0866f99 chore: bump recovery anchor to main HEAD
+b24dca5 chore(p7): fix recovery-anchor commit hash metadata
+676c67b chore(p7): sync recovery anchor metadata to anchor commit
+abdaf87 chore(p7): bump recovery anchor to main HEAD (4d18dc2)
+4d18dc2 fix(p4): playback perf, gift reminders, stream e2e http
+b17771a fix(p3): gift security, sync consumer hardening
+3c8b49e fix(p2): entitlements read path, products schema, e2e playback test
+ec935d1 fix(p1): playback and library schema sprint 1
+ea01e82 audit: fix catalog media urls, library cover art, R2 remotePatterns, end-to-end asset chain
+5f47448 Add frontend recovery checkpoint manifest 20260523-0126.
+698945f feat: restore auth screens, fix 8-digit OTP row, remove all Tomorrow Music references
+0652ef1 audit: complete asset chain — cover art, motion cover, full audio, preview audio, lyrics across all release types
+2fa9c33 feat: restore auth screens, fix 8-digit OTP row, remove all Tomorrow Music references
+b3f7413 feat: remove tagline, restore auth card layout and hero glow
+73aad03 chore: add frontend recovery checkpoint manifest 20260523-0006
+3006b3c feat: restore auth card layout with elevated styling and hero glow
+74d57c3 feat: restore auth card layout with elevated styling and hero glow

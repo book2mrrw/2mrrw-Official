@@ -1,0 +1,113 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> artist-platform@0.1.0 build
+> next build
+
+▲ Next.js 16.2.4 (Turbopack)
+- Environments: .env.local
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 7.8s
+  Running TypeScript ...
+  Finished TypeScript in 287ms ...
+  Collecting page data using 1 worker ...
+  Generating static pages using 1 worker (0/49) ...
+⚠ Unsupported metadata themeColor is configured in metadata export in /_not-found. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+  Generating static pages using 1 worker (12/49) 
+  Generating static pages using 1 worker (24/49) 
+  Generating static pages using 1 worker (36/49) 
+⚠ Unsupported metadata themeColor is configured in metadata export in /collector/activate. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /collectors-cards. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /join. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /login. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /success. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /subscribe. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+⚠ Unsupported metadata themeColor is configured in metadata export in /verify-otp. Please move it to viewport export instead.
+Read more: https://nextjs.org/docs/app/api-reference/functions/generate-viewport
+✓ Generating static pages using 1 worker (49/49) in 258ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /album/[slug]
+├ ƒ /api/access/[token]
+├ ƒ /api/account/state
+├ ƒ /api/admin/collector-cards
+├ ƒ /api/admin/diagnostics/entitlements-parity
+├ ƒ /api/admin/fulfill-recovery
+├ ƒ /api/admin/gifts
+├ ƒ /api/admin/seed-products
+├ ƒ /api/admin/sync/catalog
+├ ƒ /api/admin/sync/drop-notification
+├ ƒ /api/auth/complete-profile
+├ ƒ /api/auth/lookup-email
+├ ƒ /api/auth/lookup-phone
+├ ƒ /api/catalog/exclusive-drops
+├ ƒ /api/checkout/session
+├ ƒ /api/collector-card/activate
+├ ƒ /api/collector-card/verify
+├ ƒ /api/collector/cards
+├ ƒ /api/collector/cards/claim
+├ ƒ /api/collector/cards/verify
+├ ƒ /api/community/circle
+├ ƒ /api/community/comments
+├ ƒ /api/create-payment-intent
+├ ƒ /api/cron/expire-gifts
+├ ƒ /api/cron/gift-reminders
+├ ƒ /api/donations/create-payment-intent
+├ ƒ /api/get-purchases
+├ ƒ /api/gifts/claim/[token]
+├ ƒ /api/gifts/preview/[token]
+├ ƒ /api/gifts/purchase
+├ ƒ /api/gifts/redeem
+├ ƒ /api/gifts/send
+├ ƒ /api/gifts/sent
+├ ƒ /api/guest/session
+├ ƒ /api/library
+├ ƒ /api/library/stream
+├ ƒ /api/media/playback
+├ ƒ /api/memberships/checkout
+├ ƒ /api/notifications
+├ ƒ /api/ownership/check
+├ ƒ /api/printful/products
+├ ƒ /api/public/vault
+├ ƒ /api/purchase/confirm
+├ ƒ /api/purchases
+├ ƒ /api/register-user
+├ ƒ /api/save-purchase
+├ ƒ /api/signal/active
+├ ƒ /api/signal/state
+├ ƒ /api/stream/end
+├ ƒ /api/stripe/webhook
+├ ƒ /api/vault/content
+├ ƒ /api/vault/media
+├ ƒ /api/vault/progress
+├ ƒ /api/webhook
+├ ƒ /api/webhooks/stripe
+├ ○ /collector/activate
+├ ○ /collectors-cards
+├ ƒ /feature/[slug]
+├ ƒ /gift/[token]
+├ ○ /join
+├ ○ /login
+├ ƒ /song/[slug]
+├ ○ /subscribe
+├ ○ /success
+└ ○ /verify-otp
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

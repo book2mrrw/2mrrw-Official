@@ -1,0 +1,33 @@
+# Immersive player forensic audit — key files (2026-05-24)
+
+## Canonical runtime stack
+src/context/AudioContext.js
+src/components/audio/GlobalAudioPlayerBar.js
+src/components/audio/PlayerControlButton.js
+src/components/player/ImmersivePlayerEngine/index.js
+src/components/player/ImmersivePlayerEngine/ModalPlayerShell.js
+src/components/player/ImmersivePlayerEngine/PlayerArtwork.js
+src/components/player/ImmersivePlayerEngine/PlayerAtmosphere.js
+src/components/player/ImmersivePlayerEngine/FloatingMainPlayer.js
+src/components/player/ImmersivePlayerEngine/CompactDockPlayer.js
+src/components/player/ImmersivePlayerEngine/SignaturePlayRing.js
+src/components/preview/ImmersivePreviewModal.js
+src/components/preview/PreviewModalPlayer.js
+src/components/preview/immersive/*
+src/lib/player/*
+src/lib/media-session-artwork.js
+src/hooks/useCoverPalette.js
+src/app/globals.css (modal-immersive-*, player-*)
+src/app/layout.js
+src/app/page.js
+
+## Duplication / drift risk
+shareable/component-exports/ImmersivePreviewModal.js
+shareable/component-exports/PreviewModalPlayer.js
+shareable/component-exports/CollectorCardModal.js
+src/components/media/ModalAudioPlayer.js (no src imports found)
+
+## Docs / assets (find inventory)
+docs/reports/dynamic-island-media-session-upgrade.md
+public/audio/
+audio/

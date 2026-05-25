@@ -1,0 +1,318 @@
+=== grep ImmersivePreviewModal|ImmersivePlayerEngine|GlobalAudioPlayerBar|ModalAudioPlayer ===
+src/app/layout.js:import GlobalAudioPlayerBar from "@/components/audio/GlobalAudioPlayerBar";
+src/app/layout.js:                  <GlobalAudioPlayerBar />
+src/app/page.js:import ImmersivePreviewModal from "@/components/preview/ImmersivePreviewModal";
+src/app/page.js:          <ImmersivePreviewModal
+src/components/audio/GlobalAudioPlayerBar.js:} from "@/components/player/ImmersivePlayerEngine";
+src/components/audio/GlobalAudioPlayerBar.js:function GlobalAudioPlayerBar() {
+src/components/audio/GlobalAudioPlayerBar.js:export default memo(GlobalAudioPlayerBar);
+src/components/preview/ImmersivePreviewModal.js:import { ModalPlayerShell, PlayerAtmosphere } from "@/components/player/ImmersivePlayerEngine";
+src/components/preview/ImmersivePreviewModal.js:function ImmersivePreviewModal({
+src/components/preview/ImmersivePreviewModal.js:export default memo(ImmersivePreviewModal);
+src/components/preview/immersive/PreviewPlayerControls.js:import SignaturePlayRing from "@/components/player/ImmersivePlayerEngine/SignaturePlayRing";
+src/components/player/ImmersivePlayerEngine/FloatingMainPlayer.js:import SignaturePlayRing from "@/components/player/ImmersivePlayerEngine/SignaturePlayRing";
+src/components/player/ImmersivePlayerEngine/CompactDockPlayer.js:import SignaturePlayRing from "@/components/player/ImmersivePlayerEngine/SignaturePlayRing";
+src/components/player/ImmersivePlayerEngine/CompactDockPlayer.js:import PlayerArtwork from "@/components/player/ImmersivePlayerEngine/PlayerArtwork";
+src/components/media/ModalAudioPlayer.js:function ModalAudioPlayer() {
+src/components/media/ModalAudioPlayer.js:export default memo(ModalAudioPlayer);
+
+=== grep audioRef ===
+src/context/AudioContext.js:  const audioRef = useRef(null);
+src/context/AudioContext.js:      const audio = audioRef.current;
+src/context/AudioContext.js:    const audio = audioRef.current;
+src/context/AudioContext.js:    const audio = audioRef.current;
+src/context/AudioContext.js:    const audio = audioRef.current;
+src/context/AudioContext.js:    const audio = audioRef.current;
+src/context/AudioContext.js:    const resumeAt = audioRef.current?.currentTime || stateRef.current.currentTime || 0;
+src/context/AudioContext.js:      const audio = audioRef.current;
+src/context/AudioContext.js:    const audio = audioRef.current;
+src/context/AudioContext.js:    const audio = audioRef.current;
+src/context/AudioContext.js:    audioRef.current?.pause();
+src/context/AudioContext.js:    const audio = audioRef.current;
+src/context/AudioContext.js:    if (audioRef.current?.paused) return resume();
+src/context/AudioContext.js:    const audio = audioRef.current;
+src/context/AudioContext.js:    const audio = audioRef.current;
+src/context/AudioContext.js:    const audio = audioRef.current;
+src/context/AudioContext.js:    const audio = audioRef.current;
+src/context/AudioContext.js:      const audio = audioRef.current;
+src/context/AudioContext.js:        currentTime: audioRef.current?.currentTime ?? s.currentTime,
+src/context/AudioContext.js:        duration: audioRef.current?.duration ?? s.duration,
+src/context/AudioContext.js:    audioRef,
+src/context/AudioContext.js:        ref={audioRef}
+src/app/page.js:            audioRef={modalAudioRef}
+src/components/audio/GlobalAudioPlayerBar.js:    audioRef,
+src/components/audio/GlobalAudioPlayerBar.js:      const audio = audioRef?.current;
+src/components/audio/GlobalAudioPlayerBar.js:    [audioRef, csAudio, markProgrammaticPause]
+src/components/audio/GlobalAudioPlayerBar.js:    const audio = audioRef?.current;
+src/components/audio/GlobalAudioPlayerBar.js:  }, [audioRef, cancelHoldAnim, csAudio, markProgrammaticPause]);
+src/components/preview/GlyphLyricsPanel.js:function GlyphLyricsPanel({ open, lrcText, audioRef, onClose, isMobile = false }) {
+src/components/preview/GlyphLyricsPanel.js:      const t = audioRef.current?.currentTime ?? 0;
+src/components/preview/GlyphLyricsPanel.js:  }, [open, lines, audioRef]);
+src/components/preview/PreviewModalPlayer.js:function PreviewModalPlayer({ audioRef, compact }) {
+src/components/preview/PreviewModalPlayer.js:    const audio = audioRef.current;
+src/components/preview/PreviewModalPlayer.js:  }, [audioRef]);
+src/components/preview/PreviewModalPlayer.js:    const audio = audioRef.current;
+src/components/preview/PreviewModalPlayer.js:    const audio = audioRef.current;
+src/components/preview/ImmersivePreviewModal.js:  audioRef,
+src/components/preview/ImmersivePreviewModal.js:              audioRef={audioRef}
+src/components/preview/ImmersivePreviewModal.js:            <PreviewPlayerControls audioRef={audioRef} palette={palette} compact />
+src/components/preview/ImmersivePreviewModal.js:            audioRef={audioRef}
+src/components/preview/ImmersivePreviewModal.js:          <PreviewModalPlayer audioRef={audioRef} compact={false} />
+src/components/preview/immersive/PreviewPlayerControls.js:function PreviewPlayerControls({ audioRef, palette, compact = true }) {
+src/components/preview/immersive/PreviewPlayerControls.js:    const audio = audioRef.current;
+src/components/preview/immersive/PreviewPlayerControls.js:  }, [audioRef]);
+src/components/preview/immersive/PreviewPlayerControls.js:      const audio = audioRef.current;
+src/components/preview/immersive/PreviewPlayerControls.js:    [audioRef, duration]
+src/components/preview/immersive/PreviewPlayerControls.js:    const audio = audioRef.current;
+src/components/preview/immersive/PreviewPlayerControls.js:  }, [audioRef, playing]);
+
+=== grep <audio ===
+src/context/AudioContext.js:      <audio
+src/app/page.js:      <audio ref={nowPlayingAudioRef} style={{display:"none"}}/>
+src/app/page.js:      <audio ref={modalAudioRef} style={{display:"none"}}/>
+
+=== grep PlayerAtmosphere|modal-immersive|backdrop-filter|mix-blend-mode ===
+src/app/globals.css:.modal-immersive-overlay {
+src/app/globals.css:  backdrop-filter: blur(6px);
+src/app/globals.css:  -webkit-backdrop-filter: blur(6px);
+src/app/globals.css:.modal-immersive-shell {
+src/app/globals.css:.modal-immersive-shell--desktop {
+src/app/globals.css:.modal-immersive-sheet-handle {
+src/app/globals.css:.modal-immersive-sheet-handle::before {
+src/app/globals.css:.modal-immersive-sheet-handle:focus-visible::before,
+src/app/globals.css:.modal-immersive-sheet-handle:hover::before {
+src/app/globals.css:.modal-immersive-close {
+src/app/globals.css:  backdrop-filter: blur(10px);
+src/app/globals.css:  -webkit-backdrop-filter: blur(10px);
+src/app/globals.css:.modal-immersive-close:hover,
+src/app/globals.css:.modal-immersive-close:focus-visible {
+src/app/globals.css:.modal-immersive-stage {
+src/app/globals.css:.modal-immersive-ambient {
+src/app/globals.css:.modal-immersive-ambient__blur {
+src/app/globals.css:.modal-immersive-ambient__blur--static {
+src/app/globals.css:.modal-immersive-ambient__blur--motion {
+src/app/globals.css:.modal-immersive-ambient__blur--motion .modal-immersive-ambient__media {
+src/app/globals.css:.modal-immersive-ambient__pulse {
+src/app/globals.css:  mix-blend-mode: screen;
+src/app/globals.css:.modal-immersive-ambient__blur::after {
+src/app/globals.css:  mix-blend-mode: screen;
+src/app/globals.css:.modal-immersive-ambient__wash {
+src/app/globals.css:.modal-immersive-ambient__noise {
+src/app/globals.css:.modal-immersive-art {
+src/app/globals.css:.modal-immersive-art--pulse {
+src/app/globals.css:.modal-immersive-art__cover {
+src/app/globals.css:.modal-immersive-art__sheen {
+src/app/globals.css:.modal-immersive-view-more {
+src/app/globals.css:  backdrop-filter: blur(12px);
+src/app/globals.css:  -webkit-backdrop-filter: blur(12px);
+src/app/globals.css:.modal-immersive-view-more:hover,
+src/app/globals.css:.modal-immersive-view-more:focus-visible {
+src/app/globals.css:.modal-immersive-view-more:active {
+src/app/globals.css:.modal-immersive-drawer {
+src/app/globals.css:  backdrop-filter: blur(16px);
+src/app/globals.css:  -webkit-backdrop-filter: blur(16px);
+src/app/globals.css:.modal-immersive-drawer__handle {
+src/app/globals.css:.modal-immersive-drawer__handle:hover,
+src/app/globals.css:.modal-immersive-drawer__handle:focus-visible {
+src/app/globals.css:.modal-immersive-drawer__row {
+src/app/globals.css:.modal-immersive-drawer__label {
+src/app/globals.css:.modal-immersive-drawer__value {
+src/app/globals.css:.modal-immersive-drawer__empty {
+src/app/globals.css:.modal-immersive-panel {
+src/app/globals.css:  backdrop-filter: blur(14px);
+src/app/globals.css:  -webkit-backdrop-filter: blur(14px);
+src/app/globals.css:.modal-immersive-meta__title {
+src/app/globals.css:.modal-immersive-meta__row {
+src/app/globals.css:.modal-immersive-meta__status {
+src/app/globals.css:.modal-immersive-meta__glyphs {
+src/app/globals.css:.modal-immersive-glyphs-btn {
+src/app/globals.css:.modal-immersive-player {
+src/app/globals.css:.modal-immersive-player__track {
+src/app/globals.css:.modal-immersive-player__fill {
+src/app/globals.css:.modal-immersive-player__row {
+src/app/globals.css:.modal-immersive-player__time {
+src/app/globals.css:.modal-immersive-player__time--end {
+src/app/globals.css:.modal-immersive-actions {
+src/app/globals.css:.modal-immersive-action-card {
+src/app/globals.css:  backdrop-filter: blur(8px);
+src/app/globals.css:  -webkit-backdrop-filter: blur(8px);
+src/app/globals.css:.modal-immersive-action-card:hover,
+src/app/globals.css:.modal-immersive-action-card:focus-visible {
+src/app/globals.css:.modal-immersive-action-card:active {
+src/app/globals.css:.modal-immersive-action-card--cart {
+src/app/globals.css:.modal-immersive-action-card--gift {
+src/app/globals.css:.modal-immersive-action-card__label {
+src/app/globals.css:.modal-immersive-action-card__sub {
+src/app/globals.css:.modal-immersive-vinyl-link {
+src/app/globals.css:.modal-immersive-vinyl-link:hover,
+src/app/globals.css:.modal-immersive-vinyl-link:focus-visible {
+src/app/globals.css:.modal-immersive-player--accent .player-signature-ring__progress {
+src/app/globals.css:.modal-immersive-player--accent .player-signature-bloom {
+src/app/globals.css:.modal-immersive-player--accent .player-hero-ambient {
+src/app/globals.css:.modal-immersive-player--accent .player-hero-btn--playing .player-hero-core {
+src/app/globals.css:.modal-immersive-player--accent .player-hero-ring {
+src/app/globals.css:  .modal-immersive-ambient__blur--static,
+src/app/globals.css:  .modal-immersive-ambient__pulse,
+src/app/globals.css:  .modal-immersive-art--pulse {
+src/app/globals.css:  .modal-immersive-shell .preview-modal-close-btn {
+src/app/globals.css:  backdrop-filter: blur(28px) saturate(1.15);
+src/app/globals.css:  -webkit-backdrop-filter: blur(28px) saturate(1.15);
+src/app/globals.css:  backdrop-filter: blur(10px);
+src/app/globals.css:  -webkit-backdrop-filter: blur(10px);
+src/app/globals.css:  backdrop-filter: blur(40px);
+src/app/globals.css:  -webkit-backdrop-filter: blur(40px);
+src/app/globals.css:  backdrop-filter: blur(8px);
+src/app/globals.css:.modal-immersive-overlay--desktop {
+src/app/globals.css:  backdrop-filter: none;
+src/app/globals.css:  -webkit-backdrop-filter: none;
+src/app/globals.css:  backdrop-filter: blur(8px);
+src/app/globals.css:  -webkit-backdrop-filter: blur(8px);
+src/app/globals.css:  backdrop-filter: blur(12px);
+src/app/globals.css:  -webkit-backdrop-filter: blur(12px);
+src/app/globals.css:  backdrop-filter: blur(20px);
+src/app/globals.css:  -webkit-backdrop-filter: blur(20px);
+src/app/globals.css:  backdrop-filter: blur(14px);
+src/app/globals.css:  -webkit-backdrop-filter: blur(14px);
+src/components/preview/ImmersivePreviewModal.js:import { ModalPlayerShell, PlayerAtmosphere } from "@/components/player/ImmersivePlayerEngine";
+src/components/preview/ImmersivePreviewModal.js:        <PlayerAtmosphere open />
+src/components/preview/ImmersivePreviewModal.js:            className="modal-immersive-sheet-handle"
+src/components/preview/ImmersivePreviewModal.js:            className="preview-modal-close-btn modal-immersive-close"
+src/components/preview/ImmersivePreviewModal.js:          <section className="modal-immersive-stage">
+src/components/preview/ImmersivePreviewModal.js:            <div className={`modal-immersive-art${palette.animated ? "" : " modal-immersive-art--pulse"}`}>
+src/components/preview/ImmersivePreviewModal.js:                className="modal-immersive-art__cover"
+src/components/preview/ImmersivePreviewModal.js:              <div className="modal-immersive-art__sheen" aria-hidden />
+src/components/preview/ImmersivePreviewModal.js:            className="modal-immersive-panel"
+src/components/preview/ImmersivePreviewModal.js:              <button type="button" className="modal-immersive-vinyl-link" onClick={() => { onAddVinyl(single); closeModal(); }}>
+src/components/preview/ImmersivePreviewModal.js:      <PlayerAtmosphere open />
+src/components/preview/immersive/AmbientArtworkBackground.js:      className={`modal-immersive-ambient${animated ? " modal-immersive-ambient--animated" : " modal-immersive-ambient--static"}`}
+src/components/preview/immersive/AmbientArtworkBackground.js:        <div className="modal-immersive-ambient__blur modal-immersive-ambient__blur--motion">
+src/components/preview/immersive/AmbientArtworkBackground.js:            className="modal-immersive-ambient__media"
+src/components/preview/immersive/AmbientArtworkBackground.js:          className="modal-immersive-ambient__blur modal-immersive-ambient__blur--static"
+src/components/preview/immersive/AmbientArtworkBackground.js:      {!animated ? <div className="modal-immersive-ambient__pulse" aria-hidden /> : null}
+src/components/preview/immersive/AmbientArtworkBackground.js:      <div className="modal-immersive-ambient__wash" style={washStyle} />
+src/components/preview/immersive/AmbientArtworkBackground.js:      <div className="modal-immersive-ambient__noise" />
+src/components/preview/immersive/TrackMeta.js:    <div className="modal-immersive-meta" style={paletteToCssVars(palette)}>
+src/components/preview/immersive/TrackMeta.js:      <h2 className="modal-immersive-meta__title">{title}</h2>
+src/components/preview/immersive/TrackMeta.js:      <div className="modal-immersive-meta__row">
+src/components/preview/immersive/TrackMeta.js:        <span className="modal-immersive-meta__status">
+src/components/preview/immersive/TrackMeta.js:        <div className="modal-immersive-meta__glyphs">
+src/components/preview/immersive/TrackMeta.js:          <button type="button" className="modal-immersive-glyphs-btn" onClick={onOpenGlyphs}>
+src/components/preview/immersive/FloatingViewMore.js:        className="modal-immersive-view-more"
+src/components/preview/immersive/FloatingViewMore.js:            className="modal-immersive-drawer"
+src/components/preview/immersive/FloatingViewMore.js:                className="modal-immersive-drawer__handle"
+src/components/preview/immersive/FloatingViewMore.js:                <div key={key} className="modal-immersive-drawer__row">
+src/components/preview/immersive/FloatingViewMore.js:                  <span className="modal-immersive-drawer__label">{label}</span>
+src/components/preview/immersive/FloatingViewMore.js:                  <span className="modal-immersive-drawer__value">{value}</span>
+src/components/preview/immersive/FloatingViewMore.js:              <p className="modal-immersive-drawer__empty">Credits available soon.</p>
+src/components/preview/immersive/PreviewPlayerControls.js:    <div className="modal-immersive-player modal-immersive-player--accent player-immersive-modal-controls" style={cssVars}>
+src/components/preview/immersive/PreviewPlayerControls.js:      <div className="modal-immersive-player__row player-immersive-modal-controls__row">
+src/components/preview/immersive/PreviewPlayerControls.js:        <span className="modal-immersive-player__time">{formatPlayerTime(current)}</span>
+src/components/preview/immersive/PreviewPlayerControls.js:        <span className="modal-immersive-player__time modal-immersive-player__time--end">
+src/components/preview/immersive/ModalActionButtons.js:    <div className="modal-immersive-actions" style={paletteToCssVars(palette)}>
+src/components/preview/immersive/ModalActionButtons.js:          className="modal-immersive-action-card modal-immersive-action-card--cart"
+src/components/preview/immersive/ModalActionButtons.js:          <span className="modal-immersive-action-card__label">Add to Cart</span>
+src/components/preview/immersive/ModalActionButtons.js:          {priceLabel ? <span className="modal-immersive-action-card__sub">{priceLabel}</span> : null}
+src/components/preview/immersive/ModalActionButtons.js:          className="modal-immersive-action-card modal-immersive-action-card--gift"
+src/components/preview/immersive/ModalActionButtons.js:          <span className="modal-immersive-action-card__label" style={{ color: giftIconColor }}>
+src/components/player/ImmersivePlayerEngine/ModalPlayerShell.js:      <motion.div key="player-modal-overlay" {...OVERLAY_FADE} onClick={onOverlayClick} className="modal-immersive-overlay">
+src/components/player/ImmersivePlayerEngine/ModalPlayerShell.js:          className={["modal-immersive-shell", "player-immersive-shell", className].filter(Boolean).join(" ")}
+src/components/player/ImmersivePlayerEngine/ModalPlayerShell.js:      className="modal-immersive-overlay modal-immersive-overlay--desktop"
+src/components/player/ImmersivePlayerEngine/ModalPlayerShell.js:          "modal-immersive-shell",
+src/components/player/ImmersivePlayerEngine/ModalPlayerShell.js:          "modal-immersive-shell--desktop",
+src/components/player/ImmersivePlayerEngine/index.js:export { default as PlayerAtmosphere } from "./PlayerAtmosphere";
+src/components/player/ImmersivePlayerEngine/PlayerAtmosphere.js:function PlayerAtmosphere({ open = false }) {
+src/components/player/ImmersivePlayerEngine/PlayerAtmosphere.js:export default memo(PlayerAtmosphere);
+
+=== grep z-index|z-[ ===
+src/app/globals.css:  z-index: 8888;
+src/app/globals.css:  z-index: 12;
+src/app/globals.css:  z-index: 24;
+src/app/globals.css:  z-index: 0;
+src/app/globals.css:  z-index: 1;
+src/app/globals.css:  z-index: 1;
+src/app/globals.css:  z-index: 2;
+src/app/globals.css:  z-index: 4;
+src/app/globals.css:  z-index: 8;
+src/app/globals.css:  z-index: 9;
+src/app/globals.css:  z-index: 1;
+src/app/globals.css:  z-index: 7590;
+src/app/globals.css:  z-index: 8870;
+src/app/globals.css:  z-index: 0;
+src/app/globals.css:  z-index: 0;
+src/app/globals.css:  z-index: 1;
+src/app/globals.css:  z-index: 2;
+src/app/globals.css:  z-index: 2;
+src/app/globals.css:  z-index: 8500;
+src/app/globals.css:  z-index: 1;
+src/app/globals.css:  z-index: 9200;
+src/app/globals.css:  z-index: 7700;
+src/app/globals.css:  z-index: 9000;
+src/app/globals.css:  z-index: 1;
+src/app/globals.css:  z-index: 2;
+src/app/globals.css:  z-index: 1;
+src/app/globals.css:  z-index: 2;
+src/app/globals.css:  z-index: 0;
+src/app/globals.css:  z-index: 9500;
+src/app/globals.css:  z-index: 99990;
+src/app/globals.css:  z-index: 2;
+src/app/globals.css:  z-index: 3;
+src/app/globals.css:  z-index: 4;
+src/app/globals.css:  z-index: 5;
+src/app/globals.css:  z-index: 6;
+
+=== grep fixed inset-0|position: fixed ===
+src/app/globals.css:  position: fixed;
+src/app/globals.css:  position: fixed;
+src/app/globals.css:  position: fixed;
+src/app/globals.css:  position: fixed;
+src/app/globals.css:  position: fixed;
+src/app/globals.css:  position: fixed;
+src/app/globals.css:  position: fixed;
+src/app/globals.css:  position: fixed;
+src/app/globals.css:  position: fixed;
+
+=== grep layoutId ===
+src/components/audio/GlobalAudioPlayerBar.js:            layoutId={undefined}
+src/components/player/ImmersivePlayerEngine/SignaturePlayRing.js:  layoutId,
+src/components/player/ImmersivePlayerEngine/SignaturePlayRing.js:        layoutId={layoutId}
+src/components/player/ImmersivePlayerEngine/FloatingMainPlayer.js:              layoutId={PLAYER_LAYOUT_ID}
+src/components/player/ImmersivePlayerEngine/PlayerArtwork.js:  layoutId = PLAYER_LAYOUT_ID,
+src/components/player/ImmersivePlayerEngine/PlayerArtwork.js:      layoutId={layoutId}
+
+=== grep ModalAudioPlayer (duplicate) ===
+src/components/media/ModalAudioPlayer.js:function ModalAudioPlayer() {
+src/components/media/ModalAudioPlayer.js:export default memo(ModalAudioPlayer);
+
+=== grep createPortal|Portal ===
+src/app/globals.css:  animation: collectionPortalSheen 6s ease-in-out infinite;
+src/app/globals.css:@keyframes collectionPortalSheen {
+
+=== diff -rq src/components shareable/component-exports ===
+Only in shareable/component-exports: CollectorCardModal.js
+Only in shareable/component-exports: GlyphLyricsPanel.js
+Only in shareable/component-exports: ImmersivePreviewModal.js
+Only in shareable/component-exports: MobileNavAnimatedIcon.js
+Only in shareable/component-exports: PreviewModalPlayer.js
+Only in shareable/component-exports: README.md
+Only in src/components: ReleaseDetailExtras.js
+Only in shareable/component-exports: VaultNavLockIcon.js
+Only in src/components: account
+Only in src/components: admin
+Only in src/components: audio
+Only in src/components: auth
+Only in src/components: collectors-cards
+Only in src/components: gifts
+Only in src/components: media
+Only in src/components: music
+Only in src/components: nav
+Only in shareable/component-exports: page-mobile-nav-and-more.js
+Only in src/components: payments
+Only in src/components: player
+Only in src/components: preview
+Only in shareable/component-exports: releaseMetadata.js
+Only in src/components: support
+Only in src/components: ui
+Only in src/components: vault
+(eval):1: command not found: rg
+=== supplemental: z-[ in src/app src/components ===
+=== supplemental: fixed inset-0 ===

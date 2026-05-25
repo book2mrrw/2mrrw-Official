@@ -1,0 +1,14 @@
+commit eae082ba5ca01b62b37981a207aa98ecf1e28bcc
+Author: 2mrrw <recharge@2mrrws-Vault.local>
+Date:   Sun May 24 12:36:56 2026 -0500
+
+    feat: gift icon on release cards, animated gift badge in library and player, preset message
+    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+ src/app/globals.css                          |  17 ++++
+ src/app/page.js                              | 147 +++++++++++++++++++++++++--
+ src/components/audio/GlobalAudioPlayerBar.js |  33 ++++++
+ src/components/gifts/GiftBottomSheet.js      |   4 +-
+ src/components/music/MyMusicTab.js           |  28 ++++-
+ 5 files changed, 218 insertions(+), 11 deletions(-)
