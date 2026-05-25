@@ -11,6 +11,7 @@ import {
   usePlayerAmbience,
   usePlayerBodyState,
 } from "@/components/player/ImmersivePlayerEngine";
+import { useRenderTracker } from "@/lib/dev/useRenderTracker";
 import {
   DOUBLE_TAP_MS,
   HOLD_FADE_MS,
@@ -31,6 +32,7 @@ function WaveformBars({ playing }) {
 }
 
 function GlobalAudioPlayerBar() {
+  useRenderTracker("GlobalAudioPlayerBar");
   const playback = useImmersivePlayback();
   const {
     currentTrack,

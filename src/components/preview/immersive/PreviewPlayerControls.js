@@ -5,8 +5,10 @@ import SignaturePlayRing from "@/components/player/ImmersivePlayerEngine/Signatu
 import { useImmersivePlayback } from "@/lib/player/useImmersivePlayback";
 import { playerPaletteToCssVars } from "@/lib/player/usePlayerAmbience";
 import { formatPlayerTime } from "@/lib/player/formatTime";
+import { useRenderTracker } from "@/lib/dev/useRenderTracker";
 
 function PreviewPlayerControls({ palette, compact = true }) {
+  useRenderTracker("PreviewPlayerControls");
   const {
     isPlaying,
     isBuffering,
@@ -55,7 +57,10 @@ function PreviewPlayerControls({ palette, compact = true }) {
         aria-valuenow={currentTime}
         tabIndex={0}
       >
-        <div className="player-immersive-progress-rail__fill" style={{ width: `${progress}%` }} />
+        <div
+          className="player-immersive-progress-rail__fill"
+          style={{ transform: `scaleX(${progress / 100})`, transformOrigin: "left" }}
+        />
       </div>
       <div className="modal-immersive-player__row player-immersive-modal-controls__row">
         <span className="modal-immersive-player__time">{formatPlayerTime(currentTime)}</span>

@@ -19,6 +19,7 @@ import CoverArt from "@/components/ui/CoverArt";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import GiftButton from "@/components/gifts/GiftButton";
+import { useRenderTracker } from "@/lib/dev/useRenderTracker";
 
 const DRAWER_COLLAPSE_THRESHOLD = 72;
 const MODAL_DISMISS_THRESHOLD = 56;
@@ -100,6 +101,7 @@ function ImmersivePreviewModal({
   onGift,
   onLibraryChange,
 }) {
+  useRenderTracker("ImmersivePreviewModal");
   const [viewMoreOpen, setViewMoreOpen] = useState(false);
   const [glyphsOpen, setGlyphsOpen] = useState(false);
 

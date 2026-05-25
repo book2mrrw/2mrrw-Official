@@ -29,7 +29,6 @@ const AudioContext = createContext(null);
 
 const REPEAT_MODES = ["off", "all", "one"];
 const POSITION_STATE_THROTTLE_MS = 1000;
-const PROGRESS_UI_THROTTLE_MS = 250;
 const SLOWED_SUFFIX = " · Slowed";
 const CS_PLAYBACK_RATE = 0.75;
 const POSITION_SAVE_INTERVAL_MS = 15000;
@@ -184,7 +183,7 @@ export function AudioProvider({ children }) {
   const userPausedRef = useRef(false);
   const skipPauseInterruptionRef = useRef(false);
   const lastPositionStateAtRef = useRef(0);
-  const lastProgressUiAtRef = useRef(0);
+  const progressRafRef = useRef(null);
   const listeningUserIdRef = useRef(null);
   const listeningProgressRef = useRef({ slug: null, recorded30s: false });
   const streamMetaRef = useRef(null);
@@ -256,6 +255,31 @@ export function AudioProvider({ children }) {
   const patchState = useCallback((patch) => {
     setState(prev => ({ ...prev, ...patch }));
   }, []);
+
+  const stopProgressRaf = useCallback(() => {
+    if (progressRafRef.current != null) {
+      cancelAnimationFrame(progressRafRef.current);
+      progressRafRef.current = null;
+    }
+  }, []);
+
+  const startProgressRaf = useCallback(() => {
+    stopProgressRaf();
+    const tick = () => {
+      const audio = audioRef.current;
+      if (!audio || audio.paused || audio.ended) {
+        stopProgressRaf();
+        return;
+      }
+      const t = audio.currentTime || 0;
+      const prev = stateRef.current;
+      if (Math.abs(t - prev.currentTime) >= 0.001) {
+        patchState({ currentTime: t });
+      }
+      progressRafRef.current = requestAnimationFrame(tick);
+    };
+    progressRafRef.current = requestAnimationFrame(tick);
+  }, [patchState, stopProgressRaf]);
 
   const syncPositionState = useCallback((force = false) => {
     const audio = audioRef.current;
@@ -375,6 +399,7 @@ export function AudioProvider({ children }) {
     const onPlay = () => {
       userPausedRef.current = false;
       patchState({ isPlaying: true, error: null, hasStarted: true, isBuffering: false });
+      startProgressRaf();
       startPositionSaveTimer();
       persistPlayback("play");
       const track = stateRef.current.currentTrack;
@@ -398,6 +423,7 @@ export function AudioProvider({ children }) {
         return;
       }
 
+      stopProgressRaf();
       stopPositionSaveTimer();
       patchState({ isPlaying: false });
       persistPlayback("pause");
@@ -415,12 +441,6 @@ export function AudioProvider({ children }) {
     };
 
     const onTime = () => {
-      const t = audio.currentTime || 0;
-      const now = Date.now();
-      if (now - lastProgressUiAtRef.current >= PROGRESS_UI_THROTTLE_MS) {
-        lastProgressUiAtRef.current = now;
-        patchState({ currentTime: t });
-      }
       persistPlayback("progress");
       syncPositionState(false);
 
@@ -458,6 +478,7 @@ export function AudioProvider({ children }) {
         });
         listeningProgressRef.current = { slug: null, recorded30s: false };
       }
+      stopProgressRaf();
       stopPositionSaveTimer();
       persistPlayback("complete");
       const repeatMode = repeatModeRef.current;
@@ -565,7 +586,10 @@ export function AudioProvider({ children }) {
         isBuffering: false,
       });
     };
-    const onEmptied = () => patchState({ currentTime: 0, duration: 0 });
+    const onEmptied = () => {
+      stopProgressRaf();
+      patchState({ currentTime: 0, duration: 0 });
+    };
 
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
@@ -593,6 +617,7 @@ export function AudioProvider({ children }) {
       audio.removeEventListener("stalled", onStalled);
       audio.removeEventListener("playing", onPlaying);
       audio.removeEventListener("canplaythrough", onCanPlayThrough);
+      stopProgressRaf();
       stopPositionSaveTimer();
     };
   }, [
@@ -603,6 +628,8 @@ export function AudioProvider({ children }) {
     finalizeStreamSession,
     startPositionSaveTimer,
     stopPositionSaveTimer,
+    startProgressRaf,
+    stopProgressRaf,
   ]);
 
   const applyCsToElement = useCallback((audio, presentation, resumeAt = null) => {
@@ -1124,6 +1151,7 @@ export function AudioProvider({ children }) {
       });
       void clearLibraryStreamSession(meta.slug, meta.sessionId);
     }
+    stopProgressRaf();
     stopPositionSaveTimer();
     if (audio) {
       skipPauseInterruptionRef.current = true;
@@ -1142,7 +1170,7 @@ export function AudioProvider({ children }) {
       navigator.mediaSession.metadata = null;
       navigator.mediaSession.playbackState = "none";
     }
-  }, [finalizeStreamSession, stopPositionSaveTimer]);
+  }, [finalizeStreamSession, stopPositionSaveTimer, stopProgressRaf]);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.mediaSession) return undefined;
