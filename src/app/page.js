@@ -585,7 +585,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
-  const { currentUser: authUser, library, owns, accountState, isAdmin, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
+  const { currentUser, library, owns, accountState, isAdmin, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
   const {
     playTrack,
     playQueue,
@@ -600,7 +600,15 @@ export default function Page() {
     seek,
   } = useAudioPlayer();
   // ── STATE ─────────────────────────────────────────────────────────────────
-  const [cart, setCart]                           = useState([]);
+  const [cart, setCart]                           = useState(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const stored = localStorage.getItem("2mrrw_cart");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
   const [activeTab, setActiveTab]                 = useState("home");
   const [musicSubTab, setMusicSubTab]             = useState("singles");
   const [activeVideo, setActiveVideo]             = useState("tv_aS-hJ880");
@@ -613,7 +621,6 @@ export default function Page() {
   const [singleIndex, setSingleIndex]             = useState(0);
   const [slideDir, setSlideDir]                   = useState("right");
   const [animating, setAnimating]                 = useState(false);
-  const [currentUser, setCurrentUser]             = useState(null);
   const [checkingOut, setCheckingOut]             = useState(false);
   const [checkoutError, setCheckoutError]         = useState("");
   const [clientSecret, setClientSecret]           = useState(null);
@@ -628,7 +635,7 @@ export default function Page() {
   const [circleCategory, setCircleCategory]       = useState("question");
   const [circleSubmissions, setCircleSubmissions] = useState([]);
   const [circleSubmitted, setCircleSubmitted]     = useState(false);
-  const [myPurchases, setMyPurchases]             = useState([]);
+  const myPurchases = useMemo(() => library || [], [library]);
   const [membershipUpsellOpen, setMembershipUpsellOpen] = useState(false);
   const [donateOpen, setDonateOpen] = useState(false);
   const [giftSheetRelease, setGiftSheetRelease] = useState(null);
@@ -815,25 +822,8 @@ export default function Page() {
   }, []);
 
   useEffect(() => {
-    if (authUser) {
-      setCurrentUser(authUser);
-    } else if (!authLoading) {
-      setCurrentUser(null);
-    }
-  }, [authUser, authLoading]);
-
-  useEffect(() => {
-    setMyPurchases(library || []);
-  }, [library]);
-
-  useEffect(() => {
     const stored = localStorage.getItem("2mrrw_circle");
     if (stored) setCircleSubmissions(JSON.parse(stored));
-  }, []);
-
-  useEffect(() => {
-    const stored = localStorage.getItem("2mrrw_cart");
-    if (stored) { try { setCart(JSON.parse(stored)); } catch {} }
   }, []);
 
   useEffect(() => {
@@ -880,20 +870,20 @@ export default function Page() {
   useEffect(() => {
     if (!nowPlaying) return;
     void playTrack(
-      toPlaybackTrack(nowPlaying, { ...accountState, userId: authUser?.id }, "feature")
+      toPlaybackTrack(nowPlaying, { ...accountState, userId: currentUser?.id }, "feature")
     );
-  }, [nowPlaying, accountState, authUser?.id, playTrack]);
+  }, [nowPlaying, accountState, currentUser?.id, playTrack]);
 
   const previewPlaybackSlug = selectedSingle?.slug ?? null;
 
   useEffect(() => {
     if (!previewModalOpen || !previewPlaybackSlug || !selectedSingle) return;
     void playTrack(
-      toPlaybackTrack(selectedSingle, { ...accountState, userId: authUser?.id }, "preview_modal")
+      toPlaybackTrack(selectedSingle, { ...accountState, userId: currentUser?.id }, "preview_modal")
     );
     // Replay only when modal opens or preview track slug changes — not on release-detail hydration.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedSingle read at slug-change time only
-  }, [previewModalOpen, previewPlaybackSlug, accountState, authUser?.id, playTrack]);
+  }, [previewModalOpen, previewPlaybackSlug, accountState, currentUser?.id, playTrack]);
 
   useEffect(() => {
     if (activeTab !== "live") {
@@ -903,16 +893,16 @@ export default function Page() {
 
   const playAlbumTracks = useCallback(
     (album, startIndex = 0) => {
-      const tracks = albumTracksForPlayback(album, { ...accountState, userId: authUser?.id }, "album_modal");
+      const tracks = albumTracksForPlayback(album, { ...accountState, userId: currentUser?.id }, "album_modal");
       if (tracks.length) {
         void playQueue(tracks, startIndex);
         return;
       }
       const access = resolveContentAccess(album, accountState);
       if (!access.canStream) return;
-      void playTrack(toPlaybackTrack(album, { ...accountState, userId: authUser?.id }, "album_modal"));
+      void playTrack(toPlaybackTrack(album, { ...accountState, userId: currentUser?.id }, "album_modal"));
     },
-    [accountState, authUser?.id, playQueue, playTrack]
+    [accountState, currentUser?.id, playQueue, playTrack]
   );
 
   const goRadio = useCallback(i => setRadioIndex(i), []);
@@ -1067,12 +1057,10 @@ export default function Page() {
     if (cart.length === 0) return;
     window.history.replaceState({}, "", window.location.pathname);
     void handleCheckout();
-  }, [authUser, cart]);
+  }, [currentUser, cart]);
 
   const handleSignOut = async () => {
     await signOut();
-    setCurrentUser(null);
-    setMyPurchases([]);
   };
 
   const getDaysInMonth     = (m, y) => new Date(y, m+1, 0).getDate();
@@ -1656,7 +1644,7 @@ export default function Page() {
                               <ReleaseCardActions
                                 item={singleUi}
                                 accountState={accountState}
-                                userId={authUser?.id}
+                                userId={currentUser?.id}
                                 source="home_single_card"
                                 showCart={Boolean(singleAccess?.showCart)}
                                 onAddToCart={e => { e.stopPropagation(); addToCart(single); }}
@@ -1707,7 +1695,7 @@ export default function Page() {
                   {/* Features */}
                   <div style={{marginTop:28,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={playFeature} accountState={accountState} userId={authUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={playFeature} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Radio */}
@@ -1762,7 +1750,7 @@ export default function Page() {
                   {/* Albums */}
                   <div id="home-albums">
                     <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                    <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={authUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                    <Grid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Audio Visuals */}
@@ -1973,7 +1961,7 @@ export default function Page() {
 
               {/* ══ HELP & SUPPORT ══ */}
               {activeTab==="help" && (
-                <HelpSupportSection userId={authUser?.id || currentUser?.id} />
+                <HelpSupportSection userId={currentUser?.id} />
               )}
 
               {/* ══ BLOG ══ */}
@@ -2502,7 +2490,7 @@ export default function Page() {
       <GiftBottomSheet
         open={Boolean(giftSheetRelease)}
         release={giftSheetRelease}
-        senderUserId={authUser?.id}
+        senderUserId={currentUser?.id}
         isMobile={isMobile}
         onClose={() => setGiftSheetRelease(null)}
       />
@@ -2510,7 +2498,7 @@ export default function Page() {
         open={Boolean(albumTracklistRelease)}
         album={albumTracklistRelease}
         accountState={accountState}
-        userId={authUser?.id}
+        userId={currentUser?.id}
         onClose={() => setAlbumTracklistRelease(null)}
       />
 

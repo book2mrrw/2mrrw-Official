@@ -54,15 +54,18 @@ function PreviewModalPlayer({ compact }) {
           cursor: "pointer",
           marginBottom: compact ? 6 : 8,
           position: "relative",
+          overflow: "hidden",
         }}
       >
         <div
           style={{
-            width: duration ? `${(currentTime / duration) * 100}%` : "0%",
+            width: "100%",
             height: "100%",
             background: "#00ffff",
             borderRadius: 3,
-            transition: "width 0.1s linear",
+            transform: duration ? `scaleX(${currentTime / duration})` : "scaleX(0)",
+            transformOrigin: "left",
+            transition: "transform 0.1s linear",
             boxShadow: "0 0 6px rgba(0,255,255,0.5)",
           }}
         />

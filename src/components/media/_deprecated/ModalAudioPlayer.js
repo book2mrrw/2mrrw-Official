@@ -2,7 +2,7 @@
 
 /**
  * @deprecated Unused in app tree — preview/global UI uses AudioContext via useImmersivePlayback.
- * Kept as a thin reference wrapper; safe to remove after confirming no external imports.
+ * Quarantined under _deprecated/ (zero app imports). Safe to delete after external bundle audit.
  */
 
 import { memo, useEffect, useState } from "react";
