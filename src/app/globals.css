@@ -223,6 +223,18 @@ body {
     border-color var(--motion-modal-sheet);
 }
 
+.modal-immersive-shell::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  background: inherit;
+  z-index: 0;
+  pointer-events: none;
+}
+
 .modal-immersive-shell--desktop {
   height: auto;
   max-height: 94vh;
@@ -232,6 +244,93 @@ body {
   display: flex;
   flex-direction: column;
   background: #0a0a0a;
+}
+
+.modal-immersive-body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+  background: #050506;
+}
+
+/* Immersive modal layer stack (stage) — ModalShell/overlay above atmosphere */
+.immersive-layer {
+  pointer-events: none;
+}
+
+.immersive-layer--atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.immersive-layer--lighting {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  mix-blend-mode: screen;
+  opacity: 0.85;
+}
+
+.immersive-layer--hero {
+  z-index: 4;
+  pointer-events: none;
+}
+
+.immersive-mp4-world {
+  width: 100%;
+  height: 100%;
+  transform: translateZ(0);
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+.immersive-mp4-world video,
+.immersive-mp4-world img {
+  transform: translateZ(0);
+}
+
+.immersive-layer--ui,
+.immersive-layer--drawer {
+  pointer-events: auto;
+}
+
+.immersive-layer--ui {
+  z-index: 6;
+}
+
+.immersive-layer--drawer {
+  z-index: 8;
+}
+
+.immersive-layer--chrome {
+  position: relative;
+  z-index: 12;
+  pointer-events: auto;
+  flex-shrink: 0;
+}
+
+.immersive-layer--panel {
+  position: relative;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+.immersive-desktop-stage-wrap {
+  flex-shrink: 0;
+}
+
+.modal-immersive-player__stream-hint {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+  margin-bottom: 6px;
 }
 
 .modal-immersive-sheet-handle {
@@ -272,7 +371,7 @@ body {
   top: calc(env(safe-area-inset-top, 0px) + 12px);
   right: 14px;
   z-index: 24;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.62);
   border: 1px solid var(--modal-accent-outline, rgba(255, 255, 255, 0.12));
   border-radius: 50%;
   width: 34px;
@@ -283,8 +382,6 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   transition:
     border-color var(--motion-duration-fast) var(--motion-ease-in-out),
     box-shadow var(--motion-duration-fast) var(--motion-ease-in-out);
@@ -677,6 +774,28 @@ body {
 
 .modal-immersive-player__time--end {
   text-align: right;
+}
+
+.modal-immersive-player__volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  width: 100%;
+}
+
+.modal-immersive-player__volume-icon {
+  font-size: 11px;
+  opacity: 0.45;
+  flex-shrink: 0;
+}
+
+.modal-immersive-player__volume-slider {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  accent-color: var(--modal-accent, #00dcd2);
+  cursor: pointer;
 }
 
 .modal-immersive-actions {

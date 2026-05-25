@@ -1,15 +1,15 @@
 "use client";
 
 import { memo, useMemo } from "react";
-import CoverArt from "@/components/ui/CoverArt";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
-import { isMotionCoverMedia, isVideoCoverFile } from "@/hooks/useCoverPalette";
+import { isMotionCoverMedia } from "@/hooks/useCoverPalette";
 
+/**
+ * Palette-only ambience for motion/video — ArtworkLayer owns the sole media decode.
+ */
 function AmbientArtworkBackground({ src, type, palette }) {
   const animated = palette?.animated ?? isMotionCoverMedia(src, type);
   const imageUrl = !animated ? resolveAbsoluteArtworkUrl(src) : null;
-  const isVideoFile = type === "video" || type === "motion" || isVideoCoverFile(src);
-  const motionType = isVideoFile ? "video" : type;
 
   const washStyle = useMemo(
     () => ({
@@ -26,25 +26,17 @@ function AmbientArtworkBackground({ src, type, palette }) {
       className={`modal-immersive-ambient${animated ? " modal-immersive-ambient--animated" : " modal-immersive-ambient--static"}`}
       aria-hidden
     >
-      {animated ? (
-        <div className="modal-immersive-ambient__blur modal-immersive-ambient__blur--motion">
-          <CoverArt
-            src={src}
-            type={motionType}
-            alt=""
-            width="100%"
-            height="100%"
-            className="modal-immersive-ambient__media"
-          />
-        </div>
-      ) : imageUrl ? (
+      {imageUrl ? (
         <div
           className="modal-immersive-ambient__blur modal-immersive-ambient__blur--static"
           style={{ backgroundImage: `url(${imageUrl})` }}
         />
       ) : null}
 
-      {!animated ? <div className="modal-immersive-ambient__pulse" aria-hidden /> : null}
+      <div
+        className={`modal-immersive-ambient__pulse${animated ? " modal-immersive-ambient__pulse--motion" : ""}`}
+        aria-hidden
+      />
 
       <div className="modal-immersive-ambient__wash" style={washStyle} />
       <div className="modal-immersive-ambient__noise" />

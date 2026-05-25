@@ -3,8 +3,7 @@
 import { memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { paletteToCssVars } from "@/hooks/useCoverPalette";
-
-const DRAWER_SPRING = { type: "spring", stiffness: 340, damping: 36 };
+import { MODAL_DRAWER_SPRING } from "@/components/preview/immersive/constants";
 
 function FloatingViewMore({
   open,
@@ -19,7 +18,7 @@ function FloatingViewMore({
     <>
       <button
         type="button"
-        className="modal-immersive-view-more"
+        className="modal-immersive-view-more immersive-layer immersive-layer--ui"
         style={paletteToCssVars(palette)}
         onClick={(e) => {
           e.stopPropagation();
@@ -40,8 +39,8 @@ function FloatingViewMore({
             initial={{ y: "100%" }}
             animate={{ y: 0 }}
             exit={{ y: "100%" }}
-            transition={DRAWER_SPRING}
-            className="modal-immersive-drawer"
+            transition={MODAL_DRAWER_SPRING}
+            className="modal-immersive-drawer immersive-layer immersive-layer--drawer"
             style={paletteToCssVars(palette)}
             onClick={(e) => e.stopPropagation()}
           >
