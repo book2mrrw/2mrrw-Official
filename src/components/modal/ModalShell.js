@@ -4,6 +4,8 @@ import { memo, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { PLAYER_SPRING, PLAYER_SPRING_EXIT } from "@/lib/player/constants";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
+import { ModalErrorBoundary } from "@/system/errors";
+import { useModalTiming } from "@/system/performance";
 
 const OVERLAY_FADE = {
   initial: { opacity: 0 },
@@ -39,11 +41,16 @@ function ModalShell({
   className = "",
   desktopStyle,
   stackId = "modal-shell",
+  onClose,
 }) {
+  const { onModalOpenStart, onModalOpenEnd } = useModalTiming();
+
   useEffect(() => {
     registerModal(stackId);
+    onModalOpenStart();
+    onModalOpenEnd();
     return () => unregisterModal(stackId);
-  }, [stackId]);
+  }, [stackId, onModalOpenStart, onModalOpenEnd]);
 
   const shellVariant = isMobile ? SHEET_UP : MODAL_CENTER;
   const shellClassName = useMemo(
@@ -84,7 +91,9 @@ function ModalShell({
         dragElastic={isMobile ? { top: 0, bottom: 0.38 } : undefined}
         onDragEnd={isMobile ? onDragEnd : undefined}
       >
-        {children}
+        <ModalErrorBoundary stackId={stackId} onClose={onClose}>
+          {children}
+        </ModalErrorBoundary>
       </motion.div>
     </motion.div>
   );

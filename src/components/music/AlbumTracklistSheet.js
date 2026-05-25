@@ -6,6 +6,8 @@ import { albumTracksForPlayback } from "@/lib/music-playback";
 import { useAudioPlayer } from "@/context/AudioContext";
 import CSModeButton from "@/components/audio/CSModeButton";
 import CoverArt from "@/components/ui/CoverArt";
+import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
+import { ModalErrorBoundary } from "@/system/errors";
 
 const formatDuration = (seconds) => {
   if (!seconds || !isFinite(seconds)) return "";
@@ -42,11 +44,8 @@ export default function AlbumTracklistSheet({
 
   useEffect(() => {
     if (!open) return undefined;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    registerModal("album-tracklist-sheet");
+    return () => unregisterModal("album-tracklist-sheet");
   }, [open]);
 
   const playAndClose = useCallback(
@@ -98,6 +97,7 @@ export default function AlbumTracklistSheet({
   const albumCoverType = album.coverArtType || "image";
 
   return (
+    <ModalErrorBoundary stackId="album-tracklist-sheet" onClose={onClose}>
     <div
       role="dialog"
       aria-label={`${album.title} tracklist`}
@@ -362,5 +362,6 @@ export default function AlbumTracklistSheet({
         </div>
       </motion.div>
     </div>
+    </ModalErrorBoundary>
   );
 }

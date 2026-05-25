@@ -1,5 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
+import { imagePipeline } from "@/media/imagePipeline";
+import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
+import ArtworkSkeleton from "@/ui/skeletons/ArtworkSkeleton";
+
 export function resolveCoverMediaType(src, type = "image") {
   if (type === "video" || type === "motion") return "video";
   const s = String(src || "").toLowerCase();
@@ -19,7 +24,31 @@ export default function CoverArt({
   onClick,
   onTouchStart,
   onTouchEnd,
+  skeleton = false,
 }) {
+  useEffect(() => {
+    if (!src || skeleton) return;
+    perfMark(MARKS.ARTWORK_DECODE_START);
+    imagePipeline.preload(src, "normal", { coverArtType: type });
+  }, [src, type, skeleton]);
+
+  if (skeleton && src) {
+    return (
+      <ArtworkSkeleton
+        src={src}
+        type={type}
+        alt={alt}
+        width={width}
+        height={height}
+        borderRadius={borderRadius}
+        className={className}
+        style={style}
+        onClick={onClick}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+      />
+    );
+  }
   if (!src) {
     return (
       <div

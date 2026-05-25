@@ -2809,3 +2809,12 @@ body.is-player-modal-open::before {
     box-shadow: 0 0 32px rgba(0, 255, 255, 0.28), 0 0 56px rgba(162, 89, 255, 0.15);
   }
 }
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

@@ -1,6 +1,15 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  startTransition,
+} from "react";
 import { useAuth } from "@/context/AuthContext";
 import { sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
 import {
@@ -31,6 +40,8 @@ import {
 } from "@/media/mediaEngineBridge";
 import { preloadCoverImage } from "@/lib/media/preload";
 import { logPlayback } from "@/lib/observability/client-log";
+import { MARKS, perfMark, perfMeasure } from "@/lib/dev/performanceMarks";
+import AudioPhase10Bridge from "@/components/system/AudioPhase10Bridge";
 
 const AudioContext = createContext(null);
 
@@ -420,7 +431,11 @@ export function AudioProvider({ children }) {
 
     const onWaiting = () => patchState({ isBuffering: true });
     const onStalled = () => patchState({ isBuffering: true });
-    const onPlaying = () => patchState({ isBuffering: false });
+    const onPlaying = () => {
+      patchState({ isBuffering: false });
+      perfMark(MARKS.AUDIO_START_LATENCY_END);
+      perfMeasure("audio-start-latency", MARKS.AUDIO_START_LATENCY_START, MARKS.AUDIO_START_LATENCY_END);
+    };
     const onCanPlayThrough = () => patchState({ isBuffering: false });
 
     const onPlay = () => {
@@ -711,6 +726,7 @@ export function AudioProvider({ children }) {
     preloadCoverImage(nextTrack.cover || nextTrack.baseCover, {
       coverArtType: nextTrack.coverArtType,
     });
+    perfMark(MARKS.AUDIO_START_LATENCY_START);
     logPlayback("play_track", { trackId: nextTrack.id, source: nextTrack.source });
     const audio = audioRef.current;
     if (!audio || !nextTrack.src) {
@@ -1001,7 +1017,13 @@ export function AudioProvider({ children }) {
     const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
     queueRef.current = normalized;
     queueIndexRef.current = normalized.length ? index : -1;
-    patchState({ queue: normalized, queueIndex: queueIndexRef.current });
+    perfMark(MARKS.QUEUE_UPDATE_START);
+    // perf: startTransition — queue update is non-urgent
+    startTransition(() => {
+      patchState({ queue: normalized, queueIndex: queueIndexRef.current });
+      perfMark(MARKS.QUEUE_UPDATE_END);
+      perfMeasure("queue-update", MARKS.QUEUE_UPDATE_START, MARKS.QUEUE_UPDATE_END);
+    });
     return normalized;
   }, [patchState]);
 
@@ -1497,6 +1519,7 @@ export function AudioProvider({ children }) {
 
   return (
     <AudioContext.Provider value={value}>
+      <AudioPhase10Bridge />
       {children}
       <audio
         ref={audioRef}

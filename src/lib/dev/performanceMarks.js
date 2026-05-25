@@ -2,6 +2,28 @@
  * Dev-only Performance API helpers. No-op in production.
  */
 
+/** @type {Record<string, string>} */
+export const MARKS = {
+  MODAL_OPEN_START: "2mrrw:modal-open-start",
+  MODAL_OPEN_END: "2mrrw:modal-open-end",
+  IMMERSIVE_RENDER_START: "2mrrw:immersive-render-start",
+  IMMERSIVE_RENDER_END: "2mrrw:immersive-render-end",
+  ARTWORK_DECODE_START: "2mrrw:artwork-decode-start",
+  ARTWORK_DECODE_END: "2mrrw:artwork-decode-end",
+  AUDIO_START_LATENCY_START: "2mrrw:audio-start-latency-start",
+  AUDIO_START_LATENCY_END: "2mrrw:audio-start-latency-end",
+  TRANSITION_START: "2mrrw:transition-start",
+  TRANSITION_END: "2mrrw:transition-end",
+  ROUTE_NAV_START: "2mrrw:route-nav-start",
+  ROUTE_NAV_END: "2mrrw:route-nav-end",
+  QUEUE_UPDATE_START: "2mrrw:queue-update-start",
+  QUEUE_UPDATE_END: "2mrrw:queue-update-end",
+  HYDRATION_START: "2mrrw:hydration-start",
+  HYDRATION_END: "2mrrw:hydration-end",
+  GESTURE_START: "2mrrw:gesture-start",
+  GESTURE_RESPONSE: "2mrrw:gesture-response",
+};
+
 function canMark() {
   return (
     process.env.NODE_ENV === "development" &&

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, memo, useCallback } from "react";
+import { useMemo, useState, memo, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import GlyphLyricsPanel from "@/components/preview/GlyphLyricsPanel";
 import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview/releaseMetadata";
@@ -20,6 +20,9 @@ import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import GiftButton from "@/components/gifts/GiftButton";
 import { useRenderTracker } from "@/lib/dev/useRenderTracker";
+import { ImmersiveErrorBoundary } from "@/system/errors";
+import { ImmersiveModalSkeleton } from "@/ui/skeletons";
+import { useMediaTiming } from "@/system/performance";
 
 const DRAWER_COLLAPSE_THRESHOLD = 72;
 const MODAL_DISMISS_THRESHOLD = 56;
@@ -102,6 +105,8 @@ function ImmersivePreviewModal({
   onLibraryChange,
 }) {
   useRenderTracker("ImmersivePreviewModal");
+  const { onImmersiveRenderStart, onImmersiveRenderEnd } = useMediaTiming();
+  const [contentReady, setContentReady] = useState(false);
   const [viewMoreOpen, setViewMoreOpen] = useState(false);
   const [glyphsOpen, setGlyphsOpen] = useState(false);
 
@@ -117,6 +122,16 @@ function ImmersivePreviewModal({
   const hasLyrics = Boolean(lrcText?.trim());
 
   usePlayerBodyState({ modalOpen: true });
+
+  useEffect(() => {
+    onImmersiveRenderStart();
+    setContentReady(false);
+    const t = requestAnimationFrame(() => {
+      setContentReady(true);
+      onImmersiveRenderEnd();
+    });
+    return () => cancelAnimationFrame(t);
+  }, [single?.id, release?.slug, onImmersiveRenderStart, onImmersiveRenderEnd]);
 
   const closeModal = useCallback(() => {
     setViewMoreOpen(false);
@@ -282,6 +297,7 @@ function ImmersivePreviewModal({
   if (!single) return null;
 
   return (
+    <ImmersiveErrorBoundary onExitImmersive={onClose}>
     <>
       <PlayerAtmosphere open />
       <ModalShell
@@ -290,8 +306,10 @@ function ImmersivePreviewModal({
         paletteVars={paletteVars}
         onOverlayClick={handleOverlayClick}
         onDragEnd={handleModalDismissDragEnd}
+        onClose={onClose}
         desktopStyle={desktopShellStyle}
       >
+        {!contentReady ? <ImmersiveModalSkeleton isMobile={isMobile} /> : null}
         <div key="preview-mobile-layer" style={mobileLayerStyle} aria-hidden={!isMobile}>
           <button
             type="button"
@@ -473,6 +491,7 @@ function ImmersivePreviewModal({
         </div>
       </ModalShell>
     </>
+    </ImmersiveErrorBoundary>
   );
 }
 

@@ -44,7 +44,16 @@ export async function fetchLibraryStream(slug, { force = false, sessionId = null
     credentials: "include",
   });
 
-  if (res.status === 403) {
+  if (res.status === 403 || res.status === 401) {
+    import("@/system/telemetry")
+      .then(({ telemetry }) => {
+        telemetry.log({
+          type: "signed.url.expired",
+          assetId: slug,
+          context: "library_stream",
+        });
+      })
+      .catch(() => {});
     const err = new Error("access_denied");
     err.code = "ACCESS_DENIED";
     throw err;

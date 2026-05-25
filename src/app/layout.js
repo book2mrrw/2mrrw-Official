@@ -4,6 +4,8 @@ import { AuthGateProvider } from "@/context/AuthGateContext";
 import AppAuthRoot from "@/components/auth/AppAuthRoot";
 import { AudioProvider } from "@/context/AudioContext";
 import GlobalAudioPlayerBar from "@/components/audio/GlobalAudioPlayerBar";
+import SessionRecoveryRoot from "@/components/system/SessionRecoveryRoot";
+import { MediaErrorBoundary } from "@/system/errors";
 
 export const metadata = {
   title: "Artist Site",
@@ -31,10 +33,14 @@ export default function RootLayout({ children }) {
           <AppAuthRoot>
             <AuthGateProvider>
               <AudioProvider>
-                <StripeProvider>
-                  {children}
-                  <GlobalAudioPlayerBar />
-                </StripeProvider>
+                <SessionRecoveryRoot>
+                  <StripeProvider>
+                    {children}
+                    <MediaErrorBoundary>
+                      <GlobalAudioPlayerBar />
+                    </MediaErrorBoundary>
+                  </StripeProvider>
+                </SessionRecoveryRoot>
               </AudioProvider>
             </AuthGateProvider>
           </AppAuthRoot>
