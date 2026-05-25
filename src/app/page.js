@@ -607,6 +607,7 @@ export default function Page() {
   const [addedFlash, setAddedFlash]               = useState(null);
   const [soundOn, setSoundOn]                     = useState(false);
   const [selectedSingle, setSelectedSingle]       = useState(null);
+  const [previewModalOpen, setPreviewModalOpen]   = useState(false);
   const [selectedReleaseDetail, setSelectedReleaseDetail] = useState(null);
   const [selectedAlbum, setSelectedAlbum]         = useState(null);
   const [singleIndex, setSingleIndex]             = useState(0);
@@ -883,12 +884,16 @@ export default function Page() {
     );
   }, [nowPlaying, accountState, authUser?.id, playTrack]);
 
+  const previewPlaybackSlug = selectedSingle?.slug ?? null;
+
   useEffect(() => {
-    if (!selectedSingle) return;
+    if (!previewModalOpen || !previewPlaybackSlug || !selectedSingle) return;
     void playTrack(
       toPlaybackTrack(selectedSingle, { ...accountState, userId: authUser?.id }, "preview_modal")
     );
-  }, [selectedSingle, accountState, authUser?.id, playTrack]);
+    // Replay only when modal opens or preview track slug changes — not on release-detail hydration.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedSingle read at slug-change time only
+  }, [previewModalOpen, previewPlaybackSlug, accountState, authUser?.id, playTrack]);
 
   useEffect(() => {
     if (activeTab !== "live") {
@@ -968,6 +973,7 @@ export default function Page() {
   const openSingleModal = useCallback((single) => {
     if (nowPlaying) setNowPlaying(null);
     setSelectedSingle(single);
+    setPreviewModalOpen(true);
     setSelectedReleaseDetail(null);
     if (!single?.slug) return;
     void getControlSystemReleaseDetail({ slug: single.slug, fallbackRelease: single }).then((detail) => {
@@ -976,6 +982,7 @@ export default function Page() {
   }, [nowPlaying]);
 
   const closeSingleModal = useCallback(() => {
+    setPreviewModalOpen(false);
     pause();
     setSelectedSingle(null);
     setSelectedReleaseDetail(null);
@@ -1008,6 +1015,15 @@ export default function Page() {
     if (!isAdmin) return;
     setGiftSheetRelease(release);
   }, [isAdmin]);
+
+  const handlePreviewLibraryChange = useCallback(() => {
+    void refreshAccountState();
+    void refreshLibrary();
+  }, [refreshAccountState, refreshLibrary]);
+
+  const handlePreviewGift = useCallback(() => {
+    if (selectedSingle) openGiftSheet(selectedSingle);
+  }, [selectedSingle, openGiftSheet]);
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
@@ -1290,17 +1306,17 @@ export default function Page() {
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(circle at 18% 18%,rgba(0,255,255,0.026) 0%,transparent 55%),radial-gradient(circle at 82% 80%,rgba(162,89,255,0.018) 0%,transparent 52%)"}}/>
       {/* ── SINGLE PREVIEW MODAL (immersive) ── */}
       <AnimatePresence>
-        {selectedSingle && (
+        {previewModalOpen && selectedSingle && (
           <ImmersivePreviewModal
-            key={selectedSingle.slug}
+            key="immersive-preview-modal"
             single={selectedSingle}
             releaseDetail={selectedReleaseDetail}
             isMobile={isMobile}
             trackAccess={selectedSingleAccess}
             userId={currentUser?.id}
             isAdmin={isAdmin}
-            onGift={() => openGiftSheet(selectedSingle)}
-            onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
+            onGift={handlePreviewGift}
+            onLibraryChange={handlePreviewLibraryChange}
             onClose={closeSingleModal}
             onAddToCart={addToCart}
             onAddVinyl={addVinylToCart}

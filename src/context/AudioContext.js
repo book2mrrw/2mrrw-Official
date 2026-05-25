@@ -29,6 +29,7 @@ const AudioContext = createContext(null);
 
 const REPEAT_MODES = ["off", "all", "one"];
 const POSITION_STATE_THROTTLE_MS = 1000;
+const PROGRESS_UI_THROTTLE_MS = 250;
 const SLOWED_SUFFIX = " · Slowed";
 const CS_PLAYBACK_RATE = 0.75;
 const POSITION_SAVE_INTERVAL_MS = 15000;
@@ -183,6 +184,7 @@ export function AudioProvider({ children }) {
   const userPausedRef = useRef(false);
   const skipPauseInterruptionRef = useRef(false);
   const lastPositionStateAtRef = useRef(0);
+  const lastProgressUiAtRef = useRef(0);
   const listeningUserIdRef = useRef(null);
   const listeningProgressRef = useRef({ slug: null, recorded30s: false });
   const streamMetaRef = useRef(null);
@@ -413,7 +415,12 @@ export function AudioProvider({ children }) {
     };
 
     const onTime = () => {
-      patchState({ currentTime: audio.currentTime || 0 });
+      const t = audio.currentTime || 0;
+      const now = Date.now();
+      if (now - lastProgressUiAtRef.current >= PROGRESS_UI_THROTTLE_MS) {
+        lastProgressUiAtRef.current = now;
+        patchState({ currentTime: t });
+      }
       persistPlayback("progress");
       syncPositionState(false);
 
@@ -722,7 +729,11 @@ export function AudioProvider({ children }) {
 
     const currentSrc = audio.currentSrc || audio.src;
     const nextUrl = new URL(nextTrack.src, window.location.href).href;
-    const isSameTrack = stateRef.current.currentTrackId === nextTrack.id && currentSrc === nextUrl;
+    const prevTrack = stateRef.current.currentTrack;
+    const sameIdentity =
+      (prevTrack?.slug && nextTrack.slug && prevTrack.slug === nextTrack.slug) ||
+      stateRef.current.currentTrackId === nextTrack.id;
+    const isSameTrack = sameIdentity && currentSrc === nextUrl;
     const isReplay = isSameTrack && audio.ended;
     const previousTrack = stateRef.current.currentTrack;
 

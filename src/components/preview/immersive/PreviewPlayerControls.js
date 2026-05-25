@@ -9,6 +9,7 @@ import { formatPlayerTime } from "@/lib/player/formatTime";
 function PreviewPlayerControls({ palette, compact = true }) {
   const {
     isPlaying,
+    isBuffering,
     currentTime,
     duration,
     error,
@@ -61,6 +62,7 @@ function PreviewPlayerControls({ palette, compact = true }) {
         <SignaturePlayRing
           isPlaying={isPlaying}
           hasError={Boolean(error)}
+          isBuffering={isBuffering}
           progress={progress}
           size={playSize}
           onClick={togglePlay}

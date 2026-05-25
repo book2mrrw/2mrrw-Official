@@ -162,6 +162,25 @@ function ImmersivePreviewModal({
     closeModal();
   }, [onAddToCart, single, closeModal]);
 
+  const handleViewMoreToggle = useCallback(() => {
+    setGlyphsOpen(false);
+    setViewMoreOpen((o) => !o);
+  }, []);
+
+  const handleOpenGlyphs = useCallback(() => {
+    setViewMoreOpen(false);
+    setGlyphsOpen(true);
+  }, []);
+
+  const handleCloseGlyphs = useCallback(() => setGlyphsOpen(false), []);
+
+  const handleAddVinyl = useCallback(() => {
+    onAddVinyl(single);
+    closeModal();
+  }, [onAddVinyl, single, closeModal]);
+
+  const handleGift = useCallback(() => onGift?.(single), [onGift, single]);
+
   const desktopShellStyle = useMemo(
     () => ({
       width: "min(420px, 96vw)",
@@ -262,7 +281,7 @@ function ImmersivePreviewModal({
         onDragEnd={handleModalDismissDragEnd}
         desktopStyle={desktopShellStyle}
       >
-        <div style={mobileLayerStyle} aria-hidden={!isMobile}>
+        <div key="preview-mobile-layer" style={mobileLayerStyle} aria-hidden={!isMobile}>
           <button
             type="button"
             className="modal-immersive-sheet-handle"
@@ -303,10 +322,7 @@ function ImmersivePreviewModal({
 
             <FloatingViewMore
               open={viewMoreOpen}
-              onToggle={() => {
-                setGlyphsOpen(false);
-                setViewMoreOpen((o) => !o);
-              }}
+              onToggle={handleViewMoreToggle}
               onCollapse={collapseDrawer}
               isMobile
               creditRows={creditRows}
@@ -318,7 +334,7 @@ function ImmersivePreviewModal({
               open={glyphsOpen}
               lrcText={lrcText}
               isMobile
-              onClose={() => setGlyphsOpen(false)}
+              onClose={handleCloseGlyphs}
             />
           </section>
 
@@ -334,10 +350,7 @@ function ImmersivePreviewModal({
               isMobile
               onLibraryChange={onLibraryChange}
               hasLyrics={hasLyrics}
-              onOpenGlyphs={() => {
-                setViewMoreOpen(false);
-                setGlyphsOpen(true);
-              }}
+              onOpenGlyphs={handleOpenGlyphs}
               palette={palette}
             />
 
@@ -349,17 +362,14 @@ function ImmersivePreviewModal({
               priceLabel={priceLabel}
               palette={palette}
               onAddToCart={handleAddToCart}
-              onGift={() => onGift?.(single)}
+              onGift={handleGift}
             />
 
             {showPurchase ? (
               <button
                 type="button"
                 className="modal-immersive-vinyl-link"
-                onClick={() => {
-                  onAddVinyl(single);
-                  closeModal();
-                }}
+                onClick={handleAddVinyl}
               >
                 + Add Vinyl – $47.99 (Optional)
               </button>
@@ -367,9 +377,9 @@ function ImmersivePreviewModal({
           </section>
         </div>
 
-        <div style={desktopLayerStyle} aria-hidden={isMobile}>
+        <div key="preview-desktop-layer" style={desktopLayerStyle} aria-hidden={isMobile}>
           <motion.div
-            layout
+            key="preview-desktop-stage"
             initial={{ opacity: 0.85, scale: 0.96 }}
             animate={{ opacity: 1, scale: 1, boxShadow: `0 0 36px ${palette.primaryGlow}` }}
             transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.12 }}
@@ -387,10 +397,7 @@ function ImmersivePreviewModal({
             />
             <FloatingViewMore
               open={viewMoreOpen}
-              onToggle={() => {
-                setGlyphsOpen(false);
-                setViewMoreOpen((o) => !o);
-              }}
+              onToggle={handleViewMoreToggle}
               onCollapse={collapseDrawer}
               isMobile={false}
               creditRows={creditRows}
@@ -401,11 +408,12 @@ function ImmersivePreviewModal({
               open={glyphsOpen}
               lrcText={lrcText}
               isMobile={false}
-              onClose={() => setGlyphsOpen(false)}
+              onClose={handleCloseGlyphs}
             />
           </motion.div>
 
           <motion.div
+            key="preview-desktop-panel"
             initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: glyphsOpen ? 0 : 1, y: glyphsOpen ? 10 : 0 }}
             transition={{ delay: glyphsOpen ? 0 : 0.42, duration: 0.35 }}
@@ -433,14 +441,7 @@ function ImmersivePreviewModal({
 
             {hasLyrics ? (
               <div style={desktopGlyphsRowStyle}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setViewMoreOpen(false);
-                    setGlyphsOpen(true);
-                  }}
-                  style={GLYPHS_BTN_STYLE}
-                >
+                <button type="button" onClick={handleOpenGlyphs} style={GLYPHS_BTN_STYLE}>
                   GLYPHS
                 </button>
               </div>
@@ -448,21 +449,14 @@ function ImmersivePreviewModal({
 
             <PreviewModalPlayer compact={false} />
 
-            {isAdmin ? <GiftButton onClick={() => onGift?.(single)} style={{ width: "100%", marginBottom: 8 }} /> : null}
+            {isAdmin ? <GiftButton onClick={handleGift} style={{ width: "100%", marginBottom: 8 }} /> : null}
             {showPurchase ? (
               <button type="button" onClick={handleAddToCart} style={CART_BTN_STYLE}>
                 Add to Cart{priceLabel ? ` – ${priceLabel}` : ""}
               </button>
             ) : null}
             {showPurchase ? (
-              <button
-                type="button"
-                onClick={() => {
-                  onAddVinyl(single);
-                  closeModal();
-                }}
-                style={vinylBtnStyle}
-              >
+              <button type="button" onClick={handleAddVinyl} style={vinylBtnStyle}>
                 + Add Vinyl – $47.99 (Optional)
               </button>
             ) : null}

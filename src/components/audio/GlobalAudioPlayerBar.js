@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 import {
   CompactDockPlayer,
@@ -339,6 +339,116 @@ function GlobalAudioPlayerBar() {
     touchDeltaY.current = 0;
   }, [closeExpanded]);
 
+  const coverFrameStyle = useMemo(
+    () => ({
+      transform: flipPhase ? "scaleX(0)" : "scaleX(1)",
+      transition: "transform 200ms ease",
+      touchAction: "manipulation",
+      flexShrink: 0,
+    }),
+    [flipPhase]
+  );
+
+  const handleExpand = useCallback(() => setExpanded(true), []);
+
+  const csOpacity = csMode ? 1 : csHoldOpacity;
+  const baseCoverUrl = resolveAbsoluteArtworkUrl(baseCover);
+  const csCoverUrl = csCover ? resolveAbsoluteArtworkUrl(csCover) : null;
+  const bottom = isMobile ? "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)" : 0;
+
+  const errorMessage = accessDenied ? (
+    <span>
+      Access unavailable —{" "}
+      <a href={storeLinkHref || "/subscribe"} className="player-immersive-access-link">
+        get access
+      </a>
+    </span>
+  ) : (
+    error
+  );
+
+  const sharedDockProps = useMemo(
+    () => ({
+      currentTrack,
+      isMobile,
+      cssVars,
+      progress,
+      currentTime,
+      duration,
+      isPlaying,
+      isBuffering,
+      error,
+      accessDenied,
+      errorMessage,
+      csOpacity,
+      csMode,
+      baseCoverUrl,
+      baseCoverType,
+      csCoverUrl,
+      csCoverType,
+      coverFrameStyle,
+      onExpand: handleExpand,
+      onStop: stop,
+      onSeekBarClick: handleSeek,
+      handlePlayToggle,
+      playPrevious,
+      playNext,
+      repeatMode,
+      toggleRepeat,
+      shuffle,
+      toggleShuffle,
+      onCoverTouchStart: handleCoverTouchStart,
+      onCoverTouchMove: handleCoverTouchMove,
+      onCoverTouchEnd: handleCoverTouchEnd,
+    }),
+    [
+      accessDenied,
+      baseCoverType,
+      baseCoverUrl,
+      coverFrameStyle,
+      csCoverType,
+      csCoverUrl,
+      csMode,
+      csOpacity,
+      currentTime,
+      currentTrack,
+      duration,
+      error,
+      errorMessage,
+      handleCoverTouchEnd,
+      handleCoverTouchMove,
+      handleCoverTouchStart,
+      handleExpand,
+      handlePlayToggle,
+      handleSeek,
+      isBuffering,
+      isMobile,
+      isPlaying,
+      cssVars,
+      playNext,
+      playPrevious,
+      progress,
+      repeatMode,
+      shuffle,
+      stop,
+      toggleRepeat,
+      toggleShuffle,
+    ]
+  );
+
+  const dockShellStyle = useMemo(
+    () => ({
+      position: "fixed",
+      left: isMobile ? 12 : 0,
+      right: isMobile ? 12 : 0,
+      bottom,
+      zIndex: 7600,
+      borderRadius: isMobile ? 18 : 0,
+      overflow: "hidden",
+    }),
+    [bottom, isMobile]
+  );
+
   if (!hasStarted || !currentTrack) return null;
 
   const conflictDialog = streamConflict ? (
@@ -360,68 +470,13 @@ function GlobalAudioPlayerBar() {
     </div>
   ) : null;
 
-  const csOpacity = csMode ? 1 : csHoldOpacity;
-  const baseCoverUrl = resolveAbsoluteArtworkUrl(baseCover);
-  const csCoverUrl = csCover ? resolveAbsoluteArtworkUrl(csCover) : null;
   const islandCoverUrl = csMode && csCoverUrl ? csCoverUrl : baseCoverUrl;
   const islandCoverType = csMode && csCover ? csCoverType : baseCoverType;
-  const bottom = isMobile ? "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)" : 0;
   const hasQueue = (queue || []).length > 1;
   const queuePos = queueIndex >= 0 && queue?.length ? queueIndex + 1 : 1;
   const queueTotal = queue?.length || 1;
   const queueLabel = hasQueue ? `${queuePos} of ${queueTotal}` : null;
   const coverSize = isMobile ? "min(80vw, 320px)" : 320;
-
-  const coverFrameStyle = () => ({
-    transform: flipPhase ? "scaleX(0)" : "scaleX(1)",
-    transition: "transform 200ms ease",
-    touchAction: "manipulation",
-    flexShrink: 0,
-  });
-
-  const errorMessage = accessDenied ? (
-    <span>
-      Access unavailable —{" "}
-      <a href={storeLinkHref || "/subscribe"} className="player-immersive-access-link">
-        get access
-      </a>
-    </span>
-  ) : (
-    error
-  );
-
-  const sharedDockProps = {
-    currentTrack,
-    isMobile,
-    cssVars,
-    progress,
-    currentTime,
-    duration,
-    isPlaying,
-    error,
-    accessDenied,
-    errorMessage,
-    csOpacity,
-    csMode,
-    baseCoverUrl,
-    baseCoverType,
-    csCoverUrl,
-    csCoverType,
-    coverFrameStyle,
-    onExpand: () => setExpanded(true),
-    onStop: stop,
-    onSeekBarClick: handleSeek,
-    handlePlayToggle,
-    playPrevious,
-    playNext,
-    repeatMode,
-    toggleRepeat,
-    shuffle,
-    toggleShuffle,
-    onCoverTouchStart: handleCoverTouchStart,
-    onCoverTouchMove: handleCoverTouchMove,
-    onCoverTouchEnd: handleCoverTouchEnd,
-  };
 
   return (
     <>
@@ -432,7 +487,7 @@ function GlobalAudioPlayerBar() {
       {isMobile && !expanded && (
         <button
           type="button"
-          onClick={() => setExpanded(true)}
+          onClick={handleExpand}
           aria-label="Expand audio player"
           className="player-island-pill player-immersive-island"
           style={cssVars}
@@ -479,17 +534,7 @@ function GlobalAudioPlayerBar() {
       )}
 
       {!expanded && (
-        <div
-          style={{
-            position: "fixed",
-            left: isMobile ? 12 : 0,
-            right: isMobile ? 12 : 0,
-            bottom,
-            zIndex: 7600,
-            borderRadius: isMobile ? 18 : 0,
-            overflow: "hidden",
-          }}
-        >
+        <div style={dockShellStyle}>
           <CompactDockPlayer {...sharedDockProps} />
         </div>
       )}
