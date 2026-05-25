@@ -832,12 +832,29 @@ export default function Page() {
   }, [engineIsPlaying]);
 
   useEffect(() => {
-    if (!previewModalOpen || !selectedSingle?.slug) return;
+    if (authLoading || !previewModalOpen || !selectedSingle?.slug) return;
     const access = resolveContentAccess(selectedSingle, accountState);
     if (!access?.canStream) return;
-    if (currentTrack?.slug !== selectedSingle.slug) return;
-    void upgradeToFullStream();
-  }, [previewModalOpen, selectedSingle, accountState, currentTrack?.slug, upgradeToFullStream]);
+    const playbackTrack = toPlaybackTrack(
+      selectedSingle,
+      { ...accountState, userId: currentUser?.id },
+      "preview_modal"
+    );
+    if (currentTrack?.slug === selectedSingle.slug) {
+      void upgradeToFullStream();
+      return;
+    }
+    void playTrack(playbackTrack);
+  }, [
+    authLoading,
+    previewModalOpen,
+    selectedSingle,
+    accountState,
+    currentUser?.id,
+    currentTrack?.slug,
+    playTrack,
+    upgradeToFullStream,
+  ]);
 
   useEffect(() => {
     if (activeTab !== "live") {
@@ -929,13 +946,14 @@ export default function Page() {
     setPreviewModalOpen(true);
     setSelectedReleaseDetail(null);
     if (!single?.slug) return;
+    if (authLoading) return;
     void playTrack(
       toPlaybackTrack(single, { ...accountState, userId: currentUser?.id }, "preview_modal")
     );
     void getControlSystemReleaseDetail({ slug: single.slug, fallbackRelease: single }).then((detail) => {
       if (detail) setSelectedReleaseDetail(detail);
     });
-  }, [nowPlaying, accountState, currentUser?.id, playTrack]);
+  }, [nowPlaying, accountState, authLoading, currentUser?.id, playTrack]);
 
   const handleSingleClick = useCallback(
     (single) => {

@@ -1,14 +1,21 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { toPlaybackTrack } from "@/lib/music-playback";
+import { resolveTrackAccess } from "@/lib/music-access";
 import { preloadTrack } from "@/media/preloader/MediaPreloader";
 import { catalogPreviewAudioUrl } from "@/lib/media-urls";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 
 export default function ReleaseCardPlayButton({ item, accountState, userId, source = "home_card", onPlayClick }) {
-  const { playQueue, toggle, currentTrack, isPlaying, hasStarted } = useAudioPlayer();
+  const { playQueue, toggle, currentTrack, isPlaying, hasStarted, upgradeToFullStream } = useAudioPlayer();
+  const upgradeTimerRef = useRef(null);
+
+  const access = useMemo(
+    () => resolveTrackAccess(item, { ...accountState, userId }),
+    [accountState, item, userId]
+  );
 
   useEffect(() => {
     const previewPath = item?.preview || item?.preview_path || item?.previewPath;
@@ -21,6 +28,10 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
     const coverDisplay = catalogCoverDisplay(item);
     preloadTrack(item?.slug || item?.id, previewUrl, coverDisplay.src, coverDisplay.type);
   }, [item]);
+
+  useEffect(() => () => {
+    if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
+  }, []);
 
   const handlePlay = useCallback(
     (e) => {
@@ -38,9 +49,27 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         void toggle();
         return;
       }
+      if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
       void playQueue([track], 0);
+      if (track.metadata?.access?.canStream) {
+        upgradeTimerRef.current = setTimeout(() => {
+          void upgradeToFullStream();
+        }, 2000);
+      }
     },
-    [accountState, currentTrack?.id, currentTrack?.slug, hasStarted, item, onPlayClick, playQueue, source, toggle, userId]
+    [
+      accountState,
+      currentTrack?.id,
+      currentTrack?.slug,
+      hasStarted,
+      item,
+      onPlayClick,
+      playQueue,
+      source,
+      toggle,
+      upgradeToFullStream,
+      userId,
+    ]
   );
 
   const sameTrack =
@@ -48,11 +77,16 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
     currentTrack &&
     (currentTrack.slug === item?.slug || currentTrack.id === item?.slug);
   const showPause = sameTrack && isPlaying;
+  const playAriaLabel = showPause
+    ? "Pause"
+    : access?.canStream
+      ? "Play full track"
+      : "Play preview";
 
   return (
     <button
       type="button"
-      aria-label={showPause ? "Pause" : "Play preview"}
+      aria-label={playAriaLabel}
       onClick={handlePlay}
       style={{
         width: 44,

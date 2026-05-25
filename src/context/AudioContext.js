@@ -765,7 +765,15 @@ export function AudioProvider({ children }) {
   }, []);
 
   const playTrack = useCallback(async (track, options = {}) => {
+    if (!track || (typeof track !== "object")) {
+      console.error("[AudioContext] playTrack: invalid track", track);
+      return false;
+    }
     const normalized = normalizeTrack(track);
+    if (!normalized.slug && !normalized.id && !normalized.src) {
+      console.error("[AudioContext] playTrack: track missing identity and src", track);
+      return false;
+    }
     const presentation = resolvePlaybackPresentation(normalized, csModeRef.current, csUsingAlternateSrcRef.current);
     let nextTrack = {
       ...normalized,
@@ -780,7 +788,23 @@ export function AudioProvider({ children }) {
     perfMark(MARKS.AUDIO_START_LATENCY_START);
     logPlayback("play_track", { trackId: nextTrack.id, source: nextTrack.source });
     const audio = audioRef.current;
-    if (!audio || !nextTrack.src) {
+    if (!audio) {
+      console.error("[AudioContext] playTrack: audio element not mounted");
+      patchState({
+        currentTrackId: nextTrack.id || null,
+        currentTrack: nextTrack,
+        source: nextTrack.source,
+        isPlaying: false,
+        error: "Audio player unavailable.",
+        hasStarted: true,
+      });
+      return false;
+    }
+    if (!nextTrack.src) {
+      console.error("[AudioContext] playTrack: no playback src", {
+        slug: nextTrack.slug,
+        id: nextTrack.id,
+      });
       patchState({
         currentTrackId: nextTrack.id || null,
         currentTrack: nextTrack,
@@ -803,7 +827,8 @@ export function AudioProvider({ children }) {
     let backgroundStreamResolve = false;
 
     if (usesLibraryStream && streamSlug) {
-      if (previewSrc) {
+      const entitledFullStream = Boolean(nextTrack.metadata?.access?.canStream);
+      if (previewSrc && !entitledFullStream) {
         syncSrc = previewSrc;
         backgroundStreamResolve = true;
       } else if (redirectFastPath) {
@@ -1001,7 +1026,15 @@ export function AudioProvider({ children }) {
     const audio = audioRef.current;
     const track = stateRef.current.currentTrack;
     if (!audio || !track?.slug) return false;
-    if (!track.metadata?.access?.previewOnly && streamMetaRef.current?.url) return true;
+    const previewSrc = getTrackPreviewSrc(track);
+    const currentPlaybackSrc = audio.currentSrc || audio.src || "";
+    const stillOnPreview =
+      previewSrc &&
+      (currentPlaybackSrc === previewSrc ||
+        (!isLibraryStreamSrc(currentPlaybackSrc) && !streamMetaRef.current?.url));
+    if (!track.metadata?.access?.previewOnly && streamMetaRef.current?.url && !stillOnPreview) {
+      return true;
+    }
 
     const libraryTrack = {
       ...track,

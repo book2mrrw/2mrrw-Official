@@ -148,7 +148,10 @@ export function resolveTrackAccess(track, accountState = {}) {
   const subscriptionGlobal =
     subscriptionActive && Boolean(permissions.subscriber);
   const subscription =
-    subscriptionActive && (subscriptionViaLibrary || subscriptionGlobal);
+    subscriptionActive &&
+    (subscriptionViaLibrary ||
+      subscriptionGlobal ||
+      Boolean(accountState.subscriberActive));
 
   const collector =
     collectorCardOwner ||

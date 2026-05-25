@@ -56,17 +56,25 @@ export async function fetchLibraryStream(slug, { force = false, sessionId = null
   });
 
   if (res.status === 403 || res.status === 401) {
+    console.error(
+      `[stream-client] library stream ${res.status} for slug=${slug}`
+    );
     import("@/system/telemetry")
       .then(({ telemetry }) => {
         telemetry.log({
           type: "signed.url.expired",
           assetId: slug,
           context: "library_stream",
+          status: res.status,
         });
       })
       .catch(() => {});
-    const err = new Error("access_denied");
+    const err = new Error(
+      res.status === 401 ? "authentication_required" : "access_denied"
+    );
     err.code = "ACCESS_DENIED";
+    err.status = res.status;
+    err.slug = slug;
     throw err;
   }
   if (res.status === 409) {

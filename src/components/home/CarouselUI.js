@@ -11,6 +11,7 @@ import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 export default function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singleIndex, singles, prevSingle, nextSingle, goToSingle, onSingleClick, addToCart, addVinylToCart, buttonHoverIn, buttonHoverOut, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   const [previewHover, setPreviewHover] = useState(false);
   const access = currentSingleAccess || (currentSingle ? resolveContentAccess(currentSingle, accountState) : null);
+  const overlayPlayLabel = access?.canStream ? "Listen" : "Preview";
   const coverDisplay = catalogCoverDisplay(currentSingle);
   const currentLibraryItem = accountState?.library?.find(
     (lib) => lib.slug === currentSingle?.slug
@@ -43,7 +44,7 @@ export default function CarouselUI({ large, isMobile, currentSingle, currentSing
             />
             <div onClick={()=>onSingleClick?.(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,borderRadius:14,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
               <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(8px)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg viewBox="0 0 24 24" fill="white" width="24" height="24" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg></div>
-              <div style={{fontSize:11,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>Preview</div>
+              <div style={{fontSize:11,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>{overlayPlayLabel}</div>
             </div>
           </div>
           <button onClick={nextSingle} style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.06)",border:"1px solid #2a2a2a",color:"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>›</button>
@@ -70,7 +71,7 @@ export default function CarouselUI({ large, isMobile, currentSingle, currentSing
           />
           <div onClick={()=>onSingleClick?.(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,borderRadius:large?18:16,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
             <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(0,0,0,0.55)",backdropFilter:"blur(8px)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 30px rgba(0,0,0,0.5)"}}><svg viewBox="0 0 24 24" fill="white" width="28" height="28" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg></div>
-            <div style={{fontSize:12,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>Preview</div>
+            <div style={{fontSize:12,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>{overlayPlayLabel}</div>
           </div>
         </div>
       )}

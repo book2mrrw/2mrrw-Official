@@ -1,9 +1,11 @@
 import { getPublicR2Url } from "@/lib/storage/r2";
+import { getPublicCdnBase, R2_PUBLIC_CDN_FALLBACK } from "@/lib/storage/r2-public-cdn";
 
-const R2_CDN_FALLBACK = "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
+/** @deprecated Use R2_PUBLIC_CDN_FALLBACK from r2-public-cdn.js */
+export const R2_CDN_FALLBACK = R2_PUBLIC_CDN_FALLBACK;
 
 function catalogCdnBase() {
-  return (process.env.NEXT_PUBLIC_R2_PUBLIC_URL || R2_CDN_FALLBACK).replace(/\/$/, "");
+  return getPublicCdnBase();
 }
 
 function toCatalogCdnUrl(relativePath) {
@@ -39,8 +41,7 @@ export function catalogPreviewAudioUrl(previewPath) {
   const normalized = String(previewPath).replace(/^\//, "");
   if (normalized.startsWith("audio/previews/")) {
     const r2Path = `previews/${normalized.replace(/^audio\/previews\//, "")}`;
-    const r2 = getPublicR2Url(r2Path);
-    if (r2) return r2;
+    return toCatalogCdnUrl(r2Path);
   }
   return catalogPublicMediaUrl(normalized);
 }

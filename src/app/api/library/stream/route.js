@@ -17,6 +17,20 @@ import { getOrCreateStreamSignedUrl } from "@/lib/playback/stream-url-cache";
 
 export const dynamic = "force-dynamic";
 
+const R2_STREAM_DEBUG = process.env.R2_STREAM_DEBUG === "1";
+
+function logStreamR2Env(context) {
+  if (!R2_STREAM_DEBUG) return;
+  console.info("[library/stream] r2 env (presence only)", {
+    context,
+    bucket: Boolean(process.env.CLOUDFLARE_R2_BUCKET_NAME),
+    endpoint: Boolean(process.env.CLOUDFLARE_R2_ENDPOINT),
+    accessKeyId: Boolean(process.env.CLOUDFLARE_R2_ACCESS_KEY_ID),
+    secretAccessKey: Boolean(process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY),
+    publicCdn: Boolean(process.env.NEXT_PUBLIC_R2_PUBLIC_URL),
+  });
+}
+
 async function validateStreamEntitlement(user, slug) {
   const canStream = await userCanStreamProduct(user.id, slug, user);
   if (!canStream) {
@@ -53,9 +67,11 @@ async function buildStreamResponse(req, user, slug, { force = false } = {}) {
 
   const resolved = await resolvePlaybackKey(admin, slug);
   if (!resolved?.key) {
+    logStreamR2Env("no_playback_key");
     return NextResponse.json({ error: "No downloadable asset for this item" }, { status: 404 });
   }
 
+  logStreamR2Env("signing");
   const sessionId = await createStreamSession(admin, user.id, productId);
   const streamEventId = await insertStreamEvent(admin, user.id, productId);
 
@@ -91,8 +107,10 @@ export async function GET(req) {
   const force = req.nextUrl.searchParams.get("force") === "true";
 
   try {
+    logStreamR2Env("get");
     return await buildStreamResponse(req, user, slug, { force });
   } catch (err) {
+    logStreamR2Env("get_error");
     console.error("[library/stream] GET failed", { slug, userId: user.id, err: err?.message });
     return NextResponse.json({ error: "Stream unavailable" }, { status: 500 });
   }

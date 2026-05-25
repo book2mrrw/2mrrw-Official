@@ -1,5 +1,6 @@
 import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getPublicCdnBase, warnPublicCdnEnvMismatch } from "@/lib/storage/r2-public-cdn";
 
 export const r2Client = new S3Client({
   region: "auto",
@@ -37,19 +38,20 @@ export function buildR2Key(prefix, path) {
 let warnedMissingR2PublicUrl = false;
 
 export function getPublicR2Url(path) {
-  const base = process.env.NEXT_PUBLIC_R2_PUBLIC_URL;
-  if (!base) {
+  const base = getPublicCdnBase();
+  if (!process.env.NEXT_PUBLIC_R2_PUBLIC_URL) {
     if (!warnedMissingR2PublicUrl) {
       warnedMissingR2PublicUrl = true;
       console.warn(
-        "[2MRRW Storefront] NEXT_PUBLIC_R2_PUBLIC_URL is not set — catalog media helpers will use site-relative paths."
+        "[2MRRW Storefront] NEXT_PUBLIC_R2_PUBLIC_URL is not set — using documented public CDN fallback for catalog media."
       );
     }
-    return null;
+  } else {
+    warnPublicCdnEnvMismatch();
   }
   const normalized = String(path || "").replace(/^\//, "");
-  if (!normalized) return base.replace(/\/$/, "");
-  return `${base.replace(/\/$/, "")}/${normalized}`;
+  if (!normalized) return base;
+  return `${base}/${normalized}`;
 }
 
 export async function createR2SignedGetUrl(key, expiresIn = 3600) {
