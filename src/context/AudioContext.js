@@ -1493,6 +1493,8 @@ export function AudioProvider({ children }) {
     endCsHoldPreview,
   ]);
 
+  useEffect(() => () => stopProgressRaf(), [stopProgressRaf]);
+
   return (
     <AudioContext.Provider value={value}>
       {children}

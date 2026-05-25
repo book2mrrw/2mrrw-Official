@@ -1,0 +1,26 @@
+/**
+ * Phase 9 — shared motion tokens (CSS variables only).
+ * Consumed by globals.css immersive modal + player surfaces.
+ */
+:root {
+  --motion-duration-fast: 0.18s;
+  --motion-duration-base: 0.34s;
+  --motion-duration-slow: 0.48s;
+
+  --motion-ease-out: cubic-bezier(0.33, 0, 0.2, 1);
+  --motion-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --motion-modal-backdrop: var(--motion-duration-base) var(--motion-ease-out);
+  --motion-modal-sheet: var(--motion-duration-slow) var(--motion-ease-spring);
+  --motion-press-scale: 0.97;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0.01ms;
+    --motion-duration-base: 0.01ms;
+    --motion-duration-slow: 0.01ms;
+    --motion-press-scale: 1;
+  }
+}

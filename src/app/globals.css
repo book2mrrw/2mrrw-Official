@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../styles/motion/tokens.css";
 
 :root {
   --background: #ffffff;
@@ -193,7 +194,7 @@ body {
   -webkit-backdrop-filter: blur(8px);
   will-change: opacity;
   /* Opacity driven by framer-motion; avoid animating backdrop-filter in parallel (repaint recursion). */
-  transition: background-color 0.44s cubic-bezier(0.33, 0, 0.2, 1);
+  transition: background-color var(--motion-modal-backdrop);
 }
 
 .modal-immersive-shell {
@@ -216,10 +217,10 @@ body {
   will-change: transform;
   touch-action: pan-y;
   transition:
-    --modal-accent 0.48s cubic-bezier(0.22, 1, 0.36, 1),
-    --modal-accent-glow 0.48s cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 0.52s cubic-bezier(0.22, 1, 0.36, 1),
-    border-color 0.48s cubic-bezier(0.22, 1, 0.36, 1);
+    --modal-accent var(--motion-modal-sheet),
+    --modal-accent-glow var(--motion-modal-sheet),
+    box-shadow var(--motion-modal-sheet),
+    border-color var(--motion-modal-sheet);
 }
 
 .modal-immersive-shell--desktop {
@@ -255,7 +256,9 @@ body {
   border-radius: 99px;
   background: rgba(148, 148, 156, 0.55);
   box-shadow: 0 0 12px var(--modal-accent-glow, rgba(0, 220, 210, 0.22));
-  transition: box-shadow 0.25s ease, background 0.25s ease;
+  transition:
+    box-shadow var(--motion-duration-fast) var(--motion-ease-in-out),
+    background var(--motion-duration-fast) var(--motion-ease-in-out);
 }
 
 .modal-immersive-sheet-handle:focus-visible::before,
@@ -282,7 +285,9 @@ body {
   justify-content: center;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-ease-in-out),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-in-out);
 }
 
 .modal-immersive-close:hover,
@@ -412,7 +417,7 @@ body {
   box-shadow:
     0 18px 48px rgba(0, 0, 0, 0.55),
     0 0 32px var(--modal-accent-glow, rgba(0, 220, 210, 0.22));
-  transition: box-shadow 0.35s ease;
+  transition: box-shadow var(--motion-duration-base) var(--motion-ease-in-out);
 }
 
 .modal-immersive-art--pulse {
@@ -471,7 +476,11 @@ body {
   box-shadow:
     0 4px 20px rgba(0, 0, 0, 0.35),
     0 0 16px var(--modal-accent-glow, rgba(0, 220, 210, 0.15));
-  transition: border-color 0.2s, box-shadow 0.2s, transform 0.18s;
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-ease-in-out),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-in-out),
+    transform var(--motion-duration-fast) var(--motion-ease-out),
+    opacity var(--motion-duration-fast) var(--motion-ease-in-out);
 }
 
 .modal-immersive-view-more:hover,
@@ -481,10 +490,11 @@ body {
     0 4px 20px rgba(0, 0, 0, 0.35),
     0 0 22px var(--modal-accent-glow, rgba(0, 220, 210, 0.28));
   outline: none;
+  opacity: 1;
 }
 
 .modal-immersive-view-more:active {
-  transform: scale(0.98);
+  transform: scale(var(--motion-press-scale));
 }
 
 .modal-immersive-drawer {
@@ -573,7 +583,8 @@ body {
 .modal-immersive-panel--scroll {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
+  touch-action: manipulation;
+  overscroll-behavior: contain;
 }
 
 .modal-immersive-meta__title {
@@ -689,18 +700,22 @@ body {
   background: rgba(18, 18, 22, 0.72);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+  transition:
+    transform var(--motion-duration-fast) var(--motion-ease-out),
+    border-color var(--motion-duration-fast) var(--motion-ease-in-out),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-in-out);
 }
 
 .modal-immersive-action-card:hover,
 .modal-immersive-action-card:focus-visible {
+  opacity: 1;
   border-color: var(--modal-accent, #00dcd2);
   box-shadow: 0 0 20px var(--modal-accent-glow, rgba(0, 220, 210, 0.18));
   outline: none;
 }
 
 .modal-immersive-action-card:active {
-  transform: scale(0.98);
+  transform: scale(var(--motion-press-scale));
 }
 
 .modal-immersive-action-card--cart {
@@ -742,7 +757,9 @@ body {
   cursor: pointer;
   text-align: center;
   opacity: 0.75;
-  transition: opacity 0.2s ease, text-shadow 0.2s ease;
+  transition:
+    opacity var(--motion-duration-fast) var(--motion-ease-in-out),
+    text-shadow var(--motion-duration-fast) var(--motion-ease-in-out);
 }
 
 .modal-immersive-vinyl-link:hover,
@@ -1251,6 +1268,13 @@ body.is-player-modal-open::before {
   cursor: pointer;
   text-align: left;
   color: inherit;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.player-dock.player-immersive-glass .player-immersive-meta-btn:active,
+.player-dock.player-immersive-glass .player-glass-btn:active,
+.player-dock.player-immersive-glass .player-hold-seek-btn:active {
+  transform: scale(var(--motion-press-scale));
 }
 
 .player-immersive-title {
@@ -1293,7 +1317,9 @@ body.is-player-modal-open::before {
   box-shadow:
     0 8px 28px rgba(0, 0, 0, 0.45),
     0 0 0 1px rgba(255, 255, 255, 0.04);
-  transition: box-shadow 0.35s ease, filter 0.35s ease;
+  transition:
+    box-shadow var(--motion-duration-base) var(--motion-ease-in-out),
+    filter var(--motion-duration-base) var(--motion-ease-in-out);
 }
 
 .player-art-glow--playing,
@@ -1327,7 +1353,7 @@ body.is-player-modal-open::before {
   height: 100%;
   background: var(--player-accent, rgba(210, 208, 202, 0.75));
   box-shadow: 0 0 12px var(--player-accent-muted, rgba(255, 255, 255, 0.12));
-  transition: transform 0.12s linear;
+  transition: transform var(--motion-duration-fast) linear;
   border-radius: inherit;
 }
 
@@ -1384,6 +1410,7 @@ body.is-player-modal-open::before {
   color: rgba(255, 255, 255, 0.92);
   background: transparent;
   overflow: visible;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
 }
 
 .player-signature-ring__svg {
@@ -1419,6 +1446,7 @@ body.is-player-modal-open::before {
     inset 0 -6px 14px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
 }
 
 .player-signature-ring__viz {
@@ -1479,11 +1507,19 @@ body.is-player-modal-open::before {
   justify-content: center;
 }
 
+.player-signature-ring:active {
+  transform: scale(var(--motion-press-scale));
+}
+
 .player-signature-ring:active .player-signature-ring__glass {
   transform: scale(0.96);
   box-shadow:
     inset 0 2px 10px rgba(255, 255, 255, 0.12),
     0 0 24px var(--player-accent-glow, rgba(255, 255, 255, 0.15));
+}
+
+.player-immersive-dock-ring:active {
+  transform: scale(var(--motion-press-scale));
 }
 
 .player-signature-ring--error .player-signature-ring__progress {
@@ -1737,6 +1773,7 @@ body.is-player-modal-open::before {
   box-shadow:
     0 -12px 48px rgba(0, 0, 0, 0.55),
     inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: box-shadow var(--motion-modal-sheet);
 }
 
 .modal-immersive-overlay--desktop {
@@ -2440,10 +2477,19 @@ body.is-player-modal-open::before {
   cursor: pointer;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  transition: border-color 0.22s, box-shadow 0.22s, background 0.22s, color 0.22s;
+  transition:
+    border-color var(--motion-duration-fast) var(--motion-ease-in-out),
+    box-shadow var(--motion-duration-fast) var(--motion-ease-in-out),
+    background var(--motion-duration-fast) var(--motion-ease-in-out),
+    color var(--motion-duration-fast) var(--motion-ease-in-out),
+    transform var(--motion-duration-fast) var(--motion-ease-out);
   overflow: hidden;
   flex-shrink: 0;
   isolation: isolate;
+}
+
+.collection-portal-link:active {
+  transform: scale(var(--motion-press-scale));
 }
 
 .collection-portal-link::after {
@@ -2585,6 +2631,11 @@ body.is-player-modal-open::before {
   cursor: pointer;
   padding: 0;
   z-index: 2;
+  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.gift-reveal-artifact:active {
+  transform: scale(var(--motion-press-scale));
 }
 
 .gift-reveal-artifact-core {

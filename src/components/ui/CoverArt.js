@@ -68,6 +68,7 @@ export default function CoverArt({
     <img
       src={src}
       alt={alt}
+      decoding="async"
       draggable={false}
       className={className}
       {...touchProps}
