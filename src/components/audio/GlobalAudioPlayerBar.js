@@ -20,6 +20,7 @@ import {
   SWIPE_DISMISS_PX,
   EXPAND_SWIPE_CLOSE_MS,
 } from "@/lib/player/constants";
+import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 
 function WaveformBars({ playing }) {
   return (
@@ -130,11 +131,8 @@ function GlobalAudioPlayerBar() {
 
   useEffect(() => {
     if (!expanded) return undefined;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
+    registerModal("global-audio-player-expanded");
+    return () => unregisterModal("global-audio-player-expanded");
   }, [expanded]);
 
   useEffect(

@@ -159,6 +159,7 @@ function ImmersivePreviewModal({
 
   const coverSrc = single?.video || single?.cover || null;
   const coverType = single?.coverArtType || (single?.video ? "video" : "image");
+  const coverArtKey = single?.slug || single?.id || "preview";
   const palette = useCoverPalette(coverSrc, coverType);
   const paletteVars = paletteToCssVars(palette);
 
@@ -284,6 +285,7 @@ function ImmersivePreviewModal({
     <>
       <PlayerAtmosphere open />
       <ModalShell
+        stackId="immersive-preview"
         isMobile={isMobile}
         paletteVars={paletteVars}
         onOverlayClick={handleOverlayClick}
@@ -312,6 +314,7 @@ function ImmersivePreviewModal({
 
             <div className={`modal-immersive-art${palette.animated ? "" : " modal-immersive-art--pulse"}`}>
               <CoverArt
+                key={coverArtKey}
                 src={coverSrc}
                 type={coverType}
                 alt={single.title}
@@ -389,6 +392,7 @@ function ImmersivePreviewModal({
           >
             <AmbientArtworkBackground src={coverSrc} type={coverType} palette={palette} />
             <CoverArt
+              key={coverArtKey}
               src={coverSrc}
               type={coverType}
               alt={single.title}

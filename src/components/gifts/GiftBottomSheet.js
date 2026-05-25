@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatPhoneInput, validateEmail, validatePhone } from "@/lib/auth/validation";
+import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 
 const SPRING = { type: "spring", stiffness: 320, damping: 34 };
 
@@ -40,6 +41,12 @@ export default function GiftBottomSheet({
   useEffect(() => {
     if (!open) reset();
   }, [open, reset]);
+
+  useEffect(() => {
+    if (!open || !release) return undefined;
+    registerModal("gift-bottom-sheet");
+    return () => unregisterModal("gift-bottom-sheet");
+  }, [open, release]);
 
   useEffect(() => {
     if (!successEmail) return undefined;

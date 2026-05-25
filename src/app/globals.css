@@ -192,10 +192,8 @@ body {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   will-change: opacity;
-  transition:
-    background-color 0.44s cubic-bezier(0.33, 0, 0.2, 1),
-    backdrop-filter 0.52s cubic-bezier(0.33, 0, 0.2, 1),
-    -webkit-backdrop-filter 0.52s cubic-bezier(0.33, 0, 0.2, 1);
+  /* Opacity driven by framer-motion; avoid animating backdrop-filter in parallel (repaint recursion). */
+  transition: background-color 0.44s cubic-bezier(0.33, 0, 0.2, 1);
 }
 
 .modal-immersive-shell {

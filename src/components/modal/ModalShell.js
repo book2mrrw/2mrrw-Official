@@ -1,8 +1,9 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { PLAYER_SPRING, PLAYER_SPRING_EXIT } from "@/lib/player/constants";
+import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 
 const OVERLAY_FADE = {
   initial: { opacity: 0 },
@@ -37,7 +38,13 @@ function ModalShell({
   children,
   className = "",
   desktopStyle,
+  stackId = "modal-shell",
 }) {
+  useEffect(() => {
+    registerModal(stackId);
+    return () => unregisterModal(stackId);
+  }, [stackId]);
+
   const shellVariant = isMobile ? SHEET_UP : MODAL_CENTER;
   const shellClassName = useMemo(
     () =>

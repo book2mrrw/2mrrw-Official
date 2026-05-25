@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { PLAYER_BODY_CLASS } from "@/lib/player/constants";
 
 /**
  * Toggle document.body classes for site-wide player atmosphere.
+ * Body scroll lock is owned by modalStackStore (ModalShell, sheets, expanded player).
  */
 export function usePlayerBodyState({ playing = false, expanded = false, modalOpen = false } = {}) {
-  const modalScrollLockRef = useRef(false);
-
   useEffect(() => {
     const { body } = document;
     if (playing) body.classList.add(PLAYER_BODY_CLASS.active, PLAYER_BODY_CLASS.navDim);
@@ -29,16 +28,4 @@ export function usePlayerBodyState({ playing = false, expanded = false, modalOpe
       );
     };
   }, [playing, expanded, modalOpen]);
-
-  useEffect(() => {
-    if (!modalOpen) return undefined;
-    if (modalScrollLockRef.current) return undefined;
-    modalScrollLockRef.current = true;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      modalScrollLockRef.current = false;
-    };
-  }, [modalOpen]);
 }
