@@ -8,7 +8,7 @@ const OVERLAY_FADE = {
   initial: { opacity: 0 },
   animate: { opacity: 1 },
   exit: { opacity: 0 },
-  transition: { duration: 0.28 },
+  transition: { duration: 0.34, ease: [0.33, 0, 0.2, 1] },
 };
 
 const SHEET_UP = {

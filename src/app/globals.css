@@ -179,6 +179,7 @@ body {
   background: rgba(0, 0, 0, 0.78);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
+  will-change: opacity;
 }
 
 .modal-immersive-shell {
@@ -614,10 +615,12 @@ body {
 }
 
 .modal-immersive-player__fill {
+  width: 100%;
   height: 100%;
   background: var(--modal-accent, #00dcd2);
   border-radius: 3px;
-  transition: width 0.1s linear;
+  transform-origin: left;
+  transition: transform 0.1s linear;
   box-shadow: 0 0 8px var(--modal-accent-glow, rgba(0, 220, 210, 0.45));
 }
 
@@ -1282,6 +1285,8 @@ body.is-player-modal-open::before {
   cursor: pointer;
   position: relative;
   z-index: 2;
+  overflow: hidden;
+  border-radius: 2px;
 }
 
 .player-immersive-progress-rail--lg {

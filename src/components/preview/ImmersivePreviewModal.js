@@ -311,7 +311,6 @@ function ImmersivePreviewModal({
 
             <div className={`modal-immersive-art${palette.animated ? "" : " modal-immersive-art--pulse"}`}>
               <CoverArt
-                key={single.slug}
                 src={coverSrc}
                 type={coverType}
                 alt={single.title}
@@ -389,7 +388,6 @@ function ImmersivePreviewModal({
           >
             <AmbientArtworkBackground src={coverSrc} type={coverType} palette={palette} />
             <CoverArt
-              key={single.slug}
               src={coverSrc}
               type={coverType}
               alt={single.title}
