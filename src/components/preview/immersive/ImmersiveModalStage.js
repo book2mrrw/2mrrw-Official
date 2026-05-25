@@ -3,8 +3,10 @@
 import { memo } from "react";
 import AtmosphericBackgroundLayer from "@/components/preview/immersive/AtmosphericBackgroundLayer";
 import AmbientLightingLayer from "@/components/preview/immersive/AmbientLightingLayer";
+import ImmersiveModalScene from "@/components/preview/immersive/ImmersiveModalScene";
 import FloatingArtworkHero from "@/components/preview/immersive/FloatingArtworkHero";
 import ViewMoreExpansion from "@/components/preview/immersive/FloatingViewMore";
+import PreviewPlayerControls from "@/components/preview/immersive/PreviewPlayerControls";
 import GlyphLyricsPanel from "@/components/preview/GlyphLyricsPanel";
 
 function ImmersiveModalStage({
@@ -24,9 +26,14 @@ function ImmersiveModalStage({
   glyphsOpen,
   lrcText,
   onCloseGlyphs,
+  canStream,
+  previewOnly,
 }) {
+  const stageClass = [className, isMobile ? "modal-immersive-stage--mobile" : ""].filter(Boolean).join(" ");
+
   return (
-    <section className={className} style={style}>
+    <section className={stageClass} style={style}>
+      <ImmersiveModalScene palette={palette} />
       <AtmosphericBackgroundLayer src={coverSrc} type={coverType} palette={palette} />
       <AmbientLightingLayer palette={palette} />
       <FloatingArtworkHero
@@ -37,6 +44,17 @@ function ImmersiveModalStage({
         palette={palette}
         isMobile={isMobile}
       />
+      {isMobile ? (
+        <div className="modal-immersive-float-player immersive-layer immersive-layer--ui">
+          <PreviewPlayerControls
+            palette={palette}
+            compact
+            variant="floating"
+            canStream={canStream}
+            previewOnly={previewOnly}
+          />
+        </div>
+      ) : null}
       <ViewMoreExpansion
         open={viewMoreOpen}
         onToggle={onViewMoreToggle}

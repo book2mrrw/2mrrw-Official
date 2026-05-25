@@ -262,6 +262,14 @@ body {
   pointer-events: none;
 }
 
+.immersive-layer--scene {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  overflow: hidden;
+}
+
 .immersive-layer--atmosphere {
   position: absolute;
   inset: 0;
@@ -401,6 +409,417 @@ body {
   max-height: clamp(240px, 58dvh, 420px);
   overflow: hidden;
   isolation: isolate;
+}
+
+/* Mobile art / info split (prototype 62% / 38%) */
+.modal-immersive-body--mobile {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.modal-immersive-shell:not(.modal-immersive-shell--desktop) .modal-immersive-stage--mobile {
+  flex: 0 0 62%;
+  max-height: none;
+  min-height: 0;
+}
+
+.modal-immersive-shell:not(.modal-immersive-shell--desktop) .modal-immersive-panel--mobile {
+  flex: 1 1 38%;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  justify-content: flex-start;
+  gap: clamp(14px, 3dvh, 20px);
+  padding: clamp(14px, 2.5dvh, 18px) 22px max(16px, env(safe-area-inset-bottom, 14px));
+  background: var(--modal-scene-dark, rgba(4, 4, 8, 0.98));
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+/* Scene atmosphere — palette via --p1, --glow, etc. */
+.modal-immersive-scene__gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    160deg,
+    color-mix(in srgb, var(--modal-scene-dark, #050508) 88%, var(--p1, #00dcd2) 12%) 0%,
+    color-mix(in srgb, #050508 92%, var(--p2, #6448b4) 8%) 48%,
+    #050508 100%
+  );
+}
+
+.modal-immersive-scene__orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(72px);
+  opacity: 0.85;
+}
+
+.modal-immersive-scene__orb--a {
+  width: 85%;
+  aspect-ratio: 1;
+  top: -25%;
+  left: -20%;
+  background: var(--glow-dim, rgba(0, 220, 210, 0.2));
+  animation: modalSceneOrbA 10s ease-in-out infinite alternate;
+}
+
+.modal-immersive-scene__orb--b {
+  width: 70%;
+  aspect-ratio: 1;
+  bottom: -22%;
+  right: -18%;
+  background: var(--modal-secondary-muted, rgba(100, 72, 180, 0.22));
+  animation: modalSceneOrbB 13s ease-in-out infinite alternate;
+}
+
+.modal-immersive-scene__orb--c {
+  width: 55%;
+  aspect-ratio: 1;
+  top: 20%;
+  left: 20%;
+  background: var(--modal-ambient-glow, rgba(0, 220, 210, 0.14));
+  animation: modalSceneOrbC 8s ease-in-out infinite alternate;
+}
+
+@keyframes modalSceneOrbA {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(7%, 9%);
+  }
+}
+
+@keyframes modalSceneOrbB {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(-7%, -6%);
+  }
+}
+
+@keyframes modalSceneOrbC {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(5%, -8%);
+  }
+}
+
+.modal-immersive-scene__rays {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.modal-immersive-scene__ray {
+  position: absolute;
+  top: -20%;
+  width: 1px;
+  height: 140%;
+  opacity: 0;
+  transform-origin: top center;
+  background: linear-gradient(to bottom, transparent, var(--p1, #00dcd2), transparent);
+  animation: modalSceneRay 7s ease-in-out infinite;
+}
+
+.modal-immersive-scene__ray:nth-child(1) {
+  left: 22%;
+}
+
+.modal-immersive-scene__ray:nth-child(2) {
+  left: 48%;
+  animation-delay: 2.2s;
+}
+
+.modal-immersive-scene__ray:nth-child(3) {
+  left: 72%;
+  animation-delay: 4.4s;
+}
+
+@keyframes modalSceneRay {
+  0%,
+  100% {
+    opacity: 0;
+    transform: rotate(-5deg);
+  }
+  50% {
+    opacity: 0.32;
+    transform: rotate(5deg);
+  }
+}
+
+.modal-immersive-scene__scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.04) 2px,
+    rgba(0, 0, 0, 0.04) 4px
+  );
+  animation: modalSceneScan 10s linear infinite;
+}
+
+@keyframes modalSceneScan {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 80px;
+  }
+}
+
+.modal-immersive-scene__grain {
+  position: absolute;
+  inset: 0;
+  opacity: 0.18;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+
+/* Chrome: drag pill + leading close + access badge */
+.modal-immersive-chrome {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.modal-immersive-close--leading {
+  left: 14px;
+  right: auto;
+  top: calc(env(safe-area-inset-top, 0px) + 52px);
+}
+
+.modal-immersive-access-badge {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 52px);
+  right: 14px;
+  z-index: 24;
+  padding: 4px 11px;
+  border-radius: 20px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent, var(--modal-accent, #00dcd2));
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid color-mix(in srgb, var(--p1, #00dcd2) 28%, transparent);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.modal-immersive-access-badge--preview {
+  color: rgba(255, 255, 255, 0.72);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Floating player overlay in art zone */
+.modal-immersive-float-player {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 7;
+  padding: 10px 18px max(12px, env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    rgba(0, 0, 0, 0.55) 30%,
+    rgba(0, 0, 0, 0.9) 100%
+  );
+  pointer-events: auto;
+}
+
+.modal-immersive-art--mobile {
+  bottom: clamp(108px, 22dvh, 148px);
+  width: min(72vw, 280px);
+  height: min(72vw, 280px);
+}
+
+.modal-immersive-player--floating {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+.modal-immersive-waveform {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  height: 18px;
+  margin-bottom: 8px;
+}
+
+.modal-immersive-waveform span {
+  width: 3px;
+  height: 18px;
+  border-radius: 2px;
+  transform-origin: bottom;
+  transform: scaleY(0.14);
+  background: linear-gradient(to top, var(--p1, #00dcd2), var(--accent, #00dcd2));
+  opacity: 0.22;
+}
+
+.modal-immersive-waveform.is-playing span {
+  opacity: 0.72;
+  animation: modalWaveBar 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes modalWaveBar {
+  from {
+    transform: scaleY(0.18);
+  }
+  to {
+    transform: scaleY(0.92);
+  }
+}
+
+.modal-immersive-player--floating .modal-immersive-player__rail {
+  margin-bottom: 10px;
+}
+
+.modal-immersive-player--floating .player-immersive-progress-rail {
+  height: 2px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.modal-immersive-player--floating .player-immersive-progress-rail__fill {
+  background: linear-gradient(to right, var(--p2, #6448b4), var(--accent, #00dcd2));
+  box-shadow: 0 0 8px var(--glow, var(--modal-accent-glow));
+}
+
+.modal-immersive-player--floating .modal-immersive-player__time {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  min-width: 28px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Mobile meta + action icon row */
+.modal-immersive-meta--mobile {
+  text-align: center;
+}
+
+.modal-immersive-meta--mobile .modal-immersive-meta__head {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.modal-immersive-meta--mobile .modal-immersive-meta__title {
+  font-size: clamp(22px, 6vw, 28px);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.modal-immersive-meta--mobile .modal-immersive-meta__artist {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--accent, var(--modal-accent, #00dcd2));
+}
+
+.modal-immersive-meta--mobile .modal-immersive-meta__sub {
+  margin: 0;
+  font-size: 8px;
+  letter-spacing: 0.15em;
+  color: rgba(255, 255, 255, 0.28);
+  text-transform: uppercase;
+}
+
+.modal-immersive-meta__row--mobile {
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.modal-immersive-act-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(40px, 14vw, 56px);
+}
+
+.modal-immersive-act-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  color: var(--accent, var(--modal-accent, #00dcd2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+
+.modal-immersive-act-btn:active {
+  transform: scale(0.86);
+}
+
+.modal-immersive-act-btn--cart {
+  animation: modalCartPulse 3s ease-in-out infinite;
+}
+
+@keyframes modalCartPulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 5px var(--glow)) drop-shadow(0 0 10px var(--glow-dim));
+  }
+  50% {
+    filter: drop-shadow(0 0 13px var(--glow)) drop-shadow(0 0 26px var(--glow-dim))
+      brightness(1.12);
+  }
+}
+
+.modal-immersive-act-btn--subscribe {
+  text-decoration: none;
+  filter: drop-shadow(0 0 6px var(--glow));
+}
+
+.modal-immersive-act-btn--collection {
+  animation: modalColGlow 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes modalColGlow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px var(--glow));
+  }
+  50% {
+    filter: drop-shadow(0 0 10px var(--glow)) brightness(1.08);
+  }
+}
+
+/* View More drawer — prototype sheet polish */
+.modal-immersive-shell:not(.modal-immersive-shell--desktop) .modal-immersive-drawer {
+  border-radius: 22px 22px 0 0;
+  max-height: 48%;
+  padding-top: 8px;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.modal-immersive-shell:not(.modal-immersive-shell--desktop) .modal-immersive-drawer__handle {
+  width: 32px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  margin-bottom: 14px;
+}
+
+.modal-immersive-shell:not(.modal-immersive-shell--desktop) .modal-immersive-view-more {
+  top: calc(env(safe-area-inset-top, 0px) + 88px);
 }
 
 .modal-immersive-ambient {
@@ -918,7 +1337,13 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .modal-immersive-ambient__blur--static,
   .modal-immersive-ambient__pulse,
-  .modal-immersive-art--pulse {
+  .modal-immersive-art--pulse,
+  .modal-immersive-scene__orb,
+  .modal-immersive-scene__ray,
+  .modal-immersive-scene__scan,
+  .modal-immersive-waveform.is-playing span,
+  .modal-immersive-act-btn--cart,
+  .modal-immersive-act-btn--collection {
     animation: none !important;
   }
 }

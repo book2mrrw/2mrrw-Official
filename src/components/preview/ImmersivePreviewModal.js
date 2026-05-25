@@ -213,6 +213,8 @@ function ImmersivePreviewModal({
       glyphsOpen,
       lrcText,
       onCloseGlyphs: handleCloseGlyphs,
+      canStream,
+      previewOnly,
     }),
     [
       coverSrc,
@@ -229,6 +231,8 @@ function ImmersivePreviewModal({
       glyphsOpen,
       lrcText,
       handleCloseGlyphs,
+      canStream,
+      previewOnly,
     ]
   );
 
@@ -287,7 +291,7 @@ function ImmersivePreviewModal({
         desktopStyle={desktopShellStyle}
       >
         <PlayerAtmosphere open />
-        <div className="modal-immersive-body">
+        <div className={["modal-immersive-body", isMobile ? "modal-immersive-body--mobile" : ""].filter(Boolean).join(" ")}>
           <ImmersiveModalEnvironment
             contentReady={contentReady}
             isMobile={isMobile}
@@ -297,6 +301,9 @@ function ImmersivePreviewModal({
             stageProps={stageProps}
             panelProps={panelProps}
             onCloseClick={handleCloseClick}
+            trackAccess={trackAccess}
+            canStream={canStream}
+            palette={palette}
           />
         </div>
       </ModalShell>

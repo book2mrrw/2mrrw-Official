@@ -1,3 +1,5 @@
+export { default as ImmersiveModalScene } from "./ImmersiveModalScene";
+export { default as ImmersiveModalAccessBadge } from "./ImmersiveModalAccessBadge";
 export { default as AtmosphericBackgroundLayer } from "./AtmosphericBackgroundLayer";
 export { default as AmbientLightingLayer } from "./AmbientLightingLayer";
 export { default as FloatingArtworkHero } from "./FloatingArtworkHero";

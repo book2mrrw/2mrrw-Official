@@ -9,7 +9,28 @@ import { formatPlayerTime } from "@/lib/player/formatTime";
 import { useRenderTracker } from "@/lib/dev/useRenderTracker";
 import { PREVIEW_DISPLAY_CAP_SEC } from "@/components/preview/immersive/constants";
 
-function PreviewPlayerControls({ palette, compact = true, canStream = true, previewOnly = false }) {
+const FLOAT_WAVE_BARS = 20;
+
+function FloatingWaveform({ playing }) {
+  return (
+    <div
+      className={["modal-immersive-waveform", playing ? "is-playing" : ""].filter(Boolean).join(" ")}
+      aria-hidden
+    >
+      {Array.from({ length: FLOAT_WAVE_BARS }, (_, i) => (
+        <span key={i} style={{ animationDelay: `${(i % 5) * 0.08}s` }} />
+      ))}
+    </div>
+  );
+}
+
+function PreviewPlayerControls({
+  palette,
+  compact = true,
+  variant = "panel",
+  canStream = true,
+  previewOnly = false,
+}) {
   useRenderTracker("PreviewPlayerControls");
   const {
     state: { isPlaying, currentTime, duration, volume },
@@ -54,6 +75,7 @@ function PreviewPlayerControls({ palette, compact = true, canStream = true, prev
   const playSize = compact ? 52 : 60;
   const cssVars = useMemo(() => playerPaletteToCssVars(palette), [palette]);
   const streamHint = canStream && !previewOnly ? "Full stream" : `Preview · ${PREVIEW_DISPLAY_CAP_SEC}s`;
+  const isFloating = variant === "floating";
 
   const handleVolume = useCallback(
     (e) => {
@@ -62,13 +84,25 @@ function PreviewPlayerControls({ palette, compact = true, canStream = true, prev
     [setVolume]
   );
 
+  const rootClass = [
+    "modal-immersive-player",
+    "modal-immersive-player--accent",
+    "player-immersive-modal-controls",
+    isFloating ? "modal-immersive-player--floating" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
-    <div className="modal-immersive-player modal-immersive-player--accent player-immersive-modal-controls" style={cssVars}>
-      <div className="modal-immersive-player__stream-hint" aria-live="polite">
-        {streamHint}
-      </div>
+    <div className={rootClass} style={cssVars}>
+      {isFloating ? <FloatingWaveform playing={isPlaying} /> : null}
+      {!isFloating ? (
+        <div className="modal-immersive-player__stream-hint" aria-live="polite">
+          {streamHint}
+        </div>
+      ) : null}
       <div
-        className="player-immersive-progress-rail"
+        className="player-immersive-progress-rail modal-immersive-player__rail"
         onClick={seekTo}
         role="slider"
         aria-valuemin={0}
@@ -96,20 +130,22 @@ function PreviewPlayerControls({ palette, compact = true, canStream = true, prev
           {formatPlayerTime(displayDuration)}
         </span>
       </div>
-      <label className="modal-immersive-player__volume" aria-label="Volume">
-        <span className="modal-immersive-player__volume-icon" aria-hidden>
-          ♪
-        </span>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={volume}
-          onChange={handleVolume}
-          className="modal-immersive-player__volume-slider"
-        />
-      </label>
+      {!isFloating ? (
+        <label className="modal-immersive-player__volume" aria-label="Volume">
+          <span className="modal-immersive-player__volume-icon" aria-hidden>
+            ♪
+          </span>
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume}
+            onChange={handleVolume}
+            className="modal-immersive-player__volume-slider"
+          />
+        </label>
+      ) : null}
     </div>
   );
 }

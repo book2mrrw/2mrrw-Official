@@ -17,6 +17,9 @@ function ImmersiveModalEnvironment({
   stageProps,
   panelProps,
   onCloseClick,
+  trackAccess,
+  canStream,
+  palette,
 }) {
   if (!contentReady) {
     return <ImmersiveModalSkeleton isMobile={isMobile} />;
@@ -33,7 +36,14 @@ function ImmersiveModalEnvironment({
 
   return (
     <>
-      {isMobile ? <ImmersiveModalChrome onCloseClick={onCloseClick} /> : null}
+      {isMobile ? (
+        <ImmersiveModalChrome
+          onCloseClick={onCloseClick}
+          trackAccess={trackAccess}
+          canStream={canStream}
+          palette={palette}
+        />
+      ) : null}
 
       {isMobile ? (
         stage

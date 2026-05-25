@@ -17,7 +17,13 @@ function FloatingArtworkHero({
   isMobile,
 }) {
   const animated = palette?.animated ?? isMotionCoverMedia(coverSrc, coverType);
-  const artClass = `modal-immersive-art${animated ? "" : " modal-immersive-art--pulse"}`;
+  const artClass = [
+    "modal-immersive-art",
+    animated ? "" : "modal-immersive-art--pulse",
+    isMobile ? "modal-immersive-art--mobile" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div className={`immersive-layer immersive-layer--hero ${artClass}`}>
