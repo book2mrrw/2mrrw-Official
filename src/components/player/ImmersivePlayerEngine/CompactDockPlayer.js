@@ -82,7 +82,7 @@ function CompactDockPlayer({
       >
         <div
           className="player-immersive-progress-rail__fill"
-          style={{ width: `${progress}%` }}
+          style={{ transform: `scaleX(${progress / 100})`, transformOrigin: "left" }}
           data-error={error ? "1" : undefined}
         />
       </div>

@@ -24,6 +24,11 @@ import {
   readPersistedMediaSessionTrack,
 } from "@/lib/media-session-artwork";
 import { resolveCoverMediaType } from "@/components/ui/CoverArt";
+import { mapContextTrackToMediaTrack } from "@/media/useMediaEngine";
+import {
+  notifyMediaEngineBridge,
+  registerMediaEngineBridge,
+} from "@/media/mediaEngineBridge";
 
 const AudioContext = createContext(null);
 
@@ -349,7 +354,27 @@ export function AudioProvider({ children }) {
     repeatModeRef.current = state.repeatMode || "off";
     shuffleRef.current = Boolean(state.shuffle);
     csModeRef.current = Boolean(state.csMode);
+    notifyMediaEngineBridge();
   }, [state]);
+
+  useEffect(() => {
+    registerMediaEngineBridge({
+      getState: () => {
+        const s = stateRef.current;
+        const el = audioRef.current;
+        const volume = el && typeof el.volume === "number" ? el.volume : 1;
+        return {
+          currentTrack: mapContextTrackToMediaTrack(s.currentTrack),
+          isPlaying: Boolean(s.isPlaying),
+          currentTime: s.currentTime ?? 0,
+          duration: s.duration ?? 0,
+          volume,
+          queue: s.queue ?? [],
+        };
+      },
+    });
+    return () => registerMediaEngineBridge(null);
+  }, []);
 
   useEffect(() => {
     const audio = audioRef.current;

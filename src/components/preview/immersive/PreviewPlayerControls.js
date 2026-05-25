@@ -2,7 +2,8 @@
 
 import { useMemo, memo, useCallback } from "react";
 import SignaturePlayRing from "@/components/player/ImmersivePlayerEngine/SignaturePlayRing";
-import { useImmersivePlayback } from "@/lib/player/useImmersivePlayback";
+import { useAudioPlayer } from "@/context/AudioContext";
+import { useMediaEngine } from "@/media/useMediaEngine";
 import { playerPaletteToCssVars } from "@/lib/player/usePlayerAmbience";
 import { formatPlayerTime } from "@/lib/player/formatTime";
 import { useRenderTracker } from "@/lib/dev/useRenderTracker";
@@ -10,16 +11,11 @@ import { useRenderTracker } from "@/lib/dev/useRenderTracker";
 function PreviewPlayerControls({ palette, compact = true }) {
   useRenderTracker("PreviewPlayerControls");
   const {
-    isPlaying,
-    isBuffering,
-    currentTime,
-    duration,
-    error,
-    streamRetryable,
-    handlePlayToggle,
+    state: { isPlaying, currentTime, duration },
     seek,
-    retryStreamPlayback,
-  } = useImmersivePlayback();
+    toggle,
+  } = useMediaEngine();
+  const { isBuffering, error, streamRetryable, retryStreamPlayback } = useAudioPlayer();
 
   const seekTo = useCallback(
     (e) => {
@@ -33,13 +29,14 @@ function PreviewPlayerControls({ palette, compact = true }) {
 
   const togglePlay = useCallback(
     (e) => {
+      e?.stopPropagation?.();
       if (streamRetryable && error) {
         void retryStreamPlayback();
         return;
       }
-      handlePlayToggle(e);
+      toggle();
     },
-    [error, handlePlayToggle, retryStreamPlayback, streamRetryable]
+    [error, toggle, retryStreamPlayback, streamRetryable]
   );
 
   const progress = duration ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;

@@ -147,7 +147,11 @@ function FloatingMainPlayer({
                 if (e.key === "ArrowLeft") seek(Math.max(0, currentTime - 5));
               }}
             >
-              <div className="player-immersive-progress-rail__fill" style={{ width: `${progress}%` }} data-error={error ? "1" : undefined} />
+              <div
+                className="player-immersive-progress-rail__fill"
+                style={{ transform: `scaleX(${progress / 100})`, transformOrigin: "left" }}
+                data-error={error ? "1" : undefined}
+              />
             </div>
             <div className="player-immersive-scrub__times">
               <span>{formatPlayerTime(currentTime)}</span>
