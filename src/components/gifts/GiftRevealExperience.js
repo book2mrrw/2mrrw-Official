@@ -1,5 +1,8 @@
 "use client";
 
+// phase11: GiftRevealExperience is intentionally NOT on modalStackStore — fullscreen
+// cinematic overlay with independent scroll/lock behavior (see Phase 11 Step 1).
+
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import CoverArt from "@/components/ui/CoverArt";

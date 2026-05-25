@@ -5,6 +5,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "@/components/payments/CheckoutForm";
+import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
+import { ModalErrorBoundary } from "@/system/errors";
 
 const PRESET_AMOUNTS = [5, 10, 20, 50];
 const MIN_DOLLARS = 1;
@@ -52,6 +54,12 @@ export default function DonateModal({ open, onClose, isMobile }) {
 
   useEffect(() => {
     if (!open) resetState();
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    registerModal("donate-modal");
+    return () => unregisterModal("donate-modal");
   }, [open]);
 
   const handleClose = () => {
@@ -106,6 +114,7 @@ export default function DonateModal({ open, onClose, isMobile }) {
   const amountLabel = amountCents != null ? `$${(amountCents / 100).toFixed(2)}` : null;
 
   return (
+    <ModalErrorBoundary stackId="donate-modal" onClose={handleClose} resetKey={open ? "open" : "closed"}>
     <AnimatePresence>
       {open && (
         <motion.div
@@ -293,5 +302,6 @@ export default function DonateModal({ open, onClose, isMobile }) {
         </motion.div>
       )}
     </AnimatePresence>
+    </ModalErrorBoundary>
   );
 }

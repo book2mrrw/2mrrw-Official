@@ -34,6 +34,8 @@ import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
 import LivePanel from "@/components/home/LivePanel";
 import FlowState from "@/components/home/FlowState";
 import RadioCarousel from "@/components/home/RadioCarousel";
+import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
+import { ModalErrorBoundary } from "@/system/errors";
 
 const MOBILE_NAV_TABS = [
   { id: "home", label: "Home" },
@@ -1110,6 +1112,26 @@ export default function Page() {
     }, MOBILE_NAV_SHEET_MS);
     return () => clearTimeout(timer);
   }, [mobileNavClosing]);
+
+  const mobileNavSheetOpen = mobileNavOpen || mobileNavClosing;
+
+  useEffect(() => {
+    if (!mobileNavSheetOpen) return undefined;
+    registerModal("mobile-nav-sheet");
+    return () => unregisterModal("mobile-nav-sheet");
+  }, [mobileNavSheetOpen]);
+
+  useEffect(() => {
+    if (!mobileCartOpen) return undefined;
+    registerModal("mobile-cart-sheet");
+    return () => unregisterModal("mobile-cart-sheet");
+  }, [mobileCartOpen]);
+
+  useEffect(() => {
+    if (!clientSecret) return undefined;
+    registerModal("stripe-checkout-overlay");
+    return () => unregisterModal("stripe-checkout-overlay");
+  }, [clientSecret]);
 
   const openMobileNav = useCallback(() => {
     setMobileNavClosing(false);
@@ -2312,7 +2334,8 @@ export default function Page() {
           </AnimatePresence>
 
           <AnimatePresence>
-            {(mobileNavOpen || mobileNavClosing) && (
+            {mobileNavSheetOpen && (
+              <ModalErrorBoundary stackId="mobile-nav-sheet" onClose={closeMobileNav} resetKey={mobileNavSheetOpen ? "open" : "closed"}>
               <motion.div
                 key="nav-sheet"
                 initial={{ opacity: 0 }}
@@ -2405,11 +2428,13 @@ export default function Page() {
                   </motion.div>
                 </motion.div>
               </motion.div>
+              </ModalErrorBoundary>
             )}
           </AnimatePresence>
 
           <AnimatePresence>
             {mobileCartOpen && (
+              <ModalErrorBoundary stackId="mobile-cart-sheet" onClose={() => setMobileCartOpen(false)} resetKey={mobileCartOpen ? "open" : "closed"}>
               <motion.div
                 key="cart-sheet"
                 {...OVERLAY_FADE}
@@ -2430,6 +2455,7 @@ export default function Page() {
                   <motion.div style={{padding:"12px 20px 0"}}><button onClick={()=>setMobileCartOpen(false)} style={{width:"100%",padding:"12px 0",background:"none",border:"1px solid #1e1e1e",color:"#555",cursor:"pointer",fontSize:13,borderRadius:10}}>Close</button></motion.div>
                 </motion.div>
               </motion.div>
+              </ModalErrorBoundary>
             )}
           </AnimatePresence>
         </>
@@ -2505,6 +2531,11 @@ export default function Page() {
       {/* ── STRIPE MODAL ── */}
       <AnimatePresence>
         {clientSecret && (
+          <ModalErrorBoundary
+            stackId="stripe-checkout-overlay"
+            onClose={() => { setClientSecret(null); setCheckingOut(false); }}
+            resetKey={clientSecret}
+          >
           <motion.div
             key="stripe"
             {...OVERLAY_FADE}
@@ -2521,6 +2552,7 @@ export default function Page() {
               <button onClick={()=>{setClientSecret(null);setCheckingOut(false);}} style={{marginTop:10,width:"100%",padding:10,background:"none",border:"1px solid #333",color:"#777",cursor:"pointer",borderRadius:8}}>Cancel</button>
             </motion.div>
           </motion.div>
+          </ModalErrorBoundary>
         )}
       </AnimatePresence>
 
