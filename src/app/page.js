@@ -492,7 +492,6 @@ export default function Page() {
   const {
     playTrack,
     playQueue,
-    upgradeToFullStream,
     hasStarted,
     currentTrack,
     csMode,
@@ -520,6 +519,9 @@ export default function Page() {
   const [soundOn, setSoundOn]                     = useState(false);
   const [selectedSingle, setSelectedSingle]       = useState(null);
   const [previewModalOpen, setPreviewModalOpen]   = useState(false);
+  const [featureModalOpen, setFeatureModalOpen]   = useState(false);
+  const [featureModalItem, setFeatureModalItem]   = useState(null);
+  const [featureReleaseDetail, setFeatureReleaseDetail] = useState(null);
   const [selectedReleaseDetail, setSelectedReleaseDetail] = useState(null);
   const [selectedAlbum, setSelectedAlbum]         = useState(null);
   const [singleIndex, setSingleIndex]             = useState(0);
@@ -579,6 +581,8 @@ export default function Page() {
   const ytIframeRef        = useRef(null);
   const mainScrollRef      = useRef(null);
   const singlesRowRef      = useRef(null);
+  const modalPlaySlugRef   = useRef(null);
+  const featureModalPlaySlugRef = useRef(null);
 
   const syncSinglesCarouselVideos = useCallback(() => {
     const row = singlesRowRef.current;
@@ -832,28 +836,35 @@ export default function Page() {
   }, [engineIsPlaying]);
 
   useEffect(() => {
-    if (authLoading || !previewModalOpen || !selectedSingle?.slug) return;
-    const access = resolveContentAccess(selectedSingle, accountState);
-    if (!access?.canStream) return;
+    if (authLoading) return;
+    if (featureModalOpen && featureModalItem?.slug && featureModalPlaySlugRef.current === featureModalItem.slug) {
+      featureModalPlaySlugRef.current = null;
+      const playbackTrack = toPlaybackTrack(
+        featureModalItem,
+        { ...accountState, userId: currentUser?.id },
+        "feature_modal"
+      );
+      if (playbackTrack?.src) void playTrack(playbackTrack);
+      return;
+    }
+    if (!previewModalOpen || !selectedSingle?.slug) return;
+    if (modalPlaySlugRef.current !== selectedSingle.slug) return;
+    modalPlaySlugRef.current = null;
     const playbackTrack = toPlaybackTrack(
       selectedSingle,
       { ...accountState, userId: currentUser?.id },
       "preview_modal"
     );
-    if (currentTrack?.slug === selectedSingle.slug) {
-      void upgradeToFullStream();
-      return;
-    }
-    void playTrack(playbackTrack);
+    if (playbackTrack?.src) void playTrack(playbackTrack);
   }, [
     authLoading,
+    featureModalOpen,
+    featureModalItem,
     previewModalOpen,
     selectedSingle,
     accountState,
     currentUser?.id,
-    currentTrack?.slug,
     playTrack,
-    upgradeToFullStream,
   ]);
 
   useEffect(() => {
@@ -934,6 +945,10 @@ export default function Page() {
     () => (selectedSingle ? resolveContentAccess(selectedSingle, accountState) : null),
     [selectedSingle, accountState]
   );
+  const featureModalAccess = useMemo(
+    () => (featureModalItem ? resolveContentAccess(featureModalItem, accountState) : null),
+    [featureModalItem, accountState]
+  );
   const selectedAlbumAccess = useMemo(
     () => (selectedAlbum ? resolveContentAccess(selectedAlbum, accountState) : null),
     [selectedAlbum, accountState]
@@ -942,18 +957,78 @@ export default function Page() {
 
   const openSingleModal = useCallback((single) => {
     if (nowPlaying) setNowPlaying(null);
+    if (featureModalOpen) {
+      setFeatureModalOpen(false);
+      setFeatureModalItem(null);
+      setFeatureReleaseDetail(null);
+      featureModalPlaySlugRef.current = null;
+    }
     setSelectedSingle(single);
     setPreviewModalOpen(true);
     setSelectedReleaseDetail(null);
     if (!single?.slug) return;
-    if (authLoading) return;
-    void playTrack(
-      toPlaybackTrack(single, { ...accountState, userId: currentUser?.id }, "preview_modal")
+    const playbackTrack = toPlaybackTrack(
+      single,
+      { ...accountState, userId: currentUser?.id },
+      "preview_modal"
     );
+    if (authLoading) {
+      modalPlaySlugRef.current = single.slug;
+      return;
+    }
+    modalPlaySlugRef.current = null;
+    if (playbackTrack?.src) void playTrack(playbackTrack);
     void getControlSystemReleaseDetail({ slug: single.slug, fallbackRelease: single }).then((detail) => {
       if (detail) setSelectedReleaseDetail(detail);
     });
-  }, [nowPlaying, accountState, authLoading, currentUser?.id, playTrack]);
+  }, [nowPlaying, featureModalOpen, accountState, authLoading, currentUser?.id, playTrack]);
+
+  const openFeatureModal = useCallback(
+    (feat) => {
+      if (nowPlaying) setNowPlaying(null);
+      if (previewModalOpen) {
+        setPreviewModalOpen(false);
+        setSelectedSingle(null);
+        setSelectedReleaseDetail(null);
+        modalPlaySlugRef.current = null;
+      }
+      setFeatureModalItem(feat);
+      setFeatureModalOpen(true);
+      setFeatureReleaseDetail(null);
+      if (!feat?.slug) return;
+      const playbackTrack = toPlaybackTrack(
+        feat,
+        { ...accountState, userId: currentUser?.id },
+        "feature_modal"
+      );
+      if (authLoading) {
+        featureModalPlaySlugRef.current = feat.slug;
+        return;
+      }
+      featureModalPlaySlugRef.current = null;
+      if (playbackTrack?.src) void playTrack(playbackTrack);
+      void getControlSystemReleaseDetail({ slug: feat.slug, fallbackRelease: feat }).then((detail) => {
+        if (detail) setFeatureReleaseDetail(detail);
+      });
+    },
+    [nowPlaying, previewModalOpen, accountState, authLoading, currentUser?.id, playTrack]
+  );
+
+  const closeFeatureModal = useCallback(() => {
+    setFeatureModalOpen(false);
+    featureModalPlaySlugRef.current = null;
+    setFeatureModalItem(null);
+    setFeatureReleaseDetail(null);
+  }, []);
+
+  const openAlbumModal = useCallback(
+    (album) => {
+      setSelectedAlbum(album);
+      if (!album) return;
+      playAlbumTracks(album, 0);
+    },
+    [playAlbumTracks]
+  );
 
   const handleSingleClick = useCallback(
     (single) => {
@@ -964,18 +1039,10 @@ export default function Page() {
 
   const closeSingleModal = useCallback(() => {
     setPreviewModalOpen(false);
-    pause();
+    modalPlaySlugRef.current = null;
     setSelectedSingle(null);
     setSelectedReleaseDetail(null);
-  }, [pause]);
-
-  const handleFeatureClick = useCallback(
-    (feat) => {
-      setNowPlaying(feat);
-      void playTrack(toPlaybackTrack(feat, { ...accountState, userId: currentUser?.id }, "feature"));
-    },
-    [accountState, currentUser?.id, playTrack]
-  );
+  }, []);
 
   const dismissNowPlaying = useCallback(() => {
     setNowPlaying(null);
@@ -1005,6 +1072,10 @@ export default function Page() {
     void refreshAccountState();
     void refreshLibrary();
   }, [refreshAccountState, refreshLibrary]);
+
+  const handleFeaturePreviewGift = useCallback(() => {
+    if (featureModalItem) openGiftSheet(featureModalItem);
+  }, [featureModalItem, openGiftSheet]);
 
   const handlePreviewGift = useCallback(() => {
     if (selectedSingle) openGiftSheet(selectedSingle);
@@ -1252,16 +1323,16 @@ export default function Page() {
       const album = albums.find((a) => a.slug === parsed.slug);
       if (album) {
         switchTab("albums");
-        setSelectedAlbum(album);
+        openAlbumModal(album);
       }
     } else if (parsed.type === "feature") {
       const feat = features.find((f) => f.slug === parsed.slug);
       if (feat) {
         switchTab("singles");
-        handleFeatureClick(feat);
+        openFeatureModal(feat);
       }
     }
-  }, [authLoading, currentUser, openSingleModal, handleFeatureClick]);
+  }, [authLoading, currentUser, openSingleModal, openAlbumModal, openFeatureModal]);
 
   const shopItems      = printfulProducts.length > 0 ? printfulProducts : fallbackMerch;
   const shopIsFallback = !printfulLoading && printfulProducts.length === 0;
@@ -1330,6 +1401,22 @@ export default function Page() {
             onGift={handlePreviewGift}
             onLibraryChange={handlePreviewLibraryChange}
             onClose={closeSingleModal}
+            onAddToCart={addToCart}
+            onAddVinyl={addVinylToCart}
+          />
+        )}
+        {featureModalOpen && featureModalItem && (
+          <ImmersivePreviewModal
+            key="immersive-feature-modal"
+            single={featureModalItem}
+            releaseDetail={featureReleaseDetail}
+            isMobile={isMobile}
+            trackAccess={featureModalAccess}
+            userId={currentUser?.id}
+            isAdmin={isAdmin}
+            onGift={handleFeaturePreviewGift}
+            onLibraryChange={handlePreviewLibraryChange}
+            onClose={closeFeatureModal}
             onAddToCart={addToCart}
             onAddVinyl={addVinylToCart}
           />
@@ -1735,7 +1822,7 @@ export default function Page() {
                   {/* Features */}
                   <div style={{marginTop:28,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={handleFeatureClick} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Radio */}
@@ -1790,7 +1877,7 @@ export default function Page() {
                   {/* Albums */}
                   <div id="home-albums">
                     <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                    <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                    <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Audio Visuals */}
@@ -1886,7 +1973,7 @@ export default function Page() {
                       <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} onSingleClick={handleSingleClick} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       <div style={{marginTop:32,marginBottom:4}}>
                         <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                        <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onPlay={handleFeatureClick} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                        <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       </div>
                       <AudioVisualsSection isMobile={isMobile} onAudioVisualsFocused={handleAudioVisualsFocused}/>
                     </>
@@ -1896,7 +1983,7 @@ export default function Page() {
                   {activeTab==="albums" && (
                     <>
                       <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                      <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={setSelectedAlbum} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                      <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                     </>
                   )}
 
@@ -1911,7 +1998,7 @@ export default function Page() {
                         highlightSlug={giftHighlightSlug}
                         onSwitchTab={switchTab}
                         onOpenSingle={openSingleModal}
-                        onOpenAlbum={setSelectedAlbum}
+                        onOpenAlbum={openAlbumModal}
                       />
                     </>
                   )}

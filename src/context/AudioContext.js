@@ -229,6 +229,7 @@ export function AudioProvider({ children }) {
   const streamMetaRef = useRef(null);
   const streamErrorRetriedRef = useRef(false);
   const onPreviewEndedRef = useRef(null);
+  const [previewEnded, setPreviewEnded] = useState(false);
   const visibilityPausedRef = useRef(false);
   const wasPlayingBeforeHideRef = useRef(false);
   const positionSaveTimerRef = useRef(null);
@@ -521,6 +522,7 @@ export function AudioProvider({ children }) {
           currentTime: PREVIEW_HARD_CAP_SEC,
           playbackState: "ended_preview",
         });
+        setPreviewEnded(true);
         onPreviewEndedRef.current?.(track);
         dispatchPreviewEnded(track.slug);
         return;
@@ -550,6 +552,7 @@ export function AudioProvider({ children }) {
         stopProgressRaf();
         stopPositionSaveTimer();
         patchState({ isPlaying: false, currentTime: PREVIEW_HARD_CAP_SEC, playbackState: "ended_preview" });
+        setPreviewEnded(true);
         onPreviewEndedRef.current?.(track);
         dispatchPreviewEnded(track?.slug);
         if (track) void updateMediaSession(track, { playing: false });
@@ -765,6 +768,7 @@ export function AudioProvider({ children }) {
   }, []);
 
   const playTrack = useCallback(async (track, options = {}) => {
+    setPreviewEnded(false);
     if (!track || (typeof track !== "object")) {
       console.error("[AudioContext] playTrack: invalid track", track);
       return false;
@@ -1694,6 +1698,8 @@ export function AudioProvider({ children }) {
     endCsHoldPreview,
     upgradeToFullStream,
     setOnPreviewEnded,
+    previewEnded,
+    setPreviewEnded,
   }), [
     pause,
     playQueue,
@@ -1721,6 +1727,8 @@ export function AudioProvider({ children }) {
     endCsHoldPreview,
     upgradeToFullStream,
     setOnPreviewEnded,
+    previewEnded,
+    setPreviewEnded,
   ]);
 
   useEffect(() => () => stopProgressRaf(), [stopProgressRaf]);

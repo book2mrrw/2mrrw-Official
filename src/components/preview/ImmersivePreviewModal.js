@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState, memo, useCallback, useEffect } from "react";
+import { useAudioPlayer } from "@/context/AudioContext";
+import PreviewEndedCTA from "@/components/preview/PreviewEndedCTA";
 import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview/releaseMetadata";
 import { extractLrcFromRelease } from "@/lib/lrc";
 import { useCoverPalette, paletteToCssVars } from "@/hooks/useCoverPalette";
@@ -30,6 +32,7 @@ function ImmersivePreviewModal({
 }) {
   useRenderTracker("ImmersivePreviewModal");
   const { onImmersiveRenderStart, onImmersiveRenderEnd } = useMediaTiming();
+  const { previewEnded, setPreviewEnded, currentTrack, playTrack } = useAudioPlayer();
   const [contentReady, setContentReady] = useState(false);
   const [viewMoreOpen, setViewMoreOpen] = useState(false);
   const [glyphsOpen, setGlyphsOpen] = useState(false);
@@ -102,14 +105,47 @@ function ImmersivePreviewModal({
   const palette = useCoverPalette(coverSrc, coverType);
   const paletteVars = paletteToCssVars(palette);
   const canStream = Boolean(trackAccess?.canStream);
+  const previewOnly = Boolean(trackAccess && !trackAccess.canStream);
   const showPurchase = trackAccess ? Boolean(trackAccess.showCart) : true;
   const priceLabel =
     single?.price != null && showPurchase ? `$${Number(single.price).toFixed(2)}` : null;
+  const showPreviewEndedCTA =
+    previewOnly && previewEnded && Boolean(single?.slug) && currentTrack?.slug === single.slug;
 
   const handleAddToCart = useCallback(() => {
     onAddToCart(single);
     closeModal();
   }, [onAddToCart, single, closeModal]);
+
+  const handleUnlockFromPreviewEnd = useCallback(() => {
+    onAddToCart(single);
+  }, [onAddToCart, single]);
+
+  const handleContinueListening = useCallback(() => {
+    setPreviewEnded(false);
+    if (currentTrack?.slug === single?.slug && currentTrack) {
+      void playTrack({ ...currentTrack }, { resumeAt: 0 });
+    }
+  }, [setPreviewEnded, currentTrack, single?.slug, playTrack]);
+
+  const previewEndedCTA = useMemo(
+    () =>
+      showPreviewEndedCTA ? (
+        <PreviewEndedCTA
+          priceLabel={priceLabel}
+          showPurchase={showPurchase}
+          onContinueListening={handleContinueListening}
+          onUnlock={handleUnlockFromPreviewEnd}
+        />
+      ) : null,
+    [
+      showPreviewEndedCTA,
+      priceLabel,
+      showPurchase,
+      handleContinueListening,
+      handleUnlockFromPreviewEnd,
+    ]
+  );
 
   const handleViewMoreToggle = useCallback(() => {
     setGlyphsOpen(false);
@@ -214,6 +250,7 @@ function ImmersivePreviewModal({
       onGift: handleGift,
       onAddVinyl: handleAddVinyl,
       onClose: closeModal,
+      previewEndedCTA,
     }),
     [
       panelStyle,
@@ -232,6 +269,7 @@ function ImmersivePreviewModal({
       handleGift,
       handleAddVinyl,
       closeModal,
+      previewEndedCTA,
     ]
   );
 
