@@ -53,14 +53,7 @@ async function buildStreamResponse(req, user, slug, { force = false } = {}) {
   if (!force) {
     const active = await findActiveStreamSession(admin, user.id, productId);
     if (active?.session_id) {
-      return NextResponse.json(
-        {
-          error: "Already streaming on another device",
-          code: "CONCURRENT_STREAM",
-          sessionId: active.session_id,
-        },
-        { status: 409 }
-      );
+      await clearStreamSessionsForUserProduct(admin, user.id, productId);
     }
   } else {
     await clearStreamSessionsForUserProduct(admin, user.id, productId);
