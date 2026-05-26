@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanStreamProduct } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
+import { getFanSessionUser } from "@/lib/auth/session-user";
 import { resolvePlaybackKey } from "@/lib/playback/resolve-playback-key";
 import {
   clearStreamSession,
@@ -99,7 +100,7 @@ export async function GET(req) {
     return NextResponse.json({ error: "slug required" }, { status: 400 });
   }
 
-  const user = await getGuestUser();
+  const user = await getFanSessionUser() ?? await getGuestUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -123,7 +124,7 @@ export async function DELETE(req) {
     return NextResponse.json({ error: "slug required" }, { status: 400 });
   }
 
-  const user = await getGuestUser();
+  const user = await getFanSessionUser() ?? await getGuestUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
