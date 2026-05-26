@@ -1126,7 +1126,7 @@ export function AudioProvider({ children }) {
       if (
         !isSameTrack &&
         stateRef.current.isPlaying &&
-        audio.currentTime > 0 &&
+        audio.currentTime > 3 &&
         !audio.paused
       ) {
         const startVol = audio.volume > 0 ? audio.volume : 1;
@@ -1188,30 +1188,6 @@ export function AudioProvider({ children }) {
 
       const playPromise = audio.play();
       void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: true });
-
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            const startTime = audio.currentTime;
-            const watchdogTimer = setTimeout(() => {
-              if (
-                stateRef.current.isPlaying &&
-                audio.currentTime === startTime &&
-                !audio.paused
-              ) {
-                console.warn("[AUDIO WATCHDOG] Playing but no progress — retrying");
-                audio.load();
-                audio.play().catch(() => {});
-              }
-            }, 2000);
-            const clearWatchdog = () => {
-              clearTimeout(watchdogTimer);
-              audio.removeEventListener("timeupdate", clearWatchdog);
-            };
-            audio.addEventListener("timeupdate", clearWatchdog);
-          })
-          .catch(() => {});
-      }
 
       if (isReplay) {
         sendControlSystemPlaybackEvent(nextTrack, "replay", {
@@ -1971,7 +1947,7 @@ export function AudioProvider({ children }) {
       {children}
       <audio
         ref={audioRef}
-        preload="metadata"
+        preload="auto"
         playsInline
         {...{ "webkit-playsinline": "", "x-webkit-airplay": "allow" }}
         style={{ display: "none" }}
