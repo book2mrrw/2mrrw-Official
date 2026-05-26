@@ -1,0 +1,21 @@
+platform-a25-a30-full-audit-readonly-20260526.md
+platform-a25-a30-full-audit-readonly-20260526-manifest.txt
+
+Sections: A25 Gifting, A26 Community+Player, A27 Release Scheduler, A28 Collector Cards, A29 Fan Profile/Listening, A30 Vault Visual
+
+Primary: /Users/recharge/artist-platform
+Control: /Users/recharge/2MRRW-Control-System
+
+Key paths:
+A25 api: src/app/api/gifts/*, src/app/api/admin/gifts/route.js, src/app/api/cron/expire-gifts, gift-reminders
+A25 components: src/components/gifts/*
+A25 CS: 2MRRW-Control-System/src/app/api/gifts/*, src/server/gifts/giftService.ts, AdminGiftsPanel.tsx
+A25 db: supabase/migrations/20260522140000_gifting_system.sql, 003_guest_gifts_memberships.sql, 010_release_commerce_extensions.sql
+
+A26: src/app/page.js (blog,vision,circle,innercircle,live), src/app/api/community/*
+A27 CS: src/server/releases/scheduledPublishService.ts, src/app/api/cron/scheduled-releases/route.ts
+A27 storefront: src/lib/releases.js, src/components/home/catalogMedia.js, src/lib/playback/playback-gate.js
+
+A28: src/components/collectors-cards/*, src/app/collectors-cards/page.js, src/app/globals.css (collector-card-*)
+A29: src/app/page.js (account tab), src/lib/listening-history.js, src/hooks/useListeningHistory.js, src/components/music/MyMusicTab.js, supabase media_playback_progress
+A30: src/components/vault/*, src/app/api/public/vault/route.js, src/app/page.js (vault tab + innercircle VaultUnlockedRoom)

@@ -1,0 +1,37 @@
+React #185 Mobile Safari Audit (Read-Only) — 2026-05-26
+============================================================
+
+Last 6 commits (newest first):
+  097c6a6 fix(resilience): 4s timeout on all Control System calls…
+  f06ec3e feat(cs): CS button on all playback surfaces…
+  8497aa0 feat(cs): cinematic CS transition — blur-dissolve cover swap…
+  cd1986e fix(gifts): bulk collector query schema fix…
+  4c462c6 feat(catalog): map CS audio and cover fields from Control System API
+  2cb391c fix(audio): remove watchdog, fix crossfade guard, preload auto…
+
+Focus files (5):
+  src/hooks/useCsCoverTransition.js
+  src/components/preview/immersive/FloatingArtworkHero.js
+  src/components/preview/immersive/ImmersiveModalScene.js
+  src/components/audio/GlobalAudioPlayerBar.js
+  src/context/AudioContext.js
+
+Other files changed in last 6 commits (14):
+  src/app/api/catalog/hydrate/route.js
+  src/app/api/catalog/releases/route.js
+  src/app/api/gifts/bulk/route.js
+  src/app/globals.css
+  src/app/page.js
+  src/components/audio/PlayerCsBarButton.js
+  src/components/player/ImmersivePlayerEngine/FloatingMainPlayer.js
+  src/components/preview/immersive/ImmersiveModalStage.js
+  src/components/preview/immersive/PreviewPlayerControls.js
+  src/components/preview/immersive/TrackMeta.js
+  src/components/ui/CoverArtCS.js
+  src/lib/control-system/client.js
+  src/lib/control-system/media.js
+  src/lib/control-system/releases.js
+
+Report bundle:
+  docs/reports/react-185-mobile-safari-audit-readonly-20260526.md
+  docs/reports/react-185-mobile-safari-audit-readonly-20260526-manifest.txt

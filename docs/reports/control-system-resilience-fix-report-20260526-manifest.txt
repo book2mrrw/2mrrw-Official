@@ -1,0 +1,6 @@
+control-system-resilience-fix-report-20260526.md
+artist-platform/src/lib/control-system/client.js
+artist-platform/src/lib/control-system/media.js
+artist-platform/src/app/api/catalog/hydrate/route.js
+artist-platform/src/app/api/catalog/releases/route.js
+artist-platform/src/app/page.js

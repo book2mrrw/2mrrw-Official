@@ -1,0 +1,6 @@
+cs-api-bulk-gifts-fix-report-20260526.md
+2MRRW-Control-System/src/app/api/public/releases/route.ts
+2MRRW-Control-System/src/app/api/releases/[slug]/media/route.ts
+2MRRW-Control-System/src/server/media/mediaObjects.ts
+artist-platform/src/lib/control-system/releases.js
+artist-platform/src/app/api/gifts/bulk/route.js

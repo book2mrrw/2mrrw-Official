@@ -1,0 +1,26 @@
+control-system-call-site-audit-readonly-20260526 — files referenced
+
+Source (repository)
+- src/lib/control-system/client.js
+- src/lib/control-system/releases.js
+- src/lib/control-system/media.js
+- src/lib/control-system/vault.js
+- src/lib/control-system/playback.js
+- src/lib/control-system/audio-visuals.js
+- src/lib/control-system/account.js
+- src/lib/control-system/circle.js
+- src/hooks/sync/useRealtimeEvents.js
+- src/hooks/sync/useSyncEngine.js
+- src/hooks/media/useMediaAssets.js
+- src/hooks/releases/useReleases.js
+- src/context/AudioContext.js
+- src/app/page.js
+- src/app/api/catalog/hydrate/route.js
+- src/app/api/catalog/releases/route.js
+- scripts/recovery/lib/env-check.mjs
+
+Symbols / env (audit call-outs)
+- getControlSystemApiUrl, buildControlSystemUrl, fetchControlSystemJson
+- fetchSignedUrl, fetchSignedUrlsBatch, resolveEntitledMediaAssetUrl
+- getControlSystemVaultMedia, sendControlSystemPlaybackEvent
+- NEXT_PUBLIC_CONTROL_SYSTEM_API_URL, NEXT_PUBLIC_CONTROL_SYSTEM_URL
