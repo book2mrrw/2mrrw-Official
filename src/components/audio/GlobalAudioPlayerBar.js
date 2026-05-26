@@ -12,6 +12,7 @@ import {
 } from "@/components/player/ImmersivePlayerEngine";
 import { useMediaEngine } from "@/media/useMediaEngine";
 import { ClosePlayerButton } from "@/components/audio/PlayerControlButton";
+import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import { formatPlayerTime } from "@/lib/player/formatTime";
 import { useRenderTracker } from "@/lib/dev/useRenderTracker";
@@ -180,6 +181,9 @@ function MiniPlayerDock({
   onSeek,
   onSkipBack,
   onSkipForward,
+  showCs,
+  csActive,
+  onToggleCs,
   progress,
   onCoverTouchStart,
   onCoverTouchMove,
@@ -259,6 +263,9 @@ function MiniPlayerDock({
               className="player-immersive-dock-ring"
             />
             <Skip15Button direction="forward" ariaLabel="Skip forward 15 seconds" onClick={onSkipForward} />
+            {showCs ? (
+              <PlayerCsBarButton active={csActive} onClick={onToggleCs} />
+            ) : null}
             <ClosePlayerButton onClick={onStop} size={18} />
           </div>
           <PlayerBarScrub
@@ -292,8 +299,10 @@ function GlobalAudioPlayerBar() {
       duration: engineDuration,
       isPlaying: engineIsPlaying,
       currentTrack: engineCurrentTrack,
+      csMode: engineCsMode,
     },
     seek: engineSeek,
+    toggleCSMode: engineToggleCSMode,
   } = useMediaEngine();
   const {
     currentTrack,
@@ -604,6 +613,12 @@ function GlobalAudioPlayerBar() {
     return Math.max(0, Math.min(100, (dockCurrentTime / dockDuration) * 100));
   }, [dockCurrentTime, dockDuration]);
 
+  const showCs = Boolean(currentTrack?.hasCs || currentTrack?.csAudio);
+  const dockCsMode = engineCsMode ?? csMode;
+  const handleToggleCs = useCallback(() => {
+    void (engineToggleCSMode ?? toggleCSMode)?.();
+  }, [engineToggleCSMode, toggleCSMode]);
+
   const closeExpanded = useCallback(() => {
     setSwipeClosing(true);
     setSwipeOffset(120);
@@ -869,6 +884,9 @@ function GlobalAudioPlayerBar() {
             onSeek={handleEngineSeek}
             onSkipBack={handleSkipBack15}
             onSkipForward={handleSkipForward15}
+            showCs={showCs}
+            csActive={dockCsMode}
+            onToggleCs={handleToggleCs}
             progress={dockProgress}
             previewOnly={previewOnly}
             onCoverTouchStart={handleCoverTouchStart}

@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import GiftIcon from "@/components/gifts/GiftIcon";
-import CSModeButton from "@/components/audio/CSModeButton";
+import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
 import {
   HoldSeekButton,
   RepeatButton,
@@ -13,6 +13,7 @@ import CoverArtCS from "@/components/ui/CoverArtCS";
 import SignaturePlayRing from "@/components/player/ImmersivePlayerEngine/SignaturePlayRing";
 import { formatPlayerTime } from "@/lib/player/formatTime";
 import { PLAYER_LAYOUT_ID } from "@/lib/player/constants";
+import { useMediaEngine } from "@/media/useMediaEngine";
 
 function FloatingMainPlayer({
   currentTrack,
@@ -58,6 +59,12 @@ function FloatingMainPlayer({
   onCoverTouchMove,
   onCoverTouchEnd,
 }) {
+  const {
+    state: { csMode: engineCsMode },
+    toggleCSMode: engineToggleCSMode,
+  } = useMediaEngine();
+  const showCs = Boolean(currentTrack?.hasCs || currentTrack?.csAudio);
+  const csModeActive = engineCsMode;
   const sourceLabel = String(currentTrack.source || "audio").replace(/_/g, " ");
 
   return (
@@ -180,6 +187,12 @@ function FloatingMainPlayer({
               onTapSeek={() => seekForward(15)}
               onScrubTick={(s) => seekForward(Math.abs(s))}
             />
+            {showCs ? (
+              <PlayerCsBarButton
+                active={csModeActive}
+                onClick={() => void engineToggleCSMode?.()}
+              />
+            ) : null}
             {!isSmallScreen ? (
               <TrackTransportButton direction="forward" size={44} onClick={() => playNext()} />
             ) : (
@@ -204,7 +217,6 @@ function FloatingMainPlayer({
                 toggleRepeat();
               }}
             />
-            <CSModeButton />
           </div>
 
           {hasQueue && queueLabel ? (

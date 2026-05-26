@@ -2,6 +2,7 @@
 
 import { memo } from "react";
 import CoverArt from "@/components/ui/CoverArt";
+import { useCsCoverTransition } from "@/hooks/useCsCoverTransition";
 import { isMotionCoverMedia } from "@/hooks/useCoverPalette";
 
 /**
@@ -11,16 +12,32 @@ import { isMotionCoverMedia } from "@/hooks/useCoverPalette";
 function FloatingArtworkHero({
   coverSrc,
   coverType,
+  baseCoverSrc,
+  baseCoverType,
+  csCoverSrc,
+  csCoverType,
+  csMode = false,
   coverArtKey,
   title,
   palette,
   isMobile,
 }) {
-  const animated = palette?.animated ?? isMotionCoverMedia(coverSrc, coverType);
+  const baseSrc = baseCoverSrc ?? coverSrc;
+  const baseType = baseCoverType ?? coverType;
+  const { displaySrc, displayType, artPhaseClass } = useCsCoverTransition({
+    csMode,
+    baseSrc,
+    csSrc: csCoverSrc,
+    baseType,
+    csType: csCoverType ?? "image",
+  });
+
+  const animated = palette?.animated ?? isMotionCoverMedia(displaySrc, displayType);
   const artClass = [
     "modal-immersive-art",
     animated ? "" : "modal-immersive-art--pulse",
     isMobile ? "modal-immersive-art--mobile" : "",
+    artPhaseClass,
   ]
     .filter(Boolean)
     .join(" ");
@@ -29,9 +46,9 @@ function FloatingArtworkHero({
     <div className={`immersive-layer immersive-layer--hero ${artClass}`}>
       <div className="immersive-mp4-world">
         <CoverArt
-          key={coverArtKey}
-          src={coverSrc}
-          type={coverType}
+          key={`${coverArtKey}:${displaySrc}:${csMode ? "cs" : "base"}`}
+          src={displaySrc}
+          type={displayType}
           alt={title}
           width="100%"
           height="100%"

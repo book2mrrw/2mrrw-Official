@@ -294,6 +294,17 @@ function PreviewPlayerControls({
             .filter(Boolean)
             .join(" ")}
         />
+        {isFloating && showCs ? (
+          <button
+            type="button"
+            className={`player-cs-btn${csMode ? " player-cs-btn--active" : ""}`}
+            onClick={() => void toggleCSMode()}
+            title="Chopped & Slowed"
+            aria-label="Chopped and slowed mode"
+          >
+            <CsIcon />
+          </button>
+        ) : null}
         <span className="modal-immersive-player__time modal-immersive-player__time--end">
           {formatPlayerTime(displayDuration)}
         </span>

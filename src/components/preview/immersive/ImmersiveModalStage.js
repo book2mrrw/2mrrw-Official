@@ -34,7 +34,12 @@ function ImmersiveModalStage({
   const {
     state: { csMode, atmosphereLevel, playbackState, currentTime },
     analyser,
+    currentTrack,
   } = useMediaEngine();
+  const baseCoverSrc = currentTrack?.baseCover || currentTrack?.cover || coverSrc;
+  const baseCoverType = currentTrack?.coverArtType || coverType;
+  const csCoverSrc = currentTrack?.csCover || null;
+  const csCoverType = currentTrack?.csCoverType || "image";
   const stageClass = [className, isMobile ? "modal-immersive-stage--mobile" : ""].filter(Boolean).join(" ");
 
   return (
@@ -53,6 +58,11 @@ function ImmersiveModalStage({
       <FloatingArtworkHero
         coverSrc={coverSrc}
         coverType={coverType}
+        baseCoverSrc={baseCoverSrc}
+        baseCoverType={baseCoverType}
+        csCoverSrc={csCoverSrc}
+        csCoverType={csCoverType}
+        csMode={csMode}
         coverArtKey={coverArtKey}
         title={title}
         palette={palette}

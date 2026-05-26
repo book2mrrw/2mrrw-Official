@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useRef, useEffect } from "react";
+import { memo, useMemo, useRef, useEffect, useState } from "react";
 import { paletteToCssVars } from "@/hooks/useCoverPalette";
 
 function ImmersiveModalScene({
@@ -17,11 +17,23 @@ function ImmersiveModalScene({
   const orbBRef = useRef(null);
   const rafRef = useRef(null);
 
+  const [csEntering, setCsEntering] = useState(false);
+  const prevCsMode = useRef(csMode);
+
+  useEffect(() => {
+    if (prevCsMode.current === csMode) return undefined;
+    prevCsMode.current = csMode;
+    setCsEntering(true);
+    const timer = window.setTimeout(() => setCsEntering(false), 1200);
+    return () => window.clearTimeout(timer);
+  }, [csMode]);
+
   const sceneClass = [
     "modal-immersive-scene",
     "immersive-layer",
     "immersive-layer--scene",
     csMode ? "modal-immersive-scene--cs" : "",
+    csEntering ? "modal-immersive-scene--cs-entering" : "",
     playbackState === "ending" ? "modal-immersive-scene--ending" : "",
     previewOnly && currentTime >= 25 ? "modal-immersive-preview-closing" : "",
     atmosphereLevel === 1 ? "modal-immersive-scene--atmos-off" : "",

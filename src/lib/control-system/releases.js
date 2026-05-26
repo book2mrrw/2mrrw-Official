@@ -223,7 +223,7 @@ function mapTrackToFrontendTrack(track, release, fallbackTrack, apiBaseUrl) {
     },
     csAudio: track?.csAudio ?? track?.cs_audio ?? null,
     csCover: track?.csCover ?? track?.cs_cover ?? null,
-    hasCs: Boolean(track?.csAudio ?? track?.cs_audio),
+    hasCs: Boolean(track?.csAudio ?? track?.cs_audio ?? track?.csCover ?? track?.cs_cover),
     entitlement: track?.entitlement || null,
     playback: track?.playback || null,
   };
@@ -280,7 +280,7 @@ export function mapControlSystemRelease(release, fallbackRelease = {}, index = 0
     csAudio: release?.csAudio ?? release?.cs_audio ?? null,
     csCover: release?.csCover ?? release?.cs_cover ?? null,
     csCoverType: release?.csCoverType ?? release?.cs_cover_type ?? "image",
-    hasCs: Boolean(release?.csAudio ?? release?.cs_audio),
+    hasCs: Boolean(release?.csAudio ?? release?.cs_audio ?? release?.csCover ?? release?.cs_cover),
     preview,
     video,
     price,

@@ -367,7 +367,7 @@ export function AudioProvider({ children }) {
     const artwork = await getArtworkEntriesForTrack(track.cover, track.slug);
     try {
       ms.metadata = new MediaMetadata({
-        title: track.title || "Untitled",
+        title: csModeRef.current ? `${track.title || "Untitled"} ◈` : (track.title || "Untitled"),
         artist: track.artist || "2MRRW",
         album: track.source || "2MRRW",
         artwork,
@@ -1367,6 +1367,7 @@ export function AudioProvider({ children }) {
     const track = stateRef.current.currentTrack;
     if (!audio || !track || !stateRef.current.hasStarted) {
       patchState({ csMode: next, csTrack: next && track ? normalizeTrack(track) : null });
+      void updateMediaSession(track, { playing: stateRef.current.isPlaying });
       return next;
     }
 
@@ -1682,6 +1683,13 @@ export function AudioProvider({ children }) {
         const dur = audioRef.current?.duration || 0;
         seek(Math.min(dur, (audioRef.current?.currentTime || 0) + skipTime));
       });
+      try {
+        ms.setActionHandler("togglemicrophone", () => {
+          void toggleCSMode();
+        });
+      } catch {
+        /* togglemicrophone not supported */
+      }
     } catch {
       /* action handler not supported */
     }
@@ -1695,11 +1703,12 @@ export function AudioProvider({ children }) {
         ms.setActionHandler("stop", null);
         ms.setActionHandler("seekbackward", null);
         ms.setActionHandler("seekforward", null);
+        ms.setActionHandler("togglemicrophone", null);
       } catch {
         /* ignore */
       }
     };
-  }, [pause, resume, playNext, playPrevious, seek, stop]);
+  }, [pause, resume, playNext, playPrevious, seek, stop, toggleCSMode]);
 
   useEffect(() => {
     const onVisibility = async () => {

@@ -1,8 +1,7 @@
 "use client";
 
 import CoverArt from "./CoverArt";
-
-const CROSSFADE_MS = 300;
+import { useCsCoverTransition } from "@/hooks/useCsCoverTransition";
 
 export default function CoverArtCS({
   originalSrc,
@@ -24,6 +23,18 @@ export default function CoverArtCS({
   tabIndex,
   "aria-label": ariaLabel,
 }) {
+  const csMode = isLocked || csOpacity >= 1;
+  const { displaySrc, displayType, artPhaseClass } = useCsCoverTransition({
+    csMode: Boolean(csMode && csSrc),
+    baseSrc: originalSrc,
+    csSrc,
+    baseType: originalType,
+    csType: csType ?? "image",
+  });
+
+  const showCsLayer = Boolean(csSrc && (csOpacity > 0 || isLocked));
+  const coverClass = ["player-art-cover-layer", artPhaseClass].filter(Boolean).join(" ");
+
   return (
     <div
       className={className}
@@ -44,30 +55,19 @@ export default function CoverArtCS({
       onTouchEnd={onTouchEnd}
     >
       <CoverArt
-        src={originalSrc}
-        type={originalType}
+        src={showCsLayer ? displaySrc : originalSrc}
+        type={showCsLayer ? displayType : originalType}
         width="100%"
         height="100%"
         borderRadius={borderRadius}
-        style={{ position: "absolute", inset: 0 }}
+        className={coverClass}
+        style={{
+          position: "absolute",
+          inset: 0,
+          filter: showCsLayer && csMode ? "saturate(1.3) brightness(0.85)" : undefined,
+          opacity: showCsLayer && !isLocked ? csOpacity : 1,
+        }}
       />
-      {csSrc && (
-        <CoverArt
-          src={csSrc}
-          type={csType}
-          width="100%"
-          height="100%"
-          borderRadius={borderRadius}
-          style={{
-            position: "absolute",
-            inset: 0,
-            opacity: csOpacity,
-            filter: "saturate(1.3) brightness(0.85)",
-            transition: isLocked ? "none" : `opacity ${CROSSFADE_MS}ms ease`,
-            pointerEvents: "none",
-          }}
-        />
-      )}
     </div>
   );
 }

@@ -3676,6 +3676,31 @@ body.is-player-modal-open::before {
   }
 }
 
+.player-bar-cs {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+.player-bar-cs--active {
+  color: #7ec8ff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.9), 0 0 24px #7ec8ff, 0 0 48px rgba(77, 170, 255, 0.8);
+  animation: cs-pulse 2s ease-in-out infinite;
+}
+.player-bar-cs:active {
+  transform: scale(0.96);
+}
+
 .modal-immersive-scene--cs .modal-immersive-scene__orb--a,
 .modal-immersive-scene--cs .orb-a {
   animation-duration: 20s;
@@ -3691,6 +3716,74 @@ body.is-player-modal-open::before {
 .modal-immersive-scene--cs .modal-immersive-scene__scan,
 .modal-immersive-scene--cs .sc-scan {
   animation-duration: 8s;
+}
+
+.modal-immersive-scene--cs-entering .modal-immersive-scene__orb--a,
+.modal-immersive-scene--cs-entering .orb-a,
+.modal-immersive-scene--cs-entering .modal-immersive-scene__orb--b,
+.modal-immersive-scene--cs-entering .orb-b,
+.modal-immersive-scene--cs-entering .modal-immersive-scene__orb--c,
+.modal-immersive-scene--cs-entering .orb-c {
+  animation: cs-orb-pulse 800ms ease-in-out;
+}
+
+.modal-immersive-art--cs-entering .modal-immersive-art__cover,
+.modal-immersive-art--cs-exiting .modal-immersive-art__cover,
+.player-art-cover-layer.modal-immersive-art--cs-entering,
+.player-art-cover-layer.modal-immersive-art--cs-exiting {
+  animation: cs-cover-blur-in 200ms ease forwards, cs-cover-blur-out 400ms ease 200ms forwards;
+}
+
+.art-lbl--cs-pulse {
+  animation: cs-title-electric 400ms ease 800ms;
+}
+
+@keyframes cs-cover-blur-in {
+  from {
+    filter: blur(0);
+    opacity: 1;
+  }
+  to {
+    filter: blur(14px);
+    opacity: 0.85;
+  }
+}
+
+@keyframes cs-cover-blur-out {
+  from {
+    filter: blur(14px);
+    opacity: 0.85;
+  }
+  to {
+    filter: blur(0);
+    opacity: 1;
+  }
+}
+
+@keyframes cs-orb-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.12);
+    opacity: 0.95;
+  }
+}
+
+@keyframes cs-title-electric {
+  0%,
+  100% {
+    color: inherit;
+    text-shadow: none;
+  }
+  40% {
+    color: #b8e8ff;
+    text-shadow:
+      0 0 12px rgba(126, 200, 255, 0.95),
+      0 0 28px rgba(77, 170, 255, 0.65);
+  }
 }
 
 .modal-immersive-scene--atmos-minimal .modal-immersive-scene__orb {
