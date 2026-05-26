@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { isAdminUser } from "@/lib/auth/constants";
 
 const EMPTY_ACCOUNT_STATE = {
@@ -33,6 +33,11 @@ export function AuthProvider({ children }) {
   const [accountState, setAccountState] = useState(EMPTY_ACCOUNT_STATE);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  const sessionBootstrappedRef = useRef(false);
+  const applySessionUserRef = useRef(null);
+  const refreshAccountStateRef = useRef(null);
+  const refreshGuestRef = useRef(null);
 
   const applyAccountPayload = useCallback((data = {}) => {
     const items = data.library || data.items || [];
@@ -95,7 +100,7 @@ export function AuthProvider({ children }) {
     const data = await res.json();
     if (data.user) {
       const resolved = resolveUserFromSession({ user: data.user });
-      setUser(data.user);
+      setUser((prev) => (prev?.id === data.user.id ? prev : data.user));
       setIsAdmin(Boolean(data.permissions?.admin) || resolved?.isAdmin);
     }
     applyAccountPayload(data);
@@ -137,7 +142,15 @@ export function AuthProvider({ children }) {
     [refreshAccountState]
   );
 
+
+  applySessionUserRef.current = applySessionUser;
+  refreshAccountStateRef.current = refreshAccountState;
+  refreshGuestRef.current = refreshGuest;
+
   useEffect(() => {
+    if (sessionBootstrappedRef.current) return;
+    sessionBootstrappedRef.current = true;
+
     let mounted = true;
     let authSubscription = null;
 
@@ -161,9 +174,9 @@ export function AuthProvider({ children }) {
         if (resolved) {
           setUser(resolved.user);
           setIsAdmin(resolved.isAdmin);
-          await refreshAccountState();
+          await refreshAccountStateRef.current?.();
         } else {
-          await refreshGuest();
+          await refreshGuestRef.current?.();
         }
 
         const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -173,7 +186,7 @@ export function AuthProvider({ children }) {
             return;
           }
           if (event === "SIGNED_IN" && session) {
-            await applySessionUser(session);
+            await applySessionUserRef.current?.(session);
           }
         });
         authSubscription = authListener?.subscription;
@@ -188,7 +201,7 @@ export function AuthProvider({ children }) {
       mounted = false;
       authSubscription?.unsubscribe();
     };
-  }, [applySessionUser, refreshAccountState, refreshGuest]);
+  }, []);
 
   const enterGuest = useCallback(async ({ email, phone, name }) => {
     const res = await fetch("/api/guest/session", {
@@ -237,11 +250,17 @@ export function AuthProvider({ children }) {
     if (isAdminUser(nextUser)) setIsAdmin(true);
   }, []);
 
+  const userId = user?.id ?? null;
+
   useEffect(() => {
-    if (!isAdmin && !user) return;
+    if (!isAdmin && !userId) return;
     setAccountState((prev) => {
       const adminFlag = isAdmin || (user ? isAdminUser(user) : false);
-      if (prev.isAdmin === adminFlag && prev.permissions?.admin === adminFlag && prev.user === user) {
+      if (
+        prev.isAdmin === adminFlag &&
+        prev.permissions?.admin === adminFlag &&
+        (prev.user?.id ?? null) === userId
+      ) {
         return prev;
       }
       return {
@@ -251,7 +270,7 @@ export function AuthProvider({ children }) {
         permissions: { ...(prev.permissions || {}), admin: adminFlag || prev.permissions?.admin },
       };
     });
-  }, [isAdmin, user]);
+  }, [isAdmin, userId, user]);
 
   const owns = useCallback((slug) => ownedSlugs.has(slug), [ownedSlugs]);
 

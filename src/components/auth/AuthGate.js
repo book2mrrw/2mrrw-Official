@@ -94,6 +94,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
   const touchStartYRef = useRef(null);
   const draggingRef = useRef(false);
   const otpAutoSubmittedRef = useRef(false);
+  const completeProfileFetchedRef = useRef(false);
   const code = useMemo(() => digits.join(""), [digits]);
   const screen = mode === "otp" ? "otp" : mode === "signin" ? "signin" : "signup";
   const resetForm = useCallback(() => {
@@ -241,17 +242,22 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
           typeof window !== "undefined"
             ? sessionStorage.getItem("pendingProfileName")
             : "";
-        if (pendingPhone || pendingName) {
-          await fetch("/api/auth/complete-profile", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({
-              email: otpEmail,
-              phone: pendingPhone,
-              name: pendingName || name.trim() || undefined,
-            }),
-          });
+        if ((pendingPhone || pendingName) && !completeProfileFetchedRef.current) {
+          completeProfileFetchedRef.current = true;
+          try {
+            await fetch("/api/auth/complete-profile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                email: otpEmail,
+                phone: pendingPhone,
+                name: pendingName || name.trim() || undefined,
+              }),
+            });
+          } catch {
+            /* profile sync is best-effort */
+          }
         }
         if (typeof window !== "undefined") {
           sessionStorage.removeItem("pendingProfileName");

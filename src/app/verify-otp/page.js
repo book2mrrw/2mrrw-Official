@@ -25,6 +25,7 @@ function VerifyOtpForm() {
   const [resendIn, setResendIn] = useState(30);
   const inputsRef = useRef([]);
   const otpAutoSubmittedRef = useRef(false);
+  const completeProfileFetchedRef = useRef(false);
 
   const code = useMemo(() => digits.join(""), [digits]);
 
@@ -82,13 +83,18 @@ function VerifyOtpForm() {
         const pendingPhone = readPendingPhone() || undefined;
         const pendingName =
           typeof window !== "undefined" ? sessionStorage.getItem("pendingProfileName") : "";
-        if (pendingPhone || pendingName) {
-          await fetch("/api/auth/complete-profile", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ email, phone: pendingPhone, name: pendingName || undefined }),
-          });
+        if ((pendingPhone || pendingName) && !completeProfileFetchedRef.current) {
+          completeProfileFetchedRef.current = true;
+          try {
+            await fetch("/api/auth/complete-profile", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ email, phone: pendingPhone, name: pendingName || undefined }),
+            });
+          } catch {
+            /* profile sync is best-effort; OTP session still valid */
+          }
         }
         if (typeof window !== "undefined") {
           sessionStorage.removeItem("pendingProfileName");

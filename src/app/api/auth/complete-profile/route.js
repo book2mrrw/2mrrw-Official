@@ -3,6 +3,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminUser } from "@/lib/auth/constants";
 
+function isMissingColumnError(error) {
+  const msg = String(error?.message || "");
+  return /column|role|phone_verified/i.test(msg);
+}
+
 export async function POST(request) {
   try {
     const supabase = await createClient();
@@ -19,22 +24,58 @@ export async function POST(request) {
     const email = String(body.email || user.email || "").trim().toLowerCase();
     const name = String(body.name || "").trim();
 
-    const admin = createAdminClient();
-    const { data: existing } = await admin.from("profiles").select("role").eq("id", user.id).maybeSingle();
-    const role = existing?.role === "admin" || isAdminUser(user) ? "admin" : "user";
+    let admin;
+    try {
+      admin = createAdminClient();
+    } catch (err) {
+      console.error("complete-profile admin client:", err?.message || err);
+      return NextResponse.json({ error: "Profile service unavailable" }, { status: 503 });
+    }
 
-    const { error } = await admin.from("profiles").upsert({
+    let existingRole = null;
+    const { data: existing, error: existingError } = await admin
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!existingError) {
+      existingRole = existing?.role ?? null;
+    } else if (!isMissingColumnError(existingError)) {
+      throw existingError;
+    }
+
+    const role =
+      existingRole === "admin" || isAdminUser(user) ? "admin" : "user";
+
+    const fullRow = {
       id: user.id,
       email,
       phone: phone || null,
-      full_name: name || null,
+      full_name: name || "",
       phone_verified: Boolean(phone),
       role,
-    });
+    };
+
+    let { error } = await admin.from("profiles").upsert(fullRow, { onConflict: "id" });
+
+    if (error && isMissingColumnError(error)) {
+      const minimalRow = {
+        id: user.id,
+        email,
+        phone: phone || null,
+        full_name: name || "",
+      };
+      ({ error } = await admin.from("profiles").upsert(minimalRow, { onConflict: "id" }));
+    }
 
     if (error) throw error;
     return NextResponse.json({ ok: true });
   } catch (err) {
-    return NextResponse.json({ error: err.message || "Profile update failed" }, { status: 500 });
+    console.error("complete-profile error:", err?.message || err);
+    return NextResponse.json(
+      { error: err.message || "Profile update failed" },
+      { status: 500 }
+    );
   }
 }
