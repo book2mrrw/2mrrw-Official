@@ -114,10 +114,12 @@ export function paletteToCssVars(palette) {
     ["--modal-title-glow"]: p.titleGlow,
     /* Prototype scene aliases (cover-derived, not a theme catalog) */
     ["--p1"]: p.primaryCss,
+    ["--p1-dim"]: rgbToGlow(p.primary, 0.55),
+    ["--p1-dim2"]: rgbToGlow(p.primary, 0.22),
     ["--p2"]: p.secondaryCss,
     ["--accent"]: p.primaryCss,
-    ["--glow"]: p.primaryGlow,
-    ["--glow-dim"]: p.primaryMuted,
+    ["--glow"]: rgbToGlow(p.primary, 0.6),
+    ["--glow-dim"]: rgbToGlow(p.primary, 0.2),
     ["--modal-scene-dark"]: p.ambientTintCss,
   };
 }

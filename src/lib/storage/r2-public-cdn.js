@@ -1,6 +1,12 @@
 /** Documented public R2 dev URL (previews/, artwork/, images/). */
 export const R2_PUBLIC_CDN_FALLBACK = "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
 
+if (process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.includes("pub-992d4f5d")) {
+  console.error(
+    "[R2 CDN] WRONG PUBLIC URL IN ENV — audio/covers will 401. Update NEXT_PUBLIC_R2_PUBLIC_URL on Vercel."
+  );
+}
+
 /**
  * Base URL for browser-loadable public objects (no signing).
  * Uses NEXT_PUBLIC_R2_PUBLIC_URL when set; otherwise the documented fallback CDN.

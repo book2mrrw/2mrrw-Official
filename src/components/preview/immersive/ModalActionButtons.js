@@ -71,7 +71,7 @@ function ModalActionButtons({
           <>
             <button
               type="button"
-              className="modal-immersive-act-btn modal-immersive-act-btn--cart"
+              className="modal-immersive-act-btn modal-immersive-act-btn--cart cart-pulse"
               aria-label={priceLabel ? `Add to cart ${priceLabel}` : "Add to cart"}
               onClick={onAddToCart}
             >
@@ -86,7 +86,7 @@ function ModalActionButtons({
             </Link>
           </>
         ) : owned || canStream ? (
-          <span className="modal-immersive-act-btn modal-immersive-act-btn--collection" aria-hidden>
+          <span className="modal-immersive-act-btn modal-immersive-act-btn--collection col-glow" aria-hidden>
             <CollectionIcon />
           </span>
         ) : null}

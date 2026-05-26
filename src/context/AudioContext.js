@@ -1000,7 +1000,7 @@ export function AudioProvider({ children }) {
         audio.addEventListener("loadedmetadata", applyPendingSeek);
       }
 
-      const playAttempt = audio.play();
+      const playPromise = audio.play();
       void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: true });
 
       if (isReplay) {
@@ -1011,14 +1011,20 @@ export function AudioProvider({ children }) {
         });
       }
       patchState({ isPlaying: true, error: null, playbackState: "playing" });
-      playAttempt.catch(() => {
-        patchState({
-          isPlaying: false,
-          error: "Audio playback failed. Try again in a moment.",
-          playbackState: "paused",
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          console.error("[AUDIO PLAY ERROR]", err);
+          setTimeout(() => {
+            audio.play().catch((e) => console.error("[AUDIO PLAY RETRY]", e));
+          }, 150);
+          patchState({
+            isPlaying: false,
+            error: "Audio playback failed. Try again in a moment.",
+            playbackState: "paused",
+          });
+          void updateMediaSession(nextTrack, { playing: false });
         });
-        void updateMediaSession(nextTrack, { playing: false });
-      });
+      }
       return true;
     } catch {
       patchState({ isPlaying: false, error: "Audio playback failed. Try again in a moment.", playbackState: "paused" });

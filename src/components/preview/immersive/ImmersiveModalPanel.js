@@ -74,6 +74,18 @@ function ImmersiveModalPanel({
 
       {previewEndedCTA}
 
+      {canStream && trackAccess?.owned ? (
+        <div className="modal-immersive-owner-panel" role="status">
+          <span className="modal-immersive-owner-panel__check" aria-hidden>
+            ✓
+          </span>
+          <div className="modal-immersive-owner-panel__copy">
+            <span className="modal-immersive-owner-panel__title">You own this track</span>
+            <span className="modal-immersive-owner-panel__sub">Full quality stream unlocked</span>
+          </div>
+        </div>
+      ) : null}
+
       <ModalActionButtons
         showPurchase={showPurchase}
         showGift={isAdmin}

@@ -896,6 +896,14 @@ export default function Page() {
   }, [engineIsPlaying]);
 
   useEffect(() => {
+    if (isPlaying) {
+      Object.values(ambientRefs.current || {}).forEach((audio) => {
+        if (audio && !audio.paused) audio.pause();
+      });
+    }
+  }, [isPlaying]);
+
+  useEffect(() => {
     if (authLoading) return;
     if (featureModalOpen && featureModalItem?.slug && featureModalPlaySlugRef.current === featureModalItem.slug) {
       featureModalPlaySlugRef.current = null;
@@ -928,17 +936,16 @@ export default function Page() {
   ]);
 
   useEffect(() => {
-    if (!hasStarted || !currentTrack?.slug) return;
-    if (previewModalOpen || featureModalOpen) return;
-    const source = String(currentTrack.source || "");
-    const isCardPlayback =
-      source.includes("_card") || source === "feature" || source === "library";
-    if (!isCardPlayback) return;
-    setNowPlaying({
-      slug: currentTrack.slug,
-      title: currentTrack.title,
-      cover: currentTrack.cover || currentTrack.baseCover,
-    });
+    if (hasStarted && currentTrack && !previewModalOpen && !featureModalOpen) {
+      setNowPlaying({
+        slug: currentTrack.slug,
+        title: currentTrack.title,
+        cover: currentTrack.cover || currentTrack.baseCover,
+      });
+    }
+    if (!hasStarted) {
+      setNowPlaying(null);
+    }
   }, [hasStarted, currentTrack, previewModalOpen, featureModalOpen]);
 
   useEffect(() => {
@@ -1124,6 +1131,12 @@ export default function Page() {
     setSelectedAlbum(null);
     pause();
   }, [pause]);
+
+  useEffect(() => {
+    if (!selectedAlbum) return;
+    registerModal("album-modal");
+    return () => unregisterModal("album-modal");
+  }, [selectedAlbum]);
 
   const dismissNowPlaying = useCallback(() => {
     setNowPlaying(null);
@@ -1748,16 +1761,14 @@ export default function Page() {
                   <motion.div style={{marginTop:20,marginBottom:4}}>
                     <motion.div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:14,flexWrap:"wrap"}}>
                       <h2 className="section-heading" style={{margin:0}}>Latest Singles</h2>
-                      {currentUser ? (
-                        <button type="button" className="collection-portal-link" onClick={openCollection} aria-label="Open my music collection">
-                          <span className="collection-portal-link__icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
-                              <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
-                            </svg>
-                          </span>
-                          My Music Collection
-                        </button>
-                      ) : null}
+                      <button
+                        type="button"
+                        className="my-coll-btn"
+                        onClick={openCollection}
+                        aria-label="Open my music collection"
+                      >
+                        MY COLLECTION
+                      </button>
                     </motion.div>
 
                     <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:18,alignItems:"flex-start"}}>

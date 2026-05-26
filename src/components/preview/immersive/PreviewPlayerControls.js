@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, memo, useCallback } from "react";
+import { useMemo, memo, useCallback, useState, useEffect, useRef } from "react";
 import SignaturePlayRing from "@/components/player/ImmersivePlayerEngine/SignaturePlayRing";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { useMediaEngine } from "@/media/useMediaEngine";
@@ -39,6 +39,27 @@ function PreviewPlayerControls({
     setVolume,
   } = useMediaEngine();
   const { isBuffering, error, streamRetryable, retryStreamPlayback } = useAudioPlayer();
+
+  const [beat, setBeat] = useState(false);
+  const beatRef = useRef(null);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      setBeat(false);
+      return undefined;
+    }
+    const fire = () => {
+      setBeat(true);
+      beatRef.current = setTimeout(() => {
+        setBeat(false);
+        beatRef.current = setTimeout(fire, 380 + Math.random() * 120);
+      }, 110);
+    };
+    beatRef.current = setTimeout(fire, 400);
+    return () => {
+      if (beatRef.current) clearTimeout(beatRef.current);
+    };
+  }, [isPlaying]);
 
   const displayDuration = useMemo(() => {
     if (canStream && !previewOnly) return duration;
@@ -125,6 +146,7 @@ function PreviewPlayerControls({
           size={playSize}
           layoutId={undefined}
           onClick={togglePlay}
+          className={["c-lg", isPlaying ? "playing" : "", beat ? "beat" : ""].filter(Boolean).join(" ")}
         />
         <span className="modal-immersive-player__time modal-immersive-player__time--end">
           {formatPlayerTime(displayDuration)}

@@ -785,6 +785,10 @@ body {
   animation: modalCartPulse 3s ease-in-out infinite;
 }
 
+.modal-immersive-body .cart-pulse {
+  animation: mm-cart-pulse 2.6s ease-in-out infinite;
+}
+
 @keyframes modalCartPulse {
   0%,
   100% {
@@ -792,6 +796,17 @@ body {
   }
   50% {
     filter: drop-shadow(0 0 13px var(--glow)) drop-shadow(0 0 26px var(--glow-dim))
+      brightness(1.12);
+  }
+}
+
+@keyframes mm-cart-pulse {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 5px var(--glow)) drop-shadow(0 0 10px var(--glow-dim));
+  }
+  50% {
+    filter: drop-shadow(0 0 14px var(--glow)) drop-shadow(0 0 28px var(--glow-dim))
       brightness(1.12);
   }
 }
@@ -806,6 +821,10 @@ body {
   pointer-events: none;
 }
 
+.modal-immersive-body .col-glow {
+  animation: mm-col-glow 3s ease-in-out infinite;
+}
+
 @keyframes modalColGlow {
   0%,
   100% {
@@ -814,6 +833,66 @@ body {
   50% {
     filter: drop-shadow(0 0 10px var(--glow)) brightness(1.08);
   }
+}
+
+@keyframes mm-col-glow {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 4px var(--glow));
+  }
+  50% {
+    filter: drop-shadow(0 0 14px var(--glow));
+  }
+}
+
+.modal-immersive-body .c-lg.beat {
+  box-shadow: 0 0 42px var(--glow), 0 0 80px var(--glow-dim);
+}
+
+.modal-immersive-owner-panel {
+  margin-top: 10px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent, #00dcd2) 45%, transparent);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--glow-dim, rgba(0, 220, 210, 0.2)) 65%, rgba(255, 255, 255, 0.02)),
+    rgba(0, 0, 0, 0.28)
+  );
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-immersive-owner-panel__check {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #041214;
+  background: color-mix(in srgb, var(--accent, #00dcd2) 82%, #ffffff);
+  box-shadow: 0 0 14px var(--glow, rgba(0, 220, 210, 0.45));
+}
+
+.modal-immersive-owner-panel__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modal-immersive-owner-panel__title {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.modal-immersive-owner-panel__sub {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.62);
+  letter-spacing: 0.04em;
 }
 
 /* View More drawer — prototype sheet polish */
@@ -3020,6 +3099,25 @@ body.is-player-modal-open::before {
 }
 
 /* Homepage collection portal — premium gold beside Latest Singles */
+.my-coll-btn {
+  font-family: "DM Mono", monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #00ffff;
+  background: rgba(0, 255, 255, 0.12);
+  border: 1px solid rgba(0, 255, 255, 0.35);
+  border-radius: 20px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.my-coll-btn:hover {
+  background: rgba(0, 255, 255, 0.18);
+  box-shadow: 0 0 14px rgba(0, 255, 255, 0.2);
+}
+
 .collection-portal-link {
   position: relative;
   display: inline-flex;
