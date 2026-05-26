@@ -352,11 +352,12 @@ function GlobalAudioPlayerBar() {
   const touchDeltaY = useRef(0);
   const lastTapTimeRef = useRef(0);
   const holdRafRef = useRef(null);
+  const lastHoldOpacityRef = useRef(0);
   const holdActiveRef = useRef(false);
   const touchMovedRef = useRef(false);
   const touchStartRef = useRef(null);
   const tapTimeoutRef = useRef(null);
-  const ambientCoverUrlRef = useRef(null);
+  const lastAmbientUrlRef = useRef("");
   const csModeRef = useRef(csMode);
 
   const baseCover = currentTrack?.baseCover || currentTrack?.cover;
@@ -375,6 +376,7 @@ function GlobalAudioPlayerBar() {
   useEffect(() => {
     csModeRef.current = csMode;
     if (csMode) {
+      lastHoldOpacityRef.current = 0;
       setCsHoldOpacity(0);
       holdActiveRef.current = false;
     }
@@ -430,8 +432,8 @@ function GlobalAudioPlayerBar() {
     const ambient = csMode && csCover ? csCover : baseCover;
     if (!ambient) return;
     const newUrl = resolveAbsoluteArtworkUrl(ambient);
-    if (ambientCoverUrlRef.current !== newUrl) {
-      ambientCoverUrlRef.current = newUrl;
+    if (lastAmbientUrlRef.current !== newUrl) {
+      lastAmbientUrlRef.current = newUrl;
       setAmbientCoverUrl(newUrl);
     }
   }, [baseCover, csCover, csMode, currentTrack]);
@@ -466,7 +468,10 @@ function GlobalAudioPlayerBar() {
       const step = (now) => {
         const p = Math.min(1, (now - start) / duration);
         const value = from + (to - from) * p;
-        setCsHoldOpacity(value);
+        if (Math.abs(lastHoldOpacityRef.current - value) > 0.01) {
+          lastHoldOpacityRef.current = value;
+          setCsHoldOpacity(value);
+        }
         onFrame?.(value, p);
         if (p < 1) {
           holdRafRef.current = requestAnimationFrame(step);
@@ -493,6 +498,7 @@ function GlobalAudioPlayerBar() {
         lastTapTimeRef.current = 0;
         cancelHoldAnim();
         revertHoldPreview();
+        lastHoldOpacityRef.current = 0;
         setCsHoldOpacity(0);
         void toggleCSMode?.();
         return;
@@ -512,8 +518,8 @@ function GlobalAudioPlayerBar() {
       holdActiveRef.current = true;
       if (csCover) {
         const newUrl = resolveAbsoluteArtworkUrl(csCover);
-        if (ambientCoverUrlRef.current !== newUrl) {
-          ambientCoverUrlRef.current = newUrl;
+        if (lastAmbientUrlRef.current !== newUrl) {
+          lastAmbientUrlRef.current = newUrl;
           setAmbientCoverUrl(newUrl);
         }
       }
@@ -536,8 +542,8 @@ function GlobalAudioPlayerBar() {
             revertHoldPreview();
             if (baseCover) {
               const newUrl = resolveAbsoluteArtworkUrl(baseCover);
-              if (ambientCoverUrlRef.current !== newUrl) {
-                ambientCoverUrlRef.current = newUrl;
+              if (lastAmbientUrlRef.current !== newUrl) {
+                lastAmbientUrlRef.current = newUrl;
                 setAmbientCoverUrl(newUrl);
               }
             }
@@ -568,8 +574,8 @@ function GlobalAudioPlayerBar() {
           revertHoldPreview();
           if (baseCover) {
             const newUrl = resolveAbsoluteArtworkUrl(baseCover);
-            if (ambientCoverUrlRef.current !== newUrl) {
-              ambientCoverUrlRef.current = newUrl;
+            if (lastAmbientUrlRef.current !== newUrl) {
+              lastAmbientUrlRef.current = newUrl;
               setAmbientCoverUrl(newUrl);
             }
           }

@@ -5,10 +5,6 @@ import { useEffect, useRef, useState } from "react";
 export const CS_TRANSITION_TOTAL_MS = 1200;
 const SWAP_MS = 200;
 
-/**
- * 1.2s CS cover transition: blur-in 200ms → swap at 200ms → blur-out 400ms.
- * Returns phase classes for artwork, scene orb pulse, and title flash.
- */
 export function useCsCoverTransition({
   csMode,
   baseSrc,
@@ -16,50 +12,50 @@ export function useCsCoverTransition({
   baseType = "image",
   csType = "image",
 }) {
-  const [displaySrc, setDisplaySrc] = useState(() => (csMode && csSrc ? csSrc : baseSrc));
-  const [displayType, setDisplayType] = useState(() => (csMode && csSrc ? csType : baseType));
+  const targetSrc = csMode && csSrc ? csSrc : baseSrc;
+  const targetType = csMode && csSrc ? csType : baseType;
+  const [displaySrc, setDisplaySrc] = useState(targetSrc);
+  const [displayType, setDisplayType] = useState(targetType);
   const [phase, setPhase] = useState("idle");
-  const prevCsMode = useRef(csMode);
-  const lastDisplaySrcRef = useRef(csMode && csSrc ? csSrc : baseSrc);
-  const lastDisplayTypeRef = useRef(csMode && csSrc ? csType : baseType);
 
+  const prevCsModeRef = useRef(csMode);
+  const prevTargetSrcRef = useRef(targetSrc);
+  const isTransitioningRef = useRef(false);
+
+  // Handle CS MODE TOGGLE (csMode changed)
   useEffect(() => {
-    const targetSrc = csMode && csSrc ? csSrc : baseSrc;
-    const targetType = csMode && csSrc ? csType : baseType;
+    if (prevCsModeRef.current === csMode) return;
+    prevCsModeRef.current = csMode;
 
-    if (prevCsMode.current === csMode) {
-      if (lastDisplaySrcRef.current !== targetSrc) {
-        lastDisplaySrcRef.current = targetSrc;
-        setDisplaySrc(targetSrc);
-      }
-      if (lastDisplayTypeRef.current !== targetType) {
-        lastDisplayTypeRef.current = targetType;
-        setDisplayType(targetType);
-      }
-      return undefined;
-    }
+    if (isTransitioningRef.current) return;
+    isTransitioningRef.current = true;
 
-    prevCsMode.current = csMode;
     setPhase(csMode ? "entering" : "exiting");
-
     const swapTimer = window.setTimeout(() => {
-      if (lastDisplaySrcRef.current !== targetSrc) {
-        lastDisplaySrcRef.current = targetSrc;
-        setDisplaySrc(targetSrc);
-      }
-      if (lastDisplayTypeRef.current !== targetType) {
-        lastDisplayTypeRef.current = targetType;
-        setDisplayType(targetType);
-      }
+      setDisplaySrc(targetSrc);
+      setDisplayType(targetType);
+      prevTargetSrcRef.current = targetSrc;
     }, SWAP_MS);
-
-    const endTimer = window.setTimeout(() => setPhase("idle"), CS_TRANSITION_TOTAL_MS);
-
+    const endTimer = window.setTimeout(() => {
+      setPhase("idle");
+      isTransitioningRef.current = false;
+    }, CS_TRANSITION_TOTAL_MS);
     return () => {
       window.clearTimeout(swapTimer);
       window.clearTimeout(endTimer);
+      isTransitioningRef.current = false;
     };
-  }, [baseSrc, baseType, csMode, csSrc, csType]);
+  }, [csMode]); // ONLY watches csMode — nothing else
+
+  // Handle SRC CHANGE when not transitioning
+  // (catalog URL hydration, track change)
+  useEffect(() => {
+    if (isTransitioningRef.current) return;
+    if (prevTargetSrcRef.current === targetSrc) return;
+    prevTargetSrcRef.current = targetSrc;
+    setDisplaySrc(targetSrc);
+    setDisplayType(targetType);
+  }, [targetSrc, targetType]); // Only fires when src actually changes
 
   const artPhaseClass =
     phase === "entering"
