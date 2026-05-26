@@ -54,7 +54,7 @@ function PlayerArtwork({
           csSrc={csCoverUrl}
           csType={csCoverType}
           csOpacity={csOpacity}
-          isLocked={csMode}
+          csMode={csMode}
           width="100%"
           height="100%"
           borderRadius={borderRadius}

@@ -356,6 +356,7 @@ function GlobalAudioPlayerBar() {
   const touchMovedRef = useRef(false);
   const touchStartRef = useRef(null);
   const tapTimeoutRef = useRef(null);
+  const ambientCoverUrlRef = useRef(null);
   const csModeRef = useRef(csMode);
 
   const baseCover = currentTrack?.baseCover || currentTrack?.cover;
@@ -427,7 +428,12 @@ function GlobalAudioPlayerBar() {
   useEffect(() => {
     if (!currentTrack) return;
     const ambient = csMode && csCover ? csCover : baseCover;
-    if (ambient) setAmbientCoverUrl(resolveAbsoluteArtworkUrl(ambient));
+    if (!ambient) return;
+    const newUrl = resolveAbsoluteArtworkUrl(ambient);
+    if (ambientCoverUrlRef.current !== newUrl) {
+      ambientCoverUrlRef.current = newUrl;
+      setAmbientCoverUrl(newUrl);
+    }
   }, [baseCover, csCover, csMode, currentTrack]);
 
   const cancelHoldAnim = useCallback(() => {
@@ -504,9 +510,15 @@ function GlobalAudioPlayerBar() {
       }
 
       holdActiveRef.current = true;
+      if (csCover) {
+        const newUrl = resolveAbsoluteArtworkUrl(csCover);
+        if (ambientCoverUrlRef.current !== newUrl) {
+          ambientCoverUrlRef.current = newUrl;
+          setAmbientCoverUrl(newUrl);
+        }
+      }
       animateHoldOpacity(0, 1, HOLD_FADE_MS, (value, p) => {
         applyHoldAudio(p);
-        if (csCover) setAmbientCoverUrl(resolveAbsoluteArtworkUrl(csCover));
       });
     },
     [animateHoldOpacity, applyHoldAudio, cancelHoldAnim, csCover, hasCs, revertHoldPreview, toggleCSMode]
@@ -522,7 +534,13 @@ function GlobalAudioPlayerBar() {
         if (holdActiveRef.current && !csModeRef.current) {
           animateHoldOpacity(csHoldOpacity, 0, RELEASE_FADE_MS, null, () => {
             revertHoldPreview();
-            if (baseCover) setAmbientCoverUrl(resolveAbsoluteArtworkUrl(baseCover));
+            if (baseCover) {
+              const newUrl = resolveAbsoluteArtworkUrl(baseCover);
+              if (ambientCoverUrlRef.current !== newUrl) {
+                ambientCoverUrlRef.current = newUrl;
+                setAmbientCoverUrl(newUrl);
+              }
+            }
           });
         }
       }
@@ -548,7 +566,13 @@ function GlobalAudioPlayerBar() {
       if (holdActiveRef.current) {
         animateHoldOpacity(csHoldOpacity, 0, RELEASE_FADE_MS, null, () => {
           revertHoldPreview();
-          if (baseCover) setAmbientCoverUrl(resolveAbsoluteArtworkUrl(baseCover));
+          if (baseCover) {
+            const newUrl = resolveAbsoluteArtworkUrl(baseCover);
+            if (ambientCoverUrlRef.current !== newUrl) {
+              ambientCoverUrlRef.current = newUrl;
+              setAmbientCoverUrl(newUrl);
+            }
+          }
         });
         touchStartRef.current = null;
         return;

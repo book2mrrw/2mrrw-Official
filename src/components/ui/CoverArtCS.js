@@ -9,6 +9,7 @@ export default function CoverArtCS({
   csSrc,
   csType,
   csOpacity = 0,
+  csMode = false,
   isLocked = false,
   width,
   height,
@@ -23,17 +24,21 @@ export default function CoverArtCS({
   tabIndex,
   "aria-label": ariaLabel,
 }) {
-  const csMode = isLocked || csOpacity >= 1;
+  const lockedCsMode = csMode || isLocked;
   const { displaySrc, displayType, artPhaseClass } = useCsCoverTransition({
-    csMode: Boolean(csMode && csSrc),
+    csMode: Boolean(lockedCsMode && csSrc),
     baseSrc: originalSrc,
     csSrc,
     baseType: originalType,
     csType: csType ?? "image",
   });
 
-  const showCsLayer = Boolean(csSrc && (csOpacity > 0 || isLocked));
-  const coverClass = ["player-art-cover-layer", artPhaseClass].filter(Boolean).join(" ");
+  const showCsOverlay = Boolean(csSrc && (csOpacity > 0 || lockedCsMode));
+  const overlaySrc = lockedCsMode ? displaySrc : csSrc;
+  const overlayType = lockedCsMode ? displayType : csType ?? "image";
+  const coverClass = ["player-art-cover-layer", lockedCsMode ? artPhaseClass : ""]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <div
@@ -55,19 +60,34 @@ export default function CoverArtCS({
       onTouchEnd={onTouchEnd}
     >
       <CoverArt
-        src={showCsLayer ? displaySrc : originalSrc}
-        type={showCsLayer ? displayType : originalType}
+        src={originalSrc}
+        type={originalType}
         width="100%"
         height="100%"
         borderRadius={borderRadius}
-        className={coverClass}
+        className="player-art-cover-layer"
         style={{
           position: "absolute",
           inset: 0,
-          filter: showCsLayer && csMode ? "saturate(1.3) brightness(0.85)" : undefined,
-          opacity: showCsLayer && !isLocked ? csOpacity : 1,
         }}
       />
+      {showCsOverlay ? (
+        <CoverArt
+          src={overlaySrc}
+          type={overlayType}
+          width="100%"
+          height="100%"
+          borderRadius={borderRadius}
+          className={coverClass}
+          style={{
+            position: "absolute",
+            inset: 0,
+            filter: "saturate(1.3) brightness(0.85)",
+            opacity: lockedCsMode ? 1 : csOpacity,
+            pointerEvents: "none",
+          }}
+        />
+      ) : null}
     </div>
   );
 }

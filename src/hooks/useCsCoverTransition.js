@@ -20,14 +20,22 @@ export function useCsCoverTransition({
   const [displayType, setDisplayType] = useState(() => (csMode && csSrc ? csType : baseType));
   const [phase, setPhase] = useState("idle");
   const prevCsMode = useRef(csMode);
+  const lastDisplaySrcRef = useRef(csMode && csSrc ? csSrc : baseSrc);
+  const lastDisplayTypeRef = useRef(csMode && csSrc ? csType : baseType);
 
   useEffect(() => {
     const targetSrc = csMode && csSrc ? csSrc : baseSrc;
     const targetType = csMode && csSrc ? csType : baseType;
 
     if (prevCsMode.current === csMode) {
-      setDisplaySrc(targetSrc);
-      setDisplayType(targetType);
+      if (lastDisplaySrcRef.current !== targetSrc) {
+        lastDisplaySrcRef.current = targetSrc;
+        setDisplaySrc(targetSrc);
+      }
+      if (lastDisplayTypeRef.current !== targetType) {
+        lastDisplayTypeRef.current = targetType;
+        setDisplayType(targetType);
+      }
       return undefined;
     }
 
@@ -35,8 +43,14 @@ export function useCsCoverTransition({
     setPhase(csMode ? "entering" : "exiting");
 
     const swapTimer = window.setTimeout(() => {
-      setDisplaySrc(targetSrc);
-      setDisplayType(targetType);
+      if (lastDisplaySrcRef.current !== targetSrc) {
+        lastDisplaySrcRef.current = targetSrc;
+        setDisplaySrc(targetSrc);
+      }
+      if (lastDisplayTypeRef.current !== targetType) {
+        lastDisplayTypeRef.current = targetType;
+        setDisplayType(targetType);
+      }
     }, SWAP_MS);
 
     const endTimer = window.setTimeout(() => setPhase("idle"), CS_TRANSITION_TOTAL_MS);
