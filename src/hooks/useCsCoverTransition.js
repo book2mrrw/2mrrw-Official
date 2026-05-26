@@ -21,54 +21,61 @@ export function useCsCoverTransition({
   const prevCsModeRef = useRef(csMode);
   const prevTargetSrcRef = useRef(targetSrc);
   const isTransitioningRef = useRef(false);
+  const timersRef = useRef([]);
 
-  // Handle CS MODE TOGGLE (csMode changed)
+  const clearTimers = () => {
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+  };
+
   useEffect(() => {
     if (prevCsModeRef.current === csMode) return;
     prevCsModeRef.current = csMode;
-
     if (isTransitioningRef.current) return;
     isTransitioningRef.current = true;
-
+    clearTimers();
     setPhase(csMode ? "entering" : "exiting");
-    const swapTimer = window.setTimeout(() => {
-      setDisplaySrc(targetSrc);
-      setDisplayType(targetType);
-      prevTargetSrcRef.current = targetSrc;
-    }, SWAP_MS);
-    const endTimer = window.setTimeout(() => {
-      setPhase("idle");
-      isTransitioningRef.current = false;
-    }, CS_TRANSITION_TOTAL_MS);
+    timersRef.current.push(
+      window.setTimeout(() => {
+        setDisplaySrc(targetSrc);
+        setDisplayType(targetType);
+        prevTargetSrcRef.current = targetSrc;
+      }, SWAP_MS)
+    );
+    timersRef.current.push(
+      window.setTimeout(() => {
+        setPhase("idle");
+        isTransitioningRef.current = false;
+      }, CS_TRANSITION_TOTAL_MS)
+    );
     return () => {
-      window.clearTimeout(swapTimer);
-      window.clearTimeout(endTimer);
+      clearTimers();
       isTransitioningRef.current = false;
     };
-  }, [csMode]); // ONLY watches csMode — nothing else
+  }, [csMode]);
 
-  // Handle SRC CHANGE when not transitioning
-  // (catalog URL hydration, track change)
   useEffect(() => {
     if (isTransitioningRef.current) return;
     if (prevTargetSrcRef.current === targetSrc) return;
     prevTargetSrcRef.current = targetSrc;
     setDisplaySrc(targetSrc);
     setDisplayType(targetType);
-  }, [targetSrc, targetType]); // Only fires when src actually changes
+  }, [targetSrc, targetType]);
 
-  const artPhaseClass =
-    phase === "entering"
-      ? "modal-immersive-art--cs-entering"
-      : phase === "exiting"
-        ? "modal-immersive-art--cs-exiting"
-        : "";
+  useEffect(() => {
+    return () => clearTimers();
+  }, []);
 
   return {
     displaySrc,
     displayType,
     phase,
-    artPhaseClass,
+    artPhaseClass:
+      phase === "entering"
+        ? "modal-immersive-art--cs-entering"
+        : phase === "exiting"
+        ? "modal-immersive-art--cs-exiting"
+        : "",
     sceneEntering: phase === "entering" || phase === "exiting",
     titlePulseClass: phase === "entering" ? "art-lbl--cs-pulse" : "",
   };

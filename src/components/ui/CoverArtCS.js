@@ -24,7 +24,6 @@ export default function CoverArtCS({
   tabIndex,
   "aria-label": ariaLabel,
 }) {
-  const engineCsMode = csMode || isLocked;
   const { displaySrc, displayType, artPhaseClass } = useCsCoverTransition({
     csMode,
     baseSrc: originalSrc,
@@ -33,10 +32,10 @@ export default function CoverArtCS({
     csType: csType ?? "image",
   });
 
-  const showCsOverlay = Boolean(csSrc && (csOpacity > 0 || engineCsMode));
-  const overlaySrc = engineCsMode ? displaySrc : csSrc;
-  const overlayType = engineCsMode ? displayType : csType ?? "image";
-  const coverClass = ["player-art-cover-layer", engineCsMode ? artPhaseClass : ""]
+  const showCsOverlay = Boolean(csSrc && (csOpacity > 0 || csMode));
+  const overlaySrc = csMode ? displaySrc : csSrc;
+  const overlayType = csMode ? displayType : csType ?? "image";
+  const coverClass = ["player-art-cover-layer", csMode ? artPhaseClass : ""]
     .filter(Boolean)
     .join(" ");
 
@@ -83,7 +82,7 @@ export default function CoverArtCS({
             position: "absolute",
             inset: 0,
             filter: "saturate(1.3) brightness(0.85)",
-            opacity: engineCsMode ? 1 : csOpacity,
+            opacity: csMode ? 1 : csOpacity,
             pointerEvents: "none",
           }}
         />
