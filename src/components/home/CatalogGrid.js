@@ -9,6 +9,17 @@ import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
 import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
 import { albumCardPlaybackItem } from "@/lib/music-playback";
 import { withR2CatalogMedia, isUpcomingReleaseDate } from "@/components/home/catalogMedia";
+import { CountdownTimer } from "@/components/music/CountdownTimer";
+
+function LockIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M8 11V8a4 4 0 1 1 8 0v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, onOpenAlbumTracklist, isMobile, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   if (!items || items.length === 0) return null;
   const containerStyle = isMobile
@@ -26,6 +37,50 @@ export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut,
         const albumIsGifted =
           albumLibraryItem?.source === "gift" ||
           albumLibraryItem?.gifted === true;
+        const targetDate = item.scheduled_publish_at || item.date;
+        const isUpcoming =
+          item.status === "scheduled" || isUpcomingReleaseDate(targetDate);
+
+        if (isUpcoming) {
+          return (
+            <div
+              key={item.slug}
+              className="release-card release-card--upcoming"
+              style={{
+                ...(isMobile ? { flex: "0 0 160px", width: 160, scrollSnapAlign: "start" } : {}),
+                position: "relative",
+                background: "#0a0a0a",
+                borderRadius: isMobile ? 12 : 16,
+                overflow: "hidden",
+                border: "1px solid #1a1a1a",
+              }}
+            >
+              <div className="release-card-cover release-card-cover--locked">
+                <img
+                  src={item.cover}
+                  alt=""
+                  className="release-card-cover-img--blur"
+                  style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block" }}
+                />
+                <div className="release-card-upcoming-overlay">
+                  <div className="release-card-lock-icon">
+                    <LockIcon />
+                  </div>
+                  <div className="release-card-countdown">
+                    <CountdownTimer targetDate={targetDate} />
+                  </div>
+                </div>
+              </div>
+              <div className="release-card-meta" style={{ padding: isMobile ? "10px" : "14px 16px" }}>
+                <div className="release-card-title" style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700 }}>
+                  {item.title}
+                </div>
+                <div className="release-card-upcoming-label">DROPPING SOON</div>
+              </div>
+            </div>
+          );
+        }
+
         return (
         <div key={item.slug} style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
           {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(item)} /> : null}

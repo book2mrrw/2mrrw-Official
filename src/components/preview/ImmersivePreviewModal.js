@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, memo, useCallback, useEffect } from "react";
+import { useMemo, useState, memo, useCallback, useEffect, useRef } from "react";
+import { isFirstListen, markListened } from "@/lib/first-listen";
 import { useAudioPlayer } from "@/context/AudioContext";
 import PreviewEndedCTA from "@/components/preview/PreviewEndedCTA";
 import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview/releaseMetadata";
@@ -37,6 +38,9 @@ function ImmersivePreviewModal({
   const [contentReady, setContentReady] = useState(false);
   const [viewMoreOpen, setViewMoreOpen] = useState(false);
   const [glyphsOpen, setGlyphsOpen] = useState(false);
+  const [firstListen, setFirstListen] = useState(false);
+  const [ownershipMoment, setOwnershipMoment] = useState(false);
+  const prevCanStreamRef = useRef(false);
 
   const release = releaseDetail || single;
   const editorial = useMemo(() => getReleaseEditorial(release), [release]);
@@ -60,6 +64,27 @@ function ImmersivePreviewModal({
     });
     return () => cancelAnimationFrame(t);
   }, [single?.id, release?.slug, onImmersiveRenderStart, onImmersiveRenderEnd]);
+
+  useEffect(() => {
+    if (!single?.slug || !isFirstListen(single.slug)) return undefined;
+    setFirstListen(true);
+    const timer = setTimeout(() => {
+      setFirstListen(false);
+      markListened(single.slug);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [single?.slug]);
+
+  useEffect(() => {
+    if (trackAccess?.canStream && !prevCanStreamRef.current) {
+      setOwnershipMoment(true);
+      const timer = setTimeout(() => setOwnershipMoment(false), 800);
+      prevCanStreamRef.current = Boolean(trackAccess?.canStream);
+      return () => clearTimeout(timer);
+    }
+    prevCanStreamRef.current = Boolean(trackAccess?.canStream);
+    return undefined;
+  }, [trackAccess?.canStream]);
 
   const closeModal = useCallback(() => {
     setViewMoreOpen(false);
@@ -217,6 +242,7 @@ function ImmersivePreviewModal({
       onCloseGlyphs: handleCloseGlyphs,
       canStream,
       previewOnly,
+      track: single,
     }),
     [
       coverSrc,
@@ -293,7 +319,16 @@ function ImmersivePreviewModal({
         desktopStyle={desktopShellStyle}
       >
         <PlayerAtmosphere open />
-        <div className={["modal-immersive-body", isMobile ? "modal-immersive-body--mobile" : ""].filter(Boolean).join(" ")}>
+        <div
+          className={[
+            "modal-immersive-body",
+            isMobile ? "modal-immersive-body--mobile" : "modal-immersive-body--desktop",
+            firstListen ? "modal-immersive--first-listen" : "",
+            ownershipMoment ? "modal-immersive--owned-flash" : "",
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        >
           <ImmersiveModalEnvironment
             contentReady={contentReady}
             isMobile={isMobile}

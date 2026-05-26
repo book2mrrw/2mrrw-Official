@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
+import { getMediaEngineBridge, subscribeMediaEngine } from "@/media/mediaEngineBridge";
 
 /**
  * Maps AudioContext track shape to subscription-layer track fields.
@@ -51,6 +52,7 @@ function readVolume(audioRef) {
  */
 export function mapAudioContextToMediaEngine(audio) {
   const currentTrack = mapContextTrackToMediaTrack(audio.currentTrack);
+  const bridge = getMediaEngineBridge();
 
   return {
     state: {
@@ -60,6 +62,11 @@ export function mapAudioContextToMediaEngine(audio) {
       duration: audio.duration ?? 0,
       volume: readVolume(audio.audioRef),
       queue: audio.queue ?? [],
+      playbackState: audio.playbackState ?? null,
+      csMode: Boolean(audio.csMode),
+      spaceMode: Boolean(audio.spaceMode),
+      bassMode: Boolean(audio.bassMode),
+      atmosphereLevel: audio.atmosphereLevel ?? 3,
     },
     play: (track) => audio.playTrack(mapMediaTrackToPlayInput(track)),
     pause: audio.pause,
@@ -71,6 +78,11 @@ export function mapAudioContextToMediaEngine(audio) {
       if (Number.isFinite(v)) el.volume = v;
     },
     toggle: audio.toggle,
+    toggleCSMode: audio.toggleCSMode,
+    toggleSpaceMode: audio.toggleSpaceMode,
+    toggleBassBoost: audio.toggleBassBoost,
+    cycleAtmosphere: audio.cycleAtmosphere,
+    analyser: bridge?.getAnalyser?.() ?? audio.getAnalyser?.() ?? null,
   };
 }
 
@@ -79,5 +91,6 @@ export function mapAudioContextToMediaEngine(audio) {
  */
 export function useMediaEngine() {
   const audio = useAudioPlayer();
+  useSyncExternalStore(subscribeMediaEngine, () => getMediaEngineBridge()?.getState?.(), () => null);
   return useMemo(() => mapAudioContextToMediaEngine(audio), [audio]);
 }

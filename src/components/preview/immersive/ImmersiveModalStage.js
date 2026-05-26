@@ -8,6 +8,7 @@ import FloatingArtworkHero from "@/components/preview/immersive/FloatingArtworkH
 import ViewMoreExpansion from "@/components/preview/immersive/FloatingViewMore";
 import PreviewPlayerControls from "@/components/preview/immersive/PreviewPlayerControls";
 import GlyphLyricsPanel from "@/components/preview/GlyphLyricsPanel";
+import { useMediaEngine } from "@/media/useMediaEngine";
 
 function ImmersiveModalStage({
   className = "modal-immersive-stage",
@@ -28,12 +29,25 @@ function ImmersiveModalStage({
   onCloseGlyphs,
   canStream,
   previewOnly,
+  track = null,
 }) {
+  const {
+    state: { csMode, atmosphereLevel, playbackState, currentTime },
+    analyser,
+  } = useMediaEngine();
   const stageClass = [className, isMobile ? "modal-immersive-stage--mobile" : ""].filter(Boolean).join(" ");
 
   return (
     <section className={stageClass} style={style}>
-      <ImmersiveModalScene palette={palette} />
+      <ImmersiveModalScene
+        palette={palette}
+        analyser={analyser}
+        csMode={csMode}
+        atmosphereLevel={atmosphereLevel}
+        playbackState={playbackState}
+        previewOnly={previewOnly}
+        currentTime={currentTime}
+      />
       <AtmosphericBackgroundLayer src={coverSrc} type={coverType} palette={palette} />
       <AmbientLightingLayer palette={palette} />
       <FloatingArtworkHero
@@ -52,6 +66,7 @@ function ImmersiveModalStage({
             variant="floating"
             canStream={canStream}
             previewOnly={previewOnly}
+            track={track}
           />
         </div>
       ) : null}

@@ -3489,3 +3489,275 @@ body.is-player-modal-open::before {
     background-position: -200% 0;
   }
 }
+
+/* ── Complete implementation (cursor-complete-implementation) ── */
+
+.modal-immersive-preview-closing {
+  animation: preview-vignette 5s ease-in forwards;
+}
+@keyframes preview-vignette {
+  0% { box-shadow: inset 0 0 0px rgba(0, 0, 0, 0); }
+  100% { box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.88); }
+}
+
+.player-preview-ended-cta {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(62px + env(safe-area-inset-bottom, 0px) + 64px);
+  z-index: 7601;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: "DM Mono", monospace;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+}
+.player-preview-ended-cta[data-mobile="0"] {
+  left: 16px;
+  right: auto;
+  bottom: 72px;
+}
+.player-preview-ended-label {
+  color: rgba(255, 255, 255, 0.35);
+}
+.player-preview-ended-buy {
+  color: #00ffff;
+  border: 1px solid rgba(0, 255, 255, 0.4);
+  border-radius: 12px;
+  padding: 3px 9px;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+.player-preview-ended-buy:hover {
+  background: rgba(0, 255, 255, 0.12);
+}
+
+.modal-immersive-float-player .player-signature-ring,
+.modal-immersive-panel .player-signature-ring,
+.player-signature-ring {
+  touch-action: manipulation;
+}
+
+.player-cs-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.38);
+  flex-shrink: 0;
+  touch-action: manipulation;
+  transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.player-cs-btn--active {
+  color: #7ec8ff;
+  border-color: rgba(126, 200, 255, 0.55);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.9), 0 0 24px #7ec8ff, 0 0 48px rgba(77, 170, 255, 0.8);
+  animation: cs-pulse 2s ease-in-out infinite;
+}
+@keyframes cs-pulse {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.9), 0 0 24px #7ec8ff, 0 0 48px rgba(77, 170, 255, 0.8);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(255, 255, 255, 1), 0 0 36px #7ec8ff, 0 0 72px rgba(77, 170, 255, 1);
+  }
+}
+
+.modal-immersive-scene--cs .modal-immersive-scene__orb--a,
+.modal-immersive-scene--cs .orb-a {
+  animation-duration: 20s;
+}
+.modal-immersive-scene--cs .modal-immersive-scene__orb--b,
+.modal-immersive-scene--cs .orb-b {
+  animation-duration: 26s;
+}
+.modal-immersive-scene--cs .modal-immersive-scene__orb--c,
+.modal-immersive-scene--cs .orb-c {
+  animation-duration: 16s;
+}
+.modal-immersive-scene--cs .modal-immersive-scene__scan,
+.modal-immersive-scene--cs .sc-scan {
+  animation-duration: 8s;
+}
+
+.modal-immersive-scene--atmos-minimal .modal-immersive-scene__orb {
+  opacity: 0.4;
+}
+.modal-immersive-scene--atmos-off .modal-immersive-scene__orb,
+.modal-immersive-scene--atmos-off .modal-immersive-scene__rays,
+.modal-immersive-scene--atmos-off .modal-immersive-scene__scan {
+  opacity: 0;
+}
+
+.player-experience-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 10px;
+  padding: 0 4px;
+}
+.player-exp-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.32);
+  touch-action: manipulation;
+  transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+.player-exp-btn--active {
+  color: var(--accent, #00ffff);
+  border-color: var(--p1, rgba(0, 255, 255, 0.5));
+  box-shadow: 0 0 8px var(--glow, rgba(0, 255, 255, 0.35));
+}
+
+.modal-immersive--first-listen .modal-immersive-scene {
+  animation: scene-intro 2.5s ease-out forwards;
+}
+@keyframes scene-intro {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+.modal-immersive--first-listen .modal-immersive-artwork,
+.modal-immersive--first-listen .floating-artwork-hero {
+  animation: art-intro 2s ease-out 0.5s both;
+}
+@keyframes art-intro {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+.modal-immersive--first-listen .art-lbl {
+  animation: title-intro 2s ease-out 1s both;
+}
+@keyframes title-intro {
+  from { opacity: 0; letter-spacing: 0.12em; }
+  to { opacity: 1; letter-spacing: 0.04em; }
+}
+
+.modal-immersive--owned-flash {
+  animation: owned-flash 0.8s ease-out forwards;
+}
+@keyframes owned-flash {
+  0% { box-shadow: inset 0 0 0 rgba(0, 255, 255, 0); }
+  30% { box-shadow: inset 0 0 120px rgba(0, 255, 255, 0.35); }
+  100% { box-shadow: inset 0 0 0 rgba(0, 255, 255, 0); }
+}
+
+.modal-immersive-access-badge--owned {
+  animation: badge-stamp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes badge-stamp {
+  0% { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.modal-immersive-scene--ending {
+  animation: scene-exhale 2s ease-out forwards;
+}
+@keyframes scene-exhale {
+  from { opacity: 1; }
+  to { opacity: 0.3; }
+}
+
+.release-card-cover--locked {
+  position: relative;
+}
+.release-card-cover-img--blur {
+  filter: blur(6px) brightness(0.45);
+}
+.release-card-upcoming-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(0, 0, 0, 0.35);
+}
+.release-card-lock-icon {
+  color: rgba(255, 255, 255, 0.7);
+}
+.release-card-countdown,
+.countdown-timer {
+  font-family: "DM Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: #00ffff;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.countdown-sep {
+  opacity: 0.5;
+}
+.release-card-upcoming-label {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: #666;
+  margin-top: 6px;
+}
+
+@media (max-width: 375px) {
+  .modal-immersive-body {
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
+  }
+  .modal-immersive-float-player {
+    padding: 8px 14px 12px;
+  }
+  .modal-immersive-panel {
+    padding: 12px 14px 16px;
+  }
+}
+
+@media (min-width: 768px) {
+  .modal-immersive-overlay {
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .modal-immersive-shell {
+    width: 90vw;
+    max-width: 960px;
+    height: 90vh;
+    max-height: 780px;
+    border-radius: 24px;
+    flex-direction: row;
+  }
+  .modal-immersive-body--desktop {
+    display: flex;
+    flex-direction: row;
+    height: 100%;
+    width: 100%;
+  }
+  .modal-immersive-body--desktop .modal-immersive-stage,
+  .modal-immersive-body--desktop .immersive-desktop-stage-wrap {
+    flex: 0 0 55%;
+    height: 100%;
+    border-radius: 24px 0 0 24px;
+  }
+  .modal-immersive-body--desktop .modal-immersive-panel {
+    flex: 1;
+    height: 100%;
+    overflow-y: auto;
+    border-radius: 0 24px 24px 0;
+  }
+  .modal-immersive-body--desktop .drag-pill {
+    display: none;
+  }
+}

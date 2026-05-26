@@ -12,6 +12,7 @@ export default function GiftBottomSheet({
   release,
   senderUserId,
   isMobile,
+  isAdmin = false,
   onClose,
 }) {
   const [email, setEmail] = useState("");
@@ -25,6 +26,8 @@ export default function GiftBottomSheet({
   const [submitError, setSubmitError] = useState("");
   const [sending, setSending] = useState(false);
   const [successEmail, setSuccessEmail] = useState("");
+  const [bulkSending, setBulkSending] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
 
   const reset = useCallback(() => {
     setEmail("");
@@ -57,6 +60,32 @@ export default function GiftBottomSheet({
   }, [successEmail, onClose]);
 
   const emailValid = validateEmail(email).ok;
+
+  const handleBulkGift = async (recipientType) => {
+    if (!release?.slug || bulkSending) return;
+    setBulkSending(true);
+    setBulkResult(null);
+    setSubmitError("");
+    try {
+      const res = await fetch("/api/gifts/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          slug: release.slug,
+          recipient_type: recipientType,
+          message: message.trim() || null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Bulk gift failed");
+      setBulkResult(`Granted to ${data.granted} of ${data.total} recipients`);
+    } catch (err) {
+      setSubmitError(err.message || "Bulk gift failed");
+    } finally {
+      setBulkSending(false);
+    }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -330,6 +359,44 @@ export default function GiftBottomSheet({
 
                 {submitError ? (
                   <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 12 }}>{submitError}</div>
+                ) : null}
+
+                {isAdmin ? (
+                  <div className="gift-bulk-section" style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #1a1a1a" }}>
+                    <div className="gift-bulk-label" style={{ fontSize: 10, letterSpacing: 2, color: "#666", marginBottom: 10 }}>
+                      SEND TO GROUP
+                    </div>
+                    {["subscribers", "collectors", "all"].map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        className="gift-bulk-btn"
+                        disabled={bulkSending}
+                        onClick={() => void handleBulkGift(type)}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          marginBottom: 8,
+                          padding: "11px 14px",
+                          background: "#111",
+                          border: "1px solid #2a2a2a",
+                          borderRadius: 10,
+                          color: "#ccc",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          cursor: bulkSending ? "default" : "pointer",
+                          textAlign: "left",
+                        }}
+                      >
+                        {type === "subscribers" && "All Subscribers"}
+                        {type === "collectors" && "All Collector Card Owners"}
+                        {type === "all" && "Everyone on the Platform"}
+                      </button>
+                    ))}
+                    {bulkResult ? (
+                      <div style={{ fontSize: 12, color: "#00ffff", marginTop: 8 }}>{bulkResult}</div>
+                    ) : null}
+                  </div>
                 ) : null}
               </>
             )}

@@ -69,6 +69,7 @@ function ImmersiveModalPanel({
           compact={false}
           canStream={canStream}
           previewOnly={previewOnly}
+          track={single}
         />
       ) : null}
 

@@ -13,9 +13,15 @@ function ImmersiveModalAccessBadge({ trackAccess, canStream, palette }) {
 
   const preview = !canStream && !trackAccess?.owned;
 
+  const owned = Boolean(trackAccess?.owned || (canStream && trackAccess?.badge === "OWNED"));
+
   return (
     <div
-      className={["modal-immersive-access-badge", preview ? "modal-immersive-access-badge--preview" : ""]
+      className={[
+        "modal-immersive-access-badge",
+        preview ? "modal-immersive-access-badge--preview" : "",
+        owned ? "modal-immersive-access-badge--owned" : "",
+      ]
         .filter(Boolean)
         .join(" ")}
       style={paletteToCssVars(palette)}

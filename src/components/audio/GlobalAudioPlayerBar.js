@@ -66,6 +66,7 @@ function GlobalAudioPlayerBar() {
     overrideConcurrentStream,
     dismissStreamConflict,
     storeLinkHref,
+    playbackState,
   } = playback;
 
   const [isMobile, setIsMobile] = useState(false);
@@ -532,6 +533,18 @@ function GlobalAudioPlayerBar() {
           onTouchEnd={onTouchEnd}
         />
       )}
+
+      {!expanded && playbackState === "ended_preview" && currentTrack ? (
+        <div className="player-preview-ended-cta" data-mobile={isMobile ? "1" : undefined}>
+          <span className="player-preview-ended-label">PREVIEW ENDED</span>
+          <a
+            href={`/?track=${encodeURIComponent(currentTrack.slug)}&buy=1`}
+            className="player-preview-ended-buy"
+          >
+            OWN IT
+          </a>
+        </div>
+      ) : null}
 
       {!expanded && (
         <div style={dockShellStyle}>

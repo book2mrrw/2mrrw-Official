@@ -107,6 +107,9 @@ function SuccessContent() {
         let expectedSlugs = resolveExpectedSlugs(searchParams);
 
         await Promise.all([refreshAccountState(), refreshLibrary()]);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("entitlements:updated"));
+        }
 
         for (let attempt = 0; attempt <= 6; attempt += 1) {
           if (cancelled) return;

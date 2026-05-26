@@ -144,8 +144,8 @@ const radioSlides = [
 ];
 
 const features = [
-  { title:"I Don't Believe You", slug:"i-dont-believe-you", type:"feature", cover:"/images/features/idbu.jpg",   price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/i-dont-believe-you-preview.wav" },
-  { title:"2 Heavy",             slug:"2-heavy",            type:"feature", cover:"/images/features/2heavy.jpg", price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/2-heavy-preview.wav" },
+  { title:"I Don't Believe You", slug:"i-dont-believe-you", type:"feature", cover:"/images/features/idbu.jpg",   price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/i-dont-believe-you-preview.wav", csAudio: null, csCover: null, hasCs: false },
+  { title:"2 Heavy",             slug:"2-heavy",            type:"feature", cover:"/images/features/2heavy.jpg", price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/2-heavy-preview.wav", csAudio: null, csCover: null, hasCs: false },
 ];
 
 // ── SINGLES — FIXED: all paths point to /videos/singles/, wdaguys removed ────
@@ -158,6 +158,9 @@ const singles = [
     video: "/videos/singles/hourglass.mp4",
     price: 2.99,
     preview: "/audio/previews/hourglass-preview.mp3",
+    csAudio: null,
+    csCover: null,
+    hasCs: false,
   },
   {
     title: "W.2.D",
@@ -167,6 +170,9 @@ const singles = [
     video: "/videos/singles/w2d.mp4",
     price: 2.99,
     preview: "/audio/previews/w2d-preview.mp3",
+    csAudio: null,
+    csCover: null,
+    hasCs: false,
   },
   {
     title: "Artificial",
@@ -176,6 +182,9 @@ const singles = [
     video: "/videos/singles/artificial.mp4",
     price: 2.99,
     preview: "/audio/previews/artificial-preview.mp3",
+    csAudio: null,
+    csCover: null,
+    hasCs: false,
   },
   {
     title: "Turnt Me 2 Dis",
@@ -185,6 +194,9 @@ const singles = [
     video: "/videos/singles/turntme2dis.mp4",
     price: 2.99,
     preview: "/audio/previews/turntme2dis-preview.mp3",
+    csAudio: null,
+    csCover: null,
+    hasCs: false,
   },
 ];
 
@@ -1043,7 +1055,6 @@ export default function Page() {
   const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
 
   const openSingleModal = useCallback((single) => {
-    if (nowPlaying) setNowPlaying(null);
     if (featureModalOpen) {
       setFeatureModalOpen(false);
       setFeatureModalItem(null);
@@ -1212,6 +1223,9 @@ export default function Page() {
     setInventory(inv);
     setClientSecret(null); setCheckingOut(false); clearCart();
     await Promise.all([refreshAccountState(), refreshLibrary()]);
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("entitlements:updated"));
+    }
     setMembershipUpsellOpen(true);
     if (isMobile) setMobileCartOpen(false);
   };
@@ -2730,6 +2744,7 @@ export default function Page() {
         open={Boolean(giftSheetRelease)}
         release={giftSheetRelease}
         senderUserId={currentUser?.id}
+        isAdmin={isAdmin}
         isMobile={isMobile}
         onClose={() => setGiftSheetRelease(null)}
       />

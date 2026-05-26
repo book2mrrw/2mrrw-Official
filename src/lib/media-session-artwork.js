@@ -3,6 +3,7 @@ const ARTWORK_SIZE_ENTRIES = [
   { sizes: "128x128" },
   { sizes: "256x256" },
   { sizes: "512x512" },
+  { sizes: "1024x1024" },
 ];
 
 const artworkEntriesCache = new Map();

@@ -11,6 +11,7 @@ import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 export default function ReleaseCardPlayButton({ item, accountState, userId, source = "home_card", onPlayClick }) {
   const { playQueue, toggle, currentTrack, isPlaying, hasStarted, upgradeToFullStream } = useAudioPlayer();
   const upgradeTimerRef = useRef(null);
+  const lastTapRef = useRef(0);
 
   const access = useMemo(
     () => resolveTrackAccess(item, { ...accountState, userId }),
@@ -36,6 +37,9 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
   const handlePlay = useCallback(
     (e) => {
       e.stopPropagation();
+      const now = Date.now();
+      if (now - lastTapRef.current < 300) return;
+      lastTapRef.current = now;
       if (onPlayClick) {
         onPlayClick(e, item);
         return;
@@ -102,6 +106,7 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         padding: 0,
         boxShadow: showPause ? "0 0 10px rgba(0,255,255,0.2)" : "none",
         transition: "all 0.2s",
+        touchAction: "manipulation",
       }}
     >
       <span

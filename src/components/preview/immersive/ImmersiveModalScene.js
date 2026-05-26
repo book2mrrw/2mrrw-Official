@@ -1,27 +1,77 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, useRef, useEffect } from "react";
 import { paletteToCssVars } from "@/hooks/useCoverPalette";
 
-/**
- * CSS-only scene atmosphere (orbs, rays, grain) inside the modal stage.
- * Palette comes from useCoverPalette — no duplicate theme catalog.
- */
-function ImmersiveModalScene({ palette }) {
+function ImmersiveModalScene({
+  palette,
+  analyser = null,
+  csMode = false,
+  atmosphereLevel = 3,
+  playbackState = null,
+  previewOnly = false,
+  currentTime = 0,
+}) {
   const style = useMemo(() => paletteToCssVars(palette), [palette]);
+  const orbARef = useRef(null);
+  const orbBRef = useRef(null);
+  const rafRef = useRef(null);
+
+  const sceneClass = [
+    "modal-immersive-scene",
+    "immersive-layer",
+    "immersive-layer--scene",
+    csMode ? "modal-immersive-scene--cs" : "",
+    playbackState === "ending" ? "modal-immersive-scene--ending" : "",
+    previewOnly && currentTime >= 25 ? "modal-immersive-preview-closing" : "",
+    atmosphereLevel === 1 ? "modal-immersive-scene--atmos-off" : "",
+    atmosphereLevel === 2 ? "modal-immersive-scene--atmos-minimal" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  useEffect(() => {
+    if (!analyser) return undefined;
+    const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+    const tick = () => {
+      analyser.getByteFrequencyData(dataArray);
+      const bass = dataArray.slice(0, 4).reduce((a, b) => a + b, 0) / (4 * 255);
+      const mid = dataArray.slice(5, 20).reduce((a, b) => a + b, 0) / (15 * 255);
+
+      if (orbARef.current) {
+        orbARef.current.style.transform = `translate(${bass * 7}%, ${bass * 9}%) scale(${1 + bass * 0.15})`;
+      }
+      if (orbBRef.current) {
+        orbBRef.current.style.transform = `translate(${-mid * 7}%, ${-mid * 6}%) scale(${1 + mid * 0.1})`;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [analyser]);
 
   return (
-    <div className="modal-immersive-scene immersive-layer immersive-layer--scene" style={style} aria-hidden>
+    <div className={sceneClass} style={style} aria-hidden>
       <div className="modal-immersive-scene__gradient" />
-      <div className="modal-immersive-scene__orb modal-immersive-scene__orb--a" />
-      <div className="modal-immersive-scene__orb modal-immersive-scene__orb--b" />
-      <div className="modal-immersive-scene__orb modal-immersive-scene__orb--c" />
+      <div
+        ref={orbARef}
+        className="modal-immersive-scene__orb modal-immersive-scene__orb--a orb-a"
+      />
+      <div
+        ref={orbBRef}
+        className="modal-immersive-scene__orb modal-immersive-scene__orb--b orb-b"
+      />
+      <div className="modal-immersive-scene__orb modal-immersive-scene__orb--c orb-c" />
       <div className="modal-immersive-scene__rays">
         <span className="modal-immersive-scene__ray" />
         <span className="modal-immersive-scene__ray" />
         <span className="modal-immersive-scene__ray" />
       </div>
-      <div className="modal-immersive-scene__scan" />
+      <div className="modal-immersive-scene__scan sc-scan" />
       <div className="modal-immersive-scene__grain" />
     </div>
   );

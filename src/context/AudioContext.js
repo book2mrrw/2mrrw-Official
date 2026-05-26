@@ -44,6 +44,7 @@ import { preloadCoverImage } from "@/lib/media/preload";
 import { logPlayback } from "@/lib/observability/client-log";
 import { MARKS, perfMark, perfMeasure } from "@/lib/dev/performanceMarks";
 import AudioPhase10Bridge from "@/components/system/AudioPhase10Bridge";
+import { isFirstListen } from "@/lib/first-listen";
 
 const AudioContext = createContext(null);
 
@@ -91,6 +92,9 @@ const EMPTY_STATE = {
   csMode: false,
   csTrack: null,
   playbackState: null,
+  spaceMode: false,
+  bassMode: false,
+  atmosphereLevel: 3,
 };
 
 function stripSlowedSuffix(title) {
@@ -204,11 +208,16 @@ function preloadCsAssets(track, refs) {
 }
 
 export function AudioProvider({ children }) {
-  const { user } = useAuth();
+  const { user, accountState } = useAuth();
   const csImgRef = useRef(null);
   const csVidRef = useRef(null);
   const csAudioRef = useRef(null);
   const audioRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const analyserRef = useRef(null);
+  const sourceRef = useRef(null);
+  const stereoPannerRef = useRef(null);
+  const bassFilterRef = useRef(null);
   const lastPersistRef = useRef({ key: null, at: 0 });
   const pendingSeekRef = useRef(null);
   const stateRef = useRef(EMPTY_STATE);
@@ -384,6 +393,61 @@ export function AudioProvider({ children }) {
     syncPositionState(true);
   }, [updateMediaSession, syncPositionState]);
 
+  const initWebAudio = useCallback(() => {
+    if (audioCtxRef.current || typeof window === "undefined") return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.8;
+      const source = ctx.createMediaElementSource(audio);
+      const stereoPanner = ctx.createStereoPanner();
+      stereoPanner.pan.value = 0;
+      const bassFilter = ctx.createBiquadFilter();
+      bassFilter.type = "lowshelf";
+      bassFilter.frequency.value = 200;
+      bassFilter.gain.value = 0;
+      source.connect(analyser);
+      analyser.connect(stereoPanner);
+      stereoPanner.connect(bassFilter);
+      bassFilter.connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      analyserRef.current = analyser;
+      sourceRef.current = source;
+      stereoPannerRef.current = stereoPanner;
+      bassFilterRef.current = bassFilter;
+    } catch (e) {
+      console.warn("[WebAudio] Could not init:", e);
+    }
+  }, []);
+
+  const toggleSpaceMode = useCallback(() => {
+    const next = !stateRef.current.spaceMode;
+    patchState({ spaceMode: next });
+  }, [patchState]);
+
+  const toggleBassBoost = useCallback(() => {
+    const next = !stateRef.current.bassMode;
+    if (bassFilterRef.current) {
+      bassFilterRef.current.gain.setTargetAtTime(
+        next ? 8 : 0,
+        bassFilterRef.current.context.currentTime,
+        0.1
+      );
+    }
+    patchState({ bassMode: next });
+  }, [patchState]);
+
+  const cycleAtmosphere = useCallback(() => {
+    const current = stateRef.current.atmosphereLevel ?? 3;
+    const next = current <= 1 ? 3 : current - 1;
+    patchState({ atmosphereLevel: next });
+  }, [patchState]);
+
   useEffect(() => {
     stateRef.current = state;
     queueRef.current = state.queue || [];
@@ -407,8 +471,14 @@ export function AudioProvider({ children }) {
           duration: s.duration ?? 0,
           volume,
           queue: s.queue ?? [],
+          playbackState: s.playbackState,
+          csMode: s.csMode,
+          spaceMode: s.spaceMode,
+          bassMode: s.bassMode,
+          atmosphereLevel: s.atmosphereLevel,
         };
       },
+      getAnalyser: () => analyserRef.current,
     });
     return () => registerMediaEngineBridge(null);
   }, []);
@@ -502,7 +572,13 @@ export function AudioProvider({ children }) {
       }
 
       if (!userInitiated && track && audio.paused) {
-        /* External audio interruption — metadata retained, state paused */
+        const resumeAfterInterrupt = () => {
+          if (stateRef.current.isPlaying && audio.paused) {
+            audio.play().catch(() => {});
+          }
+          audio.removeEventListener("canplay", resumeAfterInterrupt);
+        };
+        audio.addEventListener("canplay", resumeAfterInterrupt);
       }
     };
 
@@ -513,19 +589,31 @@ export function AudioProvider({ children }) {
       const track = stateRef.current.currentTrack;
       const previewOnly = track?.metadata?.access?.previewOnly;
 
-      if (previewOnly && audio.currentTime >= PREVIEW_HARD_CAP_SEC) {
-        skipPauseInterruptionRef.current = true;
-        audio.pause();
-        audio.currentTime = PREVIEW_HARD_CAP_SEC;
-        patchState({
-          isPlaying: false,
-          currentTime: PREVIEW_HARD_CAP_SEC,
-          playbackState: "ended_preview",
-        });
-        setPreviewEnded(true);
-        onPreviewEndedRef.current?.(track);
-        dispatchPreviewEnded(track.slug);
+      if (previewOnly && audio.currentTime >= PREVIEW_HARD_CAP_SEC - 2) {
+        const fadeStart = PREVIEW_HARD_CAP_SEC - 2;
+        const elapsed = audio.currentTime - fadeStart;
+        const fadeProgress = Math.min(1, elapsed / 2);
+        audio.volume = Math.max(0, 1 - fadeProgress);
+
+        if (audio.currentTime >= PREVIEW_HARD_CAP_SEC) {
+          skipPauseInterruptionRef.current = true;
+          audio.pause();
+          audio.volume = 1;
+          audio.currentTime = PREVIEW_HARD_CAP_SEC;
+          patchState({
+            isPlaying: false,
+            currentTime: PREVIEW_HARD_CAP_SEC,
+            playbackState: "ended_preview",
+          });
+          setPreviewEnded(true);
+          onPreviewEndedRef.current?.(track);
+          dispatchPreviewEnded(track.slug);
+        }
         return;
+      }
+
+      if (previewOnly && audio.volume < 1 && audio.currentTime < PREVIEW_HARD_CAP_SEC - 2) {
+        audio.volume = 1;
       }
 
       if (track?.slug && audio.currentTime >= 30) {
@@ -577,51 +665,82 @@ export function AudioProvider({ children }) {
       stopProgressRaf();
       stopPositionSaveTimer();
       persistPlayback("complete");
+      patchState({ playbackState: "ending" });
+
       const repeatMode = repeatModeRef.current;
       const queue = queueRef.current;
       const queueIndex = queueIndexRef.current;
 
-      if (repeatMode === "one" && stateRef.current.currentTrack) {
-        audio.currentTime = 0;
-        audio.play().catch(() => {});
-        return;
-      }
+      const finishEnded = () => {
+        if (repeatMode === "one" && stateRef.current.currentTrack) {
+          audio.currentTime = 0;
+          audio.play().catch(() => {});
+          return;
+        }
 
-      if (queue.length > 0) {
-        let nextIndex = queueIndex + 1;
-        if (shuffleRef.current && queue.length > 1) {
-          let candidate = Math.floor(Math.random() * queue.length);
-          while (candidate === queueIndex) {
-            candidate = Math.floor(Math.random() * queue.length);
+        if (queue.length > 0) {
+          let nextIndex = queueIndex + 1;
+          if (shuffleRef.current && queue.length > 1) {
+            let candidate = Math.floor(Math.random() * queue.length);
+            while (candidate === queueIndex) {
+              candidate = Math.floor(Math.random() * queue.length);
+            }
+            nextIndex = candidate;
+          } else if (nextIndex >= queue.length) {
+            if (repeatMode === "all") nextIndex = 0;
+            else {
+              patchState({ isPlaying: false, currentTime: 0, playbackState: "idle" });
+              setPreviewEnded(false);
+              if (typeof navigator !== "undefined" && navigator.mediaSession) {
+                navigator.mediaSession.playbackState = "none";
+              }
+              if (track) void updateMediaSession(track, { playing: false });
+              return;
+            }
           }
-          nextIndex = candidate;
-        } else if (nextIndex >= queue.length) {
-          if (repeatMode === "all") nextIndex = 0;
-          else {
-            patchState({ isPlaying: false, currentTime: 0 });
-            if (track) void updateMediaSession(track, { playing: false });
+          const nextTrack = queue[nextIndex];
+          if (nextTrack) {
+            queueIndexRef.current = nextIndex;
+            patchState({ queueIndex: nextIndex, playbackState: "playing" });
+            void playTrackRef.current?.(nextTrack, { resumeAt: 0 }).then((ok) => {
+              if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
+            });
             return;
           }
         }
-        const nextTrack = queue[nextIndex];
-        if (nextTrack) {
-          queueIndexRef.current = nextIndex;
-          patchState({ queueIndex: nextIndex });
-          void playTrackRef.current?.(nextTrack, { resumeAt: 0 }).then((ok) => {
-            if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
-          });
-          return;
-        }
-      }
 
-      patchState({ isPlaying: false, currentTime: 0 });
-      if (track) void updateMediaSession(track, { playing: false });
+        patchState({ isPlaying: false, currentTime: 0, playbackState: "idle" });
+        setPreviewEnded(false);
+        if (typeof navigator !== "undefined" && navigator.mediaSession) {
+          navigator.mediaSession.playbackState = "none";
+        }
+        if (track) void updateMediaSession(track, { playing: false });
+      };
+
+      setTimeout(finishEnded, 2000);
     };
     const onError = async () => {
       const track = stateRef.current.currentTrack;
       const slug = track?.slug || streamMetaRef.current?.slug;
       const at = new Date().toISOString();
       console.error("[stream] playback error", { trackId: track?.id || slug, slug, at });
+
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        const onOnline = () => {
+          window.removeEventListener("online", onOnline);
+          const current = stateRef.current.currentTrack;
+          if (current) {
+            streamErrorRetriedRef.current = false;
+            void playTrackRef.current?.(current, {
+              resumeAt: audio.currentTime || 0,
+              forceStream: true,
+            });
+          }
+        };
+        window.addEventListener("online", onOnline);
+        patchState({ error: "RECONNECTING", isBuffering: true });
+        return;
+      }
 
       const meta = streamMetaRef.current;
       const resumeAt = audio.currentTime || 0;
@@ -700,6 +819,20 @@ export function AudioProvider({ children }) {
     audio.addEventListener("playing", onPlaying);
     audio.addEventListener("canplaythrough", onCanPlayThrough);
 
+    let onDeviceChange = null;
+    if (navigator.mediaDevices?.addEventListener) {
+      onDeviceChange = () => {
+        navigator.mediaDevices.enumerateDevices().then((devices) => {
+          const hasAudioOut = devices.some((d) => d.kind === "audiooutput");
+          if (!hasAudioOut && stateRef.current.isPlaying) {
+            userPausedRef.current = true;
+            audio.pause();
+          }
+        });
+      };
+      navigator.mediaDevices.addEventListener("devicechange", onDeviceChange);
+    }
+
     return () => {
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
@@ -713,6 +846,9 @@ export function AudioProvider({ children }) {
       audio.removeEventListener("stalled", onStalled);
       audio.removeEventListener("playing", onPlaying);
       audio.removeEventListener("canplaythrough", onCanPlayThrough);
+      if (onDeviceChange && navigator.mediaDevices?.removeEventListener) {
+        navigator.mediaDevices.removeEventListener("devicechange", onDeviceChange);
+      }
       stopProgressRaf();
       stopPositionSaveTimer();
     };
@@ -768,6 +904,10 @@ export function AudioProvider({ children }) {
   }, []);
 
   const playTrack = useCallback(async (track, options = {}) => {
+    initWebAudio();
+    if (audioCtxRef.current?.state === "suspended") {
+      void audioCtxRef.current.resume();
+    }
     setPreviewEnded(false);
     if (!track || (typeof track !== "object")) {
       console.error("[AudioContext] playTrack: invalid track", track);
@@ -929,14 +1069,20 @@ export function AudioProvider({ children }) {
         resumeAt = saved.positionSeconds;
       }
     }
+    if (!resumeAt && accountState?.mediaProgress?.length) {
+      const savedProgress = accountState.mediaProgress.find(
+        (p) => p.product_slug === nextTrack.slug && !p.completed
+      );
+      if (savedProgress?.position_seconds > 5) {
+        resumeAt = savedProgress.position_seconds;
+      }
+    }
 
-    const currentSrc = audio.currentSrc || audio.src;
-    const nextUrl = new URL(syncSrc, window.location.href).href;
     const prevTrack = stateRef.current.currentTrack;
     const sameIdentity =
       (prevTrack?.slug && nextTrack.slug && prevTrack.slug === nextTrack.slug) ||
       stateRef.current.currentTrackId === nextTrack.id;
-    const isSameTrack = sameIdentity && currentSrc === nextUrl;
+    const isSameTrack = sameIdentity;
     const isReplay = isSameTrack && audio.ended;
     const previousTrack = stateRef.current.currentTrack;
 
@@ -977,14 +1123,44 @@ export function AudioProvider({ children }) {
     preloadCsAssets(normalized, { csImgRef, csVidRef, csAudioRef });
 
     try {
+      if (
+        !isSameTrack &&
+        stateRef.current.isPlaying &&
+        audio.currentTime > 0 &&
+        !audio.paused
+      ) {
+        const startVol = audio.volume > 0 ? audio.volume : 1;
+        await new Promise((resolve) => {
+          const fadeOut = setInterval(() => {
+            audio.volume = Math.max(0, audio.volume - startVol / 10);
+            if (audio.volume <= 0) {
+              clearInterval(fadeOut);
+              audio.volume = startVol;
+              resolve();
+            }
+          }, 30);
+          setTimeout(() => {
+            clearInterval(fadeOut);
+            audio.volume = startVol;
+            resolve();
+          }, 300);
+        });
+      }
+
       if (!isSameTrack) {
         skipPauseInterruptionRef.current = true;
         audio.pause();
         audio.src = syncSrc;
         audio.load();
         pendingSeekRef.current = resumeAt;
-      } else if (resumeAt && Math.abs(audio.currentTime - resumeAt) > 2) {
-        audio.currentTime = resumeAt;
+      } else {
+        if (!audio.paused && stateRef.current.isPlaying) {
+          applyCsToElement(audio, presentation, pendingSeekRef.current || null);
+          return true;
+        }
+        if (resumeAt && Math.abs(audio.currentTime - resumeAt) > 2) {
+          audio.currentTime = resumeAt;
+        }
       }
 
       applyCsToElement(audio, presentation, pendingSeekRef.current || null);
@@ -1000,8 +1176,42 @@ export function AudioProvider({ children }) {
         audio.addEventListener("loadedmetadata", applyPendingSeek);
       }
 
+      if (isFirstListen(nextTrack.slug)) {
+        audio.volume = 0;
+        let vol = 0;
+        const swell = setInterval(() => {
+          vol = Math.min(1, vol + 0.033);
+          audio.volume = vol;
+          if (vol >= 1) clearInterval(swell);
+        }, 100);
+      }
+
       const playPromise = audio.play();
       void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: true });
+
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            const startTime = audio.currentTime;
+            const watchdogTimer = setTimeout(() => {
+              if (
+                stateRef.current.isPlaying &&
+                audio.currentTime === startTime &&
+                !audio.paused
+              ) {
+                console.warn("[AUDIO WATCHDOG] Playing but no progress — retrying");
+                audio.load();
+                audio.play().catch(() => {});
+              }
+            }, 2000);
+            const clearWatchdog = () => {
+              clearTimeout(watchdogTimer);
+              audio.removeEventListener("timeupdate", clearWatchdog);
+            };
+            audio.addEventListener("timeupdate", clearWatchdog);
+          })
+          .catch(() => {});
+      }
 
       if (isReplay) {
         sendControlSystemPlaybackEvent(nextTrack, "replay", {
@@ -1034,6 +1244,8 @@ export function AudioProvider({ children }) {
     recordLocalListening,
     resolveLibraryStreamForTrack,
     finalizeStreamSession,
+    initWebAudio,
+    accountState?.mediaProgress,
   ]);
 
   const upgradeToFullStream = useCallback(async () => {
@@ -1095,6 +1307,18 @@ export function AudioProvider({ children }) {
       return false;
     }
   }, [patchState, resolveLibraryStreamForTrack]);
+
+  useEffect(() => {
+    const onEntitlementsUpdated = () => {
+      const track = stateRef.current.currentTrack;
+      const meta = track?.metadata?.access;
+      if (meta?.previewOnly && stateRef.current.isPlaying) {
+        void upgradeToFullStream();
+      }
+    };
+    window.addEventListener("entitlements:updated", onEntitlementsUpdated);
+    return () => window.removeEventListener("entitlements:updated", onEntitlementsUpdated);
+  }, [upgradeToFullStream]);
 
   const setOnPreviewEnded = useCallback((handler) => {
     onPreviewEndedRef.current = typeof handler === "function" ? handler : null;
@@ -1470,6 +1694,18 @@ export function AudioProvider({ children }) {
       ms.setActionHandler("previoustrack", handlePrev);
       ms.setActionHandler("nexttrack", handleNext);
       ms.setActionHandler("seekto", handleSeek);
+      ms.setActionHandler("stop", () => {
+        stop();
+      });
+      ms.setActionHandler("seekbackward", (details) => {
+        const skipTime = details?.seekOffset ?? 10;
+        seek(Math.max(0, (audioRef.current?.currentTime || 0) - skipTime));
+      });
+      ms.setActionHandler("seekforward", (details) => {
+        const skipTime = details?.seekOffset ?? 10;
+        const dur = audioRef.current?.duration || 0;
+        seek(Math.min(dur, (audioRef.current?.currentTime || 0) + skipTime));
+      });
     } catch {
       /* action handler not supported */
     }
@@ -1480,11 +1716,14 @@ export function AudioProvider({ children }) {
         ms.setActionHandler("previoustrack", null);
         ms.setActionHandler("nexttrack", null);
         ms.setActionHandler("seekto", null);
+        ms.setActionHandler("stop", null);
+        ms.setActionHandler("seekbackward", null);
+        ms.setActionHandler("seekforward", null);
       } catch {
         /* ignore */
       }
     };
-  }, [pause, resume, playNext, playPrevious, seek]);
+  }, [pause, resume, playNext, playPrevious, seek, stop]);
 
   useEffect(() => {
     const onVisibility = async () => {
@@ -1493,7 +1732,6 @@ export function AudioProvider({ children }) {
 
       if (document.visibilityState === "hidden") {
         if (!track || !stateRef.current.hasStarted || !audio) return;
-        visibilityPausedRef.current = true;
         wasPlayingBeforeHideRef.current = stateRef.current.isPlaying && !audio.paused;
         const position = audio.currentTime || 0;
         const userId = listeningUserIdRef.current;
@@ -1505,63 +1743,22 @@ export function AudioProvider({ children }) {
             isFinite(audio.duration) ? audio.duration : 0
           );
         }
-        userPausedRef.current = false;
-        skipPauseInterruptionRef.current = true;
-        audio.pause();
-        patchState({ isPlaying: false });
-        return;
-      }
-
-      if (document.visibilityState === "visible" && visibilityPausedRef.current) {
-        visibilityPausedRef.current = false;
-        if (!track || !audio) {
-          rehydrateMediaSession();
-          return;
-        }
-        const userId = listeningUserIdRef.current;
-        let resumeAt = audio.currentTime || 0;
-        if (userId && track.slug) {
-          const saved = getSavedPlaybackPosition(userId, track.slug);
-          if (saved?.positionSeconds > 0) resumeAt = saved.positionSeconds;
-        }
-
         const meta = streamMetaRef.current;
         const slug = meta?.slug || parseStreamSlugFromSrc(track.src) || track.slug;
-        try {
-          if (slug && meta && streamUrlNeedsRefresh(meta)) {
-            const data = await fetchLibraryStream(slug, { force: false });
-            streamMetaRef.current = {
-              ...meta,
-              url: data.url,
-              fetchedAt: Date.now(),
-              expiresIn: data.expiresIn || 3600,
-              streamEventId: data.streamEventId || meta.streamEventId,
-              sessionId: data.sessionId || meta.sessionId,
-            };
-            skipPauseInterruptionRef.current = true;
-            audio.src = data.url;
-            audio.load();
-          }
-          if (resumeAt > 0) {
-            const seekAfterLoad = () => {
-              if (resumeAt > 0 && isFinite(audio.duration)) {
-                audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
-              }
-              audio.removeEventListener("loadedmetadata", seekAfterLoad);
-            };
-            audio.addEventListener("loadedmetadata", seekAfterLoad);
-            if (isFinite(audio.duration) && audio.duration > 0) seekAfterLoad();
-          }
-          if (wasPlayingBeforeHideRef.current) {
-            userPausedRef.current = false;
-            await audio.play();
-            patchState({ isPlaying: true });
-            void updateMediaSession(track, { playing: true });
-          }
-        } catch {
-          /* leave paused if refresh fails */
+        if (slug && meta && streamUrlNeedsRefresh(meta)) {
+          void fetchLibraryStream(slug, { force: false })
+            .then((data) => {
+              streamMetaRef.current = {
+                ...meta,
+                url: data.url,
+                fetchedAt: Date.now(),
+                expiresIn: data.expiresIn || 3600,
+                streamEventId: data.streamEventId || meta.streamEventId,
+                sessionId: data.sessionId || meta.sessionId,
+              };
+            })
+            .catch(() => {});
         }
-        rehydrateMediaSession();
         return;
       }
 
@@ -1593,13 +1790,31 @@ export function AudioProvider({ children }) {
       if (isStandalonePwa()) return;
     };
 
+    const onPageHide = () => {
+      const audioEl = audioRef.current;
+      if (audioEl && stateRef.current.isPlaying) {
+        const t = stateRef.current.currentTrack;
+        const userId = listeningUserIdRef.current;
+        if (userId && t?.slug) {
+          savePlaybackPosition(
+            userId,
+            t.slug,
+            audioEl.currentTime || 0,
+            isFinite(audioEl.duration) ? audioEl.duration : 0
+          );
+        }
+      }
+    };
+
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pageshow", onPageShow);
     window.addEventListener("beforeunload", onBeforeUnload);
+    window.addEventListener("pagehide", onPageHide);
     return () => {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("pagehide", onPageHide);
     };
   }, [rehydrateMediaSession, patchState, updateMediaSession]);
 
@@ -1710,6 +1925,10 @@ export function AudioProvider({ children }) {
     setOnPreviewEnded,
     previewEnded,
     setPreviewEnded,
+    toggleSpaceMode,
+    toggleBassBoost,
+    cycleAtmosphere,
+    getAnalyser: () => analyserRef.current,
   }), [
     pause,
     playQueue,
@@ -1739,6 +1958,9 @@ export function AudioProvider({ children }) {
     setOnPreviewEnded,
     previewEnded,
     setPreviewEnded,
+    toggleSpaceMode,
+    toggleBassBoost,
+    cycleAtmosphere,
   ]);
 
   useEffect(() => () => stopProgressRaf(), [stopProgressRaf]);
@@ -1751,6 +1973,7 @@ export function AudioProvider({ children }) {
         ref={audioRef}
         preload="metadata"
         playsInline
+        {...{ "webkit-playsinline": "", "x-webkit-airplay": "allow" }}
         style={{ display: "none" }}
       />
     </AudioContext.Provider>
