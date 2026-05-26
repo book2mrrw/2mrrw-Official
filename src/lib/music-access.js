@@ -149,9 +149,8 @@ export function resolveTrackAccess(track, accountState = {}) {
     subscriptionActive && Boolean(permissions.subscriber);
   const subscription =
     subscriptionActive &&
-    (subscriptionViaLibrary ||
-      subscriptionGlobal ||
-      Boolean(accountState.subscriberActive));
+    (Boolean(permissions.subscriber) || Boolean(accountState.subscriberActive)) &&
+    (subscriptionViaLibrary || subscriptionGlobal);
 
   const collector =
     collectorCardOwner ||
@@ -256,6 +255,15 @@ export function partitionLibraryByType(library = [], catalog = { singles: [], al
  * @param {object} item - track, single, album, or feature
  * @param {object} accountState
  */
+/** True when inline card play or preview stream should be offered. */
+export function itemHasPlayableAudio(item, access) {
+  if (!item) return false;
+  if (access?.canStream || access?.canPreview) return true;
+  if (item.preview || item.preview_path || item.previewPath) return true;
+  const tracks = item.tracks || item.trackTitles;
+  return Array.isArray(tracks) && tracks.length > 0;
+}
+
 export function resolveContentAccess(item, accountState = {}) {
   const trackAccess = resolveTrackAccess(item, accountState);
   const membership = accountState.membership || null;

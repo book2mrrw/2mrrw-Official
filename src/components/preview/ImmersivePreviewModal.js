@@ -6,6 +6,7 @@ import PreviewEndedCTA from "@/components/preview/PreviewEndedCTA";
 import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview/releaseMetadata";
 import { extractLrcFromRelease } from "@/lib/lrc";
 import { useCoverPalette, paletteToCssVars } from "@/hooks/useCoverPalette";
+import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 import { usePlayerBodyState } from "@/lib/player/usePlayerBodyState";
 import { PlayerAtmosphere } from "@/components/player/ImmersivePlayerEngine";
 import ModalShell from "@/components/modal/ModalShell";
@@ -99,8 +100,9 @@ function ImmersivePreviewModal({
     [closeModal]
   );
 
-  const coverSrc = single?.video || single?.cover || null;
-  const coverType = single?.coverArtType || (single?.video ? "video" : "image");
+  const coverDisplay = useMemo(() => catalogCoverDisplay(single || {}), [single]);
+  const coverSrc = coverDisplay.src;
+  const coverType = coverDisplay.type || single?.coverArtType || "image";
   const coverArtKey = single?.slug || single?.id || "preview";
   const palette = useCoverPalette(coverSrc, coverType);
   const paletteVars = paletteToCssVars(palette);

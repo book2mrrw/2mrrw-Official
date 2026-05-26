@@ -3,7 +3,9 @@
 import { memo } from "react";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
+import ReleaseCardPlayButton from "@/components/music/ReleaseCardPlayButton";
 import { resolveContentAccess } from "@/lib/music-access";
+import { withR2CatalogMedia } from "@/components/home/catalogMedia";
 
 function RadioCarousel({
   narrow = false,
@@ -114,6 +116,12 @@ function RadioCarousel({
             <div style={{ fontSize: isMobile ? 16 : 20, color: "#00ffff", fontWeight: 700 }}>${currentSlide.price.toFixed(2)}</div>
           ) : null}
           <div style={{ display: "flex", gap: 10, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}>
+            <ReleaseCardPlayButton
+              item={withR2CatalogMedia(currentSlide)}
+              accountState={accountState}
+              userId={currentUserId}
+              source="home_radio_carousel"
+            />
             {radioAccess?.showCart ? (
               <button
                 onClick={() =>

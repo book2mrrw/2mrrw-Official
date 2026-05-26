@@ -1,0 +1,36 @@
+# full-modal-audio-audit-20260526 bundle manifest
+# generated: 2026-05-26
+
+/Users/recharge/artist-platform/src/state/ui/modalStackStore.js
+/Users/recharge/artist-platform/src/components/modal/ModalShell.js
+/Users/recharge/artist-platform/src/components/preview/ImmersivePreviewModal.js
+/Users/recharge/artist-platform/src/components/preview/PreviewEndedCTA.js
+/Users/recharge/artist-platform/src/components/preview/PreviewModalPlayer.js
+/Users/recharge/artist-platform/src/components/preview/immersive/* (all 15)
+/Users/recharge/artist-platform/src/components/music/AlbumTracklistSheet.js
+/Users/recharge/artist-platform/src/components/music/ReleaseCardPlayButton.js
+/Users/recharge/artist-platform/src/components/music/MyMusicTab.js
+/Users/recharge/artist-platform/src/components/home/FeaturesRail.js
+/Users/recharge/artist-platform/src/components/home/RadioCarousel.js
+/Users/recharge/artist-platform/src/components/home/CarouselUI.js
+/Users/recharge/artist-platform/src/components/home/CatalogGrid.js
+/Users/recharge/artist-platform/src/components/audio/GlobalAudioPlayerBar.js
+/Users/recharge/artist-platform/src/context/AudioContext.js (partial)
+/Users/recharge/artist-platform/src/lib/player/useImmersivePlayback.js
+/Users/recharge/artist-platform/src/lib/music-playback.js
+/Users/recharge/artist-platform/src/lib/music-access.js
+/Users/recharge/artist-platform/src/media/useMediaEngine.js
+/Users/recharge/artist-platform/src/media/mediaEngineBridge.js
+/Users/recharge/artist-platform/src/media/MediaEngine.js
+/Users/recharge/artist-platform/src/app/page.js (modal/audio sections)
+/Users/recharge/artist-platform/src/app/globals.css (z-index excerpts)
+/Users/recharge/artist-platform/docs/reports/audio-system-full-audit-20260525.md
+/Users/recharge/artist-platform/docs/reports/audio-modal-unified-fix-20260526.md
+/Users/recharge/artist-platform/docs/reports/full-modal-audio-audit-20260526.md
+/Users/recharge/artist-platform/docs/reports/audio-system-full-audit-20260525.md
+/Users/recharge/artist-platform/docs/reports/audio-modal-unified-fix-20260526.md
+/Users/recharge/artist-platform/docs/reports/audio-logic-audit-20260525.md
+/Users/recharge/artist-platform/docs/reports/audio-logic-fix-20260525.md
+/Users/recharge/artist-platform/docs/reports/manifest-audio-audit.txt
+/Users/recharge/artist-platform/docs/reports/site-feedback-fixes-20260526.md
+/Users/recharge/artist-platform/docs/reports/immersive-modal-mobile-integration-20260525.md

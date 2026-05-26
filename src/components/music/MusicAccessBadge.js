@@ -8,7 +8,9 @@ export default function MusicAccessBadge({ access, label, compact }) {
       ? "#a259ff"
       : access?.subscription || String(text).includes("Subscription")
         ? "#00ffff"
-        : "#888";
+        : access?.canStream
+          ? "#00ffff"
+          : "#888";
   return (
     <span
       style={{

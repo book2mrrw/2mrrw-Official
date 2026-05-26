@@ -6,7 +6,8 @@ import GiftIcon from "@/components/gifts/GiftIcon";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
-import { resolveContentAccess } from "@/lib/music-access";
+import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
+import { albumCardPlaybackItem } from "@/lib/music-playback";
 import { withR2CatalogMedia, isUpcomingReleaseDate } from "@/components/home/catalogMedia";
 export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, onOpenAlbumTracklist, isMobile, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   if (!items || items.length === 0) return null;
@@ -17,6 +18,8 @@ export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut,
     <div className={isMobile?`${type}-row`:""} style={containerStyle}>
       {items.map(item=>{
         const access = resolveContentAccess(item, accountState);
+        const showPlayActions = itemHasPlayableAudio(item, access);
+        const playItem = type === "albums" ? albumCardPlaybackItem(item) : item;
         const albumLibraryItem = accountState?.library?.find(
           (lib) => lib.slug === item?.slug
         );
@@ -71,13 +74,14 @@ export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut,
             ) : null}
             {access?.showPrice && <div style={{fontSize:isMobile?12:13,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${item.price.toFixed(2)}</div>}
             <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}} onClick={type==="albums"?e=>e.stopPropagation():undefined}>
-              {access?.showCart && type==="albums" ? (
+              {showPlayActions && type==="albums" ? (
                 <div style={{flex:1,minWidth:0}}>
                   <ReleaseCardActions
-                    item={withR2CatalogMedia(item)}
+                    item={withR2CatalogMedia(playItem)}
                     accountState={accountState}
                     userId={userId}
                     source="home_album_card"
+                    showCart={Boolean(access?.showCart)}
                     onPlayClick={(e) => {
                       e.stopPropagation();
                       onOpenAlbumTracklist?.(withR2CatalogMedia(item));

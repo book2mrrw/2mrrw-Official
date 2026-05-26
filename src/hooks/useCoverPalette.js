@@ -112,6 +112,13 @@ export function paletteToCssVars(palette) {
     ["--modal-gradient-bottom"]: p.gradientBottom,
     ["--modal-accent-outline"]: p.accentOutline,
     ["--modal-title-glow"]: p.titleGlow,
+    /* Prototype scene aliases (cover-derived, not a theme catalog) */
+    ["--p1"]: p.primaryCss,
+    ["--p2"]: p.secondaryCss,
+    ["--accent"]: p.primaryCss,
+    ["--glow"]: p.primaryGlow,
+    ["--glow-dim"]: p.primaryMuted,
+    ["--modal-scene-dark"]: p.ambientTintCss,
   };
 }
 

@@ -41,6 +41,7 @@ import CarouselUI from "@/components/home/CarouselUI";
 import FeaturesRail from "@/components/home/FeaturesRail";
 import CatalogGrid from "@/components/home/CatalogGrid";
 import { withR2CatalogMedia, catalogCoverDisplay } from "@/components/home/catalogMedia";
+import { imagePipeline } from "@/media/imagePipeline";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { ModalErrorBoundary } from "@/system/errors";
 import { useAbortController } from "@/system/guards/useAbortController";
@@ -50,9 +51,9 @@ const MOBILE_NAV_TABS = [
   { id: "home", label: "Home" },
   { id: "singles", label: "Music" },
   { id: "mymusic", label: "Collection" },
-  { id: "shop", label: "Shop" },
-  { id: "cards", label: "Cards" },
   { id: "vault", label: "Vault", vault: true },
+  { id: "cards", label: "Cards" },
+  { id: "shop", label: "Shop" },
   { id: "more", label: "More", more: true },
 ];
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
@@ -136,10 +137,10 @@ const events = [
   { id:"evt-5", name:"2MRRW Live – NYC",     location:"New York, NY",    date:"2026-07-04", time:"8:00 PM", price:35.00, tickets:45 },
 ];
 const radioSlides = [
-  { slug:"hour-glass",     title:"Hour Glass",     type:"single", cover:"/images/singles/hourglass.jpg", price:2.99, tag:"NOW PLAYING", tagColor:"#00ffff" },
-  { slug:"w2d",            title:"W.2.D",          type:"single", cover:"/images/singles/w2d.jpg",       price:2.99, tag:"FEATURED",    tagColor:"#a259ff" },
-  { slug:"artificial",     title:"Artificial",     type:"single", cover:"/images/singles/artificial.jpg",price:2.99, tag:"TRENDING",    tagColor:"#ff6b35" },
-  { slug:"turnt-me-2-dis", title:"Turnt Me 2 Dis", type:"single", cover:"/images/singles/turnt.jpg",     price:2.99, tag:"FEATURED",    tagColor:"#00ffff" },
+  { slug:"hour-glass",     title:"Hour Glass",     type:"single", cover:"/images/singles/hourglass.jpg", price:2.99, preview:"/audio/previews/hourglass-preview.mp3", tag:"NOW PLAYING", tagColor:"#00ffff" },
+  { slug:"w2d",            title:"W.2.D",          type:"single", cover:"/images/singles/w2d.jpg",       price:2.99, preview:"/audio/previews/w2d-preview.mp3", tag:"FEATURED",    tagColor:"#a259ff" },
+  { slug:"artificial",     title:"Artificial",     type:"single", cover:"/images/singles/artificial.jpg",price:2.99, preview:"/audio/previews/artificial-preview.mp3", tag:"TRENDING",    tagColor:"#ff6b35" },
+  { slug:"turnt-me-2-dis", title:"Turnt Me 2 Dis", type:"single", cover:"/images/singles/turnt.jpg",     price:2.99, preview:"/audio/previews/turntme2dis-preview.mp3", tag:"FEATURED",    tagColor:"#00ffff" },
 ];
 
 const features = [
@@ -662,9 +663,22 @@ export default function Page() {
         });
         const data = await res.json();
         if (cancelled || !res.ok) return;
-        const incoming = (data.tracks || []).map((t) => withR2CatalogMedia(t));
+        const staticBySlug = new Map(singles.map((s) => [s.slug, s]));
+        const incoming = (data.tracks || []).map((t) => {
+          const fb = staticBySlug.get(t?.slug);
+          const merged = fb
+            ? {
+                ...fb,
+                ...t,
+                preview: t.preview || fb.preview,
+                video: t.video || fb.video,
+                cover: t.cover || fb.cover,
+              }
+            : t;
+          return withR2CatalogMedia(merged);
+        });
         setBrowseSingles((prev) => {
-          const merged = catalogPage === 1 ? [...singles] : [...prev];
+          const merged = catalogPage === 1 ? [...singles.map((s) => withR2CatalogMedia(s))] : [...prev];
           const seen = new Set(merged.map((s) => s.slug));
           incoming.forEach((t) => {
             if (t?.slug && !seen.has(t.slug)) {
@@ -692,6 +706,52 @@ export default function Page() {
   }, [catalogHasMore, catalogLoading]);
 
   const displaySingles = browseSingles.length ? browseSingles : singles;
+
+  const catalogPlaybackBySlug = useMemo(() => {
+    const map = new Map();
+    [...singles, ...displaySingles, ...features].forEach((item) => {
+      if (item?.slug) map.set(item.slug, item);
+    });
+    return map;
+  }, [displaySingles]);
+
+  const enrichRadioSlide = useCallback(
+    (slide) => {
+      if (!slide) return slide;
+      const match = catalogPlaybackBySlug.get(slide.slug);
+      const merged = match
+        ? {
+            ...match,
+            ...slide,
+            preview: slide.preview || match.preview,
+            cover: slide.cover || match.cover,
+            video: slide.video || match.video,
+          }
+        : slide;
+      return withR2CatalogMedia(merged);
+    },
+    [catalogPlaybackBySlug]
+  );
+
+  const enrichedRadioSlides = useMemo(
+    () => radioSlides.map((slide) => enrichRadioSlide(slide)),
+    [enrichRadioSlide]
+  );
+
+  useEffect(() => {
+    if (activeTab !== "home") return undefined;
+    const preloadItems = [
+      ...displaySingles.slice(0, 8),
+      ...features.slice(0, 4),
+      ...albums.slice(0, 6),
+      ...enrichedRadioSlides.slice(0, 4),
+    ];
+    preloadItems.forEach((item) => {
+      const { src, type } = catalogCoverDisplay(withR2CatalogMedia(item));
+      if (src) imagePipeline.preload(src, "high", { coverArtType: type });
+    });
+    return undefined;
+  }, [activeTab, displaySingles, enrichedRadioSlides]);
 
   useEffect(() => {
     if (activeTab !== "home") return undefined;
@@ -868,6 +928,20 @@ export default function Page() {
   ]);
 
   useEffect(() => {
+    if (!hasStarted || !currentTrack?.slug) return;
+    if (previewModalOpen || featureModalOpen) return;
+    const source = String(currentTrack.source || "");
+    const isCardPlayback =
+      source.includes("_card") || source === "feature" || source === "library";
+    if (!isCardPlayback) return;
+    setNowPlaying({
+      slug: currentTrack.slug,
+      title: currentTrack.title,
+      cover: currentTrack.cover || currentTrack.baseCover,
+    });
+  }, [hasStarted, currentTrack, previewModalOpen, featureModalOpen]);
+
+  useEffect(() => {
     if (activeTab !== "live") {
       if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch {} ytPlayerRef.current = null; }
     }
@@ -1019,7 +1093,8 @@ export default function Page() {
     featureModalPlaySlugRef.current = null;
     setFeatureModalItem(null);
     setFeatureReleaseDetail(null);
-  }, []);
+    pause();
+  }, [pause]);
 
   const openAlbumModal = useCallback(
     (album) => {
@@ -1042,7 +1117,13 @@ export default function Page() {
     modalPlaySlugRef.current = null;
     setSelectedSingle(null);
     setSelectedReleaseDetail(null);
-  }, []);
+    pause();
+  }, [pause]);
+
+  const closeAlbumModal = useCallback(() => {
+    setSelectedAlbum(null);
+    pause();
+  }, [pause]);
 
   const dismissNowPlaying = useCallback(() => {
     setNowPlaying(null);
@@ -1339,7 +1420,9 @@ export default function Page() {
 
   const liveStreamDate = nextLiveDateTime.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
   const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
-  const currentSlide   = useMemo(() => withR2CatalogMedia(radioSlides[radioIndex]), [radioIndex]);
+  const currentSlide   = useMemo(() => enrichedRadioSlides[radioIndex], [enrichedRadioSlides, radioIndex]);
+  const accountDisplayName = currentUser?.name?.trim() || currentUser?.email?.split("@")[0] || "Member";
+  const accountDisplayInitial = (accountDisplayName[0] || "?").toUpperCase();
   const activeFlowMode = flowConversionActive ? "conversion" : nowPlaying ? "nowplaying" : "idle";
   const accountStateReady = !authLoading;
   const showOwnTrackConversion = accountStateReady && !isAdminAccount(accountState);
@@ -1431,7 +1514,7 @@ export default function Page() {
           <motion.div
             key="album-overlay"
             {...OVERLAY_FADE}
-            onClick={() => setSelectedAlbum(null)}
+            onClick={closeAlbumModal}
             style={{
               position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8888,
               display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",
@@ -1494,8 +1577,8 @@ export default function Page() {
                 )}
                 {selectedAlbumAccess?.showCart && (
                   <>
-                    <button onClick={()=>{addToCart(selectedAlbum);setSelectedAlbum(null);}} style={{width:"100%",padding:"12px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,marginTop:6,fontWeight:700}}>Add to Cart – ${selectedAlbum.price.toFixed(2)}</button>
-                    <button onClick={()=>{addToCart({title:`${selectedAlbum.title} – Vinyl`,slug:`${selectedAlbum.slug}-vinyl`,cover:selectedAlbum.cover,price:selectedAlbum.vinyl});setSelectedAlbum(null);}} style={{width:"100%",padding:"12px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – ${selectedAlbum.vinyl.toFixed(2)} (Optional)</button>
+                    <button onClick={()=>{addToCart(selectedAlbum);closeAlbumModal();}} style={{width:"100%",padding:"12px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,marginTop:6,fontWeight:700}}>Add to Cart – ${selectedAlbum.price.toFixed(2)}</button>
+                    <button onClick={()=>{addToCart({title:`${selectedAlbum.title} – Vinyl`,slug:`${selectedAlbum.slug}-vinyl`,cover:selectedAlbum.cover,price:selectedAlbum.vinyl});closeAlbumModal();}} style={{width:"100%",padding:"12px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – ${selectedAlbum.vinyl.toFixed(2)} (Optional)</button>
                   </>
                 )}
                 {currentUser?.id && selectedAlbum && (
@@ -1510,7 +1593,7 @@ export default function Page() {
                     />
                   </div>
                 )}
-                <button onClick={()=>setSelectedAlbum(null)} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,marginTop:4}}>Close</button>
+                <button onClick={closeAlbumModal} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,marginTop:4}}>Close</button>
               </motion.div>
             </motion.div>
           </motion.div>
@@ -1667,6 +1750,11 @@ export default function Page() {
                       <h2 className="section-heading" style={{margin:0}}>Latest Singles</h2>
                       {currentUser ? (
                         <button type="button" className="collection-portal-link" onClick={openCollection} aria-label="Open my music collection">
+                          <span className="collection-portal-link__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                              <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6z" />
+                            </svg>
+                          </span>
                           My Music Collection
                         </button>
                       ) : null}
@@ -1732,6 +1820,7 @@ export default function Page() {
                             <video
                               data-single-carousel
                               src={singleUi.video}
+                              poster={singleUi.cover || undefined}
                               muted
                               loop
                               playsInline
@@ -1832,7 +1921,7 @@ export default function Page() {
                       <RadioCarousel
                         isMobile={isMobile}
                         currentSlide={currentSlide}
-                        radioSlides={radioSlides}
+                        radioSlides={enrichedRadioSlides}
                         radioIndex={radioIndex}
                         goRadio={goRadio}
                         isAdmin={isAdmin}
@@ -1850,7 +1939,7 @@ export default function Page() {
                             narrow
                             isMobile={isMobile}
                             currentSlide={currentSlide}
-                            radioSlides={radioSlides}
+                            radioSlides={enrichedRadioSlides}
                             radioIndex={radioIndex}
                             goRadio={goRadio}
                             isAdmin={isAdmin}
@@ -2468,7 +2557,7 @@ export default function Page() {
                       cursor: "pointer",
                     }}
                   />
-                  {currentUser&&userStatus&&<motion.div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}><motion.div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>{currentUser.name[0].toUpperCase()}</motion.div><motion.div><motion.div style={{fontSize:13,fontWeight:700,color:"white"}}>{currentUser.name}</motion.div><motion.div style={{fontSize:9,color:userStatus.color,fontWeight:700,letterSpacing:1}}>{userStatus.label}</motion.div></motion.div></motion.div>}
+                  {currentUser&&userStatus&&<motion.div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}><motion.div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>{accountDisplayInitial}</motion.div><motion.div><motion.div style={{fontSize:13,fontWeight:700,color:"white"}}>{accountDisplayName}</motion.div><motion.div style={{fontSize:9,color:userStatus.color,fontWeight:700,letterSpacing:1}}>{userStatus.label}</motion.div></motion.div></motion.div>}
                   {sidebarNav.map(group=>{
                     const hasSubs = group.subTabs.length > 0;
                     const isSheetExpanded = mobileNavExpandedGroups.has(group.groupId);

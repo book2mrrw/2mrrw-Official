@@ -95,14 +95,25 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#111",
-        border: "1px solid #333",
+        background: showPause ? "rgba(0,255,255,0.1)" : "#111",
+        border: `1px solid ${showPause ? "rgba(0,255,255,0.5)" : "#333"}`,
         borderRadius: 10,
         cursor: "pointer",
         padding: 0,
+        boxShadow: showPause ? "0 0 10px rgba(0,255,255,0.2)" : "none",
+        transition: "all 0.2s",
       }}
     >
-      <span style={{ color: "#00ffff", fontSize: 16, lineHeight: 1 }}>{showPause ? "⏸" : "▶"}</span>
+      <span
+        style={{
+          color: "#00ffff",
+          fontSize: showPause ? 13 : 16,
+          lineHeight: 1,
+          letterSpacing: showPause ? 2 : 0,
+        }}
+      >
+        {showPause ? "❙❙" : "▶"}
+      </span>
     </button>
   );
 }

@@ -333,10 +333,36 @@ function mapReleaseToFeature(release, fallbackFeatures, index, apiBaseUrl) {
   };
 }
 
+function mergeCatalogWithFallback(fallback, mapped) {
+  if (!fallback) return mapped;
+  if (!mapped) return fallback;
+  return {
+    ...fallback,
+    ...mapped,
+    preview: mapped.preview || fallback.preview,
+    video: mapped.video || fallback.video,
+    cover: mapped.cover || fallback.cover,
+    audio: mapped.audio || fallback.audio,
+    csAudio: mapped.csAudio || fallback.csAudio,
+    csCover: mapped.csCover || fallback.csCover,
+  };
+}
+
 function mergeWithFallback(mappedReleases, fallbackItems, limit) {
+  const fallbackBySlug = new Map();
+  (Array.isArray(fallbackItems) ? fallbackItems : []).forEach((item) => {
+    if (item?.slug) fallbackBySlug.set(item.slug, item);
+  });
+
   const unique = new Map();
 
-  [...mappedReleases, ...(Array.isArray(fallbackItems) ? fallbackItems : [])].forEach((item) => {
+  mappedReleases.forEach((item) => {
+    if (!item?.slug) return;
+    const fb = fallbackBySlug.get(item.slug);
+    unique.set(item.slug, mergeCatalogWithFallback(fb, item));
+  });
+
+  (Array.isArray(fallbackItems) ? fallbackItems : []).forEach((item) => {
     if (item?.slug && !unique.has(item.slug)) unique.set(item.slug, item);
   });
 
