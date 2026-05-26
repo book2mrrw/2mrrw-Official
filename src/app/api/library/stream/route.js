@@ -112,8 +112,6 @@ export async function GET(req) {
         accessKey: Boolean(process.env.CLOUDFLARE_R2_ACCESS_KEY_ID),
         secretKey: Boolean(process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY),
         bucket: Boolean(process.env.CLOUDFLARE_R2_BUCKET_NAME),
-        accountId: Boolean(process.env.CLOUDFLARE_R2_ACCOUNT_ID),
-        serviceRole: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
       },
     });
     return NextResponse.json({ error: "Stream unavailable" }, { status: 500 });

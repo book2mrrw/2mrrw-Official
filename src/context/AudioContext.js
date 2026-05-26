@@ -1015,14 +1015,10 @@ export function AudioProvider({ children }) {
         playPromise.catch((err) => {
           console.error("[AUDIO PLAY ERROR]", err);
           setTimeout(() => {
-            audio.play().catch((e) => console.error("[AUDIO PLAY RETRY]", e));
+            audio.play().catch((e) =>
+              console.error("[AUDIO PLAY RETRY]", e)
+            );
           }, 150);
-          patchState({
-            isPlaying: false,
-            error: "Audio playback failed. Try again in a moment.",
-            playbackState: "paused",
-          });
-          void updateMediaSession(nextTrack, { playing: false });
         });
       }
       return true;

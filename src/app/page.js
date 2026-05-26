@@ -936,17 +936,23 @@ export default function Page() {
   ]);
 
   useEffect(() => {
-    if (hasStarted && currentTrack && !previewModalOpen && !featureModalOpen) {
-      setNowPlaying({
-        slug: currentTrack.slug,
-        title: currentTrack.title,
-        cover: currentTrack.cover || currentTrack.baseCover,
-      });
+    if (
+      hasStarted &&
+      currentTrack &&
+      !previewModalOpen &&
+      !featureModalOpen
+    ) {
+      setNowPlaying(currentTrack);
     }
     if (!hasStarted) {
       setNowPlaying(null);
     }
-  }, [hasStarted, currentTrack, previewModalOpen, featureModalOpen]);
+  }, [
+    hasStarted,
+    currentTrack,
+    previewModalOpen,
+    featureModalOpen,
+  ]);
 
   useEffect(() => {
     if (activeTab !== "live") {

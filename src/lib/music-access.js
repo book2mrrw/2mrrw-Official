@@ -163,8 +163,11 @@ export function resolveTrackAccess(track, accountState = {}) {
   const canAddToPlaylist = canAddToLibrary;
   const canShare = true;
 
-  const canStreamFull =
-    owned || (subscription && subscriptionActive) || collector || collectorCardOwner;
+  const isSubscriber =
+    subscriptionActive &&
+    Boolean(accountState.subscriberActive) &&
+    Boolean(permissions.subscriber);
+  const canStreamFull = owned || isSubscriber || collectorCardOwner;
   const subscriptionExpired = Boolean(membership && !subscriptionActive && subscriptionLibrary.has(slug));
 
   let badge = null;
