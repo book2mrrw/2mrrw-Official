@@ -48,14 +48,32 @@ export async function fetchControlSystemJson(path, { params, fetchOptions = {} }
   const target = buildControlSystemUrl(path, params);
   if (!target) return { apiBaseUrl: "", ok: false, payload: null, status: 0 };
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  const { signal: externalSignal, ...restFetchOptions } = fetchOptions;
+
+  const upstreamOnAbort = () => controller.abort();
+  if (externalSignal) {
+    if (externalSignal.aborted) controller.abort();
+    else externalSignal.addEventListener("abort", upstreamOnAbort);
+  }
+
+  const cleanup = () => {
+    clearTimeout(timeoutId);
+    if (externalSignal) externalSignal.removeEventListener("abort", upstreamOnAbort);
+  };
+
   try {
     const sessionId = browserControlSessionId();
+    const isServer = typeof window === "undefined";
     const response = await fetch(target.href, {
       method: "GET",
       headers: { Accept: "application/json" },
       credentials: "include",
       cache: "no-store",
-      ...fetchOptions,
+      ...restFetchOptions,
+      ...(isServer ? { next: { revalidate: 30 } } : {}),
+      signal: controller.signal,
       headers: {
         Accept: "application/json",
         ...(sessionId ? { "x-control-session-id": sessionId } : {}),
@@ -64,16 +82,23 @@ export async function fetchControlSystemJson(path, { params, fetchOptions = {} }
     });
 
     if (!response.ok) {
+      cleanup();
       return { apiBaseUrl: target.apiBaseUrl, ok: false, payload: null, status: response.status };
     }
 
+    const payload = await response.json();
+    cleanup();
     return {
       apiBaseUrl: target.apiBaseUrl,
       ok: true,
-      payload: await response.json(),
+      payload,
       status: response.status,
     };
-  } catch {
+  } catch (err) {
+    cleanup();
+    if (err?.name === "AbortError") {
+      console.warn("[ControlSystem] Request timed out:", path);
+    }
     return { apiBaseUrl: target.apiBaseUrl, ok: false, payload: null, status: 0 };
   }
 }

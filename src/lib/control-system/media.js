@@ -152,20 +152,29 @@ async function fetchSignedUrl(endpoint) {
   const cached = readSignedUrlCache(endpoint);
   if (cached) return cached;
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 4000);
+
   try {
     const response = await fetch(endpoint, {
       method: "GET",
       headers: { Accept: "application/json" },
       credentials: "include",
       cache: "no-store",
+      signal: controller.signal,
     });
     if (!response.ok) return "";
     const payload = await response.json();
     const url = parseSignedUrlPayload(payload);
     if (url) writeSignedUrlCache(endpoint, url);
     return url;
-  } catch {
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      console.warn("[ControlSystem] Request timed out:", endpoint);
+    }
     return "";
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 

@@ -13,16 +13,30 @@ export async function GET(request) {
   );
   const offset = (page - 1) * limit;
 
-  const all = await getLatestControlSystemSingles({ limit: offset + limit });
-  const tracks = all.slice(offset, offset + limit);
-  const total = all.length;
-  const hasMore = offset + tracks.length < total;
+  try {
+    const all = await getLatestControlSystemSingles({ limit: offset + limit });
+    if (!Array.isArray(all) || all.length === 0) {
+      throw new Error("catalog_unavailable");
+    }
+    const tracks = all.slice(offset, offset + limit);
+    const total = all.length;
+    const hasMore = offset + tracks.length < total;
 
-  return NextResponse.json({
-    tracks,
-    total,
-    page,
-    hasMore,
-    limit,
-  });
+    return NextResponse.json({
+      tracks,
+      total,
+      page,
+      hasMore,
+      limit,
+    });
+  } catch {
+    return NextResponse.json({
+      tracks: [],
+      total: 0,
+      page,
+      hasMore: false,
+      limit,
+      fallback: true,
+    });
+  }
 }

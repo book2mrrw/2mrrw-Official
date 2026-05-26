@@ -206,6 +206,11 @@ const albums = [
   { title:"Love Hz Vol.1", slug:"love-hz", type:"album", cover:"/images/albums/lovehz.jpg", price:12.99, date:"August 2026",    vinyl:47.99, tracks:["Roll Call","W.2.D","All Of It","Knock On Wood","Stayed 2 Long","Hour Glass"] },
 ];
 
+/** Last-resort catalog when Control System or `/api/catalog/releases` is unavailable */
+const INLINE_SINGLES = singles;
+const INLINE_FEATURES = features;
+const INLINE_ALBUMS = albums;
+
 const fallbackMerch = [
   { title:"2MRRW HOODIE",  slug:"hoodie", cover:"/images/albums/tbh.jpg",    price:59.99 },
   { title:"2MRRW T-SHIRT", slug:"shirt",  cover:"/images/albums/ad.jpg",     price:29.99 },
@@ -673,10 +678,35 @@ export default function Page() {
           cache: "no-store",
           signal: catalogFetchAbort.signal,
         });
-        const data = await res.json();
-        if (cancelled || !res.ok) return;
-        const staticBySlug = new Map(singles.map((s) => [s.slug, s]));
-        const incoming = (data.tracks || []).map((t) => {
+        let data = {};
+        try {
+          data = await res.json();
+        } catch {
+          data = {};
+        }
+        if (cancelled) return;
+
+        if (!res.ok) {
+          if (catalogPage === 1) {
+            setBrowseSingles(INLINE_SINGLES.map((s) => withR2CatalogMedia(s)));
+          }
+          setCatalogHasMore(false);
+          return;
+        }
+
+        const tracks = Array.isArray(data.tracks) ? data.tracks : [];
+        const useInline = data?.fallback === true || (catalogPage === 1 && tracks.length === 0);
+
+        if (useInline) {
+          if (catalogPage === 1) {
+            setBrowseSingles(INLINE_SINGLES.map((s) => withR2CatalogMedia(s)));
+          }
+          setCatalogHasMore(false);
+          return;
+        }
+
+        const staticBySlug = new Map(INLINE_SINGLES.map((s) => [s.slug, s]));
+        const incoming = tracks.map((t) => {
           const fb = staticBySlug.get(t?.slug);
           const merged = fb
             ? {
@@ -690,7 +720,7 @@ export default function Page() {
           return withR2CatalogMedia(merged);
         });
         setBrowseSingles((prev) => {
-          const merged = catalogPage === 1 ? [...singles.map((s) => withR2CatalogMedia(s))] : [...prev];
+          const merged = catalogPage === 1 ? [...INLINE_SINGLES.map((s) => withR2CatalogMedia(s))] : [...prev];
           const seen = new Set(merged.map((s) => s.slug));
           incoming.forEach((t) => {
             if (t?.slug && !seen.has(t.slug)) {
@@ -702,7 +732,10 @@ export default function Page() {
         });
         setCatalogHasMore(Boolean(data.hasMore));
       } catch {
-        /* keep static singles */
+        if (!cancelled && catalogPage === 1) {
+          setBrowseSingles(INLINE_SINGLES.map((s) => withR2CatalogMedia(s)));
+          setCatalogHasMore(false);
+        }
       } finally {
         if (!cancelled) setCatalogLoading(false);
       }
@@ -717,11 +750,11 @@ export default function Page() {
     setCatalogPage((p) => p + 1);
   }, [catalogHasMore, catalogLoading]);
 
-  const displaySingles = browseSingles.length ? browseSingles : singles;
+  const displaySingles = browseSingles.length ? browseSingles : INLINE_SINGLES;
 
   const catalogPlaybackBySlug = useMemo(() => {
     const map = new Map();
-    [...singles, ...displaySingles, ...features].forEach((item) => {
+    [...INLINE_SINGLES, ...displaySingles, ...INLINE_FEATURES].forEach((item) => {
       if (item?.slug) map.set(item.slug, item);
     });
     return map;
