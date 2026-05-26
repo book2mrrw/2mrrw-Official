@@ -317,7 +317,7 @@ function PreviewPlayerControls({
               className={`player-cs-btn${csMode ? " player-cs-btn--active" : ""}`}
               onClick={() => void toggleCSMode()}
               title="Chopped & Slowed"
-              aria-label="Toggle chopped and slowed mode"
+              aria-label="Chopped and slowed mode"
             >
               <CsIcon />
             </button>
