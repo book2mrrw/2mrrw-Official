@@ -35,6 +35,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   const sessionBootstrappedRef = useRef(false);
+  const accountStateFetchingRef = useRef(false);
   const applySessionUserRef = useRef(null);
   const refreshAccountStateRef = useRef(null);
   const refreshGuestRef = useRef(null);
@@ -86,25 +87,38 @@ export function AuthProvider({ children }) {
   }, []);
 
   const refreshAccountState = useCallback(async () => {
-    const res = await fetch("/api/account/state", { credentials: "include", cache: "no-store" });
-    if (!res.ok) {
-      if (res.status === 401) {
-        setUser(null);
-        setIsAdmin(false);
-        setLibrary([]);
-        setOwnedSlugs(new Set());
-        setAccountState(EMPTY_ACCOUNT_STATE);
+    if (accountStateFetchingRef.current) return null;
+    accountStateFetchingRef.current = true;
+
+    try {
+      const res = await fetch("/api/account/state", {
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        if (res.status === 401) {
+          setUser(null);
+          setIsAdmin(false);
+          setLibrary([]);
+          setOwnedSlugs(new Set());
+          setAccountState(EMPTY_ACCOUNT_STATE);
+        }
+        return null;
       }
+      const data = await res.json();
+      if (data.user) {
+        const resolved = resolveUserFromSession({ user: data.user });
+        setUser((prev) => (prev?.id === data.user.id ? prev : data.user));
+        setIsAdmin(Boolean(data.permissions?.admin) || resolved?.isAdmin);
+      }
+      applyAccountPayload(data);
+      return data;
+    } catch (err) {
+      console.error("[account/state] fetch failed:", err);
       return null;
+    } finally {
+      accountStateFetchingRef.current = false;
     }
-    const data = await res.json();
-    if (data.user) {
-      const resolved = resolveUserFromSession({ user: data.user });
-      setUser((prev) => (prev?.id === data.user.id ? prev : data.user));
-      setIsAdmin(Boolean(data.permissions?.admin) || resolved?.isAdmin);
-    }
-    applyAccountPayload(data);
-    return data;
   }, [applyAccountPayload]);
 
   const refreshGuest = useCallback(async () => {
