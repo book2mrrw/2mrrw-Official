@@ -104,5 +104,22 @@ Requires `CLOUDFLARE_API_TOKEN` with R2 edit scope or interactive login.
 
 ## Deploy / SHAs
 
-(Filled in after commit + deploy in this run.)
+| Repo | Commit | Production alias |
+|------|--------|------------------|
+| **2MRRW-Control-System** | `49c4a72a54e1a84e587103ff88615fa9d96a3710` | https://2mrrw-control-system.vercel.app |
+| **artist-platform** | `3fd35d112bec92124d45dfae9c5851f473bce714` (docs only; app code at `ccd0fd3`) | https://www.2mrrw.com |
+
+**Vercel deployments**
+
+- CS: `dpl_GVfQC1kMGuvYzjutZPgHYxySxTT4` — https://vercel.com/eellian-morrows-projects/2mrrw-control-system/GVfQC1kMGuvYzjutZPgHYxySxTT4
+- Storefront: `dpl_43pmkr1Pygjggxaq7UgYVE7KR5RA` — https://vercel.com/eellian-morrows-projects/artist-platform/43pmkr1Pygjggxaq7UgYVE7KR5RA
+
+### Post-deploy CORS probe (CS `/api/playback/events`)
+
+| Request | `Access-Control-Allow-Origin` | Status |
+|---------|-------------------------------|--------|
+| OPTIONS + `Origin: https://www.2mrrw.com` | `https://www.2mrrw.com` (single origin) | 204 |
+| POST + same origin | `https://www.2mrrw.com` | 200 |
+
+**Before fix:** comma-separated multi-origin value (browser-invalid).
 
