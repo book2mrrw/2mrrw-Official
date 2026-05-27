@@ -75,7 +75,15 @@ async function buildStreamResponse(req, user, slug, { force = false } = {}) {
 
   const redirect = req.nextUrl.searchParams.get("redirect") === "1";
   if (redirect) {
-    return NextResponse.redirect(url);
+    const rangeHeader = req.headers.get("range");
+    return NextResponse.redirect(url, {
+      status: 302,
+      headers: {
+        ...(rangeHeader ? { "Range": rangeHeader } : {}),
+        "Cache-Control": "no-store",
+        "Accept-Ranges": "bytes",
+      },
+    });
   }
 
   return NextResponse.json({
