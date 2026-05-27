@@ -1883,7 +1883,7 @@ export default function Page() {
                             {/* FIXED: src points to /videos/singles/, webkit-playsinline for iOS Safari */}
                             <video
                               data-single-carousel
-                              src={singleUi.video}
+                              src={singleUi.video || undefined}
                               poster={singleUi.cover || undefined}
                               muted
                               loop
