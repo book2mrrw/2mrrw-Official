@@ -1133,6 +1133,17 @@ export function AudioProvider({ children }) {
   }, []);
 
   const playTrack = useCallback(async (track, options = {}) => {
+    // Unlock audio on mobile Safari immediately
+    // Must happen synchronously on user gesture
+    const audioEl = audioRef.current;
+    if (audioEl && audioEl.paused) {
+      audioEl.volume = 0;
+      const unlockPromise = audioEl.play().catch(() => {});
+      audioEl.pause();
+      audioEl.volume = 1;
+      audioEl.currentTime = 0;
+    }
+
     initWebAudio();
     await resumeWebAudioContextIfSuspended(audioCtxRef);
     setPreviewEnded(false);
