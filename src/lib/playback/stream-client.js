@@ -6,7 +6,11 @@ export const STREAM_REFRESH_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
 export function isLibraryStreamSrc(src) {
   if (!src || typeof src !== "string") return false;
   try {
-    const url = new URL(src, typeof window !== "undefined" ? window.location.origin : "http://localhost");
+    const url = src.startsWith("/api/")
+      ? { href: src, pathname: src.split("?")[0], searchParams: new URLSearchParams(src.split("?")[1] || "") }
+      : new URL(src, typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost");
     return url.pathname === LIBRARY_STREAM_PATH;
   } catch {
     return src.includes(LIBRARY_STREAM_PATH);
@@ -17,7 +21,11 @@ export function isLibraryStreamSrc(src) {
 export function isLibraryStreamRedirectSrc(src) {
   if (!isLibraryStreamSrc(src)) return false;
   try {
-    const url = new URL(src, typeof window !== "undefined" ? window.location.origin : "http://localhost");
+    const url = src.startsWith("/api/")
+      ? { href: src, pathname: src.split("?")[0], searchParams: new URLSearchParams(src.split("?")[1] || "") }
+      : new URL(src, typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost");
     return url.searchParams.get("redirect") === "1";
   } catch {
     return String(src).includes("redirect=1");
@@ -27,7 +35,11 @@ export function isLibraryStreamRedirectSrc(src) {
 export function parseStreamSlugFromSrc(src) {
   if (!src) return null;
   try {
-    const url = new URL(src, typeof window !== "undefined" ? window.location.origin : "http://localhost");
+    const url = src.startsWith("/api/")
+      ? { href: src, pathname: src.split("?")[0], searchParams: new URLSearchParams(src.split("?")[1] || "") }
+      : new URL(src, typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost");
     return url.searchParams.get("slug");
   } catch {
     const match = String(src).match(/[?&]slug=([^&]+)/);

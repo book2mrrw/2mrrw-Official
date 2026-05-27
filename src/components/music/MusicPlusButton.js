@@ -84,8 +84,7 @@ export default function MusicPlusButton({
 
   const handleShare = async () => {
     if (!track?.slug) return;
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const url = `${origin}/?track=${encodeURIComponent(track.slug)}`;
+    const url = `/?track=${encodeURIComponent(track.slug)}`;
     const artist = track.artist || track.artistName || "2MRRW";
     const payload = {
       title: track.title || "Track",
