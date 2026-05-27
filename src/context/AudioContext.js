@@ -59,7 +59,6 @@ const RESTORE_MIN_POSITION_SEC = 5;
 const RESTORE_NEAR_END_BUFFER_SEC = 3;
 const SPURIOUS_ENDED_GUARD_MS = 1200;
 const KEEP_ALIVE_INTERVAL_MS = 20000;
-const VISIBILITY_RESUME_DELAY_MS = 300;
 const GESTURE_UNLOCK_EVENTS = ["touchstart", "touchend", "click", "keydown"];
 
 function normalizePlaybackSrc(src) {
@@ -171,7 +170,6 @@ const EMPTY_STATE = {
   isBuffering: false,
   accessDenied: false,
   streamRetryable: false,
-  needsGestureResume: false,
   streamConflict: null,
   queue: [],
   queueIndex: -1,
@@ -333,9 +331,6 @@ export function AudioProvider({ children }) {
   const sessionUnlockedRef = useRef(false);
   const webAudioInitializedRef = useRef(false);
   const webAudioAvailableRef = useRef(true);
-  const needsGestureToResumeRef = useRef(false);
-  const silentGraphLoggedRef = useRef(false);
-  const silentGraphPlayStartedAtRef = useRef(0);
   const retryStreamPlaybackRef = useRef(null);
   const positionSaveTimerRef = useRef(null);
   const lastPlayedSlugRef = useRef(null);
@@ -727,10 +722,7 @@ export function AudioProvider({ children }) {
 
     const onPlay = () => {
       userPausedRef.current = false;
-      silentGraphLoggedRef.current = false;
-      silentGraphPlayStartedAtRef.current = audio.currentTime || 0;
-      patchState({ isPlaying: true, error: null, hasStarted: true, isBuffering: false, needsGestureResume: false });
-      needsGestureToResumeRef.current = false;
+      patchState({ isPlaying: true, error: null, hasStarted: true, isBuffering: false });
       startKeepAlivePing();
       startProgressRaf();
       startPositionSaveTimer();
@@ -825,28 +817,6 @@ export function AudioProvider({ children }) {
             durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
             completed: false,
           });
-        }
-      }
-
-      if (
-        !silentGraphLoggedRef.current &&
-        webAudioAvailableRef.current &&
-        stateRef.current.isPlaying &&
-        !audio.paused &&
-        analyserRef.current &&
-        audioCtxRef.current?.state === "running"
-      ) {
-        const startedAt = silentGraphPlayStartedAtRef.current;
-        if (startedAt > 0 && audio.currentTime - startedAt >= 2) {
-          const bins = analyserRef.current.frequencyBinCount;
-          const data = new Uint8Array(bins);
-          analyserRef.current.getByteFrequencyData(data);
-          let sum = 0;
-          for (let i = 0; i < data.length; i += 1) sum += data[i];
-          if (sum === 0) {
-            console.warn("[AUDIO] Possible silent graph — Web Audio may be CORS-blocked");
-            silentGraphLoggedRef.current = true;
-          }
         }
       }
     };
@@ -1923,10 +1893,6 @@ export function AudioProvider({ children }) {
     if (!audio || !track) return false;
 
     userPausedRef.current = false;
-    if (needsGestureToResumeRef.current) {
-      needsGestureToResumeRef.current = false;
-      patchState({ needsGestureResume: false });
-    }
 
     try {
       await unlockAudioFromGesture(audio);
@@ -2173,14 +2139,8 @@ export function AudioProvider({ children }) {
         if (shouldResume && audio) {
           const el = audioRef.current;
           if (el?.paused && stateRef.current.isPlaying) {
-            needsGestureToResumeRef.current = true;
-            patchState({ needsGestureResume: true });
-          } else {
-            setTimeout(() => {
-              const visibleEl = audioRef.current;
-              if (!visibleEl || !stateRef.current.currentTrack || visibleEl.paused) return;
-              void resumeWebAudioContextIfSuspended(audioCtxRef);
-            }, VISIBILITY_RESUME_DELAY_MS);
+            void resumeWebAudioContextIfSuspended(audioCtxRef);
+            el.play().catch(() => {});
           }
         }
 

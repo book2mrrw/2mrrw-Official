@@ -236,7 +236,6 @@ function MiniPlayerDock({
   onCoverTouchMove,
   onCoverTouchEnd,
   previewOnly,
-  needsGestureResume,
 }) {
   const giftBadge =
     currentTrack?.source === "gift" || currentTrack?.gifted ? (
@@ -251,11 +250,7 @@ function MiniPlayerDock({
       />
     ) : null;
 
-  const artistLine = needsGestureResume
-    ? "Tap to resume"
-    : error || accessDenied
-      ? errorMessage
-      : currentTrack.artist;
+  const artistLine = error || accessDenied ? errorMessage : currentTrack.artist;
 
   return (
     <div role="region" aria-label="Global audio player" className="player-bar-compact">
@@ -330,7 +325,6 @@ function GlobalAudioPlayerBar() {
     isBuffering,
     accessDenied,
     streamConflict,
-    needsGestureResume,
     progress,
     handlePlayToggle,
     csMode,
@@ -639,7 +633,6 @@ function GlobalAudioPlayerBar() {
         onToggleCs={handleToggleCs}
         progress={dockProgress}
         previewOnly={previewOnly}
-        needsGestureResume={needsGestureResume}
         onCoverTouchStart={handleCoverTouchStart}
         onCoverTouchMove={handleCoverTouchMove}
         onCoverTouchEnd={handleCoverTouchEnd}
