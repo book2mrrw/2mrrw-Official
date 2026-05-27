@@ -46,6 +46,61 @@ function readVolume(audioRef) {
   return 1;
 }
 
+let _cachedMediaEngineState = null;
+
+function tracksEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return a === b;
+  return (
+    a.id === b.id &&
+    a.slug === b.slug &&
+    a.title === b.title &&
+    a.artist === b.artist &&
+    a.artwork === b.artwork &&
+    a.audioUrl === b.audioUrl
+  );
+}
+
+function queueEqual(a, b) {
+  if (a === b) return true;
+  if (!Array.isArray(a) || !Array.isArray(b)) return a === b;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const aid = a[i]?.id ?? a[i]?.slug;
+    const bid = b[i]?.id ?? b[i]?.slug;
+    if (aid !== bid) return false;
+  }
+  return true;
+}
+
+function mediaEngineStateChanged(next, prev) {
+  if (prev === null) return true;
+  if (next === null) return prev !== null;
+  return (
+    !tracksEqual(next.currentTrack, prev.currentTrack) ||
+    next.isPlaying !== prev.isPlaying ||
+    next.currentTime !== prev.currentTime ||
+    next.duration !== prev.duration ||
+    next.volume !== prev.volume ||
+    !queueEqual(next.queue, prev.queue) ||
+    next.playbackState !== prev.playbackState ||
+    next.csMode !== prev.csMode ||
+    next.spaceMode !== prev.spaceMode ||
+    next.bassMode !== prev.bassMode ||
+    next.atmosphereLevel !== prev.atmosphereLevel
+  );
+}
+
+function getMediaEngineSnapshot() {
+  const next = getMediaEngineBridge()?.getState?.() ?? null;
+
+  if (_cachedMediaEngineState === null || mediaEngineStateChanged(next, _cachedMediaEngineState)) {
+    _cachedMediaEngineState = next;
+  }
+
+  return _cachedMediaEngineState;
+}
+
 /**
  * Pure mapper: AudioContext value → useMediaEngine public API.
  * Shared by the hook and imperative bridge snapshots.
@@ -91,6 +146,6 @@ export function mapAudioContextToMediaEngine(audio) {
  */
 export function useMediaEngine() {
   const audio = useAudioPlayer();
-  useSyncExternalStore(subscribeMediaEngine, () => getMediaEngineBridge()?.getState?.(), () => null);
+  useSyncExternalStore(subscribeMediaEngine, getMediaEngineSnapshot, () => null);
   return useMemo(() => mapAudioContextToMediaEngine(audio), [audio]);
 }

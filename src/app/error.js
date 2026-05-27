@@ -9,7 +9,7 @@ export default function Error({ error, reset }) {
       message: error?.message,
       digest: error?.digest,
     });
-  }, [error]);
+  }, []);
 
   return (
     <div
