@@ -55,6 +55,34 @@ const CS_PLAYBACK_RATE = 0.75;
 const POSITION_SAVE_INTERVAL_MS = 15000;
 const STORE_LINK_HREF = "/subscribe";
 const PREVIEW_HARD_CAP_SEC = 30;
+const RESTORE_MIN_POSITION_SEC = 5;
+const RESTORE_NEAR_END_BUFFER_SEC = 3;
+const SPURIOUS_ENDED_GUARD_MS = 1200;
+
+function normalizePlaybackSrc(src) {
+  if (!src || typeof src !== "string") return "";
+  try {
+    return new URL(src, typeof window !== "undefined" ? window.location.href : "http://localhost").href;
+  } catch {
+    return String(src);
+  }
+}
+
+function isNearEndRestorePosition(positionSeconds, durationSeconds) {
+  if (!Number.isFinite(positionSeconds) || positionSeconds < RESTORE_MIN_POSITION_SEC) return true;
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return false;
+  return positionSeconds >= durationSeconds - RESTORE_NEAR_END_BUFFER_SEC;
+}
+
+/** Reject invalid or near-end restores that would immediately fire `ended`. */
+function clampRestorePosition(positionSeconds, durationSeconds) {
+  if (!Number.isFinite(positionSeconds) || positionSeconds < RESTORE_MIN_POSITION_SEC) return null;
+  if (Number.isFinite(durationSeconds) && durationSeconds > 0) {
+    if (isNearEndRestorePosition(positionSeconds, durationSeconds)) return null;
+    return Math.min(positionSeconds, durationSeconds - RESTORE_NEAR_END_BUFFER_SEC);
+  }
+  return positionSeconds;
+}
 
 /** Set src, wait for canplay/error/timeout, then load(). */
 async function waitAudioSrcReady(audio, src) {
@@ -299,6 +327,7 @@ export function AudioProvider({ children }) {
   const positionSaveTimerRef = useRef(null);
   const csHoldSavedRef = useRef(null);
   const csHoldActiveRef = useRef(false);
+  const spuriousEndedGuardRef = useRef(0);
   const [state, setState] = useState(EMPTY_STATE);
 
   useEffect(() => {
@@ -319,12 +348,10 @@ export function AudioProvider({ children }) {
       const track = stateRef.current.currentTrack;
       const userId = listeningUserIdRef.current;
       if (!audio || !track?.slug || !userId || audio.paused) return;
-      savePlaybackPosition(
-        userId,
-        track.slug,
-        audio.currentTime || 0,
-        isFinite(audio.duration) ? audio.duration : 0
-      );
+      const dur = isFinite(audio.duration) ? audio.duration : 0;
+      const pos = audio.currentTime || 0;
+      if (dur > 0 && isNearEndRestorePosition(pos, dur)) return;
+      savePlaybackPosition(userId, track.slug, pos, dur);
     }, POSITION_SAVE_INTERVAL_MS);
   }, [stopPositionSaveTimer]);
 
@@ -690,6 +717,20 @@ export function AudioProvider({ children }) {
     const onEnded = () => {
       const track = stateRef.current.currentTrack;
       const previewOnly = track?.metadata?.access?.previewOnly;
+
+      if (Date.now() < spuriousEndedGuardRef.current) {
+        const dur = isFinite(audio.duration) ? audio.duration : 0;
+        if (dur > 0 && audio.currentTime >= dur - RESTORE_NEAR_END_BUFFER_SEC) {
+          audio.currentTime = Math.max(0, dur - RESTORE_NEAR_END_BUFFER_SEC - 0.5);
+        } else {
+          audio.currentTime = 0;
+        }
+        patchState({
+          playbackState: stateRef.current.playbackState === "ending" ? null : stateRef.current.playbackState,
+          currentTime: audio.currentTime,
+        });
+        return;
+      }
 
       if (previewOnly) {
         stopProgressRaf();
@@ -1178,20 +1219,39 @@ export function AudioProvider({ children }) {
     }
 
     const userId = listeningUserIdRef.current;
-    let resumeAt = options.resumeAt && options.resumeAt > 5 ? options.resumeAt : null;
+    let resumeAt =
+      options.resumeAt != null && options.resumeAt > RESTORE_MIN_POSITION_SEC
+        ? options.resumeAt
+        : null;
+    if (options.resumeAt === 0) {
+      resumeAt = null;
+      if (userId && streamSlug) clearPlaybackPosition(userId, streamSlug);
+    }
     if (!resumeAt && userId && streamSlug) {
       const saved = getSavedPlaybackPosition(userId, streamSlug);
-      if (saved?.positionSeconds > 5) {
-        resumeAt = saved.positionSeconds;
+      if (saved?.positionSeconds > RESTORE_MIN_POSITION_SEC) {
+        const clamped = clampRestorePosition(saved.positionSeconds, saved.durationSeconds);
+        if (clamped != null) {
+          resumeAt = clamped;
+        } else {
+          clearPlaybackPosition(userId, streamSlug);
+        }
       }
     }
     if (!resumeAt && accountState?.mediaProgress?.length) {
       const savedProgress = accountState.mediaProgress.find(
         (p) => p.product_slug === nextTrack.slug && !p.completed
       );
-      if (savedProgress?.position_seconds > 5) {
-        resumeAt = savedProgress.position_seconds;
+      if (savedProgress?.position_seconds > RESTORE_MIN_POSITION_SEC) {
+        const clamped = clampRestorePosition(
+          savedProgress.position_seconds,
+          savedProgress.duration_seconds
+        );
+        if (clamped != null) resumeAt = clamped;
       }
+    }
+    if (resumeAt != null && isFinite(audio.duration) && audio.duration > 0) {
+      resumeAt = clampRestorePosition(resumeAt, audio.duration);
     }
 
     const prevTrack = stateRef.current.currentTrack;
@@ -1201,6 +1261,12 @@ export function AudioProvider({ children }) {
     const isSameTrack = sameIdentity;
     const isReplay = isSameTrack && audio.ended;
     const previousTrack = stateRef.current.currentTrack;
+
+    if (isReplay) {
+      audio.currentTime = 0;
+      pendingSeekRef.current = null;
+      patchState({ playbackState: null, currentTime: 0 });
+    }
 
     if (
       previousTrack?.slug &&
@@ -1266,6 +1332,7 @@ export function AudioProvider({ children }) {
       if (!isSameTrack) {
         skipPauseInterruptionRef.current = true;
         audio.pause();
+        spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
         await loadAudioSrcAndPlay(audio, syncSrc);
         pendingSeekRef.current = resumeAt;
       } else {
@@ -1273,8 +1340,14 @@ export function AudioProvider({ children }) {
           applyCsToElement(audio, presentation, pendingSeekRef.current || null);
           return true;
         }
-        if (resumeAt && Math.abs(audio.currentTime - resumeAt) > 2) {
-          audio.currentTime = resumeAt;
+        if (resumeAt) {
+          const dur = isFinite(audio.duration) ? audio.duration : 0;
+          const safe = dur > 0 ? clampRestorePosition(resumeAt, dur) : resumeAt;
+          if (safe != null && Math.abs(audio.currentTime - safe) > 2) {
+            audio.currentTime = safe;
+          } else if (safe == null && userId && streamSlug) {
+            clearPlaybackPosition(userId, streamSlug);
+          }
         }
       }
 
@@ -1282,8 +1355,15 @@ export function AudioProvider({ children }) {
 
       if (pendingSeekRef.current) {
         const applyPendingSeek = () => {
-          if (pendingSeekRef.current && isFinite(audio.duration)) {
-            audio.currentTime = Math.min(pendingSeekRef.current, Math.max(0, audio.duration - 1));
+          const pending = pendingSeekRef.current;
+          if (pending != null && isFinite(audio.duration) && audio.duration > 0) {
+            const safe = clampRestorePosition(pending, audio.duration);
+            if (safe != null) {
+              audio.currentTime = safe;
+            } else if (listeningUserIdRef.current && nextTrack.slug) {
+              clearPlaybackPosition(listeningUserIdRef.current, nextTrack.slug);
+            }
+            spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
           }
           pendingSeekRef.current = null;
           audio.removeEventListener("loadedmetadata", applyPendingSeek);
@@ -1342,12 +1422,24 @@ export function AudioProvider({ children }) {
     const track = stateRef.current.currentTrack;
     if (!audio || !track?.slug) return false;
     const previewSrc = getTrackPreviewSrc(track);
-    const currentPlaybackSrc = audio.currentSrc || audio.src || "";
+    const currentPlaybackSrc = normalizePlaybackSrc(audio.currentSrc || audio.src || "");
+    const signedUrl = streamMetaRef.current?.url
+      ? normalizePlaybackSrc(streamMetaRef.current.url)
+      : "";
     const stillOnPreview =
-      previewSrc &&
-      (currentPlaybackSrc === previewSrc ||
-        (!isLibraryStreamSrc(currentPlaybackSrc) && !streamMetaRef.current?.url));
-    if (!track.metadata?.access?.previewOnly && streamMetaRef.current?.url && !stillOnPreview) {
+      Boolean(previewSrc) &&
+      (currentPlaybackSrc === normalizePlaybackSrc(previewSrc) ||
+        (Boolean(track.metadata?.access?.previewOnly) &&
+          !isLibraryStreamSrc(currentPlaybackSrc) &&
+          !signedUrl));
+
+    if (!track.metadata?.access?.previewOnly && signedUrl && currentPlaybackSrc === signedUrl) {
+      return true;
+    }
+    if (!stillOnPreview && signedUrl && currentPlaybackSrc === signedUrl) {
+      return true;
+    }
+    if (!stillOnPreview && !track.metadata?.access?.previewOnly && isLibraryStreamSrc(currentPlaybackSrc)) {
       return true;
     }
 
@@ -1358,6 +1450,27 @@ export function AudioProvider({ children }) {
 
     try {
       const resolved = await resolveLibraryStreamForTrack(libraryTrack, { force: false });
+      const nextSrc = normalizePlaybackSrc(resolved.track.src);
+      if (nextSrc && nextSrc === currentPlaybackSrc) {
+        patchState({
+          currentTrack: {
+            ...track,
+            src: resolved.track.src,
+            metadata: {
+              ...track.metadata,
+              access: {
+                ...(track.metadata?.access || {}),
+                previewOnly: false,
+                canStream: true,
+              },
+            },
+          },
+          playbackState: audio.paused ? "paused" : "playing",
+          error: null,
+          accessDenied: false,
+        });
+        return true;
+      }
       const resumeAt = audio.currentTime || 0;
       skipPauseInterruptionRef.current = true;
       await waitAudioSrcReady(audio, resolved.track.src);
@@ -1839,12 +1952,10 @@ export function AudioProvider({ children }) {
         const position = audio.currentTime || 0;
         const userId = listeningUserIdRef.current;
         if (userId && track.slug) {
-          savePlaybackPosition(
-            userId,
-            track.slug,
-            position,
-            isFinite(audio.duration) ? audio.duration : 0
-          );
+          const dur = isFinite(audio.duration) ? audio.duration : 0;
+          if (!(dur > 0 && isNearEndRestorePosition(position, dur))) {
+            savePlaybackPosition(userId, track.slug, position, dur);
+          }
         }
         const meta = streamMetaRef.current;
         const slug = meta?.slug || parseStreamSlugFromSrc(track.src) || track.slug;
@@ -1899,12 +2010,11 @@ export function AudioProvider({ children }) {
         const t = stateRef.current.currentTrack;
         const userId = listeningUserIdRef.current;
         if (userId && t?.slug) {
-          savePlaybackPosition(
-            userId,
-            t.slug,
-            audioEl.currentTime || 0,
-            isFinite(audioEl.duration) ? audioEl.duration : 0
-          );
+          const dur = isFinite(audioEl.duration) ? audioEl.duration : 0;
+          const pos = audioEl.currentTime || 0;
+          if (!(dur > 0 && isNearEndRestorePosition(pos, dur))) {
+            savePlaybackPosition(userId, t.slug, pos, dur);
+          }
         }
       }
     };

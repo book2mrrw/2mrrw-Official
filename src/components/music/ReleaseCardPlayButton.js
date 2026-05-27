@@ -56,7 +56,9 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
       }
       if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
       void playQueue([track], 0);
-      if (track.metadata?.access?.canStream) {
+      const needsPreviewUpgrade =
+        track.metadata?.access?.canStream && track.metadata?.access?.previewOnly;
+      if (needsPreviewUpgrade) {
         upgradeTimerRef.current = setTimeout(() => {
           void upgradeToFullStream();
         }, 2000);
