@@ -100,6 +100,17 @@ async function playAudioIfNotPaused(audio) {
   }
 }
 
+/** Safari keeps AudioContext suspended until resumed inside a user gesture. */
+async function resumeWebAudioContextIfSuspended(ctxRef) {
+  const ctx = ctxRef?.current;
+  if (!ctx || ctx.state !== "suspended") return;
+  try {
+    await ctx.resume();
+  } catch (e) {
+    console.warn("[WebAudio] resume failed:", e);
+  }
+}
+
 function getTrackPreviewSrc(track) {
   const previewPath =
     track?.preview ||
@@ -984,9 +995,7 @@ export function AudioProvider({ children }) {
 
   const playTrack = useCallback(async (track, options = {}) => {
     initWebAudio();
-    if (audioCtxRef.current?.state === "suspended") {
-      void audioCtxRef.current.resume();
-    }
+    await resumeWebAudioContextIfSuspended(audioCtxRef);
     setPreviewEnded(false);
     if (!track || (typeof track !== "object")) {
       console.error("[AudioContext] playTrack: invalid track", track);
@@ -1619,6 +1628,8 @@ export function AudioProvider({ children }) {
     userPausedRef.current = false;
 
     try {
+      initWebAudio();
+      await resumeWebAudioContextIfSuspended(audioCtxRef);
       await audio.play();
       if (track) void updateMediaSession(track, { playing: true });
       patchState({ isPlaying: true, error: null, accessDenied: false, playbackState: "playing" });
@@ -1673,7 +1684,7 @@ export function AudioProvider({ children }) {
       patchState({ isPlaying: false, error: "Audio playback failed. Try again in a moment.", playbackState: "paused" });
       return false;
     }
-  }, [patchState, updateMediaSession, finalizeStreamSession]);
+  }, [patchState, updateMediaSession, finalizeStreamSession, initWebAudio]);
 
   const toggle = useCallback(() => {
     if (audioRef.current?.paused) return resume();
@@ -2084,6 +2095,7 @@ export function AudioProvider({ children }) {
         ref={audioRef}
         preload="auto"
         playsInline
+        crossOrigin="anonymous"
         {...{ "webkit-playsinline": "", "x-webkit-airplay": "allow" }}
         style={{ display: "none" }}
       />
