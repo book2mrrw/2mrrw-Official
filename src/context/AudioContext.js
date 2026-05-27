@@ -11,7 +11,7 @@ import {
   startTransition,
 } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
+import { resetPlaybackTelemetry, sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
 import {
   clearPlaybackPosition,
   getSavedPlaybackPosition,
@@ -982,6 +982,7 @@ export function AudioProvider({ children }) {
       }
       stopProgressRaf();
       stopPositionSaveTimer();
+      resetPlaybackTelemetry();
     };
   }, [
     patchState,
