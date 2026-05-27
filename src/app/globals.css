@@ -4284,3 +4284,35 @@ body.is-player-modal-open::before {
   transition:background .2s,box-shadow .2s;
 }
 .my-coll-btn:hover{background:rgba(0,255,255,.18);box-shadow:0 0 14px rgba(0,255,255,.2);}
+
+/* Immersive modal — landscape phone rotation */
+@media screen and (orientation: landscape) and (max-height: 500px) {
+  .modal-immersive-shell {
+    height: 100dvh;
+    border-radius: 0;
+  }
+  .modal-immersive-stage {
+    flex: 0 0 55%;
+  }
+}
+
+/* Low power / reduced motion — soften decorative motion only */
+@media (prefers-reduced-motion: reduce) {
+  .sc-orb,
+  .orb-a,
+  .orb-b,
+  .orb-c {
+    animation-duration: 30s;
+  }
+  .sc-scan {
+    animation: none;
+  }
+  .cart-pulse,
+  .col-glow,
+  .player-cs-btn--active {
+    animation: none;
+  }
+  .eq-b {
+    animation-duration: 2s;
+  }
+}

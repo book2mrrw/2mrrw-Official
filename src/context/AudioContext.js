@@ -44,7 +44,7 @@ import { preloadCoverImage } from "@/lib/media/preload";
 import { logPlayback } from "@/lib/observability/client-log";
 import { MARKS, perfMark, perfMeasure } from "@/lib/dev/performanceMarks";
 import AudioPhase10Bridge from "@/components/system/AudioPhase10Bridge";
-import { isFirstListen } from "@/lib/first-listen";
+import { isFirstListen, markListened } from "@/lib/first-listen";
 
 const AudioContext = createContext(null);
 
@@ -212,6 +212,7 @@ const normalizeTrack = (track = {}) => {
     csAudio: csAudio || null,
     csCover: csCover || null,
     csCoverType,
+    hasCs: Boolean(csAudio || csCover),
     source: track.source || "unknown",
     metadata: track.metadata || {},
     preview: track.preview || track.preview_path || track.previewPath || null,
@@ -322,8 +323,8 @@ export function AudioProvider({ children }) {
   const streamErrorRetriedRef = useRef(false);
   const onPreviewEndedRef = useRef(null);
   const [previewEnded, setPreviewEnded] = useState(false);
-  const visibilityPausedRef = useRef(false);
   const wasPlayingBeforeHideRef = useRef(false);
+  const retryStreamPlaybackRef = useRef(null);
   const positionSaveTimerRef = useRef(null);
   const csHoldSavedRef = useRef(null);
   const csHoldActiveRef = useRef(false);
@@ -446,12 +447,16 @@ export function AudioProvider({ children }) {
     const ms = navigator.mediaSession;
     if (!track) return;
 
-    const artwork = await getArtworkEntriesForTrack(track.cover, track.slug);
+    const coverForSession =
+      csModeRef.current && (track.csCover || track.cs_cover)
+        ? track.csCover || track.cs_cover
+        : track.cover || track.coverArt || track.coverUrl || track.baseCover || "";
+    const artwork = await getArtworkEntriesForTrack(coverForSession, track.slug);
     try {
       ms.metadata = new MediaMetadata({
         title: csModeRef.current ? `${track.title || "Untitled"} ◈` : (track.title || "Untitled"),
         artist: track.artist || "2MRRW",
-        album: track.source || "2MRRW",
+        album: track.album || "2MRRW",
         artwork,
       });
       ms.playbackState = playing ? "playing" : "paused";
@@ -950,21 +955,41 @@ export function AudioProvider({ children }) {
     audio.addEventListener("playing", onPlaying);
     audio.addEventListener("canplaythrough", onCanPlayThrough);
 
+    const onOnline = () => {
+      if (
+        stateRef.current.isPlaying &&
+        audioRef.current?.paused &&
+        stateRef.current.currentTrack
+      ) {
+        console.log("[AUDIO] Network restored — resuming");
+        void retryStreamPlaybackRef.current?.();
+      }
+    };
+    window.addEventListener("online", onOnline);
+
     let onDeviceChange = null;
     if (navigator.mediaDevices?.addEventListener) {
-      onDeviceChange = () => {
-        navigator.mediaDevices.enumerateDevices().then((devices) => {
-          const hasAudioOut = devices.some((d) => d.kind === "audiooutput");
-          if (!hasAudioOut && stateRef.current.isPlaying) {
+      onDeviceChange = async () => {
+        try {
+          if (!navigator.mediaDevices?.enumerateDevices) return;
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const hasAudioOutput = devices.some(
+            (d) => d.kind === "audiooutput" && d.deviceId !== "default"
+          );
+          if (!hasAudioOutput && stateRef.current.isPlaying) {
             userPausedRef.current = true;
             audio.pause();
+            patchState({ isPlaying: false });
           }
-        });
+        } catch {
+          /* enumerateDevices unavailable */
+        }
       };
       navigator.mediaDevices.addEventListener("devicechange", onDeviceChange);
     }
 
     return () => {
+      window.removeEventListener("online", onOnline);
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("timeupdate", onTime);
@@ -1373,6 +1398,7 @@ export function AudioProvider({ children }) {
       }
 
       if (isFirstListen(nextTrack.slug)) {
+        markListened(nextTrack.slug);
         audio.volume = 0;
         let vol = 0;
         const swell = setInterval(() => {
@@ -1548,6 +1574,10 @@ export function AudioProvider({ children }) {
     const resumeAt = audioRef.current?.currentTime || stateRef.current.currentTime || 0;
     return playTrack(track, { resumeAt, forceStream: true });
   }, [patchState, playTrack]);
+
+  useEffect(() => {
+    retryStreamPlaybackRef.current = retryStreamPlayback;
+  }, [retryStreamPlayback]);
 
   const applyCSModeToTrack = useCallback(
     async (track) => {
@@ -1978,7 +2008,16 @@ export function AudioProvider({ children }) {
       }
 
       if (document.visibilityState === "visible") {
-        rehydrateMediaSession();
+        if (stateRef.current.isPlaying && audio.paused) {
+          audio.play().catch(() => {});
+        }
+        if (stateRef.current.currentTrack) {
+          void updateMediaSession(stateRef.current.currentTrack, {
+            playing: stateRef.current.isPlaying,
+          });
+        } else {
+          rehydrateMediaSession();
+        }
       }
     };
     const onPageShow = (event) => {
