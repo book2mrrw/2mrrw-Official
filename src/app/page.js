@@ -8,7 +8,7 @@ import CheckoutForm from "@/components/payments/CheckoutForm";
 const DonateModal = dynamic(() => import("@/components/payments/DonateModal"), { ssr: false });
 import { useAuth } from "@/context/AuthContext";
 import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
-import ImmersivePreviewModal from "@/components/preview/ImmersivePreviewModal";
+import ImmersivePreviewModal, { AlbumModal } from "@/components/preview/ImmersivePreviewModal";
 import GiftBottomSheet from "@/components/gifts/GiftBottomSheet";
 import GiftButton from "@/components/gifts/GiftButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
@@ -84,6 +84,24 @@ const formatTime = (s) => {
   const sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, "0")}`;
 };
+
+function normalizeAlbumTracksForModal(tracks) {
+  if (!Array.isArray(tracks)) return [];
+  return tracks.map((track, index) => {
+    if (typeof track === "string") {
+      return { id: index + 1, title: track, feat: null, dur: null, durSec: 0, free: false };
+    }
+    const dur = track?.dur ?? track?.duration ?? null;
+    return {
+      id: track?.id ?? index + 1,
+      title: track?.title || `Track ${index + 1}`,
+      feat: track?.feat || track?.featuring || null,
+      dur: typeof dur === "number" ? formatTime(dur) : dur,
+      durSec: track?.durSec ?? (typeof dur === "number" ? dur : 0),
+      free: Boolean(track?.free),
+    };
+  });
+}
 
 // ── SOCIALS ───────────────────────────────────────────────────────────────────
 const SOCIALS = [
@@ -542,6 +560,7 @@ export default function Page() {
   const [featureReleaseDetail, setFeatureReleaseDetail] = useState(null);
   const [selectedReleaseDetail, setSelectedReleaseDetail] = useState(null);
   const [selectedAlbum, setSelectedAlbum]         = useState(null);
+  const [albumModalOpen, setAlbumModalOpen]       = useState(false);
   const [singleIndex, setSingleIndex]             = useState(0);
   const [slideDir, setSlideDir]                   = useState("right");
   const [animating, setAnimating]                 = useState(false);
@@ -1081,10 +1100,6 @@ export default function Page() {
     () => (featureModalItem ? resolveContentAccess(featureModalItem, accountState) : null),
     [featureModalItem, accountState]
   );
-  const selectedAlbumAccess = useMemo(
-    () => (selectedAlbum ? resolveContentAccess(selectedAlbum, accountState) : null),
-    [selectedAlbum, accountState]
-  );
   const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
 
   const openSingleModal = useCallback((single) => {
@@ -1156,6 +1171,7 @@ export default function Page() {
   const openAlbumModal = useCallback(
     (album) => {
       setSelectedAlbum(album);
+      setAlbumModalOpen(true);
       if (!album) return;
       playAlbumTracks(album, 0);
     },
@@ -1178,6 +1194,7 @@ export default function Page() {
   }, [pause]);
 
   const closeAlbumModal = useCallback(() => {
+    setAlbumModalOpen(false);
     setSelectedAlbum(null);
     pause();
   }, [pause]);
@@ -1574,124 +1591,22 @@ export default function Page() {
 
 
 
-      {/* ── ALBUM MODAL ── */}
-      <AnimatePresence>
-        {selectedAlbum && (
-          <motion.div
-            key="album-overlay"
-            {...OVERLAY_FADE}
-            onClick={closeAlbumModal}
-            style={{
-              position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8888,
-              display:"flex",alignItems:isMobile?"flex-end":"center",justifyContent:"center",
-              padding:isMobile?0:16,
-            }}
-          >
-            <motion.div
-              key="album-sheet"
-              className="album-modal-sheet"
-              {...(isMobile ? SHEET_UP : MODAL_CENTER)}
-              onClick={e => e.stopPropagation()}
-              style={{
-                background:"#0d0d0d",
-                border:isMobile?"1px solid #1e1e1e":"1px solid #222",
-                borderRadius:isMobile?"20px 20px 0 0":20,
-                width:isMobile?"100%":320,
-                maxWidth:isMobile?"100%":"none",
-                maxHeight:isMobile?"88vh":"80vh",
-                overflowY:"auto",
-                display:"flex",
-                flexDirection:"column",
-                alignItems:"center",
-                gap:10,
-                padding:isMobile?"0 0 28px":"22px 26px",
-              }}
-            >
-              {isMobile && <motion.div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"12px auto 0",flexShrink:0}} />}
-              {isMobile && (
-                <motion.div style={{position:"relative",width:"100%",height:180,flexShrink:0,overflow:"hidden"}}>
-                  <img src={selectedAlbum.cover} style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}} alt="" />
-                  <motion.div style={{position:"absolute",inset:0,background:"linear-gradient(to top,rgba(0,0,0,0.9) 0%,transparent 50%)"}} />
-                  <motion.div style={{position:"absolute",bottom:16,left:20,right:20}}>
-                    <motion.div style={{fontSize:20,fontWeight:900,letterSpacing:2}}>{selectedAlbum.title}</motion.div>
-                    <motion.div style={{fontSize:11,opacity:0.5,letterSpacing:1,marginTop:4}}>{selectedAlbum.date}</motion.div>
-                  </motion.div>
-                </motion.div>
-              )}
-              <motion.div style={{padding:isMobile?"0 20px":"0",width:"100%",display:"flex",flexDirection:"column",alignItems:"center",gap:10}}>
-                {!isMobile && <img src={selectedAlbum.cover} style={{width:130,height:130,borderRadius:10,objectFit:"cover"}} alt="" />}
-                {!isMobile && <motion.div style={{fontSize:17,fontWeight:900,letterSpacing:2,textAlign:"center"}}>{selectedAlbum.title}</motion.div>}
-                {!isMobile && <motion.div style={{fontSize:11,opacity:0.4,letterSpacing:1}}>{selectedAlbum.date}</motion.div>}
-                <motion.div style={{width:"100%",marginTop:4}}>
-                  <motion.div style={{fontSize:10,letterSpacing:2,opacity:0.4,marginBottom:8,textTransform:"uppercase"}}>Track Listing</motion.div>
-                  {selectedAlbum.tracks.map((t,i)=>{
-                    const trackTitle = typeof t === "string" ? t : t?.title || `Track ${i + 1}`;
-                    const trackDuration = typeof t === "string" ? null : t?.duration || t?.dur || null;
-                    const canPlayTrack = Boolean(selectedAlbumAccess?.canStream);
-                    const normalizedCurrent = String(currentTrack?.title || "").trim().toLowerCase();
-                    const normalizedTitle = String(trackTitle || "").trim().toLowerCase();
-                    const isActiveTrack = canPlayTrack && normalizedCurrent && normalizedCurrent === normalizedTitle;
-                    const isPlayingTrack = Boolean(isActiveTrack && isPlaying);
-                    return (
-                      <motion.div
-                        key={i}
-                        className={["album-modal-track-row", isActiveTrack ? "active-tr" : "", canPlayTrack ? "" : "locked"].filter(Boolean).join(" ")}
-                        style={{color:canPlayTrack ? "white" : "#666"}}
-                      >
-                        <div className="album-modal-track-index" aria-hidden>
-                          {isPlayingTrack ? (
-                            <>
-                              <span className="eq-b" />
-                              <span className="eq-b" />
-                              <span className="eq-b" />
-                            </>
-                          ) : (
-                            <span>{i + 1}</span>
-                          )}
-                        </div>
-                        <span className="album-modal-track-title">
-                          {trackTitle}
-                          {!canPlayTrack ? " · Preview only" : ""}
-                        </span>
-                        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                          {trackDuration ? <span className="album-modal-track-duration">{trackDuration}</span> : null}
-                          {canPlayTrack ? (
-                            <button type="button" onClick={()=>playAlbumTracks(selectedAlbum, i)} style={{background:"none",border:"none",color:"#00ffff",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>
-                              {isPlayingTrack ? "Pause" : "Play"}
-                            </button>
-                          ) : (
-                            <span style={{fontSize:10,color:"#444",flexShrink:0}}>Locked</span>
-                          )}
-                        </div>
-                      </motion.div>
-                    );
-                  })}
-                </motion.div>
-                {selectedAlbumAccess?.canStream && (
-                  <button type="button" onClick={()=>playAlbumTracks(selectedAlbum, 0)} style={{width:"100%",padding:"12px 0",background:"#00ffff",color:"#000",border:"none",borderRadius:10,cursor:"pointer",fontSize:13,marginTop:6,fontWeight:800}}>Play Album</button>
-                )}
-                {selectedAlbumAccess?.showCart && (
-                  <>
-                    <button onClick={()=>{addToCart(selectedAlbum);closeAlbumModal();}} style={{width:"100%",padding:"12px 0",background:"#1f1f1f",color:"white",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,marginTop:6,fontWeight:700}}>Add to Cart – ${selectedAlbum.price.toFixed(2)}</button>
-                    <button onClick={()=>{addToCart({title:`${selectedAlbum.title} – Vinyl`,slug:`${selectedAlbum.slug}-vinyl`,cover:selectedAlbum.cover,price:selectedAlbum.vinyl});closeAlbumModal();}} style={{width:"100%",padding:"12px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – ${selectedAlbum.vinyl.toFixed(2)} (Optional)</button>
-                  </>
-                )}
-                {selectedAlbum && (
-                  <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-                    <MusicPlusButton
-                      track={selectedAlbum}
-                      userId={currentUser?.id}
-                      access={selectedAlbumAccess}
-                      onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
-                    />
-                  </div>
-                )}
-                <button onClick={closeAlbumModal} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,marginTop:4}}>Close</button>
-              </motion.div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* ── ALBUM MODAL (V9 immersive) ── */}
+      {albumModalOpen && selectedAlbum && (
+        <AlbumModal
+          key={selectedAlbum.id || selectedAlbum.slug}
+          album={{
+            ...selectedAlbum,
+            artist: selectedAlbum.artist || "2MRRW",
+            year: selectedAlbum.year || selectedAlbum.date,
+            coverArt: selectedAlbum.coverArt || selectedAlbum.cover,
+            price: selectedAlbum.price != null ? `$${Number(selectedAlbum.price).toFixed(2)}` : selectedAlbum.price,
+            tracks: normalizeAlbumTracksForModal(selectedAlbum.tracks || []),
+          }}
+          access={resolveTrackAccess(selectedAlbum, accountState)?.canStream ? "full" : "preview"}
+          onClose={closeAlbumModal}
+        />
+      )}
 
 
 
