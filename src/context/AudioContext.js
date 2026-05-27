@@ -58,6 +58,9 @@ const PREVIEW_HARD_CAP_SEC = 30;
 const RESTORE_MIN_POSITION_SEC = 5;
 const RESTORE_NEAR_END_BUFFER_SEC = 3;
 const SPURIOUS_ENDED_GUARD_MS = 1200;
+const KEEP_ALIVE_INTERVAL_MS = 20000;
+const VISIBILITY_RESUME_DELAY_MS = 300;
+const GESTURE_UNLOCK_EVENTS = ["touchstart", "touchend", "click", "keydown"];
 
 function normalizePlaybackSrc(src) {
   if (!src || typeof src !== "string") return "";
@@ -324,6 +327,8 @@ export function AudioProvider({ children }) {
   const onPreviewEndedRef = useRef(null);
   const [previewEnded, setPreviewEnded] = useState(false);
   const wasPlayingBeforeHideRef = useRef(false);
+  const keepAliveIntervalRef = useRef(null);
+  const sessionUnlockedRef = useRef(false);
   const retryStreamPlaybackRef = useRef(null);
   const positionSaveTimerRef = useRef(null);
   const csHoldSavedRef = useRef(null);
@@ -415,10 +420,36 @@ export function AudioProvider({ children }) {
     progressRafRef.current = requestAnimationFrame(tick);
   }, [patchState, stopProgressRaf]);
 
+  const postKeepAliveToServiceWorker = useCallback(() => {
+    if (typeof navigator === "undefined" || !navigator.serviceWorker?.controller) return;
+    try {
+      navigator.serviceWorker.controller.postMessage({ type: "KEEP_ALIVE" });
+    } catch {
+      /* SW ping best-effort */
+    }
+  }, []);
+
+  const stopKeepAlivePing = useCallback(() => {
+    if (keepAliveIntervalRef.current) {
+      clearInterval(keepAliveIntervalRef.current);
+      keepAliveIntervalRef.current = null;
+    }
+  }, []);
+
+  const startKeepAlivePing = useCallback(() => {
+    stopKeepAlivePing();
+    postKeepAliveToServiceWorker();
+    keepAliveIntervalRef.current = setInterval(
+      postKeepAliveToServiceWorker,
+      KEEP_ALIVE_INTERVAL_MS
+    );
+  }, [postKeepAliveToServiceWorker, stopKeepAlivePing]);
+
   const syncPositionState = useCallback((force = false) => {
     const audio = audioRef.current;
     if (
       typeof navigator === "undefined" ||
+      !("mediaSession" in navigator) ||
       !navigator.mediaSession?.setPositionState ||
       !audio ||
       !isFinite(audio.duration) ||
@@ -443,7 +474,7 @@ export function AudioProvider({ children }) {
   }, []);
 
   const updateMediaSession = useCallback(async (track, { playing } = {}) => {
-    if (typeof navigator === "undefined" || !navigator.mediaSession) return;
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
     const ms = navigator.mediaSession;
     if (!track) return;
 
@@ -511,6 +542,54 @@ export function AudioProvider({ children }) {
       console.warn("[WebAudio] Could not init:", e);
     }
   }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const unlockFromGesture = async () => {
+      if (sessionUnlockedRef.current) return;
+      sessionUnlockedRef.current = true;
+
+      const audio = audioRef.current;
+      if (audio) {
+        try {
+          audio.load();
+        } catch {
+          /* Android session priming */
+        }
+      }
+
+      initWebAudio();
+      await resumeWebAudioContextIfSuspended(audioCtxRef);
+
+      try {
+        const Ctx = window.AudioContext || window.webkitAudioContext;
+        if (Ctx && !audioCtxRef.current) {
+          const ephemeral = new Ctx();
+          if (ephemeral.state === "suspended") {
+            await ephemeral.resume();
+          }
+          await ephemeral.close();
+        }
+      } catch {
+        /* iOS unlock best-effort */
+      }
+
+      GESTURE_UNLOCK_EVENTS.forEach((evt) => {
+        document.removeEventListener(evt, unlockFromGesture, true);
+      });
+    };
+
+    GESTURE_UNLOCK_EVENTS.forEach((evt) => {
+      document.addEventListener(evt, unlockFromGesture, { capture: true, passive: true });
+    });
+
+    return () => {
+      GESTURE_UNLOCK_EVENTS.forEach((evt) => {
+        document.removeEventListener(evt, unlockFromGesture, true);
+      });
+    };
+  }, [initWebAudio]);
 
   const toggleSpaceMode = useCallback(() => {
     const next = !stateRef.current.spaceMode;
@@ -622,6 +701,7 @@ export function AudioProvider({ children }) {
     const onPlay = () => {
       userPausedRef.current = false;
       patchState({ isPlaying: true, error: null, hasStarted: true, isBuffering: false });
+      startKeepAlivePing();
       startProgressRaf();
       startPositionSaveTimer();
       persistPlayback("play");
@@ -646,6 +726,7 @@ export function AudioProvider({ children }) {
         return;
       }
 
+      stopKeepAlivePing();
       stopProgressRaf();
       stopPositionSaveTimer();
       patchState({ isPlaying: false });
@@ -654,7 +735,7 @@ export function AudioProvider({ children }) {
       const track = stateRef.current.currentTrack;
       if (track) {
         void updateMediaSession(track, { playing: false });
-      } else if (typeof navigator !== "undefined" && navigator.mediaSession) {
+      } else if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
         navigator.mediaSession.playbackState = "paused";
       }
 
@@ -792,7 +873,7 @@ export function AudioProvider({ children }) {
             else {
               patchState({ isPlaying: false, currentTime: 0, playbackState: "idle" });
               setPreviewEnded(false);
-              if (typeof navigator !== "undefined" && navigator.mediaSession) {
+              if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
                 navigator.mediaSession.playbackState = "none";
               }
               if (track) void updateMediaSession(track, { playing: false });
@@ -812,7 +893,7 @@ export function AudioProvider({ children }) {
 
         patchState({ isPlaying: false, currentTime: 0, playbackState: "idle" });
         setPreviewEnded(false);
-        if (typeof navigator !== "undefined" && navigator.mediaSession) {
+        if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
           navigator.mediaSession.playbackState = "none";
         }
         if (track) void updateMediaSession(track, { playing: false });
@@ -1007,6 +1088,7 @@ export function AudioProvider({ children }) {
       }
       stopProgressRaf();
       stopPositionSaveTimer();
+      stopKeepAlivePing();
       resetPlaybackTelemetry();
     };
   }, [
@@ -1019,6 +1101,8 @@ export function AudioProvider({ children }) {
     stopPositionSaveTimer,
     startProgressRaf,
     stopProgressRaf,
+    startKeepAlivePing,
+    stopKeepAlivePing,
   ]);
 
   const applyCsToElement = useCallback((audio, presentation, resumeAt = null) => {
@@ -1888,6 +1972,7 @@ export function AudioProvider({ children }) {
     }
     stopProgressRaf();
     stopPositionSaveTimer();
+    stopKeepAlivePing();
     if (audio) {
       skipPauseInterruptionRef.current = true;
       audio.pause();
@@ -1901,14 +1986,14 @@ export function AudioProvider({ children }) {
     queueRef.current = [];
     queueIndexRef.current = -1;
     clearPersistedMediaSessionTrack();
-    if (typeof navigator !== "undefined" && navigator.mediaSession) {
+    if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
       navigator.mediaSession.metadata = null;
       navigator.mediaSession.playbackState = "none";
     }
-  }, [finalizeStreamSession, stopPositionSaveTimer, stopProgressRaf]);
+  }, [finalizeStreamSession, stopPositionSaveTimer, stopProgressRaf, stopKeepAlivePing]);
 
   useEffect(() => {
-    if (typeof navigator === "undefined" || !navigator.mediaSession) return undefined;
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return undefined;
     const ms = navigator.mediaSession;
     const handlePlay = () => {
       void resume();
@@ -2008,9 +2093,28 @@ export function AudioProvider({ children }) {
       }
 
       if (document.visibilityState === "visible") {
-        if (stateRef.current.isPlaying && audio.paused) {
-          audio.play().catch(() => {});
+        const shouldResume = wasPlayingBeforeHideRef.current;
+        wasPlayingBeforeHideRef.current = false;
+
+        if (shouldResume && audio) {
+          setTimeout(() => {
+            const el = audioRef.current;
+            if (!el || !stateRef.current.currentTrack) return;
+            void (async () => {
+              await resumeWebAudioContextIfSuspended(audioCtxRef);
+              if (el.paused) {
+                try {
+                  await el.play();
+                } catch (e) {
+                  if (e.name !== "AbortError") {
+                    console.error("[AUDIO]", e.name, e.message);
+                  }
+                }
+              }
+            })();
+          }, VISIBILITY_RESUME_DELAY_MS);
         }
+
         if (stateRef.current.currentTrack) {
           void updateMediaSession(stateRef.current.currentTrack, {
             playing: stateRef.current.isPlaying,
@@ -2018,6 +2122,7 @@ export function AudioProvider({ children }) {
         } else {
           rehydrateMediaSession();
         }
+        syncPositionState(true);
       }
     };
     const onPageShow = (event) => {
@@ -2069,7 +2174,7 @@ export function AudioProvider({ children }) {
       window.removeEventListener("beforeunload", onBeforeUnload);
       window.removeEventListener("pagehide", onPageHide);
     };
-  }, [rehydrateMediaSession, patchState, updateMediaSession]);
+  }, [rehydrateMediaSession, patchState, updateMediaSession, syncPositionState]);
 
   const beginCsHoldPreview = useCallback((csAudioUrl) => {
     const audio = audioRef.current;
@@ -2235,7 +2340,10 @@ export function AudioProvider({ children }) {
     cycleAtmosphere,
   ]);
 
-  useEffect(() => () => stopProgressRaf(), [stopProgressRaf]);
+  useEffect(() => () => {
+    stopProgressRaf();
+    stopKeepAlivePing();
+  }, [stopProgressRaf, stopKeepAlivePing]);
 
   return (
     <AudioContext.Provider value={value}>

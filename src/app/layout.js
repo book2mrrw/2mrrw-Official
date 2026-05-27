@@ -30,6 +30,11 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en">
       <body style={{ margin: 0, background: "#0a0a0a", color: "white" }}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if("serviceWorker"in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").catch(function(){});});}`,
+          }}
+        />
         <PostHogInit />
         <AuthProvider>
           <AppAuthRoot>
