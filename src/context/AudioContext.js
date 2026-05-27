@@ -773,6 +773,37 @@ export function AudioProvider({ children }) {
           patchState({ isPlaying: true, error: null, streamRetryable: false, isBuffering: false });
           return;
         } catch (retryErr) {
+          if (retryErr?.status === 401 && track?.metadata?.access?.canStream) {
+            console.warn("[AudioContext] stream retry 401; falling back to preview", {
+              slug: track?.slug || slug,
+              trackId: track?.id || slug,
+            });
+            const previewFallbackSrc = track?.metadata?.previewSrc || track?.previewUrl || null;
+            if (previewFallbackSrc) {
+              skipPauseInterruptionRef.current = true;
+              audio.src = previewFallbackSrc;
+              audio.load();
+              void audio.play().catch(() => {});
+              patchState({
+                isPlaying: true,
+                error: null,
+                source: "preview",
+                playbackState: "preview_fallback",
+                currentTrack: {
+                  ...track,
+                  src: previewFallbackSrc,
+                  metadata: {
+                    ...(track.metadata || {}),
+                    access: {
+                      ...(track.metadata?.access || {}),
+                      previewOnly: true,
+                    },
+                  },
+                },
+              });
+              return;
+            }
+          }
           if (retryErr?.code === "ACCESS_DENIED") {
             finalizeStreamSession(meta, { durationSeconds: resumeAt, completed: false });
             skipPauseInterruptionRef.current = true;
@@ -983,6 +1014,37 @@ export function AudioProvider({ children }) {
     }
 
     const applyStreamResolveError = (err) => {
+      if (err?.status === 401 && nextTrack?.metadata?.access?.canStream) {
+        console.warn("[AudioContext] stream fetch 401; falling back to preview", {
+          slug: nextTrack.slug,
+          trackId: nextTrack.id,
+        });
+        const previewFallbackSrc = nextTrack?.metadata?.previewSrc || nextTrack?.previewUrl || null;
+        if (previewFallbackSrc) {
+          skipPauseInterruptionRef.current = true;
+          audio.src = previewFallbackSrc;
+          audio.load();
+          void audio.play().catch(() => {});
+          patchState({
+            isPlaying: true,
+            error: null,
+            source: "preview",
+            playbackState: "preview_fallback",
+            currentTrack: {
+              ...nextTrack,
+              src: previewFallbackSrc,
+              metadata: {
+                ...(nextTrack.metadata || {}),
+                access: {
+                  ...(nextTrack.metadata?.access || {}),
+                  previewOnly: true,
+                },
+              },
+            },
+          });
+          return;
+        }
+      }
       if (err?.code === "ACCESS_DENIED") {
         const prevMeta = streamMetaRef.current;
         if (prevMeta) finalizeStreamSession(prevMeta, { completed: false, durationSeconds: audio.currentTime || 0 });

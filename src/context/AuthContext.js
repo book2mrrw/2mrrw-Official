@@ -182,9 +182,35 @@ export function AuthProvider({ children }) {
         const supabase = createClient();
 
         const { data: sessionData } = await supabase.auth.getSession();
+
+        // Safari ITP can drop Supabase cookies; fall back to localStorage session.
+        let resolvedSession = sessionData?.session || null;
+        if (!resolvedSession && typeof window !== "undefined") {
+          try {
+            const raw = window.localStorage.getItem("2mrrw-auth-token");
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              const candidate =
+                parsed?.access_token && parsed?.refresh_token
+                  ? parsed
+                  : parsed?.currentSession && parsed.currentSession.access_token
+                    ? parsed.currentSession
+                    : null;
+              if (candidate?.access_token && candidate?.refresh_token) {
+                const refreshed = await supabase.auth.setSession({
+                  access_token: candidate.access_token,
+                  refresh_token: candidate.refresh_token,
+                });
+                if (refreshed?.data?.session) resolvedSession = refreshed.data.session;
+              }
+            }
+          } catch {
+            /* ignore localStorage parse/setSession errors */
+          }
+        }
         if (!mounted) return;
 
-        const resolved = resolveUserFromSession(sessionData?.session);
+        const resolved = resolveUserFromSession(resolvedSession);
         if (resolved) {
           setUser(resolved.user);
           setIsAdmin(resolved.isAdmin);
