@@ -1214,6 +1214,41 @@ export function AudioProvider({ children }) {
         audio.pause();
         audio.src = syncSrc;
         audio.load();
+        // Wait for canplay before calling play()
+        const playWhenReady = () => {
+          audio.removeEventListener("canplay", playWhenReady);
+          audio.removeEventListener("canplaythrough", playWhenReady);
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise.catch(err => {
+              if (err.name === "AbortError") {
+                // Try once more after short delay
+                setTimeout(() => {
+                  audio.play().catch(e => 
+                    console.error("[AUDIO] retry failed", e)
+                  );
+                }, 200);
+              } else {
+                console.error("[AUDIO PLAY ERROR]", err);
+              }
+            });
+          }
+        };
+        audio.addEventListener("canplay", playWhenReady);
+        audio.addEventListener("canplaythrough", playWhenReady);
+        // Safety timeout — play anyway after 3s even if 
+        // canplay never fires (some browsers don't fire it)
+        const safetyTimer = setTimeout(() => {
+          audio.removeEventListener("canplay", playWhenReady);
+          audio.removeEventListener("canplaythrough", playWhenReady);
+          audio.play().catch(e => 
+            console.error("[AUDIO SAFETY PLAY]", e)
+          );
+        }, 3000);
+        // Clear safety timer if canplay fires first
+        audio.addEventListener("canplay", () => 
+          clearTimeout(safetyTimer), { once: true }
+        );
         pendingSeekRef.current = resumeAt;
       } else {
         if (!audio.paused && stateRef.current.isPlaying) {
@@ -1248,7 +1283,11 @@ export function AudioProvider({ children }) {
         }, 100);
       }
 
-      const playPromise = audio.play();
+      if (isSameTrack) {
+        void audio.play().catch((err) => {
+          console.error("[AUDIO PLAY ERROR]", err);
+        });
+      }
       void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: true });
 
       if (isReplay) {
@@ -1259,16 +1298,6 @@ export function AudioProvider({ children }) {
         });
       }
       patchState({ isPlaying: true, error: null, playbackState: "playing" });
-      if (playPromise !== undefined) {
-        playPromise.catch((err) => {
-          console.error("[AUDIO PLAY ERROR]", err);
-          setTimeout(() => {
-            audio.play().catch((e) =>
-              console.error("[AUDIO PLAY RETRY]", e)
-            );
-          }, 150);
-        });
-      }
       return true;
     } catch {
       patchState({ isPlaying: false, error: "Audio playback failed. Try again in a moment.", playbackState: "paused" });
