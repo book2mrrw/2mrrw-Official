@@ -56,6 +56,50 @@ const POSITION_SAVE_INTERVAL_MS = 15000;
 const STORE_LINK_HREF = "/subscribe";
 const PREVIEW_HARD_CAP_SEC = 30;
 
+/** Set src, wait for canplay/error/timeout, then load(). */
+async function waitAudioSrcReady(audio, src) {
+  audio.src = src;
+  await new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      audio.removeEventListener("canplay", finish);
+      audio.removeEventListener("canplaythrough", finish);
+      audio.removeEventListener("error", finish);
+      clearTimeout(fallback);
+      resolve();
+    };
+    const fallback = setTimeout(finish, 3000);
+    audio.addEventListener("canplay", finish);
+    audio.addEventListener("canplaythrough", finish);
+    audio.addEventListener("error", finish);
+    audio.load();
+  });
+}
+
+async function loadAudioSrcAndPlay(audio, src) {
+  await waitAudioSrcReady(audio, src);
+  try {
+    await audio.play();
+  } catch (e) {
+    if (e.name !== "AbortError") {
+      console.error("[AUDIO]", e.name, e.message);
+    }
+  }
+}
+
+async function playAudioIfNotPaused(audio) {
+  if (audio.paused) return;
+  try {
+    await audio.play();
+  } catch (e) {
+    if (e.name !== "AbortError") {
+      console.error("[AUDIO]", e.name, e.message);
+    }
+  }
+}
+
 function getTrackPreviewSrc(track) {
   const previewPath =
     track?.preview ||
@@ -758,8 +802,7 @@ export function AudioProvider({ children }) {
             sessionId: data.sessionId || meta?.sessionId || null,
           };
           skipPauseInterruptionRef.current = true;
-          audio.src = data.url;
-          audio.load();
+          await waitAudioSrcReady(audio, data.url);
           if (resumeAt > 0) {
             const seekAfterLoad = () => {
               if (resumeAt > 0 && isFinite(audio.duration)) {
@@ -768,8 +811,15 @@ export function AudioProvider({ children }) {
               audio.removeEventListener("loadedmetadata", seekAfterLoad);
             };
             audio.addEventListener("loadedmetadata", seekAfterLoad);
+            if (isFinite(audio.duration) && audio.duration > 0) seekAfterLoad();
           }
-          await audio.play();
+          try {
+            await audio.play();
+          } catch (e) {
+            if (e.name !== "AbortError") {
+              console.error("[AUDIO]", e.name, e.message);
+            }
+          }
           patchState({ isPlaying: true, error: null, streamRetryable: false, isBuffering: false });
           return;
         } catch (retryErr) {
@@ -781,9 +831,7 @@ export function AudioProvider({ children }) {
             const previewFallbackSrc = track?.metadata?.previewSrc || track?.previewUrl || null;
             if (previewFallbackSrc) {
               skipPauseInterruptionRef.current = true;
-              audio.src = previewFallbackSrc;
-              audio.load();
-              void audio.play().catch(() => {});
+              await loadAudioSrcAndPlay(audio, previewFallbackSrc);
               patchState({
                 isPlaying: true,
                 error: null,
@@ -1022,9 +1070,7 @@ export function AudioProvider({ children }) {
         const previewFallbackSrc = nextTrack?.metadata?.previewSrc || nextTrack?.previewUrl || null;
         if (previewFallbackSrc) {
           skipPauseInterruptionRef.current = true;
-          audio.src = previewFallbackSrc;
-          audio.load();
-          void audio.play().catch(() => {});
+          void loadAudioSrcAndPlay(audio, previewFallbackSrc);
           patchState({
             isPlaying: true,
             error: null,
@@ -1085,13 +1131,12 @@ export function AudioProvider({ children }) {
       });
     };
 
-    const swapToSignedStream = (resolved) => {
+    const swapToSignedStream = async (resolved) => {
       const signedUrl = resolved.track?.src;
       if (!signedUrl || signedUrl === syncSrc) return;
       const resumeAt = audio.currentTime || 0;
       skipPauseInterruptionRef.current = true;
-      audio.src = signedUrl;
-      audio.load();
+      await waitAudioSrcReady(audio, signedUrl);
       const applySeek = () => {
         if (resumeAt > 0 && isFinite(audio.duration)) {
           audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
@@ -1100,7 +1145,7 @@ export function AudioProvider({ children }) {
       };
       audio.addEventListener("loadedmetadata", applySeek);
       if (isFinite(audio.duration) && audio.duration > 0) applySeek();
-      if (stateRef.current.isPlaying) void audio.play().catch(() => {});
+      if (stateRef.current.isPlaying) await playAudioIfNotPaused(audio);
       patchState({
         currentTrack: {
           ...nextTrack,
@@ -1212,30 +1257,7 @@ export function AudioProvider({ children }) {
       if (!isSameTrack) {
         skipPauseInterruptionRef.current = true;
         audio.pause();
-        audio.src = syncSrc;
-        audio.load();
-        // Wait for canplay before calling play()
-        const playWhenReady = () => {
-          audio.removeEventListener("canplay", playWhenReady);
-          audio.removeEventListener("canplaythrough", playWhenReady);
-          const playPromise = audio.play();
-          if (playPromise !== undefined) {
-            playPromise.catch(err => {
-              if (err.name === "AbortError") {
-                // Try once more after short delay
-                setTimeout(() => {
-                  audio.play().catch(e => 
-                    console.error("[AUDIO] retry failed", e)
-                  );
-                }, 200);
-              } else {
-                console.error("[AUDIO PLAY ERROR]", err);
-              }
-            });
-          }
-        };
-        audio.addEventListener("canplay", playWhenReady);
-        audio.addEventListener("canplaythrough", playWhenReady);
+        await loadAudioSrcAndPlay(audio, syncSrc);
         pendingSeekRef.current = resumeAt;
       } else {
         if (!audio.paused && stateRef.current.isPlaying) {
@@ -1271,9 +1293,13 @@ export function AudioProvider({ children }) {
       }
 
       if (isSameTrack) {
-        void audio.play().catch((err) => {
-          console.error("[AUDIO PLAY ERROR]", err);
-        });
+        try {
+          await audio.play();
+        } catch (e) {
+          if (e.name !== "AbortError") {
+            console.error("[AUDIO]", e.name, e.message);
+          }
+        }
       }
       void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: true });
 
@@ -1325,8 +1351,7 @@ export function AudioProvider({ children }) {
       const resolved = await resolveLibraryStreamForTrack(libraryTrack, { force: false });
       const resumeAt = audio.currentTime || 0;
       skipPauseInterruptionRef.current = true;
-      audio.src = resolved.track.src;
-      audio.load();
+      await waitAudioSrcReady(audio, resolved.track.src);
       const applySeek = () => {
         if (resumeAt > 0 && isFinite(audio.duration)) {
           audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
@@ -1352,7 +1377,7 @@ export function AudioProvider({ children }) {
         error: null,
         accessDenied: false,
       });
-      if (!audio.paused) void audio.play().catch(() => {});
+      if (!audio.paused) await playAudioIfNotPaused(audio);
       return true;
     } catch (err) {
       if (err?.code === "ACCESS_DENIED") {
@@ -1423,8 +1448,7 @@ export function AudioProvider({ children }) {
       if (currentUrl !== targetUrl) {
         skipPauseInterruptionRef.current = true;
         audio.pause();
-        audio.src = nextTrack.src;
-        audio.load();
+        await waitAudioSrcReady(audio, nextTrack.src);
       }
       applyCsToElement(audio, presentation, audio.currentTime > 0 ? audio.currentTime : null);
       patchState({
@@ -1467,8 +1491,7 @@ export function AudioProvider({ children }) {
       if (needsSrcSwap) {
         skipPauseInterruptionRef.current = true;
         audio.pause();
-        audio.src = nextTrack.src;
-        audio.load();
+        await waitAudioSrcReady(audio, nextTrack.src);
         pendingSeekRef.current = resumeAt > 0 ? resumeAt : null;
       }
       applyCsToElement(audio, presentation, resumeAt > 0 ? resumeAt : null);
@@ -1479,7 +1502,13 @@ export function AudioProvider({ children }) {
       });
       void updateMediaSession(nextTrack, { playing: !audio.paused });
       if (audio.paused && stateRef.current.isPlaying) {
-        await audio.play();
+        try {
+          await audio.play();
+        } catch (e) {
+          if (e.name !== "AbortError") {
+            console.error("[AUDIO]", e.name, e.message);
+          }
+        }
       }
       syncPositionState(true);
     } catch {
@@ -1610,8 +1639,7 @@ export function AudioProvider({ children }) {
             };
             const resumeAt = audio.currentTime || 0;
             skipPauseInterruptionRef.current = true;
-            audio.src = data.url;
-            audio.load();
+            await waitAudioSrcReady(audio, data.url);
             if (resumeAt > 0) {
               const seekAfterLoad = () => {
                 if (resumeAt > 0 && isFinite(audio.duration)) {
@@ -1620,8 +1648,9 @@ export function AudioProvider({ children }) {
                 audio.removeEventListener("loadedmetadata", seekAfterLoad);
               };
               audio.addEventListener("loadedmetadata", seekAfterLoad);
+              if (isFinite(audio.duration) && audio.duration > 0) seekAfterLoad();
             }
-            if (!audio.paused) void audio.play().catch(() => {});
+            if (!audio.paused) await playAudioIfNotPaused(audio);
           } catch {
             /* stale URL refresh is best-effort */
           }
@@ -1893,20 +1922,29 @@ export function AudioProvider({ children }) {
     };
     skipPauseInterruptionRef.current = true;
     audio.pause();
-    audio.src = csAudioUrl;
-    audio.load();
-    const seekTo = csHoldSavedRef.current.currentTime;
-    const applySeek = () => {
-      if (seekTo > 0 && isFinite(audio.duration)) {
-        audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
+    void (async () => {
+      await waitAudioSrcReady(audio, csAudioUrl);
+      const seekTo = csHoldSavedRef.current.currentTime;
+      const applySeek = () => {
+        if (seekTo > 0 && isFinite(audio.duration)) {
+          audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
+        }
+        audio.removeEventListener("loadedmetadata", applySeek);
+      };
+      audio.addEventListener("loadedmetadata", applySeek);
+      if (isFinite(audio.duration) && audio.duration > 0) applySeek();
+      audio.playbackRate = 1;
+      if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+      if (csHoldSavedRef.current?.wasPlaying) {
+        try {
+          await audio.play();
+        } catch (e) {
+          if (e.name !== "AbortError") {
+            console.error("[AUDIO]", e.name, e.message);
+          }
+        }
       }
-      audio.removeEventListener("loadedmetadata", applySeek);
-    };
-    audio.addEventListener("loadedmetadata", applySeek);
-    if (isFinite(audio.duration) && audio.duration > 0) applySeek();
-    audio.playbackRate = 1;
-    if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
-    if (csHoldSavedRef.current.wasPlaying) audio.play().catch(() => {});
+    })();
     csHoldActiveRef.current = true;
   }, []);
 
@@ -1928,25 +1966,35 @@ export function AudioProvider({ children }) {
       const track = stateRef.current.currentTrack;
       const csAudio = track?.csAudio || null;
       const needsSwap = csAudio && savedUrl && currentUrl !== savedUrl;
-      if (needsSwap) {
-        skipPauseInterruptionRef.current = true;
-        audio.pause();
-        audio.src = saved.src;
-        audio.load();
-        const seekTo = saved.currentTime;
-        const applySeek = () => {
-          if (seekTo > 0 && isFinite(audio.duration)) {
-            audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
+      void (async () => {
+        if (needsSwap) {
+          skipPauseInterruptionRef.current = true;
+          audio.pause();
+          await waitAudioSrcReady(audio, saved.src);
+          const seekTo = saved.currentTime;
+          const applySeek = () => {
+            if (seekTo > 0 && isFinite(audio.duration)) {
+              audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
+            }
+            audio.removeEventListener("loadedmetadata", applySeek);
+          };
+          audio.addEventListener("loadedmetadata", applySeek);
+          if (isFinite(audio.duration) && audio.duration > 0) applySeek();
+        } else if (saved.currentTime > 0) {
+          audio.currentTime = saved.currentTime;
+        }
+        audio.playbackRate = saved.playbackRate ?? 1;
+        if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+        if (saved.wasPlaying && audio.paused) {
+          try {
+            await audio.play();
+          } catch (e) {
+            if (e.name !== "AbortError") {
+              console.error("[AUDIO]", e.name, e.message);
+            }
           }
-          audio.removeEventListener("loadedmetadata", applySeek);
-        };
-        audio.addEventListener("loadedmetadata", applySeek);
-      } else if (saved.currentTime > 0) {
-        audio.currentTime = saved.currentTime;
-      }
-      audio.playbackRate = saved.playbackRate ?? 1;
-      if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
-      if (saved.wasPlaying && audio.paused) audio.play().catch(() => {});
+        }
+      })();
     } else if (audio) {
       audio.playbackRate = 1;
       if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
