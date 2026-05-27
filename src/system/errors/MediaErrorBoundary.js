@@ -1,8 +1,6 @@
 "use client";
 
 import { Component } from "react";
-import { clientLog } from "@/lib/observability/client-log";
-import { MediaErrorChrome } from "./FallbackRenderer";
 
 function logBoundaryTelemetry(payload) {
   try {
@@ -22,17 +20,16 @@ function logBoundaryTelemetry(payload) {
 export default class MediaErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
   }
 
   componentDidCatch(error, errorInfo) {
-    const { assetId, mediaType } = this.props;
-    clientLog("error", "boundary_caught", {
-      boundary: "MediaErrorBoundary",
+    const { assetId = "unknown", mediaType = "unknown" } = this.props;
+    console.error("[MediaErrorBoundary]", {
       assetId,
       mediaType,
       message: error?.message,
@@ -40,7 +37,7 @@ export default class MediaErrorBoundary extends Component {
     });
     logBoundaryTelemetry({
       type: "playback.failed",
-      trackId: assetId || "unknown",
+      trackId: assetId,
       error: error?.message || "unknown",
     });
     this.props.onMediaError?.(error);
@@ -48,14 +45,13 @@ export default class MediaErrorBoundary extends Component {
 
   componentDidUpdate(prevProps) {
     if (prevProps.resetKey !== this.props.resetKey && this.state.hasError) {
-      this.setState({ hasError: false });
+      this.setState({ hasError: false, error: null });
     }
   }
 
   render() {
     if (this.state.hasError) {
-      if (this.props.fallback) return this.props.fallback;
-      return <MediaErrorChrome />;
+      return this.props.fallback ?? null;
     }
     return this.props.children;
   }

@@ -37,10 +37,10 @@ export default function RootLayout({ children }) {
               <AudioProvider>
                 <SessionRecoveryRoot>
                   <StripeProvider>
-                    {children}
-                    <MediaErrorBoundary>
-                      <GlobalAudioPlayerBar />
+                    <MediaErrorBoundary assetId="app-layout" mediaType="layout">
+                      {children}
                     </MediaErrorBoundary>
+                    <GlobalAudioPlayerBar />
                   </StripeProvider>
                 </SessionRecoveryRoot>
               </AudioProvider>
