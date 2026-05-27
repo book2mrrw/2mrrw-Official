@@ -18,6 +18,11 @@ import { getOrCreateStreamSignedUrl } from "@/lib/playback/stream-url-cache";
 
 export const dynamic = "force-dynamic";
 
+/** Same-origin preflight; relative /api/library/stream fetch rarely needs CORS headers. */
+export async function OPTIONS() {
+  return new Response(null, { status: 204 });
+}
+
 const R2_STREAM_DEBUG = process.env.R2_STREAM_DEBUG === "1";
 
 function logStreamR2Env(context) {
