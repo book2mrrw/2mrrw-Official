@@ -12,12 +12,12 @@ import {
 } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { resetPlaybackTelemetry, sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
+import { recordListeningEvent } from "@/lib/listening-history";
 import {
   clearPlaybackPosition,
   getSavedPlaybackPosition,
-  recordListeningEvent,
   savePlaybackPosition,
-} from "@/lib/listening-history";
+} from "@/lib/playback/position-memory";
 import {
   clearLibraryStreamSession,
   endStreamAnalytics,
@@ -331,6 +331,7 @@ export function AudioProvider({ children }) {
   const sessionUnlockedRef = useRef(false);
   const retryStreamPlaybackRef = useRef(null);
   const positionSaveTimerRef = useRef(null);
+  const lastPlayedSlugRef = useRef(null);
   const csHoldSavedRef = useRef(null);
   const csHoldActiveRef = useRef(false);
   const spuriousEndedGuardRef = useRef(0);
@@ -1328,6 +1329,14 @@ export function AudioProvider({ children }) {
     }
 
     const userId = listeningUserIdRef.current;
+    const previousLastPlayedSlug = lastPlayedSlugRef.current;
+    const playedDifferentSince =
+      previousLastPlayedSlug != null && previousLastPlayedSlug !== nextTrack.slug;
+    if (playedDifferentSince && userId) {
+      clearPlaybackPosition(userId, previousLastPlayedSlug);
+    }
+    lastPlayedSlugRef.current = nextTrack.slug;
+
     let resumeAt =
       options.resumeAt != null && options.resumeAt > RESTORE_MIN_POSITION_SEC
         ? options.resumeAt
@@ -1336,7 +1345,10 @@ export function AudioProvider({ children }) {
       resumeAt = null;
       if (userId && streamSlug) clearPlaybackPosition(userId, streamSlug);
     }
-    if (!resumeAt && userId && streamSlug) {
+    if (playedDifferentSince && userId && streamSlug) {
+      clearPlaybackPosition(userId, streamSlug);
+    }
+    if (!resumeAt && !playedDifferentSince && userId && streamSlug) {
       const saved = getSavedPlaybackPosition(userId, streamSlug);
       if (saved?.positionSeconds > RESTORE_MIN_POSITION_SEC) {
         const clamped = clampRestorePosition(saved.positionSeconds, saved.durationSeconds);
@@ -1347,7 +1359,7 @@ export function AudioProvider({ children }) {
         }
       }
     }
-    if (!resumeAt && accountState?.mediaProgress?.length) {
+    if (!resumeAt && !playedDifferentSince && accountState?.mediaProgress?.length) {
       const savedProgress = accountState.mediaProgress.find(
         (p) => p.product_slug === nextTrack.slug && !p.completed
       );
