@@ -35,13 +35,20 @@ export function buildControlSystemUrl(path, params = {}) {
   const apiBaseUrl = getControlSystemApiUrl();
   if (!apiBaseUrl || !path) return null;
 
-  const url = new URL(path.startsWith("/") ? `${apiBaseUrl}${path}` : `${apiBaseUrl}/${path}`);
+  const normalizedPath = path.startsWith("/") ? path : `/${path}`;
+  const isBrowser = typeof window !== "undefined";
+  const shouldUseSameOrigin = isBrowser && normalizedPath.startsWith("/api/");
+  const resolvedApiBaseUrl = shouldUseSameOrigin ? window.location.origin : apiBaseUrl;
+  const url = shouldUseSameOrigin
+    ? new URL(normalizedPath, window.location.origin)
+    : new URL(path.startsWith("/") ? `${apiBaseUrl}${path}` : `${apiBaseUrl}/${path}`);
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
       url.searchParams.set(key, String(value));
     }
   });
-  return { apiBaseUrl, href: url.toString() };
+  const href = shouldUseSameOrigin ? `${url.pathname}${url.search}` : url.toString();
+  return { apiBaseUrl: resolvedApiBaseUrl, href };
 }
 
 export async function fetchControlSystemJson(path, { params, fetchOptions = {} } = {}) {
