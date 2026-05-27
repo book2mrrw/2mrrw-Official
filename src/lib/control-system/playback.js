@@ -65,8 +65,14 @@ export async function sendControlSystemPlaybackEvent(track, eventType, details =
       keepalive: true,
       body: JSON.stringify(playbackEventPayload(track, eventType, details)),
     });
+    if (!response.ok && process.env.NODE_ENV === "development") {
+      console.debug("[playback/events] telemetry failed:", response.status);
+    }
     return response.ok;
   } catch {
+    if (process.env.NODE_ENV === "development") {
+      console.debug("[playback/events] telemetry network error");
+    }
     return false;
   }
 }
