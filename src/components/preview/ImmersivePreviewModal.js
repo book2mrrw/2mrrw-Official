@@ -3,50 +3,9 @@
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
-
-// V9 themes + helper components adapted for platform audio engine.
-const THEMES = {
-  dissolution: {
-    p1: "#9b5de5", accent: "#c77dff",
-    bg: ["#0d0020", "#1a0035", "#0a001a"],
-    orb1: "radial-gradient(circle,rgba(155,93,229,.58),transparent 70%)",
-    orb2: "radial-gradient(circle,rgba(106,13,173,.44),transparent 70%)",
-    orb3: "radial-gradient(circle,rgba(199,125,255,.26),transparent 70%)",
-    glow: "rgba(155,93,229,.6)", glowDim: "rgba(155,93,229,.2)",
-    dark: "#08001a",
-    cover: "https://images.unsplash.com/photo-1557672172-298e090bd0f1?w=600&q=80",
-  },
-  signal_loss: {
-    p1: "#f4a261", accent: "#ffe66d",
-    bg: ["#1a0800", "#200e00", "#0d0400"],
-    orb1: "radial-gradient(circle,rgba(244,162,97,.58),transparent 70%)",
-    orb2: "radial-gradient(circle,rgba(231,111,81,.44),transparent 70%)",
-    orb3: "radial-gradient(circle,rgba(255,230,109,.26),transparent 70%)",
-    glow: "rgba(244,162,97,.6)", glowDim: "rgba(244,162,97,.2)",
-    dark: "#0d0400",
-    cover: "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&q=80",
-  },
-  origin: {
-    p1: "#0096c7", accent: "#48cae4",
-    bg: ["#00111f", "#001a2e", "#000d17"],
-    orb1: "radial-gradient(circle,rgba(0,150,199,.58),transparent 70%)",
-    orb2: "radial-gradient(circle,rgba(2,62,138,.44),transparent 70%)",
-    orb3: "radial-gradient(circle,rgba(72,202,228,.26),transparent 70%)",
-    glow: "rgba(0,150,199,.6)", glowDim: "rgba(0,150,199,.2)",
-    dark: "#00080f",
-    cover: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&q=80",
-  },
-  tides: {
-    p1: "#52b788", accent: "#95d5b2",
-    bg: ["#071a10", "#0d2b1a", "#040e09"],
-    orb1: "radial-gradient(circle,rgba(82,183,136,.58),transparent 70%)",
-    orb2: "radial-gradient(circle,rgba(27,67,50,.44),transparent 70%)",
-    orb3: "radial-gradient(circle,rgba(149,213,178,.26),transparent 70%)",
-    glow: "rgba(82,183,136,.6)", glowDim: "rgba(82,183,136,.2)",
-    dark: "#040e09",
-    cover: "https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=600&q=80",
-  },
-};
+import ImmersiveModalScene from "@/components/preview/immersive/ImmersiveModalScene";
+import { useCoverPalette, paletteToCssVars } from "@/hooks/useCoverPalette";
+import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 
 const fmt = s => {
   if (!s || isNaN(s)) return "0:00";
@@ -109,46 +68,43 @@ function useModalAnim() {
   return { mounted, closing, setClosing };
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// SCENE — animated background per release
-// Real cover art at 42% opacity + orbs + rays + scanlines + grain
-// ─────────────────────────────────────────────────────────────────────
-function Scene({ themeKey }) {
-  const t = THEMES[themeKey];
+// Cover art wash over palette-driven scene (42% opacity)
+function CoverArtLayer({ coverSrc }) {
+  const url = useMemo(() => resolveAbsoluteArtworkUrl(coverSrc), [coverSrc]);
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
     setLoaded(false);
+    if (!url) return undefined;
     const img = new Image();
-    img.src = t.cover;
+    img.src = url;
     img.onload = () => setLoaded(true);
-  }, [themeKey]);
+    img.onerror = () => setLoaded(false);
+    return undefined;
+  }, [url]);
+  if (!url) return null;
   return (
-    <div className="sc" style={{ background: `linear-gradient(160deg,${t.bg[0]},${t.bg[1]},${t.bg[2]})` }}>
-      <img src={t.cover} alt="" style={{
-        position:"absolute", inset:0, width:"100%", height:"100%",
-        objectFit:"cover",
+    <img
+      src={url}
+      alt=""
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        objectFit: "cover",
         opacity: loaded ? 0.42 : 0,
-        transition:"opacity .7s ease",
-      }} />
-      <div className="sc-orb orb-a" style={{ background: t.orb1 }} />
-      <div className="sc-orb orb-b" style={{ background: t.orb2 }} />
-      <div className="sc-orb orb-c" style={{ background: t.orb3 }} />
-      <div className="sc-rays">
-        {[0,1,2].map(i => (
-          <div key={i} className="sc-ray" style={{ background: `linear-gradient(to bottom,transparent,${t.accent}38,transparent)` }} />
-        ))}
-      </div>
-      <div className="sc-scan" />
-      <div className="sc-grain" />
-    </div>
+        transition: "opacity .7s ease",
+        zIndex: 2,
+        pointerEvents: "none",
+      }}
+    />
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────
 // WAVEFORM — animated bars above scrub bar
 // ─────────────────────────────────────────────────────────────────────
-function Waveform({ playing, themeKey, bars = 26 }) {
-  const t = THEMES[themeKey];
+function Waveform({ playing, palette, bars = 26 }) {
   const [sc, setSc] = useState(() => Array(bars).fill(0.15));
   const ref = useRef(null);
   useEffect(() => {
@@ -169,7 +125,7 @@ function Waveform({ playing, themeKey, bars = 26 }) {
         <div key={i} style={{
           width:3, borderRadius:2, height:18,
           transformOrigin:"bottom", transform:`scaleY(${s})`,
-          background:`linear-gradient(to top,${t.p1},${t.accent})`,
+          background:`linear-gradient(to top,${palette.primaryCss},${palette.secondaryCss})`,
           transition:"transform .08s ease",
         }} />
       ))}
@@ -180,8 +136,7 @@ function Waveform({ playing, themeKey, bars = 26 }) {
 // ─────────────────────────────────────────────────────────────────────
 // SCRUB BAR — with drag handle + dashed preview cap
 // ─────────────────────────────────────────────────────────────────────
-function ScrubBar({ pct, themeKey, onSeekRatio, isPreview }) {
-  const t = THEMES[themeKey];
+function ScrubBar({ pct, palette, onSeekRatio, isPreview }) {
   const barRef = useRef(null);
   const handle = e => {
     const rect = (barRef.current || e.currentTarget).getBoundingClientRect();
@@ -197,20 +152,20 @@ function ScrubBar({ pct, themeKey, onSeekRatio, isPreview }) {
       {isPreview && (
         <div style={{
           position:"absolute", left:0, top:0, bottom:0, width:"30%",
-          borderRight:`1px dashed ${t.p1}60`, pointerEvents:"none",
+          borderRight:`1px dashed ${palette.primaryMuted}`, pointerEvents:"none",
         }} />
       )}
       <div style={{
         width:`${Math.min(100, pct)}%`, height:"100%", borderRadius:4,
-        background:`linear-gradient(90deg,${t.p1},${t.accent})`,
-        boxShadow:`0 0 8px ${t.glow}`, transition:"width .1s linear",
+        background:`linear-gradient(90deg,${palette.primaryCss},${palette.secondaryCss})`,
+        boxShadow:`0 0 8px ${palette.primaryGlow}`, transition:"width .1s linear",
         position:"relative",
       }}>
         {pct > 2 && (
           <div style={{
             position:"absolute", right:-6, top:"50%", transform:"translateY(-50%)",
             width:12, height:12, borderRadius:"50%",
-            background:t.accent, boxShadow:`0 0 8px ${t.glow}`,
+            background:palette.secondaryCss, boxShadow:`0 0 8px ${palette.primaryGlow}`,
           }} />
         )}
       </div>
@@ -222,14 +177,9 @@ function ScrubBar({ pct, themeKey, onSeekRatio, isPreview }) {
 // FLOATING PLAYER — lives at bottom of art zone (62%)
 // Waveform → scrub bar → shuffle/prev/play/next/repeat
 // ─────────────────────────────────────────────────────────────────────
-function FloatingPlayer({ themeKey, playing, current, duration, isPreview, beat, onPlay, onSeekRatio }) {
-  const t = THEMES[themeKey];
+function FloatingPlayer({ palette, playing, current, duration, isPreview, beat, onPlay, onSeekRatio }) {
   const pct = duration ? (current / duration) * 100 : 0;
-  const vars = {
-    "--glow": t.glow, "--glow-dim": t.glowDim,
-    "--p1": t.p1, "--p1-dim": `${t.p1}55`, "--p1-dim2": `${t.p1}22`,
-    "--accent": t.accent,
-  };
+  const vars = paletteToCssVars(palette);
   return (
     <div style={{
       position:"absolute", bottom:0, left:0, right:0, zIndex:10,
@@ -237,12 +187,12 @@ function FloatingPlayer({ themeKey, playing, current, duration, isPreview, beat,
       background:"linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.55) 60%,transparent 100%)",
       ...vars,
     }}>
-      <Waveform playing={playing} themeKey={themeKey} bars={26} />
+      <Waveform playing={playing} palette={palette} bars={26} />
       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:12 }}>
         <span style={{ fontFamily:"'DM Mono',monospace", fontSize:10, color:"rgba(255,255,255,.38)", flexShrink:0, minWidth:28 }}>
           {fmt(current)}
         </span>
-        <ScrubBar pct={pct} themeKey={themeKey} onSeekRatio={onSeekRatio} isPreview={isPreview} />
+        <ScrubBar pct={pct} palette={palette} onSeekRatio={onSeekRatio} isPreview={isPreview} />
         <span style={{ fontFamily:"'DM Mono',monospace", fontSize:10, color:"rgba(255,255,255,.38)", flexShrink:0, minWidth:28, textAlign:"right" }}>
           {isPreview ? "0:30" : fmt(duration)}
         </span>
@@ -264,16 +214,15 @@ function FloatingPlayer({ themeKey, playing, current, duration, isPreview, beat,
 // OWNERSHIP BADGE
 // Reads access prop: "full" = owner, anything else = visitor preview
 // ─────────────────────────────────────────────────────────────────────
-function Badge({ access, themeKey }) {
-  const t = THEMES[themeKey];
+function Badge({ access, palette }) {
   const owned = access === "full";
   return (
     <div style={{
       padding:"4px 11px", borderRadius:20,
       background:"rgba(0,0,0,.52)",
-      border:`1px solid ${owned ? t.p1 + "66" : "rgba(255,255,255,.15)"}`,
+      border:`1px solid ${owned ? palette.primaryMuted : "rgba(255,255,255,.15)"}`,
       fontFamily:"'DM Mono',monospace", fontSize:8, letterSpacing:".2em",
-      color: owned ? t.accent : "rgba(255,255,255,.45)",
+      color: owned ? palette.primaryCss : "rgba(255,255,255,.45)",
       backdropFilter:"blur(8px)", WebkitBackdropFilter:"blur(8px)",
     }}>
       {owned ? "✦ OWNED" : "PREVIEW"}
@@ -284,16 +233,15 @@ function Badge({ access, themeKey }) {
 // ─────────────────────────────────────────────────────────────────────
 // SHARE SHEET
 // ─────────────────────────────────────────────────────────────────────
-function ShareSheet({ title, sub, themeKey, onClose }) {
-  const t = THEMES[themeKey];
+function ShareSheet({ title, sub, palette, onClose }) {
   return (
-    <div className="bsheet" style={{ background: t.dark }}>
+    <div className="bsheet" style={{ background: palette.ambientTintCss }}>
       <div className="sheet-hdl" onClick={onClose} />
       <div style={{ display:"flex", alignItems:"center", gap:16, padding:"10px 24px 22px", cursor:"pointer" }} onClick={onClose}>
         <div style={{
           width:46, height:46, borderRadius:13,
-          border:`1px solid ${t.p1}55`, background:t.glowDim,
-          display:"flex", alignItems:"center", justifyContent:"center", color:t.accent,
+          border:`1px solid ${palette.primaryMuted}`, background:palette.primaryMuted,
+          display:"flex", alignItems:"center", justifyContent:"center", color:palette.primaryCss,
         }}>
           <I.Plus s={20} />
         </div>
@@ -309,14 +257,13 @@ function ShareSheet({ title, sub, themeKey, onClose }) {
 // ─────────────────────────────────────────────────────────────────────
 // VIEW MORE SHEET — track/album metadata
 // ─────────────────────────────────────────────────────────────────────
-function ViewMoreSheet({ title, sub, themeKey, rows, onClose }) {
-  const t = THEMES[themeKey];
+function ViewMoreSheet({ title, sub, palette, rows, onClose }) {
   return (
-    <div className="bsheet" style={{ background: t.dark, paddingBottom:28 }}>
+    <div className="bsheet" style={{ background: palette.ambientTintCss, paddingBottom:28 }}>
       <div className="sheet-hdl" onClick={onClose} />
       <div style={{ padding:"6px 22px 10px" }}>
         <div style={{ fontFamily:"'Cormorant Garamond',serif", fontSize:22, fontWeight:400, color:"white", marginBottom:3 }}>{title}</div>
-        <div style={{ fontFamily:"'DM Mono',monospace", fontSize:9, letterSpacing:".2em", textTransform:"uppercase", color:t.accent }}>{sub}</div>
+        <div style={{ fontFamily:"'DM Mono',monospace", fontSize:9, letterSpacing:".2em", textTransform:"uppercase", color:palette.primaryCss }}>{sub}</div>
       </div>
       {rows.map(([k, v]) => (
         <div key={k} style={{ display:"flex", justifyContent:"space-between", padding:"10px 22px", borderBottom:"1px solid rgba(255,255,255,.05)" }}>
@@ -345,7 +292,8 @@ function ViewMoreSheet({ title, sub, themeKey, rows, onClose }) {
 // ─────────────────────────────────────────────────────────────────────
 
 function SingleModal({ track, access, onClose }) {
-  const t = THEMES[track.themeKey] || THEMES.dissolution;
+  const coverSrc = track?.coverArt || track?.cover || track?.coverUrl;
+  const palette = useCoverPalette(coverSrc, track?.coverArtType || "image");
   const isPreview = access === "preview";
   const { mounted, closing, setClosing } = useModalAnim();
   const [sheet, setSheet] = useState(null); // null | "more"
@@ -432,14 +380,8 @@ function SingleModal({ track, access, onClose }) {
   );
 
   const isVisible = mounted && !closing;
-  const vars = {
-    "--glow": t.glow,
-    "--glow-dim": t.glowDim,
-    "--p1": t.p1,
-    "--p1-dim": `${t.p1}55`,
-    "--p1-dim2": `${t.p1}22`,
-    "--accent": t.accent,
-  };
+  const vars = paletteToCssVars(palette);
+  const sceneDark = palette.ambientTintCss;
 
   return (
     <div
@@ -467,8 +409,8 @@ function SingleModal({ track, access, onClose }) {
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
-          background: t.dark,
-          boxShadow: `0 0 70px ${t.glowDim}, 0 -10px 60px rgba(0,0,0,.85)`,
+          background: sceneDark,
+          boxShadow: `0 0 70px ${palette.primaryMuted}, 0 -10px 60px rgba(0,0,0,.85)`,
           willChange: "transform",
           backfaceVisibility: "hidden",
           transform: closing
@@ -484,7 +426,12 @@ function SingleModal({ track, access, onClose }) {
       >
         {/* ══ ART ZONE — 62% ══ */}
         <div style={{ flex: "0 0 62%", position: "relative", overflow: "hidden" }}>
-          <Scene themeKey={track.themeKey} />
+          <ImmersiveModalScene
+            palette={palette}
+            previewOnly={isPreview}
+            currentTime={effectiveCurrent}
+          />
+          <CoverArtLayer coverSrc={coverSrc} />
 
           {/* Bottom fade */}
           <div
@@ -515,7 +462,7 @@ function SingleModal({ track, access, onClose }) {
 
           {/* Ownership badge */}
           <div style={{ position: "absolute", top: 12, right: 14, zIndex: 30 }}>
-            <Badge access={access} themeKey={track.themeKey} />
+            <Badge access={access} palette={palette} />
           </div>
 
           {/* Title watermark */}
@@ -530,7 +477,7 @@ function SingleModal({ track, access, onClose }) {
               pointerEvents: "none",
             }}
           >
-            <div className="art-lbl" style={{ "--glow": t.glow, "--glow-dim": t.glowDim }}>
+            <div className="art-lbl" style={{ "--glow": palette.primaryGlow, "--glow-dim": palette.primaryMuted }}>
               {track.title}
             </div>
           </div>
@@ -599,7 +546,7 @@ function SingleModal({ track, access, onClose }) {
           </div>
 
           <FloatingPlayer
-            themeKey={track.themeKey}
+            palette={palette}
             playing={playing}
             current={effectiveCurrent}
             duration={effectiveDuration || (isPreview ? 30 : 0)}
@@ -617,7 +564,7 @@ function SingleModal({ track, access, onClose }) {
             display: "flex",
             flexDirection: "column",
             overflow: "hidden",
-            background: t.dark,
+            background: sceneDark,
             ...vars,
           }}
         >
@@ -651,7 +598,7 @@ function SingleModal({ track, access, onClose }) {
                   fontSize: 10,
                   letterSpacing: ".3em",
                   textTransform: "uppercase",
-                  color: t.accent,
+                  color: palette.primaryCss,
                 }}
               >
                 {track.artist}
@@ -675,32 +622,32 @@ function SingleModal({ track, access, onClose }) {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 52 }}>
                 <button
                   className="icon-btn cart-pulse"
-                  style={{ color: t.accent, "--glow": t.glow, "--glow-dim": t.glowDim }}
+                  style={{ color: palette.primaryCss, "--glow": palette.primaryGlow, "--glow-dim": palette.primaryMuted }}
                 >
                   <I.Cart s={34} />
                 </button>
                 <button
                   className="icon-btn"
-                  style={{ color: t.accent, filter: `drop-shadow(0 0 6px ${t.glow})` }}
+                  style={{ color: palette.primaryCss, filter: `drop-shadow(0 0 6px ${palette.primaryGlow})` }}
                 >
                   <I.Sub s={28} />
                 </button>
                 <MusicPlusButton
                   track={track}
                   access={trackAccess}
-                  sheetBg={t.dark}
+                  sheetBg={sceneDark}
                   style={{ color: "rgba(255,255,255,.55)" }}
                 />
               </div>
             ) : (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 52 }}>
-                <button className="icon-btn col-glow" style={{ color: t.accent, "--glow": t.glow }}>
+                <button className="icon-btn col-glow" style={{ color: palette.primaryCss, "--glow": palette.primaryGlow }}>
                   <I.Coll s={30} />
                 </button>
                 <MusicPlusButton
                   track={track}
                   access={trackAccess}
-                  sheetBg={t.dark}
+                  sheetBg={sceneDark}
                   style={{ color: "rgba(255,255,255,.55)" }}
                 />
               </div>
@@ -712,15 +659,15 @@ function SingleModal({ track, access, onClose }) {
                 style={{
                   padding: "14px 18px",
                   borderRadius: 14,
-                  background: `linear-gradient(135deg,${t.glowDim},rgba(0,0,0,.3))`,
-                  border: `1px solid ${t.p1}44`,
+                  background: `linear-gradient(135deg,${palette.primaryMuted},rgba(0,0,0,.3))`,
+                  border: `1px solid ${palette.primaryMuted}`,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
                 }}
               >
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: t.accent, marginBottom: 2 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: palette.primaryCss, marginBottom: 2 }}>
                     Own this track
                   </div>
                   <div
@@ -738,14 +685,14 @@ function SingleModal({ track, access, onClose }) {
                   style={{
                     padding: "9px 16px",
                     borderRadius: 20,
-                    background: t.p1,
+                    background: palette.primaryCss,
                     border: "none",
                     fontSize: 11,
                     fontWeight: 800,
                     color: "rgba(0,0,0,.9)",
                     cursor: "pointer",
                     letterSpacing: ".06em",
-                    boxShadow: `0 0 20px ${t.glowDim}`,
+                    boxShadow: `0 0 20px ${palette.primaryMuted}`,
                   }}
                 >
                   BUY
@@ -759,8 +706,8 @@ function SingleModal({ track, access, onClose }) {
                 style={{
                   padding: "12px 16px",
                   borderRadius: 14,
-                  background: `linear-gradient(135deg,${t.glowDim},rgba(0,0,0,.2))`,
-                  border: `1px solid ${t.p1}44`,
+                  background: `linear-gradient(135deg,${palette.primaryMuted},rgba(0,0,0,.2))`,
+                  border: `1px solid ${palette.primaryMuted}`,
                   display: "flex",
                   alignItems: "center",
                   gap: 10,
@@ -771,8 +718,8 @@ function SingleModal({ track, access, onClose }) {
                     width: 28,
                     height: 28,
                     borderRadius: "50%",
-                    background: t.glow,
-                    border: `1px solid ${t.accent}`,
+                    background: palette.primaryGlow,
+                    border: `1px solid ${palette.primaryCss}`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -784,7 +731,7 @@ function SingleModal({ track, access, onClose }) {
                     height="13"
                     viewBox="0 0 14 14"
                     fill="none"
-                    stroke={t.dark}
+                    stroke={sceneDark}
                     strokeWidth="2.5"
                     strokeLinecap="round"
                   >
@@ -792,7 +739,7 @@ function SingleModal({ track, access, onClose }) {
                   </svg>
                 </div>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: t.accent }}>You own this track</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: palette.primaryCss }}>You own this track</div>
                   <div
                     style={{
                       fontFamily: "'DM Mono',monospace",
@@ -813,7 +760,7 @@ function SingleModal({ track, access, onClose }) {
           <ViewMoreSheet
             title={track.title}
             sub={`${track.type} · ${track.artist}`}
-            themeKey={track.themeKey}
+            palette={palette}
             rows={[
               ["RELEASE DATE", "2024"],
               ["LABEL", "2MRRW Independent"],
