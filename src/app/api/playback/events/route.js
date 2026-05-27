@@ -3,6 +3,12 @@ import { getControlSystemApiUrl } from "@/lib/control-system/client";
 
 export const dynamic = "force-dynamic";
 
+const STABLE_CONTROL_SYSTEM_ORIGIN = "https://2mrrw-control-system.vercel.app";
+
+function resolveControlSystemOrigin() {
+  return getControlSystemApiUrl() || STABLE_CONTROL_SYSTEM_ORIGIN;
+}
+
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204 });
 }
@@ -12,11 +18,7 @@ export async function OPTIONS() {
  * Browser telemetry uses buildControlSystemUrl → /api/playback/events on storefront.
  */
 export async function POST(request) {
-  const apiBase = getControlSystemApiUrl();
-  if (!apiBase) {
-    return NextResponse.json({ ok: true, skipped: true });
-  }
-
+  const apiBase = resolveControlSystemOrigin();
   const body = await request.text();
   const sessionId = request.headers.get("x-control-session-id");
   const cookie = request.headers.get("cookie");
