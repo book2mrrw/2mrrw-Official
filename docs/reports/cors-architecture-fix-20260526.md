@@ -165,4 +165,14 @@ Expect single `access-control-allow-origin: https://2mrrw.com` and `access-contr
 
 ## Commit SHAs / deploy IDs
 
-_Filled in after `git push` and Vercel deploy in this run._
+| Repo | Commit | Production alias | Deployment ID |
+|------|--------|------------------|---------------|
+| **2MRRW-Control-System** | `ad351e3` | https://2mrrw-control-system.vercel.app | `dpl_66FDDs38VT4PNyDgHrYzWYCX4BZe` |
+| **artist-platform** | `ad2b549` | https://www.2mrrw.com | `dpl_3apApY2hyCMRgjGJf9L43xz4N6Qi` |
+
+### Post-deploy CORS probe (verified)
+
+| Request | `Access-Control-Allow-Origin` | Credentials |
+|---------|-------------------------------|-------------|
+| OPTIONS `…/api/playback/events` + `Origin: https://2mrrw.com` | `https://2mrrw.com` | `true` |
+| OPTIONS + `Origin: https://www.2mrrw.com` | `https://www.2mrrw.com` | `true` |
