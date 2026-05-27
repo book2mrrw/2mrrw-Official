@@ -604,6 +604,7 @@ export default function Page() {
   const [mobileNavClosing, setMobileNavClosing]   = useState(false);
   const [homeScrollSection, setHomeScrollSection] = useState(null);
   const [heroScrollY, setHeroScrollY]             = useState(0);
+  const [pendingModalGesturePlay, setPendingModalGesturePlay] = useState(null);
   const [browseSingles, setBrowseSingles]         = useState(singles);
   const [catalogPage, setCatalogPage]             = useState(1);
   const [catalogHasMore, setCatalogHasMore]       = useState(false);
@@ -968,38 +969,6 @@ export default function Page() {
   }, [isPlaying]);
 
   useEffect(() => {
-    if (authLoading) return;
-    if (featureModalOpen && featureModalItem?.slug && featureModalPlaySlugRef.current === featureModalItem.slug) {
-      featureModalPlaySlugRef.current = null;
-      const playbackTrack = toPlaybackTrack(
-        featureModalItem,
-        { ...accountState, userId: currentUser?.id },
-        "feature_modal"
-      );
-      if (playbackTrack?.src) void playTrack(playbackTrack);
-      return;
-    }
-    if (!previewModalOpen || !selectedSingle?.slug) return;
-    if (modalPlaySlugRef.current !== selectedSingle.slug) return;
-    modalPlaySlugRef.current = null;
-    const playbackTrack = toPlaybackTrack(
-      selectedSingle,
-      { ...accountState, userId: currentUser?.id },
-      "preview_modal"
-    );
-    if (playbackTrack?.src) void playTrack(playbackTrack);
-  }, [
-    authLoading,
-    featureModalOpen,
-    featureModalItem,
-    previewModalOpen,
-    selectedSingle,
-    accountState,
-    currentUser?.id,
-    playTrack,
-  ]);
-
-  useEffect(() => {
     if (
       hasStarted &&
       currentTrack &&
@@ -1120,9 +1089,11 @@ export default function Page() {
     );
     if (authLoading) {
       modalPlaySlugRef.current = single.slug;
+      setPendingModalGesturePlay("single");
       return;
     }
     modalPlaySlugRef.current = null;
+    setPendingModalGesturePlay(null);
     if (playbackTrack?.src) void playTrack(playbackTrack);
     void getControlSystemReleaseDetail({ slug: single.slug, fallbackRelease: single }).then((detail) => {
       if (detail) setSelectedReleaseDetail(detail);
@@ -1149,9 +1120,11 @@ export default function Page() {
       );
       if (authLoading) {
         featureModalPlaySlugRef.current = feat.slug;
+        setPendingModalGesturePlay("feature");
         return;
       }
       featureModalPlaySlugRef.current = null;
+      setPendingModalGesturePlay(null);
       if (playbackTrack?.src) void playTrack(playbackTrack);
       void getControlSystemReleaseDetail({ slug: feat.slug, fallbackRelease: feat }).then((detail) => {
         if (detail) setFeatureReleaseDetail(detail);
@@ -1160,9 +1133,38 @@ export default function Page() {
     [nowPlaying, previewModalOpen, accountState, authLoading, currentUser?.id, playTrack]
   );
 
+  const playSingleModalFromGesture = useCallback(() => {
+    const slug = modalPlaySlugRef.current || selectedSingle?.slug;
+    const item = selectedSingle;
+    if (!slug || !item) return;
+    setPendingModalGesturePlay(null);
+    modalPlaySlugRef.current = null;
+    const playbackTrack = toPlaybackTrack(
+      item,
+      { ...accountState, userId: currentUser?.id },
+      "preview_modal"
+    );
+    if (playbackTrack?.src) void playTrack(playbackTrack);
+  }, [accountState, currentUser?.id, playTrack, selectedSingle]);
+
+  const playFeatureModalFromGesture = useCallback(() => {
+    const slug = featureModalPlaySlugRef.current || featureModalItem?.slug;
+    const item = featureModalItem;
+    if (!slug || !item) return;
+    setPendingModalGesturePlay(null);
+    featureModalPlaySlugRef.current = null;
+    const playbackTrack = toPlaybackTrack(
+      item,
+      { ...accountState, userId: currentUser?.id },
+      "feature_modal"
+    );
+    if (playbackTrack?.src) void playTrack(playbackTrack);
+  }, [accountState, currentUser?.id, featureModalItem, playTrack]);
+
   const closeFeatureModal = useCallback(() => {
     setFeatureModalOpen(false);
     featureModalPlaySlugRef.current = null;
+    setPendingModalGesturePlay(null);
     setFeatureModalItem(null);
     setFeatureReleaseDetail(null);
     pause();
@@ -1188,6 +1190,7 @@ export default function Page() {
   const closeSingleModal = useCallback(() => {
     setPreviewModalOpen(false);
     modalPlaySlugRef.current = null;
+    setPendingModalGesturePlay(null);
     setSelectedSingle(null);
     setSelectedReleaseDetail(null);
     pause();
@@ -1571,6 +1574,8 @@ export default function Page() {
               access={resolveTrackAccess(selectedSingle, accountState)?.canStream ? "full" : "preview"}
               userId={currentUser?.id}
               isAdmin={isAdmin}
+              pendingPlayAfterAuth={pendingModalGesturePlay === "single"}
+              onPlayFromModal={playSingleModalFromGesture}
               onGift={handlePreviewGift}
               onLibraryChange={handlePreviewLibraryChange}
               onClose={closeSingleModal}
@@ -1593,6 +1598,8 @@ export default function Page() {
               access={resolveTrackAccess(featureModalItem, accountState)?.canStream ? "full" : "preview"}
               userId={currentUser?.id}
               isAdmin={isAdmin}
+              pendingPlayAfterAuth={pendingModalGesturePlay === "feature"}
+              onPlayFromModal={playFeatureModalFromGesture}
               onGift={handleFeaturePreviewGift}
               onLibraryChange={handlePreviewLibraryChange}
               onClose={closeFeatureModal}

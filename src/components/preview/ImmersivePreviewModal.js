@@ -334,7 +334,17 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
   );
 }
 
-function FloatingPlayer({ t, playing, current, duration, isPreview, beat, onPlay, onSeekRatio }) {
+function FloatingPlayer({
+  t,
+  playing,
+  current,
+  duration,
+  isPreview,
+  beat,
+  onPlay,
+  onSeekRatio,
+  pendingPlayAfterAuth,
+}) {
   const pct = duration ? (current / duration) * 100 : 0;
   const vars = themeVars(t);
   return (
@@ -377,16 +387,43 @@ function FloatingPlayer({ t, playing, current, duration, isPreview, beat, onPlay
           {isPreview ? "0:30" : fmt(duration)}
         </span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px", ...vars }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px", position: "relative", ...vars }}>
         <button type="button" className={`c-sm${beat ? " beat" : ""}`} aria-hidden>
           <I.Shuffle />
         </button>
         <button type="button" className={`c-md${beat ? " beat" : ""}`} aria-hidden>
           <I.Prev />
         </button>
-        <button type="button" className={`c-lg${playing ? " playing" : ""}${beat ? " beat" : ""}`} onClick={onPlay} style={vars}>
-          {playing ? <I.Pause /> : <I.Play />}
-        </button>
+        <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <button
+            type="button"
+            className={`c-lg${playing ? " playing" : ""}${beat ? " beat" : ""}${pendingPlayAfterAuth ? " pending-tap-play" : ""}`}
+            onClick={onPlay}
+            onTouchEnd={(e) => {
+              e.preventDefault();
+              onPlay?.(e);
+            }}
+            style={vars}
+            aria-label={pendingPlayAfterAuth ? "Tap to play" : playing ? "Pause" : "Play"}
+          >
+            {playing ? <I.Pause /> : <I.Play />}
+          </button>
+          {pendingPlayAfterAuth ? (
+            <span
+              style={{
+                marginTop: 4,
+                fontFamily: "'DM Mono',monospace",
+                fontSize: 8,
+                letterSpacing: ".2em",
+                textTransform: "uppercase",
+                color: "rgba(255,255,255,.65)",
+                whiteSpace: "nowrap",
+              }}
+            >
+              Tap to play
+            </span>
+          ) : null}
+        </div>
         <button type="button" className={`c-md${beat ? " beat" : ""}`} aria-hidden>
           <I.Next />
         </button>
@@ -495,6 +532,8 @@ export function SingleModal({
   onGift,
   onLibraryChange,
   releaseDetail,
+  pendingPlayAfterAuth = false,
+  onPlayFromModal,
 }) {
   const coverSrc = trackCoverSrc(track || {});
   const palette = useCoverPalette(coverSrc, track?.coverArtType || track?.coverType || "image");
@@ -510,6 +549,18 @@ export function SingleModal({
     toggle,
     seek,
   } = useMediaEngine();
+
+  const handleModalPlay = useCallback(
+    (e) => {
+      e?.stopPropagation?.();
+      if (pendingPlayAfterAuth && onPlayFromModal) {
+        onPlayFromModal();
+        return;
+      }
+      toggle();
+    },
+    [pendingPlayAfterAuth, onPlayFromModal, toggle]
+  );
 
   const { mounted, closing, setClosing } = useModalAnim();
   const beat = useBeat(isPlaying);
@@ -670,8 +721,9 @@ export function SingleModal({
             duration={displayDuration}
             isPreview={isPreview}
             beat={beat}
-            onPlay={toggle}
+            onPlay={handleModalPlay}
             onSeekRatio={(r) => seek(r * displayDuration)}
+            pendingPlayAfterAuth={pendingPlayAfterAuth}
           />
         </div>
 
@@ -1128,10 +1180,21 @@ export default function ImmersivePreviewModal({
   access: accessProp,
   trackAccess,
   onClose,
+  pendingPlayAfterAuth,
+  onPlayFromModal,
   ...rest
 }) {
   const single = singleProp || track;
   if (!single || (!single.slug && !single.id)) return null;
   const access = accessProp ?? (trackAccess?.canStream ? "full" : "preview");
-  return <SingleModal track={single} access={access} onClose={onClose} {...rest} />;
+  return (
+    <SingleModal
+      track={single}
+      access={access}
+      onClose={onClose}
+      pendingPlayAfterAuth={pendingPlayAfterAuth}
+      onPlayFromModal={onPlayFromModal}
+      {...rest}
+    />
+  );
 }

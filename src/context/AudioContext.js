@@ -120,8 +120,9 @@ async function loadAudioSrcAndPlay(audio, src) {
   }
 }
 
-async function playAudioIfNotPaused(audio) {
-  if (audio.paused) return;
+async function playAudioIfNotPaused(audio, isPlaying) {
+  if (!isPlaying) return;
+  if (!audio.paused) return;
   try {
     await audio.play();
   } catch (e) {
@@ -170,6 +171,7 @@ const EMPTY_STATE = {
   isBuffering: false,
   accessDenied: false,
   streamRetryable: false,
+  needsGestureResume: false,
   streamConflict: null,
   queue: [],
   queueIndex: -1,
@@ -329,6 +331,11 @@ export function AudioProvider({ children }) {
   const wasPlayingBeforeHideRef = useRef(false);
   const keepAliveIntervalRef = useRef(null);
   const sessionUnlockedRef = useRef(false);
+  const webAudioInitializedRef = useRef(false);
+  const webAudioAvailableRef = useRef(true);
+  const needsGestureToResumeRef = useRef(false);
+  const silentGraphLoggedRef = useRef(false);
+  const silentGraphPlayStartedAtRef = useRef(0);
   const retryStreamPlaybackRef = useRef(null);
   const positionSaveTimerRef = useRef(null);
   const lastPlayedSlugRef = useRef(null);
@@ -513,7 +520,7 @@ export function AudioProvider({ children }) {
   }, [updateMediaSession, syncPositionState]);
 
   const initWebAudio = useCallback(() => {
-    if (audioCtxRef.current || typeof window === "undefined") return;
+    if (webAudioInitializedRef.current || typeof window === "undefined") return;
     const audio = audioRef.current;
     if (!audio) return;
     try {
@@ -539,8 +546,27 @@ export function AudioProvider({ children }) {
       sourceRef.current = source;
       stereoPannerRef.current = stereoPanner;
       bassFilterRef.current = bassFilter;
-    } catch (e) {
-      console.warn("[WebAudio] Could not init:", e);
+      webAudioInitializedRef.current = true;
+      webAudioAvailableRef.current = true;
+    } catch (err) {
+      console.warn("[AUDIO] Web Audio graph init failed, routing direct:", err?.message || err);
+      try {
+        sourceRef.current?.disconnect();
+      } catch {
+        /* partial graph */
+      }
+      try {
+        analyserRef.current?.disconnect();
+      } catch {
+        /* partial graph */
+      }
+      audioCtxRef.current = null;
+      analyserRef.current = null;
+      sourceRef.current = null;
+      stereoPannerRef.current = null;
+      bassFilterRef.current = null;
+      webAudioInitializedRef.current = false;
+      webAudioAvailableRef.current = false;
     }
   }, []);
 
@@ -599,7 +625,7 @@ export function AudioProvider({ children }) {
 
   const toggleBassBoost = useCallback(() => {
     const next = !stateRef.current.bassMode;
-    if (bassFilterRef.current) {
+    if (bassFilterRef.current && webAudioAvailableRef.current) {
       bassFilterRef.current.gain.setTargetAtTime(
         next ? 8 : 0,
         bassFilterRef.current.context.currentTime,
@@ -645,7 +671,7 @@ export function AudioProvider({ children }) {
           atmosphereLevel: s.atmosphereLevel,
         };
       },
-      getAnalyser: () => analyserRef.current,
+      getAnalyser: () => (webAudioAvailableRef.current ? analyserRef.current : null),
     });
     return () => registerMediaEngineBridge(null);
   }, []);
@@ -701,7 +727,10 @@ export function AudioProvider({ children }) {
 
     const onPlay = () => {
       userPausedRef.current = false;
-      patchState({ isPlaying: true, error: null, hasStarted: true, isBuffering: false });
+      silentGraphLoggedRef.current = false;
+      silentGraphPlayStartedAtRef.current = audio.currentTime || 0;
+      patchState({ isPlaying: true, error: null, hasStarted: true, isBuffering: false, needsGestureResume: false });
+      needsGestureToResumeRef.current = false;
       startKeepAlivePing();
       startProgressRaf();
       startPositionSaveTimer();
@@ -796,6 +825,28 @@ export function AudioProvider({ children }) {
             durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
             completed: false,
           });
+        }
+      }
+
+      if (
+        !silentGraphLoggedRef.current &&
+        webAudioAvailableRef.current &&
+        stateRef.current.isPlaying &&
+        !audio.paused &&
+        analyserRef.current &&
+        audioCtxRef.current?.state === "running"
+      ) {
+        const startedAt = silentGraphPlayStartedAtRef.current;
+        if (startedAt > 0 && audio.currentTime - startedAt >= 2) {
+          const bins = analyserRef.current.frequencyBinCount;
+          const data = new Uint8Array(bins);
+          analyserRef.current.getByteFrequencyData(data);
+          let sum = 0;
+          for (let i = 0; i < data.length; i += 1) sum += data[i];
+          if (sum === 0) {
+            console.warn("[AUDIO] Possible silent graph — Web Audio may be CORS-blocked");
+            silentGraphLoggedRef.current = true;
+          }
         }
       }
     };
@@ -1133,16 +1184,23 @@ export function AudioProvider({ children }) {
     };
   }, []);
 
-  const playTrack = useCallback(async (track, options = {}) => {
-    // Unlock audio on mobile Safari immediately
-    // Must happen synchronously on user gesture
-    const audioEl = audioRef.current;
-    if (audioEl && audioEl.paused) {
+  const unlockAudioFromGesture = useCallback(async (audioEl) => {
+    if (!audioEl || !audioEl.paused) return;
+    try {
+      const vol = audioEl.volume;
       audioEl.volume = 0;
-      const unlockPromise = audioEl.play().catch(() => {});
+      await audioEl.play();
       audioEl.pause();
-      audioEl.volume = 1;
-      audioEl.currentTime = 0;
+      audioEl.volume = vol;
+    } catch {
+      /* unlock failure is non-fatal */
+    }
+  }, []);
+
+  const playTrack = useCallback(async (track, options = {}) => {
+    const audioEl = audioRef.current;
+    if (audioEl?.paused) {
+      void unlockAudioFromGesture(audioEl);
     }
 
     initWebAudio();
@@ -1213,10 +1271,9 @@ export function AudioProvider({ children }) {
       const entitledFullStream = Boolean(nextTrack.metadata?.access?.canStream);
       if (previewSrc && !entitledFullStream) {
         syncSrc = previewSrc;
-        backgroundStreamResolve = true;
       } else if (redirectFastPath) {
         syncSrc = nextTrack.src;
-      } else {
+      } else if (entitledFullStream) {
         backgroundStreamResolve = true;
       }
     }
@@ -1305,7 +1362,7 @@ export function AudioProvider({ children }) {
       };
       audio.addEventListener("loadedmetadata", applySeek);
       if (isFinite(audio.duration) && audio.duration > 0) applySeek();
-      if (stateRef.current.isPlaying) await playAudioIfNotPaused(audio);
+      if (stateRef.current.isPlaying) await playAudioIfNotPaused(audio, stateRef.current.isPlaying);
       patchState({
         currentTrack: {
           ...nextTrack,
@@ -1536,6 +1593,7 @@ export function AudioProvider({ children }) {
     resolveLibraryStreamForTrack,
     finalizeStreamSession,
     initWebAudio,
+    unlockAudioFromGesture,
     accountState?.mediaProgress,
   ]);
 
@@ -1621,7 +1679,7 @@ export function AudioProvider({ children }) {
         error: null,
         accessDenied: false,
       });
-      if (!audio.paused) await playAudioIfNotPaused(audio);
+      if (!audio.paused) await playAudioIfNotPaused(audio, stateRef.current.isPlaying);
       return true;
     } catch (err) {
       if (err?.code === "ACCESS_DENIED") {
@@ -1865,8 +1923,13 @@ export function AudioProvider({ children }) {
     if (!audio || !track) return false;
 
     userPausedRef.current = false;
+    if (needsGestureToResumeRef.current) {
+      needsGestureToResumeRef.current = false;
+      patchState({ needsGestureResume: false });
+    }
 
     try {
+      await unlockAudioFromGesture(audio);
       initWebAudio();
       await resumeWebAudioContextIfSuspended(audioCtxRef);
       await audio.play();
@@ -1900,7 +1963,7 @@ export function AudioProvider({ children }) {
               audio.addEventListener("loadedmetadata", seekAfterLoad);
               if (isFinite(audio.duration) && audio.duration > 0) seekAfterLoad();
             }
-            if (!audio.paused) await playAudioIfNotPaused(audio);
+            if (!audio.paused) await playAudioIfNotPaused(audio, stateRef.current.isPlaying);
           } catch {
             /* stale URL refresh is best-effort */
           }
@@ -1923,7 +1986,7 @@ export function AudioProvider({ children }) {
       patchState({ isPlaying: false, error: "Audio playback failed. Try again in a moment.", playbackState: "paused" });
       return false;
     }
-  }, [patchState, updateMediaSession, finalizeStreamSession, initWebAudio]);
+  }, [patchState, updateMediaSession, finalizeStreamSession, initWebAudio, unlockAudioFromGesture]);
 
   const toggle = useCallback(() => {
     if (audioRef.current?.paused) return resume();
@@ -2108,22 +2171,17 @@ export function AudioProvider({ children }) {
         wasPlayingBeforeHideRef.current = false;
 
         if (shouldResume && audio) {
-          setTimeout(() => {
-            const el = audioRef.current;
-            if (!el || !stateRef.current.currentTrack) return;
-            void (async () => {
-              await resumeWebAudioContextIfSuspended(audioCtxRef);
-              if (el.paused) {
-                try {
-                  await el.play();
-                } catch (e) {
-                  if (e.name !== "AbortError") {
-                    console.error("[AUDIO]", e.name, e.message);
-                  }
-                }
-              }
-            })();
-          }, VISIBILITY_RESUME_DELAY_MS);
+          const el = audioRef.current;
+          if (el?.paused && stateRef.current.isPlaying) {
+            needsGestureToResumeRef.current = true;
+            patchState({ needsGestureResume: true });
+          } else {
+            setTimeout(() => {
+              const visibleEl = audioRef.current;
+              if (!visibleEl || !stateRef.current.currentTrack || visibleEl.paused) return;
+              void resumeWebAudioContextIfSuspended(audioCtxRef);
+            }, VISIBILITY_RESUME_DELAY_MS);
+          }
         }
 
         if (stateRef.current.currentTrack) {
@@ -2316,7 +2374,7 @@ export function AudioProvider({ children }) {
     toggleSpaceMode,
     toggleBassBoost,
     cycleAtmosphere,
-    getAnalyser: () => analyserRef.current,
+    getAnalyser: () => (webAudioAvailableRef.current ? analyserRef.current : null),
   }), [
     pause,
     playQueue,
