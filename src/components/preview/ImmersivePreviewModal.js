@@ -834,9 +834,10 @@ function SingleModal({ track, access, onClose }) {
   );
 }
 
-export default function ImmersivePreviewModal({ track, onClose }) {
-  if (!track) return null;
-  const canStream = Boolean(track?.metadata?.access?.canStream);
+export default function ImmersivePreviewModal({ single, track, onClose }) {
+  const resolvedTrack = track || single;
+  if (!resolvedTrack) return null;
+  const canStream = Boolean(resolvedTrack?.metadata?.access?.canStream);
   const access = canStream ? "full" : "preview";
-  return <SingleModal track={track} access={access} onClose={onClose} />;
+  return <SingleModal track={resolvedTrack} access={access} onClose={onClose} />;
 }
