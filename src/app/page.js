@@ -1676,14 +1676,12 @@ export default function Page() {
                     <button onClick={()=>{addToCart({title:`${selectedAlbum.title} – Vinyl`,slug:`${selectedAlbum.slug}-vinyl`,cover:selectedAlbum.cover,price:selectedAlbum.vinyl});closeAlbumModal();}} style={{width:"100%",padding:"12px 0",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:10,cursor:"pointer",fontSize:13,fontWeight:"bold"}}>+ Add Vinyl – ${selectedAlbum.vinyl.toFixed(2)} (Optional)</button>
                   </>
                 )}
-                {currentUser?.id && selectedAlbum && (
+                {selectedAlbum && (
                   <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
                     <MusicPlusButton
                       track={selectedAlbum}
-                      userId={currentUser.id}
+                      userId={currentUser?.id}
                       access={selectedAlbumAccess}
-                      isMobile={isMobile}
-                      deepLinkType="album"
                       onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
                     />
                   </div>
@@ -1940,6 +1938,7 @@ export default function Page() {
                                 userId={currentUser?.id}
                                 source="home_single_card"
                                 showCart={Boolean(singleAccess?.showCart)}
+                                onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
                                 onAddToCart={e => { e.stopPropagation(); addToCart(single); }}
                                 cartButtonStyle={{
                                   background:"#1a1a1a",
@@ -2816,6 +2815,7 @@ export default function Page() {
         accountState={accountState}
         userId={currentUser?.id}
         onClose={() => setAlbumTracklistRelease(null)}
+        onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
       />
 
       {/* ── STRIPE MODAL ── */}

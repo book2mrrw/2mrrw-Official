@@ -4,7 +4,6 @@ import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
-import MusicPlusButton from "@/components/music/MusicPlusButton";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
 import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
 import { albumCardPlaybackItem } from "@/lib/music-playback";
@@ -137,6 +136,7 @@ export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut,
                     userId={userId}
                     source="home_album_card"
                     showCart={Boolean(access?.showCart)}
+                    onLibraryChange={onLibraryChange}
                     onPlayClick={(e) => {
                       e.stopPropagation();
                       onOpenAlbumTracklist?.(withR2CatalogMedia(item));
@@ -153,7 +153,6 @@ export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut,
               ) : access?.showCart ? (
                 <button onClick={()=>addToCart(item)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>
               ) : null}
-              {userId && type==="albums" && <span onClick={e=>e.stopPropagation()}><MusicPlusButton track={item} userId={userId} access={access} isMobile={isMobile} deepLinkType="album" onLibraryChange={onLibraryChange} /></span>}
             </div>
           </div>
         </div>

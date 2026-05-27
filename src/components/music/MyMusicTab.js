@@ -185,16 +185,12 @@ function LibraryCarousel({
                   >
                     Open
                   </button>
-                  {userId && (
-                    <MusicPlusButton
-                      track={item}
-                      userId={userId}
-                      access={access}
-                      isMobile={isMobile}
-                      showOfflineDownload={false}
-                      onLibraryChange={onLibraryChange}
-                    />
-                  )}
+                  <MusicPlusButton
+                    track={item}
+                    userId={userId}
+                    access={access}
+                    onLibraryChange={onLibraryChange}
+                  />
                 </div>
               </div>
             </div>
@@ -694,9 +690,7 @@ function MyMusicTab({
                   <button type="button" onClick={() => onOpenAlbum?.(merged)} style={{ padding: "8px 14px", background: "transparent", color: "#888", border: "1px solid #333", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>
                     Tracklist
                   </button>
-                  {user?.id && (
-                    <MusicPlusButton track={merged} userId={user.id} access={access} isMobile={isMobile} deepLinkType="album" showOfflineDownload={false} onLibraryChange={refresh} />
-                  )}
+                  <MusicPlusButton track={merged} userId={user?.id} access={access} onLibraryChange={refresh} />
                 </div>
               );
             })}

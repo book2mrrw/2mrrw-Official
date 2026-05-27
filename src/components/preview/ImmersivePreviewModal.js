@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useRef, useEffect, useCallback } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
+import MusicPlusButton from "@/components/music/MusicPlusButton";
 
 // V9 themes + helper components adapted for platform audio engine.
 const THEMES = {
@@ -347,7 +348,11 @@ function SingleModal({ track, access, onClose }) {
   const t = THEMES[track.themeKey] || THEMES.dissolution;
   const isPreview = access === "preview";
   const { mounted, closing, setClosing } = useModalAnim();
-  const [sheet, setSheet] = useState(null); // null | "share" | "more"
+  const [sheet, setSheet] = useState(null); // null | "more"
+  const trackAccess = useMemo(
+    () => ({ canStream: !isPreview, canAddToLibrary: !isPreview, canAddToPlaylist: !isPreview }),
+    [isPreview]
+  );
 
   const {
     currentTrack,
@@ -680,26 +685,24 @@ function SingleModal({ track, access, onClose }) {
                 >
                   <I.Sub s={28} />
                 </button>
-                <button
-                  className="icon-btn"
-                  style={{ color: "rgba(255,255,255,.38)" }}
-                  onClick={() => setSheet("share")}
-                >
-                  <I.Plus s={26} />
-                </button>
+                <MusicPlusButton
+                  track={track}
+                  access={trackAccess}
+                  sheetBg={t.dark}
+                  style={{ color: "rgba(255,255,255,.55)" }}
+                />
               </div>
             ) : (
               <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 52 }}>
                 <button className="icon-btn col-glow" style={{ color: t.accent, "--glow": t.glow }}>
                   <I.Coll s={30} />
                 </button>
-                <button
-                  className="icon-btn"
-                  style={{ color: "rgba(255,255,255,.38)" }}
-                  onClick={() => setSheet("share")}
-                >
-                  <I.Plus s={26} />
-                </button>
+                <MusicPlusButton
+                  track={track}
+                  access={trackAccess}
+                  sheetBg={t.dark}
+                  style={{ color: "rgba(255,255,255,.55)" }}
+                />
               </div>
             )}
 
@@ -806,14 +809,6 @@ function SingleModal({ track, access, onClose }) {
           </div>
         </div>
 
-        {sheet === "share" && (
-          <ShareSheet
-            title={`Share ${track.type}`}
-            sub={`${track.title} · ${track.artist}`}
-            themeKey={track.themeKey}
-            onClose={() => setSheet(null)}
-          />
-        )}
         {sheet === "more" && (
           <ViewMoreSheet
             title={track.title}

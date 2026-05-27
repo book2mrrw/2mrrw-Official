@@ -3,7 +3,6 @@
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
-import MusicPlusButton from "@/components/music/MusicPlusButton";
 import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
 import { withR2CatalogMedia } from "@/components/home/catalogMedia";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
@@ -52,6 +51,7 @@ export default function FeaturesRail({ features, isMobile, addToCart, onOpenFeat
                     userId={userId}
                     source="home_feature_card"
                     showCart={Boolean(access?.showCart)}
+                    onLibraryChange={onLibraryChange}
                     onAddToCart={e => { e.stopPropagation(); addToCart(feat); }}
                     cartButtonStyle={{
                       background:"#1a1a1a",
@@ -62,7 +62,6 @@ export default function FeaturesRail({ features, isMobile, addToCart, onOpenFeat
                   />
                 </div>
               ) : null}
-              {userId && <span onClick={e=>e.stopPropagation()}><MusicPlusButton track={feat} userId={userId} access={access} isMobile={isMobile} deepLinkType="feature" onLibraryChange={onLibraryChange} /></span>}
             </div>
           </div>
         </div>

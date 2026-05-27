@@ -158,15 +158,12 @@ function RadioCarousel({
                 + Add to Cart
               </button>
             ) : null}
-            {currentUserId ? (
-              <MusicPlusButton
-                track={currentSlide}
-                userId={currentUserId}
-                access={radioAccess}
-                isMobile={isMobile}
-                onLibraryChange={onLibraryChange}
-              />
-            ) : null}
+            <MusicPlusButton
+              track={currentSlide}
+              userId={currentUserId}
+              access={radioAccess}
+              onLibraryChange={onLibraryChange}
+            />
           </div>
           <div style={{ display: "flex", gap: 7, marginTop: isMobile ? 4 : 10 }}>
             {radioSlides.map((s, i) => (

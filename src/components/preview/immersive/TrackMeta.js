@@ -64,27 +64,21 @@ function TrackMeta({
           {!hideAccessBadge ? (
             <MusicAccessBadge access={trackAccess} label={trackAccess?.badge} compact />
           ) : null}
-          {userId ? (
-            <MusicPlusButton
-              track={single}
-              userId={userId}
-              access={trackAccess}
-              isMobile={isMobile}
-              onLibraryChange={onLibraryChange}
-            />
-          ) : null}
+          <MusicPlusButton
+            track={single}
+            userId={userId}
+            access={trackAccess}
+            onLibraryChange={onLibraryChange}
+          />
         </div>
       ) : (
         <div className="modal-immersive-meta__row modal-immersive-meta__row--mobile">
-          {userId ? (
-            <MusicPlusButton
-              track={single}
-              userId={userId}
-              access={trackAccess}
-              isMobile={isMobile}
-              onLibraryChange={onLibraryChange}
-            />
-          ) : null}
+          <MusicPlusButton
+            track={single}
+            userId={userId}
+            access={trackAccess}
+            onLibraryChange={onLibraryChange}
+          />
         </div>
       )}
       {hasLyrics ? (

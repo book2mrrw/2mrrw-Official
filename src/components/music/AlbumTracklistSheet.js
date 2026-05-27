@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import { albumTracksForPlayback } from "@/lib/music-playback";
+import { resolveTrackAccess } from "@/lib/music-access";
 import { useAudioPlayer } from "@/context/AudioContext";
+import MusicPlusButton from "@/components/music/MusicPlusButton";
 import CSModeButton from "@/components/audio/CSModeButton";
 import CoverArt from "@/components/ui/CoverArt";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
@@ -24,6 +26,7 @@ export default function AlbumTracklistSheet({
   accountState,
   userId,
   onClose,
+  onLibraryChange,
 }) {
   const { playQueue, toggle, currentTrack, isPlaying, hasStarted, setShuffle, seekBack, seekForward } = useAudioPlayer();
   const dragY = useMotionValue(0);
@@ -236,6 +239,16 @@ export default function AlbumTracklistSheet({
                 null;
               const trackCover = track.cover || album.cover;
               const trackCoverType = track.coverArtType || albumCoverType;
+              const trackAccess = resolveTrackAccess(
+                { ...track, slug: track.slug || `${album.slug}-t${index + 1}`, albumSlug: album.slug },
+                { ...accountState, userId }
+              );
+              const plusTrack = {
+                ...track,
+                slug: track.slug || `${album.slug}-t${index + 1}`,
+                artist: track.artist || album.artist || "2MRRW",
+                albumSlug: album.slug,
+              };
               return (
                 <div
                   key={track.id || index}
@@ -319,6 +332,14 @@ export default function AlbumTracklistSheet({
                       </button>
                     </>
                   )}
+                  <span onClick={(e) => e.stopPropagation()}>
+                    <MusicPlusButton
+                      track={plusTrack}
+                      userId={userId}
+                      access={trackAccess}
+                      onLibraryChange={onLibraryChange}
+                    />
+                  </span>
                   <button
                     type="button"
                     aria-label={active && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}

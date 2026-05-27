@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   addToLibrary,
   addTrackToPlaylist,
@@ -8,64 +8,41 @@ import {
   isInLibrary,
   loadPlaylists,
 } from "@/lib/playlists";
-import { queueOfflineDownload, isOfflineQueued } from "@/lib/offline-cache";
-import { buildShareUrl } from "@/lib/deep-links";
-import { resolvePlaybackSrc } from "@/lib/music-access";
 import { postLibraryAdd } from "@/lib/library-client";
-import PlusActionSheet from "@/components/music/PlusActionSheet";
+import MusicOptionsSheet from "@/components/music/MusicOptionsSheet";
+import { PlusIcon } from "@/components/music/MusicIcons";
 
 export default function MusicPlusButton({
   track,
   userId,
   access,
-  playlists: playlistsProp,
   onPlaylistsChange,
   onLibraryChange,
-  isMobile,
-  deepLinkType = "song",
-  showOfflineDownload = false,
+  sheetBg,
+  className,
+  style,
 }) {
   const [open, setOpen] = useState(false);
   const [inLib, setInLib] = useState(false);
-  const [offlineQueued, setOfflineQueued] = useState(false);
-  const [playlists, setPlaylists] = useState(playlistsProp || []);
+  const [playlists, setPlaylists] = useState([]);
   const [newPlaylistTitle, setNewPlaylistTitle] = useState("");
-  const [flashCheck, setFlashCheck] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [actionFlash, setActionFlash] = useState(null);
 
   const slug = track?.slug;
-  const canAddLibrary = Boolean(access?.canAddToLibrary);
-  const canAddPlaylist = Boolean(access?.canAddToPlaylist);
-  const canShare = Boolean(userId);
-  const shareOnly = canShare && !canAddLibrary && !canAddPlaylist;
-  const canAdd = canAddLibrary || canAddPlaylist;
-
-  const currentPlaylist = useMemo(
-    () => playlists.find((p) => !p.isSystem) || null,
-    [playlists]
-  );
+  const canStream = Boolean(access?.canStream);
 
   useEffect(() => {
     if (!userId || !slug) {
       setInLib(false);
-      setOfflineQueued(false);
       return;
     }
     setInLib(isInLibrary(userId, slug));
-    setOfflineQueued(isOfflineQueued(userId, slug));
   }, [userId, slug, open]);
 
   useEffect(() => {
-    if (playlistsProp) setPlaylists(playlistsProp);
-    else if (userId) setPlaylists(loadPlaylists(userId).filter((p) => !p.isSystem));
-  }, [playlistsProp, userId, open]);
-
-  const flashAction = useCallback((key, ms = 900) => {
-    setActionFlash(key);
-    const t = setTimeout(() => setActionFlash(null), ms);
-    return () => clearTimeout(t);
-  }, []);
+    if (!userId || !open) return;
+    setPlaylists(loadPlaylists(userId).filter((p) => !p.isSystem));
+  }, [userId, open]);
 
   const refreshPlaylists = useCallback(() => {
     const next = loadPlaylists(userId).filter((p) => !p.isSystem);
@@ -74,64 +51,50 @@ export default function MusicPlusButton({
   }, [userId, onPlaylistsChange]);
 
   const handleAddToLibrary = async () => {
-    if (!userId || !track?.slug || saving || !canAddLibrary) return;
+    if (!userId || !track?.slug || saving || !canStream) return;
     setSaving(true);
-    flashAction("library");
     addToLibrary(userId, track);
     try {
       await postLibraryAdd(track.slug);
       onLibraryChange?.();
     } catch {
-      /* local library bookmark still saved */
+      /* local bookmark still saved */
     } finally {
       setSaving(false);
     }
     setInLib(true);
-    setFlashCheck(true);
-    setTimeout(() => setFlashCheck(false), 1200);
-    setTimeout(() => setOpen(false), 450);
+    setTimeout(() => setOpen(false), 350);
   };
 
   const handleAddToPlaylist = (playlistId) => {
-    if (!userId || !canAddPlaylist) return;
-    flashAction(playlistId);
+    if (!userId || !canStream) return;
     addTrackToPlaylist(userId, playlistId, track);
     refreshPlaylists();
-    setTimeout(() => setOpen(false), 450);
-  };
-
-  const handleAddToCurrentPlaylist = () => {
-    if (!currentPlaylist?.id || !canAddPlaylist) return;
-    flashAction("current-playlist");
-    addTrackToPlaylist(userId, currentPlaylist.id, track);
-    refreshPlaylists();
-    setTimeout(() => setOpen(false), 450);
+    setOpen(false);
   };
 
   const handleCreateAndAdd = () => {
-    if (!userId || !newPlaylistTitle.trim() || !canAddPlaylist) return;
-    flashAction("create");
+    if (!userId || !newPlaylistTitle.trim() || !canStream) return;
     const pl = createPlaylist(userId, { title: newPlaylistTitle.trim(), trackIds: [] });
     addTrackToPlaylist(userId, pl.id, track);
     setNewPlaylistTitle("");
     refreshPlaylists();
-    setTimeout(() => setOpen(false), 450);
-  };
-
-  const handleOffline = async () => {
-    if (!userId || !access?.canOffline) return;
-    const src = resolvePlaybackSrc(track, access, { userId });
-    await queueOfflineDownload(userId, track, { streamUrl: src });
-    setOfflineQueued(true);
     setOpen(false);
   };
 
   const handleShare = async () => {
-    flashAction("share", 600);
-    const url = buildShareUrl({ type: deepLinkType, slug: track.slug });
+    if (!track?.slug) return;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const url = `${origin}/?track=${encodeURIComponent(track.slug)}`;
+    const artist = track.artist || track.artistName || "2MRRW";
+    const payload = {
+      title: track.title || "Track",
+      text: `${track.title || "Track"} by ${artist}`,
+      url,
+    };
     try {
       if (navigator.share) {
-        await navigator.share({ title: track.title, url });
+        await navigator.share(payload);
       } else {
         await navigator.clipboard.writeText(url);
         alert("Link copied to clipboard.");
@@ -144,61 +107,59 @@ export default function MusicPlusButton({
         alert(url);
       }
     }
-    setTimeout(() => setOpen(false), 350);
+    setOpen(false);
   };
 
-  const showCheck = (canAddLibrary && inLib) || flashCheck;
-  const showPlus = canShare;
-
-  if (!showPlus) return null;
+  if (!track?.slug) return null;
 
   return (
     <>
       <button
         type="button"
-        aria-label={showCheck ? "In library" : "More actions"}
-        onClick={() => setOpen(true)}
+        className={className}
+        aria-label="More actions"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
         style={{
-          width: 36,
-          height: 36,
-          borderRadius: "50%",
-          border: `1px solid ${showCheck ? "#00ffff55" : "#333"}`,
-          background: showCheck ? "rgba(0,255,255,0.12)" : actionFlash ? "rgba(0,255,255,0.06)" : "transparent",
-          color: showCheck ? "#00ffff" : "#888",
+          minWidth: 44,
+          minHeight: 44,
+          width: 44,
+          height: 44,
+          padding: 0,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "transparent",
+          border: "none",
           cursor: "pointer",
-          fontSize: 18,
-          fontWeight: 700,
-          lineHeight: 1,
           flexShrink: 0,
-          transition: "all 0.2s",
-          transform: actionFlash ? "scale(0.94)" : "scale(1)",
+          touchAction: "manipulation",
+          color: open ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.55)",
+          transition: "color 0.15s",
+          ...style,
         }}
       >
-        {showCheck ? "✓" : "+"}
+        <PlusIcon size={22} />
       </button>
 
-      <PlusActionSheet
+      <MusicOptionsSheet
         open={open}
         onClose={() => setOpen(false)}
         track={track}
-        isMobile={isMobile}
-        inLib={inLib}
-        offlineQueued={offlineQueued}
         access={access}
-        shareOnly={shareOnly}
+        sheetBg={sheetBg}
         userId={userId}
+        inLib={inLib}
         playlists={playlists}
-        currentPlaylist={currentPlaylist}
-        newPlaylistTitle={newPlaylistTitle}
-        onNewPlaylistTitleChange={setNewPlaylistTitle}
+        onShare={handleShare}
         onAddToLibrary={handleAddToLibrary}
         onAddToPlaylist={handleAddToPlaylist}
-        onAddToCurrentPlaylist={currentPlaylist ? handleAddToCurrentPlaylist : undefined}
         onCreateAndAdd={handleCreateAndAdd}
-        onOffline={handleOffline}
-        onShare={handleShare}
-        showOfflineDownload={showOfflineDownload}
-        actionFlash={actionFlash}
+        newPlaylistTitle={newPlaylistTitle}
+        onNewPlaylistTitleChange={setNewPlaylistTitle}
       />
     </>
   );

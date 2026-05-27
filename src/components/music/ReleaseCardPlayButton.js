@@ -7,6 +7,7 @@ import { resolveTrackAccess } from "@/lib/music-access";
 import { preloadTrack } from "@/media/preloader/MediaPreloader";
 import { catalogPreviewAudioUrl } from "@/lib/media-urls";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
+import MusicPlusButton from "@/components/music/MusicPlusButton";
 
 export default function ReleaseCardPlayButton({ item, accountState, userId, source = "home_card", onPlayClick }) {
   const { playQueue, toggle, currentTrack, isPlaying, hasStarted, upgradeToFullStream } = useAudioPlayer();
@@ -130,13 +131,22 @@ export function ReleaseCardActions({
   source,
   onAddToCart,
   onPlayClick,
+  onLibraryChange,
   cartButtonStyle,
   cartLabel = "+ Cart",
   showCart = true,
 }) {
+  const access = useMemo(
+    () => resolveTrackAccess(item, { ...accountState, userId }),
+    [accountState, item, userId]
+  );
+
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
       <ReleaseCardPlayButton item={item} accountState={accountState} userId={userId} source={source} onPlayClick={onPlayClick} />
+      <span onClick={(e) => e.stopPropagation()}>
+        <MusicPlusButton track={item} userId={userId} access={access} onLibraryChange={onLibraryChange} />
+      </span>
       {showCart ? (
         <button
           type="button"
