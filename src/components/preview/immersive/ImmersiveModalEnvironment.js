@@ -46,11 +46,11 @@ function ImmersiveModalEnvironment({
       ) : null}
 
       {isMobile ? (
-        stage
+        <div className="modal-immersive-art-zone">{stage}</div>
       ) : (
         <motion.div
           key="preview-desktop-stage"
-          className="immersive-desktop-stage-wrap"
+          className="modal-immersive-art-zone immersive-desktop-stage-wrap"
           style={desktopStageStyle}
           initial={{ opacity: 0.85, scale: 0.96 }}
           animate={{
@@ -65,10 +65,11 @@ function ImmersiveModalEnvironment({
       )}
 
       {isMobile ? (
-        panel
+        <div className="modal-immersive-info-zone">{panel}</div>
       ) : (
         <motion.div
           key="preview-desktop-panel"
+          className="modal-immersive-info-zone"
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: glyphsOpen ? 0 : 1, y: glyphsOpen ? 10 : 0 }}
           transition={MODAL_PANEL_ENTER}

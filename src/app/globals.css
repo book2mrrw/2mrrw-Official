@@ -257,6 +257,21 @@ body {
   background: #050506;
 }
 
+
+.modal-immersive-art-zone,
+.modal-immersive-info-zone {
+  position: relative;
+  min-height: 0;
+}
+
+.modal-immersive-art-zone {
+  flex: 0 0 62%;
+}
+
+.modal-immersive-info-zone {
+  flex: 1 1 38%;
+}
+
 /* Immersive modal layer stack (stage) — ModalShell/overlay above atmosphere */
 .immersive-layer {
   pointer-events: none;
@@ -4082,12 +4097,14 @@ body.is-player-modal-open::before {
     height: 100%;
     width: 100%;
   }
+  .modal-immersive-body--desktop .modal-immersive-art-zone,
   .modal-immersive-body--desktop .modal-immersive-stage,
   .modal-immersive-body--desktop .immersive-desktop-stage-wrap {
-    flex: 0 0 55%;
+    flex: 0 0 62%;
     height: 100%;
     border-radius: 24px 0 0 24px;
   }
+  .modal-immersive-body--desktop .modal-immersive-info-zone,
   .modal-immersive-body--desktop .modal-immersive-panel {
     flex: 1;
     height: 100%;
@@ -4096,5 +4113,87 @@ body.is-player-modal-open::before {
   }
   .modal-immersive-body--desktop .drag-pill {
     display: none;
+  }
+}
+
+
+.album-modal-track-row {
+  position: relative;
+  padding: 8px 0;
+  font-size: 13px;
+  border-bottom: 1px solid #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.album-modal-track-row.active-tr {
+  background: linear-gradient(90deg, rgba(0, 255, 255, 0.08), transparent 72%);
+}
+
+.album-modal-track-row.active-tr::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  border-radius: 0 1px 1px 0;
+  background: #00ffff;
+}
+
+.album-modal-track-row.locked {
+  opacity: 0.68;
+}
+
+.album-modal-track-index {
+  width: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+.album-modal-track-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.album-modal-track-duration {
+  font-size: 9px;
+  color: rgba(255, 255, 255, 0.38);
+  letter-spacing: 0.08em;
+}
+
+.album-modal-sheet .eq-b {
+  width: 2px;
+  height: 12px;
+  border-radius: 2px;
+  background: #00ffff;
+  transform-origin: bottom;
+  animation: eqPulse 0.8s ease-in-out infinite;
+}
+
+.album-modal-sheet .eq-b:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.album-modal-sheet .eq-b:nth-child(3) {
+  animation-delay: 0.26s;
+}
+
+@keyframes eqPulse {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
   }
 }

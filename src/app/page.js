@@ -1589,6 +1589,7 @@ export default function Page() {
           >
             <motion.div
               key="album-sheet"
+              className="album-modal-sheet"
               {...(isMobile ? SHEET_UP : MODAL_CENTER)}
               onClick={e => e.stopPropagation()}
               style={{
@@ -1625,15 +1626,43 @@ export default function Page() {
                   <motion.div style={{fontSize:10,letterSpacing:2,opacity:0.4,marginBottom:8,textTransform:"uppercase"}}>Track Listing</motion.div>
                   {selectedAlbum.tracks.map((t,i)=>{
                     const trackTitle = typeof t === "string" ? t : t?.title || `Track ${i + 1}`;
+                    const trackDuration = typeof t === "string" ? null : t?.duration || t?.dur || null;
                     const canPlayTrack = Boolean(selectedAlbumAccess?.canStream);
+                    const normalizedCurrent = String(currentTrack?.title || "").trim().toLowerCase();
+                    const normalizedTitle = String(trackTitle || "").trim().toLowerCase();
+                    const isActiveTrack = canPlayTrack && normalizedCurrent && normalizedCurrent === normalizedTitle;
+                    const isPlayingTrack = Boolean(isActiveTrack && isPlaying);
                     return (
-                      <motion.div key={i} style={{padding:"6px 0",fontSize:13,borderBottom:"1px solid #1a1a1a",color:canPlayTrack ? "white" : "#666",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
-                        <span>{i+1}. {trackTitle}{!canPlayTrack ? " · Preview only" : ""}</span>
-                        {canPlayTrack ? (
-                          <button type="button" onClick={()=>playAlbumTracks(selectedAlbum, i)} style={{background:"none",border:"none",color:"#00ffff",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>Play</button>
-                        ) : (
-                          <span style={{fontSize:10,color:"#444",flexShrink:0}}>Locked</span>
-                        )}
+                      <motion.div
+                        key={i}
+                        className={["album-modal-track-row", isActiveTrack ? "active-tr" : "", canPlayTrack ? "" : "locked"].filter(Boolean).join(" ")}
+                        style={{color:canPlayTrack ? "white" : "#666"}}
+                      >
+                        <div className="album-modal-track-index" aria-hidden>
+                          {isPlayingTrack ? (
+                            <>
+                              <span className="eq-b" />
+                              <span className="eq-b" />
+                              <span className="eq-b" />
+                            </>
+                          ) : (
+                            <span>{i + 1}</span>
+                          )}
+                        </div>
+                        <span className="album-modal-track-title">
+                          {trackTitle}
+                          {!canPlayTrack ? " · Preview only" : ""}
+                        </span>
+                        <div style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                          {trackDuration ? <span className="album-modal-track-duration">{trackDuration}</span> : null}
+                          {canPlayTrack ? (
+                            <button type="button" onClick={()=>playAlbumTracks(selectedAlbum, i)} style={{background:"none",border:"none",color:"#00ffff",cursor:"pointer",fontSize:11,fontWeight:700,flexShrink:0}}>
+                              {isPlayingTrack ? "Pause" : "Play"}
+                            </button>
+                          ) : (
+                            <span style={{fontSize:10,color:"#444",flexShrink:0}}>Locked</span>
+                          )}
+                        </div>
                       </motion.div>
                     );
                   })}
