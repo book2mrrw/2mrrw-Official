@@ -1236,19 +1236,6 @@ export function AudioProvider({ children }) {
         };
         audio.addEventListener("canplay", playWhenReady);
         audio.addEventListener("canplaythrough", playWhenReady);
-        // Safety timeout — play anyway after 3s even if 
-        // canplay never fires (some browsers don't fire it)
-        const safetyTimer = setTimeout(() => {
-          audio.removeEventListener("canplay", playWhenReady);
-          audio.removeEventListener("canplaythrough", playWhenReady);
-          audio.play().catch(e => 
-            console.error("[AUDIO SAFETY PLAY]", e)
-          );
-        }, 3000);
-        // Clear safety timer if canplay fires first
-        audio.addEventListener("canplay", () => 
-          clearTimeout(safetyTimer), { once: true }
-        );
         pendingSeekRef.current = resumeAt;
       } else {
         if (!audio.paused && stateRef.current.isPlaying) {
