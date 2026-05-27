@@ -101,6 +101,15 @@ export function canAddToPlaylist(access) {
  * @returns {{ owned: boolean, subscription: boolean, collector: boolean, previewOnly: boolean, canStream: boolean, badge: string|null }}
  */
 export function resolveTrackAccess(track, accountState = {}) {
+  if (accountState?.permissions?.admin === true) {
+    return {
+      canStream: true,
+      previewOnly: false,
+      owned: true,
+      source: "admin",
+    };
+  }
+
   const slug = track?.slug || track?.productSlug || track?.product_slug;
   const albumSlug = track?.albumSlug || track?.album_slug;
   const empty = {

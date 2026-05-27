@@ -188,6 +188,18 @@ export async function GET() {
     const ownedSlugs = [
       ...new Set([...legacyOwnedSlugs, ...ledgerActiveSlugs]),
     ];
+    const isAdmin = isAdminUser(user);
+    let finalOwnedSlugs = ownedSlugs;
+    if (isAdmin && (productsResult.data?.length ?? 0) > 0) {
+      finalOwnedSlugs = [
+        ...new Set(
+          (productsResult.data || [])
+            .filter(isDigitalProduct)
+            .map((product) => product.slug)
+            .filter(Boolean)
+        ),
+      ];
+    }
     const subscriberActive =
       membershipHasPremiumAccess(membership) || hasEntitlement(userEntitlements, "subscriber");
     const collectorCard =
@@ -238,7 +250,7 @@ export async function GET() {
     const body = {
       user,
       library,
-      ownedSlugs,
+      ownedSlugs: finalOwnedSlugs,
       subscriberActive,
       collectorCard,
       vaultAccess: vaultAccessFlag,
@@ -263,14 +275,20 @@ export async function GET() {
         entitlement: vaultPassAccess.entitlement,
       },
       notifications: notificationState,
-      permissions: permissionsFor({
-        membership,
-        hasCollectorAccess,
-        hasVaultPass,
-        isGuest: Boolean(user.isGuest),
-        user,
-        userEntitlements,
-      }),
+      permissions: (() => {
+        const permissions = permissionsFor({
+          membership,
+          hasCollectorAccess,
+          hasVaultPass,
+          isGuest: Boolean(user.isGuest),
+          user,
+          userEntitlements,
+        });
+        if (isAdmin) {
+          return { ...permissions, subscriber: true };
+        }
+        return permissions;
+      })(),
       userEntitlements: {
         vault_access: Boolean(userEntitlements?.vault_access),
         subscriber: Boolean(userEntitlements?.subscriber),
