@@ -1037,11 +1037,7 @@ export function AudioProvider({ children }) {
     audio.addEventListener("canplaythrough", onCanPlayThrough);
 
     const onOnline = () => {
-      if (
-        stateRef.current.isPlaying &&
-        audioRef.current?.paused &&
-        stateRef.current.currentTrack
-      ) {
+      if (stateRef.current.isPlaying && stateRef.current.currentTrack) {
         console.log("[AUDIO] Network restored — resuming");
         void retryStreamPlaybackRef.current?.();
       }
@@ -1053,15 +1049,7 @@ export function AudioProvider({ children }) {
       onDeviceChange = async () => {
         try {
           if (!navigator.mediaDevices?.enumerateDevices) return;
-          const devices = await navigator.mediaDevices.enumerateDevices();
-          const hasAudioOutput = devices.some(
-            (d) => d.kind === "audiooutput" && d.deviceId !== "default"
-          );
-          if (!hasAudioOutput && stateRef.current.isPlaying) {
-            userPausedRef.current = true;
-            audio.pause();
-            patchState({ isPlaying: false });
-          }
+          await navigator.mediaDevices.enumerateDevices();
         } catch {
           /* enumerateDevices unavailable */
         }
