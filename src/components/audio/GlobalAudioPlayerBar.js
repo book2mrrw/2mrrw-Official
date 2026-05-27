@@ -2,30 +2,17 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
-import {
-  FloatingMainPlayer,
-  PlayerArtwork,
-  SignaturePlayRing,
-  useImmersivePlayback,
-  usePlayerAmbience,
-  usePlayerBodyState,
-} from "@/components/player/ImmersivePlayerEngine";
+import { SignaturePlayRing, useImmersivePlayback, usePlayerBodyState } from "@/components/player/ImmersivePlayerEngine";
 import { useMediaEngine } from "@/media/useMediaEngine";
-import { ClosePlayerButton } from "@/components/audio/PlayerControlButton";
 import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
-import { formatPlayerTime } from "@/lib/player/formatTime";
 import { useRenderTracker } from "@/lib/dev/useRenderTracker";
 import {
   DOUBLE_TAP_MS,
   HOLD_FADE_MS,
   RELEASE_FADE_MS,
   MOVE_CANCEL_PX,
-  SWIPE_DISMISS_PX,
-  EXPAND_SWIPE_CLOSE_MS,
 } from "@/lib/player/constants";
-import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
-
 
 const PREVIEW_SCRUB_CAP_RATIO = 0.3;
 const PREVIEW_MAX_SEC = 30;
@@ -34,16 +21,26 @@ function Skip15Icon({ direction }) {
   const back = direction === "back";
   return (
     <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden>
-      <path
-        d={back ? "M17 9 L11 16 L17 23" : "M15 9 L21 16 L15 23"}
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      <g transform={back ? undefined : "scale(-1,1) translate(-32,0)"}>
+        <path
+          d="M22.5 11.5a7.2 7.2 0 1 0 0 9"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          fill="none"
+        />
+        <path
+          d="M21.5 8.5l3.5 3.5-3.5 2.8"
+          stroke="currentColor"
+          strokeWidth="1.75"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+      </g>
       <text
         x="16"
-        y="17"
+        y="18"
         textAnchor="middle"
         dominantBaseline="middle"
         fill="currentColor"
@@ -65,12 +62,7 @@ function Skip15Button({ direction, onClick, ariaLabel }) {
   );
 }
 
-function PlayerBarScrub({
-  currentTime,
-  duration,
-  previewOnly,
-  onSeek,
-}) {
+function PlayerBarScrub({ currentTime, duration, previewOnly, onSeek }) {
   const scrubRef = useRef(null);
   const [dragging, setDragging] = useState(false);
 
@@ -80,18 +72,21 @@ function PlayerBarScrub({
     return Math.min(PREVIEW_MAX_SEC, duration * PREVIEW_SCRUB_CAP_RATIO);
   }, [duration, previewOnly]);
 
-  const ratioFromEvent = useCallback((e) => {
-    const el = scrubRef.current;
-    if (!el || !maxSeek) return 0;
-    const rect = el.getBoundingClientRect();
-    const clientX = e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX;
-    const raw = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    if (previewOnly && duration > 0) {
-      const capRatio = maxSeek / duration;
-      return Math.min(raw, capRatio);
-    }
-    return raw;
-  }, [duration, maxSeek, previewOnly]);
+  const ratioFromEvent = useCallback(
+    (e) => {
+      const el = scrubRef.current;
+      if (!el || !maxSeek) return 0;
+      const rect = el.getBoundingClientRect();
+      const clientX = e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX;
+      const raw = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      if (previewOnly && duration > 0) {
+        const capRatio = maxSeek / duration;
+        return Math.min(raw, capRatio);
+      }
+      return raw;
+    },
+    [duration, maxSeek, previewOnly]
+  );
 
   const seekFromEvent = useCallback(
     (e) => {
@@ -128,8 +123,7 @@ function PlayerBarScrub({
   }, [dragging, seekFromEvent]);
 
   const progressPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
-  const capPct =
-    previewOnly && duration > 0 ? Math.min(100, (maxSeek / duration) * 100) : null;
+  const capPct = previewOnly && duration > 0 ? Math.min(100, (maxSeek / duration) * 100) : null;
 
   return (
     <div
@@ -148,19 +142,76 @@ function PlayerBarScrub({
     >
       <div className="player-bar-scrub__track">
         <div className="player-bar-scrub-fill" style={{ width: `${progressPct}%` }} />
-        {capPct != null ? (
-          <div className="player-bar-scrub-cap" style={{ left: `${capPct}%` }} aria-hidden />
-        ) : null}
+        {capPct != null ? <div className="player-bar-scrub-cap" style={{ left: `${capPct}%` }} aria-hidden /> : null}
         <div className="player-bar-scrub-handle" style={{ left: `${progressPct}%` }} aria-hidden />
       </div>
     </div>
   );
 }
 
+function MiniCoverHit({
+  title,
+  baseCoverUrl,
+  csCoverUrl,
+  csMode,
+  csOpacity,
+  hasCs,
+  isPlaying,
+  onCoverTouchStart,
+  onCoverTouchMove,
+  onCoverTouchEnd,
+}) {
+  const [baseFailed, setBaseFailed] = useState(false);
+  const [overlayFailed, setOverlayFailed] = useState(false);
+
+  useEffect(() => {
+    setBaseFailed(false);
+    setOverlayFailed(false);
+  }, [baseCoverUrl, csCoverUrl]);
+
+  const letter = (title && String(title).trim()[0]) || "♪";
+  const baseLayerUrl = baseCoverUrl || csCoverUrl || null;
+  const overlayUrl = baseCoverUrl && csCoverUrl && hasCs ? csCoverUrl : null;
+  const showBaseLayer = Boolean(baseLayerUrl) && !baseFailed;
+  const showOverlay =
+    Boolean(overlayUrl) && !overlayFailed && (csMode || csOpacity > 0.01);
+
+  return (
+    <div
+      className="player-bar-cover-hit"
+      role="button"
+      tabIndex={0}
+      aria-label="Cover art"
+      onTouchStart={(e) => onCoverTouchStart(e, undefined)}
+      onTouchMove={onCoverTouchMove}
+      onTouchEnd={(e) => onCoverTouchEnd(e, undefined)}
+      onClick={(e) => e.preventDefault()}
+    >
+      {!showBaseLayer && !showOverlay ? <div className="player-bar-cover-fallback">{letter}</div> : null}
+      {showBaseLayer ? (
+        <img
+          src={baseLayerUrl}
+          alt=""
+          className="player-bar-cover-img player-bar-cover-img--base"
+          data-playing={isPlaying ? "1" : undefined}
+          onError={() => setBaseFailed(true)}
+        />
+      ) : null}
+      {showOverlay ? (
+        <img
+          src={overlayUrl}
+          alt=""
+          className="player-bar-cover-img player-bar-cover-img--cs"
+          style={{ opacity: csMode ? 1 : csOpacity }}
+          onError={() => setOverlayFailed(true)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function MiniPlayerDock({
   currentTrack,
-  isMobile,
-  cssVars,
   currentTime,
   duration,
   isPlaying,
@@ -171,12 +222,8 @@ function MiniPlayerDock({
   csOpacity,
   csMode,
   baseCoverUrl,
-  baseCoverType,
   csCoverUrl,
-  csCoverType,
-  coverFrameStyle,
-  onExpand,
-  onStop,
+  hasCs,
   handlePlayToggle,
   onSeek,
   onSkipBack,
@@ -203,89 +250,53 @@ function MiniPlayerDock({
       />
     ) : null;
 
-  const metaLine =
-    error || accessDenied
-      ? errorMessage
-      : `${currentTrack.artist} · ${formatPlayerTime(currentTime)} / ${formatPlayerTime(duration)}`;
+  const artistLine = error || accessDenied ? errorMessage : currentTrack.artist;
 
   return (
-    <div
-      role="region"
-      aria-label="Global audio player"
-      className="player-dock player-immersive-glass player-bar-mini-dock"
-      style={cssVars}
-    >
-      <div
-        className="player-dock-inner player-immersive-dock-inner"
-        style={{ maxWidth: 1180, margin: "0 auto", padding: isMobile ? "10px 14px 12px" : "12px 20px" }}
-      >
-        <div className="player-bar-mini">
-          <div className="player-bar-mini__row player-immersive-dock-row">
-            <PlayerArtwork
-              baseCoverUrl={baseCoverUrl}
-              baseCoverType={baseCoverType}
-              csCoverUrl={csCoverUrl}
-              csCoverType={csCoverType}
-              csOpacity={csOpacity}
-              csMode={csMode}
-              size={isMobile ? 52 : 56}
-              borderRadius={isMobile ? 10 : 12}
-              isPlaying={isPlaying}
-              style={coverFrameStyle}
-              role="button"
-              tabIndex={0}
-              aria-label="Cover art"
-              onTouchStart={(e) => onCoverTouchStart(e, onExpand)}
-              onTouchMove={onCoverTouchMove}
-              onTouchEnd={(e) => onCoverTouchEnd(e, onExpand)}
-              onClick={(e) => e.preventDefault()}
-            />
-            <button type="button" className="player-immersive-meta-btn" onClick={onExpand} aria-label="Expand player">
-              <div className="player-track-title player-immersive-title">
-                {currentTrack.title}
-                {giftBadge}
-              </div>
-              <div
-                className="player-track-meta player-immersive-meta"
-                data-error={error || accessDenied ? "1" : undefined}
-              >
-                {metaLine}
-              </div>
-            </button>
-            <Skip15Button direction="back" ariaLabel="Skip back 15 seconds" onClick={onSkipBack} />
-            <SignaturePlayRing
-              isPlaying={isPlaying}
-              hasError={Boolean(error)}
-              isBuffering={isBuffering}
-              progress={progress}
-              size={isMobile ? 50 : 54}
-              onClick={handlePlayToggle}
-              className="player-immersive-dock-ring"
-            />
-            <Skip15Button direction="forward" ariaLabel="Skip forward 15 seconds" onClick={onSkipForward} />
-            {showCs ? (
-              <PlayerCsBarButton active={csActive} onClick={onToggleCs} />
-            ) : null}
-            <ClosePlayerButton onClick={onStop} size={18} />
-          </div>
-          <PlayerBarScrub
-            currentTime={currentTime}
-            duration={duration}
-            previewOnly={previewOnly}
-            onSeek={onSeek}
+    <div role="region" aria-label="Global audio player" className="player-bar-compact">
+      <div className="player-bar-compact__pad">
+        <div className="player-bar-compact__row">
+          <MiniCoverHit
+            title={currentTrack.title}
+            baseCoverUrl={baseCoverUrl}
+            csCoverUrl={csCoverUrl}
+            csMode={csMode}
+            csOpacity={csOpacity}
+            hasCs={hasCs}
+            isPlaying={isPlaying}
+            onCoverTouchStart={onCoverTouchStart}
+            onCoverTouchMove={onCoverTouchMove}
+            onCoverTouchEnd={onCoverTouchEnd}
           />
+          <div className="player-bar-compact-meta">
+            <div className="player-bar-compact-title">
+              {currentTrack.title}
+              {giftBadge}
+            </div>
+            <div
+              className="player-bar-compact-artist"
+              data-error={error || accessDenied ? "1" : undefined}
+            >
+              {artistLine}
+            </div>
+          </div>
+          <Skip15Button direction="back" ariaLabel="Skip back 15 seconds" onClick={onSkipBack} />
+          <SignaturePlayRing
+            isPlaying={isPlaying}
+            hasError={Boolean(error)}
+            isBuffering={isBuffering}
+            progress={progress}
+            size={38}
+            onClick={handlePlayToggle}
+            className="player-bar-compact-play"
+          />
+          <Skip15Button direction="forward" ariaLabel="Skip forward 15 seconds" onClick={onSkipForward} />
+          {showCs ? <PlayerCsBarButton active={csActive} onClick={onToggleCs} /> : null}
         </div>
       </div>
-    </div>
-  );
-}
-
-function WaveformBars({ playing }) {
-  return (
-    <div className={`player-immersive-island-wave${playing ? " is-playing" : ""}`} aria-hidden>
-      <span />
-      <span />
-      <span />
+      <div className="player-bar-compact-scrub">
+        <PlayerBarScrub currentTime={currentTime} duration={duration} previewOnly={previewOnly} onSeek={onSeek} />
+      </div>
     </div>
   );
 }
@@ -313,20 +324,9 @@ function GlobalAudioPlayerBar() {
     error,
     isBuffering,
     accessDenied,
-    streamRetryable,
     streamConflict,
     progress,
     handlePlayToggle,
-    seek,
-    stop,
-    queue,
-    queueIndex,
-    playNext,
-    playPrevious,
-    shuffle,
-    repeatMode,
-    toggleShuffle,
-    toggleRepeat,
     csMode,
     toggleCSMode,
     beginCsHoldPreview,
@@ -339,39 +339,22 @@ function GlobalAudioPlayerBar() {
   } = playback;
 
   const [isMobile, setIsMobile] = useState(false);
-  const [windowWidth, setWindowWidth] = useState(
-    typeof window !== "undefined" ? window.innerWidth : 768
-  );
-  const [expanded, setExpanded] = useState(false);
-  const [ambientCoverUrl, setAmbientCoverUrl] = useState(null);
-  const [swipeOffset, setSwipeOffset] = useState(0);
-  const [swipeClosing, setSwipeClosing] = useState(false);
   const [csHoldOpacity, setCsHoldOpacity] = useState(0);
-  const [flipPhase, setFlipPhase] = useState(false);
-  const touchStartY = useRef(null);
-  const touchDeltaY = useRef(0);
-  const lastTapTimeRef = useRef(0);
-  const holdRafRef = useRef(null);
-  const lastHoldOpacityRef = useRef(0);
-  const holdActiveRef = useRef(false);
   const touchMovedRef = useRef(false);
   const touchStartRef = useRef(null);
   const tapTimeoutRef = useRef(null);
-  const lastAmbientUrlRef = useRef("");
+  const holdRafRef = useRef(null);
+  const lastHoldOpacityRef = useRef(0);
+  const holdActiveRef = useRef(false);
+  const lastTapTimeRef = useRef(0);
   const csModeRef = useRef(csMode);
 
   const baseCover = currentTrack?.baseCover || currentTrack?.cover;
   const csCover = currentTrack?.csCover || null;
   const csAudio = currentTrack?.csAudio || null;
-  const baseCoverType = currentTrack?.coverArtType || "image";
-  const csCoverType = currentTrack?.csCoverType || "image";
   const hasCs = Boolean(csCover || csAudio);
-  const { cssVars } = usePlayerAmbience(
-    csMode && csCover ? csCover : baseCover,
-    csMode && csCover ? csCoverType : baseCoverType
-  );
 
-  usePlayerBodyState({ playing: isPlaying && hasStarted, expanded });
+  usePlayerBodyState({ playing: isPlaying && hasStarted, expanded: false });
 
   useEffect(() => {
     csModeRef.current = csMode;
@@ -385,28 +368,12 @@ function GlobalAudioPlayerBar() {
   useEffect(() => {
     const check = () => {
       const w = window.innerWidth;
-      setWindowWidth(w);
       setIsMobile(w < 768);
     };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
-
-  const isSmallScreen = windowWidth < 360;
-
-  useEffect(() => {
-    if (!hasStarted || !currentTrack) {
-      setExpanded(false);
-      setSwipeOffset(0);
-    }
-  }, [hasStarted, currentTrack]);
-
-  useEffect(() => {
-    if (!expanded) return undefined;
-    registerModal("global-audio-player-expanded");
-    return () => unregisterModal("global-audio-player-expanded");
-  }, [expanded]);
 
   useEffect(
     () => () => {
@@ -415,28 +382,6 @@ function GlobalAudioPlayerBar() {
     },
     []
   );
-
-  const coverFlipKey = currentTrack
-    ? `${currentTrack.id || currentTrack.slug}:${baseCover}:${currentTrack.title}:${csMode}`
-    : null;
-
-  useEffect(() => {
-    if (!coverFlipKey) return undefined;
-    setFlipPhase(true);
-    const t = window.setTimeout(() => setFlipPhase(false), 200);
-    return () => window.clearTimeout(t);
-  }, [coverFlipKey]);
-
-  useEffect(() => {
-    if (!currentTrack) return;
-    const ambient = csMode && csCover ? csCover : baseCover;
-    if (!ambient) return;
-    const newUrl = resolveAbsoluteArtworkUrl(ambient);
-    if (lastAmbientUrlRef.current !== newUrl) {
-      lastAmbientUrlRef.current = newUrl;
-      setAmbientCoverUrl(newUrl);
-    }
-  }, [baseCover, csCover, csMode, currentTrack]);
 
   const cancelHoldAnim = useCallback(() => {
     if (holdRafRef.current) {
@@ -462,11 +407,11 @@ function GlobalAudioPlayerBar() {
   }, [cancelHoldAnim, endCsHoldPreview]);
 
   const animateHoldOpacity = useCallback(
-    (from, to, duration, onFrame, onComplete) => {
+    (from, to, durationMs, onFrame, onComplete) => {
       cancelHoldAnim();
       const start = performance.now();
       const step = (now) => {
-        const p = Math.min(1, (now - start) / duration);
+        const p = Math.min(1, (now - start) / durationMs);
         const value = from + (to - from) * p;
         if (Math.abs(lastHoldOpacityRef.current - value) > 0.01) {
           lastHoldOpacityRef.current = value;
@@ -516,18 +461,11 @@ function GlobalAudioPlayerBar() {
       }
 
       holdActiveRef.current = true;
-      if (csCover) {
-        const newUrl = resolveAbsoluteArtworkUrl(csCover);
-        if (lastAmbientUrlRef.current !== newUrl) {
-          lastAmbientUrlRef.current = newUrl;
-          setAmbientCoverUrl(newUrl);
-        }
-      }
       animateHoldOpacity(0, 1, HOLD_FADE_MS, (value, p) => {
         applyHoldAudio(p);
       });
     },
-    [animateHoldOpacity, applyHoldAudio, cancelHoldAnim, csCover, hasCs, revertHoldPreview, toggleCSMode]
+    [animateHoldOpacity, applyHoldAudio, cancelHoldAnim, hasCs, revertHoldPreview, toggleCSMode]
   );
 
   const handleCoverTouchMove = useCallback(
@@ -540,18 +478,11 @@ function GlobalAudioPlayerBar() {
         if (holdActiveRef.current && !csModeRef.current) {
           animateHoldOpacity(csHoldOpacity, 0, RELEASE_FADE_MS, null, () => {
             revertHoldPreview();
-            if (baseCover) {
-              const newUrl = resolveAbsoluteArtworkUrl(baseCover);
-              if (lastAmbientUrlRef.current !== newUrl) {
-                lastAmbientUrlRef.current = newUrl;
-                setAmbientCoverUrl(newUrl);
-              }
-            }
           });
         }
       }
     },
-    [animateHoldOpacity, baseCover, csHoldOpacity, revertHoldPreview]
+    [animateHoldOpacity, csHoldOpacity, revertHoldPreview]
   );
 
   const handleCoverTouchEnd = useCallback(
@@ -572,13 +503,6 @@ function GlobalAudioPlayerBar() {
       if (holdActiveRef.current) {
         animateHoldOpacity(csHoldOpacity, 0, RELEASE_FADE_MS, null, () => {
           revertHoldPreview();
-          if (baseCover) {
-            const newUrl = resolveAbsoluteArtworkUrl(baseCover);
-            if (lastAmbientUrlRef.current !== newUrl) {
-              lastAmbientUrlRef.current = newUrl;
-              setAmbientCoverUrl(newUrl);
-            }
-          }
         });
         touchStartRef.current = null;
         return;
@@ -593,23 +517,11 @@ function GlobalAudioPlayerBar() {
 
       touchStartRef.current = null;
     },
-    [animateHoldOpacity, baseCover, csHoldOpacity, revertHoldPreview]
+    [animateHoldOpacity, csHoldOpacity, revertHoldPreview]
   );
-
-  const handleSeek = useCallback(
-    (event) => {
-      if (!duration) return;
-      const rect = event.currentTarget.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-      seek(ratio * duration);
-    },
-    [duration, seek]
-  );
-
 
   const previewOnly = Boolean(
-    engineCurrentTrack?.metadata?.access?.previewOnly ??
-      currentTrack?.metadata?.access?.previewOnly
+    engineCurrentTrack?.metadata?.access?.previewOnly ?? currentTrack?.metadata?.access?.previewOnly
   );
 
   const dockCurrentTime = engineCurrentTime ?? currentTime;
@@ -649,55 +561,9 @@ function GlobalAudioPlayerBar() {
     void (engineToggleCSMode ?? toggleCSMode)?.();
   }, [engineToggleCSMode, toggleCSMode]);
 
-  const closeExpanded = useCallback(() => {
-    setSwipeClosing(true);
-    setSwipeOffset(120);
-    window.setTimeout(() => {
-      setExpanded(false);
-      setSwipeClosing(false);
-      setSwipeOffset(0);
-    }, EXPAND_SWIPE_CLOSE_MS);
-  }, []);
-
-  const onTouchStart = useCallback((e) => {
-    touchStartY.current = e.touches[0]?.clientY ?? null;
-    touchDeltaY.current = 0;
-    setSwipeOffset(0);
-  }, []);
-
-  const onTouchMove = useCallback((e) => {
-    if (touchStartY.current == null) return;
-    const delta = (e.touches[0]?.clientY ?? 0) - touchStartY.current;
-    touchDeltaY.current = delta;
-    if (delta > 0) setSwipeOffset(Math.min(delta, 160));
-  }, []);
-
-  const onTouchEnd = useCallback(() => {
-    if (touchDeltaY.current > SWIPE_DISMISS_PX) {
-      closeExpanded();
-    } else {
-      setSwipeOffset(0);
-    }
-    touchStartY.current = null;
-    touchDeltaY.current = 0;
-  }, [closeExpanded]);
-
-  const coverFrameStyle = useMemo(
-    () => ({
-      transform: flipPhase ? "scaleX(0)" : "scaleX(1)",
-      transition: "transform 200ms ease",
-      touchAction: "manipulation",
-      flexShrink: 0,
-    }),
-    [flipPhase]
-  );
-
-  const handleExpand = useCallback(() => setExpanded(true), []);
-
   const csOpacity = csMode ? 1 : csHoldOpacity;
   const baseCoverUrl = resolveAbsoluteArtworkUrl(baseCover);
   const csCoverUrl = csCover ? resolveAbsoluteArtworkUrl(csCover) : null;
-  const bottom = isMobile ? "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)" : 0;
 
   const errorMessage = accessDenied ? (
     <span>
@@ -710,87 +576,6 @@ function GlobalAudioPlayerBar() {
     error
   );
 
-  const sharedDockProps = useMemo(
-    () => ({
-      currentTrack,
-      isMobile,
-      cssVars,
-      progress,
-      currentTime,
-      duration,
-      isPlaying,
-      isBuffering,
-      error,
-      accessDenied,
-      errorMessage,
-      csOpacity,
-      csMode,
-      baseCoverUrl,
-      baseCoverType,
-      csCoverUrl,
-      csCoverType,
-      coverFrameStyle,
-      onExpand: handleExpand,
-      onStop: stop,
-      onSeekBarClick: handleSeek,
-      handlePlayToggle,
-      playPrevious,
-      playNext,
-      repeatMode,
-      toggleRepeat,
-      shuffle,
-      toggleShuffle,
-      onCoverTouchStart: handleCoverTouchStart,
-      onCoverTouchMove: handleCoverTouchMove,
-      onCoverTouchEnd: handleCoverTouchEnd,
-    }),
-    [
-      accessDenied,
-      baseCoverType,
-      baseCoverUrl,
-      coverFrameStyle,
-      csCoverType,
-      csCoverUrl,
-      csMode,
-      csOpacity,
-      currentTime,
-      currentTrack,
-      duration,
-      error,
-      errorMessage,
-      handleCoverTouchEnd,
-      handleCoverTouchMove,
-      handleCoverTouchStart,
-      handleExpand,
-      handlePlayToggle,
-      handleSeek,
-      isBuffering,
-      isMobile,
-      isPlaying,
-      cssVars,
-      playNext,
-      playPrevious,
-      progress,
-      repeatMode,
-      shuffle,
-      stop,
-      toggleRepeat,
-      toggleShuffle,
-    ]
-  );
-
-  const dockShellStyle = useMemo(
-    () => ({
-      position: "fixed",
-      left: isMobile ? 12 : 0,
-      right: isMobile ? 12 : 0,
-      bottom,
-      zIndex: 7600,
-      borderRadius: isMobile ? 18 : 0,
-      overflow: "hidden",
-    }),
-    [bottom, isMobile]
-  );
 
   if (!hasStarted || !currentTrack) return null;
 
@@ -798,9 +583,7 @@ function GlobalAudioPlayerBar() {
     <div role="alertdialog" aria-label="Concurrent stream" className="player-immersive-conflict">
       <div className="player-immersive-conflict__card">
         <div className="player-immersive-conflict__title">Already streaming</div>
-        <p className="player-immersive-conflict__text">
-          Already streaming on another device — stop other session?
-        </p>
+        <p className="player-immersive-conflict__text">Already streaming on another device — stop other session?</p>
         <div className="player-immersive-conflict__actions">
           <button type="button" className="player-immersive-conflict__cancel" onClick={dismissStreamConflict}>
             Cancel
@@ -813,118 +596,47 @@ function GlobalAudioPlayerBar() {
     </div>
   ) : null;
 
-  const islandCoverUrl = csMode && csCoverUrl ? csCoverUrl : baseCoverUrl;
-  const islandCoverType = csMode && csCover ? csCoverType : baseCoverType;
-  const hasQueue = (queue || []).length > 1;
-  const queuePos = queueIndex >= 0 && queue?.length ? queueIndex + 1 : 1;
-  const queueTotal = queue?.length || 1;
-  const queueLabel = hasQueue ? `${queuePos} of ${queueTotal}` : null;
-  const coverSize = isMobile ? "min(80vw, 320px)" : 320;
-
   return (
     <>
       {conflictDialog}
       {isBuffering && (
         <div className="player-immersive-buffer-indicator" aria-live="polite" aria-label="Buffering" data-mobile={isMobile ? "1" : undefined} />
       )}
-      {isMobile && !expanded && (
-        <button
-          type="button"
-          onClick={handleExpand}
-          aria-label="Expand audio player"
-          className="player-island-pill player-immersive-island"
-          style={cssVars}
-        >
-          <PlayerArtwork
-            baseCoverUrl={islandCoverUrl}
-            baseCoverType={islandCoverType}
-            size={28}
-            borderRadius="50%"
-            isPlaying={isPlaying}
-            layoutId={undefined}
-          />
-          <WaveformBars playing={isPlaying} />
-          <SignaturePlayRing
-            isPlaying={isPlaying}
-            hasError={Boolean(error)}
-            isBuffering={isBuffering}
-            progress={progress}
-            size={32}
-            onClick={handlePlayToggle}
-          />
-        </button>
-      )}
-
-      {expanded && (
-        <FloatingMainPlayer
-          {...sharedDockProps}
-          isSmallScreen={isSmallScreen}
-          coverSize={coverSize}
-          ambientCoverUrl={ambientCoverUrl}
-          swipeOffset={swipeOffset}
-          swipeClosing={swipeClosing}
-          onClose={closeExpanded}
-          onSeek={handleSeek}
-          seek={seek}
-          seekBack={playback.seekBack}
-          seekForward={playback.seekForward}
-          hasQueue={hasQueue}
-          queueLabel={queueLabel}
-          onTouchStart={onTouchStart}
-          onTouchMove={onTouchMove}
-          onTouchEnd={onTouchEnd}
-        />
-      )}
-
-      {!expanded && playbackState === "ended_preview" && currentTrack ? (
+      {playbackState === "ended_preview" && currentTrack ? (
         <div className="player-preview-ended-cta" data-mobile={isMobile ? "1" : undefined}>
           <span className="player-preview-ended-label">PREVIEW ENDED</span>
-          <a
-            href={`/?track=${encodeURIComponent(currentTrack.slug)}&buy=1`}
-            className="player-preview-ended-buy"
-          >
+          <a href={`/?track=${encodeURIComponent(currentTrack.slug)}&buy=1`} className="player-preview-ended-buy">
             OWN IT
           </a>
         </div>
       ) : null}
-
-      {!expanded && (
-        <div style={dockShellStyle}>
-          <MiniPlayerDock
-            currentTrack={currentTrack}
-            isMobile={isMobile}
-            cssVars={cssVars}
-            currentTime={dockCurrentTime}
-            duration={dockDuration}
-            isPlaying={dockIsPlaying}
-            isBuffering={isBuffering}
-            error={error}
-            accessDenied={accessDenied}
-            errorMessage={errorMessage}
-            csOpacity={csOpacity}
-            csMode={csMode}
-            baseCoverUrl={baseCoverUrl}
-            baseCoverType={baseCoverType}
-            csCoverUrl={csCoverUrl}
-            csCoverType={csCoverType}
-            coverFrameStyle={coverFrameStyle}
-            onExpand={handleExpand}
-            onStop={stop}
-            handlePlayToggle={handlePlayToggle}
-            onSeek={handleEngineSeek}
-            onSkipBack={handleSkipBack15}
-            onSkipForward={handleSkipForward15}
-            showCs={showCs}
-            csActive={dockCsMode}
-            onToggleCs={handleToggleCs}
-            progress={dockProgress}
-            previewOnly={previewOnly}
-            onCoverTouchStart={handleCoverTouchStart}
-            onCoverTouchMove={handleCoverTouchMove}
-            onCoverTouchEnd={handleCoverTouchEnd}
-          />
-        </div>
-      )}
+      <MiniPlayerDock
+        currentTrack={currentTrack}
+        currentTime={dockCurrentTime}
+        duration={dockDuration}
+        isPlaying={dockIsPlaying}
+        isBuffering={isBuffering}
+        error={error}
+        accessDenied={accessDenied}
+        errorMessage={errorMessage}
+        csOpacity={csOpacity}
+        csMode={csMode}
+        baseCoverUrl={baseCoverUrl}
+        csCoverUrl={csCoverUrl}
+        hasCs={hasCs}
+        handlePlayToggle={handlePlayToggle}
+        onSeek={handleEngineSeek}
+        onSkipBack={handleSkipBack15}
+        onSkipForward={handleSkipForward15}
+        showCs={showCs}
+        csActive={dockCsMode}
+        onToggleCs={handleToggleCs}
+        progress={dockProgress}
+        previewOnly={previewOnly}
+        onCoverTouchStart={handleCoverTouchStart}
+        onCoverTouchMove={handleCoverTouchMove}
+        onCoverTouchEnd={handleCoverTouchEnd}
+      />
     </>
   );
 }
