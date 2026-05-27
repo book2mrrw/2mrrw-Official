@@ -1300,15 +1300,19 @@ export default function Page() {
   const prevMonth = () => { if (calMonth===0) { setCalMonth(11); setCalYear(calYear-1); } else setCalMonth(calMonth-1); };
   const nextMonth = () => { if (calMonth===11) { setCalMonth(0); setCalYear(calYear+1); } else setCalMonth(calMonth+1); };
 
+  const accountDisplayName = currentUser?.name?.trim() || currentUser?.email?.split("@")[0] || "Member";
+  const accountDisplayInitial = ((accountDisplayName || "?")[0] || "?").toUpperCase();
+  const accountCircleByline = (currentUser?.name?.trim() || currentUser?.email || "Anonymous").trim();
+
   const handleAddComment = postId => {
     if (!blogComment.trim()) return;
-    const name = currentUser ? currentUser.name : "Anonymous";
+    const name = currentUser ? accountCircleByline : "Anonymous";
     setBlogComments(p => ({ ...p, [postId]: [...(p[postId]||[]), { name, text:blogComment, time:new Date().toLocaleString() }] }));
     setBlogComment("");
   };
   const handleCircleSubmit = () => {
     if (!circleQuestion.trim()) return;
-    const name = currentUser ? currentUser.name : "Anonymous";
+    const name = currentUser ? accountCircleByline : "Anonymous";
     const sub  = { id:`sub-${Date.now()}`, text:circleQuestion, category:circleCategory, by:name, time:new Date().toLocaleString() };
     const upd  = [sub, ...circleSubmissions];
     setCircleSubmissions(upd); localStorage.setItem("2mrrw_circle", JSON.stringify(upd));
@@ -1319,7 +1323,7 @@ export default function Page() {
     if (!currentUser) return null;
     const hasCollector = myPurchases.some(p => p.slug?.startsWith("exc-card"));
     const hasBundle    = myPurchases.some(p => p.slug?.startsWith("exc-bundle"));
-    const subs         = circleSubmissions.filter(s => s.by === currentUser.name).length;
+    const subs         = circleSubmissions.filter(s => s.by === accountCircleByline || s.by === currentUser.name).length;
     if ((hasCollector||hasBundle) && subs >= 1) return { label:"INNER CIRCLE",   color:"#a259ff", glow:"rgba(162,89,255,0.5)" };
     if  (hasCollector||hasBundle)               return { label:"COLLECTOR",       color:"#ff6b35", glow:"rgba(255,107,53,0.5)" };
     if  (subs >= 3)                             return { label:"VISIONARY",       color:"#00ffff", glow:"rgba(0,255,255,0.5)" };
@@ -1504,8 +1508,6 @@ export default function Page() {
   const liveStreamDate = nextLiveDateTime.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
   const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
   const currentSlide   = useMemo(() => enrichedRadioSlides[radioIndex], [enrichedRadioSlides, radioIndex]);
-  const accountDisplayName = currentUser?.name?.trim() || currentUser?.email?.split("@")[0] || "Member";
-  const accountDisplayInitial = (accountDisplayName[0] || "?").toUpperCase();
   const activeFlowMode = flowConversionActive ? "conversion" : nowPlaying ? "nowplaying" : "idle";
   const accountStateReady = !authLoading;
   const showOwnTrackConversion = accountStateReady && !isAdminAccount(accountState);
@@ -1556,36 +1558,48 @@ export default function Page() {
       {/* ── SINGLE PREVIEW MODAL (immersive) ── */}
       <AnimatePresence>
         {previewModalOpen && selectedSingle && (
-          <ImmersivePreviewModal
-            key="immersive-preview-modal"
-            single={selectedSingle}
-            releaseDetail={selectedReleaseDetail}
-            isMobile={isMobile}
-            access={resolveTrackAccess(selectedSingle, accountState)?.canStream ? "full" : "preview"}
-            userId={currentUser?.id}
-            isAdmin={isAdmin}
-            onGift={handlePreviewGift}
-            onLibraryChange={handlePreviewLibraryChange}
+          <ModalErrorBoundary
+            stackId="immersive-preview-modal"
             onClose={closeSingleModal}
-            onAddToCart={addToCart}
-            onAddVinyl={addVinylToCart}
-          />
+            resetKey={selectedSingle?.slug || selectedSingle?.id || "preview"}
+          >
+            <ImmersivePreviewModal
+              key="immersive-preview-modal"
+              single={selectedSingle}
+              releaseDetail={selectedReleaseDetail}
+              isMobile={isMobile}
+              access={resolveTrackAccess(selectedSingle, accountState)?.canStream ? "full" : "preview"}
+              userId={currentUser?.id}
+              isAdmin={isAdmin}
+              onGift={handlePreviewGift}
+              onLibraryChange={handlePreviewLibraryChange}
+              onClose={closeSingleModal}
+              onAddToCart={addToCart}
+              onAddVinyl={addVinylToCart}
+            />
+          </ModalErrorBoundary>
         )}
         {featureModalOpen && featureModalItem && (
-          <ImmersivePreviewModal
-            key="immersive-feature-modal"
-            single={featureModalItem}
-            releaseDetail={featureReleaseDetail}
-            isMobile={isMobile}
-            access={resolveTrackAccess(featureModalItem, accountState)?.canStream ? "full" : "preview"}
-            userId={currentUser?.id}
-            isAdmin={isAdmin}
-            onGift={handleFeaturePreviewGift}
-            onLibraryChange={handlePreviewLibraryChange}
+          <ModalErrorBoundary
+            stackId="immersive-feature-modal"
             onClose={closeFeatureModal}
-            onAddToCart={addToCart}
-            onAddVinyl={addVinylToCart}
-          />
+            resetKey={featureModalItem?.slug || featureModalItem?.id || "feature"}
+          >
+            <ImmersivePreviewModal
+              key="immersive-feature-modal"
+              single={featureModalItem}
+              releaseDetail={featureReleaseDetail}
+              isMobile={isMobile}
+              access={resolveTrackAccess(featureModalItem, accountState)?.canStream ? "full" : "preview"}
+              userId={currentUser?.id}
+              isAdmin={isAdmin}
+              onGift={handleFeaturePreviewGift}
+              onLibraryChange={handlePreviewLibraryChange}
+              onClose={closeFeatureModal}
+              onAddToCart={addToCart}
+              onAddVinyl={addVinylToCart}
+            />
+          </ModalErrorBoundary>
         )}
       </AnimatePresence>
 
@@ -1593,19 +1607,25 @@ export default function Page() {
 
       {/* ── ALBUM MODAL (V9 immersive) ── */}
       {albumModalOpen && selectedAlbum && (
-        <AlbumModal
-          key={selectedAlbum.id || selectedAlbum.slug}
-          album={{
-            ...selectedAlbum,
-            artist: selectedAlbum.artist || "2MRRW",
-            year: selectedAlbum.year || selectedAlbum.date,
-            coverArt: selectedAlbum.coverArt || selectedAlbum.cover,
-            price: selectedAlbum.price != null ? `$${Number(selectedAlbum.price).toFixed(2)}` : selectedAlbum.price,
-            tracks: normalizeAlbumTracksForModal(selectedAlbum.tracks || []),
-          }}
-          access={resolveTrackAccess(selectedAlbum, accountState)?.canStream ? "full" : "preview"}
+        <ModalErrorBoundary
+          stackId="immersive-album-modal"
           onClose={closeAlbumModal}
-        />
+          resetKey={selectedAlbum?.slug || selectedAlbum?.id || "album"}
+        >
+          <AlbumModal
+            key={selectedAlbum.id || selectedAlbum.slug}
+            album={{
+              ...selectedAlbum,
+              artist: selectedAlbum.artist || "2MRRW",
+              year: selectedAlbum.year || selectedAlbum.date,
+              coverArt: selectedAlbum.coverArt || selectedAlbum.cover,
+              price: selectedAlbum.price != null ? `$${Number(selectedAlbum.price).toFixed(2)}` : selectedAlbum.price,
+              tracks: normalizeAlbumTracksForModal(selectedAlbum.tracks || []),
+            }}
+            access={resolveTrackAccess(selectedAlbum, accountState)?.canStream ? "full" : "preview"}
+            onClose={closeAlbumModal}
+          />
+        </ModalErrorBoundary>
       )}
 
 
@@ -2360,8 +2380,8 @@ export default function Page() {
                   {currentUser ? (
                     <div style={{display:"flex",flexDirection:"column",gap:20}}>
                       <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:28}}>
-                        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{currentUser.name[0].toUpperCase()}</div><div><div style={{fontSize:18,fontWeight:800}}>{currentUser.name}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{currentUser.email}</div></div>{userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`}}>{userStatus.label}</div>}</div>
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===currentUser.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{accountDisplayInitial}</div><div><div style={{fontSize:18,fontWeight:800}}>{accountDisplayName}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{currentUser.email || "—"}</div></div>{userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`}}>{userStatus.label}</div>}</div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===accountCircleByline||s.by===currentUser?.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Collection",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
                       {isAdmin ? <GiftsSentSection /> : null}

@@ -36,10 +36,11 @@ function trackCoverSrc(track) {
 }
 
 function buildTheme(palette) {
-  const p1 = palette?.primaryCss || "#9b5de5";
-  const accent = palette?.secondaryCss || "#c77dff";
-  const glow = palette?.primaryGlow || "rgba(155,93,229,.6)";
-  const glowDim = palette?.primaryMuted || palette?.primaryGlowDim || "rgba(155,93,229,.2)";
+  const safe = palette && typeof palette === "object" ? palette : {};
+  const p1 = safe.primaryCss || "#9b5de5";
+  const accent = safe.secondaryCss || "#c77dff";
+  const glow = safe.primaryGlow || "rgba(155,93,229,.6)";
+  const glowDim = safe.primaryMuted || safe.primaryGlowDim || "rgba(155,93,229,.2)";
   return {
     dark: "#0a0a0a",
     p1,
@@ -47,9 +48,9 @@ function buildTheme(palette) {
     glow,
     glowDim,
     bg: ["#0a0a0a", "#111", "#0a0a0a"],
-    orb1: `radial-gradient(circle,${palette?.gradientTop || glow},transparent 70%)`,
-    orb2: `radial-gradient(circle,${palette?.gradientBottom || glowDim},transparent 70%)`,
-    orb3: `radial-gradient(circle,${palette?.ambientTint || glowDim},transparent 70%)`,
+    orb1: `radial-gradient(circle,${safe.gradientTop || glow},transparent 70%)`,
+    orb2: `radial-gradient(circle,${safe.gradientBottom || glowDim},transparent 70%)`,
+    orb3: `radial-gradient(circle,${safe.ambientTint || glowDim},transparent 70%)`,
   };
 }
 
@@ -495,7 +496,7 @@ export function SingleModal({
   onLibraryChange,
   releaseDetail,
 }) {
-  const coverSrc = trackCoverSrc(track);
+  const coverSrc = trackCoverSrc(track || {});
   const palette = useCoverPalette(coverSrc, track?.coverArtType || track?.coverType || "image");
   const t = useMemo(() => buildTheme(palette), [palette]);
   const vars = useMemo(() => themeVars(t), [t]);
@@ -817,15 +818,15 @@ export function SingleModal({
   );
 }
 
-export function AlbumModal({ album, access = "preview", onClose }) {
+function AlbumModalView({ album, access = "preview", onClose }) {
   const coverSrc = trackCoverSrc(album);
   const palette = useCoverPalette(coverSrc, album?.coverArtType || album?.coverType || "image");
   const t = useMemo(() => buildTheme(palette), [palette]);
   const vars = useMemo(() => themeVars(t), [t]);
 
-  const tracks = Array.isArray(album?.tracks) ? album.tracks : [];
+  const tracks = Array.isArray(album?.tracks) ? album.tracks.filter(Boolean) : [];
   const { mounted, closing, setClosing } = useModalAnim();
-  const [activeTrack, setActiveTrack] = useState(tracks[0] || null);
+  const [activeTrack, setActiveTrack] = useState(() => tracks[0] || null);
   const [sheet, setSheet] = useState(null);
   const [addTarget, setAddTarget] = useState(null);
 
@@ -838,6 +839,17 @@ export function AlbumModal({ album, access = "preview", onClose }) {
     registerModal("immersive-album-modal");
     return () => unregisterModal("immersive-album-modal");
   }, []);
+
+  useEffect(() => {
+    if (!tracks.length) {
+      setActiveTrack(null);
+      return;
+    }
+    setActiveTrack((prev) => {
+      if (prev && tracks.some((tr) => tr?.id === prev?.id)) return prev;
+      return tracks[0];
+    });
+  }, [tracks]);
 
   const isPreview = access !== "full";
   const trackLocked = (tr) => isPreview && !tr?.free;
@@ -959,6 +971,11 @@ export function AlbumModal({ album, access = "preview", onClose }) {
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>
+            {!tracks.length ? (
+              <div style={{ padding: "24px 20px", fontSize: 12, color: "rgba(255,255,255,.45)", textAlign: "center" }}>
+                Track list unavailable for this release.
+              </div>
+            ) : null}
             {tracks.map((tr, idx) => {
               const locked = trackLocked(tr);
               const isActive = activeTrack?.id === tr.id;
@@ -1099,6 +1116,12 @@ export function AlbumModal({ album, access = "preview", onClose }) {
   );
 }
 
+export function AlbumModal(props) {
+  const { album } = props;
+  if (!album || (!album.slug && !album.id)) return null;
+  return <AlbumModalView {...props} />;
+}
+
 export default function ImmersivePreviewModal({
   single: singleProp,
   track,
@@ -1108,7 +1131,7 @@ export default function ImmersivePreviewModal({
   ...rest
 }) {
   const single = singleProp || track;
-  if (!single) return null;
+  if (!single || (!single.slug && !single.id)) return null;
   const access = accessProp ?? (trackAccess?.canStream ? "full" : "preview");
   return <SingleModal track={single} access={access} onClose={onClose} {...rest} />;
 }

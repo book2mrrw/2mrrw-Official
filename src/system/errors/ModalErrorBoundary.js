@@ -3,7 +3,7 @@
 import { Component } from "react";
 import { unregisterModal } from "@/state/ui/modalStackStore";
 import { clientLog } from "@/lib/observability/client-log";
-import { ModalDismissToast } from "./FallbackRenderer";
+import { ModalErrorFallback } from "./FallbackRenderer";
 
 function logBoundaryTelemetry(payload) {
   try {
@@ -18,44 +18,71 @@ function logBoundaryTelemetry(payload) {
 }
 
 /**
- * Modal tree boundary — dismisses cleanly and releases scroll lock.
+ * Modal tree boundary — recoverable fallback with retry/close; releases scroll lock.
  */
 export default class ModalErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, showToast: false };
+    this.state = { hasError: false };
+    this._loggedError = false;
   }
 
   static getDerivedStateFromError() {
-    return { hasError: true, showToast: true };
+    return { hasError: true };
   }
 
   componentDidCatch(error, errorInfo) {
-    const { stackId, onClose } = this.props;
+    const { stackId } = this.props;
     if (stackId) unregisterModal(stackId);
-    onClose?.();
-    clientLog("error", "boundary_caught", {
-      boundary: "ModalErrorBoundary",
-      stackId,
-      message: error?.message,
-      componentStack: errorInfo?.componentStack,
-    });
-    logBoundaryTelemetry({
-      type: "error.boundary.caught",
-      boundary: "ModalErrorBoundary",
-      error: error?.message || "unknown",
-    });
+
+    if (!this._loggedError) {
+      this._loggedError = true;
+      if (process.env.NODE_ENV !== "production") {
+        // eslint-disable-next-line no-console
+        console.error("[ModalErrorBoundary]", error?.message, errorInfo?.componentStack);
+      }
+      clientLog("error", "boundary_caught", {
+        boundary: "ModalErrorBoundary",
+        stackId,
+        message: error?.message,
+        componentStack: errorInfo?.componentStack,
+      });
+      logBoundaryTelemetry({
+        type: "error.boundary.caught",
+        boundary: "ModalErrorBoundary",
+        error: error?.message || "unknown",
+      });
+    }
   }
 
   componentDidUpdate(prevProps) {
     if (prevProps.resetKey !== this.props.resetKey && this.state.hasError) {
-      this.setState({ hasError: false, showToast: false });
+      this._loggedError = false;
+      this.setState({ hasError: false });
     }
   }
 
+  handleRetry = () => {
+    this._loggedError = false;
+    this.setState({ hasError: false });
+  };
+
+  handleClose = () => {
+    const { onClose, stackId } = this.props;
+    if (stackId) unregisterModal(stackId);
+    onClose?.();
+    this.setState({ hasError: false });
+  };
+
   render() {
     if (this.state.hasError) {
-      return this.state.showToast ? <ModalDismissToast /> : null;
+      return (
+        <ModalErrorFallback
+          message="This panel could not load. You can try again or close."
+          onRetry={this.handleRetry}
+          onClose={this.handleClose}
+        />
+      );
     }
     return this.props.children;
   }
