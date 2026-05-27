@@ -1,37 +1,68 @@
 "use client";
 
-import { useMemo, useState, memo, useCallback, useEffect, useRef } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
-import { isFirstListen, markListened } from "@/lib/first-listen";
-import { useAudioPlayer } from "@/context/AudioContext";
-import PreviewEndedCTA from "@/components/preview/PreviewEndedCTA";
-import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview/releaseMetadata";
-import { extractLrcFromRelease } from "@/lib/lrc";
-import { useCoverPalette, paletteToCssVars } from "@/hooks/useCoverPalette";
-import { catalogCoverDisplay } from "@/components/home/catalogMedia";
-import { usePlayerBodyState } from "@/lib/player/usePlayerBodyState";
-import { PlayerAtmosphere } from "@/components/player/ImmersivePlayerEngine";
-import ModalShell from "@/components/modal/ModalShell";
-import ImmersiveModalEnvironment from "@/components/preview/immersive/ImmersiveModalEnvironment";
-import ImmersiveModalAccessBadge from "@/components/preview/immersive/ImmersiveModalAccessBadge";
-import ImmersiveModalScene from "@/components/preview/immersive/ImmersiveModalScene";
-import FloatingViewMore from "@/components/preview/immersive/FloatingViewMore";
-import GlyphLyricsPanel from "@/components/preview/GlyphLyricsPanel";
-import { ImmersiveModalSkeleton } from "@/ui/skeletons";
-import MusicPlusButton from "@/components/music/MusicPlusButton";
-import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
-import { useRenderTracker } from "@/lib/dev/useRenderTracker";
-import { ImmersiveErrorBoundary } from "@/system/errors";
-import { useMediaTiming } from "@/system/performance";
+import { useCoverPalette } from "@/hooks/useCoverPalette";
 import { useMediaEngine } from "@/media/useMediaEngine";
+import { catalogCoverDisplay } from "@/components/home/catalogMedia";
+import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview/releaseMetadata";
+import { usePlayerBodyState } from "@/lib/player/usePlayerBodyState";
+import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 
-const DRAWER_COLLAPSE_THRESHOLD = 72;
-const MODAL_DISMISS_THRESHOLD = 56;
+const PREVIEW_CAP_SEC = 30;
 
 const fmt = (s) => {
-  if (!s || isNaN(s)) return "0:00";
+  if (!s || Number.isNaN(s)) return "0:00";
   return `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 };
+
+function parseDurSec(track) {
+  if (track?.durSec && Number.isFinite(track.durSec)) return track.durSec;
+  const raw = track?.dur || track?.duration;
+  if (typeof raw === "number" && Number.isFinite(raw)) return raw;
+  if (typeof raw === "string") {
+    const parts = raw.split(":").map(Number);
+    if (parts.length === 2 && parts.every((n) => !Number.isNaN(n))) return parts[0] * 60 + parts[1];
+    if (parts.length === 3 && parts.every((n) => !Number.isNaN(n))) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+  }
+  return 0;
+}
+
+function trackCoverSrc(track) {
+  const { src } = catalogCoverDisplay(track || {});
+  return src || track?.coverArt || track?.cover || track?.coverUrl || "";
+}
+
+function buildTheme(palette) {
+  const p1 = palette?.primaryCss || "#9b5de5";
+  const accent = palette?.secondaryCss || "#c77dff";
+  const glow = palette?.primaryGlow || "rgba(155,93,229,.6)";
+  const glowDim = palette?.primaryMuted || palette?.primaryGlowDim || "rgba(155,93,229,.2)";
+  return {
+    dark: "#0a0a0a",
+    p1,
+    accent,
+    glow,
+    glowDim,
+    bg: ["#0a0a0a", "#111", "#0a0a0a"],
+    orb1: `radial-gradient(circle,${palette?.gradientTop || glow},transparent 70%)`,
+    orb2: `radial-gradient(circle,${palette?.gradientBottom || glowDim},transparent 70%)`,
+    orb3: `radial-gradient(circle,${palette?.ambientTint || glowDim},transparent 70%)`,
+  };
+}
+
+function themeVars(t) {
+  return {
+    "--glow": t.glow,
+    "--glow-dim": t.glowDim,
+    "--p1": t.p1,
+    "--p1-dim": `${t.p1}55`,
+    "--p1-dim2": `${t.p1}22`,
+    "--accent": t.accent,
+  };
+}
 
 const I = {
   Play: () => (
@@ -91,6 +122,23 @@ const I = {
       <path d="M8 4h12a2 2 0 012 2v16l-8-4-8 4V6a2 2 0 012-2z" />
     </svg>
   ),
+  Plus: ({ s = 26 }) => (
+    <svg width={s} height={s} viewBox="0 0 26 26" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+      <line x1="13" y1="4" x2="13" y2="22" />
+      <line x1="4" y1="13" x2="22" y2="13" />
+    </svg>
+  ),
+  TrPlay: () => (
+    <svg width="9" height="10" viewBox="0 0 9 10" fill="none">
+      <polygon points="1,.5 8.5,5 1,9.5" fill="currentColor" />
+    </svg>
+  ),
+  TrPause: () => (
+    <svg width="9" height="10" viewBox="0 0 9 10" fill="none">
+      <rect x="0" y="0" width="3" height="10" rx="1" fill="currentColor" />
+      <rect x="6" y="0" width="3" height="10" rx="1" fill="currentColor" />
+    </svg>
+  ),
 };
 
 function useBeat(playing) {
@@ -111,39 +159,70 @@ function useBeat(playing) {
   return beat;
 }
 
-function CoverArtLayer({ coverSrc }) {
-  const url = useMemo(() => resolveAbsoluteArtworkUrl(coverSrc), [coverSrc]);
+function useModalAnim() {
+  const [mounted, setMounted] = useState(false);
+  const [closing, setClosing] = useState(false);
+  useEffect(() => {
+    const r1 = requestAnimationFrame(() => {
+      const r2 = requestAnimationFrame(() => setMounted(true));
+      return () => cancelAnimationFrame(r2);
+    });
+    return () => cancelAnimationFrame(r1);
+  }, []);
+  return { mounted, closing, setClosing };
+}
+
+function Scene({ coverUrl, t }) {
   const [loaded, setLoaded] = useState(false);
   useEffect(() => {
+    if (!coverUrl) {
+      setLoaded(false);
+      return undefined;
+    }
     setLoaded(false);
-    if (!url) return undefined;
     const img = new Image();
-    img.src = url;
+    img.src = coverUrl;
     img.onload = () => setLoaded(true);
     img.onerror = () => setLoaded(false);
     return undefined;
-  }, [url]);
-  if (!url) return null;
+  }, [coverUrl]);
+
   return (
-    <img
-      src={url}
-      alt=""
-      style={{
-        position: "absolute",
-        inset: 0,
-        width: "100%",
-        height: "100%",
-        objectFit: "cover",
-        opacity: loaded ? 0.42 : 0,
-        transition: "opacity .7s ease",
-        zIndex: 2,
-        pointerEvents: "none",
-      }}
-    />
+    <div className="sc" style={{ background: `linear-gradient(160deg,${t.bg[0]},${t.bg[1]},${t.bg[2]})` }}>
+      {coverUrl ? (
+        <img
+          src={coverUrl}
+          alt=""
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            opacity: loaded ? 0.42 : 0,
+            transition: "opacity .7s ease",
+          }}
+        />
+      ) : null}
+      <div className="sc-orb orb-a" style={{ background: t.orb1 }} />
+      <div className="sc-orb orb-b" style={{ background: t.orb2 }} />
+      <div className="sc-orb orb-c" style={{ background: t.orb3 }} />
+      <div className="sc-rays">
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="sc-ray"
+            style={{ background: `linear-gradient(to bottom,transparent,${t.accent}38,transparent)` }}
+          />
+        ))}
+      </div>
+      <div className="sc-scan" />
+      <div className="sc-grain" />
+    </div>
   );
 }
 
-function Waveform({ playing, palette, bars = 26 }) {
+function Waveform({ playing, t, bars = 26 }) {
   const [sc, setSc] = useState(() => Array(bars).fill(0.15));
   const ref = useRef(null);
   useEffect(() => {
@@ -177,7 +256,7 @@ function Waveform({ playing, palette, bars = 26 }) {
             height: 18,
             transformOrigin: "bottom",
             transform: `scaleY(${s})`,
-            background: `linear-gradient(to top,${palette.primaryCss},${palette.secondaryCss})`,
+            background: `linear-gradient(to top,${t.p1},${t.accent})`,
             transition: "transform .08s ease",
           }}
         />
@@ -186,7 +265,7 @@ function Waveform({ playing, palette, bars = 26 }) {
   );
 }
 
-function ScrubBar({ pct, palette, onSeekRatio, isPreview }) {
+function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
   const barRef = useRef(null);
   const handle = (e) => {
     const rect = (barRef.current || e.currentTarget).getBoundingClientRect();
@@ -198,6 +277,8 @@ function ScrubBar({ pct, palette, onSeekRatio, isPreview }) {
       ref={barRef}
       onClick={handle}
       onTouchStart={handle}
+      role="slider"
+      aria-valuenow={pct}
       style={{
         width: "100%",
         height: 4,
@@ -216,7 +297,7 @@ function ScrubBar({ pct, palette, onSeekRatio, isPreview }) {
             top: 0,
             bottom: 0,
             width: "30%",
-            borderRight: `1px dashed ${palette.primaryMuted}`,
+            borderRight: `1px dashed ${t.p1}60`,
             pointerEvents: "none",
           }}
         />
@@ -226,8 +307,8 @@ function ScrubBar({ pct, palette, onSeekRatio, isPreview }) {
           width: `${Math.min(100, pct)}%`,
           height: "100%",
           borderRadius: 4,
-          background: `linear-gradient(90deg,${palette.primaryCss},${palette.secondaryCss})`,
-          boxShadow: `0 0 8px ${palette.primaryGlow}`,
+          background: `linear-gradient(90deg,${t.p1},${t.accent})`,
+          boxShadow: `0 0 8px ${t.glow}`,
           transition: "width .1s linear",
           position: "relative",
         }}
@@ -242,8 +323,8 @@ function ScrubBar({ pct, palette, onSeekRatio, isPreview }) {
               width: 12,
               height: 12,
               borderRadius: "50%",
-              background: palette.secondaryCss,
-              boxShadow: `0 0 8px ${palette.primaryGlow}`,
+              background: t.accent,
+              boxShadow: `0 0 8px ${t.glow}`,
             }}
           />
         ) : null}
@@ -252,9 +333,9 @@ function ScrubBar({ pct, palette, onSeekRatio, isPreview }) {
   );
 }
 
-function FloatingPlayer({ palette, playing, current, duration, isPreview, beat, onPlay, onSeekRatio }) {
+function FloatingPlayer({ t, playing, current, duration, isPreview, beat, onPlay, onSeekRatio }) {
   const pct = duration ? (current / duration) * 100 : 0;
-  const vars = paletteToCssVars(palette);
+  const vars = themeVars(t);
   return (
     <div
       style={{
@@ -264,12 +345,11 @@ function FloatingPlayer({ palette, playing, current, duration, isPreview, beat, 
         right: 0,
         zIndex: 10,
         padding: "10px 20px 16px",
-        background:
-          "linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.55) 60%,transparent 100%)",
+        background: "linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.55) 60%,transparent 100%)",
         ...vars,
       }}
     >
-      <Waveform playing={playing} palette={palette} bars={26} />
+      <Waveform playing={playing} t={t} bars={26} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <span
           style={{
@@ -282,7 +362,7 @@ function FloatingPlayer({ palette, playing, current, duration, isPreview, beat, 
         >
           {fmt(current)}
         </span>
-        <ScrubBar pct={pct} palette={palette} onSeekRatio={onSeekRatio} isPreview={isPreview} />
+        <ScrubBar pct={pct} t={t} onSeekRatio={onSeekRatio} isPreview={isPreview} />
         <span
           style={{
             fontFamily: "'DM Mono',monospace",
@@ -297,25 +377,19 @@ function FloatingPlayer({ palette, playing, current, duration, isPreview, beat, 
         </span>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px", ...vars }}>
-        <button type="button" className={`c-sm${beat ? " beat" : ""}`} aria-hidden tabIndex={-1}>
+        <button type="button" className={`c-sm${beat ? " beat" : ""}`} aria-hidden>
           <I.Shuffle />
         </button>
-        <button type="button" className={`c-md${beat ? " beat" : ""}`} aria-hidden tabIndex={-1}>
+        <button type="button" className={`c-md${beat ? " beat" : ""}`} aria-hidden>
           <I.Prev />
         </button>
-        <button
-          type="button"
-          className={`c-lg${playing ? " playing" : ""}${beat ? " beat" : ""}`}
-          onClick={onPlay}
-          style={vars}
-          aria-label={playing ? "Pause" : "Play"}
-        >
+        <button type="button" className={`c-lg${playing ? " playing" : ""}${beat ? " beat" : ""}`} onClick={onPlay} style={vars}>
           {playing ? <I.Pause /> : <I.Play />}
         </button>
-        <button type="button" className={`c-md${beat ? " beat" : ""}`} aria-hidden tabIndex={-1}>
+        <button type="button" className={`c-md${beat ? " beat" : ""}`} aria-hidden>
           <I.Next />
         </button>
-        <button type="button" className={`c-sm${beat ? " beat" : ""}`} aria-hidden tabIndex={-1}>
+        <button type="button" className={`c-sm${beat ? " beat" : ""}`} aria-hidden>
           <I.Repeat />
         </button>
       </div>
@@ -323,781 +397,718 @@ function FloatingPlayer({ palette, playing, current, duration, isPreview, beat, 
   );
 }
 
-function MobileV9VisitorCta({ single, palette, priceLabel, onAddToCart }) {
-  const durLabel = single?.dur || single?.durationLabel || "";
+function Badge({ access, t }) {
+  const owned = access === "full";
   return (
     <div
       style={{
-        padding: "14px 18px",
-        borderRadius: 14,
-        background: `linear-gradient(135deg,${palette.primaryMuted},rgba(0,0,0,.3))`,
-        border: `1px solid ${palette.primaryMuted}`,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
+        padding: "4px 11px",
+        borderRadius: 20,
+        background: "rgba(0,0,0,.52)",
+        border: `1px solid ${owned ? `${t.p1}66` : "rgba(255,255,255,.15)"}`,
+        fontFamily: "'DM Mono',monospace",
+        fontSize: 8,
+        letterSpacing: ".2em",
+        color: owned ? t.accent : "rgba(255,255,255,.45)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
       }}
     >
-      <div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: palette.primaryCss, marginBottom: 2 }}>Own this track</div>
-        <div
-          style={{
-            fontFamily: "'DM Mono',monospace",
-            fontSize: 9,
-            color: "rgba(255,255,255,.35)",
-            letterSpacing: ".1em",
-          }}
-        >
-          FULL QUALITY · {durLabel}
-          {priceLabel ? ` · ${priceLabel}` : ""}
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onAddToCart}
-        style={{
-          padding: "9px 16px",
-          borderRadius: 20,
-          background: palette.primaryCss,
-          border: "none",
-          fontSize: 11,
-          fontWeight: 800,
-          color: "rgba(0,0,0,.9)",
-          cursor: "pointer",
-          letterSpacing: ".06em",
-          boxShadow: `0 0 20px ${palette.primaryMuted}`,
-        }}
-      >
-        BUY
-      </button>
+      {owned ? "✦ OWNED" : "PREVIEW"}
     </div>
   );
 }
 
-function MobileV9OwnerPanel({ palette, sceneDark }) {
+function ShareSheet({ title, sub, t, onClose }) {
   return (
-    <div
-      style={{
-        padding: "12px 16px",
-        borderRadius: 14,
-        background: `linear-gradient(135deg,${palette.primaryMuted},rgba(0,0,0,.2))`,
-        border: `1px solid ${palette.primaryMuted}`,
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-      }}
-    >
-      <div
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: "50%",
-          background: palette.primaryGlow,
-          border: `1px solid ${palette.primaryCss}`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke={sceneDark} strokeWidth="2.5" strokeLinecap="round">
-          <polyline points="2,7 6,11 12,3" />
-        </svg>
-      </div>
-      <div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: palette.primaryCss }}>You own this track</div>
+    <div className="bsheet" style={{ background: t.dark }}>
+      <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
+      <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 24px 22px", cursor: "pointer" }} onClick={onClose}>
         <div
           style={{
-            fontFamily: "'DM Mono',monospace",
-            fontSize: 9,
-            color: "rgba(255,255,255,.35)",
-            letterSpacing: ".1em",
-          }}
-        >
-          Full quality stream unlocked
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MobileV9Layout({
-  single,
-  palette,
-  paletteVars,
-  sceneDark,
-  coverSrc,
-  coverType,
-  coverArtKey,
-  creditRows,
-  viewMoreOpen,
-  onViewMoreToggle,
-  onViewMoreCollapse,
-  handleDrawerDragEnd,
-  glyphsOpen,
-  lrcText,
-  onCloseGlyphs,
-  canStream,
-  previewOnly,
-  trackAccess,
-  showPurchase,
-  priceLabel,
-  userId,
-  onLibraryChange,
-  isAdmin,
-  onAddToCart,
-  onGift,
-  onAddVinyl,
-  previewEndedCTA,
-  handleCloseClick,
-}) {
-  const {
-    state: { playbackState, currentTime },
-    analyser,
-  } = useMediaEngine();
-  const { currentTrack, isPlaying, duration, seek, toggle, playTrack } = useAudioPlayer();
-  const beat = useBeat(Boolean(isPlaying && currentTrack?.slug === single?.slug));
-
-  const isThisTrack = Boolean(single?.slug && currentTrack?.slug === single.slug);
-  const playing = Boolean(isThisTrack && isPlaying);
-
-  const effectiveDuration = useMemo(() => {
-    const d = Number.isFinite(duration) ? duration : 0;
-    if (previewOnly) return Math.min(d || 30, 30);
-    return d;
-  }, [duration, previewOnly]);
-
-  const effectiveCurrent = useMemo(() => {
-    const c = Number.isFinite(currentTime) ? currentTime : 0;
-    if (previewOnly) return Math.min(c, 30);
-    return c;
-  }, [currentTime, previewOnly]);
-
-  const handlePlayPause = useCallback(() => {
-    if (!single) return;
-    if (!isThisTrack) {
-      void playTrack({ ...single }, { resumeAt: 0 });
-      return;
-    }
-    toggle();
-  }, [single, isThisTrack, playTrack, toggle]);
-
-  const handleSeekRatio = useCallback(
-    (r) => {
-      if (!Number.isFinite(r)) return;
-      const d = effectiveDuration || (previewOnly ? 30 : 0);
-      const next = Math.max(0, Math.min(d, r * d));
-      seek(next);
-    },
-    [effectiveDuration, previewOnly, seek]
-  );
-
-  const releaseType = single?.type || single?.releaseType || "Single";
-  const durLabel = single?.dur || single?.durationLabel || "";
-  const owned = Boolean(trackAccess?.owned);
-
-  return (
-    <>
-      {/* ══ ART ZONE — 62% ══ */}
-      <div className="modal-immersive-art-zone" style={{ flex: "0 0 62%", position: "relative", overflow: "hidden" }}>
-        <ImmersiveModalScene
-          palette={palette}
-          analyser={analyser}
-          previewOnly={previewOnly}
-          playbackState={playbackState}
-          currentTime={effectiveCurrent}
-        />
-        <CoverArtLayer coverSrc={coverSrc} />
-
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 2,
-            pointerEvents: "none",
-            background:
-              "linear-gradient(to top,rgba(0,0,0,.94) 0%,rgba(0,0,0,.28) 44%,transparent 68%)",
-          }}
-        />
-
-        <div
-          style={{
-            position: "absolute",
-            top: 14,
-            left: 0,
-            right: 0,
-            zIndex: 30,
-            display: "flex",
-            justifyContent: "center",
-          }}
-        >
-          <div className="drag-pill" onClick={handleCloseClick} role="button" tabIndex={0} aria-label="Close preview" />
-        </div>
-
-        <div style={{ position: "absolute", top: 12, right: 14, zIndex: 30 }}>
-          <ImmersiveModalAccessBadge trackAccess={trackAccess} canStream={canStream} palette={palette} />
-        </div>
-
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            zIndex: 3,
+            width: 46,
+            height: 46,
+            borderRadius: 13,
+            border: `1px solid ${t.p1}55`,
+            background: t.glowDim,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            pointerEvents: "none",
+            color: t.accent,
           }}
         >
-          <div className="art-lbl" style={{ "--glow": palette.primaryGlow, "--glow-dim": palette.primaryMuted }}>
-            {single?.title}
-          </div>
+          <I.Plus s={20} />
         </div>
-
-        {previewOnly ? (
+        <div>
+          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 22, fontWeight: 400, color: "white" }}>{title}</div>
           <div
             style={{
-              position: "absolute",
-              bottom: 108,
-              left: 0,
-              right: 0,
-              zIndex: 10,
-              display: "flex",
-              justifyContent: "center",
+              fontFamily: "'DM Mono',monospace",
+              fontSize: 9,
+              letterSpacing: ".18em",
+              textTransform: "uppercase",
+              color: "rgba(255,255,255,.35)",
+              marginTop: 2,
             }}
           >
-            <div
-              style={{
-                fontFamily: "'DM Mono',monospace",
-                fontSize: 8,
-                letterSpacing: ".22em",
-                padding: "4px 12px",
-                borderRadius: 20,
-                background: "rgba(0,0,0,.6)",
-                border: "1px solid rgba(255,255,255,.12)",
-                color: "rgba(255,255,255,.45)",
-              }}
-            >
-              30 SEC PREVIEW
-            </div>
+            {sub}
           </div>
-        ) : null}
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: 100,
-            left: 0,
-            right: 0,
-            zIndex: 10,
-            display: "flex",
-            justifyContent: "center",
-          }}
-        >
-          <FloatingViewMore
-            open={viewMoreOpen}
-            onToggle={onViewMoreToggle}
-            onCollapse={onViewMoreCollapse}
-            isMobile
-            creditRows={creditRows}
-            handleDrawerDragEnd={handleDrawerDragEnd}
-            palette={palette}
-          />
-        </div>
-
-        <FloatingPlayer
-          palette={palette}
-          playing={playing}
-          current={effectiveCurrent}
-          duration={effectiveDuration || (previewOnly ? 30 : 0)}
-          isPreview={previewOnly}
-          beat={beat}
-          onPlay={handlePlayPause}
-          onSeekRatio={handleSeekRatio}
-        />
-
-        <GlyphLyricsPanel open={glyphsOpen} lrcText={lrcText} isMobile onClose={onCloseGlyphs} />
-      </div>
-
-      {/* ══ INFO ZONE — 38% ══ */}
-      <div className="modal-immersive-info-zone" style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: sceneDark, ...paletteVars }}>
-        <div
-          style={{
-            flex: 1,
-            padding: "20px 22px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 18,
-            overflowY: "auto",
-          }}
-        >
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                fontFamily: "'Cormorant Garamond',serif",
-                fontSize: 30,
-                fontWeight: 500,
-                color: "white",
-                lineHeight: 1.1,
-                marginBottom: 6,
-              }}
-            >
-              {single?.title}
-            </div>
-            <div
-              style={{
-                fontFamily: "'DM Mono',monospace",
-                fontSize: 10,
-                letterSpacing: ".3em",
-                textTransform: "uppercase",
-                color: palette.primaryCss,
-              }}
-            >
-              {single?.artist || "2MRRW"}
-            </div>
-            <div
-              style={{
-                fontFamily: "'DM Mono',monospace",
-                fontSize: 8,
-                color: "rgba(255,255,255,.28)",
-                letterSpacing: ".18em",
-                marginTop: 4,
-              }}
-            >
-              {releaseType} · {previewOnly ? "30 sec preview" : durLabel || "Full track"}
-            </div>
-          </div>
-
-          {previewOnly && showPurchase ? (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 52 }}>
-              <button
-                type="button"
-                className="icon-btn cart-pulse"
-                style={{ color: palette.primaryCss, "--glow": palette.primaryGlow, "--glow-dim": palette.primaryMuted }}
-                aria-label={priceLabel ? `Add to cart ${priceLabel}` : "Add to cart"}
-                onClick={onAddToCart}
-              >
-                <I.Cart s={34} />
-              </button>
-              <Link
-                href="/subscribe"
-                className="icon-btn"
-                style={{ color: palette.primaryCss, filter: `drop-shadow(0 0 6px ${palette.primaryGlow})` }}
-                aria-label="Subscribe for unlimited streaming"
-              >
-                <I.Sub s={28} />
-              </Link>
-              <MusicPlusButton
-                track={single}
-                userId={userId}
-                access={trackAccess}
-                onLibraryChange={onLibraryChange}
-                sheetBg={sceneDark}
-                style={{ color: "rgba(255,255,255,.55)" }}
-              />
-            </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 52 }}>
-              <span className="icon-btn col-glow" style={{ color: palette.primaryCss, "--glow": palette.primaryGlow }} aria-hidden>
-                <I.Coll s={30} />
-              </span>
-              <MusicPlusButton
-                track={single}
-                userId={userId}
-                access={trackAccess}
-                onLibraryChange={onLibraryChange}
-                sheetBg={sceneDark}
-                style={{ color: "rgba(255,255,255,.55)" }}
-              />
-              {isAdmin ? (
-                <button type="button" className="icon-btn" style={{ color: "rgba(255,255,255,.38)" }} onClick={onGift} aria-label="Send gift">
-                  <svg width="26" height="26" viewBox="0 0 26 26" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                    <line x1="13" y1="4" x2="13" y2="22" />
-                    <line x1="4" y1="13" x2="22" y2="13" />
-                  </svg>
-                </button>
-              ) : null}
-            </div>
-          )}
-
-          {previewEndedCTA}
-
-          {previewOnly && showPurchase ? (
-            <MobileV9VisitorCta single={single} palette={palette} priceLabel={priceLabel} onAddToCart={onAddToCart} />
-          ) : null}
-
-          {!previewOnly && (owned || canStream) ? <MobileV9OwnerPanel palette={palette} sceneDark={sceneDark} /> : null}
-
-          {showPurchase ? (
-            <button type="button" className="modal-immersive-vinyl-link" onClick={onAddVinyl}>
-              + Add Vinyl – $47.99 (Optional)
-            </button>
-          ) : null}
         </div>
       </div>
-    </>
+    </div>
   );
 }
 
-function ImmersivePreviewModal({
-  single: singleProp,
+function ViewMoreSheet({ title, sub, t, rows, onClose }) {
+  return (
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: 28 }}>
+      <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
+      <div style={{ padding: "6px 22px 10px" }}>
+        <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 22, fontWeight: 400, color: "white", marginBottom: 3 }}>{title}</div>
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".2em", textTransform: "uppercase", color: t.accent }}>{sub}</div>
+      </div>
+      {rows.map(([k, v]) => (
+        <div
+          key={k}
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            padding: "10px 22px",
+            borderBottom: "1px solid rgba(255,255,255,.05)",
+          }}
+        >
+          <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".15em", color: "rgba(255,255,255,.3)" }}>{k}</span>
+          <span style={{ fontSize: 11, color: "rgba(255,255,255,.7)" }}>{v}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function SingleModal({
   track,
-  releaseDetail,
-  isMobile,
+  access = "preview",
   onClose,
   onAddToCart,
   onAddVinyl,
-  trackAccess = null,
-  userId = null,
-  isAdmin = false,
   onGift,
   onLibraryChange,
+  releaseDetail,
 }) {
-  const single = singleProp || track;
+  const coverSrc = trackCoverSrc(track);
+  const palette = useCoverPalette(coverSrc, track?.coverArtType || track?.coverType || "image");
+  const t = useMemo(() => buildTheme(palette), [palette]);
+  const vars = useMemo(() => themeVars(t), [t]);
 
-  useRenderTracker("ImmersivePreviewModal");
-  const { onImmersiveRenderStart, onImmersiveRenderEnd } = useMediaTiming();
-  const { previewEnded, setPreviewEnded, currentTrack, playTrack } = useAudioPlayer();
-  const [contentReady, setContentReady] = useState(false);
-  const [viewMoreOpen, setViewMoreOpen] = useState(false);
-  const [glyphsOpen, setGlyphsOpen] = useState(false);
-  const [firstListen, setFirstListen] = useState(false);
-  const [ownershipMoment, setOwnershipMoment] = useState(false);
-  const prevCanStreamRef = useRef(false);
+  const isPreview = access !== "full";
+  const fullDur = parseDurSec(track) || 222;
+  const duration = isPreview ? PREVIEW_CAP_SEC : fullDur || 222;
 
-  const release = releaseDetail || single;
-  const editorial = useMemo(() => getReleaseEditorial(release), [release]);
-  const creditRows = useMemo(() => getCreditsDisplayRows(editorial), [editorial]);
-  const lrcText = useMemo(() => {
-    const lrc = extractLrcFromRelease(release);
-    if (lrc?.trim()) return lrc;
-    const tr = Array.isArray(release?.tracks) ? release.tracks[0] : null;
-    return tr?.lyricsText || tr?.lyrics_text || tr?.lyrics || "";
-  }, [release]);
-  const hasLyrics = Boolean(lrcText?.trim());
+  const {
+    state: { isPlaying, currentTime, duration: engineDuration },
+    toggle,
+    seek,
+  } = useMediaEngine();
+
+  const { mounted, closing, setClosing } = useModalAnim();
+  const beat = useBeat(isPlaying);
+  const [sheet, setSheet] = useState(null);
 
   usePlayerBodyState({ modalOpen: true });
 
   useEffect(() => {
-    onImmersiveRenderStart();
-    setContentReady(false);
-    const t = requestAnimationFrame(() => {
-      setContentReady(true);
-      onImmersiveRenderEnd();
-    });
-    return () => cancelAnimationFrame(t);
-  }, [single?.id, release?.slug, onImmersiveRenderStart, onImmersiveRenderEnd]);
-
-  useEffect(() => {
-    if (!single?.slug || !isFirstListen(single.slug)) return undefined;
-    setFirstListen(true);
-    const timer = setTimeout(() => {
-      setFirstListen(false);
-      markListened(single.slug);
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [single?.slug]);
-
-  useEffect(() => {
-    if (trackAccess?.canStream && !prevCanStreamRef.current) {
-      setOwnershipMoment(true);
-      const timer = setTimeout(() => setOwnershipMoment(false), 800);
-      prevCanStreamRef.current = Boolean(trackAccess?.canStream);
-      return () => clearTimeout(timer);
-    }
-    prevCanStreamRef.current = Boolean(trackAccess?.canStream);
-    return undefined;
-  }, [trackAccess?.canStream]);
-
-  const closeModal = useCallback(() => {
-    setViewMoreOpen(false);
-    setGlyphsOpen(false);
-    onClose();
-  }, [onClose]);
-
-  const handleCloseClick = useCallback(
-    (e) => {
-      e.stopPropagation();
-      closeModal();
-    },
-    [closeModal]
-  );
-
-  const collapseDrawer = useCallback(() => setViewMoreOpen(false), []);
-
-  const handleOverlayClick = useCallback(() => {
-    if (glyphsOpen) {
-      setGlyphsOpen(false);
-      return;
-    }
-    closeModal();
-  }, [glyphsOpen, closeModal]);
-
-  const handleDrawerDragEnd = useCallback((_e, info) => {
-    if (info.offset.y > DRAWER_COLLAPSE_THRESHOLD || info.velocity.y > 420) {
-      collapseDrawer();
-    }
-  }, [collapseDrawer]);
-
-  const handleModalDismissDragEnd = useCallback(
-    (_e, info) => {
-      if (info.offset.y > MODAL_DISMISS_THRESHOLD || info.velocity.y > 400) {
-        closeModal();
-      }
-    },
-    [closeModal]
-  );
-
-  const coverDisplay = useMemo(() => catalogCoverDisplay(single || {}), [single]);
-  const coverSrc = coverDisplay.src;
-  const coverType = coverDisplay.type || single?.coverArtType || "image";
-  const coverArtKey = single?.slug || single?.id || "preview";
-  const palette = useCoverPalette(coverSrc, coverType);
-  const paletteVars = paletteToCssVars(palette);
-  const canStream = Boolean(trackAccess?.canStream);
-  const previewOnly = Boolean(trackAccess && !trackAccess.canStream);
-  const showPurchase = trackAccess ? Boolean(trackAccess.showCart) : true;
-  const priceLabel =
-    single?.price != null && showPurchase ? `$${Number(single.price).toFixed(2)}` : null;
-  const showPreviewEndedCTA =
-    previewOnly && previewEnded && Boolean(single?.slug) && currentTrack?.slug === single.slug;
-  const sceneDark = palette.ambientTintCss;
-
-  const handleAddToCart = useCallback(() => {
-    onAddToCart?.(single);
-    closeModal();
-  }, [onAddToCart, single, closeModal]);
-
-  const handleUnlockFromPreviewEnd = useCallback(() => {
-    onAddToCart?.(single);
-  }, [onAddToCart, single]);
-
-  const handleContinueListening = useCallback(() => {
-    setPreviewEnded(false);
-    if (currentTrack?.slug === single?.slug && currentTrack) {
-      void playTrack({ ...currentTrack }, { resumeAt: 0 });
-    }
-  }, [setPreviewEnded, currentTrack, single?.slug, playTrack]);
-
-  const previewEndedCTA = useMemo(
-    () =>
-      showPreviewEndedCTA ? (
-        <PreviewEndedCTA
-          priceLabel={priceLabel}
-          showPurchase={showPurchase}
-          onContinueListening={handleContinueListening}
-          onUnlock={handleUnlockFromPreviewEnd}
-        />
-      ) : null,
-    [showPreviewEndedCTA, priceLabel, showPurchase, handleContinueListening, handleUnlockFromPreviewEnd]
-  );
-
-  const handleViewMoreToggle = useCallback(() => {
-    setGlyphsOpen(false);
-    setViewMoreOpen((o) => !o);
+    registerModal("immersive-preview-modal");
+    return () => unregisterModal("immersive-preview-modal");
   }, []);
 
-  const handleOpenGlyphs = useCallback(() => {
-    setViewMoreOpen(false);
-    setGlyphsOpen(true);
-  }, []);
+  const engineDur = engineDuration > 0 ? engineDuration : duration;
+  const displayDuration = isPreview ? PREVIEW_CAP_SEC : engineDur;
+  const displayCurrent = isPreview ? Math.min(currentTime, PREVIEW_CAP_SEC) : currentTime;
 
-  const handleCloseGlyphs = useCallback(() => setGlyphsOpen(false), []);
+  const release = releaseDetail || track;
+  const editorial = useMemo(() => getReleaseEditorial(release), [release]);
+  const creditRows = useMemo(() => getCreditsDisplayRows(editorial), [editorial]);
+  const viewMoreRows = useMemo(() => {
+    const rows = [];
+    if (editorial?.releaseDate || track?.year) rows.push(["RELEASE DATE", editorial?.releaseDate || track?.year]);
+    if (editorial?.label) rows.push(["LABEL", editorial.label]);
+    rows.push(["FORMAT", "Digital"]);
+    rows.push(["DURATION", track?.dur || fmt(fullDur)]);
+    if (editorial?.genre || track?.genre) rows.push(["GENRE", editorial?.genre || track?.genre]);
+    if (creditRows.length) {
+      creditRows.slice(0, 3).forEach(([k, v]) => rows.push([k.toUpperCase(), v]));
+    }
+    if (!rows.length) {
+      rows.push(["ARTIST", track?.artist || "2MRRW"], ["TYPE", track?.type || "Single"]);
+    }
+    return rows;
+  }, [editorial, track, creditRows, fullDur]);
 
-  const handleAddVinyl = useCallback(() => {
-    onAddVinyl?.(single);
-    closeModal();
-  }, [onAddVinyl, single, closeModal]);
+  const close = useCallback(() => {
+    setSheet(null);
+    setClosing(true);
+    setTimeout(onClose, 340);
+  }, [onClose, setClosing]);
 
-  const handleGift = useCallback(() => onGift?.(single), [onGift, single]);
-
-  const desktopShellStyle = useMemo(
-    () => ({
-      width: "min(420px, 96vw)",
-      maxWidth: "100%",
-      maxHeight: "94vh",
-      boxShadow: `0 0 48px ${palette.primaryGlow}, 0 24px 80px rgba(0,0,0,0.65)`,
-    }),
-    [palette.primaryGlow]
-  );
-
-  const desktopStageStyle = useMemo(
-    () => ({
-      position: "relative",
-      width: "100%",
-      height: "min(52vh, 520px)",
-      flexShrink: 0,
-      overflow: "hidden",
-      background: "#000",
-    }),
-    []
-  );
-
-  const panelStyle = useMemo(
-    () => ({
-      opacity: glyphsOpen ? 0 : 1,
-      pointerEvents: glyphsOpen ? "none" : "auto",
-      ...(isMobile ? {} : { padding: "16px 22px 22px", display: "flex", flexDirection: "column", gap: 10 }),
-    }),
-    [glyphsOpen, isMobile]
-  );
-
-  const stageProps = useMemo(
-    () => ({
-      coverSrc,
-      coverType,
-      coverArtKey,
-      title: single?.title,
-      palette,
-      isMobile,
-      creditRows,
-      viewMoreOpen,
-      onViewMoreToggle: handleViewMoreToggle,
-      onViewMoreCollapse: collapseDrawer,
-      handleDrawerDragEnd,
-      glyphsOpen,
-      lrcText,
-      onCloseGlyphs: handleCloseGlyphs,
-      canStream,
-      previewOnly,
-      track: single,
-    }),
-    [
-      coverSrc,
-      coverType,
-      coverArtKey,
-      single?.title,
-      palette,
-      isMobile,
-      creditRows,
-      viewMoreOpen,
-      handleViewMoreToggle,
-      collapseDrawer,
-      handleDrawerDragEnd,
-      glyphsOpen,
-      lrcText,
-      handleCloseGlyphs,
-      canStream,
-      previewOnly,
-      single,
-    ]
-  );
-
-  const panelProps = useMemo(
-    () => ({
-      panelStyle,
-      single,
-      trackAccess,
-      canStream,
-      showPurchase,
-      priceLabel,
-      userId,
-      onLibraryChange,
-      hasLyrics,
-      onOpenGlyphs: handleOpenGlyphs,
-      palette,
-      isAdmin,
-      onAddToCart: handleAddToCart,
-      onGift: handleGift,
-      onAddVinyl: handleAddVinyl,
-      onClose: closeModal,
-      previewEndedCTA,
-    }),
-    [
-      panelStyle,
-      single,
-      trackAccess,
-      canStream,
-      showPurchase,
-      priceLabel,
-      userId,
-      onLibraryChange,
-      hasLyrics,
-      handleOpenGlyphs,
-      palette,
-      isAdmin,
-      handleAddToCart,
-      handleGift,
-      handleAddVinyl,
-      closeModal,
-      previewEndedCTA,
-    ]
-  );
-
-  if (!single) return null;
+  const isVisible = mounted && !closing;
+  const priceLabel = track?.price || track?.priceLabel || "";
 
   return (
-    <ImmersiveErrorBoundary onExitImmersive={onClose}>
-      <ModalShell
-        stackId="immersive-preview"
-        isMobile={isMobile}
-        paletteVars={paletteVars}
-        onOverlayClick={handleOverlayClick}
-        onDragEnd={handleModalDismissDragEnd}
-        onClose={onClose}
-        desktopStyle={desktopShellStyle}
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9000,
+        display: "flex",
+        alignItems: "flex-end",
+        background: isVisible ? "rgba(0,0,0,.88)" : "rgba(0,0,0,0)",
+        backdropFilter: isVisible ? "blur(7px)" : "blur(0px)",
+        WebkitBackdropFilter: isVisible ? "blur(7px)" : "blur(0px)",
+        transition: "background .35s ease, backdrop-filter .35s ease",
+      }}
+      onClick={(e) => e.target === e.currentTarget && close()}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 430,
+          margin: "0 auto",
+          height: "94dvh",
+          maxHeight: 880,
+          borderRadius: "22px 22px 0 0",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          background: t.dark,
+          boxShadow: `0 0 70px ${t.glowDim}, 0 -10px 60px rgba(0,0,0,.85)`,
+          willChange: "transform",
+          backfaceVisibility: "hidden",
+          transform: closing ? "translateY(100%)" : mounted ? "translateY(0)" : "translateY(100%)",
+          transition: closing
+            ? "transform .34s cubic-bezier(.55,0,1,.45)"
+            : "transform .44s cubic-bezier(.22,1,.36,1)",
+          ...vars,
+        }}
       >
-        <PlayerAtmosphere open />
-        <div
-          className={[
-            "modal-immersive-body",
-            isMobile ? "modal-immersive-body--mobile" : "modal-immersive-body--desktop",
-            firstListen ? "modal-immersive--first-listen" : "",
-            ownershipMoment ? "modal-immersive--owned-flash" : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          style={isMobile ? paletteVars : undefined}
-        >
-          {!contentReady ? (
-            <ImmersiveModalSkeleton isMobile={isMobile} />
-          ) : isMobile ? (
-            <MobileV9Layout
-              single={single}
-              palette={palette}
-              paletteVars={paletteVars}
-              sceneDark={sceneDark}
-              coverSrc={coverSrc}
-              creditRows={creditRows}
-              viewMoreOpen={viewMoreOpen}
-              onViewMoreToggle={handleViewMoreToggle}
-              onViewMoreCollapse={collapseDrawer}
-              handleDrawerDragEnd={handleDrawerDragEnd}
-              glyphsOpen={glyphsOpen}
-              lrcText={lrcText}
-              onCloseGlyphs={handleCloseGlyphs}
-              canStream={canStream}
-              previewOnly={previewOnly}
-              trackAccess={trackAccess}
-              showPurchase={showPurchase}
-              priceLabel={priceLabel}
-              userId={userId}
-              onLibraryChange={onLibraryChange}
-              isAdmin={isAdmin}
-              onAddToCart={handleAddToCart}
-              onGift={handleGift}
-              onAddVinyl={handleAddVinyl}
-              previewEndedCTA={previewEndedCTA}
-              handleCloseClick={handleCloseClick}
-            />
-          ) : (
-            <ImmersiveModalEnvironment
-              contentReady={contentReady}
-              isMobile={isMobile}
-              glyphsOpen={glyphsOpen}
-              desktopStageStyle={desktopStageStyle}
-              desktopStageMotion={{ boxShadow: `0 0 36px ${palette.primaryGlow}` }}
-              stageProps={stageProps}
-              panelProps={panelProps}
-              onCloseClick={handleCloseClick}
-              trackAccess={trackAccess}
-              canStream={canStream}
-              palette={palette}
-            />
-          )}
+        <div style={{ flex: "0 0 62%", position: "relative", overflow: "hidden" }}>
+          <Scene coverUrl={coverSrc} t={t} />
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 2,
+              pointerEvents: "none",
+              background: "linear-gradient(to top,rgba(0,0,0,.94) 0%,rgba(0,0,0,.28) 44%,transparent 68%)",
+            }}
+          />
+          <div style={{ position: "absolute", top: 14, left: 0, right: 0, zIndex: 30, display: "flex", justifyContent: "center" }}>
+            <div className="drag-pill" onClick={close} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && close()} />
+          </div>
+          <div style={{ position: "absolute", top: 12, right: 14, zIndex: 30 }}>
+            <Badge access={access} t={t} />
+          </div>
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              zIndex: 3,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              pointerEvents: "none",
+            }}
+          >
+            <div className="art-lbl" style={{ "--glow": t.glow, "--glow-dim": t.glowDim }}>
+              {track?.title}
+            </div>
+          </div>
+          {isPreview ? (
+            <div style={{ position: "absolute", bottom: 108, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center" }}>
+              <div
+                style={{
+                  fontFamily: "'DM Mono',monospace",
+                  fontSize: 8,
+                  letterSpacing: ".22em",
+                  padding: "4px 12px",
+                  borderRadius: 20,
+                  background: "rgba(0,0,0,.6)",
+                  border: "1px solid rgba(255,255,255,.12)",
+                  color: "rgba(255,255,255,.45)",
+                }}
+              >
+                30 SEC PREVIEW
+              </div>
+            </div>
+          ) : null}
+          <div style={{ position: "absolute", bottom: 100, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center" }}>
+            <button
+              type="button"
+              onClick={() => setSheet("more")}
+              style={{
+                background: "rgba(255,255,255,.07)",
+                border: "1px solid rgba(255,255,255,.13)",
+                color: "rgba(255,255,255,.65)",
+                fontFamily: "'DM Mono',monospace",
+                fontSize: 9,
+                letterSpacing: ".22em",
+                textTransform: "uppercase",
+                padding: "7px 18px",
+                borderRadius: 20,
+                cursor: "pointer",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+              }}
+            >
+              View More
+            </button>
+          </div>
+          <FloatingPlayer
+            t={t}
+            playing={isPlaying}
+            current={displayCurrent}
+            duration={displayDuration}
+            isPreview={isPreview}
+            beat={beat}
+            onPlay={toggle}
+            onSeekRatio={(r) => seek(r * displayDuration)}
+          />
         </div>
-      </ModalShell>
-    </ImmersiveErrorBoundary>
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: t.dark, ...vars }}>
+          <div style={{ flex: 1, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18, overflowY: "auto" }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 30, fontWeight: 500, color: "white", lineHeight: 1.1, marginBottom: 6 }}>
+                {track?.title}
+              </div>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: t.accent }}>
+                {track?.artist}
+                {track?.feat ? ` · ft. ${track.feat}` : ""}
+              </div>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, color: "rgba(255,255,255,.28)", letterSpacing: ".18em", marginTop: 4 }}>
+                {track?.type || "Single"} · {isPreview ? "30 sec preview" : track?.dur || fmt(fullDur)}
+              </div>
+            </div>
+
+            {isPreview ? (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 52 }}>
+                <button
+                  type="button"
+                  className="icon-btn cart-pulse"
+                  style={{ color: t.accent, "--glow": t.glow, "--glow-dim": t.glowDim }}
+                  onClick={() => onAddToCart?.(track)}
+                >
+                  <I.Cart s={34} />
+                </button>
+                <Link href="/subscribe" className="icon-btn" style={{ color: t.accent, filter: `drop-shadow(0 0 6px ${t.glow})` }}>
+                  <I.Sub s={28} />
+                </Link>
+                <button type="button" className="icon-btn" style={{ color: "rgba(255,255,255,.38)" }} onClick={() => (onGift ? onGift() : setSheet("share"))}>
+                  <I.Plus s={26} />
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 52 }}>
+                <button
+                  type="button"
+                  className="icon-btn col-glow"
+                  style={{ color: t.accent, "--glow": t.glow }}
+                  onClick={() => onLibraryChange?.()}
+                >
+                  <I.Coll s={30} />
+                </button>
+                <button type="button" className="icon-btn" style={{ color: "rgba(255,255,255,.38)" }} onClick={() => setSheet("share")}>
+                  <I.Plus s={26} />
+                </button>
+              </div>
+            )}
+
+            {isPreview ? (
+              <div
+                style={{
+                  padding: "14px 18px",
+                  borderRadius: 14,
+                  background: `linear-gradient(135deg,${t.glowDim},rgba(0,0,0,.3))`,
+                  border: `1px solid ${t.p1}44`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: t.accent, marginBottom: 2 }}>Own this track</div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.35)", letterSpacing: ".1em" }}>
+                    FULL QUALITY · {track?.dur || fmt(fullDur)}
+                    {priceLabel ? ` · ${priceLabel}` : ""}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onAddToCart?.(track)}
+                  style={{
+                    padding: "9px 16px",
+                    borderRadius: 20,
+                    background: t.p1,
+                    border: "none",
+                    fontSize: 11,
+                    fontWeight: 800,
+                    color: "rgba(0,0,0,.9)",
+                    cursor: "pointer",
+                    letterSpacing: ".06em",
+                    boxShadow: `0 0 20px ${t.glowDim}`,
+                  }}
+                >
+                  BUY
+                </button>
+              </div>
+            ) : (
+              <div
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: 14,
+                  background: `linear-gradient(135deg,${t.glowDim},rgba(0,0,0,.2))`,
+                  border: `1px solid ${t.p1}44`,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "50%",
+                    background: t.glow,
+                    border: `1px solid ${t.accent}`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke={t.dark} strokeWidth="2.5" strokeLinecap="round">
+                    <polyline points="2,7 6,11 12,3" />
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: t.accent }}>You own this track</div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.35)", letterSpacing: ".1em" }}>
+                    Full quality stream unlocked
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {onAddVinyl && isPreview ? (
+              <button type="button" className="modal-immersive-vinyl-link" onClick={() => onAddVinyl(track)} style={{ background: "none", border: "none", color: "rgba(255,255,255,.4)", fontSize: 11, cursor: "pointer" }}>
+                + Add Vinyl (Optional)
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        {sheet === "share" ? (
+          <ShareSheet title={`Share ${track?.type || "Single"}`} sub={`${track?.title} · ${track?.artist}`} t={t} onClose={() => setSheet(null)} />
+        ) : null}
+        {sheet === "more" ? (
+          <ViewMoreSheet title={track?.title} sub={`${track?.type || "Single"} · ${track?.artist}`} t={t} rows={viewMoreRows} onClose={() => setSheet(null)} />
+        ) : null}
+      </div>
+    </div>
   );
 }
 
-export default memo(ImmersivePreviewModal);
+export function AlbumModal({ album, access = "preview", onClose }) {
+  const coverSrc = trackCoverSrc(album);
+  const palette = useCoverPalette(coverSrc, album?.coverArtType || album?.coverType || "image");
+  const t = useMemo(() => buildTheme(palette), [palette]);
+  const vars = useMemo(() => themeVars(t), [t]);
+
+  const tracks = Array.isArray(album?.tracks) ? album.tracks : [];
+  const { mounted, closing, setClosing } = useModalAnim();
+  const [activeTrack, setActiveTrack] = useState(tracks[0] || null);
+  const [sheet, setSheet] = useState(null);
+  const [addTarget, setAddTarget] = useState(null);
+
+  const { state: { isPlaying, currentTime, duration: engineDuration }, toggle, seek } = useMediaEngine();
+  const beat = useBeat(isPlaying);
+
+  usePlayerBodyState({ modalOpen: true });
+
+  useEffect(() => {
+    registerModal("immersive-album-modal");
+    return () => unregisterModal("immersive-album-modal");
+  }, []);
+
+  const isPreview = access !== "full";
+  const trackLocked = (tr) => isPreview && !tr?.free;
+  const trackDur = (tr) => (isPreview && !tr?.free ? PREVIEW_CAP_SEC : parseDurSec(tr) || 180);
+  const activeDur = activeTrack ? trackDur(activeTrack) : PREVIEW_CAP_SEC;
+  const engineDur = engineDuration > 0 ? engineDuration : activeDur;
+  const displayDuration = isPreview && activeTrack && !activeTrack?.free ? PREVIEW_CAP_SEC : engineDur;
+  const displayCurrent =
+    isPreview && activeTrack && !activeTrack?.free ? Math.min(currentTime, PREVIEW_CAP_SEC) : currentTime;
+  const miniPct = displayDuration ? (displayCurrent / displayDuration) * 100 : 0;
+
+  const close = useCallback(() => {
+    setSheet(null);
+    setClosing(true);
+    setTimeout(onClose, 340);
+  }, [onClose, setClosing]);
+
+  const handleTrack = (tr) => {
+    if (trackLocked(tr)) return;
+    if (activeTrack?.id === tr.id) {
+      toggle();
+      return;
+    }
+    setActiveTrack(tr);
+    seek(0);
+  };
+
+  const isVisible = mounted && !closing;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9000,
+        display: "flex",
+        alignItems: "flex-end",
+        background: isVisible ? "rgba(0,0,0,.88)" : "rgba(0,0,0,0)",
+        backdropFilter: isVisible ? "blur(7px)" : "blur(0px)",
+        WebkitBackdropFilter: isVisible ? "blur(7px)" : "blur(0px)",
+        transition: "background .35s ease, backdrop-filter .35s ease",
+      }}
+      onClick={(e) => e.target === e.currentTarget && close()}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 430,
+          margin: "0 auto",
+          height: "94dvh",
+          maxHeight: 880,
+          borderRadius: "22px 22px 0 0",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+          background: t.dark,
+          boxShadow: `0 0 70px ${t.glowDim}, 0 -10px 60px rgba(0,0,0,.85)`,
+          willChange: "transform",
+          backfaceVisibility: "hidden",
+          transform: closing ? "translateY(100%)" : mounted ? "translateY(0)" : "translateY(100%)",
+          transition: closing
+            ? "transform .34s cubic-bezier(.55,0,1,.45)"
+            : "transform .44s cubic-bezier(.22,1,.36,1)",
+          ...vars,
+        }}
+      >
+        <div style={{ flex: "0 0 62%", position: "relative", overflow: "hidden" }}>
+          <Scene coverUrl={coverSrc} t={t} />
+          <div style={{ position: "absolute", inset: 0, zIndex: 2, pointerEvents: "none", background: "linear-gradient(to top,rgba(0,0,0,.94) 0%,rgba(0,0,0,.28) 44%,transparent 68%)" }} />
+          <div style={{ position: "absolute", top: 14, left: 0, right: 0, zIndex: 30, display: "flex", justifyContent: "center" }}>
+            <div className="drag-pill" onClick={close} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && close()} />
+          </div>
+          <div style={{ position: "absolute", top: 12, right: 14, zIndex: 30 }}>
+            <Badge access={access} t={t} />
+          </div>
+          <div style={{ position: "absolute", inset: 0, zIndex: 3, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+            <div className="art-lbl" style={{ "--glow": t.glow, "--glow-dim": t.glowDim }}>
+              {album?.title}
+            </div>
+          </div>
+          <div style={{ position: "absolute", bottom: 100, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center" }}>
+            <button type="button" onClick={() => setSheet("more")} style={{ background: "rgba(255,255,255,.07)", border: "1px solid rgba(255,255,255,.13)", color: "rgba(255,255,255,.65)", fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".22em", textTransform: "uppercase", padding: "7px 18px", borderRadius: 20, cursor: "pointer", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
+              View More
+            </button>
+          </div>
+          <FloatingPlayer
+            t={t}
+            playing={isPlaying}
+            current={displayCurrent}
+            duration={displayDuration}
+            isPreview={isPreview && activeTrack && !activeTrack?.free}
+            beat={beat}
+            onPlay={toggle}
+            onSeekRatio={(r) => seek(r * displayDuration)}
+          />
+        </div>
+
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: t.dark, ...vars }}>
+          <div style={{ flexShrink: 0, padding: "14px 20px 10px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+            <div>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".26em", textTransform: "uppercase", color: t.accent }}>
+                {album?.type || "Album"} · {album?.year || ""}
+              </div>
+              <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 22, fontWeight: 500, color: "white", lineHeight: 1.1, marginTop: 2 }}>{album?.title}</div>
+              <div style={{ fontSize: 11, fontWeight: 300, color: "rgba(255,255,255,.38)", marginTop: 2 }}>
+                {album?.artist} · {tracks.length} tracks
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7, alignItems: "flex-end", flexShrink: 0 }}>
+              {isPreview && album?.price ? (
+                <button type="button" style={{ padding: "8px 14px", borderRadius: 20, border: `1px solid ${t.p1}`, background: t.glowDim, fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".15em", cursor: "pointer", color: t.accent }}>
+                  {album.price} · Acquire
+                </button>
+              ) : null}
+              <button type="button" onClick={() => setSheet("share")} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.04)", fontSize: 10, color: "rgba(255,255,255,.5)", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                <I.Plus s={12} /> Share
+              </button>
+            </div>
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>
+            {tracks.map((tr, idx) => {
+              const locked = trackLocked(tr);
+              const isActive = activeTrack?.id === tr.id;
+              const isPlayingThis = isActive && isPlaying;
+              return (
+                <div key={tr.id ?? idx} className={`tr${isActive ? " active-tr" : ""}${locked ? " locked" : ""}`} onClick={() => handleTrack(tr)}>
+                  {isActive ? <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: t.p1, borderRadius: "0 1px 1px 0" }} /> : null}
+                  <div style={{ width: 20, flexShrink: 0, fontFamily: "'DM Mono',monospace", fontSize: 10, color: "rgba(255,255,255,.3)", display: "flex", gap: 2, alignItems: "flex-end", height: 13 }}>
+                    {isPlayingThis ? (
+                      <>
+                        <div className="eq-b" style={{ background: t.p1 }} />
+                        <div className="eq-b" style={{ background: t.p1 }} />
+                        <div className="eq-b" style={{ background: t.p1 }} />
+                      </>
+                    ) : (
+                      <span>{tr.id ?? idx + 1}</span>
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 400, color: isActive ? t.accent : "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tr.title}</div>
+                    {tr.feat ? <div style={{ fontSize: 10, fontWeight: 300, color: "rgba(255,255,255,.35)" }}>ft. {tr.feat}</div> : null}
+                  </div>
+                  {tr.free ? (
+                    <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 7, letterSpacing: ".1em", padding: "2px 5px", borderRadius: 4, border: `1px solid ${t.p1}55`, color: t.accent, flexShrink: 0 }}>FREE</span>
+                  ) : null}
+                  <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.3)", flexShrink: 0 }}>{tr.dur}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      style={{
+                        width: 26,
+                        height: 26,
+                        borderRadius: "50%",
+                        background: "transparent",
+                        border: `1.5px solid ${isPlayingThis ? t.accent : `${t.p1}55`}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: locked ? "default" : "pointer",
+                        color: isPlayingThis ? t.accent : "rgba(255,255,255,.55)",
+                      }}
+                      onClick={() => handleTrack(tr)}
+                    >
+                      {isPlayingThis ? <I.TrPause /> : <I.TrPlay />}
+                    </button>
+                    {!locked ? (
+                      <button
+                        type="button"
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: "50%",
+                          background: "transparent",
+                          border: "1px solid rgba(255,255,255,.15)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer",
+                          color: "rgba(255,255,255,.4)",
+                        }}
+                        onClick={() => {
+                          setAddTarget(tr);
+                          setSheet("playlist");
+                        }}
+                      >
+                        <I.Plus s={14} />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{ height: 4 }} />
+          </div>
+
+          <div style={{ flexShrink: 0, padding: "10px 18px 14px", borderTop: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2 }}>
+              <div style={{ height: "100%", width: `${miniPct}%`, background: `linear-gradient(90deg,${t.p1},${t.accent})`, boxShadow: `0 0 6px ${t.glow}`, transition: "width .4s linear" }} />
+            </div>
+            <div style={{ width: 38, height: 38, borderRadius: 8, flexShrink: 0, background: `linear-gradient(135deg,${t.bg[0]},${t.bg[1]})`, border: `1px solid ${t.p1}30`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Cormorant Garamond',serif", fontSize: 16, color: t.accent }}>
+              {(album?.title || "?").charAt(0)}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, color: "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{activeTrack?.title}</div>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.35)" }}>
+                {album?.title} · {album?.artist}
+              </div>
+            </div>
+            <button
+              type="button"
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: "50%",
+                border: `1.5px solid ${t.p1}`,
+                background: "transparent",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                color: t.accent,
+                flexShrink: 0,
+                boxShadow: isPlaying ? `0 0 12px ${t.glow}` : "none",
+                transition: "box-shadow .2s",
+              }}
+              onClick={toggle}
+            >
+              {isPlaying ? <I.TrPause /> : <I.TrPlay />}
+            </button>
+          </div>
+        </div>
+
+        {sheet === "share" ? <ShareSheet title={`Share ${album?.type || "Album"}`} sub={`${album?.title} · ${album?.artist}`} t={t} onClose={() => setSheet(null)} /> : null}
+        {sheet === "more" ? (
+          <ViewMoreSheet
+            title={album?.title}
+            sub={`${album?.type || "Album"} · ${album?.artist}`}
+            t={t}
+            rows={[
+              ["RELEASE DATE", album?.year || "—"],
+              ["TRACKS", `${tracks.length} tracks`],
+              ["FORMAT", "Digital"],
+            ]}
+            onClose={() => setSheet(null)}
+          />
+        ) : null}
+        {sheet === "playlist" ? (
+          <div className="bsheet" style={{ background: t.dark }}>
+            <div className="sheet-hdl" onClick={() => setSheet(null)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && setSheet(null)} />
+            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".25em", textTransform: "uppercase", color: "rgba(255,255,255,.3)", padding: "2px 18px 8px" }}>
+              Add &quot;{addTarget?.title}&quot; to playlist
+            </div>
+            <div style={{ padding: "16px 18px 24px", fontSize: 12, color: "rgba(255,255,255,.45)" }}>Playlists open from My Music.</div>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+export default function ImmersivePreviewModal({
+  single: singleProp,
+  track,
+  access: accessProp,
+  trackAccess,
+  onClose,
+  ...rest
+}) {
+  const single = singleProp || track;
+  if (!single) return null;
+  const access = accessProp ?? (trackAccess?.canStream ? "full" : "preview");
+  return <SingleModal track={single} access={access} onClose={onClose} {...rest} />;
+}

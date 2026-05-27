@@ -21,7 +21,7 @@ import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/lib/deep-links";
 import { consumeGiftHighlightSlug } from "@/lib/gifts/session-keys";
-import { resolveContentAccess, resolvePlaybackSrc, isAdminAccount } from "@/lib/music-access";
+import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess, isAdminAccount } from "@/lib/music-access";
 import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { useMediaEngine } from "@/media/useMediaEngine";
@@ -1544,7 +1544,7 @@ export default function Page() {
             single={selectedSingle}
             releaseDetail={selectedReleaseDetail}
             isMobile={isMobile}
-            trackAccess={selectedSingleAccess}
+            access={resolveTrackAccess(selectedSingle, accountState)?.canStream ? "full" : "preview"}
             userId={currentUser?.id}
             isAdmin={isAdmin}
             onGift={handlePreviewGift}
@@ -1560,7 +1560,7 @@ export default function Page() {
             single={featureModalItem}
             releaseDetail={featureReleaseDetail}
             isMobile={isMobile}
-            trackAccess={featureModalAccess}
+            access={resolveTrackAccess(featureModalItem, accountState)?.canStream ? "full" : "preview"}
             userId={currentUser?.id}
             isAdmin={isAdmin}
             onGift={handleFeaturePreviewGift}
