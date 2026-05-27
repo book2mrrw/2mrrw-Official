@@ -15,6 +15,7 @@ import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import {
   clearGuestCookie,
+  clearGuestCookieOnResponse,
   getGuestSessionCookieState,
   withGuestCookie,
 } from "@/lib/guest-session";
@@ -302,7 +303,7 @@ export async function GET() {
     if (user.isGuest) {
       return withGuestCookie(NextResponse.json(body), user.id, { remember: session?.remember });
     }
-    return NextResponse.json(body);
+    return clearGuestCookieOnResponse(NextResponse.json(body));
   } catch (err) {
     console.error("account state error:", err);
     return NextResponse.json({ error: err.message || "Account state failed" }, { status: 500 });

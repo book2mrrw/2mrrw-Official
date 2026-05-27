@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { isAdminUser } from "@/lib/auth/constants";
+import { SUPABASE_AUTH_STORAGE_KEY } from "@/lib/supabase/auth-storage-key";
 
 const EMPTY_ACCOUNT_STATE = {
   library: [],
@@ -19,6 +20,14 @@ const EMPTY_ACCOUNT_STATE = {
 };
 
 const AuthContext = createContext(null);
+
+async function clearGuestSessionCookie() {
+  try {
+    await fetch("/api/guest/session", { method: "DELETE", credentials: "include" });
+  } catch {
+    /* optional */
+  }
+}
 
 export function resolveUserFromSession(session) {
   const user = session?.user;
@@ -48,23 +57,34 @@ export function AuthProvider({ children }) {
     const vaultDetail =
       data.vaultAccessDetail ||
       (typeof data.vaultAccess === "object" && data.vaultAccess !== null ? data.vaultAccess : null);
-    setAccountState({
-      library: items,
-      ownedSlugs: slugs,
-      subscriberActive: Boolean(data.subscriberActive),
-      collectorCard: Boolean(data.collectorCard),
-      vaultAccess: Boolean(
-        typeof data.vaultAccess === "boolean" ? data.vaultAccess : vaultDetail?.fullAccess || vaultDetail?.hasVaultPass
-      ),
-      membership: data.membership || null,
-      collectorOwnerships: data.collectorOwnerships || [],
-      mediaProgress: data.mediaProgress || [],
-      permissions: data.permissions || {},
-      vaultAccessDetail: vaultDetail,
-      userEntitlements: data.userEntitlements || null,
-      user: data.user || null,
-      isAdmin: Boolean(data.permissions?.admin) || (data.user ? isAdminUser(data.user) : false),
-      syncedAt: data.syncedAt || null,
+    const serverIsGuest = Boolean(data.user?.isGuest);
+    const adminFromServer =
+      Boolean(data.permissions?.admin) ||
+      (data.user && !serverIsGuest ? isAdminUser(data.user) : false);
+
+    setAccountState((prev) => {
+      const isAdminFlag = adminFromServer || (serverIsGuest && prev.isAdmin ? prev.isAdmin : false);
+      const permissions = { ...(data.permissions || {}) };
+      if (isAdminFlag) permissions.admin = true;
+
+      return {
+        library: items,
+        ownedSlugs: slugs,
+        subscriberActive: Boolean(data.subscriberActive),
+        collectorCard: Boolean(data.collectorCard),
+        vaultAccess: Boolean(
+          typeof data.vaultAccess === "boolean" ? data.vaultAccess : vaultDetail?.fullAccess || vaultDetail?.hasVaultPass
+        ),
+        membership: data.membership || null,
+        collectorOwnerships: data.collectorOwnerships || [],
+        mediaProgress: data.mediaProgress || [],
+        permissions,
+        vaultAccessDetail: vaultDetail,
+        userEntitlements: data.userEntitlements || null,
+        user: serverIsGuest && prev.user && !prev.user.isGuest ? prev.user : data.user || null,
+        isAdmin: isAdminFlag,
+        syncedAt: data.syncedAt || null,
+      };
     });
   }, []);
 
@@ -108,8 +128,16 @@ export function AuthProvider({ children }) {
       const data = await res.json();
       if (data.user) {
         const resolved = resolveUserFromSession({ user: data.user });
-        setUser((prev) => (prev?.id === data.user.id ? prev : data.user));
-        setIsAdmin(Boolean(data.permissions?.admin) || resolved?.isAdmin);
+        const serverIsGuest = Boolean(data.user.isGuest);
+        const adminFromServer = Boolean(data.permissions?.admin) || Boolean(resolved?.isAdmin);
+
+        if (serverIsGuest) {
+          setUser((prev) => (prev && !prev.isGuest ? prev : data.user));
+          setIsAdmin((prev) => (prev && !adminFromServer ? prev : adminFromServer));
+        } else {
+          setUser((prev) => (prev?.id === data.user.id ? prev : data.user));
+          setIsAdmin(adminFromServer);
+        }
       }
       applyAccountPayload(data);
       return data;
@@ -150,6 +178,7 @@ export function AuthProvider({ children }) {
       if (!resolved) return null;
       setUser(resolved.user);
       setIsAdmin(resolved.isAdmin);
+      await clearGuestSessionCookie();
       await refreshAccountState();
       return resolved.user;
     },
@@ -187,7 +216,7 @@ export function AuthProvider({ children }) {
         let resolvedSession = sessionData?.session || null;
         if (!resolvedSession && typeof window !== "undefined") {
           try {
-            const raw = window.localStorage.getItem("2mrrw-auth-token");
+            const raw = window.localStorage.getItem(SUPABASE_AUTH_STORAGE_KEY);
             if (raw) {
               const parsed = JSON.parse(raw);
               const candidate =
@@ -214,6 +243,7 @@ export function AuthProvider({ children }) {
         if (resolved) {
           setUser(resolved.user);
           setIsAdmin(resolved.isAdmin);
+          await clearGuestSessionCookie();
           await refreshAccountStateRef.current?.();
         } else {
           await refreshGuestRef.current?.();

@@ -74,8 +74,7 @@ export async function getGuestSessionCookieState() {
   }
 }
 
-export function clearGuestCookie(body = { ok: true }) {
-  const response = NextResponse.json(body);
+export function clearGuestCookieOnResponse(response) {
   response.cookies.set(COOKIE_NAME, "", {
     httpOnly: true,
     sameSite: "lax",
@@ -84,6 +83,10 @@ export function clearGuestCookie(body = { ok: true }) {
     maxAge: 0,
   });
   return response;
+}
+
+export function clearGuestCookie(body = { ok: true }) {
+  return clearGuestCookieOnResponse(NextResponse.json(body));
 }
 
 export async function getGuestIdFromCookie() {
