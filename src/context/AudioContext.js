@@ -985,7 +985,9 @@ export function AudioProvider({ children }) {
         } catch (retryErr) {
           const entitled = Boolean(track?.metadata?.access?.canStream);
           const canFallbackToPreview =
-            retryErr?.status === 401 || (retryErr?.status === 403 && !entitled);
+            retryErr?.status === 401 ||
+            retryErr?.status === 404 ||
+            (retryErr?.status === 403 && !entitled);
           if (canFallbackToPreview) {
             console.warn("[AudioContext] stream retry denied; falling back to preview", {
               slug: track?.slug || slug,
@@ -1259,7 +1261,9 @@ export function AudioProvider({ children }) {
     const applyStreamResolveError = (err) => {
       const entitled = Boolean(nextTrack?.metadata?.access?.canStream);
       const canFallbackToPreview =
-        err?.status === 401 || (err?.status === 403 && !entitled);
+        err?.status === 401 ||
+        err?.status === 404 ||
+        (err?.status === 403 && !entitled);
       if (canFallbackToPreview) {
         console.warn("[AudioContext] stream fetch denied; falling back to preview", {
           slug: nextTrack.slug,

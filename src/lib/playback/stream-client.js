@@ -96,6 +96,12 @@ export async function fetchLibraryStream(slug, { force = false, sessionId = null
     err.sessionId = body.sessionId || null;
     throw err;
   }
+  if (res.status === 404) {
+    const err = new Error("Stream asset not found");
+    err.status = 404;
+    err.slug = slug;
+    throw err;
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Stream request failed (${res.status})`);
