@@ -31,4 +31,4 @@ Hero/cinematic shell (`src/app/page.js`), 2MRRW branding, navigation, subscribe 
 - Entitlements: webhook → Supabase → `/api/account/state` → UI — never client-side permission overrides.
 - Do not commit or deploy unless the user asks.
 
-Also apply: `frontend-foundation.mdc`, `platform-architecture.mdc`.
+Also apply: `build-frame-of-mind.mdc`, `frontend-foundation.mdc`, `platform-architecture.mdc`.

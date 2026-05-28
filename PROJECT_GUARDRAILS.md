@@ -11,6 +11,7 @@
 | [`docs/foundation/FRONTEND_LONG_TERM_RECOVERY.md`](docs/foundation/FRONTEND_LONG_TERM_RECOVERY.md) | Long-term safety, npm command matrix |
 | [`docs/foundation/CURSOR_RECOVERY_WORKFLOWS.md`](docs/foundation/CURSOR_RECOVERY_WORKFLOWS.md) | Copy-paste Cursor terminal workflows |
 | [`docs/foundation/FRONTEND_ARCHITECTURAL_GUARDRAILS.md`](docs/foundation/FRONTEND_ARCHITECTURAL_GUARDRAILS.md) | Sacred surfaces, auth flow, dependency policy |
+| [`docs/foundation/BUILD_FRAME_OF_MIND.md`](docs/foundation/BUILD_FRAME_OF_MIND.md) | Mobile-first, audio-native, aesthetic standard for every build session |
 | [`scripts/recovery/*`](scripts/recovery/) | Node/shell recovery orchestrators |
 
 ### Recovery commands (npm)
@@ -98,7 +99,7 @@ Agents and Cursor must:
 - Use **mobile-first scope** only when the user specifies mobile — see [`docs/workflow/MOBILE_FIRST_DEVELOPMENT.md`](docs/workflow/MOBILE_FIRST_DEVELOPMENT.md).
 - Follow **scoped prompting** — [`docs/workflow/SCOPED_PROMPTING_RULES.md`](docs/workflow/SCOPED_PROMPTING_RULES.md).
 - Preserve **design language** — [`docs/workflow/DESIGN_LANGUAGE_PRESERVATION.md`](docs/workflow/DESIGN_LANGUAGE_PRESERVATION.md).
-- Apply always-on rules: `.cursor/rules/frontend-foundation.mdc`, `.cursor/rules/platform-architecture.mdc`, `.cursor/rules/project-guardrails.mdc`.
+- Apply always-on rules: `.cursor/rules/build-frame-of-mind.mdc`, `.cursor/rules/frontend-foundation.mdc`, `.cursor/rules/platform-architecture.mdc`, `.cursor/rules/project-guardrails.mdc`.
 
 ---
 
@@ -126,6 +127,7 @@ Agents and Cursor must:
 | [`docs/workflow/VISUAL_CHECKPOINT_WORKFLOW.md`](docs/workflow/VISUAL_CHECKPOINT_WORKFLOW.md) | Pre/post visual checkpoints |
 | [`docs/workflow/SELECTIVE_RESTORATION_WORKFLOW.md`](docs/workflow/SELECTIVE_RESTORATION_WORKFLOW.md) | Surgical restore vs full rollback |
 | [`docs/workflow/DESIGN_LANGUAGE_PRESERVATION.md`](docs/workflow/DESIGN_LANGUAGE_PRESERVATION.md) | Typography, color, motion vocabulary |
+| [`docs/foundation/BUILD_FRAME_OF_MIND.md`](docs/foundation/BUILD_FRAME_OF_MIND.md) | Artist-world standard, mobile/audio bar for AI builds |
 
 ---
 
