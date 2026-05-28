@@ -87,6 +87,7 @@ async function buildStreamResponse(req, user, slug, { force = false } = {}) {
         ...(rangeHeader ? { "Range": rangeHeader } : {}),
         "Cache-Control": "no-store",
         "Accept-Ranges": "bytes",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   }

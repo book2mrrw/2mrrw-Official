@@ -25,8 +25,8 @@ import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess, isAdminAc
 import {
   albumTracksForPlayback,
   buildCatalogPlaybackLookup,
+  normalizeTrackForPlayback,
   resolveCatalogPlaybackItem,
-  toPlaybackTrack,
 } from "@/lib/music-playback";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { useMediaEngine } from "@/media/useMediaEngine";
@@ -1030,11 +1030,22 @@ export default function Page() {
       const access = resolveContentAccess(albumItem, accountState);
       if (!access.canStream) return;
       void playTrack(
-        toPlaybackTrack(albumItem, { ...accountState, userId: currentUser?.id }, "album_modal")
+        normalizeTrackForPlayback(albumItem, { ...accountState, userId: currentUser?.id }, "album_modal")
       );
     },
     [accountState, catalogPlaybackLookup, currentUser?.id, playQueue, playTrack]
   );
+
+  const playCanonicalCatalogItem = useCallback((item, source) => {
+    const playbackTrack = normalizeTrackForPlayback(
+      item,
+      { ...accountState, userId: currentUser?.id },
+      source
+    );
+    if (playbackTrack?.src) {
+      void playTrack(playbackTrack);
+    }
+  }, [accountState, currentUser?.id, playTrack]);
 
   const goRadio = useCallback((i) => {
     // phase11: startTransition — carousel index is non-urgent
@@ -1116,12 +1127,7 @@ export default function Page() {
     setPreviewModalOpen(true);
     setSelectedReleaseDetail(null);
     if (!singleItem?.slug) return;
-    const playbackTrack = toPlaybackTrack(
-      singleItem,
-      { ...accountState, userId: currentUser?.id },
-      "preview_modal"
-    );
-    if (playbackTrack?.src) void playTrack(playbackTrack);
+    playCanonicalCatalogItem(singleItem, "preview_modal");
     void getControlSystemReleaseDetail({ slug: singleItem.slug, fallbackRelease: singleItem }).then((detail) => {
       if (detail) setSelectedReleaseDetail(detail);
     });
@@ -1132,7 +1138,7 @@ export default function Page() {
     accountState,
     catalogPlaybackLookup,
     currentUser?.id,
-    playTrack,
+    playCanonicalCatalogItem,
   ]);
 
   const openFeatureModal = useCallback(
@@ -1152,12 +1158,7 @@ export default function Page() {
       setFeatureModalOpen(true);
       setFeatureReleaseDetail(null);
       if (!featItem?.slug) return;
-      const playbackTrack = toPlaybackTrack(
-        featItem,
-        { ...accountState, userId: currentUser?.id },
-        "feature_modal"
-      );
-      if (playbackTrack?.src) void playTrack(playbackTrack);
+      playCanonicalCatalogItem(featItem, "feature_modal");
       void getControlSystemReleaseDetail({ slug: featItem.slug, fallbackRelease: featItem }).then((detail) => {
         if (detail) setFeatureReleaseDetail(detail);
       });
@@ -1169,7 +1170,7 @@ export default function Page() {
       accountState,
       catalogPlaybackLookup,
       currentUser?.id,
-      playTrack,
+      playCanonicalCatalogItem,
     ]
   );
 

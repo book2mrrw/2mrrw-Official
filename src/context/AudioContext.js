@@ -60,6 +60,7 @@ const RESTORE_NEAR_END_BUFFER_SEC = 3;
 const SPURIOUS_ENDED_GUARD_MS = 1200;
 const KEEP_ALIVE_INTERVAL_MS = 20000;
 const GESTURE_UNLOCK_EVENTS = ["touchstart", "touchend", "click", "keydown"];
+const AUDIO_CONTENT_TYPE_RE = /^(audio\/|application\/octet-stream)/i;
 
 function normalizePlaybackSrc(src) {
   if (!src || typeof src !== "string") return "";
@@ -156,6 +157,13 @@ function getTrackPreviewSrc(track) {
   if (previewPath) return catalogPreviewAudioUrl(previewPath);
   if (track?.src && !isLibraryStreamSrc(track.src)) return track.src;
   return null;
+}
+
+function isLikelyIOS() {
+  if (typeof navigator === "undefined") return false;
+  const ua = String(navigator.userAgent || "");
+  const hasTouchDocument = typeof document !== "undefined" && "ontouchend" in document;
+  return /iP(hone|ad|od)/i.test(ua) || (/Macintosh/i.test(ua) && hasTouchDocument);
 }
 
 function dispatchPreviewEnded(slug) {
@@ -342,6 +350,8 @@ export function AudioProvider({ children }) {
   const csHoldSavedRef = useRef(null);
   const csHoldActiveRef = useRef(false);
   const spuriousEndedGuardRef = useRef(0);
+  const playRequestIdRef = useRef(0);
+  const activeStreamAbortRef = useRef(null);
   const [state, setState] = useState(EMPTY_STATE);
 
   useEffect(() => {
@@ -1149,11 +1159,18 @@ export function AudioProvider({ children }) {
     }
   }, []);
 
-  const resolveLibraryStreamForTrack = useCallback(async (track, { force = false } = {}) => {
+  const resolveLibraryStreamForTrack = useCallback(async (track, { force = false, signal } = {}) => {
     const slug = parseStreamSlugFromSrc(track.src) || track.slug;
     if (!slug || !isLibraryStreamSrc(track.src)) return { track, meta: null };
 
-    const data = await fetchLibraryStream(slug, { force });
+    const data = await fetchLibraryStream(slug, { force, signal });
+    if (data?.contentType && !AUDIO_CONTENT_TYPE_RE.test(data.contentType)) {
+      const err = new Error("stream_invalid_content_type");
+      err.code = "INVALID_STREAM_CONTENT_TYPE";
+      err.status = 415;
+      err.slug = slug;
+      throw err;
+    }
     const meta = {
       slug,
       url: data.url,
@@ -1183,6 +1200,13 @@ export function AudioProvider({ children }) {
   }, []);
 
   const playTrack = useCallback(async (track, options = {}) => {
+    const requestId = playRequestIdRef.current + 1;
+    playRequestIdRef.current = requestId;
+    if (activeStreamAbortRef.current) {
+      activeStreamAbortRef.current.abort();
+    }
+    const streamAbortController = new AbortController();
+    activeStreamAbortRef.current = streamAbortController;
     const audioEl = audioRef.current;
     if (audioEl?.paused) {
       await unlockAudioFromGesture(audioEl);
@@ -1264,6 +1288,8 @@ export function AudioProvider({ children }) {
     }
 
     const applyStreamResolveError = (err) => {
+      if (requestId !== playRequestIdRef.current) return;
+      if (err?.name === "AbortError") return;
       const entitled = Boolean(nextTrack?.metadata?.access?.canStream);
       const canFallbackToPreview =
         err?.status === 401 ||
@@ -1344,6 +1370,7 @@ export function AudioProvider({ children }) {
     };
 
     const swapToSignedStream = async (resolved) => {
+      if (requestId !== playRequestIdRef.current) return;
       const signedUrl = resolved.track?.src;
       if (!signedUrl || signedUrl === syncSrc) return;
       const resumeAt = audio.currentTime || 0;
@@ -1375,7 +1402,10 @@ export function AudioProvider({ children }) {
     };
 
     if (backgroundStreamResolve && streamSlug) {
-      void resolveLibraryStreamForTrack(nextTrack, { force: options.forceStream })
+      void resolveLibraryStreamForTrack(nextTrack, {
+        force: options.forceStream,
+        signal: streamAbortController.signal,
+      })
         .then((resolved) => swapToSignedStream(resolved))
         .catch(applyStreamResolveError);
     }
@@ -1525,6 +1555,7 @@ export function AudioProvider({ children }) {
       }
 
       applyCsToElement(audio, presentation, pendingSeekRef.current || null);
+      if (requestId !== playRequestIdRef.current) return false;
 
       if (pendingSeekRef.current) {
         const applyPendingSeek = () => {
@@ -1575,7 +1606,12 @@ export function AudioProvider({ children }) {
       }
       patchState({ isPlaying: true, error: null, playbackState: "playing" });
       return true;
-    } catch {
+    } catch (err) {
+      console.error("[AudioContext] playTrack failed", {
+        message: err?.message || String(err),
+        code: err?.code || null,
+        slug: nextTrack?.slug || null,
+      });
       patchState({ isPlaying: false, error: "Audio playback failed. Try again in a moment.", playbackState: "paused" });
       void updateMediaSession(nextTrack, { playing: false });
       return false;
@@ -2046,6 +2082,10 @@ export function AudioProvider({ children }) {
     }
     csModeRef.current = false;
     csUsingAlternateSrcRef.current = false;
+    if (activeStreamAbortRef.current) {
+      activeStreamAbortRef.current.abort();
+      activeStreamAbortRef.current = null;
+    }
     streamMetaRef.current = null;
     setState(EMPTY_STATE);
     queueRef.current = [];
@@ -2164,10 +2204,17 @@ export function AudioProvider({ children }) {
         if (shouldResume && audio) {
           const el = audioRef.current;
           if (el?.paused && stateRef.current.isPlaying) {
-            void resumeWebAudioContextIfSuspended(audioCtxRef);
-            el.play().catch(() => {
+            if (isLikelyIOS()) {
               patchState({ isPlaying: false, playbackState: "paused" });
-            });
+            } else {
+              void resumeWebAudioContextIfSuspended(audioCtxRef);
+              el.play().catch((err) => {
+                console.warn("[AudioContext] visibility resume blocked", {
+                  message: err?.message || String(err),
+                });
+                patchState({ isPlaying: false, playbackState: "paused" });
+              });
+            }
           }
         }
 
@@ -2399,6 +2446,10 @@ export function AudioProvider({ children }) {
   useEffect(() => () => {
     stopProgressRaf();
     stopKeepAlivePing();
+    if (activeStreamAbortRef.current) {
+      activeStreamAbortRef.current.abort();
+      activeStreamAbortRef.current = null;
+    }
   }, [stopProgressRaf, stopKeepAlivePing]);
 
   return (

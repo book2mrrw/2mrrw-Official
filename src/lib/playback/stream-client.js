@@ -2,6 +2,50 @@
 
 export const LIBRARY_STREAM_PATH = "/api/library/stream";
 export const STREAM_REFRESH_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
+const AUDIO_CONTENT_TYPE_RE = /^(audio\/|application\/octet-stream)/i;
+
+function createStreamClientError(message, details = {}) {
+  const err = new Error(message);
+  Object.assign(err, details);
+  return err;
+}
+
+function assertJsonContentType(res, slug) {
+  const type = String(res.headers.get("content-type") || "").toLowerCase();
+  if (!type.includes("application/json")) {
+    throw createStreamClientError("library_stream_invalid_content_type", {
+      code: "INVALID_STREAM_CONTENT_TYPE",
+      slug,
+      status: res.status,
+      contentType: type || null,
+    });
+  }
+}
+
+async function assertSignedAudioUrl(url, { slug, signal } = {}) {
+  const res = await fetch(url, {
+    method: "HEAD",
+    credentials: "omit",
+    signal,
+  });
+  if (!res.ok) {
+    throw createStreamClientError("signed_stream_unreachable", {
+      code: "SIGNED_STREAM_UNREACHABLE",
+      slug,
+      status: res.status,
+    });
+  }
+  const type = String(res.headers.get("content-type") || "");
+  if (!AUDIO_CONTENT_TYPE_RE.test(type)) {
+    throw createStreamClientError("signed_stream_invalid_content_type", {
+      code: "SIGNED_STREAM_INVALID_CONTENT_TYPE",
+      slug,
+      status: res.status,
+      contentType: type || null,
+    });
+  }
+  return type;
+}
 
 export function isLibraryStreamSrc(src) {
   if (!src || typeof src !== "string") return false;
@@ -58,13 +102,17 @@ export function streamUrlNeedsRefresh(meta, now = Date.now()) {
  * Fetch signed stream URL JSON from library/stream.
  * @returns {Promise<{ url: string, expiresIn: number, streamEventId?: string, sessionId?: string }>}
  */
-export async function fetchLibraryStream(slug, { force = false, sessionId = null } = {}) {
+export async function fetchLibraryStream(
+  slug,
+  { force = false, sessionId = null, signal = undefined } = {}
+) {
   const params = new URLSearchParams({ slug });
   if (force) params.set("force", "true");
   if (sessionId) params.set("sessionId", sessionId);
 
   const res = await fetch(`${LIBRARY_STREAM_PATH}?${params.toString()}`, {
     credentials: "include",
+    signal,
   });
 
   if (res.status === 403 || res.status === 401) {
@@ -90,6 +138,7 @@ export async function fetchLibraryStream(slug, { force = false, sessionId = null
     throw err;
   }
   if (res.status === 409) {
+    assertJsonContentType(res, slug);
     const body = await res.json().catch(() => ({}));
     const err = new Error("concurrent_stream");
     err.code = "CONCURRENT_STREAM";
@@ -103,11 +152,24 @@ export async function fetchLibraryStream(slug, { force = false, sessionId = null
     throw err;
   }
   if (!res.ok) {
+    assertJsonContentType(res, slug);
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || `Stream request failed (${res.status})`);
   }
 
-  return res.json();
+  assertJsonContentType(res, slug);
+  const body = await res.json();
+  if (!body?.url || typeof body.url !== "string") {
+    throw createStreamClientError("signed_stream_missing_url", {
+      code: "SIGNED_STREAM_MISSING_URL",
+      slug,
+    });
+  }
+  const contentType = await assertSignedAudioUrl(body.url, { slug, signal });
+  return {
+    ...body,
+    contentType,
+  };
 }
 
 export async function clearLibraryStreamSession(slug, sessionId) {

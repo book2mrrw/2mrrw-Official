@@ -145,7 +145,7 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
   });
 }
 
-export function toPlaybackTrack(item, accountState, source = "library", overrides = {}) {
+export function normalizeTrackForPlayback(item, accountState, source = "library", overrides = {}) {
   const normalized = normalizeCatalogItemForPlayback(item);
   const access = resolveTrackAccess(normalized, accountState);
   const userId = accountState?.userId || overrides.userId;
@@ -192,8 +192,9 @@ export function toPlaybackTrack(item, accountState, source = "library", override
   };
 }
 
-/** Alias for callers that name the normalization step explicitly. */
-export const normalizeTrackForPlayback = normalizeCatalogItemForPlayback;
+export function toPlaybackTrack(item, accountState, source = "library", overrides = {}) {
+  return normalizeTrackForPlayback(item, accountState, source, overrides);
+}
 
 /** First-track catalog item for inline album card play — matches modal start index 0. */
 export function albumCardPlaybackItem(album, catalogLookup) {
