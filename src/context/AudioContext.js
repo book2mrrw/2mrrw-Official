@@ -89,21 +89,26 @@ function clampRestorePosition(positionSeconds, durationSeconds) {
 /** Set src, wait for canplay/error/timeout, then load(). */
 async function waitAudioSrcReady(audio, src) {
   audio.src = src;
-  await new Promise((resolve) => {
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      audio.removeEventListener("canplay", finish);
-      audio.removeEventListener("canplaythrough", finish);
-      audio.removeEventListener("error", finish);
-      clearTimeout(fallback);
+  await new Promise((resolve, reject) => {
+    const onReady = () => {
+      audio.removeEventListener("canplay", onReady);
+      audio.removeEventListener("loadedmetadata", onReady);
+      audio.removeEventListener("error", onError);
       resolve();
     };
-    const fallback = setTimeout(finish, 3000);
-    audio.addEventListener("canplay", finish);
-    audio.addEventListener("canplaythrough", finish);
-    audio.addEventListener("error", finish);
+    const onError = (event) => {
+      audio.removeEventListener("canplay", onReady);
+      audio.removeEventListener("loadedmetadata", onReady);
+      audio.removeEventListener("error", onError);
+      reject(event);
+    };
+    if (audio.readyState >= 1) {
+      resolve();
+      return;
+    }
+    audio.addEventListener("canplay", onReady);
+    audio.addEventListener("loadedmetadata", onReady);
+    audio.addEventListener("error", onError);
     audio.load();
   });
 }
@@ -1180,7 +1185,7 @@ export function AudioProvider({ children }) {
   const playTrack = useCallback(async (track, options = {}) => {
     const audioEl = audioRef.current;
     if (audioEl?.paused) {
-      void unlockAudioFromGesture(audioEl);
+      await unlockAudioFromGesture(audioEl);
     }
 
     initWebAudio();
@@ -2160,7 +2165,9 @@ export function AudioProvider({ children }) {
           const el = audioRef.current;
           if (el?.paused && stateRef.current.isPlaying) {
             void resumeWebAudioContextIfSuspended(audioCtxRef);
-            el.play().catch(() => {});
+            el.play().catch(() => {
+              patchState({ isPlaying: false, playbackState: "paused" });
+            });
           }
         }
 
