@@ -62,6 +62,9 @@ const SPURIOUS_ENDED_GUARD_MS = 1200;
 const KEEP_ALIVE_INTERVAL_MS = 20000;
 const GESTURE_UNLOCK_EVENTS = ["touchstart", "touchend", "click", "keydown"];
 const AUDIO_CONTENT_TYPE_RE = /^(audio\/|application\/octet-stream)/i;
+const AUDIO_SRC_READY_TIMEOUT_MS = 12000;
+const PLAYBACK_COMMAND_TIMEOUT_MS = 15000;
+const ACTIVE_COMMAND_STALE_MS = 20000;
 const PLAYBACK_COMMANDS = {
   PLAY_TRACK: "PLAY_TRACK",
   PLAY_QUEUE: "PLAY_QUEUE",
@@ -75,6 +78,13 @@ const PLAYBACK_COMMANDS = {
   STOP: "STOP",
   COMPLETE: "COMPLETE",
 };
+
+function createPlaybackError(code, message, context = {}) {
+  const error = new Error(message);
+  error.code = code;
+  Object.assign(error, context);
+  return error;
+}
 
 function normalizePlaybackSrc(src) {
   if (!src || typeof src !== "string") return "";
@@ -101,53 +111,99 @@ function clampRestorePosition(positionSeconds, durationSeconds) {
   return positionSeconds;
 }
 
-/** Set src, wait for canplay/error/timeout, then load(). */
-async function waitAudioSrcReady(audio, src) {
+/** Set src, wait for canplay/error/timeout with abort support, then load(). */
+async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_READY_TIMEOUT_MS } = {}) {
+  if (!audio || typeof audio.load !== "function") {
+    throw createPlaybackError("AUDIO_SRC_INVALID", "Audio element is unavailable");
+  }
+  if (!src || typeof src !== "string") {
+    throw createPlaybackError("AUDIO_SRC_INVALID", "Playback source is invalid", { src });
+  }
+  if (signal?.aborted) {
+    throw createPlaybackError("AUDIO_SRC_ABORTED", "Playback source readiness was aborted");
+  }
   audio.src = src;
   await new Promise((resolve, reject) => {
-    const onReady = () => {
+    let settled = false;
+    let timeoutId = null;
+    const settle = (resolver, value) => {
+      if (settled) return;
+      settled = true;
+      if (timeoutId) clearTimeout(timeoutId);
       audio.removeEventListener("canplay", onReady);
       audio.removeEventListener("loadedmetadata", onReady);
       audio.removeEventListener("error", onError);
-      resolve();
+      signal?.removeEventListener("abort", onAbort);
+      resolver(value);
+    };
+    const onReady = () => {
+      settle(resolve);
     };
     const onError = (event) => {
-      audio.removeEventListener("canplay", onReady);
-      audio.removeEventListener("loadedmetadata", onReady);
-      audio.removeEventListener("error", onError);
-      reject(event);
+      settle(
+        reject,
+        createPlaybackError("AUDIO_SRC_INVALID", "Audio source failed to load", {
+          src,
+          cause: event,
+        })
+      );
+    };
+    const onAbort = () => {
+      settle(reject, createPlaybackError("AUDIO_SRC_ABORTED", "Playback source readiness was aborted"));
     };
     if (audio.readyState >= 1) {
-      resolve();
+      settle(resolve);
       return;
     }
+    timeoutId = setTimeout(() => {
+      settle(
+        reject,
+        createPlaybackError("AUDIO_SRC_READY_TIMEOUT", "Timed out waiting for audio source readiness", {
+          src,
+          timeoutMs,
+        })
+      );
+    }, timeoutMs);
     audio.addEventListener("canplay", onReady);
     audio.addEventListener("loadedmetadata", onReady);
     audio.addEventListener("error", onError);
+    signal?.addEventListener("abort", onAbort, { once: true });
     audio.load();
   });
 }
 
-async function loadAudioSrcAndPlay(audio, src) {
-  await waitAudioSrcReady(audio, src);
+async function loadAudioSrcAndPlay(audio, src, { signal, command, requestId, state, context } = {}) {
+  await waitAudioSrcReady(audio, src, { signal });
   try {
     await audio.play();
   } catch (e) {
-    if (e.name !== "AbortError") {
-      console.error("[AUDIO]", e.name, e.message);
-    }
+    reportPlaybackDiagnostic({
+      level: e?.name === "AbortError" ? "warn" : "error",
+      code: "AUDIO_PLAY_FAILED",
+      command: command || "PLAY",
+      requestId: requestId ?? null,
+      state,
+      error: e,
+      context: { src, ...(context || {}) },
+    });
   }
 }
 
-async function playAudioIfNotPaused(audio, isPlaying) {
+async function playAudioIfNotPaused(audio, isPlaying, { command, requestId, state, context } = {}) {
   if (!isPlaying) return;
   if (!audio.paused) return;
   try {
     await audio.play();
   } catch (e) {
-    if (e.name !== "AbortError") {
-      console.error("[AUDIO]", e.name, e.message);
-    }
+    reportPlaybackDiagnostic({
+      level: e?.name === "AbortError" ? "warn" : "error",
+      code: "AUDIO_RESUME_FAILED",
+      command: command || "PLAY",
+      requestId: requestId ?? null,
+      state,
+      error: e,
+      context,
+    });
   }
 }
 
@@ -369,6 +425,8 @@ export function AudioProvider({ children }) {
   const commandQueueRef = useRef(Promise.resolve());
   const commandRequestIdRef = useRef(0);
   const activeCommandRef = useRef(null);
+  const queueCircuitOpenRef = useRef(false);
+  const queueWatchdogRef = useRef(null);
   const [state, setState] = useState(EMPTY_STATE);
 
   useEffect(() => {
@@ -1291,7 +1349,8 @@ export function AudioProvider({ children }) {
         source: nextTrack.source,
         isPlaying: false,
         error: "Audio player unavailable.",
-        hasStarted: true,
+        hasStarted: false,
+        playbackState: "idle",
       });
       return false;
     }
@@ -1306,7 +1365,8 @@ export function AudioProvider({ children }) {
         source: nextTrack.source,
         isPlaying: false,
         error: "Audio source unavailable.",
-        hasStarted: true,
+        hasStarted: false,
+        playbackState: "idle",
       });
       return false;
     }
@@ -1384,7 +1444,7 @@ export function AudioProvider({ children }) {
           accessDenied: true,
           streamRetryable: false,
           error: "Access unavailable",
-          hasStarted: true,
+          hasStarted: false,
           currentTrack: nextTrack,
           currentTrackId: nextTrack.id,
         });
@@ -1398,7 +1458,7 @@ export function AudioProvider({ children }) {
             track: nextTrack,
             resumeAt: options.resumeAt,
           },
-          hasStarted: true,
+          hasStarted: false,
           currentTrack: nextTrack,
           currentTrackId: nextTrack.id,
         });
@@ -1408,7 +1468,7 @@ export function AudioProvider({ children }) {
         isPlaying: false,
         error: "Stream unavailable — tap to retry",
         streamRetryable: true,
-        hasStarted: true,
+        hasStarted: false,
         currentTrack: nextTrack,
         currentTrackId: nextTrack.id,
       });
@@ -1420,7 +1480,7 @@ export function AudioProvider({ children }) {
       if (!signedUrl || signedUrl === syncSrc) return;
       const resumeAt = audio.currentTime || 0;
       skipPauseInterruptionRef.current = true;
-      await waitAudioSrcReady(audio, signedUrl);
+      await waitAudioSrcReady(audio, signedUrl, { signal: streamAbortController.signal });
       const applySeek = () => {
         if (resumeAt > 0 && isFinite(audio.duration)) {
           audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
@@ -1429,7 +1489,14 @@ export function AudioProvider({ children }) {
       };
       audio.addEventListener("loadedmetadata", applySeek);
       if (isFinite(audio.duration) && audio.duration > 0) applySeek();
-      if (stateRef.current.isPlaying) await playAudioIfNotPaused(audio, stateRef.current.isPlaying);
+      if (stateRef.current.isPlaying) {
+        await playAudioIfNotPaused(audio, stateRef.current.isPlaying, {
+          command: PLAYBACK_COMMANDS.PLAY_TRACK,
+          requestId,
+          state: stateRef.current,
+          context: { source: "signed_stream_swap" },
+        });
+      }
       patchState({
         currentTrack: {
           ...nextTrack,
@@ -1545,9 +1612,9 @@ export function AudioProvider({ children }) {
       accessDenied: false,
       streamRetryable: false,
       streamConflict: null,
-      hasStarted: true,
+      hasStarted: false,
       csTrack: csModeRef.current ? normalized : null,
-      playbackState: null,
+      playbackState: "loading",
     });
 
     preloadCsAssets(normalized, { csImgRef, csVidRef, csAudioRef });
@@ -1581,7 +1648,14 @@ export function AudioProvider({ children }) {
         skipPauseInterruptionRef.current = true;
         audio.pause();
         spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
-        await loadAudioSrcAndPlay(audio, syncSrc);
+        await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal });
+        patchState({ hasStarted: true, playbackState: "ready" });
+        await playAudioIfNotPaused(audio, true, {
+          command: PLAYBACK_COMMANDS.PLAY_TRACK,
+          requestId,
+          state: stateRef.current,
+          context: { source: nextTrack.source },
+        });
         pendingSeekRef.current = resumeAt;
       } else {
         if (!audio.paused && stateRef.current.isPlaying) {
@@ -1632,13 +1706,12 @@ export function AudioProvider({ children }) {
       }
 
       if (isSameTrack) {
-        try {
-          await audio.play();
-        } catch (e) {
-          if (e.name !== "AbortError") {
-            console.error("[AUDIO]", e.name, e.message);
-          }
-        }
+        await playAudioIfNotPaused(audio, true, {
+          command: PLAYBACK_COMMANDS.PLAY_TRACK,
+          requestId,
+          state: stateRef.current,
+          context: { source: nextTrack.source, sameTrack: true },
+        });
       }
       void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: true });
 
@@ -1895,9 +1968,21 @@ export function AudioProvider({ children }) {
         }
       }
       syncPositionState(true);
-    } catch {
+    } catch (error) {
       csModeRef.current = !next;
       patchState({ error: "Could not apply chopped & slowed mode.", csMode: !next });
+      reportPlaybackDiagnostic({
+        level: "warn",
+        code: "CS_MODE_APPLY_FAILED",
+        command: "TOGGLE_CS_MODE",
+        requestId: activeCommandRef.current?.requestId || null,
+        state: stateRef.current,
+        error,
+        context: {
+          visibility: typeof document !== "undefined" ? document.visibilityState : null,
+          source: stateRef.current?.source || null,
+        },
+      });
     }
     return next;
   }, [patchState, updateMediaSession, applyCsToElement, syncPositionState]);
@@ -2033,8 +2118,19 @@ export function AudioProvider({ children }) {
               if (isFinite(audio.duration) && audio.duration > 0) seekAfterLoad();
             }
             if (!audio.paused) await playAudioIfNotPaused(audio, stateRef.current.isPlaying);
-          } catch {
-            /* stale URL refresh is best-effort */
+          } catch (error) {
+            reportPlaybackDiagnostic({
+              level: "warn",
+              code: "RESUME_STREAM_REFRESH_FAILED",
+              command: PLAYBACK_COMMANDS.RESUME,
+              requestId: activeCommandRef.current?.requestId || null,
+              state: stateRef.current,
+              error,
+              context: {
+                visibility: typeof document !== "undefined" ? document.visibilityState : null,
+                source: stateRef.current?.source || null,
+              },
+            });
           }
         })();
       }
@@ -2064,6 +2160,11 @@ export function AudioProvider({ children }) {
     let capped = time;
     if (track?.metadata?.access?.previewOnly) {
       capped = Math.min(time, PREVIEW_HARD_CAP_SEC);
+    }
+    if (audio.readyState < 1 || stateRef.current.playbackState === "loading") {
+      pendingSeekRef.current = Math.max(0, capped);
+      patchState({ currentTime: pendingSeekRef.current });
+      return;
     }
     audio.currentTime = Math.max(0, Math.min(capped, isFinite(audio.duration) ? audio.duration : capped));
     patchState({ currentTime: audio.currentTime });
@@ -2180,25 +2281,68 @@ export function AudioProvider({ children }) {
     const requestId = commandRequestIdRef.current + 1;
     commandRequestIdRef.current = requestId;
     const command = { type, payload, requestId, issuedAt: Date.now() };
+    const isEmergencyBypass = type === PLAYBACK_COMMANDS.STOP || type === PLAYBACK_COMMANDS.PAUSE;
 
     const run = async () => {
+      if (
+        activeCommandRef.current &&
+        Date.now() - (activeCommandRef.current.issuedAt || 0) > ACTIVE_COMMAND_STALE_MS
+      ) {
+        reportPlaybackDiagnostic({
+          level: "warn",
+          code: "PLAYBACK_COMMAND_STALE_CLEANUP",
+          command: type,
+          requestId,
+          state: stateRef.current,
+          context: {
+            staleRequestId: activeCommandRef.current.requestId,
+            staleType: activeCommandRef.current.type,
+          },
+        });
+        activeCommandRef.current = null;
+      }
       activeCommandRef.current = command;
       if (cancelActiveStream && activeStreamAbortRef.current) {
         activeStreamAbortRef.current.abort();
       }
       try {
-        return await executePlaybackCommand(command);
+        const result = await Promise.race([
+          executePlaybackCommand(command),
+          new Promise((_, reject) => {
+            queueWatchdogRef.current = setTimeout(() => {
+              reject(
+                createPlaybackError("PLAYBACK_COMMAND_TIMEOUT", "Playback command watchdog timeout", {
+                  command: type,
+                  requestId,
+                })
+              );
+            }, PLAYBACK_COMMAND_TIMEOUT_MS);
+          }),
+        ]);
+        queueCircuitOpenRef.current = false;
+        return result;
       } catch (error) {
+        if (error?.code === "PLAYBACK_COMMAND_TIMEOUT") {
+          queueCircuitOpenRef.current = true;
+        }
         reportPlaybackDiagnostic({
           code: "PLAYBACK_COMMAND_FAILED",
           command: type,
           requestId,
           state: stateRef.current,
           error,
-          context: payload,
+          context: {
+            ...payload,
+            visibility: typeof document !== "undefined" ? document.visibilityState : null,
+            source: stateRef.current?.source || null,
+          },
         });
         throw error;
       } finally {
+        if (queueWatchdogRef.current) {
+          clearTimeout(queueWatchdogRef.current);
+          queueWatchdogRef.current = null;
+        }
         if (activeCommandRef.current?.requestId === requestId) {
           activeCommandRef.current = null;
         }
@@ -2206,6 +2350,26 @@ export function AudioProvider({ children }) {
     };
 
     if (!serial) return Promise.resolve().then(run);
+    if (isEmergencyBypass) {
+      return Promise.resolve()
+        .then(run)
+        .finally(() => {
+          if (queueCircuitOpenRef.current) {
+            commandQueueRef.current = Promise.resolve();
+            queueCircuitOpenRef.current = false;
+          }
+        });
+    }
+    if (queueCircuitOpenRef.current) {
+      reportPlaybackDiagnostic({
+        level: "warn",
+        code: "PLAYBACK_QUEUE_RELEASE_FALLBACK",
+        command: type,
+        requestId,
+        state: stateRef.current,
+      });
+      commandQueueRef.current = Promise.resolve();
+    }
     commandQueueRef.current = commandQueueRef.current.catch(() => undefined).then(run);
     return commandQueueRef.current;
   }, [executePlaybackCommand]);
@@ -2465,15 +2629,23 @@ export function AudioProvider({ children }) {
       audio.playbackRate = 1;
       if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
       if (csHoldSavedRef.current?.wasPlaying) {
-        try {
-          await audio.play();
-        } catch (e) {
-          if (e.name !== "AbortError") {
-            console.error("[AUDIO]", e.name, e.message);
-          }
-        }
+        await playAudioIfNotPaused(audio, true, {
+          command: "CS_HOLD_PREVIEW",
+          requestId: activeCommandRef.current?.requestId || null,
+          state: stateRef.current,
+          context: { source: stateRef.current?.source || null },
+        });
       }
-    })();
+    })().catch((error) => {
+      reportPlaybackDiagnostic({
+        level: "warn",
+        code: "CS_HOLD_PREVIEW_FAILED",
+        command: "CS_HOLD_PREVIEW",
+        requestId: activeCommandRef.current?.requestId || null,
+        state: stateRef.current,
+        error,
+      });
+    });
     csHoldActiveRef.current = true;
   }, []);
 
@@ -2515,15 +2687,23 @@ export function AudioProvider({ children }) {
         audio.playbackRate = saved.playbackRate ?? 1;
         if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
         if (saved.wasPlaying && audio.paused) {
-          try {
-            await audio.play();
-          } catch (e) {
-            if (e.name !== "AbortError") {
-              console.error("[AUDIO]", e.name, e.message);
-            }
-          }
+          await playAudioIfNotPaused(audio, true, {
+            command: "CS_HOLD_END",
+            requestId: activeCommandRef.current?.requestId || null,
+            state: stateRef.current,
+            context: { source: stateRef.current?.source || null },
+          });
         }
-      })();
+      })().catch((error) => {
+        reportPlaybackDiagnostic({
+          level: "warn",
+          code: "CS_HOLD_END_FAILED",
+          command: "CS_HOLD_END",
+          requestId: activeCommandRef.current?.requestId || null,
+          state: stateRef.current,
+          error,
+        });
+      });
     } else if (audio) {
       audio.playbackRate = 1;
       if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
@@ -2606,6 +2786,10 @@ export function AudioProvider({ children }) {
   useEffect(() => () => {
     stopProgressRaf();
     stopKeepAlivePing();
+    if (queueWatchdogRef.current) {
+      clearTimeout(queueWatchdogRef.current);
+      queueWatchdogRef.current = null;
+    }
     if (activeStreamAbortRef.current) {
       activeStreamAbortRef.current.abort();
       activeStreamAbortRef.current = null;

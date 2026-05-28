@@ -9,7 +9,7 @@ import { usePlaybackRecovery } from "@/system/recovery";
  * Wires queue preloading + playback persistence without bloating AudioContext.
  */
 export default function AudioPhase10Bridge() {
-  const { queue, queueIndex, currentTime, hasStarted, setQueue, seek } = useAudioPlayer();
+  const { queue, queueIndex, currentTime, hasStarted, currentTrack, playbackState, setQueue, seek } = useAudioPlayer();
 
   useQueuePreloader(queue, queueIndex);
 
@@ -36,12 +36,26 @@ export default function AudioPhase10Bridge() {
             }));
       setQueue(tracks, detail.queueIndex ?? 0);
       if (detail.currentTime > 0) {
-        seek(detail.currentTime);
+        let attempts = 0;
+        const trySeekWhenStable = () => {
+          attempts += 1;
+          const shouldDefer =
+            !hasStarted ||
+            !currentTrack ||
+            playbackState === "loading" ||
+            playbackState === "ready";
+          if (!shouldDefer || attempts > 40) {
+            seek(detail.currentTime);
+            return;
+          }
+          window.setTimeout(trySeekWhenStable, 75);
+        };
+        trySeekWhenStable();
       }
     };
     window.addEventListener("2mrrw:playback-recovery", handler);
     return () => window.removeEventListener("2mrrw:playback-recovery", handler);
-  }, [setQueue, seek]);
+  }, [setQueue, seek, hasStarted, currentTrack, playbackState]);
 
   return null;
 }

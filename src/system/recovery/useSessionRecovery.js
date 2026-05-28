@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import * as store from "./recoveryStore";
 import { refreshSignedUrlsForQueue } from "./signedUrlRefresher";
+import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 
 /**
  * Orchestrates session recovery on mount:
@@ -28,10 +29,34 @@ export function useSessionRecovery() {
           if (res.ok && Array.isArray(data.tracks) && data.tracks.length) {
             hydratedTracks = data.tracks;
           }
-        } catch {
-          /* fallback IDs preserved */
+        } catch (error) {
+          reportPlaybackDiagnostic({
+            level: "warn",
+            code: "RECOVERY_HYDRATE_FAILED",
+            command: "RECOVERY_HYDRATE",
+            error,
+            context: {
+              queueSize: playback.queueIds.length,
+              visibility: typeof document !== "undefined" ? document.visibilityState : null,
+              source: "session_recovery",
+            },
+          });
         }
-        await refreshSignedUrlsForQueue(hydratedTracks);
+        try {
+          await refreshSignedUrlsForQueue(hydratedTracks);
+        } catch (error) {
+          reportPlaybackDiagnostic({
+            level: "warn",
+            code: "RECOVERY_SIGNED_URL_REFRESH_FAILED",
+            command: "RECOVERY_SIGNED_URL_REFRESH",
+            error,
+            context: {
+              queueSize: hydratedTracks.length,
+              visibility: typeof document !== "undefined" ? document.visibilityState : null,
+              source: "session_recovery",
+            },
+          });
+        }
         if (!cancelled) {
           window.dispatchEvent(
             new CustomEvent("2mrrw:playback-recovery", {

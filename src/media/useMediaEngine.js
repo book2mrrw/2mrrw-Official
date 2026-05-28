@@ -66,9 +66,20 @@ function queueEqual(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b)) return a === b;
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
-    const aid = a[i]?.id ?? a[i]?.slug;
-    const bid = b[i]?.id ?? b[i]?.slug;
+    const ai = a[i] || {};
+    const bi = b[i] || {};
+    const aid = ai.id ?? ai.slug;
+    const bid = bi.id ?? bi.slug;
     if (aid !== bid) return false;
+    if ((ai.slug ?? null) !== (bi.slug ?? null)) return false;
+    if ((ai.src ?? ai.audioUrl ?? null) !== (bi.src ?? bi.audioUrl ?? null)) return false;
+    if ((ai.source ?? null) !== (bi.source ?? null)) return false;
+    if ((ai.title ?? null) !== (bi.title ?? null)) return false;
+    if ((ai.artist ?? null) !== (bi.artist ?? null)) return false;
+    const aAccess = ai.metadata?.access;
+    const bAccess = bi.metadata?.access;
+    if (Boolean(aAccess?.previewOnly) !== Boolean(bAccess?.previewOnly)) return false;
+    if (Boolean(aAccess?.canStream) !== Boolean(bAccess?.canStream)) return false;
   }
   return true;
 }
