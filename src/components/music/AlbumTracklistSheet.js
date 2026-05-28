@@ -23,6 +23,7 @@ const sheetSpring = { type: "spring", stiffness: 420, damping: 36, mass: 0.85 };
 export default function AlbumTracklistSheet({
   open,
   album,
+  catalogPlaybackLookup,
   accountState,
   userId,
   onClose,
@@ -34,8 +35,16 @@ export default function AlbumTracklistSheet({
   const dismissTriggered = useRef(false);
 
   const tracks = useMemo(
-    () => (album ? albumTracksForPlayback(album, { ...accountState, userId }, "album_tracklist") : []),
-    [album, accountState, userId]
+    () =>
+      album
+        ? albumTracksForPlayback(
+            album,
+            { ...accountState, userId },
+            "album_tracklist",
+            catalogPlaybackLookup
+          )
+        : [],
+    [album, accountState, catalogPlaybackLookup, userId]
   );
 
   useEffect(() => {

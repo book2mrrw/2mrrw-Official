@@ -22,7 +22,12 @@ import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/lib/deep-links";
 import { consumeGiftHighlightSlug } from "@/lib/gifts/session-keys";
 import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess, isAdminAccount } from "@/lib/music-access";
-import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
+import {
+  albumTracksForPlayback,
+  buildCatalogPlaybackLookup,
+  resolveCatalogPlaybackItem,
+  toPlaybackTrack,
+} from "@/lib/music-playback";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { useMediaEngine } from "@/media/useMediaEngine";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
@@ -767,14 +772,23 @@ export default function Page() {
   }, [catalogHasMore, catalogLoading]);
 
   const displaySingles = browseSingles.length ? browseSingles : INLINE_SINGLES;
+  const displayFeatures = useMemo(
+    () => INLINE_FEATURES.map((feat) => withR2CatalogMedia(feat)),
+    []
+  );
 
-  const catalogPlaybackBySlug = useMemo(() => {
-    const map = new Map();
-    [...INLINE_SINGLES, ...displaySingles, ...INLINE_FEATURES].forEach((item) => {
-      if (item?.slug) map.set(item.slug, item);
-    });
-    return map;
-  }, [displaySingles]);
+  const catalogPlaybackLookup = useMemo(
+    () =>
+      buildCatalogPlaybackLookup([
+        ...INLINE_SINGLES,
+        ...displaySingles,
+        ...displayFeatures,
+        ...INLINE_ALBUMS,
+      ]),
+    [displaySingles, displayFeatures]
+  );
+
+  const catalogPlaybackBySlug = catalogPlaybackLookup.bySlug;
 
   const enrichRadioSlide = useCallback(
     (slide) => {
@@ -993,16 +1007,24 @@ export default function Page() {
 
   const playAlbumTracks = useCallback(
     (album, startIndex = 0) => {
-      const tracks = albumTracksForPlayback(album, { ...accountState, userId: currentUser?.id }, "album_modal");
+      const albumItem = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
+      const tracks = albumTracksForPlayback(
+        albumItem,
+        { ...accountState, userId: currentUser?.id },
+        "album_modal",
+        catalogPlaybackLookup
+      );
       if (tracks.length) {
         void playQueue(tracks, startIndex);
         return;
       }
-      const access = resolveContentAccess(album, accountState);
+      const access = resolveContentAccess(albumItem, accountState);
       if (!access.canStream) return;
-      void playTrack(toPlaybackTrack(album, { ...accountState, userId: currentUser?.id }, "album_modal"));
+      void playTrack(
+        toPlaybackTrack(albumItem, { ...accountState, userId: currentUser?.id }, "album_modal")
+      );
     },
-    [accountState, currentUser?.id, playQueue, playTrack]
+    [accountState, catalogPlaybackLookup, currentUser?.id, playQueue, playTrack]
   );
 
   const goRadio = useCallback((i) => {
@@ -1080,20 +1102,29 @@ export default function Page() {
       setAlbumModalOpen(false);
       setSelectedAlbum(null);
     }
-    setSelectedSingle(single);
+    const singleItem = resolveCatalogPlaybackItem(single, catalogPlaybackLookup);
+    setSelectedSingle(singleItem);
     setPreviewModalOpen(true);
     setSelectedReleaseDetail(null);
-    if (!single?.slug) return;
+    if (!singleItem?.slug) return;
     const playbackTrack = toPlaybackTrack(
-      single,
+      singleItem,
       { ...accountState, userId: currentUser?.id },
       "preview_modal"
     );
     if (playbackTrack?.src) void playTrack(playbackTrack);
-    void getControlSystemReleaseDetail({ slug: single.slug, fallbackRelease: single }).then((detail) => {
+    void getControlSystemReleaseDetail({ slug: singleItem.slug, fallbackRelease: singleItem }).then((detail) => {
       if (detail) setSelectedReleaseDetail(detail);
     });
-  }, [nowPlaying, featureModalOpen, albumModalOpen, accountState, currentUser?.id, playTrack]);
+  }, [
+    nowPlaying,
+    featureModalOpen,
+    albumModalOpen,
+    accountState,
+    catalogPlaybackLookup,
+    currentUser?.id,
+    playTrack,
+  ]);
 
   const openFeatureModal = useCallback(
     (feat) => {
@@ -1107,21 +1138,30 @@ export default function Page() {
         setAlbumModalOpen(false);
         setSelectedAlbum(null);
       }
-      setFeatureModalItem(feat);
+      const featItem = resolveCatalogPlaybackItem(feat, catalogPlaybackLookup);
+      setFeatureModalItem(featItem);
       setFeatureModalOpen(true);
       setFeatureReleaseDetail(null);
-      if (!feat?.slug) return;
+      if (!featItem?.slug) return;
       const playbackTrack = toPlaybackTrack(
-        feat,
+        featItem,
         { ...accountState, userId: currentUser?.id },
         "feature_modal"
       );
       if (playbackTrack?.src) void playTrack(playbackTrack);
-      void getControlSystemReleaseDetail({ slug: feat.slug, fallbackRelease: feat }).then((detail) => {
+      void getControlSystemReleaseDetail({ slug: featItem.slug, fallbackRelease: featItem }).then((detail) => {
         if (detail) setFeatureReleaseDetail(detail);
       });
     },
-    [nowPlaying, previewModalOpen, albumModalOpen, accountState, currentUser?.id, playTrack]
+    [
+      nowPlaying,
+      previewModalOpen,
+      albumModalOpen,
+      accountState,
+      catalogPlaybackLookup,
+      currentUser?.id,
+      playTrack,
+    ]
   );
 
   const closeFeatureModal = useCallback(() => {
@@ -1134,12 +1174,13 @@ export default function Page() {
   const openAlbumModal = useCallback(
     (album) => {
       dismissPreviewAndFeatureModals();
-      setSelectedAlbum(album);
+      const albumItem = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
+      setSelectedAlbum(albumItem);
       setAlbumModalOpen(true);
-      if (!album) return;
-      playAlbumTracks(album, 0);
+      if (!albumItem) return;
+      playAlbumTracks(albumItem, 0);
     },
-    [playAlbumTracks, dismissPreviewAndFeatureModals]
+    [playAlbumTracks, dismissPreviewAndFeatureModals, catalogPlaybackLookup]
   );
 
   const playAlbumModalTrackAtIndex = useCallback(
@@ -1465,13 +1506,13 @@ export default function Page() {
         openAlbumModal(album);
       }
     } else if (parsed.type === "feature") {
-      const feat = features.find((f) => f.slug === parsed.slug);
+      const feat = displayFeatures.find((f) => f.slug === parsed.slug);
       if (feat) {
         switchTab("singles");
         openFeatureModal(feat);
       }
     }
-  }, [authLoading, currentUser, openSingleModal, openAlbumModal, openFeatureModal]);
+  }, [authLoading, currentUser, displayFeatures, openSingleModal, openAlbumModal, openFeatureModal]);
 
   const shopItems      = printfulProducts.length > 0 ? printfulProducts : fallbackMerch;
   const shopIsFallback = !printfulLoading && printfulProducts.length === 0;
@@ -1915,7 +1956,7 @@ export default function Page() {
                   {/* Features */}
                   <div style={{marginTop:28,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                    <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Radio */}
@@ -1970,7 +2011,7 @@ export default function Page() {
                   {/* Albums */}
                   <div id="home-albums">
                     <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                    <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                    <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Audio Visuals */}
@@ -2066,7 +2107,7 @@ export default function Page() {
                       <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} onSingleClick={handleSingleClick} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       <div style={{marginTop:32,marginBottom:4}}>
                         <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                        <FeaturesRail features={features} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                        <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       </div>
                       <AudioVisualsSection isMobile={isMobile} onAudioVisualsFocused={handleAudioVisualsFocused}/>
                     </>
@@ -2076,7 +2117,7 @@ export default function Page() {
                   {activeTab==="albums" && (
                     <>
                       <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                      <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                      <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                     </>
                   )}
 
@@ -2724,6 +2765,7 @@ export default function Page() {
       <AlbumTracklistSheet
         open={Boolean(albumTracklistRelease)}
         album={albumTracklistRelease}
+        catalogPlaybackLookup={catalogPlaybackLookup}
         accountState={accountState}
         userId={currentUser?.id}
         onClose={() => setAlbumTracklistRelease(null)}

@@ -19,7 +19,7 @@ function LockIcon() {
   );
 }
 
-export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, onOpenAlbumTracklist, isMobile, accountState, userId, isAdmin, onGift, onLibraryChange }) {
+export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, onOpenAlbumTracklist, catalogPlaybackLookup, isMobile, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   if (!items || items.length === 0) return null;
   const containerStyle = isMobile
     ? { display:"flex", flexWrap:"nowrap", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollSnapType:"x mandatory", overscrollBehaviorX:"contain", gap:12, paddingBottom:10 }
@@ -29,7 +29,8 @@ export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut,
       {items.map(item=>{
         const access = resolveContentAccess(item, accountState);
         const showPlayActions = itemHasPlayableAudio(item, access);
-        const playItem = type === "albums" ? albumCardPlaybackItem(item) : item;
+        const playItem =
+          type === "albums" ? albumCardPlaybackItem(item, catalogPlaybackLookup) : item;
         const albumLibraryItem = accountState?.library?.find(
           (lib) => lib.slug === item?.slug
         );

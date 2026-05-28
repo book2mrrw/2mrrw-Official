@@ -4,7 +4,6 @@ import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
 import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
-import { withR2CatalogMedia } from "@/components/home/catalogMedia";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 export default function FeaturesRail({ features, isMobile, addToCart, onOpenFeature, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   return (
@@ -48,7 +47,7 @@ export default function FeaturesRail({ features, isMobile, addToCart, onOpenFeat
               {showPlayActions ? (
                 <div style={{flex:1,minWidth:0}}>
                   <ReleaseCardActions
-                    item={withR2CatalogMedia(feat)}
+                    item={feat}
                     accountState={accountState}
                     userId={userId}
                     source="home_feature_card"
