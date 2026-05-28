@@ -1,0 +1,6 @@
+report.md
+files-changed.md
+lifecycle-invariants.md
+possible-audio-risks.md
+verification-checklist.md
+manifest.txt

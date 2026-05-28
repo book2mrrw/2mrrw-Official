@@ -485,7 +485,26 @@ export function AudioProvider({ children }) {
   }, []);
 
   const patchState = useCallback((patch) => {
-    setState(prev => ({ ...prev, ...patch }));
+    setState((prev) => {
+      const next = { ...prev, ...patch };
+      const shouldHaveStarted =
+        next.hasStarted === false &&
+        (next.isPlaying === true || next.playbackState === "ready" || next.playbackState === "playing");
+      if (shouldHaveStarted) {
+        if (next.playbackState === "playing") {
+          reportPlaybackDiagnostic({
+            level: "warn",
+            code: "PLAYBACK_VISIBILITY_INVARIANT_RECOVERED",
+            command: activeCommandRef.current?.type || "STATE_PATCH",
+            requestId: activeCommandRef.current?.requestId || null,
+            state: next,
+            context: { reason: "playing_with_hasStarted_false" },
+          });
+        }
+        return { ...next, hasStarted: true };
+      }
+      return next;
+    });
   }, []);
 
   const stopProgressRaf = useCallback(() => {
@@ -1098,7 +1117,14 @@ export function AudioProvider({ children }) {
               console.error("[AUDIO]", e.name, e.message);
             }
           }
-          patchState({ isPlaying: true, error: null, streamRetryable: false, isBuffering: false });
+          patchState({
+            isPlaying: true,
+            error: null,
+            streamRetryable: false,
+            isBuffering: false,
+            hasStarted: true,
+            playbackState: "playing",
+          });
           return;
         } catch (retryErr) {
           const entitled = Boolean(track?.metadata?.access?.canStream);
@@ -1125,6 +1151,7 @@ export function AudioProvider({ children }) {
                 error: null,
                 source: "preview",
                 playbackState: "preview_fallback",
+                hasStarted: true,
                 currentTrack: {
                   ...track,
                   src: previewFallbackSrc,
@@ -1419,6 +1446,7 @@ export function AudioProvider({ children }) {
             error: null,
             source: "preview",
             playbackState: "preview_fallback",
+            hasStarted: true,
             currentTrack: {
               ...nextTrack,
               src: previewFallbackSrc,
@@ -1659,6 +1687,7 @@ export function AudioProvider({ children }) {
         pendingSeekRef.current = resumeAt;
       } else {
         if (!audio.paused && stateRef.current.isPlaying) {
+          patchState({ hasStarted: true, isPlaying: true, playbackState: "playing", error: null });
           applyCsToElement(audio, presentation, pendingSeekRef.current || null);
           return true;
         }
@@ -1722,7 +1751,7 @@ export function AudioProvider({ children }) {
           durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
         });
       }
-      patchState({ isPlaying: true, error: null, playbackState: "playing" });
+      patchState({ isPlaying: true, error: null, hasStarted: true, playbackState: "playing" });
       return true;
     } catch (err) {
       console.error("[AudioContext] playTrack failed", {
@@ -2088,7 +2117,13 @@ export function AudioProvider({ children }) {
       await resumeWebAudioContextIfSuspended(audioCtxRef);
       await audio.play();
       if (track) void updateMediaSession(track, { playing: true });
-      patchState({ isPlaying: true, error: null, accessDenied: false, playbackState: "playing" });
+      patchState({
+        isPlaying: true,
+        error: null,
+        accessDenied: false,
+        hasStarted: true,
+        playbackState: "playing",
+      });
 
       const meta = streamMetaRef.current;
       const slug = meta?.slug || parseStreamSlugFromSrc(track.src) || track.slug;

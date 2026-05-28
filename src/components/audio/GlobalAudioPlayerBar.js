@@ -577,7 +577,13 @@ function GlobalAudioPlayerBar() {
   );
 
 
-  if (!hasStarted || !currentTrack) return null;
+  const isLifecycleVisibleState =
+    hasStarted ||
+    playbackState === "loading" ||
+    playbackState === "ready" ||
+    playbackState === "playing" ||
+    playbackState === "preview_fallback";
+  if (!isLifecycleVisibleState || !currentTrack) return null;
 
   const conflictDialog = streamConflict ? (
     <div role="alertdialog" aria-label="Concurrent stream" className="player-immersive-conflict">

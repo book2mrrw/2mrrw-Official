@@ -535,6 +535,7 @@ export default function Page() {
     playQueue,
     hasStarted,
     currentTrack,
+    playbackState,
     csMode,
     isPlaying,
     currentTime,
@@ -979,25 +980,25 @@ export default function Page() {
   }, [isPlaying]);
 
   useEffect(() => {
-    if (
-      hasStarted &&
+    const shouldShowNowPlaying = Boolean(
       currentTrack &&
       !previewModalOpen &&
       !featureModalOpen &&
-      !albumModalOpen
-    ) {
+      !albumModalOpen &&
+      (hasStarted ||
+        playbackState === "loading" ||
+        playbackState === "ready" ||
+        playbackState === "playing" ||
+        playbackState === "preview_fallback")
+    );
+    if (shouldShowNowPlaying) {
       setNowPlaying(currentTrack);
+      return;
     }
-    if (!hasStarted) {
+    if (!currentTrack || !hasStarted) {
       setNowPlaying(null);
     }
-  }, [
-    hasStarted,
-    currentTrack,
-    previewModalOpen,
-    featureModalOpen,
-    albumModalOpen,
-  ]);
+  }, [hasStarted, currentTrack, playbackState, previewModalOpen, featureModalOpen, albumModalOpen]);
 
   useEffect(() => {
     if (activeTab !== "live") {
@@ -1713,7 +1714,12 @@ export default function Page() {
 
       {/* ══════════════════════ MAIN LAYOUT ═══════════════════════════════════ */}
       <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
-        {hasStarted && currentTrack?.cover && (
+        {(hasStarted ||
+          playbackState === "loading" ||
+          playbackState === "ready" ||
+          playbackState === "playing" ||
+          playbackState === "preview_fallback") &&
+          currentTrack?.cover && (
           <AmbientPlaybackBackground currentTrack={currentTrack} csMode={csMode} />
         )}
 
