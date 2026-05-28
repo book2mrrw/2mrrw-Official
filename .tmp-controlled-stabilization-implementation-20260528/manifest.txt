@@ -1,0 +1,7 @@
+.tmp-controlled-stabilization-implementation-20260528/report.md
+.tmp-controlled-stabilization-implementation-20260528/architecture-before-vs-after.md
+.tmp-controlled-stabilization-implementation-20260528/commands-and-transitions.md
+.tmp-controlled-stabilization-implementation-20260528/files-changed.md
+.tmp-controlled-stabilization-implementation-20260528/verification-checklist.md
+.tmp-controlled-stabilization-implementation-20260528/remaining-risks.md
+.tmp-controlled-stabilization-implementation-20260528/manifest.txt

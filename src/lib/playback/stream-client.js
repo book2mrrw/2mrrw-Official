@@ -128,7 +128,13 @@ export async function fetchLibraryStream(
           status: res.status,
         });
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn("[stream-client] telemetry import failed", {
+          slug,
+          status: res.status,
+          message: error?.message || String(error),
+        });
+      });
     const err = new Error(
       res.status === 401 ? "authentication_required" : "access_denied"
     );
@@ -178,7 +184,13 @@ export async function clearLibraryStreamSession(slug, sessionId) {
   await fetch(`${LIBRARY_STREAM_PATH}?${params.toString()}`, {
     method: "DELETE",
     credentials: "include",
-  }).catch(() => {});
+  }).catch((error) => {
+    console.warn("[stream-client] clear session failed", {
+      slug,
+      sessionId: sessionId || null,
+      message: error?.message || String(error),
+    });
+  });
 }
 
 export async function endStreamAnalytics(payload) {
@@ -188,5 +200,11 @@ export async function endStreamAnalytics(payload) {
     credentials: "include",
     keepalive: true,
     body: JSON.stringify(payload),
-  }).catch(() => {});
+  }).catch((error) => {
+    console.warn("[stream-client] end analytics failed", {
+      streamEventId: payload?.streamEventId || null,
+      sessionId: payload?.sessionId || null,
+      message: error?.message || String(error),
+    });
+  });
 }

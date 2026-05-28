@@ -45,6 +45,7 @@ import { logPlayback } from "@/lib/observability/client-log";
 import { MARKS, perfMark, perfMeasure } from "@/lib/dev/performanceMarks";
 import AudioPhase10Bridge from "@/components/system/AudioPhase10Bridge";
 import { isFirstListen, markListened } from "@/lib/first-listen";
+import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 
 const AudioContext = createContext(null);
 
@@ -61,6 +62,19 @@ const SPURIOUS_ENDED_GUARD_MS = 1200;
 const KEEP_ALIVE_INTERVAL_MS = 20000;
 const GESTURE_UNLOCK_EVENTS = ["touchstart", "touchend", "click", "keydown"];
 const AUDIO_CONTENT_TYPE_RE = /^(audio\/|application\/octet-stream)/i;
+const PLAYBACK_COMMANDS = {
+  PLAY_TRACK: "PLAY_TRACK",
+  PLAY_QUEUE: "PLAY_QUEUE",
+  PAUSE: "PAUSE",
+  RESUME: "RESUME",
+  SEEK: "SEEK",
+  NEXT_TRACK: "NEXT_TRACK",
+  PREV_TRACK: "PREV_TRACK",
+  INTERRUPT: "INTERRUPT",
+  RECOVER: "RECOVER",
+  STOP: "STOP",
+  COMPLETE: "COMPLETE",
+};
 
 function normalizePlaybackSrc(src) {
   if (!src || typeof src !== "string") return "";
@@ -352,6 +366,9 @@ export function AudioProvider({ children }) {
   const spuriousEndedGuardRef = useRef(0);
   const playRequestIdRef = useRef(0);
   const activeStreamAbortRef = useRef(null);
+  const commandQueueRef = useRef(Promise.resolve());
+  const commandRequestIdRef = useRef(0);
+  const activeCommandRef = useRef(null);
   const [state, setState] = useState(EMPTY_STATE);
 
   useEffect(() => {
@@ -715,7 +732,17 @@ export function AudioProvider({ children }) {
             durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
             completed: eventType === "complete",
           }),
-        }).catch(() => {});
+        }).catch((error) => {
+          reportPlaybackDiagnostic({
+            level: "warn",
+            code: "PLAYBACK_EVENT_POST_FAILED",
+            command: "PLAYBACK_EVENT_POST",
+            requestId: activeCommandRef.current?.requestId || null,
+            state: stateRef.current,
+            error,
+            context: { eventType, slug: track.slug },
+          });
+        });
         sendControlSystemPlaybackEvent(track, eventType, {
           mediaType: "audio",
           positionSeconds: audio.currentTime,
@@ -779,7 +806,16 @@ export function AudioProvider({ children }) {
       if (!userInitiated && track && audio.paused) {
         const resumeAfterInterrupt = () => {
           if (stateRef.current.isPlaying && audio.paused) {
-            audio.play().catch(() => {});
+            audio.play().catch((error) => {
+              reportPlaybackDiagnostic({
+                level: "warn",
+                code: "INTERRUPTION_RESUME_FAILED",
+                command: PLAYBACK_COMMANDS.RECOVER,
+                requestId: activeCommandRef.current?.requestId || null,
+                state: stateRef.current,
+                error,
+              });
+            });
           }
           audio.removeEventListener("canplay", resumeAfterInterrupt);
         };
@@ -893,7 +929,16 @@ export function AudioProvider({ children }) {
       const finishEnded = () => {
         if (repeatMode === "one" && stateRef.current.currentTrack) {
           audio.currentTime = 0;
-          audio.play().catch(() => {});
+          audio.play().catch((error) => {
+            reportPlaybackDiagnostic({
+              level: "warn",
+              code: "REPEAT_ONE_RESTART_FAILED",
+              command: PLAYBACK_COMMANDS.COMPLETE,
+              requestId: activeCommandRef.current?.requestId || null,
+              state: stateRef.current,
+              error,
+            });
+          });
           return;
         }
 
@@ -1199,7 +1244,7 @@ export function AudioProvider({ children }) {
     }
   }, []);
 
-  const playTrack = useCallback(async (track, options = {}) => {
+  const playTrackInternal = useCallback(async (track, options = {}) => {
     const requestId = playRequestIdRef.current + 1;
     playRequestIdRef.current = requestId;
     if (activeStreamAbortRef.current) {
@@ -1740,11 +1785,13 @@ export function AudioProvider({ children }) {
     const conflict = stateRef.current.streamConflict;
     if (!conflict?.track) return false;
     patchState({ streamConflict: null });
-    return playTrack(conflict.track, {
+    return (
+      playTrackRef.current?.(conflict.track, {
       resumeAt: conflict.resumeAt,
       forceStream: true,
-    });
-  }, [patchState, playTrack]);
+      }) ?? false
+    );
+  }, [patchState]);
 
   const dismissStreamConflict = useCallback(() => {
     patchState({ streamConflict: null });
@@ -1756,8 +1803,8 @@ export function AudioProvider({ children }) {
     streamErrorRetriedRef.current = false;
     patchState({ error: null, streamRetryable: false, accessDenied: false });
     const resumeAt = audioRef.current?.currentTime || stateRef.current.currentTime || 0;
-    return playTrack(track, { resumeAt, forceStream: true });
-  }, [patchState, playTrack]);
+    return playTrackRef.current?.(track, { resumeAt, forceStream: true }) ?? false;
+  }, [patchState]);
 
   useEffect(() => {
     retryStreamPlaybackRef.current = retryStreamPlayback;
@@ -1855,11 +1902,6 @@ export function AudioProvider({ children }) {
     return next;
   }, [patchState, updateMediaSession, applyCsToElement, syncPositionState]);
 
-  useEffect(() => {
-    playTrackRef.current = playTrack;
-    applyCSModeToTrackRef.current = applyCSModeToTrack;
-  });
-
   const setQueue = useCallback((tracks = [], startIndex = 0) => {
     const normalized = (tracks || []).map(normalizeTrack).filter((t) => t.src);
     const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
@@ -1875,7 +1917,7 @@ export function AudioProvider({ children }) {
     return normalized;
   }, [patchState]);
 
-  const playNext = useCallback(async () => {
+  const playNextInternal = useCallback(async () => {
     const queue = queueRef.current;
     if (!queue.length) return false;
     let nextIndex = queueIndexRef.current + 1;
@@ -1888,12 +1930,12 @@ export function AudioProvider({ children }) {
     queueIndexRef.current = nextIndex;
     patchState({ queueIndex: nextIndex });
     const track = queue[nextIndex];
-    const ok = await playTrack(track, { resumeAt: 0 });
+    const ok = await playTrackInternal(track, { resumeAt: 0 });
     if (ok && csModeRef.current) await applyCSModeToTrack(track);
     return ok;
-  }, [playTrack, patchState, applyCSModeToTrack]);
+  }, [playTrackInternal, patchState, applyCSModeToTrack]);
 
-  const playPrevious = useCallback(async () => {
+  const playPreviousInternal = useCallback(async () => {
     const queue = queueRef.current;
     const audio = audioRef.current;
     if (audio && audio.currentTime > 3) {
@@ -1908,10 +1950,10 @@ export function AudioProvider({ children }) {
     queueIndexRef.current = prevIndex;
     patchState({ queueIndex: prevIndex });
     const track = queue[prevIndex];
-    const ok = await playTrack(track, { resumeAt: 0 });
+    const ok = await playTrackInternal(track, { resumeAt: 0 });
     if (ok && csModeRef.current) await applyCSModeToTrack(track);
     return ok;
-  }, [playTrack, patchState, syncPositionState, applyCSModeToTrack]);
+  }, [playTrackInternal, patchState, syncPositionState, applyCSModeToTrack]);
 
   const setRepeatMode = useCallback((mode) => {
     const next = REPEAT_MODES.includes(mode) ? mode : "off";
@@ -1937,18 +1979,18 @@ export function AudioProvider({ children }) {
     return shuffleRef.current;
   }, [setShuffle]);
 
-  const playQueue = useCallback(async (tracks = [], startIndex = 0, options = {}) => {
+  const playQueueInternal = useCallback(async (tracks = [], startIndex = 0, options = {}) => {
     const normalized = setQueue(tracks, startIndex);
     if (!normalized.length) return false;
-    return playTrack(normalized[Math.max(0, Math.min(startIndex, normalized.length - 1))], options);
-  }, [setQueue, playTrack]);
+    return playTrackInternal(normalized[Math.max(0, Math.min(startIndex, normalized.length - 1))], options);
+  }, [setQueue, playTrackInternal]);
 
-  const pause = useCallback(() => {
+  const pauseInternal = useCallback(() => {
     userPausedRef.current = true;
     audioRef.current?.pause();
   }, []);
 
-  const resume = useCallback(async () => {
+  const resumeInternal = useCallback(async () => {
     const audio = audioRef.current;
     const track = stateRef.current.currentTrack;
     if (!audio || !track) return false;
@@ -2015,13 +2057,7 @@ export function AudioProvider({ children }) {
     }
   }, [patchState, updateMediaSession, finalizeStreamSession, initWebAudio, unlockAudioFromGesture]);
 
-  const toggle = useCallback(() => {
-    if (audioRef.current?.paused) return resume();
-    pause();
-    return false;
-  }, [pause, resume]);
-
-  const seek = useCallback((time) => {
+  const seekInternal = useCallback((time) => {
     const audio = audioRef.current;
     if (!audio || !Number.isFinite(time)) return;
     const track = stateRef.current.currentTrack;
@@ -2060,7 +2096,7 @@ export function AudioProvider({ children }) {
     syncPositionState(true);
   }, [patchState, syncPositionState]);
 
-  const stop = useCallback(() => {
+  const stopInternal = useCallback(() => {
     userPausedRef.current = true;
     const audio = audioRef.current;
     const meta = streamMetaRef.current;
@@ -2096,6 +2132,116 @@ export function AudioProvider({ children }) {
       navigator.mediaSession.playbackState = "none";
     }
   }, [finalizeStreamSession, stopPositionSaveTimer, stopProgressRaf, stopKeepAlivePing]);
+
+  const executePlaybackCommand = useCallback(async (command) => {
+    if (command.requestId !== activeCommandRef.current?.requestId) return false;
+    switch (command.type) {
+      case PLAYBACK_COMMANDS.PLAY_TRACK:
+        return playTrackInternal(command.payload.track, command.payload.options || {});
+      case PLAYBACK_COMMANDS.PLAY_QUEUE:
+        return playQueueInternal(
+          command.payload.tracks || [],
+          command.payload.startIndex || 0,
+          command.payload.options || {}
+        );
+      case PLAYBACK_COMMANDS.PAUSE:
+      case PLAYBACK_COMMANDS.INTERRUPT:
+        pauseInternal();
+        return true;
+      case PLAYBACK_COMMANDS.RESUME:
+      case PLAYBACK_COMMANDS.RECOVER:
+        return resumeInternal();
+      case PLAYBACK_COMMANDS.SEEK:
+        seekInternal(command.payload.time);
+        return true;
+      case PLAYBACK_COMMANDS.NEXT_TRACK:
+      case PLAYBACK_COMMANDS.COMPLETE:
+        return playNextInternal();
+      case PLAYBACK_COMMANDS.PREV_TRACK:
+        return playPreviousInternal();
+      case PLAYBACK_COMMANDS.STOP:
+        stopInternal();
+        return true;
+      default:
+        return false;
+    }
+  }, [
+    pauseInternal,
+    playNextInternal,
+    playPreviousInternal,
+    playQueueInternal,
+    playTrackInternal,
+    resumeInternal,
+    seekInternal,
+    stopInternal,
+  ]);
+
+  const dispatchPlaybackCommand = useCallback((type, payload = {}, { serial = true, cancelActiveStream = false } = {}) => {
+    const requestId = commandRequestIdRef.current + 1;
+    commandRequestIdRef.current = requestId;
+    const command = { type, payload, requestId, issuedAt: Date.now() };
+
+    const run = async () => {
+      activeCommandRef.current = command;
+      if (cancelActiveStream && activeStreamAbortRef.current) {
+        activeStreamAbortRef.current.abort();
+      }
+      try {
+        return await executePlaybackCommand(command);
+      } catch (error) {
+        reportPlaybackDiagnostic({
+          code: "PLAYBACK_COMMAND_FAILED",
+          command: type,
+          requestId,
+          state: stateRef.current,
+          error,
+          context: payload,
+        });
+        throw error;
+      } finally {
+        if (activeCommandRef.current?.requestId === requestId) {
+          activeCommandRef.current = null;
+        }
+      }
+    };
+
+    if (!serial) return Promise.resolve().then(run);
+    commandQueueRef.current = commandQueueRef.current.catch(() => undefined).then(run);
+    return commandQueueRef.current;
+  }, [executePlaybackCommand]);
+
+  const playTrack = useCallback((track, options = {}) => (
+    dispatchPlaybackCommand(
+      PLAYBACK_COMMANDS.PLAY_TRACK,
+      { track, options },
+      { serial: true, cancelActiveStream: true }
+    )
+  ), [dispatchPlaybackCommand]);
+
+  const playQueue = useCallback((tracks = [], startIndex = 0, options = {}) => (
+    dispatchPlaybackCommand(
+      PLAYBACK_COMMANDS.PLAY_QUEUE,
+      { tracks, startIndex, options },
+      { serial: true, cancelActiveStream: true }
+    )
+  ), [dispatchPlaybackCommand]);
+
+  const pause = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PAUSE), [dispatchPlaybackCommand]);
+  const resume = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.RESUME), [dispatchPlaybackCommand]);
+  const seek = useCallback((time) => dispatchPlaybackCommand(PLAYBACK_COMMANDS.SEEK, { time }, { serial: false }), [dispatchPlaybackCommand]);
+  const playNext = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.NEXT_TRACK), [dispatchPlaybackCommand]);
+  const playPrevious = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PREV_TRACK), [dispatchPlaybackCommand]);
+  const stop = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.STOP, {}, { cancelActiveStream: true }), [dispatchPlaybackCommand]);
+  const toggle = useCallback(() => {
+    if (audioRef.current?.paused) return resume();
+    pause();
+    return false;
+  }, [pause, resume]);
+
+  useEffect(() => {
+    playTrackRef.current = playTrack;
+    applyCSModeToTrackRef.current = applyCSModeToTrack;
+  }, [applyCSModeToTrack, playTrack]);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return undefined;
@@ -2192,7 +2338,17 @@ export function AudioProvider({ children }) {
                 sessionId: data.sessionId || meta.sessionId,
               };
             })
-            .catch(() => {});
+            .catch((error) => {
+              reportPlaybackDiagnostic({
+                level: "warn",
+                code: "VISIBILITY_STREAM_REFRESH_FAILED",
+                command: PLAYBACK_COMMANDS.INTERRUPT,
+                requestId: activeCommandRef.current?.requestId || null,
+                state: stateRef.current,
+                error,
+                context: { slug },
+              });
+            });
         }
         return;
       }
@@ -2207,10 +2363,14 @@ export function AudioProvider({ children }) {
             if (isLikelyIOS()) {
               patchState({ isPlaying: false, playbackState: "paused" });
             } else {
-              void resumeWebAudioContextIfSuspended(audioCtxRef);
-              el.play().catch((err) => {
-                console.warn("[AudioContext] visibility resume blocked", {
-                  message: err?.message || String(err),
+              void dispatchPlaybackCommand(PLAYBACK_COMMANDS.RECOVER).catch((error) => {
+                reportPlaybackDiagnostic({
+                  level: "warn",
+                  code: "VISIBILITY_RECOVER_BLOCKED",
+                  command: PLAYBACK_COMMANDS.RECOVER,
+                  requestId: activeCommandRef.current?.requestId || null,
+                  state: stateRef.current,
+                  error,
                 });
                 patchState({ isPlaying: false, playbackState: "paused" });
               });
@@ -2277,7 +2437,7 @@ export function AudioProvider({ children }) {
       window.removeEventListener("beforeunload", onBeforeUnload);
       window.removeEventListener("pagehide", onPageHide);
     };
-  }, [rehydrateMediaSession, patchState, updateMediaSession, syncPositionState]);
+  }, [rehydrateMediaSession, patchState, updateMediaSession, syncPositionState, dispatchPlaybackCommand]);
 
   const beginCsHoldPreview = useCallback((csAudioUrl) => {
     const audio = audioRef.current;
