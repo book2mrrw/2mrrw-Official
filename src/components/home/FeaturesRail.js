@@ -14,7 +14,7 @@ export default function FeaturesRail({ features, isMobile, addToCart, onOpenFeat
         const showPlayActions = itemHasPlayableAudio(feat, access);
         const coverDisplay = catalogCoverDisplay(feat);
         return (
-        <div key={feat.slug} style={{flex:"0 0 auto",width:isMobile?160:220,scrollSnapAlign:"start",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,transition:"border-color 0.25s",position:"relative"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#a259ff55"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
+        <div key={feat.slug || feat.id || `feature-${i}`} style={{flex:"0 0 auto",width:isMobile?160:220,scrollSnapAlign:"start",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,transition:"border-color 0.25s",position:"relative"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#a259ff55"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
           {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(feat)} /> : null}
           <div
             role="button"
@@ -41,7 +41,9 @@ export default function FeaturesRail({ features, isMobile, addToCart, onOpenFeat
           <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
             <div className="hero-title-glow" style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{feat.title}</div>
             <div style={{fontSize:10,color:"#a259ff",fontWeight:700,letterSpacing:1.5,marginBottom:6}}>{feat.featuring}</div>
-            {access?.showPrice && <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${feat.price.toFixed(2)}</div>}
+            {access?.showPrice && feat.price != null && Number.isFinite(Number(feat.price)) ? (
+              <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${Number(feat.price).toFixed(2)}</div>
+            ) : null}
             <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}} onClick={e=>e.stopPropagation()}>
               {showPlayActions ? (
                 <div style={{flex:1,minWidth:0}}>

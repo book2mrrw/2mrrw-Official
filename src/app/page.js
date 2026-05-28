@@ -969,7 +969,8 @@ export default function Page() {
       hasStarted &&
       currentTrack &&
       !previewModalOpen &&
-      !featureModalOpen
+      !featureModalOpen &&
+      !albumModalOpen
     ) {
       setNowPlaying(currentTrack);
     }
@@ -981,6 +982,7 @@ export default function Page() {
     currentTrack,
     previewModalOpen,
     featureModalOpen,
+    albumModalOpen,
   ]);
 
   useEffect(() => {
@@ -1057,21 +1059,26 @@ export default function Page() {
     () => (currentSingle ? resolveContentAccess(currentSingle, accountState) : null),
     [currentSingle, accountState]
   );
-  const selectedSingleAccess = useMemo(
-    () => (selectedSingle ? resolveContentAccess(selectedSingle, accountState) : null),
-    [selectedSingle, accountState]
-  );
-  const featureModalAccess = useMemo(
-    () => (featureModalItem ? resolveContentAccess(featureModalItem, accountState) : null),
-    [featureModalItem, accountState]
-  );
   const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
+
+  const dismissPreviewAndFeatureModals = useCallback(() => {
+    setPreviewModalOpen(false);
+    setSelectedSingle(null);
+    setSelectedReleaseDetail(null);
+    setFeatureModalOpen(false);
+    setFeatureModalItem(null);
+    setFeatureReleaseDetail(null);
+  }, []);
 
   const openSingleModal = useCallback((single) => {
     if (featureModalOpen) {
       setFeatureModalOpen(false);
       setFeatureModalItem(null);
       setFeatureReleaseDetail(null);
+    }
+    if (albumModalOpen) {
+      setAlbumModalOpen(false);
+      setSelectedAlbum(null);
     }
     setSelectedSingle(single);
     setPreviewModalOpen(true);
@@ -1086,7 +1093,7 @@ export default function Page() {
     void getControlSystemReleaseDetail({ slug: single.slug, fallbackRelease: single }).then((detail) => {
       if (detail) setSelectedReleaseDetail(detail);
     });
-  }, [nowPlaying, featureModalOpen, accountState, currentUser?.id, playTrack]);
+  }, [nowPlaying, featureModalOpen, albumModalOpen, accountState, currentUser?.id, playTrack]);
 
   const openFeatureModal = useCallback(
     (feat) => {
@@ -1095,6 +1102,10 @@ export default function Page() {
         setPreviewModalOpen(false);
         setSelectedSingle(null);
         setSelectedReleaseDetail(null);
+      }
+      if (albumModalOpen) {
+        setAlbumModalOpen(false);
+        setSelectedAlbum(null);
       }
       setFeatureModalItem(feat);
       setFeatureModalOpen(true);
@@ -1110,7 +1121,7 @@ export default function Page() {
         if (detail) setFeatureReleaseDetail(detail);
       });
     },
-    [nowPlaying, previewModalOpen, accountState, currentUser?.id, playTrack]
+    [nowPlaying, previewModalOpen, albumModalOpen, accountState, currentUser?.id, playTrack]
   );
 
   const closeFeatureModal = useCallback(() => {
@@ -1122,12 +1133,21 @@ export default function Page() {
 
   const openAlbumModal = useCallback(
     (album) => {
+      dismissPreviewAndFeatureModals();
       setSelectedAlbum(album);
       setAlbumModalOpen(true);
       if (!album) return;
       playAlbumTracks(album, 0);
     },
-    [playAlbumTracks]
+    [playAlbumTracks, dismissPreviewAndFeatureModals]
+  );
+
+  const playAlbumModalTrackAtIndex = useCallback(
+    (index) => {
+      if (!selectedAlbum) return;
+      playAlbumTracks(selectedAlbum, index);
+    },
+    [selectedAlbum, playAlbumTracks]
   );
 
   const handleSingleClick = useCallback(
@@ -1557,27 +1577,33 @@ export default function Page() {
 
 
       {/* ── ALBUM MODAL (V9 immersive) ── */}
-      {albumModalOpen && selectedAlbum && (
-        <ModalErrorBoundary
-          stackId="immersive-album-modal"
-          onClose={closeAlbumModal}
-          resetKey={selectedAlbum?.slug || selectedAlbum?.id || "album"}
-        >
-          <AlbumModal
-            key={selectedAlbum.id || selectedAlbum.slug}
-            album={{
-              ...selectedAlbum,
-              artist: selectedAlbum.artist || "2MRRW",
-              year: selectedAlbum.year || selectedAlbum.date,
-              coverArt: selectedAlbum.coverArt || selectedAlbum.cover,
-              price: selectedAlbum.price != null ? `$${Number(selectedAlbum.price).toFixed(2)}` : selectedAlbum.price,
-              tracks: normalizeAlbumTracksForModal(selectedAlbum.tracks || []),
-            }}
-            access={resolveTrackAccess(selectedAlbum, accountState)?.canStream ? "full" : "preview"}
+      <AnimatePresence>
+        {albumModalOpen && selectedAlbum && (
+          <ModalErrorBoundary
+            stackId="immersive-album-modal"
             onClose={closeAlbumModal}
-          />
-        </ModalErrorBoundary>
-      )}
+            resetKey={selectedAlbum?.slug || selectedAlbum?.id || "album"}
+          >
+            <AlbumModal
+              key={selectedAlbum.slug || selectedAlbum.id || "album"}
+              album={{
+                ...selectedAlbum,
+                artist: selectedAlbum.artist || "2MRRW",
+                year: selectedAlbum.year || selectedAlbum.date,
+                coverArt: selectedAlbum.coverArt || selectedAlbum.cover,
+                price:
+                  selectedAlbum.price != null && Number.isFinite(Number(selectedAlbum.price))
+                    ? `$${Number(selectedAlbum.price).toFixed(2)}`
+                    : selectedAlbum.price,
+                tracks: normalizeAlbumTracksForModal(selectedAlbum.tracks || []),
+              }}
+              access={resolveTrackAccess(selectedAlbum, accountState)?.canStream ? "full" : "preview"}
+              onClose={closeAlbumModal}
+              onPlayTrackAtIndex={playAlbumModalTrackAtIndex}
+            />
+          </ModalErrorBoundary>
+        )}
+      </AnimatePresence>
 
 
 
@@ -1761,7 +1787,7 @@ export default function Page() {
                           const singleAccess = resolveContentAccess(singleUi, accountState);
                           return (
                           <div
-                            key={single.slug}
+                            key={single.slug || single.id || `single-${i}`}
                             data-single-card
                             onClick={() => openSingleModal(singleUi)}
                             style={{

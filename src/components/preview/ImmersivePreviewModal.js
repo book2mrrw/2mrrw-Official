@@ -537,7 +537,9 @@ export function SingleModal({
     rows.push(["DURATION", track?.dur || fmt(fullDur)]);
     if (editorial?.genre || track?.genre) rows.push(["GENRE", editorial?.genre || track?.genre]);
     if (creditRows.length) {
-      creditRows.slice(0, 3).forEach(([k, v]) => rows.push([k.toUpperCase(), v]));
+      creditRows.slice(0, 3).forEach((row) => {
+        if (row?.label && row?.value) rows.push([row.label.toUpperCase(), row.value]);
+      });
     }
     if (!rows.length) {
       rows.push(["ARTIST", track?.artist || "2MRRW"], ["TYPE", track?.type || "Single"]);
@@ -818,7 +820,7 @@ export function SingleModal({
   );
 }
 
-function AlbumModalView({ album, access = "preview", onClose }) {
+function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex }) {
   const coverSrc = trackCoverSrc(album);
   const palette = useCoverPalette(coverSrc, album?.coverArtType || album?.coverType || "image");
   const t = useMemo(() => buildTheme(palette), [palette]);
@@ -869,12 +871,18 @@ function AlbumModalView({ album, access = "preview", onClose }) {
 
   const handleTrack = (tr) => {
     if (trackLocked(tr)) return;
-    if (activeTrack?.id === tr.id) {
+    const sameTrack =
+      activeTrack != null &&
+      tr != null &&
+      String(activeTrack.id) === String(tr.id);
+    if (sameTrack) {
       toggle();
       return;
     }
     setActiveTrack(tr);
-    seek(0);
+    const idx = tracks.findIndex((t) => t && tr && String(t.id) === String(tr.id));
+    if (idx >= 0) onPlayTrackAtIndex?.(idx);
+    else seek(0);
   };
 
   const isVisible = mounted && !closing;
@@ -978,7 +986,8 @@ function AlbumModalView({ album, access = "preview", onClose }) {
             ) : null}
             {tracks.map((tr, idx) => {
               const locked = trackLocked(tr);
-              const isActive = activeTrack?.id === tr.id;
+              const isActive =
+                activeTrack != null && tr != null && String(activeTrack.id) === String(tr.id);
               const isPlayingThis = isActive && isPlaying;
               return (
                 <div key={tr.id ?? idx} className={`tr${isActive ? " active-tr" : ""}${locked ? " locked" : ""}`} onClick={() => handleTrack(tr)}>
@@ -1116,10 +1125,9 @@ function AlbumModalView({ album, access = "preview", onClose }) {
   );
 }
 
-export function AlbumModal(props) {
-  const { album } = props;
+export function AlbumModal({ album, onPlayTrackAtIndex, ...rest }) {
   if (!album || (!album.slug && !album.id)) return null;
-  return <AlbumModalView {...props} />;
+  return <AlbumModalView album={album} onPlayTrackAtIndex={onPlayTrackAtIndex} {...rest} />;
 }
 
 export default function ImmersivePreviewModal({
