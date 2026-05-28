@@ -983,12 +983,20 @@ export function AudioProvider({ children }) {
           patchState({ isPlaying: true, error: null, streamRetryable: false, isBuffering: false });
           return;
         } catch (retryErr) {
-          if (retryErr?.status === 401 && track?.metadata?.access?.canStream) {
-            console.warn("[AudioContext] stream retry 401; falling back to preview", {
+          const streamDenied =
+            (retryErr?.status === 401 || retryErr?.status === 403) &&
+            track?.metadata?.access?.canStream;
+          if (streamDenied) {
+            console.warn("[AudioContext] stream retry denied; falling back to preview", {
               slug: track?.slug || slug,
               trackId: track?.id || slug,
+              status: retryErr?.status,
             });
-            const previewFallbackSrc = track?.metadata?.previewSrc || track?.previewUrl || null;
+            const previewFallbackSrc =
+              getTrackPreviewSrc(track) ||
+              track?.metadata?.previewSrc ||
+              track?.previewUrl ||
+              null;
             if (previewFallbackSrc) {
               skipPauseInterruptionRef.current = true;
               await loadAudioSrcAndPlay(audio, previewFallbackSrc);
@@ -1249,12 +1257,19 @@ export function AudioProvider({ children }) {
     }
 
     const applyStreamResolveError = (err) => {
-      if (err?.status === 401 && nextTrack?.metadata?.access?.canStream) {
-        console.warn("[AudioContext] stream fetch 401; falling back to preview", {
+      const streamDenied =
+        (err?.status === 401 || err?.status === 403) && nextTrack?.metadata?.access?.canStream;
+      if (streamDenied) {
+        console.warn("[AudioContext] stream fetch denied; falling back to preview", {
           slug: nextTrack.slug,
           trackId: nextTrack.id,
+          status: err?.status,
         });
-        const previewFallbackSrc = nextTrack?.metadata?.previewSrc || nextTrack?.previewUrl || null;
+        const previewFallbackSrc =
+          getTrackPreviewSrc(nextTrack) ||
+          nextTrack?.metadata?.previewSrc ||
+          nextTrack?.previewUrl ||
+          null;
         if (previewFallbackSrc) {
           skipPauseInterruptionRef.current = true;
           void loadAudioSrcAndPlay(audio, previewFallbackSrc);

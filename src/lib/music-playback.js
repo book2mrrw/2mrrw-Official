@@ -157,10 +157,7 @@ export function toPlaybackTrack(item, accountState, source = "library", override
   const previewPath =
     normalized?.preview || normalized?.preview_path || normalized?.previewPath || null;
   const playbackSrc = resolvePlaybackSrc(normalized, access, { userId });
-  const previewSrc =
-    previewPath && !access?.canStream
-      ? catalogPreviewAudioUrl(previewPath)
-      : null;
+  const previewSrc = previewPath ? catalogPreviewAudioUrl(previewPath) : null;
 
   return {
     id: normalized?.slug || normalized?.id,

@@ -243,7 +243,13 @@ export function isCollectorAccessSlug(slug) {
 
 export function isDigitalProduct(product) {
   const type = product?.product_type || product?.type;
-  return type === "digital" || type === "audio" || type === "single" || type === "album";
+  return (
+    type === "digital" ||
+    type === "audio" ||
+    type === "single" ||
+    type === "album" ||
+    type === "feature"
+  );
 }
 
 export function membershipHasPremiumAccess(membership) {
