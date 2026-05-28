@@ -248,6 +248,7 @@ export function isDigitalProduct(product) {
     type === "audio" ||
     type === "single" ||
     type === "album" ||
+    type === "ep" ||
     type === "feature"
   );
 }

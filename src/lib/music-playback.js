@@ -97,18 +97,26 @@ export function resolveCatalogPlaybackItem(item, catalogLookup) {
   return normalized;
 }
 
+function resolveAlbumTrackStreamSlug(albumSlug, track, catalogLookup) {
+  if (!albumSlug) return null;
+  if (typeof track === "string") return albumSlug;
+  const candidate = track?.slug;
+  if (candidate && catalogLookup?.bySlug?.has(candidate)) return candidate;
+  return albumSlug;
+}
+
 export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup) {
   const albumNorm = normalizeCatalogItemForPlayback(album);
+  const albumSlug = albumNorm.slug || album.slug;
+  const streamSlug = resolveAlbumTrackStreamSlug(albumSlug, track, catalogLookup);
+
   if (typeof track === "string") {
     const title = track;
-    const derivedSlug = titleToCatalogSlug(title);
-    const catalogItem =
-      catalogLookup?.bySlug?.get(derivedSlug) ||
-      catalogLookup?.byTitle?.get(normalizeTitleKey(title));
+    const catalogItem = catalogLookup?.byTitle?.get(normalizeTitleKey(title));
     const base = catalogItem
-      ? { ...catalogItem, title, slug: catalogItem.slug }
+      ? { ...catalogItem, title, slug: streamSlug }
       : {
-          slug: derivedSlug,
+          slug: streamSlug,
           title,
           cover: albumNorm.cover,
           preview: albumNorm.preview,
@@ -117,18 +125,19 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
         };
     return normalizeCatalogItemForPlayback({
       ...base,
-      albumSlug: album.slug,
+      albumSlug,
+      trackIndex: index,
       type: base.type || "album_track",
     });
   }
 
-  const slug = track.slug || titleToCatalogSlug(track.title);
-  const catalogItem = catalogLookup?.bySlug?.get(slug);
+  const catalogItem = track.slug ? catalogLookup?.bySlug?.get(track.slug) : null;
   return normalizeCatalogItemForPlayback({
     ...(catalogItem || {}),
     ...track,
-    slug: catalogItem?.slug || slug,
-    albumSlug: album.slug,
+    slug: streamSlug,
+    albumSlug,
+    trackIndex: index,
     cover: track.cover || albumNorm.cover,
     preview: track.preview || catalogItem?.preview || albumNorm.preview,
     audio: track.audio || catalogItem?.audio || albumNorm.audio,
@@ -200,10 +209,26 @@ export function albumTracksForPlayback(album, accountState, source = "album", ca
   return trackList
     .map((track, index) => {
       const item = resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup);
-      return toPlaybackTrack(item, accountState, source, {
+      const playback = toPlaybackTrack(item, accountState, source, {
         trackIndex: index,
         albumSlug: album.slug,
       });
+      const access = playback.metadata?.access;
+      const previewPath = item.preview || item.preview_path || item.previewPath;
+      const hasPreview = Boolean(previewPath);
+
+      if (!access?.canStream && !hasPreview && !playback.src) {
+        return {
+          ...playback,
+          src: "",
+          metadata: {
+            ...playback.metadata,
+            access: { ...access, previewOnly: true },
+            previewUnavailable: true,
+          },
+        };
+      }
+      return playback;
     })
-    .filter((t) => t.src);
+    .filter((t) => t.src || t.metadata?.previewUnavailable);
 }

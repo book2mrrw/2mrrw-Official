@@ -62,14 +62,23 @@ export default function AlbumTracklistSheet({
 
   const playAndClose = useCallback(
     (startIndex, shuffle = false) => {
-      if (!tracks.length) return;
+      const playable = tracks.filter((t) => Boolean(t.src));
+      if (!playable.length) return;
       if (shuffle) {
         setShuffle(true);
-        const order = [...tracks].sort(() => Math.random() - 0.5);
+        const order = [...playable].sort(() => Math.random() - 0.5);
         void playQueue(order, 0);
       } else {
         setShuffle(false);
-        void playQueue(tracks, startIndex);
+        const tapped = tracks[startIndex];
+        let queueIndex = 0;
+        if (tapped?.src) {
+          const found = playable.findIndex(
+            (t) => t.id === tapped.id && t.metadata?.trackIndex === tapped.metadata?.trackIndex
+          );
+          if (found >= 0) queueIndex = found;
+        }
+        void playQueue(playable, queueIndex);
       }
       onClose?.();
     },
@@ -196,7 +205,7 @@ export default function AlbumTracklistSheet({
             <button
               type="button"
               onClick={() => playAndClose(0, false)}
-              disabled={!tracks.length}
+              disabled={!tracks.some((t) => t.src)}
               style={{
                 flex: 1,
                 height: 40,
@@ -206,8 +215,8 @@ export default function AlbumTracklistSheet({
                 borderRadius: 8,
                 fontSize: 12,
                 fontWeight: 800,
-                cursor: tracks.length ? "pointer" : "not-allowed",
-                opacity: tracks.length ? 1 : 0.4,
+                cursor: tracks.some((t) => t.src) ? "pointer" : "not-allowed",
+                opacity: tracks.some((t) => t.src) ? 1 : 0.4,
               }}
             >
               Play All
@@ -215,7 +224,7 @@ export default function AlbumTracklistSheet({
             <button
               type="button"
               onClick={() => playAndClose(0, true)}
-              disabled={!tracks.length}
+              disabled={!tracks.some((t) => t.src)}
               style={{
                 flex: 1,
                 height: 40,
@@ -225,8 +234,8 @@ export default function AlbumTracklistSheet({
                 borderRadius: 8,
                 fontSize: 12,
                 fontWeight: 700,
-                cursor: tracks.length ? "pointer" : "not-allowed",
-                opacity: tracks.length ? 1 : 0.4,
+                cursor: tracks.some((t) => t.src) ? "pointer" : "not-allowed",
+                opacity: tracks.some((t) => t.src) ? 1 : 0.4,
               }}
             >
               Shuffle
@@ -248,8 +257,9 @@ export default function AlbumTracklistSheet({
                 null;
               const trackCover = track.cover || album.cover;
               const trackCoverType = track.coverArtType || albumCoverType;
+              const previewUnavailable = Boolean(track.metadata?.previewUnavailable);
               const trackAccess = resolveTrackAccess(
-                { ...track, slug: track.slug || `${album.slug}-t${index + 1}`, albumSlug: album.slug },
+                { ...track, slug: track.slug || album.slug, albumSlug: album.slug },
                 { ...accountState, userId }
               );
               const plusTrack = {
@@ -349,40 +359,57 @@ export default function AlbumTracklistSheet({
                       onLibraryChange={onLibraryChange}
                     />
                   </span>
-                  <button
-                    type="button"
-                    aria-label={active && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
-                    onClick={() => {
-                      if (active && isPlaying) {
-                        void toggle();
-                        onClose?.();
-                        return;
-                      }
-                      if (active) {
-                        void toggle();
-                        onClose?.();
-                        return;
-                      }
-                      playAndClose(index, false);
-                    }}
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: "50%",
-                      border: "1px solid rgba(255,255,255,0.1)",
-                      background: "rgba(255,255,255,0.05)",
-                      color: "#00ffff",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      cursor: "pointer",
-                      flexShrink: 0,
-                      padding: 0,
-                      fontSize: 12,
-                    }}
-                  >
-                    {active && isPlaying ? "⏸" : "▶"}
-                  </button>
+                  {previewUnavailable ? (
+                    <span
+                      style={{
+                        fontSize: 9,
+                        color: "rgba(255,255,255,0.4)",
+                        letterSpacing: 0.5,
+                        textTransform: "uppercase",
+                        flexShrink: 0,
+                        maxWidth: 72,
+                        textAlign: "right",
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      Preview not available
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      aria-label={active && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
+                      onClick={() => {
+                        if (active && isPlaying) {
+                          void toggle();
+                          onClose?.();
+                          return;
+                        }
+                        if (active) {
+                          void toggle();
+                          onClose?.();
+                          return;
+                        }
+                        playAndClose(index, false);
+                      }}
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: "50%",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        background: "rgba(255,255,255,0.05)",
+                        color: "#00ffff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: "pointer",
+                        flexShrink: 0,
+                        padding: 0,
+                        fontSize: 12,
+                      }}
+                    >
+                      {active && isPlaying ? "⏸" : "▶"}
+                    </button>
+                  )}
                 </div>
               );
             })}

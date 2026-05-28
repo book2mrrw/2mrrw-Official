@@ -241,6 +241,7 @@ export function partitionLibraryByType(library = [], catalog = { singles: [], al
     const type = String(item.product_type || "").toLowerCase();
     const isAlbum =
       type === "album" ||
+      type === "ep" ||
       albumSlugs.has(item.slug) ||
       (Array.isArray(item.tracks) && item.tracks.length > 1);
     if (isAlbum) {

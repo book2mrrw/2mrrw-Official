@@ -1014,8 +1014,17 @@ export default function Page() {
         "album_modal",
         catalogPlaybackLookup
       );
-      if (tracks.length) {
-        void playQueue(tracks, startIndex);
+      const playable = tracks.filter((t) => Boolean(t.src));
+      if (playable.length) {
+        const tapped = tracks[startIndex];
+        let queueIndex = 0;
+        if (tapped?.src) {
+          const found = playable.findIndex(
+            (t) => t.id === tapped.id && t.metadata?.trackIndex === tapped.metadata?.trackIndex
+          );
+          if (found >= 0) queueIndex = found;
+        }
+        void playQueue(playable, queueIndex);
         return;
       }
       const access = resolveContentAccess(albumItem, accountState);
