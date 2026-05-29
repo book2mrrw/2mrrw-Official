@@ -1,4 +1,4 @@
-/** Allowed browser origins for /api/media/* cross-origin reads (matches R2 bucket CORS). */
+/** Allowed browser origins for /api/media/* and /api/library/* (matches R2 bucket CORS). */
 const MEDIA_CORS_ORIGINS = new Set([
   "https://www.2mrrw.com",
   "https://2mrrw.com",
@@ -9,7 +9,7 @@ const MEDIA_CORS_ORIGINS = new Set([
 ]);
 
 /**
- * CORS headers for /api/media/* — Range support is required for audio/video seeking.
+ * CORS headers for /api/media/* and /api/library/* — Range required for seeking.
  * @param {Request} req
  * @returns {Record<string, string>}
  */
@@ -17,8 +17,10 @@ export function mediaCorsHeaders(req) {
   const origin = req.headers.get("origin");
   const headers = {
     "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-    "Access-Control-Allow-Headers": "Range, Content-Type",
-    "Access-Control-Expose-Headers": "Accept-Ranges, Content-Length, Content-Range",
+    "Access-Control-Allow-Headers":
+      "Range, Content-Type, Authorization, Origin, Accept",
+    "Access-Control-Expose-Headers":
+      "Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified",
   };
   if (origin && MEDIA_CORS_ORIGINS.has(origin)) {
     headers["Access-Control-Allow-Origin"] = origin;
@@ -27,7 +29,7 @@ export function mediaCorsHeaders(req) {
   return headers;
 }
 
-/** OPTIONS preflight for /api/media/* routes. */
+/** OPTIONS preflight for /api/media/* and /api/library/* routes. */
 export function mediaCorsPreflightResponse(req) {
   return new Response(null, { status: 204, headers: mediaCorsHeaders(req) });
 }

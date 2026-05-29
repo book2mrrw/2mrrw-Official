@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getActiveMembership,
@@ -11,27 +12,34 @@ import {
 import { getGuestUser } from "@/lib/guest-session";
 import { catalogCoverUrl } from "@/lib/media-urls";
 
+export async function OPTIONS(req) {
+  return mediaCorsPreflightResponse(req);
+}
+
 export async function POST(request) {
   const user = await getGuestUser();
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return applyMediaCors(request, NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
   }
 
   let body = {};
   try {
     body = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return applyMediaCors(request, NextResponse.json({ error: "Invalid JSON" }, { status: 400 }));
   }
 
   const slug = String(body.slug || "").trim();
   if (!slug) {
-    return NextResponse.json({ error: "slug is required" }, { status: 400 });
+    return applyMediaCors(request, NextResponse.json({ error: "slug is required" }, { status: 400 }));
   }
 
   const alreadyOwned = await userOwnsProduct(user.id, slug);
   if (alreadyOwned) {
-    return NextResponse.json({ ok: true, slug, alreadyOwned: true });
+    return applyMediaCors(
+      request,
+      NextResponse.json({ ok: true, slug, alreadyOwned: true })
+    );
   }
 
   const membership = await getActiveMembership(user.id);
@@ -42,7 +50,10 @@ export async function POST(request) {
     membershipHasPremiumAccess(membership) || collector.hasCollectorAccess;
 
   if (!canGrant) {
-    return NextResponse.json({ error: "No entitlement to add this track" }, { status: 403 });
+    return applyMediaCors(
+      request,
+      NextResponse.json({ error: "No entitlement to add this track" }, { status: 403 })
+    );
   }
 
   try {
@@ -52,17 +63,20 @@ export async function POST(request) {
       slugs: [slug],
       source: "grant",
     });
-    return NextResponse.json({ ok: true, slug, items });
+    return applyMediaCors(request, NextResponse.json({ ok: true, slug, items }));
   } catch (err) {
-    return NextResponse.json({ error: err.message || "Grant failed" }, { status: 500 });
+    return applyMediaCors(
+      request,
+      NextResponse.json({ error: err.message || "Grant failed" }, { status: 500 })
+    );
   }
 }
 
-export async function GET() {
+export async function GET(req) {
   const user = await getGuestUser();
 
   if (!user) {
-    return NextResponse.json({ items: [], ownedSlugs: [] });
+    return applyMediaCors(req, NextResponse.json({ items: [], ownedSlugs: [] }));
   }
 
   const admin = createAdminClient();
@@ -73,7 +87,7 @@ export async function GET() {
     .order("granted_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return applyMediaCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   }
 
   const items = (data || []).map((row) => {
@@ -95,8 +109,11 @@ export async function GET() {
   };
   });
 
-  return NextResponse.json({
-    items,
-    ownedSlugs: items.map((i) => i.slug).filter(Boolean),
-  });
+  return applyMediaCors(
+    req,
+    NextResponse.json({
+      items,
+      ownedSlugs: items.map((i) => i.slug).filter(Boolean),
+    })
+  );
 }
