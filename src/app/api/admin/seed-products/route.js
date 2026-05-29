@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PRODUCT_CATALOG } from "@/lib/commerce/catalog";
+import { getProductCatalog } from "@/lib/commerce/catalog";
 
 export async function POST(req) {
   const secret = req.headers.get("x-seed-secret");
@@ -9,7 +9,7 @@ export async function POST(req) {
   }
 
   const admin = createAdminClient();
-  const rows = PRODUCT_CATALOG.map((p) => ({
+  const rows = getProductCatalog().map((p) => ({
     slug: p.slug,
     title: p.title,
     product_type: p.product_type,

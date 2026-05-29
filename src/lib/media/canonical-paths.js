@@ -1,24 +1,15 @@
 /** Canonical R2 key builders — lowercase, URL-safe; paths end at release/track folders (flat media inside). */
 
-import { normalizeReleaseType } from "@/lib/media/normalize-release-type";
+import { RELEASE_FOLDER } from "@/lib/media/constants/release-types";
+import {
+  AUDIO_ROOT,
+  IMAGE_ROOT,
+  PREVIEW_ROOT,
+  VIDEO_ROOT,
+} from "@/lib/media/constants/storage-domains";
+import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
 
-const AUDIO_ROOT = "digital-assets";
-const IMAGE_ROOT = "images";
-const PREVIEW_ROOT = "previews";
-const VIDEO_ROOT = "videos";
-
-/** @deprecated Prefer normalizeReleaseType — kept for callers that still read alias keys. */
-export const RELEASE_FOLDER = {
-  single: "singles",
-  singles: "singles",
-  feature: "features",
-  features: "features",
-  ep: "mixtapes-and-eps",
-  mixtape: "mixtapes-and-eps",
-  "mixtapes-and-eps": "mixtapes-and-eps",
-  album: "albums",
-  albums: "albums",
-};
+export { RELEASE_FOLDER };
 
 function releaseFolder(releaseType) {
   return normalizeReleaseType(releaseType);

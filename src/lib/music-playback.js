@@ -1,4 +1,4 @@
-import { withR2CatalogMedia } from "@/components/home/catalogMedia";
+import { withR2CatalogMedia } from "@/lib/media/r2-catalog-media";
 import { resolvePlaybackSrc, resolveTrackAccess } from "@/lib/music-access";
 import {
   getCanonicalReleaseBySlug,

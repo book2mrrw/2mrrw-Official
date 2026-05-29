@@ -1,14 +1,8 @@
-/** Canonical product catalog — sync to `products` table via seed API or migration. */
-export const PRODUCT_CATALOG = [
-  { slug: "hour-glass", title: "Hour Glass", product_type: "single", price_cents: 299, cover_url: "/images/singles/hourglass.jpg", storage_path: "singles/hour-glass/audio.mp3" },
-  { slug: "w2d", title: "W.2.D", product_type: "single", price_cents: 299, cover_url: "/images/singles/w2d.jpg", storage_path: "singles/w2d/audio.mp3" },
-  { slug: "artificial", title: "Artificial", product_type: "single", price_cents: 299, cover_url: "/images/singles/artificial.jpg", storage_path: "singles/artificial/audio.mp3" },
-  { slug: "turnt-me-2-dis", title: "Turnt Me 2 Dis", product_type: "single", price_cents: 299, cover_url: "/images/singles/turnt.jpg", storage_path: "singles/turnt-me-2-dis/audio.mp3" },
-  { slug: "i-dont-believe-you", title: "I Don't Believe You", product_type: "feature", price_cents: 299, cover_url: "/images/features/idbu.jpg", preview_path: "/audio/previews/i-dont-believe-you-preview.wav", storage_path: "digital-assets/singles/i-dont-believe-you/audio.wav" },
-  { slug: "2-heavy", title: "2 Heavy", product_type: "feature", price_cents: 299, cover_url: "/images/features/2heavy.jpg", preview_path: "/audio/previews/2-heavy-preview.wav", storage_path: "digital-assets/singles/2-heavy/audio.wav" },
-  { slug: "tbh", title: "T.B.H.", product_type: "album", price_cents: 999, cover_url: "/images/albums/tbh.jpg" },
-  { slug: "ad", title: "(A.D)", product_type: "album", price_cents: 999, cover_url: "/images/albums/ad.jpg" },
-  { slug: "love-hz", title: "Love Hz Vol.1", product_type: "album", price_cents: 1299, cover_url: "/images/albums/lovehz.jpg" },
+/** Canonical product catalog — sync to `products` + `catalog_tracks` via seed script or migration. */
+import { getCanonicalProductRows } from "@/lib/media/canonical-catalog";
+
+/** Non-digital commerce rows (vinyl, vault, merch) — unchanged from storefront baseline. */
+const COMMERCE_EXTRAS = [
   { slug: "tbh-vinyl", title: "T.B.H. – Vinyl", product_type: "vinyl", price_cents: 4799, cover_url: "/images/albums/tbh.jpg" },
   { slug: "ad-vinyl", title: "(A.D) – Vinyl", product_type: "vinyl", price_cents: 4799, cover_url: "/images/albums/ad.jpg" },
   { slug: "love-hz-vinyl", title: "Love Hz Vol.1 – Vinyl", product_type: "vinyl", price_cents: 4799, cover_url: "/images/albums/lovehz.jpg" },
@@ -21,6 +15,16 @@ export const PRODUCT_CATALOG = [
   { slug: "shirt", title: "2MRRW T-SHIRT", product_type: "merch", price_cents: 2999, cover_url: "/images/merch/shirt.jpg" },
   { slug: "hat", title: "2MRRW HAT", product_type: "merch", price_cents: 2499, cover_url: "/images/merch/hat.jpg" },
 ];
+
+let productCatalogCache = null;
+
+/** Lazy product catalog — use getProductCatalog() to avoid TDZ during module init. */
+export function getProductCatalog() {
+  if (!productCatalogCache) {
+    productCatalogCache = Object.freeze([...getCanonicalProductRows(), ...COMMERCE_EXTRAS]);
+  }
+  return productCatalogCache;
+}
 
 export function slugFromCartItem(item) {
   return item?.slug || null;

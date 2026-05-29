@@ -1,4 +1,4 @@
-import { PRODUCT_CATALOG } from "@/lib/commerce/catalog";
+import { getProductCatalog } from "@/lib/commerce/catalog";
 
 /** Ordered slug candidates: canonical catalog slug first, then base slug without `-vinyl`. */
 export function storefrontProductSlugCandidates(releaseSlug) {
@@ -44,7 +44,7 @@ export function releaseTypeToGiftItemType(releaseType, productType) {
 }
 
 function catalogEntryForSlug(slug) {
-  return PRODUCT_CATALOG.find((p) => p.slug === slug) || null;
+  return getProductCatalog().find((p) => p.slug === slug) || null;
 }
 
 /**
