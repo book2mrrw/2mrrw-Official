@@ -200,7 +200,7 @@ export function resolveTrackAccess(track, accountState = {}) {
   };
 }
 
-/** Fast-path library stream URL — browser follows redirect to signed R2 without JSON prefetch. */
+/** Fast-path library stream URL — browser loads same-origin proxy (Range-safe). */
 export function libraryStreamRedirectSrc(slug, { trackSlug = null } = {}) {
   if (!slug) return "";
   const params = new URLSearchParams({ slug, redirect: "1" });
@@ -210,7 +210,7 @@ export function libraryStreamRedirectSrc(slug, { trackSlug = null } = {}) {
 
 /**
  * Playback URL resolution (no UI changes).
- * - Entitled full audio → /api/library/stream (redirects to signed R2 GET)
+ * - Entitled full audio → /api/library/stream (proxied signed R2 GET)
  * - Previews → public R2 CDN (previews/, artwork/, digital-assets single covers)
  */
 /** Full stream only when client user matches server account/state user (cookie session aligned). */

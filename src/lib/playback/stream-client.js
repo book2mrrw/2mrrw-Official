@@ -25,7 +25,7 @@ function assertJsonContentType(res, slug) {
 async function assertSignedAudioUrl(url, { slug, signal } = {}) {
   const res = await fetch(url, {
     method: "HEAD",
-    credentials: "omit",
+    credentials: isLibraryStreamSrc(url) ? "include" : "omit",
     signal,
   });
   if (!res.ok) {
@@ -61,7 +61,7 @@ export function isLibraryStreamSrc(src) {
   }
 }
 
-/** True when the browser can load the stream URL directly (302 to signed R2) without a JSON prefetch. */
+/** True when the browser can load the stream URL directly (same-origin proxy) without a JSON prefetch. */
 export function isLibraryStreamRedirectSrc(src) {
   if (!isLibraryStreamSrc(src)) return false;
   try {
@@ -91,6 +91,21 @@ export function parseStreamSlugFromSrc(src) {
   }
 }
 
+export function parseStreamTrackSlugFromSrc(src) {
+  if (!src) return null;
+  try {
+    const url = src.startsWith("/api/")
+      ? { href: src, pathname: src.split("?")[0], searchParams: new URLSearchParams(src.split("?")[1] || "") }
+      : new URL(src, typeof window !== "undefined"
+        ? window.location.origin
+        : "http://localhost");
+    return url.searchParams.get("trackSlug");
+  } catch {
+    const match = String(src).match(/[?&]trackSlug=([^&]+)/);
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+}
+
 export function streamUrlNeedsRefresh(meta, now = Date.now()) {
   if (!meta?.url || !meta?.fetchedAt) return true;
   const expiresInMs = (meta.expiresIn || 3600) * 1000;
@@ -104,11 +119,12 @@ export function streamUrlNeedsRefresh(meta, now = Date.now()) {
  */
 export async function fetchLibraryStream(
   slug,
-  { force = false, sessionId = null, signal = undefined } = {}
+  { force = false, sessionId = null, trackSlug = null, signal = undefined } = {}
 ) {
   const params = new URLSearchParams({ slug });
   if (force) params.set("force", "true");
   if (sessionId) params.set("sessionId", sessionId);
+  if (trackSlug) params.set("trackSlug", String(trackSlug));
 
   const res = await fetch(`${LIBRARY_STREAM_PATH}?${params.toString()}`, {
     credentials: "include",
@@ -151,16 +167,28 @@ export async function fetchLibraryStream(
     err.sessionId = body.sessionId || null;
     throw err;
   }
-  if (res.status === 404) {
-    const err = new Error("Stream asset not found");
-    err.status = 404;
+  if (res.status === 404 || res.status === 422) {
+    let body = {};
+    try {
+      assertJsonContentType(res, slug);
+      body = await res.json();
+    } catch {
+      body = {};
+    }
+    const err = new Error(body.error || "Stream asset not found");
+    err.code = body.code || "MEDIA_UNAVAILABLE";
+    err.status = res.status;
     err.slug = slug;
     throw err;
   }
   if (!res.ok) {
     assertJsonContentType(res, slug);
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error || `Stream request failed (${res.status})`);
+    const err = new Error(body.error || `Stream request failed (${res.status})`);
+    err.code = body.code || null;
+    err.status = res.status;
+    err.slug = slug;
+    throw err;
   }
 
   assertJsonContentType(res, slug);

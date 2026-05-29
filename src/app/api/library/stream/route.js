@@ -17,6 +17,8 @@ import {
 import { createR2SignedGetUrl } from "@/lib/storage/r2";
 import { getOrCreateStreamSignedUrl } from "@/lib/playback/stream-url-cache";
 import { clearMediaResolverCaches } from "@/lib/media/cache-invalidation";
+import { proxySignedR2Get } from "@/lib/server/r2-stream-proxy";
+import { libraryStreamRedirectSrc } from "@/lib/music-access";
 
 export const dynamic = "force-dynamic";
 
@@ -115,30 +117,26 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
 
   const redirect = req.nextUrl.searchParams.get("redirect") === "1";
   if (redirect) {
-    const rangeHeader = req.headers.get("range");
-    return applyMediaCors(
-      req,
-      NextResponse.redirect(url, {
-        status: 302,
-        headers: {
-          ...(rangeHeader ? { Range: rangeHeader } : {}),
-          "Cache-Control": "no-store",
-          "Accept-Ranges": "bytes",
-          "X-Content-Type-Options": "nosniff",
-        },
-      })
-    );
+    return proxySignedR2Get(req, url);
   }
+
+  const proxySrc = libraryStreamRedirectSrc(slug, {
+    trackSlug: trackSlug || null,
+  });
 
   return applyMediaCors(
     req,
     NextResponse.json({
-      url,
+      url: proxySrc,
       expiresIn: STREAM_SIGNED_URL_TTL_SECONDS,
       sessionId: sessionId || null,
       streamEventId: streamEventId || null,
     })
   );
+}
+
+export async function HEAD(req) {
+  return GET(req);
 }
 
 export async function GET(req) {
