@@ -1,5 +1,16 @@
-import { GetObjectCommand, HeadBucketCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  GetObjectCommand,
+  HeadBucketCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import {
+  ensureRelativeSiteApiPath,
+  isSiteApiMediaPath,
+  repairMisboundR2ApiUrl,
+} from "@/lib/media/site-api-url";
 import { getPublicCdnBase, warnPublicCdnEnvMismatch } from "@/lib/storage/r2-public-cdn";
 
 export const r2Client = new S3Client({
@@ -38,6 +49,18 @@ export function buildR2Key(prefix, path) {
 let warnedMissingR2PublicUrl = false;
 
 export function getPublicR2Url(path) {
+  const raw = String(path || "").trim();
+  if (!raw) {
+    return getPublicCdnBase();
+  }
+  if (/^https?:\/\//i.test(raw)) {
+    return repairMisboundR2ApiUrl(raw);
+  }
+  const normalized = raw.replace(/^\//, "");
+  if (isSiteApiMediaPath(normalized)) {
+    return ensureRelativeSiteApiPath(normalized);
+  }
+
   const base = getPublicCdnBase();
   if (!process.env.NEXT_PUBLIC_R2_PUBLIC_URL) {
     if (!warnedMissingR2PublicUrl) {
@@ -49,7 +72,6 @@ export function getPublicR2Url(path) {
   } else {
     warnPublicCdnEnvMismatch();
   }
-  const normalized = String(path || "").replace(/^\//, "");
   if (!normalized) return base;
   return `${base}/${normalized}`;
 }
@@ -85,4 +107,87 @@ export async function checkR2Connectivity() {
   } catch (err) {
     return { ok: false, message: err?.message || "R2 HeadBucket failed" };
   }
+}
+
+/**
+ * True when `key` is a file directly under `folderPrefix` (no nested subfolders).
+ * @param {string} folderPrefix - entity folder prefix (with or without trailing slash)
+ * @param {string} key - full R2 object key
+ */
+export function isDirectChildObjectKey(folderPrefix, key) {
+  const listPrefix = String(folderPrefix || "")
+    .replace(/^\//, "")
+    .replace(/\/?$/, "/");
+  const normalizedKey = String(key || "").replace(/^\//, "");
+  if (!listPrefix || !normalizedKey.startsWith(listPrefix)) return false;
+  const remainder = normalizedKey.slice(listPrefix.length);
+  return remainder.length > 0 && !remainder.includes("/");
+}
+
+/**
+ * List R2 objects under a prefix (ListObjectsV2, paginated).
+ * Default: non-recursive — direct child files only (Delimiter `/`).
+ * @param {string} prefix - object key prefix (no leading slash)
+ * @param {{ recursive?: boolean }} [options]
+ * @returns {Promise<Array<{ Key: string, Size?: number }>>}
+ */
+export async function listR2Objects(prefix, options = {}) {
+  const { recursive = false } = options;
+  if (!R2_BUCKET) return [];
+  const normalized = String(prefix || "").replace(/^\//, "");
+  if (!normalized) return [];
+
+  const listPrefix = normalized.endsWith("/") ? normalized : `${normalized}/`;
+  const searchPrefix = recursive ? normalized : listPrefix;
+
+  const objects = [];
+  let continuationToken;
+
+  do {
+    const response = await r2Client.send(
+      new ListObjectsV2Command({
+        Bucket: R2_BUCKET,
+        Prefix: searchPrefix,
+        ...(recursive ? {} : { Delimiter: "/" }),
+        ContinuationToken: continuationToken,
+      })
+    );
+    if (response.Contents?.length) {
+      for (const item of response.Contents) {
+        if (!item?.Key || item.Key.endsWith("/")) continue;
+        if (recursive || isDirectChildObjectKey(listPrefix, item.Key)) {
+          objects.push(item);
+        }
+      }
+    }
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return objects;
+}
+
+/**
+ * Discover first direct-child object under prefix matching extensions (priority order).
+ * Does not scan nested subfolders (e.g. …/hour-glass/audio/master.wav).
+ * @param {string} prefix - entity folder prefix (with or without trailing slash)
+ * @param {string[]} extensionsInPriorityOrder - e.g. [".wav", ".flac"]
+ * @returns {Promise<string | null>} full R2 object key
+ */
+export async function discoverFileByExtensions(prefix, extensionsInPriorityOrder) {
+  const normalized = String(prefix || "").replace(/^\//, "").replace(/\/$/, "");
+  if (!normalized || !extensionsInPriorityOrder?.length) return null;
+
+  const listPrefix = `${normalized}/`;
+  const objects = await listR2Objects(listPrefix, { recursive: false });
+  const files = objects
+    .map((item) => item.Key)
+    .filter((key) => key && isDirectChildObjectKey(listPrefix, key));
+
+  for (const ext of extensionsInPriorityOrder) {
+    const suffix = ext.startsWith(".") ? ext.toLowerCase() : `.${ext.toLowerCase()}`;
+    const match = files.find((key) => key.toLowerCase().endsWith(suffix));
+    if (match) return match;
+  }
+
+  return null;
 }

@@ -1,3 +1,8 @@
+import {
+  ensureRelativeSiteApiPath,
+  isSiteApiMediaPath,
+  repairMisboundR2ApiUrl,
+} from "@/lib/media/site-api-url";
 import { getPublicR2Url } from "@/lib/storage/r2";
 import { getPublicCdnBase, R2_PUBLIC_CDN_FALLBACK } from "@/lib/storage/r2-public-cdn";
 
@@ -11,8 +16,14 @@ function catalogCdnBase() {
 function toCatalogCdnUrl(relativePath) {
   const normalized = String(relativePath || "").replace(/^\//, "");
   if (!normalized) return "";
-  if (/^https?:\/\//i.test(normalized)) return normalized;
+  if (/^https?:\/\//i.test(normalized)) {
+    return repairMisboundR2ApiUrl(normalized);
+  }
+  if (isSiteApiMediaPath(normalized)) {
+    return ensureRelativeSiteApiPath(normalized);
+  }
   const r2 = getPublicR2Url(normalized);
+  if (r2 && isSiteApiMediaPath(r2)) return ensureRelativeSiteApiPath(r2);
   if (r2) return r2;
   return `${catalogCdnBase()}/${normalized}`;
 }
@@ -24,14 +35,23 @@ function toCatalogCdnUrl(relativePath) {
 export function catalogPublicMediaUrl(relativePath) {
   if (!relativePath) return "";
   const normalized = String(relativePath).replace(/^\//, "");
-  if (/^https?:\/\//i.test(normalized)) return normalized;
+  if (/^https?:\/\//i.test(normalized)) {
+    return repairMisboundR2ApiUrl(normalized);
+  }
+  if (isSiteApiMediaPath(normalized)) {
+    return ensureRelativeSiteApiPath(normalized);
+  }
   return toCatalogCdnUrl(normalized);
 }
 
 /** Normalize cover_url for display (strip leading slash; prefer R2 public when configured). */
 export function catalogCoverUrl(coverUrl) {
   if (!coverUrl) return "";
-  const withoutLeading = String(coverUrl).replace(/^\//, "");
+  const raw = String(coverUrl).trim();
+  if (isSiteApiMediaPath(raw)) {
+    return ensureRelativeSiteApiPath(raw);
+  }
+  const withoutLeading = raw.replace(/^\//, "");
   return catalogPublicMediaUrl(withoutLeading) || `/${withoutLeading}`;
 }
 
@@ -40,11 +60,8 @@ export function catalogPreviewAudioUrl(previewPath) {
   if (!previewPath) return "";
   const normalized = String(previewPath).replace(/^\//, "");
   if (/^https?:\/\//i.test(normalized)) return normalized;
-  if (normalized.startsWith("api/media/preview")) {
-    return `/${normalized}`;
-  }
-  if (normalized.startsWith("/api/media/preview")) {
-    return normalized;
+  if (isSiteApiMediaPath(normalized)) {
+    return ensureRelativeSiteApiPath(normalized);
   }
   if (normalized.startsWith("audio/previews/")) {
     const flatKey = normalized.replace(/^audio\/previews\//, "");
@@ -61,11 +78,8 @@ export function catalogMotionVideoUrl(videoPath) {
   if (!videoPath) return "";
   const normalized = String(videoPath).replace(/^\//, "");
   if (/^https?:\/\//i.test(normalized)) return normalized;
-  if (normalized.startsWith("api/media/")) {
-    return `/${normalized}`;
-  }
-  if (normalized.startsWith("/api/media/")) {
-    return normalized;
+  if (isSiteApiMediaPath(normalized)) {
+    return ensureRelativeSiteApiPath(normalized);
   }
   if (normalized.startsWith("videos/")) {
     const r2 = getPublicR2Url(normalized);
@@ -79,7 +93,8 @@ export function catalogVisualMediaUrl(visualPath) {
   if (!visualPath) return "";
   const normalized = String(visualPath).replace(/^\//, "");
   if (/^https?:\/\//i.test(normalized)) return normalized;
-  if (normalized.startsWith("/api/media/visual")) return normalized;
-  if (normalized.startsWith("api/media/visual")) return `/${normalized}`;
+  if (isSiteApiMediaPath(normalized)) {
+    return ensureRelativeSiteApiPath(normalized);
+  }
   return catalogPublicMediaUrl(normalized);
 }

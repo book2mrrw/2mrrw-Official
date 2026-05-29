@@ -6,6 +6,12 @@ const ARTWORK_SIZE_ENTRIES = [
   { sizes: "1024x1024" },
 ];
 
+import {
+  ensureRelativeSiteApiPath,
+  isSiteApiMediaPath,
+  repairMisboundR2ApiUrl,
+} from "@/lib/media/site-api-url";
+
 const artworkEntriesCache = new Map();
 
 function r2PublicBase() {
@@ -27,15 +33,30 @@ function mimeFromUrl(url) {
  */
 export function resolveAbsoluteArtworkUrl(cover) {
   if (!cover) return "";
-  const raw = String(cover).trim();
+  let raw = String(cover).trim();
   if (!raw) return "";
-  if (/^https?:\/\//i.test(raw) || raw.startsWith("blob:") || raw.startsWith("data:")) {
+  raw = repairMisboundR2ApiUrl(raw);
+  if (raw.startsWith("blob:") || raw.startsWith("data:")) {
+    return raw;
+  }
+  if (isSiteApiMediaPath(raw)) {
+    const relative = ensureRelativeSiteApiPath(raw);
+    if (typeof window !== "undefined" && window.location?.origin) {
+      try {
+        return new URL(relative, window.location.origin).href;
+      } catch {
+        return relative;
+      }
+    }
+    return relative;
+  }
+  if (/^https?:\/\//i.test(raw)) {
     return raw;
   }
 
   const withoutLeading = raw.replace(/^\//, "");
   const r2 = r2PublicBase();
-  if (r2 && !raw.includes("://")) {
+  if (r2 && !raw.includes("://") && !isSiteApiMediaPath(withoutLeading)) {
     return `${r2}/${withoutLeading}`;
   }
 

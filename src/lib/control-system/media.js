@@ -1,3 +1,9 @@
+import {
+  ensureRelativeSiteApiPath,
+  isR2PublicCdnBaseUrl,
+  isSiteApiMediaPath,
+  repairMisboundR2ApiUrl,
+} from "@/lib/media/site-api-url";
 import { catalogItemAllowsFullPlayback } from "@/lib/playback/playback-gate";
 
 const ASSET_ID_KEYS = ["assetId", "asset_id", "id"];
@@ -57,10 +63,14 @@ export function firstString(...values) {
 }
 
 export function absolutizeControlSystemMediaUrl(value, apiBaseUrl = "") {
-  const rawUrl = firstString(value);
+  const rawUrl = firstString(repairMisboundR2ApiUrl(value));
   if (!rawUrl) return "";
-  if (/^https?:\/\//i.test(rawUrl) || rawUrl.startsWith("blob:") || rawUrl.startsWith("data:")) return rawUrl;
-  if (rawUrl.startsWith("/") && apiBaseUrl) return `${apiBaseUrl}${rawUrl}`;
+  if (rawUrl.startsWith("blob:") || rawUrl.startsWith("data:")) return rawUrl;
+  if (isSiteApiMediaPath(rawUrl)) return ensureRelativeSiteApiPath(rawUrl);
+  if (/^https?:\/\//i.test(rawUrl)) return rawUrl;
+  if (rawUrl.startsWith("/") && apiBaseUrl && !isR2PublicCdnBaseUrl(apiBaseUrl)) {
+    return `${apiBaseUrl}${rawUrl}`;
+  }
   return rawUrl.startsWith("/") ? rawUrl : "";
 }
 
@@ -74,8 +84,12 @@ export function signedUrlEndpointForAsset(asset, apiBaseUrl = "") {
     assetId ? `/api/media/${encodeURIComponent(assetId)}/signed-url` : ""
   );
   if (!endpoint) return "";
-  if (/^https?:\/\//i.test(endpoint)) return endpoint;
-  return endpoint.startsWith("/") && apiBaseUrl ? `${apiBaseUrl}${endpoint}` : "";
+  if (isSiteApiMediaPath(endpoint)) return ensureRelativeSiteApiPath(endpoint);
+  if (/^https?:\/\//i.test(endpoint)) return repairMisboundR2ApiUrl(endpoint);
+  if (endpoint.startsWith("/") && apiBaseUrl && !isR2PublicCdnBaseUrl(apiBaseUrl)) {
+    return `${apiBaseUrl}${endpoint}`;
+  }
+  return endpoint.startsWith("/") ? endpoint : "";
 }
 
 function valueFromKeys(record, keys) {
@@ -198,7 +212,10 @@ export async function fetchSignedUrlsBatch(endpoints, apiBaseUrl = "") {
 
   if (!uncached.length) return out;
 
-  const batchUrl = apiBaseUrl ? `${apiBaseUrl.replace(/\/+$/, "")}/api/media/signed-urls` : "";
+  const batchUrl =
+    apiBaseUrl && !isR2PublicCdnBaseUrl(apiBaseUrl)
+      ? `${apiBaseUrl.replace(/\/+$/, "")}/api/media/signed-urls`
+      : "/api/media/signed-urls";
   if (batchUrl) {
     const assetIds = uncached
       .map((endpoint) => {
