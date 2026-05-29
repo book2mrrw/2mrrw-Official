@@ -19,6 +19,7 @@ import { getOrCreateStreamSignedUrl } from "@/lib/playback/stream-url-cache";
 import { clearMediaResolverCaches } from "@/lib/media/cache-invalidation";
 import { proxySignedR2Get } from "@/lib/server/r2-stream-proxy";
 import { libraryStreamRedirectSrc } from "@/lib/music-access";
+import { isAdminUser } from "@/lib/auth/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ function logStreamR2Env(context) {
 }
 
 async function validateStreamEntitlement(req, user, slug) {
+  if (isAdminUser(user)) return null;
   const canStream = await userCanStreamProduct(user.id, slug, user);
   if (!canStream) {
     return applyMediaCors(
@@ -135,6 +137,7 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
   );
 }
 
+/** HEAD uses the same entitlement + redirect proxy path as GET (Range-safe audio probes). */
 export async function HEAD(req) {
   return GET(req);
 }

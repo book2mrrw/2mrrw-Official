@@ -19,6 +19,7 @@ export async function getFanSessionUser() {
     return {
       id: user.id,
       email: profile?.email || user.email,
+      authEmail: user.email || "",
       phone: profile?.phone || "",
       name: profile?.full_name || "",
       isGuest: false,

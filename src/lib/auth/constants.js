@@ -5,6 +5,10 @@ export function isAdminUser(user) {
   if (!user) return false;
   if (user.id === ADMIN_USER_ID) return true;
   if (user.role === "admin") return true;
-  const email = String(user.email || "").trim().toLowerCase();
-  return email === ADMIN_EMAIL.toLowerCase();
+  const adminEmail = ADMIN_EMAIL.toLowerCase();
+  for (const candidate of [user.email, user.authEmail]) {
+    const email = String(candidate || "").trim().toLowerCase();
+    if (email && email === adminEmail) return true;
+  }
+  return false;
 }

@@ -90,21 +90,21 @@ export async function userOwnsProduct(userId, productSlug) {
   return !!data;
 }
 
+async function resolveAdminFromProfile(admin, userId) {
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id, email, role")
+    .eq("id", userId)
+    .maybeSingle();
+  return Boolean(profile && isAdminUser({ id: profile.id, email: profile.email, role: profile.role }));
+}
+
 /** True when the user may stream full audio for this catalog slug (purchase, membership, or collector). */
 export async function userCanStreamProduct(userId, productSlug, user = null) {
   if (!userId || !productSlug) return false;
   if (user && isAdminUser(user)) return true;
   const admin = createAdminClient();
-  if (!user) {
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("id, email, role")
-      .eq("id", userId)
-      .maybeSingle();
-    if (profile && isAdminUser({ id: profile.id, email: profile.email, role: profile.role })) {
-      return true;
-    }
-  }
+  if (await resolveAdminFromProfile(admin, userId)) return true;
   if (await userOwnsProduct(userId, productSlug)) return true;
 
   const membership = await getActiveMembership(userId);

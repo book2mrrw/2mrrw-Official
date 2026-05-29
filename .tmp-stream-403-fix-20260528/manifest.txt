@@ -1,0 +1,5 @@
+.tmp-stream-403-fix-20260528/
+├── manifest.txt
+├── report.md
+├── verification-results.md
+└── files-changed.md
