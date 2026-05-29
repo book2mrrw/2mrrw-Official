@@ -3,6 +3,8 @@ import {
   isSiteApiMediaPath,
   repairMisboundR2ApiUrl,
 } from "@/lib/media/site-api-url";
+import { previewDiscoveryUrl } from "@/lib/media/canonical-paths";
+import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
 import { getPublicR2Url } from "@/lib/storage/r2";
 import { getPublicCdnBase, R2_PUBLIC_CDN_FALLBACK } from "@/lib/storage/r2-public-cdn";
 
@@ -65,10 +67,21 @@ export function catalogPreviewAudioUrl(previewPath) {
   }
   if (normalized.startsWith("audio/previews/")) {
     const flatKey = normalized.replace(/^audio\/previews\//, "");
-    return toCatalogCdnUrl(`previews/${flatKey}`);
+    const slugMatch = flatKey.match(/^(.+)-preview\.(mp3|wav|m4a|flac)$/i);
+    const canonical = slugMatch ? getCanonicalReleaseBySlug(slugMatch[1]) : null;
+    if (canonical?.preview_path) {
+      return previewDiscoveryUrl(canonical.preview_path, canonical.preview_legacy);
+    }
+    return previewDiscoveryUrl(null, `previews/${flatKey}`);
   }
   if (normalized.startsWith("previews/")) {
-    return toCatalogCdnUrl(normalized);
+    const entityFolderMatch = normalized.match(
+      /^previews\/(singles|features|albums|mixtapes-and-eps)\/[^/]+\//
+    );
+    if (entityFolderMatch) {
+      return previewDiscoveryUrl(normalized, null);
+    }
+    return previewDiscoveryUrl(null, normalized);
   }
   return catalogPublicMediaUrl(normalized);
 }

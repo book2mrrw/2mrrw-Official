@@ -204,7 +204,7 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
           : null;
   const previewPath =
     normalized?.preview || normalized?.preview_path || normalized?.previewPath || null;
-  const playbackSrc = resolvePlaybackSrc(normalized, access, { userId });
+  const playbackSrc = resolvePlaybackSrc(normalized, access, { userId, accountState });
   const previewSrc = previewPath ? catalogPreviewAudioUrl(previewPath) : null;
 
   return {

@@ -1087,7 +1087,10 @@ export function AudioProvider({ children }) {
       const meta = streamMetaRef.current;
       const resumeAt = audio.currentTime || 0;
 
-      if (slug && streamMetaRef.current && !streamErrorRetriedRef.current) {
+      const onLibraryStreamSrc =
+        isLibraryStreamSrc(audio.currentSrc || audio.src || "") ||
+        isLibraryStreamSrc(track?.src || "");
+      if (slug && (streamMetaRef.current || onLibraryStreamSrc) && !streamErrorRetriedRef.current) {
         streamErrorRetriedRef.current = true;
         try {
           const data = await fetchLibraryStream(slug, { force: false });
@@ -1755,6 +1758,50 @@ export function AudioProvider({ children }) {
       patchState({ isPlaying: true, error: null, hasStarted: true, playbackState: "playing" });
       return true;
     } catch (err) {
+      const previewFallbackSrc =
+        getTrackPreviewSrc(nextTrack) ||
+        nextTrack?.metadata?.previewSrc ||
+        nextTrack?.previewUrl ||
+        null;
+      const failedLibraryStream =
+        isLibraryStreamSrc(syncSrc) || isLibraryStreamSrc(nextTrack?.src || "");
+      if (failedLibraryStream && previewFallbackSrc) {
+        console.warn("[AudioContext] library stream load failed; falling back to preview", {
+          slug: nextTrack?.slug,
+          message: err?.message || String(err),
+        });
+        try {
+          skipPauseInterruptionRef.current = true;
+          await loadAudioSrcAndPlay(audio, previewFallbackSrc, {
+            signal: streamAbortController.signal,
+          });
+          patchState({
+            isPlaying: true,
+            error: null,
+            source: "preview",
+            playbackState: "preview_fallback",
+            hasStarted: true,
+            currentTrack: {
+              ...nextTrack,
+              src: previewFallbackSrc,
+              metadata: {
+                ...(nextTrack.metadata || {}),
+                access: {
+                  ...(nextTrack.metadata?.access || {}),
+                  previewOnly: true,
+                  canStream: false,
+                },
+              },
+            },
+          });
+          return true;
+        } catch (previewErr) {
+          console.error("[AudioContext] preview fallback failed", {
+            slug: nextTrack?.slug,
+            message: previewErr?.message || String(previewErr),
+          });
+        }
+      }
       console.error("[AudioContext] playTrack failed", {
         message: err?.message || String(err),
         code: err?.code || null,
@@ -1781,6 +1828,11 @@ export function AudioProvider({ children }) {
     const audio = audioRef.current;
     const track = stateRef.current.currentTrack;
     if (!audio || !track?.slug) return false;
+    const serverUserId = entitlementAccountState?.user?.id;
+    const clientUserId = listeningUserIdRef.current;
+    if (!serverUserId || !clientUserId || serverUserId !== clientUserId) {
+      return false;
+    }
     const previewSrc = getTrackPreviewSrc(track);
     const currentPlaybackSrc = normalizePlaybackSrc(audio.currentSrc || audio.src || "");
     const signedUrl = streamMetaRef.current?.url
@@ -1867,7 +1919,7 @@ export function AudioProvider({ children }) {
       }
       return false;
     }
-  }, [patchState, resolveLibraryStreamForTrack]);
+  }, [patchState, resolveLibraryStreamForTrack, entitlementAccountState?.user?.id]);
 
   useEffect(() => {
     const onEntitlementsUpdated = () => {

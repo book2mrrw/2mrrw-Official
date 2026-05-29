@@ -201,9 +201,11 @@ export function resolveTrackAccess(track, accountState = {}) {
 }
 
 /** Fast-path library stream URL — browser follows redirect to signed R2 without JSON prefetch. */
-export function libraryStreamRedirectSrc(slug) {
+export function libraryStreamRedirectSrc(slug, { trackSlug = null } = {}) {
   if (!slug) return "";
-  return `/api/library/stream?slug=${encodeURIComponent(slug)}&redirect=1`;
+  const params = new URLSearchParams({ slug, redirect: "1" });
+  if (trackSlug) params.set("trackSlug", String(trackSlug));
+  return `/api/library/stream?${params.toString()}`;
 }
 
 /**
@@ -211,14 +213,28 @@ export function libraryStreamRedirectSrc(slug) {
  * - Entitled full audio → /api/library/stream (redirects to signed R2 GET)
  * - Previews → public R2 CDN (previews/, artwork/, digital-assets single covers)
  */
-export function resolvePlaybackSrc(track, access, { userId } = {}) {
+/** Full stream only when client user matches server account/state user (cookie session aligned). */
+export function canRequestLibraryStream(access, { userId, accountState } = {}) {
+  if (!access?.canStream || !userId) return false;
+  const serverUserId = accountState?.user?.id;
+  if (!serverUserId) return false;
+  return serverUserId === userId;
+}
+
+export function resolvePlaybackSrc(track, access, { userId, accountState } = {}) {
   if (!track) return "";
   if (userId && track.slug && access?.canStream) {
     const offline = getOfflinePlaybackUrl(userId, track.slug);
     if (offline) return offline;
   }
-  if (access?.canStream && track.slug) {
-    return libraryStreamRedirectSrc(track.slug);
+  if (canRequestLibraryStream(access, { userId, accountState }) && track.slug) {
+    const trackSlug =
+      track.trackSlug ||
+      track.track_slug ||
+      track.metadata?.trackSlug ||
+      track.metadata?.track_slug ||
+      null;
+    return libraryStreamRedirectSrc(track.slug, { trackSlug });
   }
   const previewPath = track.preview || track.preview_path || track.previewPath;
   if (previewPath) {
