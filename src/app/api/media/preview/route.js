@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
 import { getPublicR2Url } from "@/lib/storage/r2";
 import {
   resolveArtwork,
@@ -10,6 +11,10 @@ import { normalizeToEntityFolder } from "@/lib/media/canonical-paths";
 
 export const dynamic = "force-dynamic";
 
+export async function OPTIONS(req) {
+  return mediaCorsPreflightResponse(req);
+}
+
 /**
  * Resolve public CDN media from entity folder (previews, artwork, video loops).
  * Supports legacy flat keys via ?legacy= during migration.
@@ -20,7 +25,10 @@ export async function GET(req) {
   const type = req.nextUrl.searchParams.get("type") || "preview";
 
   if (!folder && !legacy) {
-    return NextResponse.json({ error: "folder or legacy required" }, { status: 400 });
+    return applyMediaCors(
+      req,
+      NextResponse.json({ error: "folder or legacy required" }, { status: 400 })
+    );
   }
 
   const entityFolder = normalizeToEntityFolder(folder || "");
@@ -44,14 +52,17 @@ export async function GET(req) {
   }
 
   if (!resolved?.key) {
-    return NextResponse.json({ error: "Media not found" }, { status: 404 });
+    return applyMediaCors(req, NextResponse.json({ error: "Media not found" }, { status: 404 }));
   }
 
   const publicUrl = getPublicR2Url(resolved.key);
-  return NextResponse.redirect(publicUrl, {
-    status: 302,
-    headers: {
-      "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
-    },
-  });
+  return applyMediaCors(
+    req,
+    NextResponse.redirect(publicUrl, {
+      status: 302,
+      headers: {
+        "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+      },
+    })
+  );
 }

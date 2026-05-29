@@ -4,7 +4,7 @@ import {
   repairMisboundR2ApiUrl,
 } from "@/lib/media/site-api-url";
 import { previewDiscoveryUrl } from "@/lib/media/canonical-paths";
-import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
+import { getCanonicalReleaseBySlug, resolveEntityPreviewFolder } from "@/lib/media/canonical-catalog";
 import { getPublicR2Url } from "@/lib/storage/r2";
 import { getPublicCdnBase, R2_PUBLIC_CDN_FALLBACK } from "@/lib/storage/r2-public-cdn";
 
@@ -67,21 +67,34 @@ export function catalogPreviewAudioUrl(previewPath) {
   }
   if (normalized.startsWith("audio/previews/")) {
     const flatKey = normalized.replace(/^audio\/previews\//, "");
-    const slugMatch = flatKey.match(/^(.+)-preview\.(mp3|wav|m4a|flac)$/i);
-    const canonical = slugMatch ? getCanonicalReleaseBySlug(slugMatch[1]) : null;
-    if (canonical?.preview_path) {
-      return previewDiscoveryUrl(canonical.preview_path, canonical.preview_legacy);
+    const entityFolder = resolveEntityPreviewFolder(flatKey) || resolveEntityPreviewFolder(`previews/${flatKey}`);
+    if (entityFolder) {
+      const canonical = getCanonicalReleaseBySlug(
+        flatKey.match(/^(.+)-preview\.(mp3|wav|m4a|flac)$/i)?.[1] || ""
+      );
+      return previewDiscoveryUrl(entityFolder, canonical?.preview_legacy || `previews/${flatKey}`);
     }
     return previewDiscoveryUrl(null, `previews/${flatKey}`);
   }
   if (normalized.startsWith("previews/")) {
-    const entityFolderMatch = normalized.match(
-      /^previews\/(singles|features|albums|mixtapes-and-eps)\/[^/]+\//
-    );
-    if (entityFolderMatch) {
-      return previewDiscoveryUrl(normalized, null);
+    const entityFolder = resolveEntityPreviewFolder(normalized);
+    if (entityFolder) {
+      const canonical = getCanonicalReleaseBySlug(
+        normalized.match(/^previews\/(.+)-preview\.(mp3|wav|m4a|flac)$/i)?.[1] || ""
+      );
+      return previewDiscoveryUrl(
+        entityFolder,
+        canonical?.preview_legacy || (entityFolder === normalized ? null : normalized)
+      );
     }
     return previewDiscoveryUrl(null, normalized);
+  }
+  const entityFolder = resolveEntityPreviewFolder(normalized);
+  if (entityFolder) {
+    const canonical = getCanonicalReleaseBySlug(
+      normalized.match(/^(.+)-preview\.(mp3|wav|m4a|flac)$/i)?.[1] || ""
+    );
+    return previewDiscoveryUrl(entityFolder, canonical?.preview_legacy || null);
   }
   return catalogPublicMediaUrl(normalized);
 }

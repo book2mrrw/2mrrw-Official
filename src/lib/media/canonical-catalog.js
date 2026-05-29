@@ -1,4 +1,6 @@
 import {
+  extractSlugFromFlatPreviewKey,
+  isEntityPreviewFolderPath,
   legacyCoverPublicPath,
   legacyPreviewPublicPath,
   legacyVideoPublicPath,
@@ -277,6 +279,24 @@ export function getCanonicalReleaseBySlug(slug) {
   return _releasesBySlug.get(key) || null;
 }
 
+/**
+ * Map flat legacy preview keys to canonical entity folder (`previews/features/{slug}/`).
+ * @param {string | null | undefined} previewPath
+ * @param {string} [slugHint]
+ * @returns {string | null}
+ */
+export function resolveEntityPreviewFolder(previewPath, slugHint = null) {
+  const normalized = String(previewPath || "").replace(/^\//, "");
+  if (!normalized) return null;
+  if (isEntityPreviewFolderPath(normalized)) {
+    return normalized.endsWith("/") ? normalized : `${normalized}/`;
+  }
+  const slug = slugHint || extractSlugFromFlatPreviewKey(normalized);
+  if (!slug) return null;
+  const canonical = getCanonicalReleaseBySlug(slug);
+  return canonical?.preview_path || null;
+}
+
 export function getCanonicalTracksForAlbum(albumSlug) {
   indexCatalog();
   const key = CANONICAL_SLUG_ALIASES[albumSlug] || albumSlug;
@@ -370,7 +390,11 @@ export function getCanonicalProductRows() {
       artwork_path: r.artwork_path,
       video_path: r.video_path,
       release_date: r.release_date,
-      metadata: { release_category: r.release_type, canonical: true },
+      metadata: {
+        release_type: normalizeReleaseType(r.release_type),
+        release_category: r.release_type,
+        canonical: true,
+      },
     });
   });
 
@@ -386,9 +410,10 @@ export function getCanonicalProductRows() {
       storage_path: null,
       preview_path: null,
       artwork_path: r.artwork_path,
-      video_path: null,
+      video_path: r.video_path,
       release_date: r.release_date,
       metadata: {
+        release_type: normalizeReleaseType(r.release_type),
         release_category: r.release_category || r.release_type,
         canonical: true,
       },
@@ -409,6 +434,7 @@ export function getCanonicalTrackRows() {
       title: t.title,
       display_title: t.title,
       storage_path: storagePathForProductRow(enriched.storage_path),
+      preview_path: enriched.preview_path,
     };
   });
 }

@@ -1,7 +1,7 @@
-import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
+import { getCanonicalReleaseBySlug, resolveEntityPreviewFolder } from "@/lib/media/canonical-catalog";
 import { normalizePlaybackR2Key } from "@/lib/playback/normalize-r2-key";
 import { normalizeEntityFolderPath, resolveAudio, resolvePreview } from "@/lib/media/entity-resolver";
-import { resolvePreviewPath } from "@/lib/media/canonical-paths";
+import { resolvePreviewPath, resolveStoragePath, isEntityPreviewFolderPath } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/normalize-release-type";
 
 const FULL_AUDIO_ROLES = ["full_audio", "master_audio", "audio", "audio_full_song", "track_audio"];
@@ -91,6 +91,15 @@ async function resolveStoragePathFromProduct(admin, product, trackSlug) {
   return releasePrimaryAudioPath(admin, contentId);
 }
 
+async function discoverAudioInFolder(folderKey, entityFolder) {
+  let audioKey = await resolveAudio(folderKey || entityFolder);
+  if (!audioKey && /(^|\/)features\//.test(folderKey || entityFolder)) {
+    const singlesFolder = (folderKey || entityFolder).replace(/(^|\/)features\//, "$1singles/");
+    audioKey = await resolveAudio(singlesFolder);
+  }
+  return audioKey;
+}
+
 /** Same release-type inference as storefront previews — features must not fall through to singles. */
 function inferProductReleaseType(product) {
   const slug = String(product?.slug || "").trim();
@@ -140,33 +149,43 @@ export async function resolvePlaybackKey(admin, productSlug, options = {}) {
   }
   if (!product) return null;
 
+  const canonical = getCanonicalReleaseBySlug(slug);
   const trackSlug = options.trackSlug ? String(options.trackSlug).trim() : null;
+  const releaseType = inferProductReleaseType(product);
   const mediaPath = await resolveStoragePathFromProduct(admin, product, trackSlug);
-  const storagePath = mediaPath || product.storage_path;
+  let storagePath =
+    mediaPath ||
+    product.storage_path ||
+    canonical?.storage_path ||
+    resolveStoragePath(releaseType, slug, trackSlug, trackSlug ? slug : null);
   if (!storagePath) return null;
 
   const entityFolder = normalizeEntityFolderPath(storagePath);
   const folderKey = normalizePlaybackR2Key(entityFolder.replace(/\/$/, ""));
-  let audioKey = await resolveAudio(folderKey || entityFolder);
+  let audioKey = await discoverAudioInFolder(folderKey, entityFolder);
 
-  // R2 bucket stores feature masters under singles/; DB migration may still say features/.
-  if (!audioKey && /(^|\/)features\//.test(folderKey || entityFolder)) {
-    const singlesFolder = (folderKey || entityFolder).replace(/(^|\/)features\//, "$1singles/");
-    audioKey = await resolveAudio(singlesFolder);
+  if (!audioKey && canonical?.storage_path) {
+    const canonicalFolder = normalizePlaybackR2Key(
+      normalizeEntityFolderPath(canonical.storage_path).replace(/\/$/, "")
+    );
+    if (canonicalFolder && canonicalFolder !== folderKey) {
+      audioKey = await discoverAudioInFolder(canonicalFolder, canonical.storage_path);
+    }
   }
 
   let playbackSource = "master";
   if (!audioKey) {
-    const releaseType = inferProductReleaseType(product);
-    const previewFolder = resolvePreviewPath(
-      releaseType,
-      trackSlug || slug,
-      trackSlug ? slug : null
-    );
+    const previewFolder =
+      resolveEntityPreviewFolder(product.preview_path, slug) ||
+      resolvePreviewPath(releaseType, trackSlug || slug, trackSlug ? slug : null) ||
+      canonical?.preview_path;
     const legacyPreview =
-      product.preview_path ||
-      product.metadata?.preview_path ||
-      product.metadata?.preview_legacy ||
+      resolveEntityPreviewFolder(
+        product.metadata?.preview_path || product.metadata?.preview_legacy,
+        slug
+      ) ||
+      canonical?.preview_legacy ||
+      (isEntityPreviewFolderPath(product.preview_path) ? null : product.preview_path) ||
       null;
     audioKey = await resolvePreview(previewFolder, legacyPreview).catch(() => null);
     if (audioKey) playbackSource = "preview";

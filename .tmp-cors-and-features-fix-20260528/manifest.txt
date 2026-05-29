@@ -1,0 +1,15 @@
+report.md
+r2-cors-policy.json
+dashboard-steps.md
+verification-curls.sh
+manifest.txt
+
+src/lib/server/media-cors.js
+src/app/api/media/preview/route.js
+src/app/api/media/visual/route.js
+src/app/api/media/playback/route.js
+src/lib/media/canonical-paths.js
+src/lib/media/canonical-catalog.js
+src/lib/media-urls.js
+src/lib/playback/resolve-playback-key.js
+docs/reports/r2-cors-policy-recommended.json

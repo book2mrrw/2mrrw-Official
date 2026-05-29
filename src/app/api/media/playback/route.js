@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
+import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getGuestUser } from "@/lib/guest-session";
 import { isMissingSupabaseTable } from "@/lib/commerce/entitlements";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+export async function OPTIONS(req) {
+  return mediaCorsPreflightResponse(req);
+}
 
 function cleanSlug(value) {
   return String(value || "").trim().slice(0, 160);
@@ -21,7 +26,7 @@ export async function POST(req) {
     const slug = cleanSlug(body.slug);
 
     if (!slug) {
-      return NextResponse.json({ error: "slug required" }, { status: 400 });
+      return applyMediaCors(req, NextResponse.json({ error: "slug required" }, { status: 400 }));
     }
 
     const limit = await checkRateLimit(req, {
@@ -30,7 +35,7 @@ export async function POST(req) {
       windowSeconds: 300,
       identifier: user?.id || slug,
     });
-    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
+    if (!limit.allowed) return applyMediaCors(req, rateLimitResponse(limit.retryAfterSeconds));
 
     const admin = createAdminClient();
     const eventType = cleanEventType(body.eventType);
@@ -58,7 +63,10 @@ export async function POST(req) {
     const { error: eventError } = await admin.from("media_stream_events").insert(eventPayload);
     if (eventError) {
       if (isMissingSupabaseTable(eventError)) {
-        return NextResponse.json({ persisted: false, reason: "media analytics tables missing" });
+        return applyMediaCors(
+          req,
+          NextResponse.json({ persisted: false, reason: "media analytics tables missing" })
+        );
       }
       throw eventError;
     }
@@ -92,9 +100,12 @@ export async function POST(req) {
       if (progressError && !isMissingSupabaseTable(progressError)) throw progressError;
     }
 
-    return NextResponse.json({ persisted: true });
+    return applyMediaCors(req, NextResponse.json({ persisted: true }));
   } catch (err) {
     console.error("media playback persistence error:", err);
-    return NextResponse.json({ error: err.message || "Playback persistence failed" }, { status: 500 });
+    return applyMediaCors(
+      req,
+      NextResponse.json({ error: err.message || "Playback persistence failed" }, { status: 500 })
+    );
   }
 }

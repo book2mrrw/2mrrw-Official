@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
+import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
 import { resolveVisualMedia } from "@/lib/media/entity-resolver";
 import { normalizeToEntityFolder, getArtworkPlaceholderUrl } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/normalize-release-type";
 import { catalogCoverUrl } from "@/lib/media-urls";
 
 export const dynamic = "force-dynamic";
+
+export async function OPTIONS(req) {
+  return mediaCorsPreflightResponse(req);
+}
 
 /**
  * Resolve cover/loop visual: video entity folder first, then images/ fallback.
@@ -25,9 +30,12 @@ export async function GET(req) {
   const meta = searchParams.get("meta") === "1" || searchParams.get("format") === "json";
 
   if (!slug && !videoFolder && !imageFolder && !legacyVideo && !legacyImage) {
-    return NextResponse.json(
-      { error: "slug or videoFolder/imageFolder required" },
-      { status: 400 }
+    return applyMediaCors(
+      req,
+      NextResponse.json(
+        { error: "slug or videoFolder/imageFolder required" },
+        { status: 400 }
+      )
     );
   }
 
@@ -56,18 +64,24 @@ export async function GET(req) {
   }
 
   if (meta) {
-    return NextResponse.json(resolved, {
-      headers: {
-        "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
-      },
-    });
+    return applyMediaCors(
+      req,
+      NextResponse.json(resolved, {
+        headers: {
+          "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+        },
+      })
+    );
   }
 
-  return NextResponse.redirect(resolved.url, {
-    status: 302,
-    headers: {
-      "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
-      "X-Media-Type": resolved.type,
-    },
-  });
+  return applyMediaCors(
+    req,
+    NextResponse.redirect(resolved.url, {
+      status: 302,
+      headers: {
+        "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+        "X-Media-Type": resolved.type,
+      },
+    })
+  );
 }

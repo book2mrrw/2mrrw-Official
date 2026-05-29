@@ -173,6 +173,24 @@ const DEFAULT_PREVIEW_EXT = {
   "mixtapes-and-eps": "mp3",
 };
 
+const FLAT_PREVIEW_KEY_RE = /^(?:previews\/|audio\/previews\/)?(.+)-preview\.(wav|mp3|m4a|flac)$/i;
+const ENTITY_PREVIEW_FOLDER_RE =
+  /^previews\/(singles|features|albums|mixtapes-and-eps)\/[^/]+\/?$/;
+
+/** Slug from flat legacy keys like `previews/i-dont-believe-you-preview.wav`. */
+export function extractSlugFromFlatPreviewKey(previewPath) {
+  const normalized = String(previewPath || "").replace(/^\//, "");
+  if (ENTITY_PREVIEW_FOLDER_RE.test(normalized.replace(/\/$/, ""))) return null;
+  const match = normalized.match(FLAT_PREVIEW_KEY_RE);
+  return match?.[1] || null;
+}
+
+/** True when path is already a release-type entity folder (not a flat filename). */
+export function isEntityPreviewFolderPath(previewPath) {
+  const normalized = String(previewPath || "").replace(/^\//, "").replace(/\/$/, "");
+  return ENTITY_PREVIEW_FOLDER_RE.test(`${normalized}/`);
+}
+
 /** Legacy public/ path for storefront cover display (resolved via catalogCoverUrl). */
 export function legacyCoverPublicPath(releaseType, slug, legacyStem, ext = "jpg") {
   const folder = releaseFolder(releaseType);
