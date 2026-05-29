@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { writePendingPhone, clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
 import { validateEmail, validatePhone, formatResendCountdown } from "@/lib/auth/validation";
+import { sendEmailOtp, formatOtpSendError } from "@/lib/auth/email-otp";
 import { useAuth } from "@/context/AuthContext";
 const DISMISS_DRAG_PX = 80;
 const OTP_LENGTH = 8;
@@ -88,12 +89,16 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
   const [digits, setDigits] = useState(EMPTY_DIGITS());
   const [otpError, setOtpError] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
   const [resendIn, setResendIn] = useState(30);
+  const [otpAwaitingEntry, setOtpAwaitingEntry] = useState(false);
   const [sheetDragY, setSheetDragY] = useState(0);
   const inputsRef = useRef([]);
   const touchStartYRef = useRef(null);
   const draggingRef = useRef(false);
   const otpAutoSubmittedRef = useRef(false);
+  const otpSendInFlightRef = useRef(false);
+  const verifyInFlightRef = useRef(false);
   const completeProfileFetchedRef = useRef(false);
   const code = useMemo(() => digits.join(""), [digits]);
   const screen = mode === "otp" ? "otp" : mode === "signin" ? "signin" : "signup";
@@ -108,8 +113,12 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     setOtpEmail("");
     setDigits(EMPTY_DIGITS());
     setOtpError("");
+    setOtpSending(false);
+    setOtpAwaitingEntry(false);
     setResendIn(30);
     setSheetDragY(0);
+    otpSendInFlightRef.current = false;
+    verifyInFlightRef.current = false;
     touchStartYRef.current = null;
     draggingRef.current = false;
     otpAutoSubmittedRef.current = false;
@@ -124,6 +133,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
       setEmail(pendingEmail);
       setOtpEmail(pendingEmail);
       setMode("otp");
+      setOtpAwaitingEntry(true);
       sessionStorage.removeItem("pendingOtpEmail");
     }
   }, [open]);
@@ -133,18 +143,28 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     return () => clearInterval(timer);
   }, [screen, resendIn]);
   const sendOtpToEmail = useCallback(async (targetEmail, shouldCreateUser) => {
-    const supabase = createClient();
-    const { error: otpErr } = await supabase.auth.signInWithOtp({
-      email: targetEmail,
-      options: { shouldCreateUser },
-    });
-    if (otpErr) throw otpErr;
-    setOtpEmail(targetEmail);
-    setOtpCreateUser(shouldCreateUser);
-    setDigits(EMPTY_DIGITS());
-    setResendIn(30);
-    otpAutoSubmittedRef.current = false;
-    setMode("otp");
+    if (otpSendInFlightRef.current) return;
+    otpSendInFlightRef.current = true;
+    setOtpSending(true);
+    setOtpError("");
+    try {
+      const supabase = createClient();
+      const { error: otpErr } = await sendEmailOtp(supabase, {
+        email: targetEmail,
+        shouldCreateUser,
+      });
+      if (otpErr) throw otpErr;
+      setOtpEmail(targetEmail);
+      setOtpCreateUser(shouldCreateUser);
+      setDigits(EMPTY_DIGITS());
+      setResendIn(30);
+      setOtpAwaitingEntry(false);
+      otpAutoSubmittedRef.current = false;
+      setMode("otp");
+    } finally {
+      otpSendInFlightRef.current = false;
+      setOtpSending(false);
+    }
   }, []);
   const checkEmailExists = useCallback(async (targetEmail) => {
     const res = await fetch("/api/auth/lookup-email", {
@@ -166,6 +186,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     if (!emailCheck.ok) setEmailError(emailCheck.error);
     if (!phoneCheck.ok) setPhoneError(phoneCheck.error);
     if (!emailCheck.ok || !phoneCheck.ok) return;
+    if (loading || otpSending) return;
     setLoading(true);
     try {
       writePendingPhone(phoneCheck.value);
@@ -178,7 +199,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
         setMode("signin");
         setEmail(email.trim());
       } else {
-        setFormError(err.message || "Could not send verification code");
+        setFormError(formatOtpSendError(err));
       }
     } finally {
       setLoading(false);
@@ -190,11 +211,12 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     setEmailError("");
     const emailCheck = validateEmail(email);
     if (!emailCheck.ok) { setEmailError(emailCheck.error); return; }
+    if (loading || otpSending) return;
     setLoading(true);
     try {
       await sendOtpToEmail(emailCheck.value, false);
     } catch (err) {
-      setFormError(err.message || "Could not send code");
+      setFormError(formatOtpSendError(err));
     } finally {
       setLoading(false);
     }
@@ -227,6 +249,8 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
         setOtpError("Enter the 8-digit code.");
         return;
       }
+      if (verifyInFlightRef.current || otpLoading) return;
+      verifyInFlightRef.current = true;
       setOtpLoading(true);
       setOtpError("");
       try {
@@ -271,32 +295,33 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
         await refreshAccountState();
         await onVerified?.();
       } catch {
-        setOtpError("Invalid or expired code. Try again.");
-        otpAutoSubmittedRef.current = false;
+        setOtpError("Invalid or expired code. Try again or tap Resend code.");
       } finally {
+        verifyInFlightRef.current = false;
         setOtpLoading(false);
       }
     },
-    [code, otpEmail, name, applySessionUser, refreshAccountState, onVerified]
+    [code, otpEmail, name, applySessionUser, refreshAccountState, onVerified, otpLoading]
   );
   useEffect(() => {
     if (
       screen !== "otp" ||
       code.length !== OTP_LENGTH ||
       otpLoading ||
+      verifyInFlightRef.current ||
       otpAutoSubmittedRef.current
     ) return;
     otpAutoSubmittedRef.current = true;
     void verifyOtp();
   }, [screen, code, otpLoading, verifyOtp]);
   const resendOtp = async () => {
-    if (resendIn > 0 || !otpEmail) return;
+    if (resendIn > 0 || !otpEmail || otpSending) return;
     setOtpError("");
     otpAutoSubmittedRef.current = false;
     try {
       await sendOtpToEmail(otpEmail, otpCreateUser);
     } catch (err) {
-      setOtpError(err.message || "Could not resend code");
+      setOtpError(formatOtpSendError(err));
     }
   };
   const handleSheetTouchStart = (e) => {
@@ -413,7 +438,9 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
                 fontSize: 13,
                 lineHeight: 1.6,
               }}>
-                Enter the 8-digit code sent to {otpEmail || "your email"}.
+                {otpAwaitingEntry
+                  ? `Enter the code we already sent to ${otpEmail || "your email"}, or tap Resend code.`
+                  : `Enter the 8-digit code sent to ${otpEmail || "your email"}.`}
               </p>
               <div style={{
                 display: "flex",
@@ -473,16 +500,18 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
               <button
                 type="button"
                 onClick={() => void resendOtp()}
-                disabled={resendIn > 0}
+                disabled={resendIn > 0 || otpSending}
                 style={{
                   ...linkStyle,
-                  opacity: resendIn > 0 ? 0.5 : 1,
-                  cursor: resendIn > 0 ? "default" : "pointer",
+                  opacity: resendIn > 0 || otpSending ? 0.5 : 1,
+                  cursor: resendIn > 0 || otpSending ? "default" : "pointer",
                 }}
               >
-                {resendIn > 0
-                  ? `Resend code in ${formatResendCountdown(resendIn)}`
-                  : "Resend code"}
+                {otpSending
+                  ? "Sending…"
+                  : resendIn > 0
+                    ? `Resend code in ${formatResendCountdown(resendIn)}`
+                    : "Resend code"}
               </button>
             </form>
           ) : screen === "signin" ? (
@@ -524,14 +553,14 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
               ) : null}
               <button
                 type="submit"
-                disabled={loading || !signinReady}
+                disabled={loading || otpSending || !signinReady}
                 style={{
                   ...ctaStyle,
-                  opacity: loading || !signinReady ? 0.5 : 1,
-                  cursor: loading || !signinReady ? "default" : "pointer",
+                  opacity: loading || otpSending || !signinReady ? 0.5 : 1,
+                  cursor: loading || otpSending || !signinReady ? "default" : "pointer",
                 }}
               >
-                {loading ? "Sending…" : "Send Code"}
+                {loading || otpSending ? "Sending…" : "Send Code"}
               </button>
               <button
                 type="button"
@@ -602,14 +631,14 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
               ) : null}
               <button
                 type="submit"
-                disabled={loading || !signupReady}
+                disabled={loading || otpSending || !signupReady}
                 style={{
                   ...ctaStyle,
-                  opacity: loading || !signupReady ? 0.5 : 1,
-                  cursor: loading || !signupReady ? "default" : "pointer",
+                  opacity: loading || otpSending || !signupReady ? 0.5 : 1,
+                  cursor: loading || otpSending || !signupReady ? "default" : "pointer",
                 }}
               >
-                {loading ? "Sending…" : "Send Verification Code"}
+                {loading || otpSending ? "Sending…" : "Send Verification Code"}
               </button>
               <button
                 type="button"

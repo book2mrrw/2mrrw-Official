@@ -1,11 +1,12 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { writePendingPhone } from "@/lib/auth/otp-pending";
 import { validateEmail, validatePhone } from "@/lib/auth/validation";
+import { sendEmailOtp, formatOtpSendError } from "@/lib/auth/email-otp";
 
 const inputStyle = {
   padding: "12px 14px",
@@ -32,6 +33,7 @@ function JoinForm() {
   const [phoneError, setPhoneError] = useState("");
   const [existsHint, setExistsHint] = useState(false);
   const [giftPreview, setGiftPreview] = useState(null);
+  const otpSendInFlightRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -79,8 +81,10 @@ function JoinForm() {
       setPhoneError(phoneCheck.error);
     }
     if (!emailCheck.ok || !phoneCheck.ok) return;
+    if (loading || otpSendInFlightRef.current) return;
 
     setLoading(true);
+    otpSendInFlightRef.current = true;
 
     try {
       writePendingPhone(phoneCheck.value);
@@ -88,9 +92,9 @@ function JoinForm() {
         sessionStorage.setItem("pendingProfileName", name.trim());
       }
       const supabase = createClient();
-      const { error: otpError } = await supabase.auth.signInWithOtp({
+      const { error: otpError } = await sendEmailOtp(supabase, {
         email: emailCheck.value,
-        options: { shouldCreateUser: true },
+        shouldCreateUser: true,
       });
 
       if (otpError) {
@@ -98,7 +102,7 @@ function JoinForm() {
           setExistsHint(true);
           setError("You already have an account. Sign in instead.");
         } else {
-          setError(otpError.message);
+          setError(formatOtpSendError(otpError));
         }
         return;
       }
@@ -109,8 +113,9 @@ function JoinForm() {
       });
       router.push(`/verify-otp?${params.toString()}`);
     } catch (err) {
-      setError(err.message || "Could not send code");
+      setError(formatOtpSendError(err));
     } finally {
+      otpSendInFlightRef.current = false;
       setLoading(false);
     }
   };

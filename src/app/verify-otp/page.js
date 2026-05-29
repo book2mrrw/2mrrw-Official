@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
 import { formatResendCountdown } from "@/lib/auth/validation";
+import { sendEmailOtp, formatOtpSendError } from "@/lib/auth/email-otp";
 import { useAuth } from "@/context/AuthContext";
 
 const OTP_LENGTH = 8;
@@ -22,9 +23,12 @@ function VerifyOtpForm() {
   const [digits, setDigits] = useState(EMPTY_DIGITS);
   const [otpError, setOtpError] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
+  const [otpSending, setOtpSending] = useState(false);
   const [resendIn, setResendIn] = useState(30);
   const inputsRef = useRef([]);
   const otpAutoSubmittedRef = useRef(false);
+  const otpSendInFlightRef = useRef(false);
+  const verifyInFlightRef = useRef(false);
   const completeProfileFetchedRef = useRef(false);
 
   const code = useMemo(() => digits.join(""), [digits]);
@@ -69,6 +73,8 @@ function VerifyOtpForm() {
         setOtpError("Enter the 8-digit code.");
         return;
       }
+      if (verifyInFlightRef.current || otpLoading) return;
+      verifyInFlightRef.current = true;
       setOtpLoading(true);
       setOtpError("");
       try {
@@ -110,36 +116,43 @@ function VerifyOtpForm() {
         router.push(nextPath);
         router.refresh();
       } catch {
-        setOtpError("Invalid or expired code. Try again.");
-        otpAutoSubmittedRef.current = false;
+        setOtpError("Invalid or expired code. Try again or tap Resend code.");
       } finally {
+        verifyInFlightRef.current = false;
         setOtpLoading(false);
       }
     },
-    [code, email, applySessionUser, refreshAccountState, router, nextPath]
+    [code, email, applySessionUser, refreshAccountState, router, nextPath, otpLoading]
   );
 
   useEffect(() => {
-    if (code.length !== OTP_LENGTH || otpLoading || otpAutoSubmittedRef.current) return;
+    if (
+      code.length !== OTP_LENGTH ||
+      otpLoading ||
+      verifyInFlightRef.current ||
+      otpAutoSubmittedRef.current
+    ) return;
     otpAutoSubmittedRef.current = true;
     void verifyOtp();
   }, [code, otpLoading, verifyOtp]);
 
   const resendOtp = async () => {
-    if (resendIn > 0 || !email) return;
+    if (resendIn > 0 || !email || otpSending || otpSendInFlightRef.current) return;
     setOtpError("");
     otpAutoSubmittedRef.current = false;
+    otpSendInFlightRef.current = true;
+    setOtpSending(true);
     try {
       const supabase = createClient();
-      const { error: otpErr } = await supabase.auth.signInWithOtp({
-        email,
-        options: { shouldCreateUser },
-      });
+      const { error: otpErr } = await sendEmailOtp(supabase, { email, shouldCreateUser });
       if (otpErr) throw otpErr;
       setDigits(EMPTY_DIGITS());
       setResendIn(30);
     } catch (err) {
-      setOtpError(err.message || "Could not resend code");
+      setOtpError(formatOtpSendError(err));
+    } finally {
+      otpSendInFlightRef.current = false;
+      setOtpSending(false);
     }
   };
 
@@ -253,19 +266,23 @@ function VerifyOtpForm() {
         <button
           type="button"
           onClick={() => void resendOtp()}
-          disabled={resendIn > 0}
+          disabled={resendIn > 0 || otpSending}
           style={{
             background: "none",
             border: "none",
             color: "#00ffff",
             fontSize: 13,
             textAlign: "center",
-            cursor: resendIn > 0 ? "default" : "pointer",
-            opacity: resendIn > 0 ? 0.5 : 1,
+            cursor: resendIn > 0 || otpSending ? "default" : "pointer",
+            opacity: resendIn > 0 || otpSending ? 0.5 : 1,
             padding: 0,
           }}
         >
-          {resendIn > 0 ? `Resend code in ${formatResendCountdown(resendIn)}` : "Resend code"}
+          {otpSending
+            ? "Sending…"
+            : resendIn > 0
+              ? `Resend code in ${formatResendCountdown(resendIn)}`
+              : "Resend code"}
         </button>
         <Link
           href="/join"

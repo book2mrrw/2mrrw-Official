@@ -45,6 +45,7 @@ export function AuthProvider({ children }) {
 
   const sessionBootstrappedRef = useRef(false);
   const accountStateFetchingRef = useRef(false);
+  const signedInUserIdRef = useRef(null);
   const applySessionUserRef = useRef(null);
   const refreshAccountStateRef = useRef(null);
   const refreshGuestRef = useRef(null);
@@ -176,6 +177,7 @@ export function AuthProvider({ children }) {
     async (session) => {
       const resolved = resolveUserFromSession(session);
       if (!resolved) return null;
+      signedInUserIdRef.current = resolved.user.id;
       setUser(resolved.user);
       setIsAdmin(resolved.isAdmin);
       await clearGuestSessionCookie();
@@ -198,6 +200,7 @@ export function AuthProvider({ children }) {
     let authSubscription = null;
 
     const clearAuthenticatedState = () => {
+      signedInUserIdRef.current = null;
       setUser(null);
       setIsAdmin(false);
       setLibrary([]);
@@ -241,11 +244,13 @@ export function AuthProvider({ children }) {
 
         const resolved = resolveUserFromSession(resolvedSession);
         if (resolved) {
+          signedInUserIdRef.current = resolved.user.id;
           setUser(resolved.user);
           setIsAdmin(resolved.isAdmin);
           await clearGuestSessionCookie();
           await refreshAccountStateRef.current?.();
         } else {
+          signedInUserIdRef.current = null;
           await refreshGuestRef.current?.();
         }
 
@@ -255,7 +260,13 @@ export function AuthProvider({ children }) {
             clearAuthenticatedState();
             return;
           }
+          if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+            return;
+          }
           if (event === "SIGNED_IN" && session) {
+            const nextResolved = resolveUserFromSession(session);
+            if (!nextResolved) return;
+            if (signedInUserIdRef.current === nextResolved.user.id) return;
             await applySessionUserRef.current?.(session);
           }
         });
@@ -309,6 +320,7 @@ export function AuthProvider({ children }) {
     } catch {
       /* ignore */
     }
+    signedInUserIdRef.current = null;
     setUser(null);
     setIsAdmin(false);
     setLibrary([]);

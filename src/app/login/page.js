@@ -1,10 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { validateEmail } from "@/lib/auth/validation";
+import { sendEmailOtp, formatOtpSendError } from "@/lib/auth/email-otp";
 
 const inputStyle = {
   padding: "12px 14px",
@@ -73,20 +74,23 @@ function LoginForm() {
       return;
     }
 
+    if (loading || otpSendInFlightRef.current) return;
+
     setLoading(true);
+    otpSendInFlightRef.current = true;
 
     try {
       const supabase = createClient();
-      const { error: otpError } = await supabase.auth.signInWithOtp({
+      const { error: otpError } = await sendEmailOtp(supabase, {
         email: emailCheck.value,
-        options: { shouldCreateUser: false },
+        shouldCreateUser: false,
       });
 
       if (otpError) {
         if (/not found|no user|signups not allowed/i.test(otpError.message)) {
           setError("No account found. Create one here.");
         } else {
-          setError(otpError.message);
+          setError(formatOtpSendError(otpError));
         }
         return;
       }
@@ -94,8 +98,9 @@ function LoginForm() {
       const params = new URLSearchParams({ email: emailCheck.value, next: nextPath });
       router.push(`/verify-otp?${params.toString()}`);
     } catch (err) {
-      setError(err.message || "Could not send code");
+      setError(formatOtpSendError(err));
     } finally {
+      otpSendInFlightRef.current = false;
       setLoading(false);
     }
   };
