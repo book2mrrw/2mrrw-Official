@@ -1,3 +1,4 @@
+import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
 import { normalizePlaybackR2Key } from "@/lib/playback/normalize-r2-key";
 import { normalizeEntityFolderPath, resolveAudio, resolvePreview } from "@/lib/media/entity-resolver";
 import { resolvePreviewPath } from "@/lib/media/canonical-paths";
@@ -90,6 +91,31 @@ async function resolveStoragePathFromProduct(admin, product, trackSlug) {
   return releasePrimaryAudioPath(admin, contentId);
 }
 
+/** Same release-type inference as storefront previews — features must not fall through to singles. */
+function inferProductReleaseType(product) {
+  const slug = String(product?.slug || "").trim();
+  const fromRow =
+    product?.metadata?.release_category ||
+    product?.metadata?.release_type ||
+    product?.product_type ||
+    product?.content_type;
+  if (fromRow) return normalizeReleaseType(fromRow);
+
+  const canonical = slug ? getCanonicalReleaseBySlug(slug) : null;
+  if (canonical?.release_type) return normalizeReleaseType(canonical.release_type);
+
+  const storage = String(product?.storage_path || product?.metadata?.storage_path || "").replace(
+    /^\//,
+    ""
+  );
+  if (/(^|\/)features\//.test(storage)) return "features";
+  if (/(^|\/)singles\//.test(storage)) return "singles";
+  if (/(^|\/)albums\//.test(storage)) return "albums";
+  if (/(^|\/)mixtapes-and-eps\//.test(storage)) return "mixtapes-and-eps";
+
+  return "singles";
+}
+
 /**
  * Resolve canonical R2 object key for entitled playback by storefront product slug.
  * Entity folder from DB → dynamic audio discovery in R2.
@@ -104,7 +130,7 @@ export async function resolvePlaybackKey(admin, productSlug, options = {}) {
 
   const { data: product, error } = await admin
     .from("products")
-    .select("id, slug, storage_path, content_type, content_id, metadata")
+    .select("id, slug, storage_path, preview_path, product_type, content_type, content_id, metadata")
     .eq("slug", slug)
     .maybeSingle();
 
@@ -131,15 +157,16 @@ export async function resolvePlaybackKey(admin, productSlug, options = {}) {
 
   let playbackSource = "master";
   if (!audioKey) {
+    const releaseType = inferProductReleaseType(product);
     const previewFolder = resolvePreviewPath(
-      normalizeReleaseType(product.metadata?.release_category || product.content_type || "single"),
+      releaseType,
       trackSlug || slug,
       trackSlug ? slug : null
     );
     const legacyPreview =
+      product.preview_path ||
       product.metadata?.preview_path ||
       product.metadata?.preview_legacy ||
-      product.preview_path ||
       null;
     audioKey = await resolvePreview(previewFolder, legacyPreview).catch(() => null);
     if (audioKey) playbackSource = "preview";
