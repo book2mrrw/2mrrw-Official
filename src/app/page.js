@@ -6,7 +6,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "@/components/payments/CheckoutForm";
 const DonateModal = dynamic(() => import("@/components/payments/DonateModal"), { ssr: false });
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, useEntitlementAccountState } from "@/context/AuthContext";
 import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
 import ImmersivePreviewModal, { AlbumModal } from "@/components/preview/ImmersivePreviewModal";
 import GiftBottomSheet from "@/components/gifts/GiftBottomSheet";
@@ -530,6 +530,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
   const { currentUser, library, owns, accountState, isAdmin, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
+  const entitlementAccountState = useEntitlementAccountState();
   const {
     playTrack,
     playQueue,
@@ -1011,7 +1012,7 @@ export default function Page() {
       const albumItem = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
       const tracks = albumTracksForPlayback(
         albumItem,
-        { ...accountState, userId: currentUser?.id },
+        { ...entitlementAccountState, userId: currentUser?.id },
         "album_modal",
         catalogPlaybackLookup
       );
@@ -1028,25 +1029,25 @@ export default function Page() {
         void playQueue(playable, queueIndex);
         return;
       }
-      const access = resolveContentAccess(albumItem, accountState);
+      const access = resolveContentAccess(albumItem, entitlementAccountState);
       if (!access.canStream) return;
       void playTrack(
-        normalizeTrackForPlayback(albumItem, { ...accountState, userId: currentUser?.id }, "album_modal")
+        normalizeTrackForPlayback(albumItem, { ...entitlementAccountState, userId: currentUser?.id }, "album_modal")
       );
     },
-    [accountState, catalogPlaybackLookup, currentUser?.id, playQueue, playTrack]
+    [entitlementAccountState, catalogPlaybackLookup, currentUser?.id, playQueue, playTrack]
   );
 
   const playCanonicalCatalogItem = useCallback((item, source) => {
     const playbackTrack = normalizeTrackForPlayback(
       item,
-      { ...accountState, userId: currentUser?.id },
+      { ...entitlementAccountState, userId: currentUser?.id },
       source
     );
     if (playbackTrack?.src) {
       void playTrack(playbackTrack);
     }
-  }, [accountState, currentUser?.id, playTrack]);
+  }, [entitlementAccountState, currentUser?.id, playTrack]);
 
   const goRadio = useCallback((i) => {
     // phase11: startTransition — carousel index is non-urgent
@@ -1099,8 +1100,8 @@ export default function Page() {
   const nextSingle    = useCallback(() => goToSingle(singleIndex === displaySingles.length-1 ? 0 : singleIndex+1, "right"), [goToSingle, singleIndex, displaySingles.length]);
   const currentSingle = useMemo(() => withR2CatalogMedia(displaySingles[singleIndex]), [singleIndex, displaySingles]);
   const currentSingleAccess = useMemo(
-    () => (currentSingle ? resolveContentAccess(currentSingle, accountState) : null),
-    [currentSingle, accountState]
+    () => (currentSingle ? resolveContentAccess(currentSingle, entitlementAccountState) : null),
+    [currentSingle, entitlementAccountState]
   );
   const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
 
@@ -1136,7 +1137,7 @@ export default function Page() {
     nowPlaying,
     featureModalOpen,
     albumModalOpen,
-    accountState,
+    entitlementAccountState,
     catalogPlaybackLookup,
     currentUser?.id,
     playCanonicalCatalogItem,
@@ -1168,7 +1169,7 @@ export default function Page() {
       nowPlaying,
       previewModalOpen,
       albumModalOpen,
-      accountState,
+      entitlementAccountState,
       catalogPlaybackLookup,
       currentUser?.id,
       playCanonicalCatalogItem,
@@ -1346,7 +1347,7 @@ export default function Page() {
     if (!currentUser) return null;
     const hasCollector = myPurchases.some(p => p.slug?.startsWith("exc-card"));
     const hasBundle    = myPurchases.some(p => p.slug?.startsWith("exc-bundle"));
-    const subs         = circleSubmissions.filter(s => s.by === accountCircleByline || s.by === currentUser.name).length;
+    const subs         = circleSubmissions.filter(s => s.by === accountCircleByline || s.by === currentUser?.name).length;
     if ((hasCollector||hasBundle) && subs >= 1) return { label:"INNER CIRCLE",   color:"#a259ff", glow:"rgba(162,89,255,0.5)" };
     if  (hasCollector||hasBundle)               return { label:"COLLECTOR",       color:"#ff6b35", glow:"rgba(255,107,53,0.5)" };
     if  (subs >= 3)                             return { label:"VISIONARY",       color:"#00ffff", glow:"rgba(0,255,255,0.5)" };
@@ -1533,7 +1534,7 @@ export default function Page() {
   const currentSlide   = useMemo(() => enrichedRadioSlides[radioIndex], [enrichedRadioSlides, radioIndex]);
   const activeFlowMode = flowConversionActive ? "conversion" : nowPlaying ? "nowplaying" : "idle";
   const accountStateReady = !authLoading;
-  const showOwnTrackConversion = accountStateReady && !isAdminAccount(accountState);
+  const showOwnTrackConversion = accountStateReady && !isAdminAccount(entitlementAccountState);
 
   const exclusiveItems = exclusiveCatalog.map(item => ({
     ...item,
@@ -1591,7 +1592,7 @@ export default function Page() {
               single={selectedSingle}
               releaseDetail={selectedReleaseDetail}
               isMobile={isMobile}
-              access={resolveTrackAccess(selectedSingle, accountState)?.canStream ? "full" : "preview"}
+              access={resolveTrackAccess(selectedSingle, entitlementAccountState)?.canStream ? "full" : "preview"}
               userId={currentUser?.id}
               isAdmin={isAdmin}
               onGift={handlePreviewGift}
@@ -1613,7 +1614,7 @@ export default function Page() {
               single={featureModalItem}
               releaseDetail={featureReleaseDetail}
               isMobile={isMobile}
-              access={resolveTrackAccess(featureModalItem, accountState)?.canStream ? "full" : "preview"}
+              access={resolveTrackAccess(featureModalItem, entitlementAccountState)?.canStream ? "full" : "preview"}
               userId={currentUser?.id}
               isAdmin={isAdmin}
               onGift={handleFeaturePreviewGift}
@@ -1649,7 +1650,7 @@ export default function Page() {
                     : selectedAlbum.price,
                 tracks: normalizeAlbumTracksForModal(selectedAlbum.tracks || []),
               }}
-              access={resolveTrackAccess(selectedAlbum, accountState)?.canStream ? "full" : "preview"}
+              access={resolveTrackAccess(selectedAlbum, entitlementAccountState)?.canStream ? "full" : "preview"}
               onClose={closeAlbumModal}
               onPlayTrackAtIndex={playAlbumModalTrackAtIndex}
             />
@@ -1841,7 +1842,7 @@ export default function Page() {
                       >
                         {displaySingles.map((single, i) => {
                           const singleUi = withR2CatalogMedia(single);
-                          const singleAccess = resolveContentAccess(singleUi, accountState);
+                          const singleAccess = resolveContentAccess(singleUi, entitlementAccountState);
                           return (
                           <div
                             key={single.slug || single.id || `single-${i}`}
@@ -1903,7 +1904,7 @@ export default function Page() {
                               ) : null}
                               <ReleaseCardActions
                                 item={singleUi}
-                                accountState={accountState}
+                                accountState={entitlementAccountState}
                                 userId={currentUser?.id}
                                 source="home_single_card"
                                 showCart={Boolean(singleAccess?.showCart)}
@@ -1972,7 +1973,7 @@ export default function Page() {
                   {/* Features */}
                   <div style={{marginTop:28,marginBottom:4}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                    <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Radio */}
@@ -1989,7 +1990,7 @@ export default function Page() {
                         onGift={openGiftSheet}
                         onAddToCart={addToCart}
                         onFlowConversionActive={setFlowConversionActive}
-                        accountState={accountState}
+                        accountState={entitlementAccountState}
                         currentUserId={currentUser?.id}
                         onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
                       />
@@ -2007,7 +2008,7 @@ export default function Page() {
                             onGift={openGiftSheet}
                             onAddToCart={addToCart}
                             onFlowConversionActive={setFlowConversionActive}
-                            accountState={accountState}
+                            accountState={entitlementAccountState}
                             currentUserId={currentUser?.id}
                             onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
                           />
@@ -2027,7 +2028,7 @@ export default function Page() {
                   {/* Albums */}
                   <div id="home-albums">
                     <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                    <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                    <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                   </div>
 
                   {/* Audio Visuals */}
@@ -2120,10 +2121,10 @@ export default function Page() {
                         </div>
                       </div>
                       <h2 className="section-heading" style={{marginBottom:14}}>Singles</h2>
-                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} onSingleClick={handleSingleClick} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} onSingleClick={handleSingleClick} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       <div style={{marginTop:32,marginBottom:4}}>
                         <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                        <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                        <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       </div>
                       <AudioVisualsSection isMobile={isMobile} onAudioVisualsFocused={handleAudioVisualsFocused}/>
                     </>
@@ -2133,7 +2134,7 @@ export default function Page() {
                   {activeTab==="albums" && (
                     <>
                       <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                      <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={accountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                      <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                     </>
                   )}
 
@@ -2414,12 +2415,12 @@ export default function Page() {
                   {currentUser ? (
                     <div style={{display:"flex",flexDirection:"column",gap:20}}>
                       <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:28}}>
-                        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{accountDisplayInitial}</div><div><div style={{fontSize:18,fontWeight:800}}>{accountDisplayName}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{currentUser.email || "—"}</div></div>{userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`}}>{userStatus.label}</div>}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{accountDisplayInitial}</div><div><div style={{fontSize:18,fontWeight:800}}>{accountDisplayName}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{currentUser?.email || "—"}</div></div>{userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`}}>{userStatus.label}</div>}</div>
                         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===accountCircleByline||s.by===currentUser?.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Collection",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
                       {isAdmin ? <GiftsSentSection /> : null}
-                      {isAdmin ? <CollectorCardAdminPanel accountState={accountState} /> : null}
+                      {accountStateReady && isAdmin ? <CollectorCardAdminPanel accountState={accountState} /> : null}
                       <button onClick={handleSignOut} style={{width:"100%",height:44,padding:0,background:"transparent",color:"#444",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";}}>Sign Out</button>
                     </div>
                   ) : (
@@ -2782,7 +2783,7 @@ export default function Page() {
         open={Boolean(albumTracklistRelease)}
         album={albumTracklistRelease}
         catalogPlaybackLookup={catalogPlaybackLookup}
-        accountState={accountState}
+        accountState={entitlementAccountState}
         userId={currentUser?.id}
         onClose={() => setAlbumTracklistRelease(null)}
         onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}

@@ -39,7 +39,7 @@ const faqs = [
 ];
 
 export default function SubscribePage() {
-  const { currentUser, membership, refreshAccountState, enterGuest } = useAuth();
+  const { currentUser, membership, refreshAccountState, enterGuest, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [identityLoading, setIdentityLoading] = useState(false);
@@ -132,7 +132,9 @@ export default function SubscribePage() {
     sync();
     const interval = window.setInterval(sync, 2500);
   };
-  const experienceUnlocked = subscriptionUnlocked || (membership && ["active","trialing"].includes(membership.status));
+  const experienceUnlocked =
+    subscriptionUnlocked ||
+    (!authLoading && membership && ["active", "trialing"].includes(membership.status));
 
   return (
     <main style={{minHeight:"100vh",background:"#050505",color:"#fff",fontFamily:"Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",overflow:"hidden"}}>

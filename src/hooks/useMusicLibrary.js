@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, useEntitlementAccountState } from "@/context/AuthContext";
 import { partitionLibraryByType } from "@/lib/music-access";
 import {
   isCollectorLibraryItem,
@@ -13,11 +13,11 @@ export function useMusicLibrary({ singles = [], albums = [] } = {}) {
   const {
     user,
     library,
-    accountState,
     loading,
     refreshAccountState,
     refreshLibrary,
   } = useAuth();
+  const accountState = useEntitlementAccountState();
 
   const refresh = useCallback(async () => {
     await refreshAccountState();

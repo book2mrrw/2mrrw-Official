@@ -19,7 +19,32 @@ const EMPTY_ACCOUNT_STATE = {
   isAdmin: false,
 };
 
-const AuthContext = createContext(null);
+const noop = () => {};
+const noopAsync = async () => null;
+
+/** Safe pre-provider / SSR default — never treat as authenticated entitlements. */
+export const DEFAULT_AUTH_CONTEXT = {
+  user: null,
+  profile: null,
+  currentUser: null,
+  library: [],
+  ownedSlugs: new Set(),
+  accountState: EMPTY_ACCOUNT_STATE,
+  membership: null,
+  owns: () => false,
+  isAdmin: false,
+  markAdmin: noop,
+  loading: true,
+  authStatus: "loading",
+  enterGuest: noopAsync,
+  signOut: noopAsync,
+  refreshGuest: noopAsync,
+  refreshLibrary: noopAsync,
+  refreshAccountState: noopAsync,
+  applySessionUser: noopAsync,
+};
+
+const AuthContext = createContext(DEFAULT_AUTH_CONTEXT);
 
 async function clearGuestSessionCookie() {
   try {
@@ -333,6 +358,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const userId = user?.id ?? null;
+  const membership = accountState?.membership ?? null;
 
   useEffect(() => {
     if (!isAdmin && !userId) return;
@@ -372,6 +398,7 @@ export function AuthProvider({ children }) {
     library,
     ownedSlugs,
     accountState,
+    membership,
     owns,
     isAdmin,
     markAdmin,
@@ -388,6 +415,7 @@ export function AuthProvider({ children }) {
     library,
     ownedSlugs,
     accountState,
+    membership,
     owns,
     isAdmin,
     markAdmin,
@@ -408,4 +436,13 @@ export function useAuth() {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
+}
+
+/** Empty entitlements while session bootstrap runs — avoids stale guest/partial state. */
+export function useEntitlementAccountState() {
+  const { accountState, loading } = useAuth();
+  return useMemo(
+    () => (loading ? EMPTY_ACCOUNT_STATE : accountState),
+    [loading, accountState]
+  );
 }

@@ -20,21 +20,21 @@ export function catalogItemAllowsFullPlayback(item, track, accountState = {}) {
     item?.slug ||
     null;
   const albumSlug = item?.albumSlug || item?.album_slug || null;
-  const ownedSlugs = accountState.ownedSlugs || [];
+  const ownedSlugs = accountState?.ownedSlugs || [];
 
   if (catalogSlugIsOwned(slug, ownedSlugs) || catalogSlugIsOwned(albumSlug, ownedSlugs)) {
     return true;
   }
 
-  const membership = accountState.membership || null;
+  const membership = accountState?.membership || null;
   const subscriptionActive =
-    Boolean(accountState.subscriberActive) || membershipHasPremiumAccess(membership);
+    Boolean(accountState?.subscriberActive) || membershipHasPremiumAccess(membership);
   if (!subscriptionActive) return false;
 
-  const permissions = accountState.permissions || {};
-  if (permissions.subscriber || accountState.subscriberActive) return true;
+  const permissions = accountState?.permissions || {};
+  if (permissions.subscriber || accountState?.subscriberActive) return true;
 
-  const collectorRecords = accountState.collectorOwnerships || [];
+  const collectorRecords = accountState?.collectorOwnerships || [];
   if (permissions.collectorAccess || permissions.collector) {
     return collectorRecords.length > 0 || permissions.collectorAccess;
   }

@@ -10,7 +10,7 @@ import {
   useState,
   startTransition,
 } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, useEntitlementAccountState } from "@/context/AuthContext";
 import { resetPlaybackTelemetry, sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
 import { recordListeningEvent } from "@/lib/listening-history";
 import {
@@ -378,7 +378,8 @@ function preloadCsAssets(track, refs) {
 }
 
 export function AudioProvider({ children }) {
-  const { user, accountState } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const entitlementAccountState = useEntitlementAccountState();
   const csImgRef = useRef(null);
   const csVidRef = useRef(null);
   const csAudioRef = useRef(null);
@@ -1581,8 +1582,8 @@ export function AudioProvider({ children }) {
         }
       }
     }
-    if (!resumeAt && !playedDifferentSince && accountState?.mediaProgress?.length) {
-      const savedProgress = accountState.mediaProgress.find(
+    if (!resumeAt && !playedDifferentSince && !authLoading && entitlementAccountState?.mediaProgress?.length) {
+      const savedProgress = entitlementAccountState.mediaProgress.find(
         (p) => p.product_slug === nextTrack.slug && !p.completed
       );
       if (savedProgress?.position_seconds > RESTORE_MIN_POSITION_SEC) {
@@ -1772,7 +1773,8 @@ export function AudioProvider({ children }) {
     finalizeStreamSession,
     initWebAudio,
     unlockAudioFromGesture,
-    accountState?.mediaProgress,
+    authLoading,
+    entitlementAccountState?.mediaProgress,
   ]);
 
   const upgradeToFullStream = useCallback(async () => {
@@ -1869,6 +1871,7 @@ export function AudioProvider({ children }) {
 
   useEffect(() => {
     const onEntitlementsUpdated = () => {
+      if (authLoading) return;
       const track = stateRef.current.currentTrack;
       const meta = track?.metadata?.access;
       if (meta?.previewOnly && stateRef.current.isPlaying) {
@@ -1877,7 +1880,7 @@ export function AudioProvider({ children }) {
     };
     window.addEventListener("entitlements:updated", onEntitlementsUpdated);
     return () => window.removeEventListener("entitlements:updated", onEntitlementsUpdated);
-  }, [upgradeToFullStream]);
+  }, [authLoading, upgradeToFullStream]);
 
   const setOnPreviewEnded = useCallback((handler) => {
     onPreviewEndedRef.current = typeof handler === "function" ? handler : null;
