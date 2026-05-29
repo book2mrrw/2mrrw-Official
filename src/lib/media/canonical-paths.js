@@ -1,0 +1,259 @@
+/** Canonical R2 key builders — lowercase, URL-safe; paths end at release/track folders (flat media inside). */
+
+import { normalizeReleaseType } from "@/lib/media/normalize-release-type";
+
+const AUDIO_ROOT = "digital-assets";
+const IMAGE_ROOT = "images";
+const PREVIEW_ROOT = "previews";
+const VIDEO_ROOT = "videos";
+
+/** @deprecated Prefer normalizeReleaseType — kept for callers that still read alias keys. */
+export const RELEASE_FOLDER = {
+  single: "singles",
+  singles: "singles",
+  feature: "features",
+  features: "features",
+  ep: "mixtapes-and-eps",
+  mixtape: "mixtapes-and-eps",
+  "mixtapes-and-eps": "mixtapes-and-eps",
+  album: "albums",
+  albums: "albums",
+};
+
+function releaseFolder(releaseType) {
+  return normalizeReleaseType(releaseType);
+}
+
+const KNOWN_MEDIA_EXTENSIONS =
+  /\.(wav|flac|m4a|mp3|jpg|jpeg|png|webp|mp4|webm|mov)$/i;
+
+/** Wrong nested layout — media files belong directly in entity folders, not under these. */
+const WRONG_NESTED_MEDIA_DIR_NAMES = new Set(["audio", "artwork", "video", "videos", "waveform"]);
+
+function cleanSegment(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[''']/g, "")
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+/** Strip wrong nested media-type dirs (audio/, artwork/, etc.) from DB paths. */
+function stripWrongNestedMediaDirs(path) {
+  const segments = String(path || "")
+    .replace(/^\//, "")
+    .replace(/\/$/, "")
+    .split("/")
+    .filter(Boolean);
+  while (
+    segments.length > 1 &&
+    WRONG_NESTED_MEDIA_DIR_NAMES.has(segments[segments.length - 1].toLowerCase())
+  ) {
+    segments.pop();
+  }
+  return segments.join("/");
+}
+
+/** Strip trailing filename from a path — entity folder is authoritative. */
+export function normalizeToEntityFolder(path) {
+  let normalized = String(path || "").replace(/^\//, "").replace(/\/$/, "");
+  if (!normalized) return "";
+  if (KNOWN_MEDIA_EXTENSIONS.test(normalized)) {
+    const lastSlash = normalized.lastIndexOf("/");
+    return lastSlash >= 0 ? `${normalized.slice(0, lastSlash)}/` : "";
+  }
+  normalized = stripWrongNestedMediaDirs(normalized);
+  return normalized ? `${normalized}/` : "";
+}
+
+/**
+ * @param {ReleaseCategory | string} releaseType
+ * @param {string} releaseSlug
+ * @param {string} [trackSlug]
+ */
+export function resolveStoragePath(releaseType, releaseSlug, trackSlug, albumSlug) {
+  const folder = releaseFolder(releaseType);
+  const release = cleanSegment(releaseSlug);
+  if (!release) return "";
+
+  if (folder === "mixtapes-and-eps" || folder === "albums") {
+    const project = cleanSegment(albumSlug || releaseSlug);
+    const track = albumSlug ? release : cleanSegment(trackSlug);
+    if (track) {
+      return `${AUDIO_ROOT}/${folder}/${project}/${track}/`;
+    }
+    return `${AUDIO_ROOT}/${folder}/${project}/`;
+  }
+
+  return `${AUDIO_ROOT}/${folder}/${release}/`;
+}
+
+function nestedCollectionFolder(folder, slug, trackSlug, albumSlug) {
+  const release = cleanSegment(slug);
+  if (!release) return "";
+  if (folder === "mixtapes-and-eps" || folder === "albums") {
+    const project = cleanSegment(albumSlug || slug);
+    const track = albumSlug ? release : cleanSegment(trackSlug);
+    if (track) {
+      return `${project}/${track}/`;
+    }
+    return `${project}/`;
+  }
+  return `${release}/`;
+}
+
+/**
+ * @param {ReleaseCategory | string} releaseType
+ * @param {string} slug — release slug (single/feature) or album slug for collections
+ * @param {string} [trackSlug]
+ * @param {string} [albumSlug]
+ */
+export function resolveArtworkPath(releaseType, slug, trackSlug, albumSlug) {
+  const folder = releaseFolder(releaseType);
+  const nested = nestedCollectionFolder(folder, slug, trackSlug, albumSlug);
+  if (!nested) return "";
+  return `${IMAGE_ROOT}/${folder}/${nested}`;
+}
+
+/**
+ * Canonical preview entity folder.
+ * @param {ReleaseCategory | string} releaseType
+ * @param {string} slug — release slug or track slug for album tracks
+ * @param {string} [albumSlug] — required for album track previews
+ */
+export function resolvePreviewPath(releaseType, slug, albumSlug) {
+  const folder = releaseFolder(releaseType);
+  const release = cleanSegment(slug);
+  if (!release) return "";
+
+  if (folder === "mixtapes-and-eps" || folder === "albums") {
+    const project = cleanSegment(albumSlug || slug);
+    const track = albumSlug ? release : null;
+    if (albumSlug && track) {
+      return `${PREVIEW_ROOT}/${folder}/${project}/${track}/`;
+    }
+    return `${PREVIEW_ROOT}/${folder}/${project}/`;
+  }
+
+  return `${PREVIEW_ROOT}/${folder}/${release}/`;
+}
+
+/**
+ * Motion loop entity folder — videos/{folder}/{slug}/ or nested track path.
+ * @param {ReleaseCategory | string} releaseType
+ * @param {string} slug
+ * @param {string} [trackSlug]
+ * @param {string} [albumSlug]
+ */
+export function resolveVideoPath(releaseType, slug, trackSlug, albumSlug) {
+  const folder = releaseFolder(releaseType);
+  const nested = nestedCollectionFolder(folder, slug, trackSlug, albumSlug);
+  if (!nested) return "";
+  return `${VIDEO_ROOT}/${folder}/${nested}`;
+}
+
+/** @deprecated Use resolveVideoPath(releaseType, slug) */
+export function resolveVideoPathForSingle(slug) {
+  return resolveVideoPath("single", slug);
+}
+
+/** @deprecated Use resolvePreviewPath(releaseType, slug) — kept for legacy flat keys. */
+export function resolveLegacyFlatPreviewPath(slug, ext = "mp3") {
+  const safe = cleanSegment(slug);
+  if (!safe) return "";
+  return `${PREVIEW_ROOT}/${safe}.${ext}`;
+}
+
+/** Strip digital-assets/ prefix for normalizePlaybackR2Key compatibility. */
+export function storagePathForProductRow(fullPath) {
+  let normalized = normalizeToEntityFolder(fullPath).replace(/^\//, "");
+  if (normalized.startsWith(`${AUDIO_ROOT}/`)) {
+    normalized = normalized.slice(`${AUDIO_ROOT}/`.length);
+  }
+  return normalized;
+}
+
+/** Legacy public/ path for storefront cover display (resolved via catalogCoverUrl). */
+export function legacyCoverPublicPath(releaseType, slug) {
+  const folder = releaseFolder(releaseType);
+  const release = cleanSegment(slug);
+  if (!release) return "";
+  if (folder === "features") return `/images/features/${release}.jpg`;
+  if (folder === "mixtapes-and-eps") return `/images/albums/${release}.jpg`;
+  return `/images/singles/${release.replace(/-/g, "")}.jpg`;
+}
+
+/** Legacy preview public path under /audio/previews/ */
+export function legacyPreviewPublicPath(previewR2Key) {
+  const normalized = String(previewR2Key || "").replace(/^\//, "");
+  if (normalized.startsWith(`${PREVIEW_ROOT}/`)) {
+    return `/audio/${normalized}`;
+  }
+  return normalized.startsWith("/") ? normalized : `/${normalized}`;
+}
+
+/** Client/API preview resolution URL for folder-based discovery. */
+export function previewDiscoveryUrl(previewFolder, legacyKey = null) {
+  const folder = normalizeToEntityFolder(previewFolder);
+  if (!folder) return legacyKey ? legacyPreviewPublicPath(legacyKey) : "";
+  const params = new URLSearchParams({ folder });
+  if (legacyKey) params.set("legacy", String(legacyKey).replace(/^\//, ""));
+  return `/api/media/preview?${params.toString()}`;
+}
+
+const ARTWORK_PLACEHOLDER_PUBLIC = "/images/placeholder/artwork.jpg";
+
+/** Public URL for missing cover/loop art — never null. */
+export function getArtworkPlaceholderUrl(releaseType = "single", slug = "placeholder") {
+  const legacy = legacyCoverPublicPath(releaseType, slug);
+  const path = legacy ? legacy.replace(/^\//, "") : ARTWORK_PLACEHOLDER_PUBLIC.replace(/^\//, "");
+  return path.startsWith("/") ? path : `/${path}`;
+}
+
+/** Legacy motion video public path */
+export function legacyVideoPublicPath(slug) {
+  const safe = cleanSegment(slug).replace(/-/g, "");
+  return `/videos/singles/${safe}.mp4`;
+}
+
+/** Client/API video resolution URL for folder-based discovery. */
+export function videoDiscoveryUrl(videoFolder, legacyPath = null) {
+  const folder = normalizeToEntityFolder(videoFolder);
+  if (!folder) return legacyPath || "";
+  const params = new URLSearchParams({ folder, type: "video" });
+  if (legacyPath) params.set("legacy", String(legacyPath).replace(/^\//, ""));
+  return `/api/media/preview?${params.toString()}`;
+}
+
+/**
+ * Unified visual discovery (video → image fallback).
+ * @param {ReleaseCategory | string} releaseType
+ * @param {string} slug
+ * @param {{ trackSlug?: string, albumSlug?: string, legacyVideo?: string, legacyImage?: string }} [options]
+ */
+export function visualDiscoveryUrl(releaseType, slug, options = {}) {
+  const safeType = normalizeReleaseType(releaseType || "single");
+  const safeSlug = cleanSegment(slug);
+  if (!safeSlug) return "";
+  const params = new URLSearchParams({ releaseType: safeType, slug: safeSlug });
+  if (options.trackSlug) params.set("trackSlug", cleanSegment(options.trackSlug));
+  if (options.albumSlug) params.set("albumSlug", cleanSegment(options.albumSlug));
+  if (options.legacyVideo) params.set("legacyVideo", String(options.legacyVideo).replace(/^\//, ""));
+  if (options.legacyImage) params.set("legacyImage", String(options.legacyImage).replace(/^\//, ""));
+  return `/api/media/visual?${params.toString()}`;
+}
+
+/** Visual discovery from a known entity folder (DB video_path / artwork_path). */
+export function visualDiscoveryUrlFromFolder(videoFolder, imageFolder, legacy = {}) {
+  const video = normalizeToEntityFolder(videoFolder);
+  const image = normalizeToEntityFolder(imageFolder);
+  if (!video && !image) return "";
+  const params = new URLSearchParams();
+  if (video) params.set("videoFolder", video);
+  if (image) params.set("imageFolder", image);
+  if (legacy.legacyVideo) params.set("legacyVideo", String(legacy.legacyVideo).replace(/^\//, ""));
+  if (legacy.legacyImage) params.set("legacyImage", String(legacy.legacyImage).replace(/^\//, ""));
+  return `/api/media/visual?${params.toString()}`;
+}

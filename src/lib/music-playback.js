@@ -1,6 +1,18 @@
-import { withR2CatalogMedia } from "@/components/home/catalogMedia";
+import { isUpcomingReleaseDate, withR2CatalogMedia } from "@/components/home/catalogMedia";
 import { resolvePlaybackSrc, resolveTrackAccess } from "@/lib/music-access";
-import { catalogCoverUrl, catalogMotionVideoUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
+import {
+  getCanonicalReleaseBySlug,
+  getCanonicalTrack,
+  mergeCanonicalMetadata,
+} from "@/lib/media/canonical-catalog";
+import {
+  catalogCoverUrl,
+  catalogMotionVideoUrl,
+  catalogPreviewAudioUrl,
+  catalogPublicMediaUrl,
+  catalogVisualMediaUrl,
+} from "@/lib/media-urls";
+import { getCachedAvailability } from "@/lib/media/media-availability";
 
 /** Known storefront title → product slug (album rows that match singles/features). */
 const TITLE_SLUG_ALIASES = {
@@ -36,7 +48,7 @@ export function titleToCatalogSlug(title) {
 /** R2-resolve cover/preview/video paths — same shape singles use before playTrack. */
 export function normalizeCatalogItemForPlayback(item) {
   if (!item) return item;
-  const next = withR2CatalogMedia({ ...item });
+  const next = withR2CatalogMedia(mergeCanonicalMetadata({ ...item }));
   const preview = next.preview || next.preview_path || next.previewPath || null;
   if (preview) {
     next.preview = preview;
@@ -112,17 +124,28 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
 
   if (typeof track === "string") {
     const title = track;
+    const canonicalTrack = getCanonicalTrack(albumSlug, titleToCatalogSlug(title));
     const catalogItem = catalogLookup?.byTitle?.get(normalizeTitleKey(title));
-    const base = catalogItem
-      ? { ...catalogItem, title, slug: streamSlug }
-      : {
+    const base = canonicalTrack
+      ? {
           slug: streamSlug,
-          title,
+          title: canonicalTrack.title,
+          storage_path: canonicalTrack.storage_path,
           cover: albumNorm.cover,
           preview: albumNorm.preview,
           audio: albumNorm.audio,
           artist: albumNorm.artist || "2MRRW",
-        };
+        }
+      : catalogItem
+        ? { ...catalogItem, title, slug: streamSlug }
+        : {
+            slug: streamSlug,
+            title,
+            cover: albumNorm.cover,
+            preview: albumNorm.preview,
+            audio: albumNorm.audio,
+            artist: albumNorm.artist || "2MRRW",
+          };
     return normalizeCatalogItemForPlayback({
       ...base,
       albumSlug,
@@ -131,11 +154,17 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
     });
   }
 
-  const catalogItem = track.slug ? catalogLookup?.bySlug?.get(track.slug) : null;
+  const trackSlug = track.slug || track.id;
+  const canonicalTrack = getCanonicalTrack(albumSlug, trackSlug);
+  const catalogItem = trackSlug ? catalogLookup?.bySlug?.get(trackSlug) : null;
+  const canonicalRelease = getCanonicalReleaseBySlug(trackSlug);
   return normalizeCatalogItemForPlayback({
     ...(catalogItem || {}),
     ...track,
     slug: streamSlug,
+    trackSlug,
+    title: canonicalTrack?.title || canonicalRelease?.title || track.title,
+    storage_path: canonicalTrack?.storage_path || track.storage_path,
     albumSlug,
     trackIndex: index,
     cover: track.cover || albumNorm.cover,
@@ -151,18 +180,27 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
   const userId = accountState?.userId || overrides.userId;
   const csAudioRaw = normalized?.csAudio || normalized?.cs_audio || null;
   const csCoverRaw = normalized?.csCover || normalized?.cs_cover || normalized?.csCoverArt || null;
-  const motionRaw = normalized?.motion_cover_url || normalized?.motionCoverUrl || normalized?.video || null;
-  const coverArtType = normalized?.coverArtType || normalized?.cover_art_type || (motionRaw ? "video" : "image");
+  const visualRaw = normalized?.visual || null;
+  const motionRaw =
+    normalized?.motion_cover_url || normalized?.motionCoverUrl || normalized?.video || null;
+  const coverArtType =
+    normalized?.coverArtType || normalized?.cover_art_type || (motionRaw || visualRaw ? "video" : "image");
   const csCoverType = normalized?.csCoverType || normalized?.cs_cover_type || "image";
   const coverRaw =
-    normalized?.cover_art_url || normalized?.coverArtUrl || normalized?.cover || normalized?.coverArt || null;
-  const videoRaw = motionRaw;
+    normalized?.cover_art_url ||
+    normalized?.coverArtUrl ||
+    normalized?.cover ||
+    normalized?.coverArt ||
+    null;
+  const videoRaw = motionRaw || visualRaw;
   const cover =
-    coverArtType === "video" && videoRaw
-      ? catalogMotionVideoUrl(String(videoRaw).replace(/^\//, ""))
-      : coverRaw
-        ? catalogCoverUrl(String(coverRaw).replace(/^\//, ""))
-        : null;
+    visualRaw
+      ? catalogVisualMediaUrl(String(visualRaw).replace(/^\//, ""))
+      : coverArtType === "video" && videoRaw
+        ? catalogMotionVideoUrl(String(videoRaw).replace(/^\//, ""))
+        : coverRaw
+          ? catalogCoverUrl(String(coverRaw).replace(/^\//, ""))
+          : null;
   const previewPath =
     normalized?.preview || normalized?.preview_path || normalized?.previewPath || null;
   const playbackSrc = resolvePlaybackSrc(normalized, access, { userId });
@@ -187,6 +225,7 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
       previewSrc,
       price: normalized?.price,
       albumSlug: normalized?.albumSlug || overrides.albumSlug,
+      trackSlug: normalized?.trackSlug || overrides.trackSlug || null,
       ...overrides,
     },
   };
@@ -205,31 +244,115 @@ export function albumCardPlaybackItem(album, catalogLookup) {
   return resolveAlbumTrackPlaybackItem(album, first, 0, catalogLookup);
 }
 
+export function isQueueTrackPlayable(track) {
+  if (!track) return false;
+  if (track.playbackStatus === "unavailable" || track.metadata?.playbackStatus === "unavailable") {
+    return false;
+  }
+  if (track.src) return true;
+  const previewPath = track.preview || track.preview_path || track.metadata?.previewSrc;
+  return Boolean(previewPath);
+}
+
+/** Mark playbackStatus and drop tracks with no stream or preview path. */
+export function filterPlayableQueueItems(items = [], accountState) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => {
+      const access = resolveTrackAccess(item, accountState);
+      const previewPath = item.preview || item.preview_path || item.previewPath || item.metadata?.previewSrc;
+      const hasSrc = Boolean(item.src);
+      const hasPreview = Boolean(previewPath);
+      const comingSoon =
+        item.release_date && isUpcomingReleaseDate(item.release_date);
+      let playbackStatus = "ready";
+      if (comingSoon) playbackStatus = "coming_soon";
+      else if (!hasSrc && !hasPreview && !access?.canStream) playbackStatus = "unavailable";
+      else if (!hasSrc && (hasPreview || access?.previewOnly)) playbackStatus = "preview_only";
+
+      return {
+        ...item,
+        playbackStatus,
+        metadata: {
+          ...(item.metadata || {}),
+          playbackStatus,
+          previewUnavailable: playbackStatus === "unavailable",
+        },
+      };
+    })
+    .filter((t) => isQueueTrackPlayable(t));
+}
+
+/**
+ * Safe play button state for cards and track rows (no layout changes).
+ * @returns {{ label: 'Play'|'Unavailable'|'Coming Soon'|'Preview Not Ready', disabled: boolean, canAttemptPlay: boolean }}
+ */
+export function getPlayButtonState(track, accountState) {
+  if (!track) {
+    return { label: "Unavailable", disabled: true, canAttemptPlay: false };
+  }
+
+  const cached = getCachedAvailability(
+    track.slug,
+    track.metadata?.trackSlug || track.trackSlug,
+    track.metadata?.albumSlug || track.albumSlug
+  );
+  if (cached?.status === "coming_soon") {
+    return { label: "Coming Soon", disabled: true, canAttemptPlay: false };
+  }
+  if (cached?.status === "unavailable") {
+    return { label: "Unavailable", disabled: true, canAttemptPlay: false };
+  }
+
+  const status = track.playbackStatus || track.metadata?.playbackStatus || cached?.status;
+  if (status === "coming_soon" || (track.release_date && isUpcomingReleaseDate(track.release_date))) {
+    return { label: "Coming Soon", disabled: true, canAttemptPlay: false };
+  }
+  if (status === "unavailable" || track.metadata?.previewUnavailable) {
+    return { label: "Unavailable", disabled: true, canAttemptPlay: false };
+  }
+  const access = resolveTrackAccess(track, accountState);
+  const previewPath = track.preview || track.preview_path || track.previewPath || track.metadata?.previewSrc;
+  const hasPlayableSrc = Boolean(track.src) || Boolean(previewPath);
+  if (!hasPlayableSrc && !access?.canStream) {
+    return { label: "Preview Not Ready", disabled: true, canAttemptPlay: false };
+  }
+  return { label: "Play", disabled: false, canAttemptPlay: true };
+}
+
 export function albumTracksForPlayback(album, accountState, source = "album", catalogLookup) {
   const trackList = album?.tracks || album?.trackTitles || [];
-  return trackList
-    .map((track, index) => {
-      const item = resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup);
-      const playback = toPlaybackTrack(item, accountState, source, {
-        trackIndex: index,
-        albumSlug: album.slug,
-      });
-      const access = playback.metadata?.access;
-      const previewPath = item.preview || item.preview_path || item.previewPath;
-      const hasPreview = Boolean(previewPath);
+  const mapped = trackList.map((track, index) => {
+    const item = resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup);
+    const playback = toPlaybackTrack(item, accountState, source, {
+      trackIndex: index,
+      albumSlug: album.slug,
+      trackSlug: typeof track === "string" ? titleToCatalogSlug(track) : track?.slug || track?.id,
+    });
+    const access = playback.metadata?.access;
+    const previewPath = item.preview || item.preview_path || item.previewPath;
+    const hasPreview = Boolean(previewPath);
 
-      if (!access?.canStream && !hasPreview && !playback.src) {
-        return {
-          ...playback,
-          src: "",
-          metadata: {
-            ...playback.metadata,
-            access: { ...access, previewOnly: true },
-            previewUnavailable: true,
-          },
-        };
-      }
-      return playback;
-    })
-    .filter((t) => t.src || t.metadata?.previewUnavailable);
+    if (!access?.canStream && !hasPreview && !playback.src) {
+      return {
+        ...playback,
+        src: "",
+        playbackStatus: "unavailable",
+        metadata: {
+          ...playback.metadata,
+          playbackStatus: "unavailable",
+          access: { ...access, previewOnly: true },
+          previewUnavailable: true,
+        },
+      };
+    }
+    return {
+      ...playback,
+      playbackStatus: playback.src ? "ready" : "preview_only",
+      metadata: {
+        ...playback.metadata,
+        playbackStatus: playback.src ? "ready" : "preview_only",
+      },
+    };
+  });
+  return filterPlayableQueueItems(mapped, accountState);
 }
