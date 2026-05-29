@@ -15,7 +15,7 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
   const lastTapRef = useRef(0);
 
   const access = useMemo(
-    () => resolveTrackAccess(item, { ...accountState, userId }),
+    () => resolveTrackAccess(item, { ...(accountState || {}), userId }),
     [accountState, item, userId]
   );
 
@@ -139,7 +139,7 @@ export function ReleaseCardActions({
   showCart = true,
 }) {
   const access = useMemo(
-    () => resolveTrackAccess(item, { ...accountState, userId }),
+    () => resolveTrackAccess(item, { ...(accountState || {}), userId }),
     [accountState, item, userId]
   );
 
