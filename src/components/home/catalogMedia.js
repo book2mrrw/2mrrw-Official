@@ -7,6 +7,9 @@ import {
 } from "@/lib/media-urls";
 import { getArtworkPlaceholderUrl } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/normalize-release-type";
+import { isUpcomingReleaseDate } from "@/lib/media/release-date";
+
+export { isUpcomingReleaseDate };
 
 /** Resolve storefront catalog media to R2 public URLs when configured. */
 export function withR2CatalogMedia(item) {
@@ -46,13 +49,4 @@ export function catalogCoverDisplay(item) {
     };
   }
   return { src, type };
-}
-
-export function isUpcomingReleaseDate(dateStr) {
-  if (!dateStr) return false;
-  const parsed = Date.parse(dateStr);
-  if (!Number.isNaN(parsed)) return parsed > Date.now();
-  const yearMatch = String(dateStr).match(/\b(20\d{2})\b/);
-  if (!yearMatch) return false;
-  return Number(yearMatch[1]) >= new Date().getFullYear();
 }

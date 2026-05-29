@@ -1,10 +1,12 @@
-import { isUpcomingReleaseDate, withR2CatalogMedia } from "@/components/home/catalogMedia";
+import { withR2CatalogMedia } from "@/components/home/catalogMedia";
 import { resolvePlaybackSrc, resolveTrackAccess } from "@/lib/music-access";
 import {
   getCanonicalReleaseBySlug,
   getCanonicalTrack,
   mergeCanonicalMetadata,
 } from "@/lib/media/canonical-catalog";
+import { getCachedAvailability } from "@/lib/media/availability-cache";
+import { isUpcomingReleaseDate } from "@/lib/media/release-date";
 import {
   catalogCoverUrl,
   catalogMotionVideoUrl,
@@ -12,7 +14,6 @@ import {
   catalogPublicMediaUrl,
   catalogVisualMediaUrl,
 } from "@/lib/media-urls";
-import { getCachedAvailability } from "@/lib/media/media-availability";
 
 /** Known storefront title → product slug (album rows that match singles/features). */
 const TITLE_SLUG_ALIASES = {

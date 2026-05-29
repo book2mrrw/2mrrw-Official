@@ -1,4 +1,11 @@
-import { isUpcomingReleaseDate } from "@/components/home/catalogMedia";
+import {
+  clearMediaAvailabilityCache,
+  deleteInflightAvailability,
+  getCachedAvailability,
+  getInflightAvailability,
+  setInflightAvailability,
+  writeAvailabilityCache,
+} from "@/lib/media/availability-cache";
 import { getCanonicalReleaseBySlug, getCanonicalTrack } from "@/lib/media/canonical-catalog";
 import {
   resolveArtworkPath,
@@ -7,6 +14,7 @@ import {
   resolveVideoPath,
 } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/normalize-release-type";
+import { isUpcomingReleaseDate } from "@/lib/media/release-date";
 import { resolveTrackAccess } from "@/lib/music-access";
 import {
   resolveAudio,
@@ -15,63 +23,29 @@ import {
   resolveVideo,
 } from "@/lib/media/entity-resolver";
 
-const AVAILABILITY_CACHE_TTL_MS = 5 * 60 * 1000;
-/** @type {Map<string, { expiresAt: number, value: Awaited<ReturnType<typeof checkMediaAvailability>> }>} */
-const availabilityCache = new Map();
-/** @type {Map<string, Promise<Awaited<ReturnType<typeof checkMediaAvailability>>>>} */
-const inflightAvailability = new Map();
-
-function availabilityCacheKey({ slug, trackSlug, albumSlug }) {
-  return `${String(slug || "").trim()}|${String(trackSlug || "").trim()}|${String(albumSlug || "").trim()}`;
-}
-
-/** Read cached availability (5 min TTL) — no R2 calls. */
-export function getCachedAvailability(slug, trackSlug, albumSlug) {
-  const key = availabilityCacheKey({ slug, trackSlug, albumSlug });
-  const hit = availabilityCache.get(key);
-  if (!hit) return null;
-  if (Date.now() > hit.expiresAt) {
-    availabilityCache.delete(key);
-    return null;
-  }
-  return hit.value;
-}
-
-function writeAvailabilityCache(key, value) {
-  availabilityCache.set(key, {
-    value,
-    expiresAt: Date.now() + AVAILABILITY_CACHE_TTL_MS,
-  });
-}
-
-/** Clear availability cache (tests / hot reload). */
-export function clearMediaAvailabilityCache() {
-  availabilityCache.clear();
-  inflightAvailability.clear();
-}
+export { getCachedAvailability, clearMediaAvailabilityCache } from "@/lib/media/availability-cache";
 
 /**
  * Discover and cache availability — call on play attempt or debounced card mount.
  * Deduplicates concurrent requests for the same slug+track.
  */
 export async function prefetchMediaAvailability(params = {}) {
-  const key = availabilityCacheKey(params);
   const cached = getCachedAvailability(params.slug, params.trackSlug, params.albumSlug);
   if (cached) return cached;
 
-  const inflight = inflightAvailability.get(key);
+  const inflight = getInflightAvailability(params);
   if (inflight) return inflight;
 
   const promise = checkMediaAvailability(params)
     .then((result) => {
-      writeAvailabilityCache(key, result);
+      writeAvailabilityCache(params, result);
       return result;
     })
     .finally(() => {
-      inflightAvailability.delete(key);
+      deleteInflightAvailability(params);
     });
 
-  inflightAvailability.set(key, promise);
+  setInflightAvailability(params, promise);
   return promise;
 }
 
