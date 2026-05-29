@@ -35,24 +35,51 @@ export function catalogCoverUrl(coverUrl) {
   return catalogPublicMediaUrl(withoutLeading) || `/${withoutLeading}`;
 }
 
-/** Preview audio: public R2 under previews/ or legacy /audio/previews/. */
+/** Preview audio: folder discovery API, public R2, or legacy /audio/previews/. */
 export function catalogPreviewAudioUrl(previewPath) {
   if (!previewPath) return "";
   const normalized = String(previewPath).replace(/^\//, "");
+  if (/^https?:\/\//i.test(normalized)) return normalized;
+  if (normalized.startsWith("api/media/preview")) {
+    return `/${normalized}`;
+  }
+  if (normalized.startsWith("/api/media/preview")) {
+    return normalized;
+  }
   if (normalized.startsWith("audio/previews/")) {
-    const r2Path = `previews/${normalized.replace(/^audio\/previews\//, "")}`;
-    return toCatalogCdnUrl(r2Path);
+    const flatKey = normalized.replace(/^audio\/previews\//, "");
+    return toCatalogCdnUrl(`previews/${flatKey}`);
+  }
+  if (normalized.startsWith("audio/")) {
+    return toCatalogCdnUrl(normalized);
   }
   return catalogPublicMediaUrl(normalized);
 }
 
-/** Motion loop video for singles. */
+/** Motion loop video — folder discovery API or public R2. */
 export function catalogMotionVideoUrl(videoPath) {
   if (!videoPath) return "";
   const normalized = String(videoPath).replace(/^\//, "");
-  if (normalized.startsWith("videos/singles/")) {
+  if (/^https?:\/\//i.test(normalized)) return normalized;
+  if (normalized.startsWith("api/media/")) {
+    return `/${normalized}`;
+  }
+  if (normalized.startsWith("/api/media/")) {
+    return normalized;
+  }
+  if (normalized.startsWith("videos/")) {
     const r2 = getPublicR2Url(normalized);
     if (r2) return r2;
   }
+  return catalogPublicMediaUrl(normalized);
+}
+
+/** Unified visual (video → image fallback) discovery API. */
+export function catalogVisualMediaUrl(visualPath) {
+  if (!visualPath) return "";
+  const normalized = String(visualPath).replace(/^\//, "");
+  if (/^https?:\/\//i.test(normalized)) return normalized;
+  if (normalized.startsWith("/api/media/visual")) return normalized;
+  if (normalized.startsWith("api/media/visual")) return `/${normalized}`;
   return catalogPublicMediaUrl(normalized);
 }

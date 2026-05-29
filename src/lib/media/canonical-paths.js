@@ -167,20 +167,24 @@ export function storagePathForProductRow(fullPath) {
 }
 
 /** Legacy public/ path for storefront cover display (resolved via catalogCoverUrl). */
-export function legacyCoverPublicPath(releaseType, slug) {
+export function legacyCoverPublicPath(releaseType, slug, legacyStem) {
   const folder = releaseFolder(releaseType);
   const release = cleanSegment(slug);
   if (!release) return "";
   if (folder === "features") return `/images/features/${release}.jpg`;
   if (folder === "mixtapes-and-eps") return `/images/albums/${release}.jpg`;
-  return `/images/singles/${release.replace(/-/g, "")}.jpg`;
+  const stem = cleanSegment(legacyStem || release.replace(/-/g, ""));
+  return `/images/singles/${release}/${stem}.jpg`;
 }
 
-/** Legacy preview public path under /audio/previews/ */
+/** Legacy preview public path — flat `previews/` or entity-folder `audio/{type}/{slug}/`. */
 export function legacyPreviewPublicPath(previewR2Key) {
   const normalized = String(previewR2Key || "").replace(/^\//, "");
-  if (normalized.startsWith(`${PREVIEW_ROOT}/`)) {
+  if (normalized.startsWith("previews/")) {
     return `/audio/${normalized}`;
+  }
+  if (normalized.startsWith(`${PREVIEW_ROOT}/`)) {
+    return `/${normalized}`;
   }
   return normalized.startsWith("/") ? normalized : `/${normalized}`;
 }
@@ -203,10 +207,12 @@ export function getArtworkPlaceholderUrl(releaseType = "single", slug = "placeho
   return path.startsWith("/") ? path : `/${path}`;
 }
 
-/** Legacy motion video public path */
-export function legacyVideoPublicPath(slug) {
-  const safe = cleanSegment(slug).replace(/-/g, "");
-  return `/videos/singles/${safe}.mp4`;
+/** Legacy motion video public path — entity folder + legacy filename stem. */
+export function legacyVideoPublicPath(slug, legacyStem) {
+  const release = cleanSegment(slug);
+  if (!release) return "";
+  const stem = cleanSegment(legacyStem || release.replace(/-/g, ""));
+  return `/videos/singles/${release}/${stem}.mp4`;
 }
 
 /** Client/API video resolution URL for folder-based discovery. */

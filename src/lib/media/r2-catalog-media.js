@@ -1,3 +1,4 @@
+import { mergeCanonicalMetadata } from "@/lib/media/canonical-catalog";
 import {
   catalogCoverUrl,
   catalogMotionVideoUrl,
@@ -9,7 +10,7 @@ import {
 /** Resolve storefront catalog media to R2 public URLs when configured. */
 export function withR2CatalogMedia(item) {
   if (!item) return item;
-  const next = { ...item };
+  const next = mergeCanonicalMetadata({ ...item });
   if (next.visual) next.visual = catalogVisualMediaUrl(String(next.visual).replace(/^\//, ""));
   if (next.cover) {
     const coverRaw = next.visual || next.cover;

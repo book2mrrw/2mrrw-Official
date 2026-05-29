@@ -19,7 +19,9 @@ export const CANONICAL_SINGLES = [
     release_date: "2026-08-15",
     price_cents: 299,
     preview_ext: "mp3",
-    preview_legacy: "previews/hourglass-preview.mp3",
+    legacy_cover_stem: "hourglass",
+    legacy_video_stem: "hourglass",
+    preview_legacy: "audio/singles/hour-glass/hourglass-preview.mp3",
   },
   {
     slug: "turnt-me-2-dis",
@@ -28,7 +30,9 @@ export const CANONICAL_SINGLES = [
     release_date: "2026-08-01",
     price_cents: 299,
     preview_ext: "mp3",
-    preview_legacy: "previews/turntme2dis-preview.mp3",
+    legacy_cover_stem: "turnt",
+    legacy_video_stem: "turntme2dis",
+    preview_legacy: "audio/singles/turnt-me-2-dis/turntme2dis-preview.mp3",
   },
   {
     slug: "w2d",
@@ -37,7 +41,7 @@ export const CANONICAL_SINGLES = [
     release_date: "2024-06-01",
     price_cents: 299,
     preview_ext: "mp3",
-    preview_legacy: "previews/w2d-preview.mp3",
+    preview_legacy: "audio/singles/w2d/w2d-preview.mp3",
   },
   {
     slug: "artificial",
@@ -46,7 +50,7 @@ export const CANONICAL_SINGLES = [
     release_date: "2022-07-07",
     price_cents: 299,
     preview_ext: "mp3",
-    preview_legacy: "previews/artificial-preview.mp3",
+    preview_legacy: "audio/singles/artificial/artificial-preview.mp3",
   },
 ];
 
@@ -148,9 +152,14 @@ function enrichRelease(raw) {
   const preview_path = resolvePreviewPath(releaseType, raw.slug);
   const preview_legacy = raw.preview_legacy || null;
   const video_path = resolveVideoPath(releaseType, raw.slug);
-  const legacyImage = raw.legacy_cover || legacyCoverPublicPath(releaseType, raw.slug);
+  const legacyImage =
+    raw.legacy_cover ||
+    legacyCoverPublicPath(releaseType, raw.slug, raw.legacy_cover_stem);
   const legacyVideo =
-    releaseType === "single" ? legacyVideoPublicPath(raw.slug) : undefined;
+    releaseType === "single"
+      ? raw.legacy_video ||
+        legacyVideoPublicPath(raw.slug, raw.legacy_video_stem)
+      : undefined;
   const visual = visualDiscoveryUrl(releaseType, raw.slug, {
     legacyVideo,
     legacyImage,
@@ -358,13 +367,13 @@ export function mergeCanonicalMetadata(item) {
       title: release.title,
       display_title: release.title,
       storage_path: item.storage_path || release.storage_path,
-      artwork_path: item.artwork_path || release.artwork_path,
-      preview_path: item.preview_path || release.preview_path,
-      preview: item.preview || release.preview,
-      cover: item.cover || release.cover,
-      visual: item.visual || release.visual,
-      video: item.video || release.video,
-      coverArtType: item.coverArtType || release.coverArtType,
+      artwork_path: release.artwork_path || item.artwork_path,
+      preview_path: release.preview_path || item.preview_path,
+      preview: release.preview || item.preview,
+      cover: release.cover || item.cover,
+      visual: release.visual || item.visual,
+      video: release.video || item.video,
+      coverArtType: release.coverArtType || item.coverArtType,
       release_date: item.release_date || release.release_date,
     };
   }
