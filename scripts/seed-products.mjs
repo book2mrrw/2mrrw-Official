@@ -2,7 +2,8 @@ import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
-import { PRODUCT_CATALOG } from "../src/lib/commerce/catalog.js";
+import { getProductCatalog } from "../src/lib/commerce/catalog.js";
+import { getCanonicalTrackRows } from "../src/lib/media/canonical-catalog.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -19,14 +20,20 @@ const env = Object.fromEntries(
 );
 
 const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+const PRODUCT_CATALOG = getProductCatalog();
 const rows = PRODUCT_CATALOG.map((p) => ({
   slug: p.slug,
   title: p.title,
+  display_title: p.display_title || p.title,
   product_type: p.product_type,
   price_cents: p.price_cents,
   cover_url: p.cover_url,
   storage_path: p.storage_path || null,
   preview_path: p.preview_path || null,
+  artwork_path: p.artwork_path || null,
+  video_path: p.video_path || null,
+  release_date: p.release_date || null,
+  metadata: p.metadata || {},
   active: true,
 }));
 
@@ -36,6 +43,16 @@ if (error) {
   process.exit(1);
 }
 console.log("Seeded", data.length, "products");
+
+const trackRows = getCanonicalTrackRows();
+const { error: trackError } = await admin
+  .from("catalog_tracks")
+  .upsert(trackRows, { onConflict: "album_slug,slug" });
+if (trackError) {
+  console.error("Catalog tracks seed failed:", trackError.message);
+  process.exit(1);
+}
+console.log("Seeded", trackRows.length, "catalog_tracks");
 
 const catalogSlugs = new Set(PRODUCT_CATALOG.map((p) => p.slug));
 const { data: activeRows, error: countError } = await admin

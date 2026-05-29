@@ -50,11 +50,12 @@ export function titleToCatalogSlug(title) {
 export function normalizeCatalogItemForPlayback(item) {
   if (!item) return item;
   const next = withR2CatalogMedia(mergeCanonicalMetadata({ ...item }));
-  const preview = next.preview || next.preview_path || next.previewPath || null;
-  if (preview) {
-    next.preview = preview;
-    next.preview_path = next.preview_path || next.previewPath || preview;
+  const previewPath =
+    next.preview_path || next.previewPath || next.preview || null;
+  if (previewPath) {
+    next.preview_path = next.preview_path || next.previewPath || previewPath;
     next.previewPath = next.preview_path;
+    next.preview = next.preview || next.preview_path;
   }
   if (!next.slug && next.title) {
     next.slug = titleToCatalogSlug(next.title);
@@ -89,7 +90,8 @@ export function resolveCatalogPlaybackItem(item, catalogLookup) {
       slug: fromSlug.slug || slug,
       title: normalized.title || fromSlug.title,
       cover: normalized.cover || fromSlug.cover,
-      preview: normalized.preview || fromSlug.preview,
+      preview_path: fromSlug.preview_path || normalized.preview_path || fromSlug.preview,
+      preview: fromSlug.preview || normalized.preview,
     });
   }
 
@@ -103,7 +105,8 @@ export function resolveCatalogPlaybackItem(item, catalogLookup) {
       slug: fromTitle.slug,
       title: normalized.title || fromTitle.title,
       cover: normalized.cover || fromTitle.cover,
-      preview: normalized.preview || fromTitle.preview,
+      preview_path: fromTitle.preview_path || normalized.preview_path || fromTitle.preview,
+      preview: fromTitle.preview || normalized.preview,
     });
   }
 
