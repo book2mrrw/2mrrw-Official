@@ -3,7 +3,11 @@ import {
   isSiteApiMediaPath,
   repairMisboundR2ApiUrl,
 } from "@/lib/media/site-api-url";
-import { previewDiscoveryUrl } from "@/lib/media/canonical-paths";
+import {
+  extractSlugFromFlatPreviewKey,
+  isEntityPreviewFolderPath,
+  previewDiscoveryUrl,
+} from "@/lib/media/canonical-paths";
 import { getCanonicalReleaseBySlug, resolveEntityPreviewFolder } from "@/lib/media/canonical-catalog";
 import { getPublicR2Url } from "@/lib/storage/r2";
 import { getPublicCdnBase, R2_PUBLIC_CDN_FALLBACK } from "@/lib/storage/r2-public-cdn";
@@ -57,44 +61,61 @@ export function catalogCoverUrl(coverUrl) {
   return catalogPublicMediaUrl(withoutLeading) || `/${withoutLeading}`;
 }
 
+const FLAT_PREVIEW_FILE_RE = /^(.+)-preview\.(wav|mp3|m4a|flac)$/i;
+
+function flatPreviewLegacyKey(previewPath) {
+  const normalized = String(previewPath || "").replace(/^\//, "");
+  if (normalized.startsWith("audio/previews/")) {
+    return `previews/${normalized.replace(/^audio\/previews\//, "")}`;
+  }
+  if (normalized.startsWith("previews/") && FLAT_PREVIEW_FILE_RE.test(normalized.replace(/^previews\//, ""))) {
+    return normalized;
+  }
+  if (FLAT_PREVIEW_FILE_RE.test(normalized)) {
+    return `previews/${normalized}`;
+  }
+  return null;
+}
+
+function slugFromFlatPreviewPath(previewPath) {
+  const flatLegacy = flatPreviewLegacyKey(previewPath);
+  if (!flatLegacy) return null;
+  return extractSlugFromFlatPreviewKey(flatLegacy);
+}
+
 /** Preview audio: folder discovery API, public R2, or legacy /audio/previews/. */
 export function catalogPreviewAudioUrl(previewPath) {
   if (!previewPath) return "";
   const normalized = String(previewPath).replace(/^\//, "");
-  if (/^https?:\/\//i.test(normalized)) return normalized;
+  if (/^https?:\/\//i.test(normalized)) {
+    const repaired = repairMisboundR2ApiUrl(normalized);
+    if (isSiteApiMediaPath(repaired)) return ensureRelativeSiteApiPath(repaired);
+    const slug = slugFromFlatPreviewPath(normalized);
+    if (slug) return catalogPreviewAudioUrl(flatPreviewLegacyKey(normalized) || normalized);
+    return repaired;
+  }
   if (isSiteApiMediaPath(normalized)) {
     return ensureRelativeSiteApiPath(normalized);
   }
-  if (normalized.startsWith("audio/previews/")) {
-    const flatKey = normalized.replace(/^audio\/previews\//, "");
-    const entityFolder = resolveEntityPreviewFolder(flatKey) || resolveEntityPreviewFolder(`previews/${flatKey}`);
-    if (entityFolder) {
-      const canonical = getCanonicalReleaseBySlug(
-        flatKey.match(/^(.+)-preview\.(mp3|wav|m4a|flac)$/i)?.[1] || ""
-      );
-      return previewDiscoveryUrl(entityFolder, canonical?.preview_legacy || `previews/${flatKey}`);
-    }
-    return previewDiscoveryUrl(null, `previews/${flatKey}`);
-  }
-  if (normalized.startsWith("previews/")) {
-    const entityFolder = resolveEntityPreviewFolder(normalized);
-    if (entityFolder) {
-      const canonical = getCanonicalReleaseBySlug(
-        normalized.match(/^previews\/(.+)-preview\.(mp3|wav|m4a|flac)$/i)?.[1] || ""
-      );
-      return previewDiscoveryUrl(
-        entityFolder,
-        canonical?.preview_legacy || (entityFolder === normalized ? null : normalized)
-      );
-    }
-    return previewDiscoveryUrl(null, normalized);
-  }
-  const entityFolder = resolveEntityPreviewFolder(normalized);
-  if (entityFolder) {
+  if (isEntityPreviewFolderPath(normalized)) {
     const canonical = getCanonicalReleaseBySlug(
-      normalized.match(/^(.+)-preview\.(mp3|wav|m4a|flac)$/i)?.[1] || ""
+      normalized.match(/\/(singles|features|albums|mixtapes-and-eps)\/([^/]+)\/?$/)?.[2] || ""
     );
-    return previewDiscoveryUrl(entityFolder, canonical?.preview_legacy || null);
+    return previewDiscoveryUrl(normalized, canonical?.preview_legacy || null);
+  }
+  const flatLegacy = flatPreviewLegacyKey(normalized);
+  const slug = slugFromFlatPreviewPath(normalized);
+  const canonical = slug ? getCanonicalReleaseBySlug(slug) : null;
+  const entityFolder =
+    resolveEntityPreviewFolder(normalized, slug) || canonical?.preview_path || null;
+  if (entityFolder || flatLegacy) {
+    return previewDiscoveryUrl(
+      entityFolder,
+      canonical?.preview_legacy || flatLegacy || null
+    );
+  }
+  if (FLAT_PREVIEW_FILE_RE.test(normalized)) {
+    return previewDiscoveryUrl(null, `previews/${normalized}`);
   }
   return catalogPublicMediaUrl(normalized);
 }

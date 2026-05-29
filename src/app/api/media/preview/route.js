@@ -7,9 +7,27 @@ import {
   resolveVideo,
   resolveWithLegacyFallback,
 } from "@/lib/media/entity-resolver";
-import { normalizeToEntityFolder } from "@/lib/media/canonical-paths";
+import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
+import { extractSlugFromFlatPreviewKey, normalizeToEntityFolder } from "@/lib/media/canonical-paths";
 
 export const dynamic = "force-dynamic";
+
+function previewLegacyCandidates(entityFolder, legacy) {
+  const candidates = [];
+  if (legacy) candidates.push(String(legacy).replace(/^\//, ""));
+  const folderSlug = String(entityFolder || "").match(
+    /\/(singles|features|albums|mixtapes-and-eps)\/([^/]+)\/?$/
+  )?.[2];
+  const slug =
+    folderSlug || extractSlugFromFlatPreviewKey(legacy) || extractSlugFromFlatPreviewKey(entityFolder);
+  const canonical = slug ? getCanonicalReleaseBySlug(slug) : null;
+  if (canonical?.preview_legacy) candidates.push(String(canonical.preview_legacy).replace(/^\//, ""));
+  if (canonical?.legacy_preview_stem) {
+    const ext = canonical.preview_ext || "wav";
+    candidates.push(`previews/${canonical.legacy_preview_stem}-preview.${ext}`);
+  }
+  return [...new Set(candidates.filter(Boolean))];
+}
 
 export async function OPTIONS(req) {
   return mediaCorsPreflightResponse(req);
@@ -32,15 +50,21 @@ export async function GET(req) {
   }
 
   const entityFolder = normalizeToEntityFolder(folder || "");
+  const legacyCandidates =
+    type === "preview" || type === "artwork"
+      ? previewLegacyCandidates(entityFolder, legacy)
+      : legacy
+        ? [String(legacy).replace(/^\//, "")]
+        : [];
   let resolved = null;
 
   try {
     if (type === "video") {
-      resolved = await resolveWithLegacyFallback(entityFolder, legacy, resolveVideo);
+      resolved = await resolveWithLegacyFallback(entityFolder, legacyCandidates, resolveVideo);
     } else if (type === "artwork") {
-      resolved = await resolveWithLegacyFallback(entityFolder, legacy, resolveArtwork);
+      resolved = await resolveWithLegacyFallback(entityFolder, legacyCandidates, resolveArtwork);
     } else {
-      resolved = await resolveWithLegacyFallback(entityFolder, legacy, resolvePreviewFile);
+      resolved = await resolveWithLegacyFallback(entityFolder, legacyCandidates, resolvePreviewFile);
     }
   } catch (err) {
     console.error("[media/preview] discovery failed", {

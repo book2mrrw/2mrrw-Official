@@ -1,4 +1,9 @@
-import { discoverFileByExtensions, listR2Objects, getPublicR2Url } from "@/lib/storage/r2";
+import {
+  discoverFileByExtensions,
+  headR2ObjectKey,
+  listR2Objects,
+  getPublicR2Url,
+} from "@/lib/storage/r2";
 import {
   getArtworkPlaceholderUrl,
   normalizeToEntityFolder,
@@ -136,9 +141,17 @@ export async function resolveWithLegacyFallback(canonicalFolder, legacyKey, reso
   const discovered = await resolver(canonicalFolder);
   if (discovered) return { key: discovered, source: "canonical_folder" };
 
-  const legacy = String(legacyKey || "").replace(/^\//, "");
-  if (legacy && isConcreteMediaKey(legacy)) {
-    return { key: legacy, source: "legacy_flat" };
+  const candidates = Array.isArray(legacyKey)
+    ? legacyKey
+    : legacyKey
+      ? [legacyKey]
+      : [];
+  for (const raw of candidates) {
+    const legacy = String(raw || "").replace(/^\//, "");
+    if (!legacy || !isConcreteMediaKey(legacy)) continue;
+    if (await headR2ObjectKey(legacy)) {
+      return { key: legacy, source: "legacy_flat" };
+    }
   }
 
   return { key: null, source: "missing" };

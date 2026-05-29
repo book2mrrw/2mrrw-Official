@@ -1,6 +1,7 @@
 import {
   GetObjectCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
@@ -173,6 +174,20 @@ export async function listR2Objects(prefix, options = {}) {
  * @param {string[]} extensionsInPriorityOrder - e.g. [".wav", ".flac"]
  * @returns {Promise<string | null>} full R2 object key
  */
+/** True when an exact object key exists in the configured R2 bucket. */
+export async function headR2ObjectKey(key) {
+  const normalized = String(key || "").replace(/^\//, "");
+  if (!R2_BUCKET || !normalized) return false;
+  try {
+    await r2Client.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: normalized }));
+    return true;
+  } catch (err) {
+    const status = err?.$metadata?.httpStatusCode;
+    if (status === 404 || err?.name === "NotFound") return false;
+    return false;
+  }
+}
+
 export async function discoverFileByExtensions(prefix, extensionsInPriorityOrder) {
   const normalized = String(prefix || "").replace(/^\//, "").replace(/\/$/, "");
   if (!normalized || !extensionsInPriorityOrder?.length) return null;

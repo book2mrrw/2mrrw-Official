@@ -27,7 +27,9 @@ import {
   parseStreamSlugFromSrc,
   streamUrlNeedsRefresh,
 } from "@/lib/playback/stream-client";
+import { writeAvailabilityCache } from "@/lib/media/availability-cache";
 import { catalogPreviewAudioUrl } from "@/lib/media-urls";
+import { isSiteApiMediaPath } from "@/lib/media/site-api-url";
 import {
   clearPersistedMediaSessionTrack,
   getArtworkEntriesForTrack,
@@ -218,14 +220,26 @@ async function resumeWebAudioContextIfSuspended(ctxRef) {
   }
 }
 
+function isFlatPreviewCdnSrc(src) {
+  if (!src || isSiteApiMediaPath(src) || isLibraryStreamSrc(src)) return false;
+  return /\/previews\/[^/]+-preview\.(wav|mp3|m4a|flac)(\?|$)/i.test(String(src));
+}
+
 function getTrackPreviewSrc(track) {
   const previewPath =
-    track?.preview ||
     track?.preview_path ||
     track?.previewPath ||
-    track?.metadata?.previewPath;
-  if (previewPath) return catalogPreviewAudioUrl(previewPath);
-  if (track?.src && !isLibraryStreamSrc(track.src)) return track.src;
+    track?.metadata?.previewPath ||
+    track?.preview;
+  if (previewPath) {
+    const resolved = catalogPreviewAudioUrl(previewPath);
+    if (resolved && !isFlatPreviewCdnSrc(resolved)) return resolved;
+  }
+  const metadataPreview = track?.metadata?.previewSrc;
+  if (metadataPreview && !isFlatPreviewCdnSrc(metadataPreview)) return metadataPreview;
+  if (track?.src && !isLibraryStreamSrc(track.src) && !isFlatPreviewCdnSrc(track.src)) {
+    return track.src;
+  }
   return null;
 }
 
@@ -1186,6 +1200,35 @@ export function AudioProvider({ children }) {
         }
       }
 
+      const previewFallbackSrc =
+        getTrackPreviewSrc(track) ||
+        track?.metadata?.previewSrc ||
+        track?.previewUrl ||
+        null;
+      const onPreviewPlayback =
+        Boolean(previewFallbackSrc) &&
+        (!track?.metadata?.access?.canStream ||
+          stateRef.current.source === "preview" ||
+          stateRef.current.playbackState === "preview_fallback" ||
+          (audio.currentSrc || audio.src || "").includes("/api/media/preview"));
+
+      if (onPreviewPlayback) {
+        if (track?.slug) {
+          writeAvailabilityCache(
+            { slug: track.slug, trackSlug: track.metadata?.trackSlug, albumSlug: track.metadata?.albumSlug },
+            { status: "unavailable", reasons: ["missing_preview"], audioKey: null, previewKey: null }
+          );
+        }
+        patchState({
+          isPlaying: false,
+          error: "Preview unavailable",
+          streamRetryable: false,
+          isBuffering: false,
+          playbackState: "idle",
+        });
+        return;
+      }
+
       if (meta) {
         finalizeStreamSession(meta, {
           completed: false,
@@ -1800,6 +1843,25 @@ export function AudioProvider({ children }) {
             slug: nextTrack?.slug,
             message: previewErr?.message || String(previewErr),
           });
+          if (nextTrack?.slug) {
+            writeAvailabilityCache(
+              {
+                slug: nextTrack.slug,
+                trackSlug: nextTrack.metadata?.trackSlug,
+                albumSlug: nextTrack.metadata?.albumSlug,
+              },
+              { status: "unavailable", reasons: ["missing_preview"], audioKey: null, previewKey: null }
+            );
+          }
+          patchState({
+            isPlaying: false,
+            error: "Preview unavailable",
+            streamRetryable: false,
+            hasStarted: false,
+            playbackState: "idle",
+          });
+          void updateMediaSession(nextTrack, { playing: false });
+          return false;
         }
       }
       console.error("[AudioContext] playTrack failed", {

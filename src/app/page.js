@@ -167,8 +167,8 @@ const radioSlides = [
 ];
 
 const features = [
-  { title:"I Don't Believe You", slug:"i-dont-believe-you", type:"feature", cover:"/images/features/idbu.jpg",   price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/i-dont-believe-you-preview.wav", csAudio: null, csCover: null, hasCs: false },
-  { title:"2 Heavy",             slug:"2-heavy",            type:"feature", cover:"/images/features/2heavy.jpg", price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/2-heavy-preview.wav", csAudio: null, csCover: null, hasCs: false },
+  { title:"I Don't Believe You", slug:"i-dont-believe-you", type:"feature", cover:"/images/features/idbu.jpg",   price:2.99, featuring:"FT. 2MRRW", preview:"previews/features/i-dont-believe-you/", csAudio: null, csCover: null, hasCs: false },
+  { title:"2 Heavy",             slug:"2-heavy",            type:"feature", cover:"/images/features/2heavy.jpg", price:2.99, featuring:"FT. 2MRRW", preview:"previews/features/2-heavy/", csAudio: null, csCover: null, hasCs: false },
 ];
 
 // ── SINGLES — FIXED: all paths point to /videos/singles/, wdaguys removed ────

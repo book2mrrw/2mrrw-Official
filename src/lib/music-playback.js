@@ -203,7 +203,7 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
           ? catalogCoverUrl(String(coverRaw).replace(/^\//, ""))
           : null;
   const previewPath =
-    normalized?.preview || normalized?.preview_path || normalized?.previewPath || null;
+    normalized?.preview_path || normalized?.previewPath || normalized?.preview || null;
   const playbackSrc = resolvePlaybackSrc(normalized, access, { userId, accountState });
   const previewSrc = previewPath ? catalogPreviewAudioUrl(previewPath) : null;
 
