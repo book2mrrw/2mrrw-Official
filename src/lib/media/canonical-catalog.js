@@ -1,5 +1,6 @@
 import {
   legacyCoverPublicPath,
+  legacyPreviewPublicPath,
   legacyVideoPublicPath,
   previewDiscoveryUrl,
   resolveArtworkPath,
@@ -9,6 +10,47 @@ import {
   storagePathForProductRow,
   visualDiscoveryUrl,
 } from "@/lib/media/canonical-paths";
+import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
+
+/** Per release-type folder + legacy key builders (entity-folder authoritative). */
+export const CANONICAL_CATALOG = {
+  singles: {
+    releaseType: "singles",
+    cover_folder: (slug) => `images/singles/${slug}/`,
+    video_folder: (slug) => `videos/singles/${slug}/`,
+    preview_folder: (slug) => `audio/singles/${slug}/`,
+    cover_legacy: (slug, stem) => `images/singles/${slug}/${stem}.jpeg`,
+    video_legacy: (slug, stem) => `videos/singles/${slug}/${stem}.mp4`,
+    preview_legacy: (slug, stem) => `audio/singles/${slug}/${stem}-preview.mp3`,
+  },
+  features: {
+    releaseType: "features",
+    cover_folder: (slug) => `images/features/${slug}/`,
+    video_folder: (slug) => `videos/features/${slug}/`,
+    preview_folder: (slug) => `audio/features/${slug}/`,
+    cover_legacy: (slug, stem) => `images/features/${slug}/${stem}.jpeg`,
+    video_legacy: (slug, stem) => `videos/features/${slug}/${stem}.mp4`,
+    preview_legacy: (slug, stem) => `audio/features/${slug}/${stem}-preview.wav`,
+  },
+  albums: {
+    releaseType: "albums",
+    cover_folder: (slug) => `images/albums/${slug}/`,
+    video_folder: (slug) => `videos/albums/${slug}/`,
+    preview_folder: (slug) => `audio/albums/${slug}/`,
+    cover_legacy: (slug, stem) => `images/albums/${slug}/${stem}.jpeg`,
+    video_legacy: (slug, stem) => `videos/albums/${slug}/${stem}.mp4`,
+    preview_legacy: (slug, stem) => `audio/albums/${slug}/${stem}-preview.mp3`,
+  },
+  "mixtapes-and-eps": {
+    releaseType: "mixtapes-and-eps",
+    cover_folder: (slug) => `images/mixtapes-and-eps/${slug}/`,
+    video_folder: (slug) => `videos/mixtapes-and-eps/${slug}/`,
+    preview_folder: (slug) => `audio/mixtapes-and-eps/${slug}/`,
+    cover_legacy: (slug, stem) => `images/mixtapes-and-eps/${slug}/${stem}.jpeg`,
+    video_legacy: (slug, stem) => `videos/mixtapes-and-eps/${slug}/${stem}.mp4`,
+    preview_legacy: (slug, stem) => `audio/mixtapes-and-eps/${slug}/${stem}-preview.mp3`,
+  },
+};
 
 /** Singles — ordered by release_date DESC when exported. */
 export const CANONICAL_SINGLES = [
@@ -63,7 +105,8 @@ export const CANONICAL_FEATURES = [
     release_date: "2024-01-15",
     price_cents: 299,
     preview_ext: "wav",
-    preview_legacy: "previews/i-dont-believe-you-preview.wav",
+    legacy_preview_stem: "i-dont-believe-you",
+    preview_legacy: "audio/features/i-dont-believe-you/i-dont-believe-you-preview.wav",
   },
   {
     slug: "2-heavy",
@@ -72,7 +115,8 @@ export const CANONICAL_FEATURES = [
     release_date: "2024-02-01",
     price_cents: 299,
     preview_ext: "wav",
-    preview_legacy: "previews/2-heavy-preview.wav",
+    legacy_preview_stem: "2-heavy",
+    preview_legacy: "audio/features/2-heavy/2-heavy-preview.wav",
   },
 ];
 
@@ -85,7 +129,7 @@ export const CANONICAL_ALBUMS = [
     release_category: "EP",
     release_date: "2026-08-01",
     price_cents: 1299,
-    legacy_cover: "/images/albums/lovehz.jpg",
+    legacy_cover_stem: "lovehz",
   },
   {
     slug: "ad",
@@ -94,7 +138,7 @@ export const CANONICAL_ALBUMS = [
     release_category: "Mixtape",
     release_date: "2024-03-24",
     price_cents: 999,
-    legacy_cover: "/images/albums/ad.jpg",
+    legacy_cover_stem: "ad",
   },
   {
     slug: "tbh",
@@ -103,7 +147,7 @@ export const CANONICAL_ALBUMS = [
     release_category: "Mixtape",
     release_date: "2022-07-07",
     price_cents: 999,
-    legacy_cover: "/images/albums/tbh.jpg",
+    legacy_cover_stem: "tbh",
   },
 ];
 
@@ -144,13 +188,21 @@ export const CANONICAL_SLUG_ALIASES = {
   "love-hz": "love-hz-vol-1",
 };
 
+function defaultLegacyStem(releaseSlug, overrideStem) {
+  if (overrideStem) return overrideStem;
+  return String(releaseSlug || "").replace(/-/g, "");
+}
+
 function enrichRelease(raw) {
   if (!raw?.slug) return null;
   const releaseType = raw.release_type || "single";
   const storage_path = resolveStoragePath(releaseType, raw.slug);
   const artwork_path = resolveArtworkPath(releaseType, raw.slug);
   const preview_path = resolvePreviewPath(releaseType, raw.slug);
-  const preview_legacy = raw.preview_legacy || null;
+  const legacyStem = defaultLegacyStem(raw.slug, raw.legacy_preview_stem);
+  const preview_legacy =
+    raw.preview_legacy ||
+    legacyPreviewPublicPath(releaseType, raw.slug, legacyStem, raw.preview_ext);
   const video_path = resolveVideoPath(releaseType, raw.slug);
   const legacyImage =
     raw.legacy_cover ||
@@ -158,7 +210,7 @@ function enrichRelease(raw) {
   const legacyVideo =
     releaseType === "single"
       ? raw.legacy_video ||
-        legacyVideoPublicPath(raw.slug, raw.legacy_video_stem)
+        legacyVideoPublicPath(releaseType, raw.slug, raw.legacy_video_stem)
       : undefined;
   const visual = visualDiscoveryUrl(releaseType, raw.slug, {
     legacyVideo,
@@ -361,23 +413,50 @@ export function getCanonicalTrackRows() {
 export function mergeCanonicalMetadata(item) {
   if (!item?.slug) return item;
   const release = getCanonicalReleaseBySlug(item.slug);
-  if (release) {
-    return {
-      ...item,
-      title: release.title,
-      display_title: release.title,
-      storage_path: item.storage_path || release.storage_path,
-      artwork_path: release.artwork_path || item.artwork_path,
-      preview_path: release.preview_path || item.preview_path,
-      preview: release.preview || item.preview,
-      cover: release.cover || item.cover,
-      visual: release.visual || item.visual,
-      video: release.video || item.video,
-      coverArtType: release.coverArtType || item.coverArtType,
-      release_date: item.release_date || release.release_date,
-    };
-  }
-  return item;
+  if (!release) return item;
+
+  const releaseType = release.release_type || item.release_type || "single";
+  const catalog = CANONICAL_CATALOG[normalizeReleaseType(releaseType)];
+  const legacyStem = defaultLegacyStem(
+    release.slug,
+    item.legacy_preview_stem ?? release.legacy_preview_stem
+  );
+
+  return {
+    ...item,
+    title: release.title,
+    display_title: release.title,
+    storage_path: item.storage_path || release.storage_path,
+    artwork_path: release.artwork_path || item.artwork_path,
+    preview_path: release.preview_path || item.preview_path,
+    preview: release.preview || item.preview,
+    cover: release.cover || item.cover,
+    visual: release.visual || item.visual,
+    video: release.video || item.video,
+    coverArtType: release.coverArtType || item.coverArtType,
+    release_date: item.release_date || release.release_date,
+    ...(catalog
+      ? {
+          cover_folder: catalog.cover_folder(release.slug),
+          video_folder: catalog.video_folder(release.slug),
+          preview_folder: catalog.preview_folder(release.slug),
+          cover_legacy: catalog.cover_legacy(
+            release.slug,
+            item.legacy_cover_stem ?? release.legacy_cover_stem ?? legacyStem
+          ),
+          video_legacy: catalog.video_legacy(
+            release.slug,
+            item.legacy_video_stem ?? release.legacy_video_stem ?? legacyStem
+          ),
+          preview_legacy:
+            release.preview_legacy ||
+            catalog.preview_legacy(
+              release.slug,
+              item.legacy_preview_stem ?? release.legacy_preview_stem ?? legacyStem
+            ),
+        }
+      : {}),
+  };
 }
 
 /** Drop memoized slug/track indexes so folder paths re-enrich from source arrays. */

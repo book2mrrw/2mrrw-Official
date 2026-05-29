@@ -166,19 +166,34 @@ export function storagePathForProductRow(fullPath) {
   return normalized;
 }
 
+const DEFAULT_PREVIEW_EXT = {
+  singles: "mp3",
+  features: "wav",
+  albums: "mp3",
+  "mixtapes-and-eps": "mp3",
+};
+
 /** Legacy public/ path for storefront cover display (resolved via catalogCoverUrl). */
-export function legacyCoverPublicPath(releaseType, slug, legacyStem) {
+export function legacyCoverPublicPath(releaseType, slug, legacyStem, ext = "jpg") {
   const folder = releaseFolder(releaseType);
   const release = cleanSegment(slug);
   if (!release) return "";
-  if (folder === "features") return `/images/features/${release}.jpg`;
-  if (folder === "mixtapes-and-eps") return `/images/albums/${release}.jpg`;
   const stem = cleanSegment(legacyStem || release.replace(/-/g, ""));
-  return `/images/singles/${release}/${stem}.jpg`;
+  return `/images/${folder}/${release}/${stem}.${ext}`;
 }
 
-/** Legacy preview public path — flat `previews/` or entity-folder `audio/{type}/{slug}/`. */
-export function legacyPreviewPublicPath(previewR2Key) {
+/** R2 preview legacy key — entity folder `audio/{releaseType}/{releaseSlug}/{stem}-preview.{ext}`. */
+export function legacyPreviewPublicPath(releaseType, slug, legacyStem, ext) {
+  const folder = releaseFolder(releaseType);
+  const release = cleanSegment(slug);
+  if (!release) return "";
+  const stem = cleanSegment(legacyStem || release.replace(/-/g, ""));
+  const resolvedExt = ext ?? DEFAULT_PREVIEW_EXT[folder] ?? "mp3";
+  return `${PREVIEW_ROOT}/${folder}/${release}/${stem}-preview.${resolvedExt}`;
+}
+
+/** Normalize stored preview keys (flat `previews/` → `audio/`). */
+export function normalizeLegacyPreviewPath(previewR2Key) {
   const normalized = String(previewR2Key || "").replace(/^\//, "");
   if (normalized.startsWith("previews/")) {
     return `/audio/${normalized}`;
@@ -192,7 +207,7 @@ export function legacyPreviewPublicPath(previewR2Key) {
 /** Client/API preview resolution URL for folder-based discovery. */
 export function previewDiscoveryUrl(previewFolder, legacyKey = null) {
   const folder = normalizeToEntityFolder(previewFolder);
-  if (!folder) return legacyKey ? legacyPreviewPublicPath(legacyKey) : "";
+  if (!folder) return legacyKey ? normalizeLegacyPreviewPath(legacyKey) : "";
   const params = new URLSearchParams({ folder });
   if (legacyKey) params.set("legacy", String(legacyKey).replace(/^\//, ""));
   return `/api/media/preview?${params.toString()}`;
@@ -208,11 +223,12 @@ export function getArtworkPlaceholderUrl(releaseType = "single", slug = "placeho
 }
 
 /** Legacy motion video public path — entity folder + legacy filename stem. */
-export function legacyVideoPublicPath(slug, legacyStem) {
+export function legacyVideoPublicPath(releaseType, slug, legacyStem, ext = "mp4") {
+  const folder = releaseFolder(releaseType);
   const release = cleanSegment(slug);
   if (!release) return "";
   const stem = cleanSegment(legacyStem || release.replace(/-/g, ""));
-  return `/videos/singles/${release}/${stem}.mp4`;
+  return `/videos/${folder}/${release}/${stem}.${ext}`;
 }
 
 /** Client/API video resolution URL for folder-based discovery. */
