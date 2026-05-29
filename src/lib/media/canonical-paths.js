@@ -182,7 +182,7 @@ export function legacyCoverPublicPath(releaseType, slug, legacyStem, ext = "jpg"
   return `/images/${folder}/${release}/${stem}.${ext}`;
 }
 
-/** R2 preview legacy key — entity folder `audio/{releaseType}/{releaseSlug}/{stem}-preview.{ext}`. */
+/** R2 preview legacy key — entity folder `previews/{releaseType}/{releaseSlug}/{stem}-preview.{ext}`. */
 export function legacyPreviewPublicPath(releaseType, slug, legacyStem, ext) {
   const folder = releaseFolder(releaseType);
   const release = cleanSegment(slug);
@@ -192,11 +192,12 @@ export function legacyPreviewPublicPath(releaseType, slug, legacyStem, ext) {
   return `${PREVIEW_ROOT}/${folder}/${release}/${stem}-preview.${resolvedExt}`;
 }
 
-/** Normalize stored preview keys (flat `previews/` → `audio/`). */
+/** Normalize stored preview keys for CDN fallback. */
 export function normalizeLegacyPreviewPath(previewR2Key) {
   const normalized = String(previewR2Key || "").replace(/^\//, "");
-  if (normalized.startsWith("previews/")) {
-    return `/audio/${normalized}`;
+  if (normalized.startsWith("audio/previews/")) {
+    const flatKey = normalized.replace(/^audio\/previews\//, "");
+    return `/previews/${flatKey}`;
   }
   if (normalized.startsWith(`${PREVIEW_ROOT}/`)) {
     return `/${normalized}`;

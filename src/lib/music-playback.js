@@ -133,7 +133,7 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
           title: canonicalTrack.title,
           storage_path: canonicalTrack.storage_path,
           cover: albumNorm.cover,
-          preview: albumNorm.preview,
+          preview: canonicalTrack.preview || albumNorm.preview,
           audio: albumNorm.audio,
           artist: albumNorm.artist || "2MRRW",
         }
@@ -169,7 +169,7 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
     albumSlug,
     trackIndex: index,
     cover: track.cover || albumNorm.cover,
-    preview: track.preview || catalogItem?.preview || albumNorm.preview,
+    preview: track.preview || canonicalTrack?.preview || catalogItem?.preview || albumNorm.preview,
     audio: track.audio || catalogItem?.audio || albumNorm.audio,
     artist: track.artist || albumNorm.artist || "2MRRW",
   });

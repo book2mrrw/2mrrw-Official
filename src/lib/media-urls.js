@@ -50,7 +50,7 @@ export function catalogPreviewAudioUrl(previewPath) {
     const flatKey = normalized.replace(/^audio\/previews\//, "");
     return toCatalogCdnUrl(`previews/${flatKey}`);
   }
-  if (normalized.startsWith("audio/")) {
+  if (normalized.startsWith("previews/")) {
     return toCatalogCdnUrl(normalized);
   }
   return catalogPublicMediaUrl(normalized);

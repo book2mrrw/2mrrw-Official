@@ -18,37 +18,37 @@ export const CANONICAL_CATALOG = {
     releaseType: "singles",
     cover_folder: (slug) => `images/singles/${slug}/`,
     video_folder: (slug) => `videos/singles/${slug}/`,
-    preview_folder: (slug) => `audio/singles/${slug}/`,
+    preview_folder: (slug) => `previews/singles/${slug}/`,
     cover_legacy: (slug, stem) => `images/singles/${slug}/${stem}.jpeg`,
     video_legacy: (slug, stem) => `videos/singles/${slug}/${stem}.mp4`,
-    preview_legacy: (slug, stem) => `audio/singles/${slug}/${stem}-preview.mp3`,
+    preview_legacy: (slug, stem) => `previews/singles/${slug}/${stem}-preview.mp3`,
   },
   features: {
     releaseType: "features",
     cover_folder: (slug) => `images/features/${slug}/`,
     video_folder: (slug) => `videos/features/${slug}/`,
-    preview_folder: (slug) => `audio/features/${slug}/`,
+    preview_folder: (slug) => `previews/features/${slug}/`,
     cover_legacy: (slug, stem) => `images/features/${slug}/${stem}.jpeg`,
     video_legacy: (slug, stem) => `videos/features/${slug}/${stem}.mp4`,
-    preview_legacy: (slug, stem) => `audio/features/${slug}/${stem}-preview.wav`,
+    preview_legacy: (slug, stem) => `previews/features/${slug}/${stem}-preview.wav`,
   },
   albums: {
     releaseType: "albums",
     cover_folder: (slug) => `images/albums/${slug}/`,
     video_folder: (slug) => `videos/albums/${slug}/`,
-    preview_folder: (slug) => `audio/albums/${slug}/`,
+    preview_folder: (slug) => `previews/albums/${slug}/`,
     cover_legacy: (slug, stem) => `images/albums/${slug}/${stem}.jpeg`,
     video_legacy: (slug, stem) => `videos/albums/${slug}/${stem}.mp4`,
-    preview_legacy: (slug, stem) => `audio/albums/${slug}/${stem}-preview.mp3`,
+    preview_legacy: (slug, stem) => `previews/albums/${slug}/${stem}-preview.mp3`,
   },
   "mixtapes-and-eps": {
     releaseType: "mixtapes-and-eps",
     cover_folder: (slug) => `images/mixtapes-and-eps/${slug}/`,
     video_folder: (slug) => `videos/mixtapes-and-eps/${slug}/`,
-    preview_folder: (slug) => `audio/mixtapes-and-eps/${slug}/`,
+    preview_folder: (slug) => `previews/mixtapes-and-eps/${slug}/`,
     cover_legacy: (slug, stem) => `images/mixtapes-and-eps/${slug}/${stem}.jpeg`,
     video_legacy: (slug, stem) => `videos/mixtapes-and-eps/${slug}/${stem}.mp4`,
-    preview_legacy: (slug, stem) => `audio/mixtapes-and-eps/${slug}/${stem}-preview.mp3`,
+    preview_legacy: (slug, stem) => `previews/mixtapes-and-eps/${slug}/${stem}-preview.mp3`,
   },
 };
 
@@ -63,7 +63,7 @@ export const CANONICAL_SINGLES = [
     preview_ext: "mp3",
     legacy_cover_stem: "hourglass",
     legacy_video_stem: "hourglass",
-    preview_legacy: "audio/singles/hour-glass/hourglass-preview.mp3",
+    preview_legacy: "previews/singles/hour-glass/hourglass-preview.mp3",
   },
   {
     slug: "turnt-me-2-dis",
@@ -74,7 +74,7 @@ export const CANONICAL_SINGLES = [
     preview_ext: "mp3",
     legacy_cover_stem: "turnt",
     legacy_video_stem: "turntme2dis",
-    preview_legacy: "audio/singles/turnt-me-2-dis/turntme2dis-preview.mp3",
+    preview_legacy: "previews/singles/turnt-me-2-dis/turntme2dis-preview.mp3",
   },
   {
     slug: "w2d",
@@ -83,7 +83,7 @@ export const CANONICAL_SINGLES = [
     release_date: "2024-06-01",
     price_cents: 299,
     preview_ext: "mp3",
-    preview_legacy: "audio/singles/w2d/w2d-preview.mp3",
+    preview_legacy: "previews/singles/w2d/w2d-preview.mp3",
   },
   {
     slug: "artificial",
@@ -92,7 +92,7 @@ export const CANONICAL_SINGLES = [
     release_date: "2022-07-07",
     price_cents: 299,
     preview_ext: "mp3",
-    preview_legacy: "audio/singles/artificial/artificial-preview.mp3",
+    preview_legacy: "previews/singles/artificial/artificial-preview.mp3",
   },
 ];
 
@@ -106,7 +106,7 @@ export const CANONICAL_FEATURES = [
     price_cents: 299,
     preview_ext: "wav",
     legacy_preview_stem: "i-dont-believe-you",
-    preview_legacy: "audio/features/i-dont-believe-you/i-dont-believe-you-preview.wav",
+    preview_legacy: "previews/features/i-dont-believe-you/i-dont-believe-you-preview.wav",
   },
   {
     slug: "2-heavy",
@@ -116,7 +116,7 @@ export const CANONICAL_FEATURES = [
     price_cents: 299,
     preview_ext: "wav",
     legacy_preview_stem: "2-heavy",
-    preview_legacy: "audio/features/2-heavy/2-heavy-preview.wav",
+    preview_legacy: "previews/features/2-heavy/2-heavy-preview.wav",
   },
 ];
 
@@ -236,10 +236,13 @@ function enrichRelease(raw) {
 function enrichTrack(raw) {
   const album = CANONICAL_ALBUMS.find((a) => a.slug === raw.album_slug);
   const releaseType = album?.release_type || "album";
+  const preview_path = resolvePreviewPath(releaseType, raw.slug, raw.album_slug);
   return {
     ...raw,
     display_title: raw.title,
     storage_path: resolveStoragePath(releaseType, raw.album_slug, raw.slug),
+    preview_path,
+    preview: previewDiscoveryUrl(preview_path),
     albumSlug: raw.album_slug,
   };
 }
