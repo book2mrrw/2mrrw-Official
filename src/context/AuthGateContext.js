@@ -8,7 +8,7 @@ export function isOtpAuthenticated(user) {
   if (!user?.id) return false;
   if (user.isGuest === true) return false;
   if (user.isGuest === false) return true;
-  const email = String(user.email || "").trim().toLowerCase();
+  const email = String(user?.email || "").trim().toLowerCase();
   return Boolean(email && !email.endsWith("@guest.2mrrw.local"));
 }
 

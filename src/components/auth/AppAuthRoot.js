@@ -1,34 +1,48 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { isOtpAuthenticated } from "@/context/AuthGateContext";
 import AuthGate from "@/components/auth/AuthGate";
 
+const BOOT_PLACEHOLDER = (
+  <div
+    aria-busy="true"
+    aria-label="Loading"
+    style={{
+      minHeight: "100vh",
+      background: "#050508",
+    }}
+  />
+);
+
+/**
+ * SSR keeps a minimal placeholder (auth useEffect does not run on server).
+ * After hydration, always mount children so the cinematic shell is visible while auth resolves.
+ * OTP gate overlays the shell when authStatus is unauthenticated.
+ */
 export default function AppAuthRoot({ children }) {
-  const { user, loading, refreshAccountState } = useAuth();
-  const authenticated = isOtpAuthenticated(user);
+  const { authStatus, refreshAccountState } = useAuth();
+  const [hydrated, setHydrated] = useState(false);
+  const showAuthGate = authStatus === "unauthenticated";
+
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
 
   const handleVerified = useCallback(async () => {
     await refreshAccountState();
   }, [refreshAccountState]);
 
-  if (loading) {
-    return (
-      <div
-        aria-busy="true"
-        aria-label="Loading"
-        style={{
-          minHeight: "100vh",
-          background: "#050508",
-        }}
-      />
-    );
+  if (!hydrated) {
+    return BOOT_PLACEHOLDER;
   }
 
-  if (!authenticated) {
-    return <AuthGate variant="root" open onVerified={handleVerified} />;
-  }
-
-  return children;
+  return (
+    <>
+      {children}
+      {showAuthGate ? (
+        <AuthGate variant="root" open onVerified={handleVerified} />
+      ) : null}
+    </>
+  );
 }

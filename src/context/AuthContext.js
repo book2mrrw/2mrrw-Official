@@ -356,6 +356,15 @@ export function AuthProvider({ children }) {
 
   const owns = useCallback((slug) => ownedSlugs.has(slug), [ownedSlugs]);
 
+  const authStatus = useMemo(() => {
+    if (loading) return "loading";
+    if (!user?.id) return "unauthenticated";
+    if (user.isGuest === true) return "unauthenticated";
+    if (user.isGuest === false) return "authenticated";
+    const email = String(user?.email || "").trim().toLowerCase();
+    return email && !email.endsWith("@guest.2mrrw.local") ? "authenticated" : "unauthenticated";
+  }, [loading, user]);
+
   const value = useMemo(() => ({
     user,
     profile: user,
@@ -367,6 +376,7 @@ export function AuthProvider({ children }) {
     isAdmin,
     markAdmin,
     loading,
+    authStatus,
     enterGuest,
     signOut,
     refreshGuest,
@@ -382,6 +392,7 @@ export function AuthProvider({ children }) {
     isAdmin,
     markAdmin,
     loading,
+    authStatus,
     enterGuest,
     signOut,
     refreshGuest,
