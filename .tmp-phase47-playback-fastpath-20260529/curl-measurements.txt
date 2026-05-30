@@ -1,0 +1,45 @@
+# Phase 4.7 curl measurements 2026-05-30T18:22:17Z
+
+## guest-session
+URL: https://www.2mrrw.com/api/guest/session
+http_code=200 time_namelookup=5.872412 time_connect=6.397510 time_appconnect=6.828286 time_starttransfer=7.877299 time_total=7.877434 size_download=13
+
+## preview-hour-glass
+URL: https://www.2mrrw.com/api/media/preview?folder=previews/singles/hour-glass/
+http_code=302 time_namelookup=0.004723 time_connect=0.022307 time_appconnect=0.134593 time_starttransfer=0.601763 time_total=0.601838 size_download=0
+
+## stream-json-hour-glass
+URL: https://www.2mrrw.com/api/library/stream?slug=hour-glass
+http_code=401 time_namelookup=0.004159 time_connect=0.017570 time_appconnect=0.168556 time_starttransfer=0.450742 time_total=0.453533 size_download=24
+
+## stream-json-love-hz
+URL: https://www.2mrrw.com/api/library/stream?slug=love-hz-vol-1
+http_code=401 time_namelookup=0.003673 time_connect=0.012231 time_appconnect=0.081044 time_starttransfer=0.279013 time_total=0.279112 size_download=24
+
+## stream-redirect-hour-glass
+URL: https://www.2mrrw.com/api/library/stream?slug=hour-glass&redirect=1
+http_code=401 time_namelookup=0.002832 time_connect=0.199234 time_appconnect=0.302442 time_starttransfer=0.512727 time_total=0.512821 size_download=24
+
+## stream-redirect-love-hz
+URL: https://www.2mrrw.com/api/library/stream?slug=love-hz-vol-1&redirect=1
+http_code=401 time_namelookup=0.006265 time_connect=0.121267 time_appconnect=0.253019 time_starttransfer=0.804065 time_total=0.804201 size_download=24
+
+## preview-redirect-location
+https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev/previews/singles/hour-glass/hourglass-preview.mp3
+
+## cdn-head-preview
+URL: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev/previews/singles/hour-glass/hourglass-preview.mp3
+http_code=200 time_namelookup=4.012167 time_connect=4.360055 time_appconnect=5.431851 time_starttransfer=7.846496 time_total=7.846575 size_download=0
+
+## cdn-range-64k-preview
+URL: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev/previews/singles/hour-glass/hourglass-preview.mp3
+http_code=400 time_namelookup=0.001898 time_connect=0.100715 time_appconnect=0.117954 time_starttransfer=0.153369 time_total=0.214203 size_download=17949
+
+## cdn-range-64k-retry
+http_code=206 time_starttransfer=0.953512 time_total=1.026612 size_download=65536
+
+## cdn-get-full-preview
+http_code=200 time_starttransfer=0.419839 time_total=2.130993 size_download=831656
+
+## guest-session-run2
+http_code=200 time_starttransfer=0.483613 time_total=0.483701

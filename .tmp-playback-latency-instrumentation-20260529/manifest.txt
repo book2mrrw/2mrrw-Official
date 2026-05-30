@@ -1,0 +1,34 @@
+playback-latency-instrumentation-20260529
+Generated: 2026-05-30
+Repo: /Users/recharge/artist-platform
+
+Deliverables
+------------
+report.md
+timing-table.md
+methodology.md
+bottlenecks.md
+instrumentation-changes.md
+manifest.txt
+
+Code touched (dev-only instrumentation)
+---------------------------------------
+src/lib/dev/performanceMarks.js
+src/lib/playback/stream-client.js
+src/context/AudioContext.js
+
+Reference (read-only audit)
+---------------------------
+src/lib/playback/resolve-playback-key.js
+src/app/api/library/stream/route.js
+src/app/api/media/preview/route.js
+src/lib/media/canonical-catalog.js
+src/lib/music-access.js
+
+Build
+-----
+npm run build — PASS (2026-05-30)
+
+Zip output
+----------
+/Users/recharge/Downloads/playback-latency-instrumentation-20260529.zip

@@ -1,0 +1,53 @@
+Phase 5 — Hybrid Master / Stream Architecture Design
+Date: 2026-05-30
+Repo: /Users/recharge/artist-platform
+Mode: DESIGN ONLY — zero src/ modifications
+
+Zip output: /Users/recharge/Downloads/phase5-hybrid-architecture-20260530.zip
+
+Deliverables:
+  report.md                          Executive summary + final recommendation
+  01-current-architecture-map.md     Upload, R2, playback, entitlement, resolver
+  02-proposed-architecture-map.md    Hybrid master + streaming layer
+  03-master-asset-strategy.md        WAV/FLAC/AIFF, ownership, collector, download
+  04-streaming-asset-strategy.md     Formats, startup, mobile Safari/Android
+  05-playback-flow-design.md         Current vs proposed flows
+  06-ownership-preservation.md       Collector, vault, purchases, metadata
+  07-migration-plan.md               Non-destructive rollout
+  08-rollback-plan.md                Env flag + fallback
+  09-cost-analysis.md                Storage, bandwidth, transcode
+  10-performance-projections.md      Measured vs projected scorecard
+  11-risks.md                        Risk register
+  manifest.txt                       This file
+
+Inputs consumed:
+  .tmp-phase45-performance-audit-20260529/
+  .tmp-phase45-bottleneck-analysis-20260529/
+  .tmp-playback-latency-instrumentation-20260529/
+  .tmp-phase46-performance-implementation-20260529/
+  .tmp-phase47-playback-fastpath-20260529/
+  .tmp-phase48-playback-fastpath-20260529/
+  ~/Downloads/phase45-*.zip phase46-*.zip phase47-*.zip phase48-*.zip playback-latency-*.zip
+
+Key source files referenced (read-only):
+  src/lib/media/constants/storage-domains.js
+  src/lib/media/canonical-paths.js
+  src/lib/media/canonical-catalog.js
+  src/lib/media/entity-resolver.js
+  src/lib/playback/resolve-playback-key.js
+  src/lib/playback/normalize-r2-key.js
+  src/lib/playback/stream-url-cache.js
+  src/lib/playback/preview-resolution-cache.js
+  src/lib/music-access.js
+  src/lib/commerce/entitlements.js
+  src/app/api/library/stream/route.js
+  src/app/api/media/preview/route.js
+  src/app/api/access/[token]/route.js
+  src/app/api/vault/media/route.js
+  src/app/api/admin/sync/catalog/route.js
+  src/lib/server/r2-stream-proxy.js
+  src/lib/storage/r2.js
+  src/context/AudioContext.js
+
+Git verification:
+  git status --short src/ → empty (no tracked src changes this session)

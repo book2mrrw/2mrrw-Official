@@ -1,0 +1,53 @@
+Phase 4.5 Bottleneck Analysis Extension
+Generated: 2026-05-29
+Mode: READ-ONLY — zero modifications to src/ or production config
+Workspace: /Users/recharge/artist-platform
+
+DELIVERABLES (this folder)
+  ranked-bottleneck-report.md
+  thermal-startup-resource-audit.md
+  resource-loading-strategy-audit.md
+  executive-summary.md
+  manifest.txt
+
+PRIOR AUDIT CONSUMED
+  .tmp-phase45-performance-audit-20260529/ (21 files)
+  Reference zip: /Users/recharge/Downloads/phase45-performance-audit-20260529.zip
+
+BUILD EVIDENCE
+  Command: npm run build
+  Result: exit 0, Next.js 16.2.4 (Turbopack), compiled ~9.9s
+  Client chunks: .next/static/chunks/*.js — 35 files, 2.8M total (du)
+
+PRIMARY SOURCE FILES DEEP-READ
+  src/context/AudioContext.js (2973 lines)
+  src/app/page.js (2777 lines)
+  src/app/layout.js
+  src/context/AuthContext.js (448 lines)
+  src/components/home/AmbientPlaybackBackground.js
+  src/components/home/LatestSinglesStyleRow.js
+  src/lib/playback/stream-client.js
+  src/app/api/library/stream/route.js
+  src/lib/dev/performanceMarks.js
+
+PRIOR AUDIT SECTIONS CROSS-REFERENCED
+  report.md
+  01-initial-load.md
+  03-audio-start-latency.md
+  04-media-timing.md
+  05-react-churn.md
+  06-network-waterfall.md
+  07-mobile-safari.md
+  08-mp4-loop-audit.md
+  10-client-hydration-audit.md
+  11-context-churn-audit.md
+  prioritized-remediation-plan.md
+
+OUTPUT ZIP TARGET
+  /Users/recharge/Downloads/phase45-bottleneck-analysis-20260529.zip
+
+CLASSIFICATION COUNTS (TOP 10)
+  CRITICAL: 3
+  HIGH: 4
+  MEDIUM: 3
+  LOW: 0
