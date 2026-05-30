@@ -20,14 +20,14 @@ Do **not** move or rewrite:
 
 Recovery and `verify:foundation` continue to anchor on these tags. Weakening verify scripts or guardrails is not permitted.
 
-## Current ledger state (2026-05-19)
+## Current ledger state (2026-05-30)
 
 | Ref | Commit | Notes |
 |-----|--------|-------|
-| `foundation-stable-v3` | `f78d6ec` (tag object `3e3cab5…`) | Last promoted foundation snapshot |
-| `main` | `eb42cfa` | One commit ahead of v3: recovery anchor metadata alignment (`docs: align recovery anchor commit metadata with v3 promotion`) |
+| `foundation-stable-v3` | `0264124` | Phase 5.1.5 promoted foundation snapshot (main HEAD) |
+| `main` | `0264124` | Aligned with v3 after recovery baseline sync |
 
-`main` is intentionally **one metadata commit ahead** of the v3 tag. This does not change runtime behavior; verify and recovery still target v3 semantics until the next promotion.
+`main` and `foundation-stable-v3` are aligned at the same commit. Verify and recovery target v3 semantics via `recovery-anchor.json`.
 
 ## After a foundation-stable-vX tag
 

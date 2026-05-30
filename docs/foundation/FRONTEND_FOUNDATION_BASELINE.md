@@ -2,19 +2,20 @@
 
 **Status:** OFFICIAL — PRIMARY RECOVERY ANCHOR  
 **Established:** 2026-05-19  
+**Last promoted:** 2026-05-30 (Phase 5.1.5 recovery baseline sync)  
 **Purpose:** Freeze the current cinematic frontend as the reproducible, deployable, recoverable baseline.
 
 ## Anchor identifiers
 
 | Field | Value |
 |-------|-------|
-| Git commit (HEAD) | `undefined` |
+| Git commit (HEAD) | `0264124ccbd6b8ebe6dcfa545ae2aa5260f4a27e` |
 | Git branch | `main` / `frontend-stable-foundation` |
-| Commit message | chore(foundation): sync recovery-anchor metadata to e13b192 |
-| Commit date | 2026-05-19 19:24:27 -0500 |
-| UI origin (immutable) | `foundation-stable-v1` → `undefined` |
-| Operational tag | `foundation-stable-v3` → same commit as HEAD |
-| Prior operational (historical) | `foundation-stable-v2` → `undefined` (same tree as v3) |
+| Commit message | chore(recovery): promote foundation baseline to current stable platform state |
+| Commit date | 2026-05-30 14:21:46 -0500 |
+| UI origin (immutable) | `foundation-stable-v1` → `ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c` |
+| Operational tag | `foundation-stable-v3` → same commit as HEAD (`recovery-anchor.json`) |
+| Prior operational (historical) | `foundation-stable-v2` → `42a4bd90cd23eedd8c33c7644be19b8d69df3667` |
 
 ## Production deployment
 
