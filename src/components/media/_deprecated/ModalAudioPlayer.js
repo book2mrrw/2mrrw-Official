@@ -6,7 +6,7 @@
  */
 
 import { memo, useEffect, useState } from "react";
-import { useAudioPlayer } from "@/context/AudioContext";
+import { useAudioPlayer, usePlaybackProgress } from "@/context/AudioContext";
 
 const formatTime = (s) => {
   if (!s || isNaN(s) || !isFinite(s)) return "0:00";
@@ -16,7 +16,8 @@ const formatTime = (s) => {
 };
 
 function ModalAudioPlayer() {
-  const { isPlaying, currentTime, duration, error, toggle, seek } = useAudioPlayer();
+  const { isPlaying, duration, error, toggle, seek } = useAudioPlayer();
+  const { currentTime } = usePlaybackProgress();
   const [localProgress, setLocalProgress] = useState({ current: 0, duration: 0 });
 
   useEffect(() => {

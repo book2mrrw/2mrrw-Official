@@ -2,7 +2,10 @@
 
 import { resolveCoverMediaType } from "@/components/ui/CoverArt";
 
-export default function AmbientPlaybackBackground({ currentTrack, csMode }) {
+const VIDEO_BLUR_DESKTOP = "blur(120px) saturate(1.2) brightness(0.15)";
+const VIDEO_BLUR_MOBILE = "blur(72px) saturate(1.2) brightness(0.15)";
+
+export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobile = false }) {
   if (!currentTrack?.cover) return null;
 
   const baseSrc = currentTrack.cover;
@@ -10,6 +13,7 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode }) {
   const csSrc = currentTrack.csCover || null;
   const csType = currentTrack.csCoverType || "image";
   const showCs = Boolean(csMode && csSrc);
+  const videoFilter = isMobile ? VIDEO_BLUR_MOBILE : VIDEO_BLUR_DESKTOP;
 
   const mediaStyle = {
     position: "fixed",
@@ -19,7 +23,7 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode }) {
     width: "100%",
     height: "100%",
     objectFit: "cover",
-    filter: "blur(120px) saturate(1.2) brightness(0.15)",
+    filter: videoFilter,
     transition: "opacity 500ms ease",
   };
 

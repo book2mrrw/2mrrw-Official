@@ -1,5 +1,7 @@
 /** Client helpers for /api/library/stream signed URL lifecycle. */
 
+import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
+
 export const LIBRARY_STREAM_PATH = "/api/library/stream";
 export const STREAM_REFRESH_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
 const AUDIO_CONTENT_TYPE_RE = /^(audio\/|application\/octet-stream)/i;
@@ -121,6 +123,7 @@ export async function fetchLibraryStream(
   slug,
   { force = false, sessionId = null, trackSlug = null, signal = undefined } = {}
 ) {
+  perfMark(MARKS.PLAYBACK_RESOLVER_START);
   const params = new URLSearchParams({ slug });
   if (force) params.set("force", "true");
   if (sessionId) params.set("sessionId", sessionId);
@@ -199,7 +202,9 @@ export async function fetchLibraryStream(
       slug,
     });
   }
+  perfMark(MARKS.PLAYBACK_RESOLVER_END);
   const contentType = await assertSignedAudioUrl(body.url, { slug, signal });
+  perfMark(MARKS.PLAYBACK_SIGNED_URL);
   return {
     ...body,
     contentType,

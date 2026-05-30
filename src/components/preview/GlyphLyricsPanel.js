@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState, memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { parseLrc, getActiveLrcIndex } from "@/lib/lrc";
-import { useAudioPlayer } from "@/context/AudioContext";
+import { useAudioPlayer, usePlaybackProgress } from "@/context/AudioContext";
 
 function GlyphLyricsPanel({ open, lrcText, onClose, isMobile = false }) {
-  const { currentTime } = useAudioPlayer();
+  const { currentTime } = usePlaybackProgress();
   const lines = useMemo(() => parseLrc(lrcText), [lrcText]);
   const [activeIndex, setActiveIndex] = useState(-1);
   const scrollRef = useRef(null);

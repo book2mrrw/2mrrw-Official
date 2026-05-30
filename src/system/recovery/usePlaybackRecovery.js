@@ -5,7 +5,7 @@ import * as store from "./recoveryStore";
 
 const PLAYBACK_KEY = "playback";
 
-export function usePlaybackRecovery({ queue, queueIndex, currentTime, hasStarted, onRestore }) {
+export function usePlaybackRecovery({ queue, queueIndex, getCurrentTime, hasStarted, onRestore }) {
   const saveTimerRef = useRef(null);
 
   const persist = useCallback(() => {
@@ -13,10 +13,10 @@ export function usePlaybackRecovery({ queue, queueIndex, currentTime, hasStarted
     store.save(PLAYBACK_KEY, {
       queueIds: queue.map((t) => t.id || t.slug).filter(Boolean),
       queueIndex,
-      currentTime: currentTime || 0,
+      currentTime: typeof getCurrentTime === "function" ? getCurrentTime() : 0,
       savedAt: Date.now(),
     });
-  }, [queue, queueIndex, currentTime]);
+  }, [queue, queueIndex, getCurrentTime]);
 
   useEffect(() => {
     persist();

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
-import { useAudioPlayer } from "@/context/AudioContext";
+import { useAudioPlayer, usePlaybackProgress } from "@/context/AudioContext";
 import { getMediaEngineBridge, subscribeMediaEngine } from "@/media/mediaEngineBridge";
 
 /**
@@ -124,7 +124,7 @@ export function mapAudioContextToMediaEngine(audio) {
     state: {
       currentTrack,
       isPlaying: Boolean(audio.isPlaying),
-      currentTime: audio.currentTime ?? 0,
+      currentTime: audio.getCurrentTime?.() ?? audio.currentTime ?? 0,
       duration: audio.duration ?? 0,
       volume: readVolume(audio.audioRef),
       queue: audio.queue ?? [],
@@ -157,6 +157,17 @@ export function mapAudioContextToMediaEngine(audio) {
  */
 export function useMediaEngine() {
   const audio = useAudioPlayer();
+  const progress = usePlaybackProgress();
   useSyncExternalStore(subscribeMediaEngine, getMediaEngineSnapshot, () => null);
-  return useMemo(() => mapAudioContextToMediaEngine(audio), [audio]);
+  return useMemo(() => {
+    const mapped = mapAudioContextToMediaEngine(audio);
+    return {
+      ...mapped,
+      state: {
+        ...mapped.state,
+        currentTime: progress.currentTime,
+        duration: progress.duration || mapped.state.duration,
+      },
+    };
+  }, [audio, progress.currentTime, progress.duration]);
 }

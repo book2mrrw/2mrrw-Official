@@ -1,0 +1,39 @@
+Phase 4.6 — Critical Performance Implementation
+Date: 2026-05-29
+Build: npm run build PASS (Next.js 16.2.4)
+
+DELIVERABLES
+report.md
+files-changed.md
+validation-checklist.md
+remaining-risks.md
+manifest.txt
+
+SOURCE CHANGES (11 files)
+src/context/AudioContext.js
+src/app/page.js
+src/components/home/AmbientPlaybackBackground.js
+src/media/useMediaEngine.js
+src/lib/player/useImmersivePlayback.js
+src/components/preview/GlyphLyricsPanel.js
+src/components/system/AudioPhase10Bridge.js
+src/system/recovery/usePlaybackRecovery.js
+src/components/media/_deprecated/ModalAudioPlayer.js
+src/lib/dev/performanceMarks.js
+src/lib/playback/stream-client.js
+
+OPTIMIZATION GROUPS
+A1 Playback context isolation (CRITICAL)
+A2 Page render storm elimination (CRITICAL)
+A3 Scroll CSS-ref parallax (CRITICAL)
+B1 Homepage dynamic imports (HIGH)
+B2 Admin panel isolation (HIGH)
+B3 Deferred tab API fetches (HIGH)
+C1 Hero preload=metadata (HIGH)
+C2 Concurrent video budget (HIGH)
+C3 Mobile ambient blur reduction (HIGH)
+
+AUDIT SOURCES
+.tmp-phase45-performance-audit-20260529/
+.tmp-phase45-bottleneck-analysis-20260529/
+.tmp-playback-latency-instrumentation-20260529/

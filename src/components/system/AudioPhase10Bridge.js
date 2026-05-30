@@ -9,14 +9,14 @@ import { usePlaybackRecovery } from "@/system/recovery";
  * Wires queue preloading + playback persistence without bloating AudioContext.
  */
 export default function AudioPhase10Bridge() {
-  const { queue, queueIndex, currentTime, hasStarted, currentTrack, playbackState, setQueue, seek } = useAudioPlayer();
+  const { queue, queueIndex, getCurrentTime, hasStarted, currentTrack, playbackState, setQueue, seek } = useAudioPlayer();
 
   useQueuePreloader(queue, queueIndex);
 
   usePlaybackRecovery({
     queue,
     queueIndex,
-    currentTime,
+    getCurrentTime,
     hasStarted,
     onRestore: () => {},
   });

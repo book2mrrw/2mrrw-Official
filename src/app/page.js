@@ -4,17 +4,26 @@ import dynamic from "next/dynamic";
 import { motion, AnimatePresence } from "framer-motion";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
-import CheckoutForm from "@/components/payments/CheckoutForm";
+const CheckoutForm = dynamic(() => import("@/components/payments/CheckoutForm"), { ssr: false });
 const DonateModal = dynamic(() => import("@/components/payments/DonateModal"), { ssr: false });
+const ImmersivePreviewModal = dynamic(() => import("@/components/preview/ImmersivePreviewModal"), { ssr: false });
+const AlbumModal = dynamic(
+  () => import("@/components/preview/ImmersivePreviewModal").then((mod) => ({ default: mod.AlbumModal })),
+  { ssr: false }
+);
+const GiftBottomSheet = dynamic(() => import("@/components/gifts/GiftBottomSheet"), { ssr: false });
+const CollectorCardAdminPanel = dynamic(() => import("@/components/admin/CollectorCardAdminPanel"), { ssr: false });
+const VaultUnlockedRoom = dynamic(
+  () => import("@/components/vault/VaultUnlockedRoom").then((mod) => ({ default: mod.VaultUnlockedRoom })),
+  { ssr: false }
+);
+const AlbumTracklistSheet = dynamic(() => import("@/components/music/AlbumTracklistSheet"), { ssr: false });
 import { useAuth, useEntitlementAccountState } from "@/context/AuthContext";
 import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
-import ImmersivePreviewModal, { AlbumModal } from "@/components/preview/ImmersivePreviewModal";
-import GiftBottomSheet from "@/components/gifts/GiftBottomSheet";
 import GiftButton from "@/components/gifts/GiftButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftsSentSection from "@/components/gifts/GiftsSentSection";
-import CollectorCardAdminPanel from "@/components/admin/CollectorCardAdminPanel";
 import HelpSupportSection from "@/components/support/HelpSupportSection";
 import MyMusicTab from "@/components/music/MyMusicTab";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
@@ -28,11 +37,9 @@ import {
   normalizeTrackForPlayback,
   resolveCatalogPlaybackItem,
 } from "@/lib/music-playback";
-import { useAudioPlayer } from "@/context/AudioContext";
+import { useAudioPlayer, usePlaybackProgress } from "@/context/AudioContext";
 import { useMediaEngine } from "@/media/useMediaEngine";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
-import AlbumTracklistSheet from "@/components/music/AlbumTracklistSheet";
-import { VaultUnlockedRoom } from "@/components/vault/VaultUnlockedRoom";
 import { MobileNavAnimatedIcon } from "@/components/nav/MobileNavAnimatedIcon";
 import { VaultNavLockIcon } from "@/components/nav/VaultNavLockIcon";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
@@ -94,6 +101,95 @@ const formatTime = (s) => {
   const sec = Math.floor(s % 60);
   return `${m}:${sec.toString().padStart(2, "0")}`;
 };
+
+const StorefrontMiniPlayerBar = memo(function StorefrontMiniPlayerBar({
+  nowPlaying,
+  isPlaying,
+  onSeekRatio,
+  onToggle,
+  onDismiss,
+  isMobile,
+  bottom,
+}) {
+  const { currentTime, duration } = usePlaybackProgress();
+
+  const handleSeek = useCallback(
+    (e) => {
+      if (!duration) return;
+      const rect = e.currentTarget.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      onSeekRatio(ratio * duration);
+    },
+    [duration, onSeekRatio]
+  );
+
+  const progressWidth = duration ? `${(currentTime / duration) * 100}%` : "0%";
+  const timeLabel = `${formatTime(currentTime)} / ${formatTime(duration)}`;
+
+  if (isMobile) {
+    return (
+      <motion.div
+        key="mobile-mini-player"
+        initial={{ y: 72, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 72, opacity: 0 }}
+        transition={SPRING_SOFT}
+        style={{
+          position: "fixed",
+          left: 12,
+          right: 12,
+          bottom,
+          zIndex: 6750,
+          borderRadius: 16,
+          overflow: "hidden",
+          background: "rgba(10,10,10,0.9)",
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          boxShadow: "0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,255,255,0.05)",
+        }}
+      >
+        <motion.div onClick={handleSeek} style={{ width: "100%", height: 3, background: "#111", cursor: "pointer" }}>
+          <motion.div style={{ width: progressWidth, height: "100%", background: "#00ffff", transition: "width 0.1s linear" }} />
+        </motion.div>
+        <motion.div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 10 }}>
+          <img src={nowPlaying.cover} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
+          <motion.div style={{ flex: 1, minWidth: 0 }}>
+            <motion.div style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nowPlaying.title}</motion.div>
+            <motion.div style={{ fontSize: 10, color: "#555", fontVariantNumeric: "tabular-nums" }}>{timeLabel}</motion.div>
+          </motion.div>
+          <button onClick={onToggle} style={{ width: 38, height: 38, borderRadius: "50%", background: "#00ffff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+            {isPlaying
+              ? <svg viewBox="0 0 24 24" fill="#000" width="14" height="14"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
+              : <svg viewBox="0 0 24 24" fill="#000" width="14" height="14" style={{ marginLeft: 2 }}><path d="M8 5v14l11-7z"/></svg>}
+          </button>
+          <button onClick={onDismiss} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 4px" }}>×</button>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  return (
+    <div style={{ flexShrink: 0, borderTop: "1px solid #141414", background: "rgba(4,4,4,0.97)", backdropFilter: "blur(20px)", zIndex: 1 }}>
+      <div onClick={handleSeek} style={{ width: "100%", height: 3, background: "#111", cursor: "pointer", position: "relative" }}>
+        <div style={{ width: progressWidth, height: "100%", background: "#00ffff", transition: "width 0.1s linear", boxShadow: "0 0 4px rgba(0,255,255,0.5)" }} />
+      </div>
+      <div style={{ padding: "10px 20px", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 -4px 30px rgba(0,0,0,0.5)" }}>
+        <img src={nowPlaying.cover} style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} alt="" />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nowPlaying.title}</div>
+          <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, fontVariantNumeric: "tabular-nums" }}>{timeLabel}</div>
+        </div>
+        <button onClick={onToggle} style={{ width: 36, height: 36, borderRadius: "50%", background: "#00ffff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
+          {isPlaying
+            ? <svg viewBox="0 0 24 24" fill="#000" width="14" height="14"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
+            : <svg viewBox="0 0 24 24" fill="#000" width="14" height="14" style={{ marginLeft: 2 }}><path d="M8 5v14l11-7z"/></svg>}
+        </button>
+        <button onClick={onDismiss} style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>×</button>
+      </div>
+    </div>
+  );
+});
 
 function normalizeAlbumTracksForModal(tracks) {
   if (!Array.isArray(tracks)) return [];
@@ -542,8 +638,6 @@ export default function Page() {
     playbackState,
     csMode,
     isPlaying,
-    currentTime,
-    duration,
     pause,
     toggle,
     seek,
@@ -604,7 +698,7 @@ export default function Page() {
   const [radioIndex, setRadioIndex]               = useState(0);
   const [flowConversionActive, setFlowConversionActive] = useState(false);
   const [printfulProducts, setPrintfulProducts]   = useState([]);
-  const [printfulLoading, setPrintfulLoading]     = useState(true);
+  const [printfulLoading, setPrintfulLoading]     = useState(false);
   const [inventory, setInventory]                 = useState({});
   const [exclusiveCatalog, setExclusiveCatalog] = useState(exclusiveItemsBase);
   const [publicVault, setPublicVault]             = useState(null);
@@ -613,7 +707,6 @@ export default function Page() {
   const [mobileNavOpen, setMobileNavOpen]         = useState(false);
   const [mobileNavClosing, setMobileNavClosing]   = useState(false);
   const [homeScrollSection, setHomeScrollSection] = useState(null);
-  const [heroScrollY, setHeroScrollY]             = useState(0);
   const [browseSingles, setBrowseSingles]         = useState(singles);
   const [catalogPage, setCatalogPage]             = useState(1);
   const [catalogHasMore, setCatalogHasMore]       = useState(false);
@@ -628,17 +721,30 @@ export default function Page() {
   const ytIframeRef        = useRef(null);
   const mainScrollRef      = useRef(null);
   const singlesRowRef      = useRef(null);
+  const heroContainerRef   = useRef(null);
+  const heroVideoRef       = useRef(null);
+  const heroTextRef        = useRef(null);
+  const heroSocialsRef     = useRef(null);
+  const isMobileRef        = useRef(false);
   const syncSinglesCarouselVideos = useCallback(() => {
     const row = singlesRowRef.current;
     if (!row) return;
     const vw = window.innerWidth;
+    const inViewVideos = [];
     row.querySelectorAll("video[data-single-carousel]").forEach((video) => {
       const card = video.closest("[data-single-card]");
       const rect = (card || video).getBoundingClientRect();
       const inView = rect.left >= 0 && rect.right <= vw;
-      if (inView) video.play().catch(() => {});
+      if (inView) inViewVideos.push(video);
       else video.pause();
     });
+    const heroVideo = heroVideoRef.current;
+    if (heroVideo && isMobileRef.current) {
+      if (inViewVideos.length > 0) heroVideo.pause();
+      else heroVideo.play().catch(() => {});
+    }
+    inViewVideos.slice(0, 2).forEach((video) => video.play().catch(() => {}));
+    inViewVideos.slice(2).forEach((video) => video.pause());
   }, []);
 
   // ── AUDIO FOCUS HANDLER ───────────────────────────────────────────────────
@@ -648,19 +754,51 @@ export default function Page() {
 
   // ── EFFECTS ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
+    const check = () => {
+      const mobile = window.innerWidth < 768;
+      isMobileRef.current = mobile;
+      setIsMobile(mobile);
+    };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  const applyHeroParallax = useCallback((scrollY) => {
+    if (!isMobileRef.current) return;
+    const y = scrollY;
+    const container = heroContainerRef.current;
+    const video = heroVideoRef.current;
+    const text = heroTextRef.current;
+    const socials = heroSocialsRef.current;
+    if (container) {
+      container.style.height = `${Math.max(108, 200 - y * 0.46)}px`;
+    }
+    if (video) {
+      const brightness = Math.max(0.08, 0.35 - y * 0.0025);
+      video.style.opacity = String(brightness);
+      video.style.filter = `brightness(${brightness / 0.35}) blur(${Math.min(2, y * 0.01)}px)`;
+      video.style.transform = `scale(${1 + y * 0.0008})`;
+    }
+    if (text) {
+      const opacity = Math.max(0, 1 - y / 70);
+      const scale = Math.max(0.72, 1 - y / 350);
+      text.style.opacity = String(opacity);
+      text.style.transform = `scale(${scale})`;
+    }
+    if (socials) {
+      socials.style.opacity = String(Math.max(0, 1 - y / 60));
+    }
+  }, []);
+
   useEffect(() => {
     const el = mainScrollRef.current;
     if (!el) return;
-    const onScroll = () => setHeroScrollY(el.scrollTop);
+    const onScroll = () => applyHeroParallax(el.scrollTop);
+    applyHeroParallax(el.scrollTop);
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [applyHeroParallax]);
 
   useEffect(() => {
     if (!isMobile || activeTab !== "home") return;
@@ -862,6 +1000,7 @@ export default function Page() {
   }, [activeTab, tabKey, syncSinglesCarouselVideos]);
 
   useEffect(() => {
+    if (activeTab !== "vault" && activeTab !== "innercircle") return;
     let cancelled = false;
     (async () => {
       try {
@@ -877,7 +1016,7 @@ export default function Page() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "innercircle") return;
@@ -897,6 +1036,7 @@ export default function Page() {
   }, [activeTab]);
 
   useEffect(() => {
+    if (activeTab !== "shop") return;
     setPrintfulLoading(true);
     fetch("/api/printful/products")
       .then(r => r.json())
@@ -915,7 +1055,7 @@ export default function Page() {
       })
       .catch(err => console.error("PRINTFUL FETCH ERROR:", err))
       .finally(() => setPrintfulLoading(false));
-  }, []);
+  }, [activeTab]);
 
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_circle");
@@ -1238,14 +1378,11 @@ export default function Page() {
     pause();
   }, [pause]);
 
-  const seekTo = useCallback(
-    (e) => {
-      if (!duration) return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      seek(ratio * duration);
+  const seekToRatio = useCallback(
+    (time) => {
+      seek(time);
     },
-    [duration, seek]
+    [seek]
   );
 
   const nowPlayingMatchesTrack =
@@ -1566,11 +1703,7 @@ export default function Page() {
     return `${item.stock} remaining`;
   };
 
-  const mobileHeroHeight = isMobile ? Math.max(108, 200 - heroScrollY * 0.46) : 380;
-  const mobileVideoBrightness = isMobile ? Math.max(0.08, 0.35 - heroScrollY * 0.0025) : 0.35;
-  const heroTextOpacity = isMobile ? Math.max(0, 1 - heroScrollY / 70) : 1;
-  const heroTextScale = isMobile ? Math.max(0.72, 1 - heroScrollY / 350) : 1;
-  const heroSocialsOp = isMobile ? Math.max(0, 1 - heroScrollY / 60) : 1;
+  const mobileHeroHeight = isMobile ? 200 : 380;
   const mobileScrollPadding = isMobile ? (nowPlaying ? "178px" : "110px") : "30px";
   const mobileCartFabBottom = nowPlaying
     ? "calc(62px + env(safe-area-inset-bottom, 0px) + 72px)"
@@ -1725,7 +1858,7 @@ export default function Page() {
           playbackState === "playing" ||
           playbackState === "preview_fallback") &&
           currentTrack?.cover && (
-          <AmbientPlaybackBackground currentTrack={currentTrack} csMode={csMode} />
+          <AmbientPlaybackBackground currentTrack={currentTrack} csMode={csMode} isMobile={isMobile} />
         )}
 
         {/* ── DESKTOP SIDEBAR ── */}
@@ -1775,26 +1908,29 @@ export default function Page() {
             <motion.div style={{padding:isMobile?`0 0 ${mobileScrollPadding} 0`:"0 30px 30px"}}>
             <motion.div style={{padding:isMobile?"0 14px":"0"}}>
             {/* HERO — scroll compression on mobile */}
-            <motion.div style={{
+            <motion.div
+              ref={heroContainerRef}
+              style={{
               position:"relative", height: mobileHeroHeight, marginBottom: 0,
               borderRadius: isMobile ? 0 : 20, overflow:"hidden", background:"black",
-              transition: isMobile ? "height 0.08s cubic-bezier(0.25,0.46,0.45,0.94)" : "none",
+              transition: isMobile ? "none" : "none",
             }}>
-              <video autoPlay muted loop playsInline preload="auto" webkit-playsinline="true" src={catalogMotionVideoUrl("videos/A2B.mp4")}
+              <video
+                ref={heroVideoRef}
+                autoPlay muted loop playsInline preload="metadata" webkit-playsinline="true" src={catalogMotionVideoUrl("videos/A2B.mp4")}
                 style={{
                   position:"absolute",width:"100%",height:"100%",objectFit:"cover",
-                  opacity: mobileVideoBrightness,
-                  filter:`brightness(${mobileVideoBrightness / 0.35}) blur(${isMobile ? Math.min(2, heroScrollY * 0.01) : 1}px)`,
-                  transform:`scale(${isMobile ? 1 + heroScrollY * 0.0008 : 1})`,
-                  transition: isMobile ? "filter 0.1s, transform 0.1s" : "none",
+                  opacity: isMobile ? 0.35 : 0.35,
+                  filter: isMobile ? "brightness(1) blur(0px)" : "brightness(1) blur(1px)",
+                  transform: "scale(1)",
                 }}
               />
               <div style={{position:"absolute",inset:0,background:"linear-gradient(to top,black,transparent 60%)"}}/>
               <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at center,transparent 30%,black 100%)"}}/>
-              <motion.div style={{position:"absolute",top:isMobile?16:25,left:isMobile?16:25,zIndex:10,opacity:heroTextOpacity,transform:`scale(${heroTextScale})`,transformOrigin:"top left",transition:isMobile?"opacity 0.08s, transform 0.08s":"none"}}>
+              <motion.div ref={heroTextRef} style={{position:"absolute",top:isMobile?16:25,left:isMobile?16:25,zIndex:10,transformOrigin:"top left"}}>
                 <div style={{fontSize:isMobile?28:42,fontWeight:900,letterSpacing:isMobile?5:8,animation:"pulse 2.5s infinite",textShadow:"0 0 20px rgba(0,255,255,0.8)"}}>2MRRW</div>
               </motion.div>
-              <motion.div style={{position:"absolute",bottom:isMobile?14:24,right:isMobile?14:25,display:"flex",gap:isMobile?12:16,alignItems:"center",zIndex:10,flexWrap:"wrap",justifyContent:"flex-end",opacity:heroSocialsOp,transition:isMobile?"opacity 0.08s":"none"}}>
+              <motion.div ref={heroSocialsRef} style={{position:"absolute",bottom:isMobile?14:24,right:isMobile?14:25,display:"flex",gap:isMobile?12:16,alignItems:"center",zIndex:10,flexWrap:"wrap",justifyContent:"flex-end"}}>
                 {SOCIALS.map(s=><a key={s.name} href={s.href} target="_blank" rel="noopener noreferrer" title={s.name} style={{color:"rgba(255,255,255,0.65)",transition:"transform 0.2s,color 0.2s,filter 0.2s",display:"flex",alignItems:"center",textDecoration:"none"}} onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.5)";e.currentTarget.style.color="#00ffff";e.currentTarget.style.filter="drop-shadow(0 0 6px rgba(0,255,255,0.8))";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.color="rgba(255,255,255,0.65)";e.currentTarget.style.filter="none";}}>{s.svg}</a>)}
               </motion.div>
             </motion.div>
@@ -2391,24 +2527,14 @@ export default function Page() {
 
           {/* ── NOW PLAYING BAR (desktop) ── */}
           {nowPlaying && !isMobile && (
-            <div style={{flexShrink:0,borderTop:"1px solid #141414",background:"rgba(4,4,4,0.97)",backdropFilter:"blur(20px)",zIndex:isMobile?6500:1,marginBottom:isMobile?60:0}}>
-              <div onClick={seekTo} style={{width:"100%",height:3,background:"#111",cursor:"pointer",position:"relative"}}>
-                <div style={{width:duration?`${(currentTime/duration)*100}%`:"0%",height:"100%",background:"#00ffff",transition:"width 0.1s linear",boxShadow:"0 0 4px rgba(0,255,255,0.5)"}}/>
-              </div>
-              <div style={{padding:isMobile?"8px 14px":"10px 20px",display:"flex",alignItems:"center",gap:14,boxShadow:"0 -4px 30px rgba(0,0,0,0.5)"}}>
-                <img src={nowPlaying.cover} style={{width:36,height:36,borderRadius:8,objectFit:"cover",flexShrink:0}} alt=""/>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.title}</div>
-                  <div style={{fontSize:10,color:"#555",letterSpacing:1,fontVariantNumeric:"tabular-nums"}}>{formatTime(currentTime)} / {formatTime(duration)}</div>
-                </div>
-                <button onClick={() => { void toggle(); }} style={{width:36,height:36,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
-                  {miniPlayerPlaying
-                    ? <svg viewBox="0 0 24 24" fill="#000" width="14" height="14"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
-                    : <svg viewBox="0 0 24 24" fill="#000" width="14" height="14" style={{marginLeft:2}}><path d="M8 5v14l11-7z"/></svg>}
-                </button>
-                <button onClick={dismissNowPlaying} style={{background:"none",border:"none",color:"#444",cursor:"pointer",fontSize:18,lineHeight:1,flexShrink:0}}>×</button>
-              </div>
-            </div>
+            <StorefrontMiniPlayerBar
+              nowPlaying={nowPlaying}
+              isPlaying={miniPlayerPlaying}
+              onSeekRatio={seekToRatio}
+              onToggle={() => { void toggle(); }}
+              onDismiss={dismissNowPlaying}
+              isMobile={false}
+            />
           )}
         </div>
 
@@ -2508,37 +2634,15 @@ export default function Page() {
 
           <AnimatePresence>
             {nowPlaying && (
-              <motion.div
-                key="mobile-mini-player"
-                initial={{ y: 72, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: 72, opacity: 0 }}
-                transition={SPRING_SOFT}
-                style={{
-                  position:"fixed",left:12,right:12,bottom:mobileMiniPlayerBottom,zIndex:6750,
-                  borderRadius:16,overflow:"hidden",
-                  background:"rgba(10,10,10,0.9)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",
-                  border:"1px solid rgba(255,255,255,0.08)",
-                  boxShadow:"0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,255,255,0.05)",
-                }}
-              >
-                <motion.div onClick={seekTo} style={{width:"100%",height:3,background:"#111",cursor:"pointer"}}>
-                  <motion.div style={{width:duration?`${(currentTime/duration)*100}%`:"0%",height:"100%",background:"#00ffff",transition:"width 0.1s linear"}}/>
-                </motion.div>
-                <motion.div style={{padding:"8px 12px",display:"flex",alignItems:"center",gap:10}}>
-                  <img src={nowPlaying.cover} alt="" style={{width:40,height:40,borderRadius:8,objectFit:"cover",flexShrink:0}}/>
-                  <motion.div style={{flex:1,minWidth:0}}>
-                    <motion.div style={{fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.title}</motion.div>
-                    <motion.div style={{fontSize:10,color:"#555",fontVariantNumeric:"tabular-nums"}}>{formatTime(currentTime)} / {formatTime(duration)}</motion.div>
-                  </motion.div>
-                  <button onClick={() => { void toggle(); }} style={{width:38,height:38,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
-                    {miniPlayerPlaying
-                      ? <svg viewBox="0 0 24 24" fill="#000" width="14" height="14"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
-                      : <svg viewBox="0 0 24 24" fill="#000" width="14" height="14" style={{marginLeft:2}}><path d="M8 5v14l11-7z"/></svg>}
-                  </button>
-                  <button onClick={dismissNowPlaying} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:20,lineHeight:1,padding:"0 4px"}}>×</button>
-                </motion.div>
-              </motion.div>
+              <StorefrontMiniPlayerBar
+                nowPlaying={nowPlaying}
+                isPlaying={miniPlayerPlaying}
+                onSeekRatio={seekToRatio}
+                onToggle={() => { void toggle(); }}
+                onDismiss={dismissNowPlaying}
+                isMobile
+                bottom={mobileMiniPlayerBottom}
+              />
             )}
           </AnimatePresence>
 

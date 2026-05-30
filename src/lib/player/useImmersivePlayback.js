@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useAudioPlayer } from "@/context/AudioContext";
+import { useAudioPlayer, usePlaybackProgress } from "@/context/AudioContext";
 import { useMediaEngine } from "@/media/useMediaEngine";
 
 /**
@@ -10,12 +10,14 @@ import { useMediaEngine } from "@/media/useMediaEngine";
  */
 export function useImmersivePlayback() {
   const audio = useAudioPlayer();
+  const { currentTime, duration: progressDuration } = usePlaybackProgress();
   const { state: engineState, toggle: engineToggle } = useMediaEngine();
 
   const progress = useMemo(() => {
-    if (!engineState.duration) return 0;
-    return Math.max(0, Math.min(100, (engineState.currentTime / engineState.duration) * 100));
-  }, [engineState.currentTime, engineState.duration]);
+    const dur = progressDuration || engineState.duration;
+    if (!dur) return 0;
+    return Math.max(0, Math.min(100, (currentTime / dur) * 100));
+  }, [currentTime, progressDuration, engineState.duration]);
 
   const handlePlayToggle = useCallback(
     (e) => {
@@ -31,6 +33,8 @@ export function useImmersivePlayback() {
 
   return {
     ...audio,
+    currentTime,
+    duration: progressDuration || audio.duration,
     progress,
     handlePlayToggle,
   };
