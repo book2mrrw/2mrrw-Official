@@ -1,0 +1,26 @@
+# Phase 5.2 Stage 5 — Master Fallback Validation manifest
+# Date: 2026-05-30
+
+MODIFIED
+  scripts/test-playback-resolver-fallback.mjs
+  package.json
+
+UNCHANGED (resolver production code — no bugs found)
+  src/lib/playback/resolve-playback-key.js
+  src/lib/playback/resolve-stream-playback.js
+  src/lib/playback/playback-resolver-diagnostics.js
+  src/lib/feature-flags/hybrid-streaming.js
+  src/app/api/library/stream/route.js
+
+PROHIBITED — not touched
+  src/context/AudioContext.js
+  Backfill tooling (Stage 6)
+  Recovery anchor / foundation docs
+  Entitlement / collector / audiovisual / storefront
+
+DELIVERABLES
+  .tmp-phase52-stage5-master-fallback-20260530/report.md
+  .tmp-phase52-stage5-master-fallback-20260530/manifest.txt
+
+ZIP
+  /Users/recharge/Downloads/phase52-stage5-master-fallback-20260530.zip

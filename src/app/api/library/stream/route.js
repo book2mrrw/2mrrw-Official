@@ -21,6 +21,8 @@ import { proxySignedR2Get } from "@/lib/server/r2-stream-proxy";
 import { libraryStreamRedirectSrc } from "@/lib/music-access";
 import { isAdminUser } from "@/lib/auth/constants";
 import { createServerTiming } from "@/lib/server/server-timing";
+import { getHybridStreamingFeatureFlags } from "@/lib/feature-flags";
+import { getPlaybackResolverDiagnostics } from "@/lib/playback/playback-resolver-diagnostics";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,23 @@ function logStreamR2Env(context) {
     secretAccessKey: Boolean(process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY),
     publicCdn: Boolean(process.env.NEXT_PUBLIC_R2_PUBLIC_URL),
   });
+}
+
+const RESOLVER_DEBUG = R2_STREAM_DEBUG || process.env.NODE_ENV === "development";
+
+function applyResolverDiagnosticsHeaders(response, resolved) {
+  if (!RESOLVER_DEBUG || !resolved) return response;
+  response.headers.set(
+    "X-Playback-Resolver",
+    JSON.stringify({
+      result: resolved.resolverResult || resolved.playbackSource || "master",
+      durationMs: resolved.resolverDurationMs ?? null,
+      fallbackReason: resolved.streamFallbackReason || null,
+      flags: getHybridStreamingFeatureFlags(),
+      aggregate: getPlaybackResolverDiagnostics(),
+    })
+  );
+  return response;
 }
 
 function withStreamTiming(req, response, timing) {
@@ -82,7 +101,14 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
       )
     );
   }
-  timing?.mark("resolve");
+  timing?.mark(
+    "resolve",
+    resolved?.resolverResult === "stream"
+      ? "stream"
+      : resolved?.playbackSource === "preview"
+        ? "preview"
+        : "master"
+  );
 
   const productId = resolved?.productId || (await resolveProductIdBySlug(admin, slug));
   timing?.mark("product");
@@ -132,21 +158,24 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
   const redirect = req.nextUrl.searchParams.get("redirect") === "1";
   if (redirect) {
     const proxied = await proxySignedR2Get(req, url, { timing });
-    return proxied;
+    return applyResolverDiagnosticsHeaders(proxied, resolved);
   }
 
   const proxySrc = libraryStreamRedirectSrc(slug, {
     trackSlug: trackSlug || null,
   });
 
-  return applyMediaCors(
-    req,
-    NextResponse.json({
-      url: proxySrc,
-      expiresIn: STREAM_SIGNED_URL_TTL_SECONDS,
-      sessionId: sessionId || null,
-      streamEventId: streamEventId || null,
-    })
+  return applyResolverDiagnosticsHeaders(
+    applyMediaCors(
+      req,
+      NextResponse.json({
+        url: proxySrc,
+        expiresIn: STREAM_SIGNED_URL_TTL_SECONDS,
+        sessionId: sessionId || null,
+        streamEventId: streamEventId || null,
+      })
+    ),
+    resolved
   );
 }
 

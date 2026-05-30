@@ -8,10 +8,12 @@ import {
   resolveArtworkPath,
   resolvePreviewPath,
   resolveStoragePath,
+  resolveStreamPath,
   resolveVideoPath,
   storagePathForProductRow,
   visualDiscoveryUrl,
 } from "@/lib/media/canonical-paths";
+import { attachStreamRegistrationToRow } from "@/lib/media/stream-registration";
 import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
 
 /** Per release-type folder + legacy key builders (entity-folder authoritative). */
@@ -21,6 +23,7 @@ export const CANONICAL_CATALOG = {
     cover_folder: (slug) => `images/singles/${slug}/`,
     video_folder: (slug) => `videos/singles/${slug}/`,
     preview_folder: (slug) => `previews/singles/${slug}/`,
+    stream_folder: (slug) => resolveStreamPath("single", slug),
     cover_legacy: (slug, stem) => `images/singles/${slug}/${stem}.jpeg`,
     video_legacy: (slug, stem) => `videos/singles/${slug}/${stem}.mp4`,
     preview_legacy: (slug, stem) => `previews/singles/${slug}/${stem}-preview.mp3`,
@@ -30,6 +33,7 @@ export const CANONICAL_CATALOG = {
     cover_folder: (slug) => `images/features/${slug}/`,
     video_folder: (slug) => `videos/features/${slug}/`,
     preview_folder: (slug) => `previews/features/${slug}/`,
+    stream_folder: (slug) => resolveStreamPath("feature", slug),
     cover_legacy: (slug, stem) => `images/features/${slug}/${stem}.jpeg`,
     video_legacy: (slug, stem) => `videos/features/${slug}/${stem}.mp4`,
     preview_legacy: (slug, stem) => `previews/features/${slug}/${stem}-preview.wav`,
@@ -39,6 +43,7 @@ export const CANONICAL_CATALOG = {
     cover_folder: (slug) => `images/albums/${slug}/`,
     video_folder: (slug) => `videos/albums/${slug}/`,
     preview_folder: (slug) => `previews/albums/${slug}/`,
+    stream_folder: (slug) => resolveStreamPath("album", slug),
     cover_legacy: (slug, stem) => `images/albums/${slug}/${stem}.jpeg`,
     video_legacy: (slug, stem) => `videos/albums/${slug}/${stem}.mp4`,
     preview_legacy: (slug, stem) => `previews/albums/${slug}/${stem}-preview.mp3`,
@@ -48,6 +53,7 @@ export const CANONICAL_CATALOG = {
     cover_folder: (slug) => `images/mixtapes-and-eps/${slug}/`,
     video_folder: (slug) => `videos/mixtapes-and-eps/${slug}/`,
     preview_folder: (slug) => `previews/mixtapes-and-eps/${slug}/`,
+    stream_folder: (slug) => resolveStreamPath("mixtape", slug),
     cover_legacy: (slug, stem) => `images/mixtapes-and-eps/${slug}/${stem}.jpeg`,
     video_legacy: (slug, stem) => `videos/mixtapes-and-eps/${slug}/${stem}.mp4`,
     preview_legacy: (slug, stem) => `previews/mixtapes-and-eps/${slug}/${stem}-preview.mp3`,
@@ -397,46 +403,58 @@ export function getCanonicalProductRows() {
 
   [...CANONICAL_SINGLES, ...CANONICAL_FEATURES].forEach((raw) => {
     const r = _releasesBySlug.get(raw.slug);
-    rows.push({
-      slug: r.slug,
-      title: r.title,
-      display_title: r.title,
-      product_type: r.release_type === "feature" ? "feature" : "single",
-      price_cents: r.price_cents,
-      cover_url: r.cover,
-      storage_path: storagePathForProductRow(r.storage_path),
-      preview_path: r.preview_path,
-      artwork_path: r.artwork_path,
-      video_path: r.video_path,
-      release_date: r.release_date,
-      metadata: {
-        release_type: normalizeReleaseType(r.release_type),
-        release_category: r.release_type,
-        canonical: true,
-      },
-    });
+    rows.push(
+      attachStreamRegistrationToRow(
+        {
+          slug: r.slug,
+          title: r.title,
+          display_title: r.title,
+          product_type: r.release_type === "feature" ? "feature" : "single",
+          price_cents: r.price_cents,
+          cover_url: r.cover,
+          storage_path: storagePathForProductRow(r.storage_path),
+          preview_path: r.preview_path,
+          artwork_path: r.artwork_path,
+          video_path: r.video_path,
+          release_date: r.release_date,
+          metadata: {
+            release_type: normalizeReleaseType(r.release_type),
+            release_category: r.release_type,
+            canonical: true,
+          },
+        },
+        r.release_type,
+        r.slug
+      )
+    );
   });
 
   CANONICAL_MIXTAPES_AND_EPS.forEach((raw) => {
     const r = _releasesBySlug.get(raw.slug);
-    rows.push({
-      slug: r.slug,
-      title: r.title,
-      display_title: r.title,
-      product_type: "album",
-      price_cents: r.price_cents,
-      cover_url: r.cover,
-      storage_path: null,
-      preview_path: null,
-      artwork_path: r.artwork_path,
-      video_path: r.video_path,
-      release_date: r.release_date,
-      metadata: {
-        release_type: normalizeReleaseType(r.release_type),
-        release_category: r.release_category || r.release_type,
-        canonical: true,
-      },
-    });
+    rows.push(
+      attachStreamRegistrationToRow(
+        {
+          slug: r.slug,
+          title: r.title,
+          display_title: r.title,
+          product_type: "album",
+          price_cents: r.price_cents,
+          cover_url: r.cover,
+          storage_path: null,
+          preview_path: null,
+          artwork_path: r.artwork_path,
+          video_path: r.video_path,
+          release_date: r.release_date,
+          metadata: {
+            release_type: normalizeReleaseType(r.release_type),
+            release_category: r.release_category || r.release_type,
+            canonical: true,
+          },
+        },
+        r.release_type,
+        r.slug
+      )
+    );
   });
 
   CANONICAL_TRUE_ALBUMS.forEach((raw) => {
@@ -468,15 +486,22 @@ export function getCanonicalTrackRows() {
   indexCatalog();
   return CANONICAL_TRACKS.map((t) => {
     const enriched = enrichTrack(t);
-    return {
-      album_slug: t.album_slug,
-      track_number: t.track_number,
-      slug: t.slug,
-      title: t.title,
-      display_title: t.title,
-      storage_path: storagePathForProductRow(enriched.storage_path),
-      preview_path: enriched.preview_path,
-    };
+    const album = CANONICAL_ALBUMS.find((a) => a.slug === t.album_slug);
+    const releaseType = album?.release_type || "album";
+    return attachStreamRegistrationToRow(
+      {
+        album_slug: t.album_slug,
+        track_number: t.track_number,
+        slug: t.slug,
+        title: t.title,
+        display_title: t.title,
+        storage_path: storagePathForProductRow(enriched.storage_path),
+        preview_path: enriched.preview_path,
+      },
+      releaseType,
+      t.slug,
+      { trackSlug: t.slug, albumSlug: t.album_slug }
+    );
   });
 }
 
@@ -511,6 +536,7 @@ export function mergeCanonicalMetadata(item) {
           cover_folder: catalog.cover_folder(release.slug),
           video_folder: catalog.video_folder(release.slug),
           preview_folder: catalog.preview_folder(release.slug),
+          stream_folder: catalog.stream_folder(release.slug),
           cover_legacy: catalog.cover_legacy(
             release.slug,
             item.legacy_cover_stem ?? release.legacy_cover_stem ?? legacyStem

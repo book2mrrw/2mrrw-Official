@@ -1,0 +1,71 @@
+Phase 5.2 — Hybrid Master / Stream Implementation (FINAL)
+Generated: 2026-05-30
+Recovery anchor: bac9eb71f93dcbc0bee4099bf6d80ddaac29e049 (bac9eb7)
+Status: COMPLETE — pending operator rollout (flags OFF default)
+
+report.md
+manifest.txt
+
+Stage reports:
+.tmp-phase52-preimpl-checkpoint-validation-20260530/
+.tmp-phase52-stage1-feature-flags-20260530/
+.tmp-phase52-stage2-stream-registration-20260530/
+.tmp-phase52-stage3-upload-pipeline-20260530/
+.tmp-phase52-stage4-resolver-20260530/
+.tmp-phase52-stage5-master-fallback-20260530/
+.tmp-phase52-stage6-backfill-20260530/
+.tmp-phase52-stage7-e2e-validation-20260530/
+
+Source files created (15):
+src/lib/feature-flags/hybrid-streaming.js
+src/lib/feature-flags/index.js
+src/lib/media/stream-asset-schema.js
+src/lib/media/stream-registration-validation.js
+src/lib/media/stream-registration.js
+src/lib/media/r2-object-transfer.js
+src/lib/media/stream-transcode.js
+src/lib/media/stream-upload-pipeline.js
+src/lib/playback/resolve-stream-playback.js
+src/lib/playback/playback-resolver-diagnostics.js
+scripts/alias-loader.mjs
+scripts/register-alias.mjs
+scripts/test-playback-resolver-fallback.mjs
+scripts/backfill-stream-assets.mjs
+supabase/migrations/20260530160000_stream_asset_registration.sql
+
+Source files modified (8):
+package.json
+src/lib/media/canonical-paths.js
+src/lib/media/constants/storage-domains.js
+src/lib/media/canonical-catalog.js
+src/lib/media/entity-resolver.js
+src/lib/playback/resolve-playback-key.js
+src/app/api/library/stream/route.js
+src/app/api/admin/sync/catalog/route.js
+
+npm scripts added:
+test:playback-resolver-fallback
+backfill:stream-assets
+
+Environment variables (server-side, default OFF):
+HYBRID_STREAMING_ENABLED
+STREAM_PLAYBACK_PREFERRED
+AUTO_GENERATE_STREAM_ASSETS
+
+Validation (Stage 7):
+npm run build — PASS
+npm run test:foundation — PASS
+npm run verify:foundation -- --quick — PASS
+npm run verify:foundation — FAIL lint (pre-existing)
+npm run test:playback-resolver-fallback — PASS 21/21
+npm run backfill:stream-assets -- --yes --dry-run — PASS (36 candidates)
+
+Not modified (protected):
+src/context/AudioContext.js
+src/app/page.js
+Recovery anchor / foundation docs
+Collector download routes
+Production env hybrid flags
+
+Zip output:
+/Users/recharge/Downloads/phase52-implementation-complete-20260530.zip

@@ -5,3 +5,5 @@ export const IMAGE_ROOT = "images";
 /** Preview audio — R2 bucket uses `previews/{releaseType}/{releaseSlug}/`. */
 export const PREVIEW_ROOT = "previews";
 export const VIDEO_ROOT = "videos";
+/** AAC stream renditions — mirrors master entity folders under `streaming/`. */
+export const STREAM_ROOT = "streaming";

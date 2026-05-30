@@ -1,0 +1,30 @@
+Phase 5.2 — Stage 2: Stream Asset Registration
+Generated: 2026-05-30
+
+report.md
+manifest.txt
+
+Created:
+  src/lib/media/stream-asset-schema.js
+  src/lib/media/stream-registration-validation.js
+  src/lib/media/stream-registration.js
+  supabase/migrations/20260530160000_stream_asset_registration.sql
+
+Modified:
+  src/lib/media/canonical-paths.js
+  src/lib/media/canonical-catalog.js
+  src/lib/media/constants/storage-domains.js
+
+Stage 1 (unchanged this stage):
+  src/lib/feature-flags/hybrid-streaming.js
+  src/lib/feature-flags/index.js
+
+Prohibited — confirmed unchanged:
+  src/lib/playback/resolve-playback-key.js
+  src/context/AudioContext.js
+  src/lib/music-access.js
+  src/app/api/library/stream/*
+  src/app/api/media/preview/*
+  docs/foundation/recovery-anchor.json
+
+STOP — awaiting Stage 3 approval

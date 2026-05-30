@@ -1,8 +1,11 @@
 import { getCanonicalReleaseBySlug, resolveEntityPreviewFolder } from "@/lib/media/canonical-catalog";
+import { isStreamPlaybackPreferred } from "@/lib/feature-flags";
 import { normalizePlaybackR2Key } from "@/lib/playback/normalize-r2-key";
 import { normalizeEntityFolderPath, resolveAudio, resolvePreview } from "@/lib/media/entity-resolver";
 import { resolvePreviewPath, resolveStoragePath, isEntityPreviewFolderPath } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/normalize-release-type";
+import { recordPlaybackResolverOutcome } from "@/lib/playback/playback-resolver-diagnostics";
+import { tryResolveStreamPlaybackKey } from "@/lib/playback/resolve-stream-playback";
 
 const PLAYBACK_KEY_TTL_MS = 60_000;
 /** @type {Map<string, { expiresAt: number, value: object | null }>} */
@@ -177,9 +180,13 @@ export function clearPlaybackKeyCache() {
 }
 
 async function resolvePlaybackKeyUncached(admin, slug, trackSlug) {
+  const resolverStarted = performance.now();
+
   const { data: product, error } = await admin
     .from("products")
-    .select("id, slug, storage_path, preview_path, product_type, content_type, content_id, metadata")
+    .select(
+      "id, slug, storage_path, preview_path, stream_path, stream_key, product_type, content_type, content_id, metadata"
+    )
     .eq("slug", slug)
     .maybeSingle();
 
@@ -236,19 +243,48 @@ async function resolvePlaybackKeyUncached(admin, slug, trackSlug) {
 
   if (!audioKey) return null;
 
+  let resolverResult = playbackSource;
+  let streamFallbackReason = null;
+  let streamSource = null;
+
+  if (playbackSource === "master" && isStreamPlaybackPreferred()) {
+    const streamAttempt = await tryResolveStreamPlaybackKey(admin, product, trackSlug);
+    if (streamAttempt.ok && streamAttempt.key) {
+      audioKey = streamAttempt.key;
+      playbackSource = "stream";
+      resolverResult = "stream";
+      streamSource = streamAttempt.source;
+    } else {
+      streamFallbackReason = streamAttempt.fallbackReason || "unknown";
+      resolverResult = "master";
+    }
+  }
+
+  const resolverDurationMs = Math.round((performance.now() - resolverStarted) * 10) / 10;
+  recordPlaybackResolverOutcome({
+    result: resolverResult,
+    durationMs: resolverDurationMs,
+    fallbackReason: streamFallbackReason,
+  });
+
   const pathSource =
-    playbackSource === "preview"
-      ? "preview_folder"
-      : mediaPath && mediaPath !== product.storage_path
-        ? trackSlug
-          ? "catalog_tracks"
-          : "media_assets"
-        : "products.storage_path";
+    playbackSource === "stream"
+      ? streamSource || "stream_key"
+      : playbackSource === "preview"
+        ? "preview_folder"
+        : mediaPath && mediaPath !== product.storage_path
+          ? trackSlug
+            ? "catalog_tracks"
+            : "media_assets"
+          : "products.storage_path";
 
   return {
     key: audioKey,
     source: pathSource,
     playbackSource,
+    resolverResult,
+    resolverDurationMs,
+    streamFallbackReason: streamFallbackReason || undefined,
     entityFolder: entityFolder.replace(/\/$/, "") || folderKey,
     productId: product.id,
   };

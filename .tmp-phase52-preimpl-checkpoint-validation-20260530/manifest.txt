@@ -1,0 +1,65 @@
+# Phase 5.2 Pre-Implementation Checkpoint Validation — Manifest
+# Generated: 2026-05-30
+# Repo: /Users/recharge/artist-platform
+
+## Deliverables
+
+01-application-recovery-report.md
+02-data-recovery-report.md
+03-media-recovery-report.md
+04-recovery-callback-report.md
+05-feature-flag-rollback-report.md
+report.md
+remediation-plan.md
+manifest.txt
+
+## Audit inputs (read-only)
+
+docs/foundation/FRONTEND_RECOVERY_PROTOCOL.md
+docs/foundation/FRONTEND_FOUNDATION_BASELINE.md
+docs/foundation/recovery-anchor.json
+PROJECT_GUARDRAILS.md
+scripts/recovery/recover-foundation.mjs
+scripts/recovery/verify-foundation.mjs
+scripts/recovery/create-frontend-checkpoint.mjs
+scripts/recovery/lib/anchor.mjs
+scripts/recovery/lib/env-check.mjs
+scripts/frontend-foundation-smoke.mjs
+src/system/recovery/
+src/lib/playback/resolve-playback-key.js
+src/lib/media/canonical-catalog.js
+src/app/api/account/state/route.js
+src/app/api/catalog/hydrate/route.js
+supabase/migrations/
+.tmp-phase5-hybrid-architecture-20260530/08-rollback-plan.md
+.tmp-phase51-readiness-validation-20260530/report.md
+.tmp-phase51-readiness-validation-20260530/09-rollback-plan.md
+
+## Git refs examined
+
+e8402d8167c865d3522653d79082dc4a8710946b  HEAD (Phase 5.1 docs)
+23f77e4796f08d923a2e92b982fed0c1a1ac60c4  Phase 4.8 playback fast-path
+0866f9923e43acf62a13f95e73e1538becc7741f  foundation-stable-v3 (stale)
+48f97dde8dc71967c4610991fb55797307961b9a  recovery-anchor.json commit (stale)
+ce6ae20e34fd7e1bf1278d5f6da5c07fb7fee15c  foundation-stable-v1 (sacred UI)
+
+## Commands run
+
+npm run verify:foundation -- --dry-run
+npm run recover:foundation -- --dry-run
+npm run test:foundation
+git status --short src/
+
+## Verdict summary
+
+Layer 1 Application Recovery:     FAIL
+Layer 2 Data Recovery:          CONDITIONAL PASS
+Layer 3 Media Recovery:           PASS
+Recovery Callback Validation:   CONDITIONAL PASS
+Feature Flag Rollback:          CONDITIONAL PASS
+
+Authorization: NOT AUTHORIZED
+
+## Zip output
+
+/Users/recharge/Downloads/phase52-preimpl-checkpoint-validation-20260530.zip

@@ -188,6 +188,24 @@ export function clearEntityResolverCache() {
 /** @alias clearEntityResolverCache — plural form for centralized invalidation. */
 export const clearEntityResolverCaches = clearEntityResolverCache;
 
+/**
+ * Resolve a registered stream object key when it exists in R2.
+ * Returns null on missing/invalid keys — never throws.
+ *
+ * @param {string | null | undefined} streamKey
+ * @returns {Promise<string | null>}
+ */
+export async function resolveStreamAssetKey(streamKey) {
+  const key = String(streamKey || "").replace(/^\//, "").trim();
+  if (!key || key.endsWith("/")) return null;
+  try {
+    if (await headR2ObjectKey(key)) return key;
+  } catch {
+    /* master fallback — stream miss must not interrupt playback */
+  }
+  return null;
+}
+
 /** @alias resolveAudioFile */
 export const resolveAudio = resolveAudioFile;
 

@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "deploy:prod": "vercel deploy --prod --yes",
     "test:foundation": "node scripts/frontend-foundation-smoke.mjs",
+    "test:playback-resolver-fallback": "node --import ./scripts/register-alias.mjs scripts/test-playback-resolver-fallback.mjs",
+    "backfill:stream-assets": "node --import ./scripts/register-alias.mjs scripts/backfill-stream-assets.mjs",
     "check:frontend-guardrails": "node scripts/check-frontend-guardrails.mjs",
     "verify:foundation": "node scripts/recovery/verify-foundation.mjs",
     "recover:foundation": "node scripts/recovery/recover-foundation.mjs",

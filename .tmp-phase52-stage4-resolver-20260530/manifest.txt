@@ -1,0 +1,19 @@
+Phase 5.2 — Stage 4: Playback Resolver Extension
+Generated: 2026-05-30
+
+report.md
+manifest.txt
+
+Files created:
+  src/lib/playback/resolve-stream-playback.js
+  src/lib/playback/playback-resolver-diagnostics.js
+  scripts/test-playback-resolver-fallback.mjs
+  scripts/alias-loader.mjs
+  scripts/register-alias.mjs
+
+Files modified:
+  src/lib/playback/resolve-playback-key.js
+  src/lib/media/entity-resolver.js
+  src/app/api/library/stream/route.js
+
+STOP — awaiting Stage 5 approval (backfill)

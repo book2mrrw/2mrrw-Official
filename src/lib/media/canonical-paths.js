@@ -5,6 +5,7 @@ import {
   AUDIO_ROOT,
   IMAGE_ROOT,
   PREVIEW_ROOT,
+  STREAM_ROOT,
   VIDEO_ROOT,
 } from "@/lib/media/constants/storage-domains";
 import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
@@ -85,6 +86,84 @@ export function resolveStoragePath(releaseType, releaseSlug, trackSlug, albumSlu
   }
 
   return `${AUDIO_ROOT}/${folder}/${release}/`;
+}
+
+/** Default stream container extension (AAC-LC in MP4). */
+export const DEFAULT_STREAM_EXT = "m4a";
+
+/** Optional HQ tier filename suffix — `{slug}_192.m4a` @ 192 kbps. */
+export const STREAM_HQ_FILENAME_SUFFIX = "_192";
+
+/**
+ * Stream entity folder — mirrors {@link resolveStoragePath} under `streaming/`.
+ * @param {ReleaseCategory | string} releaseType
+ * @param {string} releaseSlug
+ * @param {string} [trackSlug]
+ * @param {string} [albumSlug]
+ */
+export function resolveStreamPath(releaseType, releaseSlug, trackSlug, albumSlug) {
+  const folder = releaseFolder(releaseType);
+  if (!folder) return "";
+  const release = cleanSegment(releaseSlug);
+  if (!release) return "";
+
+  if (folder === "mixtapes-and-eps" || folder === "albums") {
+    const project = cleanSegment(albumSlug || releaseSlug);
+    const track = albumSlug ? release : cleanSegment(trackSlug);
+    if (track) {
+      return `${STREAM_ROOT}/${folder}/${project}/${track}/`;
+    }
+    return `${STREAM_ROOT}/${folder}/${project}/`;
+  }
+
+  return `${STREAM_ROOT}/${folder}/${release}/`;
+}
+
+/**
+ * Deterministic stream filename for an entity slug.
+ * @param {string} slug
+ * @param {{ hq?: boolean, ext?: string }} [options]
+ */
+export function streamFilenameFromSlug(slug, options = {}) {
+  const safe = cleanSegment(slug);
+  if (!safe) return "";
+  const ext = options.ext ?? DEFAULT_STREAM_EXT;
+  const suffix = options.hq ? STREAM_HQ_FILENAME_SUFFIX : "";
+  return `${safe}${suffix}.${ext}`;
+}
+
+/**
+ * Full R2 stream object key — entity folder + deterministic filename.
+ * Singles/features use release slug; album tracks use track slug for filename.
+ *
+ * @param {ReleaseCategory | string} releaseType
+ * @param {string} releaseSlug — release slug (single/feature) or track slug for collections
+ * @param {string} [trackSlug]
+ * @param {string} [albumSlug]
+ * @param {{ hq?: boolean, ext?: string }} [options]
+ */
+export function resolveStreamKey(releaseType, releaseSlug, trackSlug, albumSlug, options = {}) {
+  const folder = releaseFolder(releaseType);
+  if (!folder) return "";
+  const streamFolder = resolveStreamPath(releaseType, releaseSlug, trackSlug, albumSlug);
+  if (!streamFolder) return "";
+
+  let filenameSlug = cleanSegment(releaseSlug);
+  if (folder === "mixtapes-and-eps" || folder === "albums") {
+    filenameSlug = albumSlug ? cleanSegment(releaseSlug) : cleanSegment(trackSlug || releaseSlug);
+  }
+  const filename = streamFilenameFromSlug(filenameSlug, options);
+  if (!filename) return "";
+  return `${streamFolder}${filename}`;
+}
+
+/** Strip streaming/ prefix for product-row metadata (mirrors storagePathForProductRow). */
+export function streamPathForProductRow(fullPath) {
+  let normalized = normalizeToEntityFolder(fullPath).replace(/^\//, "");
+  if (normalized.startsWith(`${STREAM_ROOT}/`)) {
+    normalized = normalized.slice(`${STREAM_ROOT}/`.length);
+  }
+  return normalized;
 }
 
 function nestedCollectionFolder(folder, slug, trackSlug, albumSlug) {

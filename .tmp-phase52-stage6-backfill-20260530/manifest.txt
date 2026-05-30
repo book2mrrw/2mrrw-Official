@@ -1,0 +1,27 @@
+Phase 5.2 Stage 6 — Catalog Backfill Tooling
+Date: 2026-05-30
+Recovery anchor: bac9eb71f93dcbc0bee4099bf6d80ddaac29e049 (unchanged)
+
+Created:
+  scripts/backfill-stream-assets.mjs
+  .tmp-phase52-stage6-backfill-20260530/report.md
+  .tmp-phase52-stage6-backfill-20260530/backfill-usage.md
+  .tmp-phase52-stage6-backfill-20260530/manifest.txt
+
+Modified:
+  src/lib/media/stream-upload-pipeline.js
+  package.json
+  .tmp-phase52-implementation-20260530/report.md
+
+Not modified (prohibited):
+  AudioContext.js, playback routes, entitlements, audiovisual, recovery anchor
+  Production env flags (remain OFF)
+  Auto-run on deploy/startup
+
+Validation:
+  npm run build — PASS
+  npm run test:foundation — PASS
+  npm run verify:foundation -- --quick — PASS
+  npm run backfill:stream-assets -- --yes --dry-run — PASS (36 candidates)
+
+STOP: Awaiting Stage 7 approval (staging canary / prod rollout)

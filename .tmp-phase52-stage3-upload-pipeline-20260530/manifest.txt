@@ -1,0 +1,41 @@
+Phase 5.2 — Stage 3: Upload Pipeline Extension
+Generated: 2026-05-30
+
+report.md
+manifest.txt
+
+Created:
+  src/lib/media/stream-upload-pipeline.js
+  src/lib/media/stream-transcode.js
+  src/lib/media/r2-object-transfer.js
+
+Modified:
+  src/app/api/admin/sync/catalog/route.js
+
+Stage 1 dependencies (unchanged):
+  src/lib/feature-flags/hybrid-streaming.js
+  src/lib/feature-flags/index.js
+
+Stage 2 dependencies (unchanged):
+  src/lib/media/stream-asset-schema.js
+  src/lib/media/stream-registration-validation.js
+  src/lib/media/stream-registration.js
+  src/lib/media/canonical-paths.js
+  src/lib/media/canonical-catalog.js
+  src/lib/media/constants/storage-domains.js
+  supabase/migrations/20260530160000_stream_asset_registration.sql
+
+Prohibited — confirmed unchanged:
+  src/lib/playback/resolve-playback-key.js
+  src/context/AudioContext.js
+  src/lib/music-access.js
+  src/app/api/library/stream/*
+  src/app/api/media/preview/*
+  src/app/api/media/playback/*
+  docs/foundation/recovery-anchor.json
+
+Env gates (both required for transcode):
+  HYBRID_STREAMING_ENABLED=1
+  AUTO_GENERATE_STREAM_ASSETS=1
+
+STOP — awaiting Stage 4 approval

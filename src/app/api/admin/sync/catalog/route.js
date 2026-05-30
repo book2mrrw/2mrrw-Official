@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeStoragePathForStorefront } from "@/lib/sync/normalize-storage-path";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { isAutoGenerateStreamAssetsEnabled } from "@/lib/feature-flags";
+import { maybeGenerateStreamAfterCatalogSync } from "@/lib/media/stream-upload-pipeline";
 
 function authorize(req) {
   const secret = req.headers.get("x-seed-secret");
@@ -48,6 +50,9 @@ export async function POST(req) {
     }
 
     let productUpserted = 0;
+    const streamAutoGenerateEnabled = isAutoGenerateStreamAssetsEnabled();
+    const streamResults = [];
+
     for (const row of productRows) {
       if (!row?.slug) continue;
       const meta = row.metadata || {};
@@ -84,6 +89,30 @@ export async function POST(req) {
         continue;
       }
       productUpserted += 1;
+
+      if (streamAutoGenerateEnabled && storagePath) {
+        try {
+          const streamOutcome = await maybeGenerateStreamAfterCatalogSync(admin, {
+            slug: row.slug,
+            storage_path: storagePath,
+            product_type: row.product_type,
+            metadata: payload.metadata,
+          });
+          if (!streamOutcome.skipped || streamOutcome.reason !== "auto_generate_disabled") {
+            streamResults.push({ slug: row.slug, ...streamOutcome });
+          }
+        } catch (streamErr) {
+          console.error("[admin/sync/catalog] stream generation error", {
+            slug: row.slug,
+            message: streamErr?.message,
+          });
+          streamResults.push({
+            slug: row.slug,
+            ok: false,
+            error: streamErr?.message || "stream_generation_failed",
+          });
+        }
+      }
     }
 
     return NextResponse.json({
@@ -91,6 +120,9 @@ export async function POST(req) {
       vaultUpserted,
       productUpserted,
       failed,
+      ...(streamAutoGenerateEnabled
+        ? { streamAutoGenerateEnabled: true, streamResults }
+        : {}),
       reason: body.reason || null,
       syncedAt: new Date().toISOString(),
     });

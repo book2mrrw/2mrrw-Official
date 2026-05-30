@@ -1,0 +1,24 @@
+Phase 5.2 — Stage 1 Feature Flags Deliverables
+Generated: 2026-05-30
+
+report.md
+manifest.txt
+
+Stage: 1 of 7 (Feature Flags only)
+Recovery anchor: bac9eb71f93dcbc0bee4099bf6d80ddaac29e049 (unchanged)
+
+Files created:
+  src/lib/feature-flags/hybrid-streaming.js
+  src/lib/feature-flags/index.js
+
+Flags (all default OFF):
+  HYBRID_STREAMING_ENABLED
+  STREAM_PLAYBACK_PREFERRED
+  AUTO_GENERATE_STREAM_ASSETS
+
+Validation:
+  npm run build: PASS
+  npm run test:foundation: PASS
+  npm run verify:foundation -- --quick: PASS
+
+Status: STOPPED — awaiting Stage 2 approval
