@@ -16,6 +16,8 @@ import {
 } from "@/lib/media/canonical-catalog";
 import { clearEntityResolverCaches } from "@/lib/media/entity-resolver";
 import { clearMediaAvailabilityCache } from "@/lib/media/availability-cache";
+import { clearPlaybackKeyCache } from "@/lib/playback/resolve-playback-key";
+import { clearPreviewResolutionCache } from "@/lib/playback/preview-resolution-cache";
 import { clearStreamUrlCache } from "@/lib/playback/stream-url-cache";
 
 /** Clear all resolver memoization used on the playback path (does not touch localStorage). */
@@ -23,6 +25,8 @@ export function clearMediaResolverCaches() {
   clearEntityResolverCaches();
   clearMediaAvailabilityCache();
   clearStreamUrlCache();
+  clearPlaybackKeyCache();
+  clearPreviewResolutionCache();
   clearCanonicalCatalogCache();
 }
 

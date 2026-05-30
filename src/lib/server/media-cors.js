@@ -20,7 +20,7 @@ export function mediaCorsHeaders(req) {
     "Access-Control-Allow-Headers":
       "Range, Content-Type, Authorization, Origin, Accept",
     "Access-Control-Expose-Headers":
-      "Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified",
+      "Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified, Server-Timing, X-Playback-Timing",
   };
   if (origin && MEDIA_CORS_ORIGINS.has(origin)) {
     headers["Access-Control-Allow-Origin"] = origin;

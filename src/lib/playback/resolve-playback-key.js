@@ -4,6 +4,16 @@ import { normalizeEntityFolderPath, resolveAudio, resolvePreview } from "@/lib/m
 import { resolvePreviewPath, resolveStoragePath, isEntityPreviewFolderPath } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/normalize-release-type";
 
+const PLAYBACK_KEY_TTL_MS = 60_000;
+/** @type {Map<string, { expiresAt: number, value: object | null }>} */
+const playbackKeyCache = new Map();
+/** @type {Map<string, Promise<object | null>>} */
+const playbackKeyInflight = new Map();
+
+function playbackCacheKey(slug, trackSlug) {
+  return trackSlug ? `${slug}:${trackSlug}` : slug;
+}
+
 const FULL_AUDIO_ROLES = ["full_audio", "master_audio", "audio", "audio_full_song", "track_audio"];
 
 function pickAssetPath(assetRow) {
@@ -137,6 +147,36 @@ export async function resolvePlaybackKey(admin, productSlug, options = {}) {
   const slug = String(productSlug || "").trim();
   if (!slug) return null;
 
+  const trackSlug = options.trackSlug ? String(options.trackSlug).trim() : null;
+  const cacheKey = playbackCacheKey(slug, trackSlug);
+  const now = Date.now();
+  const hit = playbackKeyCache.get(cacheKey);
+  if (hit && hit.expiresAt > now) return hit.value;
+
+  if (playbackKeyInflight.has(cacheKey)) return playbackKeyInflight.get(cacheKey);
+
+  const promise = resolvePlaybackKeyUncached(admin, slug, trackSlug)
+    .then((value) => {
+      playbackKeyCache.set(cacheKey, { value, expiresAt: now + PLAYBACK_KEY_TTL_MS });
+      playbackKeyInflight.delete(cacheKey);
+      return value;
+    })
+    .catch((err) => {
+      playbackKeyInflight.delete(cacheKey);
+      throw err;
+    });
+
+  playbackKeyInflight.set(cacheKey, promise);
+  return promise;
+}
+
+/** Clear in-memory playback key cache (tests / hot reload). */
+export function clearPlaybackKeyCache() {
+  playbackKeyCache.clear();
+  playbackKeyInflight.clear();
+}
+
+async function resolvePlaybackKeyUncached(admin, slug, trackSlug) {
   const { data: product, error } = await admin
     .from("products")
     .select("id, slug, storage_path, preview_path, product_type, content_type, content_id, metadata")
@@ -150,7 +190,6 @@ export async function resolvePlaybackKey(admin, productSlug, options = {}) {
   if (!product) return null;
 
   const canonical = getCanonicalReleaseBySlug(slug);
-  const trackSlug = options.trackSlug ? String(options.trackSlug).trim() : null;
   const releaseType = inferProductReleaseType(product);
   const mediaPath = await resolveStoragePathFromProduct(admin, product, trackSlug);
   let storagePath =
@@ -211,5 +250,6 @@ export async function resolvePlaybackKey(admin, productSlug, options = {}) {
     source: pathSource,
     playbackSource,
     entityFolder: entityFolder.replace(/\/$/, "") || folderKey,
+    productId: product.id,
   };
 }

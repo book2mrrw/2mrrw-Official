@@ -21,6 +21,8 @@ export const WAVEFORM_EXTENSIONS = [".json", ".dat", ".peak"];
 const CACHE_TTL_MS = 60_000;
 /** @type {Map<string, { expiresAt: number, value: string | null }>} */
 const discoveryCache = new Map();
+/** @type {Map<string, Promise<string | null>>} */
+const discoveryInflight = new Map();
 
 function cacheKey(prefix, kind) {
   return `${kind}:${normalizeToEntityFolder(prefix)}`;
@@ -59,9 +61,21 @@ async function discoverInFolder(folder, extensions, kind) {
   const cached = readCache(key);
   if (cached !== undefined) return cached;
 
-  const discovered = await discoverFileByExtensions(entityFolder, extensions);
-  writeCache(key, discovered);
-  return discovered;
+  if (discoveryInflight.has(key)) return discoveryInflight.get(key);
+
+  const promise = discoverFileByExtensions(entityFolder, extensions)
+    .then((discovered) => {
+      writeCache(key, discovered);
+      discoveryInflight.delete(key);
+      return discovered;
+    })
+    .catch((err) => {
+      discoveryInflight.delete(key);
+      throw err;
+    });
+
+  discoveryInflight.set(key, promise);
+  return promise;
 }
 
 /**
@@ -168,6 +182,7 @@ export async function listEntityFolderObjects(entityFolder) {
 /** Clear in-memory discovery cache (tests / hot reload). */
 export function clearEntityResolverCache() {
   discoveryCache.clear();
+  discoveryInflight.clear();
 }
 
 /** @alias clearEntityResolverCache — plural form for centralized invalidation. */

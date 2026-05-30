@@ -20,6 +20,7 @@ import { clearMediaResolverCaches } from "@/lib/media/cache-invalidation";
 import { proxySignedR2Get } from "@/lib/server/r2-stream-proxy";
 import { libraryStreamRedirectSrc } from "@/lib/music-access";
 import { isAdminUser } from "@/lib/auth/constants";
+import { createServerTiming } from "@/lib/server/server-timing";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,10 @@ function logStreamR2Env(context) {
   });
 }
 
+function withStreamTiming(req, response, timing) {
+  return applyMediaCors(req, timing.apply(response));
+}
+
 async function validateStreamEntitlement(req, user, slug) {
   if (isAdminUser(user)) return null;
   const canStream = await userCanStreamProduct(user.id, slug, user);
@@ -53,27 +58,12 @@ async function validateStreamEntitlement(req, user, slug) {
   return null;
 }
 
-async function buildStreamResponse(req, user, slug, { force = false, trackSlug = null } = {}) {
+async function buildStreamResponse(req, user, slug, { force = false, trackSlug = null, timing } = {}) {
   const denied = await validateStreamEntitlement(req, user, slug);
+  timing?.mark("entitlement");
   if (denied) return denied;
 
   const admin = createAdminClient();
-  const productId = await resolveProductIdBySlug(admin, slug);
-  if (!productId) {
-    return applyMediaCors(req, NextResponse.json({ error: "Product not found" }, { status: 404 }));
-  }
-
-  if (!force) {
-    const active = await findActiveStreamSession(admin, user.id, productId);
-    if (active?.session_id) {
-      await clearStreamSessionsForUserProduct(admin, user.id, productId);
-    }
-  } else {
-    await clearStreamSessionsForUserProduct(admin, user.id, productId);
-    if (process.env.NODE_ENV === "development") {
-      clearMediaResolverCaches();
-    }
-  }
 
   let resolved = null;
   try {
@@ -92,6 +82,14 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
       )
     );
   }
+  timing?.mark("resolve");
+
+  const productId = resolved?.productId || (await resolveProductIdBySlug(admin, slug));
+  timing?.mark("product");
+  if (!productId) {
+    return applyMediaCors(req, NextResponse.json({ error: "Product not found" }, { status: 404 }));
+  }
+
   if (!resolved?.key) {
     logStreamR2Env("no_playback_key");
     console.warn("[library/stream] no audio in entity folder", {
@@ -108,18 +106,33 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
     );
   }
 
+  if (!force) {
+    const active = await findActiveStreamSession(admin, user.id, productId);
+    if (active?.session_id) {
+      await clearStreamSessionsForUserProduct(admin, user.id, productId);
+    }
+  } else {
+    await clearStreamSessionsForUserProduct(admin, user.id, productId);
+    if (process.env.NODE_ENV === "development") {
+      clearMediaResolverCaches();
+    }
+  }
+  timing?.mark("session");
+
   logStreamR2Env("signing");
   const sessionId = await createStreamSession(admin, user.id, productId);
   const streamEventId = await insertStreamEvent(admin, user.id, productId);
 
-  const url = await getOrCreateStreamSignedUrl(user.id, slug, () =>
+  const { url, cacheHit } = await getOrCreateStreamSignedUrl(user.id, slug, () =>
     createR2SignedGetUrl(resolved.key, STREAM_SIGNED_URL_TTL_SECONDS),
     trackSlug || null
   );
+  timing?.mark("sign", cacheHit ? "cache_hit" : undefined);
 
   const redirect = req.nextUrl.searchParams.get("redirect") === "1";
   if (redirect) {
-    return proxySignedR2Get(req, url);
+    const proxied = await proxySignedR2Get(req, url, { timing });
+    return proxied;
   }
 
   const proxySrc = libraryStreamRedirectSrc(slug, {
@@ -143,38 +156,50 @@ export async function HEAD(req) {
 }
 
 export async function GET(req) {
+  const timing = createServerTiming("stream");
   const slug = req.nextUrl.searchParams.get("slug");
   const trackSlug = req.nextUrl.searchParams.get("trackSlug");
-  const redirect = req.nextUrl.searchParams.get("redirect") === "1";
   if (!slug) {
-    return applyMediaCors(req, NextResponse.json({ error: "slug required" }, { status: 400 }));
+    return withStreamTiming(
+      req,
+      NextResponse.json({ error: "slug required" }, { status: 400 }),
+      timing
+    );
   }
 
-  const user = await getFanSessionUser() ?? await getGuestUser();
+  const user = (await getFanSessionUser()) ?? (await getGuestUser());
+  timing.mark("auth");
   if (!user) {
-    return applyMediaCors(req, NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
+    return withStreamTiming(
+      req,
+      NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+      timing
+    );
   }
 
   const force = req.nextUrl.searchParams.get("force") === "true";
 
   try {
     logStreamR2Env("get");
-    return await buildStreamResponse(req, user, slug, {
+    const response = await buildStreamResponse(req, user, slug, {
       force,
       trackSlug: trackSlug ? String(trackSlug).trim() : null,
+      timing,
     });
+    return withStreamTiming(req, response, timing);
   } catch (err) {
     logStreamR2Env("get_error");
     console.error("[library/stream] GET failed", {
       message: err?.message,
       slug,
     });
-    return applyMediaCors(
+    return withStreamTiming(
       req,
       NextResponse.json(
         { error: "Stream unavailable", code: "MEDIA_UNAVAILABLE" },
         { status: 500 }
-      )
+      ),
+      timing
     );
   }
 }
@@ -186,7 +211,7 @@ export async function DELETE(req) {
     return applyMediaCors(req, NextResponse.json({ error: "slug required" }, { status: 400 }));
   }
 
-  const user = await getFanSessionUser() ?? await getGuestUser();
+  const user = (await getFanSessionUser()) ?? (await getGuestUser());
   if (!user) {
     return applyMediaCors(req, NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
   }

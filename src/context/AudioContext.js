@@ -1467,9 +1467,16 @@ export function AudioProvider({ children }) {
       cover: presentation.cover,
     };
 
-    preloadCoverImage(nextTrack.cover || nextTrack.baseCover, {
-      coverArtType: nextTrack.coverArtType,
-    });
+    const coverToPreload = nextTrack.cover || nextTrack.baseCover;
+    const coverPreloadOptions = { coverArtType: nextTrack.coverArtType };
+    const scheduleCoverPreload = () => {
+      preloadCoverImage(coverToPreload, coverPreloadOptions);
+    };
+    const isMobileViewport =
+      typeof window !== "undefined" &&
+      (window.matchMedia?.("(max-width: 768px)")?.matches ||
+        /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || ""));
+
     perfMark(MARKS.AUDIO_START_LATENCY_START);
     logPlayback("play_track", { trackId: nextTrack.id, source: nextTrack.source });
     const audio = audioRef.current;
@@ -1501,6 +1508,12 @@ export function AudioProvider({ children }) {
         playbackState: "idle",
       });
       return false;
+    }
+
+    if (!isMobileViewport && coverToPreload) {
+      scheduleCoverPreload();
+    } else if (isMobileViewport && coverToPreload) {
+      audio.addEventListener("canplay", scheduleCoverPreload, { once: true });
     }
 
     streamErrorRetriedRef.current = false;

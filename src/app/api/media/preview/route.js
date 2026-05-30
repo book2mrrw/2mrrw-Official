@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
 import { getPublicR2Url } from "@/lib/storage/r2";
 import {
+  isConcreteMediaKey,
   resolveArtwork,
   resolvePreviewFile,
   resolveVideo,
@@ -9,6 +10,11 @@ import {
 } from "@/lib/media/entity-resolver";
 import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
 import { extractSlugFromFlatPreviewKey, normalizeToEntityFolder } from "@/lib/media/canonical-paths";
+import { createServerTiming } from "@/lib/server/server-timing";
+import {
+  getOrResolvePreviewMedia,
+  previewCacheKey,
+} from "@/lib/playback/preview-resolution-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +35,44 @@ function previewLegacyCandidates(entityFolder, legacy) {
   return [...new Set(candidates.filter(Boolean))];
 }
 
+function slugFromPreviewFolder(entityFolder) {
+  return String(entityFolder || "").match(
+    /\/(singles|features|albums|mixtapes-and-eps)\/([^/]+)\/?$/
+  )?.[2];
+}
+
+function tryCanonicalPreviewFastPath(entityFolder, legacyCandidates) {
+  const slug = slugFromPreviewFolder(entityFolder);
+  const canonical = slug ? getCanonicalReleaseBySlug(slug) : null;
+  const fastKeys = [];
+  if (canonical?.preview_legacy) fastKeys.push(String(canonical.preview_legacy).replace(/^\//, ""));
+  for (const candidate of legacyCandidates) {
+    if (candidate && isConcreteMediaKey(candidate)) fastKeys.push(String(candidate).replace(/^\//, ""));
+  }
+  for (const key of [...new Set(fastKeys)]) {
+    if (isConcreteMediaKey(key)) {
+      return { key, source: "canonical_fast" };
+    }
+  }
+  return null;
+}
+
+function previewRedirectResponse(req, key, timing) {
+  const publicUrl = getPublicR2Url(key);
+  timing?.mark("redirect");
+  return applyMediaCors(
+    req,
+    timing.apply(
+      NextResponse.redirect(publicUrl, {
+        status: 302,
+        headers: {
+          "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+        },
+      })
+    )
+  );
+}
+
 export async function OPTIONS(req) {
   return mediaCorsPreflightResponse(req);
 }
@@ -38,6 +82,7 @@ export async function OPTIONS(req) {
  * Supports legacy flat keys via ?legacy= during migration.
  */
 export async function GET(req) {
+  const timing = createServerTiming("preview");
   const folder = req.nextUrl.searchParams.get("folder");
   const legacy = req.nextUrl.searchParams.get("legacy");
   const type = req.nextUrl.searchParams.get("type") || "preview";
@@ -45,7 +90,7 @@ export async function GET(req) {
   if (!folder && !legacy) {
     return applyMediaCors(
       req,
-      NextResponse.json({ error: "folder or legacy required" }, { status: 400 })
+      timing.apply(NextResponse.json({ error: "folder or legacy required" }, { status: 400 }))
     );
   }
 
@@ -56,16 +101,28 @@ export async function GET(req) {
       : legacy
         ? [String(legacy).replace(/^\//, "")]
         : [];
+
+  if (type === "preview") {
+    const fastPath = tryCanonicalPreviewFastPath(entityFolder, legacyCandidates);
+    timing.mark("fastpath");
+    if (fastPath?.key) {
+      return previewRedirectResponse(req, fastPath.key, timing);
+    }
+  }
+
+  const cacheKey = previewCacheKey(entityFolder, type, legacyCandidates.join("|"));
   let resolved = null;
 
   try {
-    if (type === "video") {
-      resolved = await resolveWithLegacyFallback(entityFolder, legacyCandidates, resolveVideo);
-    } else if (type === "artwork") {
-      resolved = await resolveWithLegacyFallback(entityFolder, legacyCandidates, resolveArtwork);
-    } else {
-      resolved = await resolveWithLegacyFallback(entityFolder, legacyCandidates, resolvePreviewFile);
-    }
+    resolved = await getOrResolvePreviewMedia(cacheKey, async () => {
+      if (type === "video") {
+        return resolveWithLegacyFallback(entityFolder, legacyCandidates, resolveVideo);
+      }
+      if (type === "artwork") {
+        return resolveWithLegacyFallback(entityFolder, legacyCandidates, resolveArtwork);
+      }
+      return resolveWithLegacyFallback(entityFolder, legacyCandidates, resolvePreviewFile);
+    });
   } catch (err) {
     console.error("[media/preview] discovery failed", {
       folder: entityFolder,
@@ -75,18 +132,13 @@ export async function GET(req) {
     });
   }
 
+  timing.mark("resolve", resolved?.cacheHit ? "cache_hit" : undefined);
   if (!resolved?.key) {
-    return applyMediaCors(req, NextResponse.json({ error: "Media not found" }, { status: 404 }));
+    return applyMediaCors(
+      req,
+      timing.apply(NextResponse.json({ error: "Media not found" }, { status: 404 }))
+    );
   }
 
-  const publicUrl = getPublicR2Url(resolved.key);
-  return applyMediaCors(
-    req,
-    NextResponse.redirect(publicUrl, {
-      status: 302,
-      headers: {
-        "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
-      },
-    })
-  );
+  return previewRedirectResponse(req, resolved.key, timing);
 }

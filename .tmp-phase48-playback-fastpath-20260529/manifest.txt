@@ -1,0 +1,23 @@
+Phase 4.8 Playback Fast-Path Implementation
+Generated: 2026-05-30
+
+report.md
+files-changed.md
+validation-results.md
+remaining-bottlenecks.md
+rollback-paths.md
+curl-after.txt
+manifest.txt
+
+Source changes (not in zip manifest — see files-changed.md):
+src/lib/server/server-timing.js
+src/lib/playback/preview-resolution-cache.js
+src/app/api/library/stream/route.js
+src/app/api/media/preview/route.js
+src/lib/server/r2-stream-proxy.js
+src/lib/server/media-cors.js
+src/lib/playback/resolve-playback-key.js
+src/lib/playback/stream-url-cache.js
+src/lib/media/entity-resolver.js
+src/lib/media/cache-invalidation.js
+src/context/AudioContext.js

@@ -3,13 +3,17 @@ import { applyMediaCors } from "@/lib/server/media-cors";
 /**
  * Proxy a presigned R2 GET through Next.js so the browser never hits
  * *.r2.cloudflarestorage.com (S3 endpoint ignores dashboard CORS).
+ * @param {Request} req
+ * @param {string} signedUrl
+ * @param {{ timing?: ReturnType<import("@/lib/server/server-timing").createServerTiming> }} [options]
  */
-export async function proxySignedR2Get(req, signedUrl) {
+export async function proxySignedR2Get(req, signedUrl, { timing } = {}) {
   const rangeHeader = req.headers.get("range") || req.headers.get("Range");
   const fetchHeaders = rangeHeader ? { Range: rangeHeader } : {};
   const method = req.method === "HEAD" ? "HEAD" : "GET";
 
   const r2Response = await fetch(signedUrl, { method, headers: fetchHeaders });
+  timing?.mark("cdn");
 
   const headers = {
     "Content-Type": r2Response.headers.get("Content-Type") ?? "audio/mpeg",

@@ -1,0 +1,6 @@
+# Phase 4.8 curl measurements 2026-05-30T18:50:08Z
+# Local server http://127.0.0.1:3099 (post Phase 4.8 changes)
+
+## pass=cold
+### preview-hour-glass
+URL: http://127.0.0.1:3099/api/media/preview?folder=previews/singles/hour-glass/
