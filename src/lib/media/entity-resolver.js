@@ -211,6 +211,9 @@ export async function resolvePreview(entityFolder, legacyFallback) {
 export async function resolveVisualMedia(releaseType, slug, trackSlug, options = {}) {
   const { albumSlug, legacyVideo, legacyImage, videoFolder, imageFolder } = options;
   const normalizedType = normalizeReleaseType(releaseType);
+  if (!normalizedType) {
+    return { type: "image", key: null, url: getArtworkPlaceholderUrl("single", slug || "placeholder"), source: "placeholder" };
+  }
 
   const videoEntity =
     normalizeEntityFolderPath(videoFolder) ||

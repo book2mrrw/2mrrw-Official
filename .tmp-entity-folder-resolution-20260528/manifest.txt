@@ -1,0 +1,15 @@
+src/lib/media/entity-resolver.js
+src/lib/storage/r2.js
+src/lib/media/canonical-paths.js
+src/lib/media/canonical-catalog.js
+src/lib/playback/resolve-playback-key.js
+src/app/api/library/stream/route.js
+src/app/api/media/preview/route.js
+src/lib/music-access.js
+src/lib/music-playback.js
+src/lib/playback/stream-client.js
+src/lib/playback/stream-url-cache.js
+src/lib/media-urls.js
+src/system/recovery/signedUrlRefresher.js
+supabase/migrations/20260529130000_entity_folder_paths.sql
+report.md

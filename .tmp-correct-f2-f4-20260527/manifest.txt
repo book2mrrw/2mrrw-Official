@@ -1,0 +1,13 @@
+commit 04dc78d8766c6b018f4c8a92859bd354a0cf8099
+Author: 2mrrw <recharge@2mrrws-Vault.local>
+Date:   Wed May 27 15:41:34 2026 -0500
+
+    fix(audio): correct F2 F4 mobile gesture and resume per prompt
+    
+    Co-authored-by: Cursor <cursoragent@cursor.com>
+
+ src/app/page.js                                 | 60 +---------------------
+ src/components/audio/GlobalAudioPlayerBar.js    |  9 +---
+ src/components/preview/ImmersivePreviewModal.js | 68 +++----------------------
+ src/context/AudioContext.js                     | 46 ++---------------
+ 4 files changed, 12 insertions(+), 171 deletions(-)

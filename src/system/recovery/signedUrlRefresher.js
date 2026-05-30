@@ -1,4 +1,4 @@
-import { fetchLibraryStream, isLibraryStreamSrc, parseStreamSlugFromSrc } from "@/lib/playback/stream-client";
+import { fetchLibraryStream, isLibraryStreamSrc, parseStreamSlugFromSrc, parseStreamTrackSlugFromSrc } from "@/lib/playback/stream-client";
 import { telemetry } from "@/system/telemetry";
 
 /**
@@ -9,12 +9,16 @@ export async function refreshSignedUrlsForQueue(tracks = []) {
   const results = [];
   for (const track of tracks.slice(0, 3)) {
     const slug = track?.slug || parseStreamSlugFromSrc(track?.src);
+    const trackSlug =
+      track?.trackSlug ||
+      track?.metadata?.trackSlug ||
+      parseStreamTrackSlugFromSrc(track?.src);
     if (!slug || !isLibraryStreamSrc(track?.src || `/api/library/stream?slug=${slug}`)) {
       results.push({ trackId: track?.id, ok: true, skipped: true });
       continue;
     }
     try {
-      const data = await fetchLibraryStream(slug, { force: true });
+      const data = await fetchLibraryStream(slug, { force: true, trackSlug });
       results.push({ trackId: track?.id, ok: true, url: data?.url });
     } catch (err) {
       telemetry.log({

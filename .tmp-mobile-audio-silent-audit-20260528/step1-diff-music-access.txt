@@ -1,0 +1,12 @@
+diff --git a/src/lib/music-access.js b/src/lib/music-access.js
+index 3fb8551..99afa11 100644
+--- a/src/lib/music-access.js
++++ b/src/lib/music-access.js
+@@ -241,6 +241,7 @@ export function partitionLibraryByType(library = [], catalog = { singles: [], al
+     const type = String(item.product_type || "").toLowerCase();
+     const isAlbum =
+       type === "album" ||
++      type === "ep" ||
+       albumSlugs.has(item.slug) ||
+       (Array.isArray(item.tracks) && item.tracks.length > 1);
+     if (isAlbum) {

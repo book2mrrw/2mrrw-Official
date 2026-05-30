@@ -1,0 +1,29 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://www.2mrrw.com",
+      "https://2mrrw.com",
+      "https://artist-platform-silk.vercel.app",
+      "https://2mrrw-official.vercel.app",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000"
+    ],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": [
+      "Range",
+      "Content-Type",
+      "Authorization",
+      "Origin",
+      "Accept"
+    ],
+    "ExposeHeaders": [
+      "Accept-Ranges",
+      "Content-Length",
+      "Content-Range",
+      "Content-Type",
+      "ETag",
+      "Last-Modified"
+    ],
+    "MaxAgeSeconds": 86400
+  }
+]

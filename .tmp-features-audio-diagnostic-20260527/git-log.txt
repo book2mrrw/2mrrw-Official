@@ -1,0 +1,10 @@
+4100ee3 docs(checkpoint): frontend-checkpoint-20260527-2351 build frame of mind
+43c2fad docs(foundation): add platform build frame of mind for AI sessions
+97f2439 fix(audio): features section playback root cause
+51af6ff fix(audio): restore Features and album playback via unified track normalization
+5b4cdd3 fix(modal): stabilize singles features albums modal lifecycle and account tab
+04dc78d fix(audio): correct F2 F4 mobile gesture and resume per prompt
+627f3e7 fix(audio): mobile audio per production prompt (F1–F5)
+db88530 fix(modal): permanent mobile modal and account tab crash fixes
+0b26e4c feat(audio): position memory — resume same song, restart on track switch
+04b1c59 fix(audio): iOS mobile Safari gesture unlock at start of playTrack

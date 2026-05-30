@@ -1,0 +1,56 @@
+Probe timestamp: 2026-05-27T14:33Z-14:34Z
+
+[GET] https://www.2mrrw.com/
+HTTP/2 200
+access-control-allow-origin: *
+server: Vercel
+
+[GET] https://2mrrw.com/
+HTTP/2 307
+location: https://www.2mrrw.com/
+
+[OPTIONS] https://2mrrw-control-system.vercel.app/api/releases
+Origin: https://www.2mrrw.com
+HTTP/2 204
+access-control-allow-origin: https://www.2mrrw.com
+access-control-allow-methods: GET, POST, PATCH, PUT, DELETE, OPTIONS
+access-control-allow-credentials: true
+
+[OPTIONS] https://2mrrw-control-system.vercel.app/api/releases
+Origin: https://2mrrw.com
+HTTP/2 204
+access-control-allow-origin: https://2mrrw.com
+
+[OPTIONS] https://2mrrw-control-system.vercel.app/api/sync/stream
+Origin: https://www.2mrrw.com
+HTTP/2 204
+access-control-allow-origin: https://www.2mrrw.com
+
+[OPTIONS] https://2mrrw-control-system.vercel.app/api/sync/stream
+Origin: https://2mrrw.com
+HTTP/2 204
+access-control-allow-origin: https://2mrrw.com
+
+[OPTIONS] https://www.2mrrw.com/api/account/state
+Origin: https://2mrrw-control-system.vercel.app
+HTTP/2 204
+allow: GET, HEAD, OPTIONS
+
+[GET] https://www.2mrrw.com/api/account/state
+Origin: https://2mrrw-control-system.vercel.app
+HTTP/2 200
+content-type: application/json
+
+[OPTIONS] https://www.2mrrw.com/api/library/stream?slug=hourglass
+Origin: https://2mrrw-control-system.vercel.app
+HTTP/2 204
+
+[GET] https://www.2mrrw.com/api/library/stream?slug=hourglass
+Origin: https://2mrrw-control-system.vercel.app
+HTTP/2 401
+content-type: application/json
+
+[OPTIONS] https://2mrrw.com/api/account/state
+Origin: https://2mrrw-control-system.vercel.app
+HTTP/2 307
+location: https://www.2mrrw.com/api/account/state

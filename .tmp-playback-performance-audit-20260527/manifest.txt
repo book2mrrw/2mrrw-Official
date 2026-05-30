@@ -1,0 +1,38 @@
+playback-performance-audit-20260527
+Generated: 2026-05-28
+Repo: /Users/recharge/artist-platform
+Mode: read-only audit + implementation plan (no code changes)
+
+Files:
+  report.md
+  01-playback-flow-map.md
+  02-blockers-before-play.md
+  03-streaming-vs-blob.md
+  04-r2-cdn-headers.md
+  05-signed-url-caching.md
+  06-preload-strategy.md
+  07-react-remount-architecture.md
+  08-safari-mobile.md
+  09-network-waterfall.md
+  10-singles-vs-features.md
+  11-implementation-plan.md
+  raw-curl-probes.txt
+  manifest.txt
+
+Key source files reviewed:
+  src/context/AudioContext.js
+  src/lib/playback/stream-client.js
+  src/lib/music-playback.js
+  src/lib/music-access.js
+  src/app/api/library/stream/route.js
+  src/components/audio/GlobalAudioPlayerBar.js
+  src/components/preview/ImmersivePreviewModal.js
+  src/components/music/ReleaseCardPlayButton.js
+  src/app/page.js (open handlers)
+  src/lib/control-system/playback.js
+  public/sw.js
+  src/lib/commerce/catalog.js
+  src/lib/playback/stream-url-cache.js
+  src/media/preloader/MediaPreloader.js
+
+Reference commit: 97f2439 (features playback / previewSrc fix)

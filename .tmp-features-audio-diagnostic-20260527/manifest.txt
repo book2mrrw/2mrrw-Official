@@ -1,0 +1,29 @@
+features-audio-diagnostic-20260527
+Generated: 2026-05-27
+Repo: /Users/recharge/artist-platform
+Mode: read-only audit (per Downloads prompt)
+Context commits: 97f2439, 51af6ff
+
+Files:
+  report.md          — full entitlement & audio diagnostic (7 sections + appendices)
+  manifest.txt       — this file
+  git-log.txt        — git log --oneline -10
+  git-diff-head.txt  — git diff HEAD~1..HEAD (audio paths; empty at audit time)
+
+Key source files read:
+  src/lib/commerce/entitlements.js
+  src/lib/music-access.js
+  src/lib/music-playback.js
+  src/app/api/library/stream/route.js
+  src/context/AudioContext.js
+  src/lib/playback/stream-client.js
+  src/lib/auth/constants.js
+  src/lib/playback/resolve-playback-key.js
+  src/components/home/catalogMedia.js
+  src/app/api/account/state/route.js
+  src/app/page.js (singles/features/albums constants + play handlers)
+  src/components/home/FeaturesRail.js
+  src/components/music/ReleaseCardPlayButton.js
+  src/lib/commerce/catalog.js
+
+No code changes. No commit. No push.

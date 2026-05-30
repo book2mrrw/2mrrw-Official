@@ -21,10 +21,13 @@ export function catalogCoverDisplay(item) {
         catalogCoverUrl(String(resolved.cover || "").replace(/^\//, ""));
   if (!src) {
     const releaseType = normalizeReleaseType(
-      resolved.release_type || resolved.metadata?.release_category || "single"
+      resolved.release_type || resolved.metadata?.release_category
     );
+    const placeholderType = releaseType || "single";
     return {
-      src: catalogCoverUrl(getArtworkPlaceholderUrl(releaseType, resolved.slug || "placeholder").replace(/^\//, "")),
+      src: catalogCoverUrl(
+        getArtworkPlaceholderUrl(placeholderType, resolved.slug || "placeholder").replace(/^\//, "")
+      ),
       type: "image",
     };
   }

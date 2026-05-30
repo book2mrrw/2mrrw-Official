@@ -1,0 +1,46 @@
+modal-catalog-media-audit-20260527
+Generated: 2026-05-27
+Mode: read-only audit
+
+DELIVERABLES
+============
+report.md
+modals-inventory.md
+singles-section.md
+features-section.md
+albums-section.md
+unified-media-engine.md
+modal-playback-integration.md
+open-modal-audio-flow.md
+risks-and-inconsistencies.md
+manifest.txt
+
+PRIMARY SOURCE FILES REVIEWED
+=============================
+src/app/page.js
+src/app/layout.js
+src/components/preview/ImmersivePreviewModal.js
+src/components/modal/ModalShell.js
+src/components/preview/immersive/ImmersiveModalEnvironment.js
+src/components/preview/immersive/ImmersiveModalStage.js
+src/components/preview/immersive/ImmersiveModalPanel.js
+src/components/preview/immersive/PreviewPlayerControls.js
+src/components/music/AlbumTracklistSheet.js
+src/components/music/ReleaseCardPlayButton.js
+src/components/home/CatalogGrid.js
+src/components/home/FeaturesRail.js
+src/components/home/RadioCarousel.js
+src/components/home/CarouselUI.js
+src/context/AudioContext.js
+src/media/useMediaEngine.js
+src/lib/player/useImmersivePlayback.js
+src/lib/music-access.js
+src/lib/music-playback.js
+src/lib/playback/stream-client.js
+src/lib/playback/playback-gate.js
+src/components/audio/GlobalAudioPlayerBar.js
+src/state/ui/modalStackStore.js
+
+ZIP OUTPUT
+==========
+/Users/recharge/Downloads/modal-catalog-media-audit-20260527.zip

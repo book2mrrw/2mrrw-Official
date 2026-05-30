@@ -1,0 +1,17 @@
+# git diff HEAD~1..HEAD — audio-related paths (audit run 2026-05-27)
+# HEAD = 4100ee3 (docs only)
+
+## src/lib/commerce/entitlements.js
+(no diff)
+
+## src/lib/music-playback.js
+(no diff)
+
+## src/context/AudioContext.js
+(no diff)
+
+## src/app/api/library/stream/route.js
+(no diff)
+
+## src/lib/music-access.js
+(no diff)

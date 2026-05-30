@@ -52,3 +52,9 @@ rg 'useEffect[\s\S]{0,400}(signInWithOtp|sendEmailOtp|sendOtpToEmail)' src/
 ```
 
 Expected: no matches.
+
+## Deploy
+
+- **Commit:** `fe3fa3b8cfa6bc2919f4f28a955766aa67221d9a`
+- **Pushed:** `origin/main`
+- **Production:** https://www.2mrrw.com (Vercel deployment `dpl_FsQLpXGzpTnSaQ2eSSRJ8Da4xWbR`)

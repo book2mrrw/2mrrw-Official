@@ -52,7 +52,11 @@ export async function prefetchMediaAvailability(params = {}) {
 function inferReleaseType(slug, releaseType) {
   if (releaseType) return normalizeReleaseType(releaseType);
   const release = getCanonicalReleaseBySlug(slug);
-  return normalizeReleaseType(release?.release_type || release?.release_category || "single");
+  if (!release) {
+    console.error("[media-availability] cannot infer release_type", { slug });
+    return null;
+  }
+  return normalizeReleaseType(release.release_type || release.release_category);
 }
 
 function safeDiscovery(promise) {
@@ -83,6 +87,9 @@ export async function checkMediaAvailability({
 
   try {
     const rt = inferReleaseType(safeSlug, releaseType);
+    if (!rt) {
+      return { status: "unavailable", reasons: ["unknown_release_type"], audioKey: null, previewKey: null };
+    }
     const release = getCanonicalReleaseBySlug(safeSlug);
     const track = albumSlug || trackSlug ? getCanonicalTrack(albumSlug || safeSlug, trackSlug) : null;
     const effectiveAlbumSlug = albumSlug || (trackSlug && release?.release_type !== "single" ? safeSlug : null);
@@ -100,10 +107,6 @@ export async function checkMediaAvailability({
     let audioKey = null;
     if (audioFolder) {
       audioKey = await safeDiscovery(resolveAudio(audioFolder));
-      if (!audioKey && /(^|\/)features\//.test(audioFolder)) {
-        const singlesFolder = audioFolder.replace(/(^|\/)features\//, "$1singles/");
-        audioKey = await safeDiscovery(resolveAudio(singlesFolder));
-      }
       if (!audioKey) reasons.push("missing_audio");
     } else {
       reasons.push("missing_audio");

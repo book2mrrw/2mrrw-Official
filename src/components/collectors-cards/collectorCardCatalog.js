@@ -1,3 +1,5 @@
+import { visualDiscoveryUrl } from "@/lib/media/canonical-paths";
+
 /** Static catalog for /collectors-cards — artwork paths match site albums. */
 
 export const COLLECTOR_CARD_BENEFITS = [
@@ -42,8 +44,13 @@ export const COLLECTOR_CARDS_CATALOG = [
     price: 129.99,
     editionSize: 100,
     accentColor: "#a259ff",
-    artwork: "/images/albums/lovehz.jpg",
-    videoSrc: "/videos/singles/w2d.mp4",
+    artwork: visualDiscoveryUrl("ep", "love-hz-vol-1", {
+      legacyImage: "/images/albums/lovehz.jpg",
+    }),
+    videoSrc: visualDiscoveryUrl("single", "w2d", {
+      legacyVideo: "/videos/singles/w2d.mp4",
+      legacyImage: "/images/singles/w2d.jpg",
+    }),
     faceType: "video",
   },
 ];

@@ -1,0 +1,29 @@
+mobile-auth-ssr-cookie-fix-20260527
+generated: 2026-05-27
+
+artifacts/
+  report.md
+  manifest.txt
+
+source_changed/
+  src/lib/supabase/client.js
+
+verification_readonly/
+  src/lib/supabase/middleware.js
+  src/app/verify-otp/page.js
+
+build/
+  npm run build — PASS
+
+grep_browser_auth_consumers/
+  src/context/AuthContext.js
+  src/components/auth/AuthGate.js
+  src/app/join/page.js
+  src/app/login/page.js
+  src/app/verify-otp/page.js
+
+grep_supabase_js_direct_src/
+  src/lib/supabase/admin.js
+  src/app/api/save-purchase/route.js
+  src/app/api/get-purchases/route.js
+  src/app/api/register-user/route.js

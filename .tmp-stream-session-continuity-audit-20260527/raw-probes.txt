@@ -1,0 +1,36 @@
+[MCP browser probe]
+1) Runtime.evaluate on https://www.2mrrw.com/
+   fetch('/api/library/stream?slug=hour-glass', { credentials: 'include' })
+   -> status: 401
+   -> bodyPreview: {"error":"Unauthorized"}
+   -> documentCookie: __stripe_mid=...; __stripe_sid=...
+
+2) CDP cookie introspection attempt
+   method: Network.getCookies
+   result: Error: CDP method 'Network.getCookies' is not allowed
+
+[shell curl probes]
+### Probe 1: anonymous www stream
+HTTP/2 401
+x-matched-path: /api/library/stream
+{"error":"Unauthorized"}
+
+### Probe 2: anonymous apex stream
+HTTP/2 307
+location: https://www.2mrrw.com/api/library/stream?slug=hour-glass
+
+### Probe 3: create guest session on www
+HTTP/2 200
+set-cookie: guest_session=<uuid>.<hmac>; Path=/; Expires=<1y>; Max-Age=31536000; Secure; HttpOnly; SameSite=lax
+{"user":{"id":"a21c3ff4-31c8-4c33-8330-f487bf1fecef",...}}
+
+### Probe 4: stream with guest cookie on www
+HTTP/2 403
+{"error":"Not entitled to stream this item"}
+
+### Probe 5: stream with same guest cookie on apex
+HTTP/2 307
+location: https://www.2mrrw.com/api/library/stream?slug=hour-glass
+
+### Probe 6: cookie jar
+#HttpOnly_www.2mrrw.com	FALSE	/	TRUE	...	guest_session	a21c3ff4-31c8-4c33-8330-f487bf1fecef....

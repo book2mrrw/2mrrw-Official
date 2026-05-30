@@ -1,0 +1,5 @@
+same-origin-playback-fix-20260527
+/Users/recharge/artist-platform/.tmp-same-origin-playback-fix-20260527/report.md
+/Users/recharge/artist-platform/.tmp-same-origin-playback-fix-20260527/absolute-url-inventory.md
+/Users/recharge/artist-platform/.tmp-same-origin-playback-fix-20260527/verification.md
+/Users/recharge/artist-platform/.tmp-same-origin-playback-fix-20260527/manifest.txt

@@ -1,0 +1,3 @@
+-- Canonical metadata normalization (manual / SQL editor).
+-- Source of truth: supabase/migrations/20260529150000_canonical_metadata_normalization.sql
+-- Apply via CLI:  supabase db push

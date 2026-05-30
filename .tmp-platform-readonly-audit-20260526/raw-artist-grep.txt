@@ -1,0 +1,276 @@
+=== 1. safetyTimer / SAFETY PLAY ===
+(no matches)
+
+=== 2. canplay / audio events (head 60) ===
+266:      if (!audio || !track?.slug || !userId || audio.paused) return;
+321:      if (!audio || audio.paused || audio.ended) {
+354:        playbackRate: audio.playbackRate || 1,
+574:      if (!userInitiated && track && audio.paused) {
+576:          if (stateRef.current.isPlaying && audio.paused) {
+577:            audio.play().catch(() => {});
+579:          audio.removeEventListener("canplay", resumeAfterInterrupt);
+581:        audio.addEventListener("canplay", resumeAfterInterrupt);
+600:          audio.pause();
+677:          audio.play().catch(() => {});
+761:          audio.src = data.url;
+762:          audio.load();
+772:          await audio.play();
+784:              audio.src = previewFallbackSrc;
+785:              audio.load();
+786:              void audio.play().catch(() => {});
+810:            audio.pause();
+851:    audio.addEventListener("canplaythrough", onCanPlayThrough);
+860:            audio.pause();
+879:      audio.removeEventListener("canplaythrough", onCanPlayThrough);
+900:    audio.playbackRate = presentation.playbackRate ?? 1;
+1025:          audio.src = previewFallbackSrc;
+1026:          audio.load();
+1027:          void audio.play().catch(() => {});
+1052:        audio.pause();
+1093:      audio.src = signedUrl;
+1094:      audio.load();
+1103:      if (stateRef.current.isPlaying) void audio.play().catch(() => {});
+1192:        !audio.paused
+1214:        audio.pause();
+1215:        audio.src = syncSrc;
+1216:        audio.load();
+1217:        // Wait for canplay before calling play()
+1219:          audio.removeEventListener("canplay", playWhenReady);
+1220:          audio.removeEventListener("canplaythrough", playWhenReady);
+1221:          const playPromise = audio.play();
+1227:                  audio.play().catch(e => 
+1237:        audio.addEventListener("canplay", playWhenReady);
+1238:        audio.addEventListener("canplaythrough", playWhenReady);
+1241:        if (!audio.paused && stateRef.current.isPlaying) {
+1274:        void audio.play().catch((err) => {
+1310:    const currentPlaybackSrc = audio.currentSrc || audio.src || "";
+1328:      audio.src = resolved.track.src;
+1329:      audio.load();
+1351:        playbackState: audio.paused ? "paused" : "playing",
+1355:      if (!audio.paused) void audio.play().catch(() => {});
+1421:      const currentUrl = audio.currentSrc || audio.src;
+1425:        audio.pause();
+1426:        audio.src = nextTrack.src;
+1427:        audio.load();
+1435:      void updateMediaSession(nextTrack, { playing: !audio.paused });
+1462:    const currentUrl = audio.currentSrc || audio.src;
+1469:        audio.pause();
+1470:        audio.src = nextTrack.src;
+1471:        audio.load();
+1480:      void updateMediaSession(nextTrack, { playing: !audio.paused });
+1481:      if (audio.paused && stateRef.current.isPlaying) {
+1482:        await audio.play();
+1593:      await audio.play();
+1613:            audio.src = data.url;
+
+=== 3. https://www.2mrrw.com ===
+src//lib/gifts/email.js:2:const BRAND_SITE = "https://www.2mrrw.com";
+
+=== 4. window.location.origin ===
+src//app/subscribe/page.js:343:      confirmParams: { return_url: `${window.location.origin}/subscribe?subscribed=1` },
+src//lib/media-session-artwork.js:45:      return new URL(path, window.location.origin).href;
+src//lib/deep-links.js:23:  const base = origin || (typeof window !== "undefined" ? window.location.origin : "");
+src//lib/playback/stream-client.js:12:        ? window.location.origin
+src//lib/playback/stream-client.js:27:        ? window.location.origin
+src//lib/playback/stream-client.js:41:        ? window.location.origin
+
+=== 7. 416/Range in stream route ===
+76:  const redirect = req.nextUrl.searchParams.get("redirect") === "1";
+77:  if (redirect) {
+78:    const rangeHeader = req.headers.get("range");
+79:    return NextResponse.redirect(url, {
+82:        ...(rangeHeader ? { "Range": rangeHeader } : {}),
+84:        "Accept-Ranges": "bytes",
+99:  const redirect = req.nextUrl.searchParams.get("redirect") === "1";
+
+=== 8. API path references ===
+src//context/AudioContext.js:1321:      src: `/api/library/stream?slug=${encodeURIComponent(track.slug)}&redirect=1`,
+src//context/AuthContext.js:94:      const res = await fetch("/api/account/state", {
+src//context/AuthContext.js:117:      console.error("[account/state] fetch failed:", err);
+src//app/page.js:832:        const response = await fetch("/api/catalog/exclusive-drops", { cache: "no-store" });
+src//app/page.js:865:    fetch("/api/printful/products")
+src//app/api/catalog/hydrate/route.js:9:    `/api/library/stream?slug=${encodeURIComponent(item.slug)}`;
+src//app/api/library/stream/route.js:25:  console.info("[library/stream] r2 env (presence only)", {
+src//app/api/library/stream/route.js:116:    console.error("[library/stream] GET failed", {
+src//app/api/library/stream/route.js:153:    console.error("[library/stream] DELETE failed", { slug, userId: user.id, err: err?.message });
+src//system/recovery/signedUrlRefresher.js:12:    if (!slug || !isLibraryStreamSrc(track?.src || `/api/library/stream?slug=${slug}`)) {
+src//system/recovery/useSessionRecovery.js:10: * Hydration uses /api/catalog/hydrate (see useTrackHydration); partial results are OK.
+src//system/recovery/useSessionRecovery.js:23:          const res = await fetch(`/api/catalog/hydrate?ids=${qs}`, {
+src//system/recovery/useTrackHydration.js:25:      const res = await fetch(`/api/catalog/hydrate?ids=${qs}`, {
+src//system/recovery/useTrackHydration.js:64:        src: `/api/library/stream?slug=${encodeURIComponent(id)}`,
+src//components/collectors-cards/useCollectorInventory.js:19:        const res = await fetch("/api/catalog/exclusive-drops", { cache: "no-store" });
+src//components/system/AudioPhase10Bridge.js:35:              src: `/api/library/stream?slug=${encodeURIComponent(id)}`,
+src//lib/control-system/account.js:47:  const { ok, payload } = await fetchControlSystemJson("/api/account/state", { fetchOptions: { credentials: "include" } });
+src//lib/music-access.js:100: * @param {object} accountState - from /api/account/state or AuthContext
+src//lib/music-access.js:206:  return `/api/library/stream?slug=${encodeURIComponent(slug)}&redirect=1`;
+src//lib/music-access.js:211: * - Entitled full audio → /api/library/stream (redirects to signed R2 GET)
+src//lib/playback/playback-gate.js:5: * Requires account/state owned slugs — never catalog entitlement.canStream alone.
+src//lib/playback/stream-client.js:1:/** Client helpers for /api/library/stream signed URL lifecycle. */
+src//lib/playback/stream-client.js:3:export const LIBRARY_STREAM_PATH = "/api/library/stream";
+src//lib/playback/stream-client.js:58: * Fetch signed stream URL JSON from library/stream.
+src//media/preloader/MediaPreloader.js:38:  if (audioUrl && !String(audioUrl).includes("/api/library/stream")) {
+
+=== 9. fetch/axios https (filtered) ===
+src//app/api/printful/products/route.js:88:    const res = await fetch("https://api.printful.com/store/products?limit=100", {
+src//lib/gifts/email.js:99:    const response = await fetch("https://api.resend.com/emails", {
+src//lib/gifts/email.js:153:    const response = await fetch("https://api.resend.com/emails", {
+
+=== 10. visibilitychange (head 30) ===
+243:  const wasPlayingBeforeHideRef = useRef(false);
+266:      if (!audio || !track?.slug || !userId || audio.paused) return;
+321:      if (!audio || audio.paused || audio.ended) {
+375:      ms.playbackState = playing ? "playing" : "paused";
+565:      persistPlayback("pause");
+571:        navigator.mediaSession.playbackState = "paused";
+574:      if (!userInitiated && track && audio.paused) {
+576:          if (stateRef.current.isPlaying && audio.paused) {
+600:          audio.pause();
+810:            audio.pause();
+841:    audio.addEventListener("pause", onPause);
+860:            audio.pause();
+869:      audio.removeEventListener("pause", onPause);
+1052:        audio.pause();
+1192:        !audio.paused
+1214:        audio.pause();
+1241:        if (!audio.paused && stateRef.current.isPlaying) {
+1290:      patchState({ isPlaying: false, error: "Audio playback failed. Try again in a moment.", playbackState: "paused" });
+1351:        playbackState: audio.paused ? "paused" : "playing",
+1355:      if (!audio.paused) void audio.play().catch(() => {});
+1425:        audio.pause();
+1435:      void updateMediaSession(nextTrack, { playing: !audio.paused });
+1469:        audio.pause();
+1480:      void updateMediaSession(nextTrack, { playing: !audio.paused });
+1481:      if (audio.paused && stateRef.current.isPlaying) {
+1580:  const pause = useCallback(() => {
+1582:    audioRef.current?.pause();
+1624:            if (!audio.paused) void audio.play().catch(() => {});
+1640:          playbackState: "paused",
+1644:      patchState({ isPlaying: false, error: "Audio playback failed. Try again in a moment.", playbackState: "paused" });
+
+=== 11. mediaSession (head 30) ===
+339:      !navigator.mediaSession?.setPositionState ||
+352:      navigator.mediaSession.setPositionState({
+362:  const updateMediaSession = useCallback(async (track, { playing } = {}) => {
+363:    if (typeof navigator === "undefined" || !navigator.mediaSession) return;
+364:    const ms = navigator.mediaSession;
+392:    void updateMediaSession(s.currentTrack, { playing: s.isPlaying });
+394:  }, [updateMediaSession, syncPositionState]);
+549:        void updateMediaSession(track, { playing: true });
+569:        void updateMediaSession(track, { playing: false });
+570:      } else if (typeof navigator !== "undefined" && navigator.mediaSession) {
+571:        navigator.mediaSession.playbackState = "paused";
+646:        if (track) void updateMediaSession(track, { playing: false });
+694:              if (typeof navigator !== "undefined" && navigator.mediaSession) {
+695:                navigator.mediaSession.playbackState = "none";
+697:              if (track) void updateMediaSession(track, { playing: false });
+714:        if (typeof navigator !== "undefined" && navigator.mediaSession) {
+715:          navigator.mediaSession.playbackState = "none";
+717:        if (track) void updateMediaSession(track, { playing: false });
+888:    updateMediaSession,
+1278:      void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: true });
+1291:      void updateMediaSession(nextTrack, { playing: false });
+1296:    updateMediaSession,
+1435:      void updateMediaSession(nextTrack, { playing: !audio.paused });
+1437:    [applyCsToElement, patchState, updateMediaSession]
+1448:      void updateMediaSession(track, { playing: stateRef.current.isPlaying });
+1480:      void updateMediaSession(nextTrack, { playing: !audio.paused });
+1490:  }, [patchState, updateMediaSession, applyCsToElement, syncPositionState]);
+1594:      if (track) void updateMediaSession(track, { playing: true });
+1647:  }, [patchState, updateMediaSession, finalizeStreamSession]);
+1720:    if (typeof navigator !== "undefined" && navigator.mediaSession) {
+
+=== 12. playsinline / preload ===
+43:import { preloadCoverImage } from "@/lib/media/preload";
+182:function preloadCsAssets(track, refs) {
+191:      vid.preload = "auto";
+202:    const preload = new Audio();
+203:    preload.preload = "auto";
+204:    preload.src = track.csAudio;
+205:    preload.load();
+206:    refs.csAudioRef.current = preload;
+960:    preloadCoverImage(nextTrack.cover || nextTrack.baseCover, {
+1185:    preloadCsAssets(normalized, { csImgRef, csVidRef, csAudioRef });
+2037:        preload="auto"
+2039:        {...{ "webkit-playsinline": "", "x-webkit-airplay": "allow" }}
+
+=== 13. music-access.js (head 20) ===
+64:/** Platform admin — full catalog access, no purchase UI. */
+66:  if (Boolean(accountState?.permissions?.admin)) return true;
+73:export function adminTrackAccess() {
+79:    previewOnly: false,
+80:    canStream: true,
+86:    admin: true,
+101: * @returns {{ owned: boolean, subscription: boolean, collector: boolean, previewOnly: boolean, canStream: boolean, badge: string|null }}
+103:export function resolveTrackAccess(track, accountState = {}) {
+104:  if (accountState?.permissions?.admin === true) {
+106:      canStream: true,
+107:      previewOnly: false,
+109:      source: "admin",
+120:    previewOnly: true,
+121:    canStream: false,
+130:    return adminTrackAccess();
+179:  const canStreamFull = owned || isSubscriber || collectorCardOwner;
+193:    previewOnly: !canStreamFull,
+194:    canStream: canStreamFull,
+216:  if (userId && track.slug && access?.canStream) {
+220:  if (access?.canStream && track.slug) {
+
+=== 14. account/state route (head 20) ===
+3:import { createAdminClient } from "@/lib/supabase/admin";
+15:import { isAdminUser } from "@/lib/auth/constants";
+45:    admin: isAdminUser(user),
+68:        ownedSlugs: [],
+86:    const admin = createAdminClient();
+88:      admin
+93:      admin
+100:      admin
+104:      admin
+109:      admin
+115:      getCollectorAccessRecords(admin, user.id),
+147:      getCollectorAccessState(admin, user.id, legacyOwnedSlugs),
+148:      getVaultPassAccessState(admin, user.id, legacyOwnedSlugs),
+149:      getNotificationState(admin, user.id),
+150:      getUserEntitlements(user.id, admin),
+155:    const adminFullLibrary = isAdminUser(user);
+156:    if (adminFullLibrary || membershipHasPremiumAccess(membership) || hasCollectorAccess) {
+166:              source: adminFullLibrary
+167:                ? "admin"
+172:              membershipAccess: !adminFullLibrary && membershipHasPremiumAccess(membership),
+
+=== 16. OPTIONS/CORS stream route ===
+(no matches)
+
+=== 17. image_load_failed / idbu / features ===
+src//app/page.js:147:  { title:"I Don't Believe You", slug:"i-dont-believe-you", type:"feature", cover:"/images/features/idbu.jpg",   price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/i-dont-believe-you-preview.wav", csAudio: null, csCover: null, hasCs: false },
+src//app/page.js:148:  { title:"2 Heavy",             slug:"2-heavy",            type:"feature", cover:"/images/features/2heavy.jpg", price:2.99, featuring:"FT. 2MRRW", preview:"/audio/previews/2-heavy-preview.wav", csAudio: null, csCover: null, hasCs: false },
+src//lib/commerce/catalog.js:7:  { slug: "i-dont-believe-you", title: "I Don't Believe You", product_type: "feature", price_cents: 299, cover_url: "/images/features/idbu.jpg", preview_path: "/audio/previews/i-dont-believe-you-preview.wav" },
+src//lib/commerce/catalog.js:8:  { slug: "2-heavy", title: "2 Heavy", product_type: "feature", price_cents: 299, cover_url: "/images/features/2heavy.jpg", preview_path: "/audio/previews/2-heavy-preview.wav" },
+src//media/imagePipeline/ImagePipeline.js:23:    img.onerror = () => reject(new Error("image_load_failed"));
+
+=== 18. ChunkLoadError / generateBuildId ===
+(no matches)
+
+=== 19. AbortError / NotAllowedError ===
+src/context/AudioContext.js:1224:              if (err.name === "AbortError") {
+
+=== 20. csMode (head 20) ===
+92:  csMode: false,
+115:  const csAudio = track.csAudio || track.cs_audio || null;
+129:    csAudio: csAudio || null,
+154:  if (track.csAudio) {
+158:      src: track.csAudio,
+185:  refs.csAudioRef.current = null;
+201:  if (track.csAudio) {
+204:    preload.src = track.csAudio;
+206:    refs.csAudioRef.current = preload;
+214:  const csAudioRef = useRef(null);
+228:  const csModeRef = useRef(false);
+370:        title: csModeRef.current ? `${track.title || "Untitled"} ◈` : (track.title || "Untitled"),
+457:    csModeRef.current = Boolean(state.csMode);
+475:          csMode: s.csMode,
+706:              if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
+952:    const presentation = resolvePlaybackPresentation(normalized, csModeRef.current, csUsingAlternateSrcRef.current);
+1181:      csTrack: csModeRef.current ? normalized : null,
+1185:    preloadCsAssets(normalized, { csImgRef, csVidRef, csAudioRef });
+1406:      if (!csModeRef.current || !track) return;
+1440:  const toggleCSMode = useCallback(async () => {

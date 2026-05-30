@@ -1,0 +1,19 @@
+playback-events-loop-fix-20260527
+Generated: 2026-05-27
+
+Files:
+- report.md
+- manifest.txt
+
+Code changed:
+- src/lib/control-system/playback.js
+- src/context/AudioContext.js
+
+Reference (unchanged):
+- src/app/api/playback/events/route.js
+
+Probes:
+- POST https://www.2mrrw.com/api/playback/events → 200
+
+Build:
+- npm run build → success

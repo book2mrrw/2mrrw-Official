@@ -1,0 +1,29 @@
+# Clean supplement (2026-05-29) — authoritative probe lines
+
+## Production https://www.2mrrw.com
+/api/account/state → 200 application/json
+/api/media/preview?folder=previews/singles/hour-glass/ → 404 HTML (x-matched-path: /404) — route not deployed
+/api/media/visual?releaseType=singles&slug=hour-glass&meta=1 → 404 HTML — route not deployed
+/api/library/stream?slug=hour-glass&redirect=1 → 401 JSON — route OK, auth required
+
+## Local http://127.0.0.1:3099 (current branch + .env.local)
+/api/media/preview?folder=previews/singles/hour-glass/ → 302 → pub-643e4a94…/hourglass-preview.mp3
+/api/media/preview?folder=previews/singles/w2d/ → 302 → w2d-preview.mp3
+/api/media/preview?folder=previews/features/i-dont-believe-you/ → 404 JSON
+/api/media/preview?legacy=previews/i-dont-believe-you-preview.wav → 302 → legacy path (CDN GET 404)
+/api/media/preview?legacy=previews/2-heavy-preview.wav → 302 → legacy path (CDN GET 404)
+/api/media/preview?folder=previews/mixtapes-and-eps/love-hz-vol-1/01-roll-call/ → 404 JSON
+/api/media/visual?releaseType=singles&slug=hour-glass&meta=1 → {"type":"video","key":"videos/singles/hour-glass/hourglass.mp4",...}
+/api/media/visual?releaseType=feature&slug=i-dont-believe-you&meta=1 → {"type":"image",...idbu.jpg}
+/api/media/visual?releaseType=features&slug=i-dont-believe-you&meta=1 → {"error":"Visual media not found"}
+/api/media/visual?releaseType=ep&slug=love-hz-vol-1&meta=1 → {"type":"image",...lovehz.jpg}
+/api/library/stream?slug=hour-glass&redirect=1 → 401
+/api/library/stream?slug=ad&trackSlug=01-2mrrws-ntro&redirect=1 → 401
+
+## CDN Range bytes=0-1023 Origin https://www.2mrrw.com
+previews/singles/hour-glass/hourglass-preview.mp3 → 206
+digital-assets/singles/hour-glass/audio.mp3 → 206
+videos/singles/hour-glass/hourglass.mp4 → 206
+previews/i-dont-believe-you-preview.wav → 404
+previews/2-heavy-preview.wav → 404
+digital-assets/mixtapes-and-eps/ad/01-2mrrws-ntro/2mrrw's Ntro.wav → 206

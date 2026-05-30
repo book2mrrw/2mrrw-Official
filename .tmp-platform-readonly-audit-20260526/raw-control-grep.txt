@@ -1,0 +1,26 @@
+=== 22a. OPTIONS playback/events ===
+/Users/recharge/2MRRW-Control-System/src/app/api/playback/events/route.ts:50:export async function OPTIONS(request: Request) {
+/Users/recharge/2MRRW-Control-System/src/app/api/playback/events/route.ts:63:      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+
+=== 22b. OPTIONS releases/[slug] ===
+/Users/recharge/2MRRW-Control-System/src/app/api/releases/[slug]/route.ts:72:    "Access-Control-Allow-Methods": "GET, OPTIONS",
+/Users/recharge/2MRRW-Control-System/src/app/api/releases/[slug]/route.ts:83:export async function OPTIONS(request: Request) {
+/Users/recharge/2MRRW-Control-System/src/app/api/releases/[slug]/route.ts:96:      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+
+=== 23. CORS in next.config.mjs ===
+40:            key: "Access-Control-Allow-Origin",
+44:            key: "Access-Control-Allow-Methods",
+48:            key: "Access-Control-Allow-Headers",
+
+=== 24. www.2mrrw.com / allowedOrigins ===
+/Users/recharge/2MRRW-Control-System/src//app/api/releases/route.ts:7:  "https://www.2mrrw.com",
+/Users/recharge/2MRRW-Control-System/src//app/api/releases/[slug]/route.ts:9:  "https://www.2mrrw.com",
+/Users/recharge/2MRRW-Control-System/src//app/api/releases/[slug]/route.ts:86:    "https://www.2mrrw.com",
+/Users/recharge/2MRRW-Control-System/src//app/api/releases/[slug]/route.ts:91:  const allowOrigin = allowed.includes(origin) ? origin : "https://www.2mrrw.com";
+/Users/recharge/2MRRW-Control-System/src//app/api/public/releases/route.ts:8:  "https://www.2mrrw.com",
+/Users/recharge/2MRRW-Control-System/src//app/api/public/audio-visuals/route.ts:6:  "https://www.2mrrw.com",
+/Users/recharge/2MRRW-Control-System/src//app/api/public/hero/route.ts:7:  "https://www.2mrrw.com",
+/Users/recharge/2MRRW-Control-System/src//app/api/playback/events/route.ts:53:    "https://www.2mrrw.com",
+/Users/recharge/2MRRW-Control-System/src//app/api/playback/events/route.ts:58:  const allowOrigin = allowed.includes(origin) ? origin : "https://www.2mrrw.com";
+/Users/recharge/2MRRW-Control-System/src//server/http.ts:8:  "https://www.2mrrw.com",
+/Users/recharge/2MRRW-Control-System/src//proxy.ts:14:  "https://www.2mrrw.com",

@@ -1,0 +1,18 @@
+runtime-audit-current-state-20260526/
+  report.md
+  01-runtime-architecture-map.md
+  02-origin-interaction-map.md
+  03-media-url-map.md
+  04-network-request-map.md
+  05-console-error-inventory.md
+  06-failed-request-inventory.md
+  07-playback-pipeline-audit.md
+  08-env-audit.md
+  09-deployment-audit.md
+  10-r2dev-dependency-audit.md
+  11-stability-score-and-risks.md
+  12-next-actions-ordered.md
+  raw/
+    01-origin-and-cors-probes.txt
+    02-playback-path-snippets.txt
+    03-r2dev-references.txt

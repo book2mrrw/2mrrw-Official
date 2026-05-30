@@ -1,0 +1,9 @@
+report.md
+command-dispatch-trace.md
+state-machine-stall-analysis.md
+ui-sync-analysis.md
+initialization-analysis.md
+serialization-guardrail-analysis.md
+error-visibility-analysis.md
+minimal-remediation-steps.md
+manifest.txt

@@ -1,0 +1,279 @@
+=== R2 CORS Complete Verification ===
+Date: 2026-05-29T22:32:06Z
+R2_BASE: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev
+SITE: https://www.2mrrw.com
+
+----------------------------------------
+[R2-GET-videos]
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 22:32:06 GMT
+Content-Type: video/mp4
+Content-Length: 1104855
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "3626dceaaf47d3c9fe9e46f85c822dea"
+Last-Modified: Fri, 29 May 2026 15:51:54 GMT
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a038f3fe3ced839f-DFW
+
+
+----------------------------------------
+[R2-GET-previews]
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 22:32:06 GMT
+Content-Type: audio/mpeg
+Content-Length: 831656
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "d69eafd8c7b91fd732ef4b1caed614fb"
+Last-Modified: Fri, 29 May 2026 18:06:24 GMT
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a038f3ff3fd26b14-DFW
+
+
+----------------------------------------
+[R2-GET-images]
+HTTP/1.1 404 Not Found
+Date: Fri, 29 May 2026 22:32:06 GMT
+Content-Type: text/plain;charset=UTF-8
+Connection: keep-alive
+Access-Control-Allow-Origin: https://www.2mrrw.com
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a038f400a8889abe-DFW
+
+
+----------------------------------------
+[R2-GET-digital-assets]
+HTTP/1.1 404 Not Found
+Date: Fri, 29 May 2026 22:32:06 GMT
+Content-Type: text/plain;charset=UTF-8
+Connection: keep-alive
+Access-Control-Allow-Origin: https://www.2mrrw.com
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a038f4019af4da10-DFW
+
+
+----------------------------------------
+[R2-video-Range-206]
+HTTP/1.1 206 Partial Content
+Date: Fri, 29 May 2026 22:32:07 GMT
+Content-Type: video/mp4
+Content-Length: 1024
+Connection: keep-alive
+Content-Range: bytes 0-1023/1104855
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "3626dceaaf47d3c9fe9e46f85c822dea"
+Last-Modified: Fri, 29 May 2026 15:51:54 GMT
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a038f4036d5197ae-DFW
+
+
+----------------------------------------
+[R2-OPTIONS-preflight]
+HTTP/1.1 204 No Content
+Date: Fri, 29 May 2026 22:32:07 GMT
+Connection: keep-alive
+Access-Control-Allow-Origin: https://www.2mrrw.com
+Vary: Origin
+Access-Control-Allow-Headers: Range, Authorization
+Access-Control-Allow-Methods: GET, HEAD
+Access-Control-Max-Age: 86400
+Server: cloudflare
+CF-RAY: a038f407ebf0f0a8-DFW
+
+
+----------------------------------------
+[R2-Origin-apex]
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 22:32:07 GMT
+Content-Type: video/mp4
+Content-Length: 1104855
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://2mrrw.com
+ETag: "3626dceaaf47d3c9fe9e46f85c822dea"
+Last-Modified: Fri, 29 May 2026 15:51:54 GMT
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a038f408decc0864-DFW
+
+
+----------------------------------------
+[R2-Origin-localhost]
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 22:32:08 GMT
+Content-Type: video/mp4
+Content-Length: 1104855
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: http://localhost:3000
+ETag: "3626dceaaf47d3c9fe9e46f85c822dea"
+Last-Modified: Fri, 29 May 2026 15:51:54 GMT
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a038f40a4dfb28d3-DFW
+
+
+----------------------------------------
+[API-media-preview-OPTIONS]
+HTTP/2 204 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-allow-origin: https://www.2mrrw.com
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified
+cache-control: public, max-age=0, must-revalidate
+date: Fri, 29 May 2026 22:32:09 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+vary: Origin
+x-matched-path: /api/media/preview
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::w8t6x-1780093928343-29b14b0057dd
+
+
+----------------------------------------
+[API-media-preview-GET]
+HTTP/2 302 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-allow-origin: https://www.2mrrw.com
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified
+age: 0
+cache-control: public, max-age=300
+date: Fri, 29 May 2026 22:32:09 GMT
+location: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev/previews/singles/hour-glass/hourglass-preview.mp3
+server: Vercel
+strict-transport-security: max-age=63072000
+vary: Origin
+x-matched-path: /api/media/preview
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::7d7kz-1780093929193-c939bf49936d
+
+
+----------------------------------------
+[API-media-visual-single]
+HTTP/2 200 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-allow-origin: https://www.2mrrw.com
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified
+age: 0
+cache-control: public, max-age=300
+content-type: application/json
+date: Fri, 29 May 2026 22:32:10 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+vary: Origin
+x-matched-path: /api/media/visual
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::f4s7k-1780093929747-37a59d358bf5
+
+
+----------------------------------------
+[API-media-visual-feature]
+HTTP/2 200 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-allow-origin: https://www.2mrrw.com
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified
+age: 0
+cache-control: public, max-age=300
+content-type: application/json
+date: Fri, 29 May 2026 22:32:10 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+vary: Origin
+x-matched-path: /api/media/visual
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::2t4q5-1780093930396-ba770276c57f
+
+
+----------------------------------------
+[API-media-visual-album]
+HTTP/2 200 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-allow-origin: https://www.2mrrw.com
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified
+age: 0
+cache-control: public, max-age=300
+content-type: application/json
+date: Fri, 29 May 2026 22:32:11 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+vary: Origin
+x-matched-path: /api/media/visual
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::h4fkc-1780093930921-353565cdf9ba
+
+
+----------------------------------------
+[API-media-visual-mixtapes-and-eps]
+HTTP/2 200 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-allow-origin: https://www.2mrrw.com
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified
+age: 0
+cache-control: public, max-age=300
+content-type: application/json
+date: Fri, 29 May 2026 22:32:11 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+vary: Origin
+x-matched-path: /api/media/visual
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::vmg4c-1780093931377-638a7aacce2d
+
+
+----------------------------------------
+[API-library-stream-OPTIONS]
+HTTP/2 204 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-allow-origin: https://www.2mrrw.com
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified
+cache-control: public, max-age=0, must-revalidate
+date: Fri, 29 May 2026 22:32:12 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+vary: Origin
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::w5vwq-1780093931905-b071b3591174
+
+
+----------------------------------------
+[API-library-stream-GET]
+HTTP/2 401 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-allow-origin: https://www.2mrrw.com
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Fri, 29 May 2026 22:32:12 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+vary: Origin
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::sxkgb-1780093932277-5eb344ab11c3
+
+

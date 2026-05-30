@@ -92,12 +92,7 @@ async function resolveStoragePathFromProduct(admin, product, trackSlug) {
 }
 
 async function discoverAudioInFolder(folderKey, entityFolder) {
-  let audioKey = await resolveAudio(folderKey || entityFolder);
-  if (!audioKey && /(^|\/)features\//.test(folderKey || entityFolder)) {
-    const singlesFolder = (folderKey || entityFolder).replace(/(^|\/)features\//, "$1singles/");
-    audioKey = await resolveAudio(singlesFolder);
-  }
-  return audioKey;
+  return resolveAudio(folderKey || entityFolder);
 }
 
 /** Same release-type inference as storefront previews — features must not fall through to singles. */
@@ -122,7 +117,12 @@ function inferProductReleaseType(product) {
   if (/(^|\/)albums\//.test(storage)) return "albums";
   if (/(^|\/)mixtapes-and-eps\//.test(storage)) return "mixtapes-and-eps";
 
-  return "singles";
+  console.error("[resolvePlaybackKey] could not infer release_type", {
+    slug: product?.slug,
+    product_type: product?.product_type,
+    content_type: product?.content_type,
+  });
+  return null;
 }
 
 /**
@@ -157,7 +157,9 @@ export async function resolvePlaybackKey(admin, productSlug, options = {}) {
     mediaPath ||
     product.storage_path ||
     canonical?.storage_path ||
-    resolveStoragePath(releaseType, slug, trackSlug, trackSlug ? slug : null);
+    (releaseType
+      ? resolveStoragePath(releaseType, slug, trackSlug, trackSlug ? slug : null)
+      : null);
   if (!storagePath) return null;
 
   const entityFolder = normalizeEntityFolderPath(storagePath);
@@ -177,7 +179,9 @@ export async function resolvePlaybackKey(admin, productSlug, options = {}) {
   if (!audioKey) {
     const previewFolder =
       resolveEntityPreviewFolder(product.preview_path, slug) ||
-      resolvePreviewPath(releaseType, trackSlug || slug, trackSlug ? slug : null) ||
+      (releaseType
+        ? resolvePreviewPath(releaseType, trackSlug || slug, trackSlug ? slug : null)
+        : null) ||
       canonical?.preview_path;
     const legacyPreview =
       resolveEntityPreviewFolder(

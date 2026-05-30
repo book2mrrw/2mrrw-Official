@@ -1,0 +1,46 @@
+# curl HEAD probes — 2026-05-28
+# CDN: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev
+
+## previews/i-dont-believe-you-preview.wav
+HTTP/1.1 200 OK
+Content-Type: audio/wav
+Content-Length: 5203902
+Accept-Ranges: bytes
+ETag: "2fa3105e10d50146aba3db07584c698a"
+Server: cloudflare
+METRICS ttfb~0.34s (initial probe)
+
+## previews/2-heavy-preview.wav
+HTTP/1.1 200 OK
+Content-Type: audio/wav
+Content-Length: 6649094
+Accept-Ranges: bytes
+METRICS ttfb~0.13s
+
+## previews/hourglass-preview.mp3
+HTTP/1.1 200 OK
+Content-Type: audio/mpeg
+Content-Length: 831656
+Accept-Ranges: bytes
+METRICS ttfb=0.107s http=200
+
+## previews/w2d-preview.mp3
+HTTP/1.1 200 OK
+Content-Type: audio/mpeg
+Content-Length: 1230016
+Accept-Ranges: bytes
+METRICS ttfb=0.190s http=200
+
+## previews/artificial-preview.mp3
+HTTP/1.1 200 OK
+Content-Type: audio/mpeg
+Content-Length: 1039936
+Accept-Ranges: bytes
+METRICS ttfb=0.109s http=200
+
+## singles/hour-glass/audio.mp3 (public bucket)
+METRICS http=404 (full track not on public CDN — expected)
+
+## https://2mrrw.com/api/library/stream?slug=hour-glass&redirect=1 (no auth cookie)
+HTTP/2 307
+location: https://www.2mrrw.com/api/library/stream?slug=hour-glass&redirect=1

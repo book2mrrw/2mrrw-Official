@@ -1,0 +1,26 @@
+# Supabase auth init audit (read-only) — 2026-05-26
+# Paths relative to repository root unless absolute.
+# Secrets are not stored in the companion .md; .env.local is listed only as an audit input path.
+
+/Users/recharge/artist-platform/.env.local
+/Users/recharge/artist-platform/middleware.js
+/Users/recharge/artist-platform/src/lib/supabase/client.js
+/Users/recharge/artist-platform/src/lib/supabase/server.js
+/Users/recharge/artist-platform/src/lib/supabase/middleware.js
+/Users/recharge/artist-platform/src/lib/supabase/admin.js
+/Users/recharge/artist-platform/src/lib/auth/session-user.js
+/Users/recharge/artist-platform/src/context/AuthContext.js
+/Users/recharge/artist-platform/src/app/join/page.js
+/Users/recharge/artist-platform/src/app/login/page.js
+/Users/recharge/artist-platform/src/app/verify-otp/page.js
+/Users/recharge/artist-platform/src/components/auth/AuthGate.js
+/Users/recharge/artist-platform/src/app/api/auth/complete-profile/route.js
+/Users/recharge/artist-platform/src/app/api/account/state/route.js
+/Users/recharge/artist-platform/src/app/api/library/stream/route.js
+/Users/recharge/artist-platform/src/app/api/gifts/bulk/route.js
+/Users/recharge/artist-platform/src/app/api/gifts/sent/route.js
+/Users/recharge/artist-platform/src/app/api/gifts/send/route.js
+/Users/recharge/artist-platform/src/app/api/gifts/claim/[token]/route.js
+/Users/recharge/artist-platform/src/app/api/collector-card/activate/route.js
+/Users/recharge/artist-platform/src/app/api/admin/collector-cards/route.js
+/Users/recharge/artist-platform/src/lib/gifts/helpers.js

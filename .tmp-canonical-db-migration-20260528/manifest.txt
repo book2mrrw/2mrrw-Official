@@ -1,0 +1,4 @@
+report.md
+supabase/migrations/20260529150000_canonical_metadata_normalization.sql
+scripts/sql/canonical-metadata-normalization.sql
+src/lib/media/canonical-catalog.js

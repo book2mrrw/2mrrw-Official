@@ -1,0 +1,9 @@
+playback-lifecycle-stabilization-20260527
+created=2026-05-27
+files_changed=2
+  src/context/AudioContext.js
+  src/components/music/ReleaseCardPlayButton.js
+artifacts
+  report.md
+  manifest.txt
+commit_message=fix(playback): safe progress restore clamping and upgradeToFullStream continuity guards

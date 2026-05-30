@@ -1,0 +1,32 @@
+R2 CORS + Media Source Validation Audit
+Date: 2026-05-28
+Repo: /Users/recharge/artist-platform
+Output dir: .tmp-r2-cors-media-validation-20260528/
+
+Files:
+  report.md                 — 7-item verdict + remediation
+  curl-probes.txt           — raw curl output (GET/OPTIONS/Range/HEAD)
+  path-resolution-matrix.md — slug → R2 key → code path
+  manifest.txt              — this file
+
+Key sources read (read-only):
+  .env.example
+  src/lib/storage/r2.js
+  src/lib/storage/r2-public-cdn.js
+  src/lib/playback/resolve-playback-key.js
+  src/lib/playback/normalize-r2-key.js
+  src/lib/sync/normalize-storage-path.js
+  src/app/api/library/stream/route.js
+  src/lib/playback/stream-client.js
+  src/lib/music-access.js
+  src/lib/media-urls.js
+  src/lib/commerce/catalog.js
+  src/context/AudioContext.js (crossOrigin, play diagnostics)
+  src/lib/playback/playback-diagnostics.js
+  scripts/test-library-stream-e2e.mjs
+  scripts/migrate-r2-bucket.mjs
+  supabase/migrations/20260528071100_backfill_feature_storage_paths.sql
+  docs/reports/r2-cors-policy-recommended.json
+
+Probe target:
+  NEXT_PUBLIC_R2_PUBLIC_URL=https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev

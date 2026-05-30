@@ -444,8 +444,9 @@ export function mergeCanonicalMetadata(item) {
   const release = getCanonicalReleaseBySlug(item.slug);
   if (!release) return item;
 
-  const releaseType = release.release_type || item.release_type || "single";
-  const catalog = CANONICAL_CATALOG[normalizeReleaseType(releaseType)];
+  const releaseType = release.release_type || item.release_type;
+  const normalizedType = normalizeReleaseType(releaseType);
+  const catalog = normalizedType ? CANONICAL_CATALOG[normalizedType] : null;
   const legacyStem = defaultLegacyStem(
     release.slug,
     item.legacy_preview_stem ?? release.legacy_preview_stem

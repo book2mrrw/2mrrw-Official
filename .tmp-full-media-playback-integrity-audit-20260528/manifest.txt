@@ -1,0 +1,37 @@
+full-media-playback-integrity-audit-20260528
+generated=2026-05-29T15:30:00Z
+repo=/Users/recharge/artist-platform
+mode=read-only-audit
+
+01-media-inventory.md
+02-r2-object-validation.md
+03-database-paths.md
+04-url-validation.md
+05-playback-init.md
+06-entitlements.md
+07-ui-queue.md
+08-mobile.md
+curl-probes.txt
+stale-path-inventory.txt
+report.md
+manifest.txt
+
+key-sources:
+  src/lib/commerce/catalog.js
+  src/app/page.js
+  src/lib/playback/normalize-r2-key.js
+  src/lib/playback/resolve-playback-key.js
+  src/lib/storage/r2.js
+  src/lib/media-urls.js
+  src/app/api/library/stream/route.js
+  src/lib/playback/stream-client.js
+  src/lib/music-access.js
+  src/lib/commerce/entitlements.js
+  src/context/AudioContext.js
+  src/lib/music-playback.js
+  scripts/migrate-r2-bucket.mjs
+  supabase/migrations/20260528071100_backfill_feature_storage_paths.sql
+  .tmp-r2-cors-media-validation-20260528/report.md
+
+cdn=https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev
+origin=https://www.2mrrw.com

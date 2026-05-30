@@ -1,0 +1,19 @@
+Active/runtime-code references
+
+artist-platform/src/lib/storage/r2-public-cdn.js:2
+artist-platform/src/lib/storage/r2-public-cdn.js:4
+artist-platform/src/lib/control-system/media.js:8
+artist-platform/next.config.mjs:9
+artist-platform/next.config.mjs:13
+2MRRW-Control-System/src/lib/storage/r2.ts:53
+2MRRW-Control-System/src/server/media/artworkPublicFallback.ts:53
+2MRRW-Control-System/src/lib/media/frontendMediaFallbacks.ts:14
+2MRRW-Control-System/next.config.mjs:9
+2MRRW-Control-System/next.config.mjs:13
+2MRRW-Control-System/.env.example:52
+
+Non-runtime/docs/history references (examples)
+
+artist-platform/docs/reports/r2-playback-fix-20260525.md:11
+artist-platform/docs/reports/production-stabilization-20260526.md:84
+2MRRW-Control-System/reports/AUDIT-REPORT-E2E-2026-05-22.md:51

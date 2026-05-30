@@ -1,0 +1,9 @@
+src/lib/auth/constants.js
+src/lib/auth/session-user.js
+src/app/api/library/stream/route.js
+src/lib/commerce/entitlements.js
+src/app/api/account/state/route.js
+src/context/AuthContext.js
+src/lib/music-access.js
+.tmp-stream-403-fix-20260528/report.md
+.tmp-stream-403-fix-20260528/verification-results.md

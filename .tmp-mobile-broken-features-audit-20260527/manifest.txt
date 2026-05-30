@@ -1,0 +1,20 @@
+mobile-broken-features-audit-20260527
+Generated: 2026-05-27
+Repo: /Users/recharge/artist-platform
+Mode: read-only audit
+
+Files:
+  report.md       — full findings (scrub bar, modals, account, playTrack)
+  raw-grep.txt    — exact grep output for sections 2 and 3
+  manifest.txt    — this file
+
+Sources read (not copied into bundle):
+  src/components/audio/GlobalAudioPlayerBar.js
+  src/context/AudioContext.js
+  src/app/page.js
+  src/app/error.js
+  src/app/layout.js
+  src/system/errors/ModalErrorBoundary.js
+  src/system/errors/ErrorBoundary.js
+  src/system/errors/FallbackRenderer.js
+  src/system/errors/MediaErrorBoundary.js

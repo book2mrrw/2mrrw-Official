@@ -1,0 +1,173 @@
+src//app/success/page.js:184:    overflow: "hidden",
+src//app/success/page.js:247:                  overflow: "hidden",
+src//app/page.js:346:          <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:16,overflow:"hidden"}}>
+src//app/page.js:380:          <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:6,scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch"}}>
+src//app/page.js:390:                    scrollSnapAlign:"start",
+src//app/page.js:394:                    overflow:"hidden",
+src//app/page.js:424:          <div style={{flex:"1 1 0",minWidth:0,background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.5)"}}>
+src//app/page.js:474:                    overflow:"hidden",
+src//app/page.js:487:                    <div style={{position:"relative",width:90,height:50,borderRadius:8,overflow:"hidden",flexShrink:0}}>
+src//app/page.js:510:                        overflow:"hidden",
+src//app/page.js:655:    const onScroll = () => setHeroScrollY(el.scrollTop);
+src//app/page.js:656:    el.addEventListener("scroll", onScroll, { passive: true });
+src//app/page.js:657:    return () => el.removeEventListener("scroll", onScroll);
+src//app/page.js:839:    row?.addEventListener("scroll", onScroll, { passive: true });
+src//app/page.js:852:      row?.removeEventListener("scroll", onScroll);
+src//app/page.js:1443:          mainScrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+src//app/page.js:1459:        mainScrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+src//app/page.js:1669:          <div onClick={e=>e.stopPropagation()} style={{background:"#0d0d0d",border:`1px solid ${exclusiveModal.badgeColor}33`,borderRadius:24,padding:isMobile?20:32,width:isMobile?"100%":380,maxWidth:isMobile?"calc(100vw - 32px)":"none",maxHeight:"88vh",overflowY:"auto",display:"flex",flexDirection:"column",gap:16,boxShadow:`0 0 60px ${exclusiveModal.badgeColor}22`}}>
+src//app/page.js:1705:      <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
+src//app/page.js:1712:          <div style={{width:220,flexShrink:0,borderRight:"1px solid #141414",background:"rgba(4,4,4,0.9)",backdropFilter:"blur(20px)",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto",boxShadow:"2px 0 32px rgba(0,0,0,0.5)"}}>
+src//app/page.js:1717:            <nav style={{flex:1,padding:"12px 0",overflowY:"auto"}}>
+src//app/page.js:1749:        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
+src//app/page.js:1752:            style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:0,WebkitOverflowScrolling:"touch"}}
+src//app/page.js:1756:            {/* HERO — scroll compression on mobile */}
+src//app/page.js:1759:              borderRadius: isMobile ? 0 : 20, overflow:"hidden", background:"black",
+src//app/page.js:1816:                          overflowX:"auto",
+src//app/page.js:1818:                          scrollSnapType:"x mandatory",
+src//app/page.js:1820:                          overscrollBehaviorX:"contain",
+src//app/page.js:1838:                              scrollSnapAlign:"start",
+src//app/page.js:2210:                  <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden",marginBottom:28}}>
+src//app/page.js:2270:                  <div style={{background:"linear-gradient(135deg,#080808,#0e0e0e)",border:"1px solid #1a1a1a",borderRadius:24,padding:isMobile?"28px 20px":"48px 40px",marginBottom:28,textAlign:"center",position:"relative",overflow:"hidden"}}>
+src//app/page.js:2361:                          <div style={{background:"linear-gradient(135deg,#0d0814,#0d0d0d)",border:"1px solid rgba(162,89,255,0.2)",borderRadius:20,padding:isMobile?"20px":"28px 30px",marginBottom:28,position:"relative",overflow:"hidden"}}>
+src//app/page.js:2420:          </div>{/* end scroll area */}
+src//app/page.js:2431:                  <div style={{fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.title}</div>
+src//app/page.js:2447:          <div style={{width:240,flexShrink:0,borderLeft:"1px solid #222",padding:25,overflowY:"auto",background:"rgba(4,4,4,0.8)",backdropFilter:"blur(12px)"}}>
+src//app/page.js:2490:            minHeight:62,overflow:"visible",isolation:"auto",
+src//app/page.js:2549:                  borderRadius:16,overflow:"hidden",
+src//app/page.js:2561:                    <motion.div style={{fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.title}</motion.div>
+src//app/page.js:2592:                  style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:"max(32px, env(safe-area-inset-bottom))",border:"1px solid #1e1e1e",maxHeight:"80vh",overflowY:"auto"}}
+src//app/page.js:2686:                  style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",padding:"0 0 max(32px, env(safe-area-inset-bottom))",border:"1px solid #1e1e1e",maxHeight:"82vh",overflowY:"auto"}}
+src//app/page.js:2707:        html,body{width:100%;overflow-x:clip;}
+src//app/page.js:2710:          .singles-row,.albums-row,.features-row,.products-row,.videos-row{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scroll-snap-type:x mandatory!important;overscroll-behavior-x:contain!important;gap:12px!important;padding-bottom:10px!important;}
+src//app/page.js:2711:          .singles-row>*,.albums-row>*,.features-row>*,.products-row>*,.videos-row>*{flex:0 0 auto!important;scroll-snap-align:start!important;}
+src//app/page.js:2713:        .singles-row::-webkit-scrollbar,.albums-row::-webkit-scrollbar,.features-row::-webkit-scrollbar,.products-row::-webkit-scrollbar,.videos-row::-webkit-scrollbar{height:4px;}
+src//app/page.js:2714:        .singles-row::-webkit-scrollbar-track,.albums-row::-webkit-scrollbar-track,.features-row::-webkit-scrollbar-track,.products-row::-webkit-scrollbar-track,.videos-row::-webkit-scrollbar-track{background:#111;border-radius:4px;}
+src//app/page.js:2715:        .singles-row::-webkit-scrollbar-thumb,.albums-row::-webkit-scrollbar-thumb,.features-row::-webkit-scrollbar-thumb,.products-row::-webkit-scrollbar-thumb,.videos-row::-webkit-scrollbar-thumb{background:#00ffff;border-radius:4px;}
+src//app/page.js:2729:        .donate-glow-button,.subscribe-shimmer-button{position:relative;overflow:hidden;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;transition:color .2s,border-color .2s,background .2s,box-shadow .2s,transform .2s;border:1px solid #2a2a2a;isolation:isolate}
+src//app/subscribe/page.js:138:    <main style={{minHeight:"100vh",background:"#050505",color:"#fff",fontFamily:"Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",overflow:"hidden"}}>
+src//app/subscribe/page.js:290:          overflow: hidden;
+src//app/globals.css:31:.living-scroll-lyrics {
+src//app/globals.css:33:  overflow: hidden;
+src//app/globals.css:38:.living-scroll-lyrics .living-scroll-line {
+src//app/globals.css:47:.living-scroll-lyrics .living-scroll-line:nth-child(odd) {
+src//app/globals.css:208:  overflow: hidden;
+src//app/globals.css:244:  overflow: hidden;
+src//app/globals.css:286:  overflow: hidden;
+src//app/globals.css:313:  overflow: hidden;
+src//app/globals.css:349:  overflow: hidden;
+src//app/globals.css:429:  overflow: hidden;
+src//app/globals.css:450:  overflow-y: auto;
+src//app/globals.css:451:  -webkit-overflow-scrolling: touch;
+src//app/globals.css:452:  overscroll-behavior: contain;
+src//app/globals.css:536:  overflow: hidden;
+src//app/globals.css:936:  overflow: hidden;
+src//app/globals.css:958:  overflow: hidden;
+src//app/globals.css:1040:  overflow: hidden;
+src//app/globals.css:1141:  overflow-y: auto;
+src//app/globals.css:1142:  -webkit-overflow-scrolling: touch;
+src//app/globals.css:1204:  overflow: hidden;
+src//app/globals.css:1207:.modal-immersive-panel--scroll {
+src//app/globals.css:1208:  overflow-y: auto;
+src//app/globals.css:1209:  -webkit-overflow-scrolling: touch;
+src//app/globals.css:1211:  overscroll-behavior: contain;
+src//app/globals.css:1275:  overflow: hidden;
+src//app/globals.css:1481:  overflow: hidden;
+src//app/globals.css:1567:  overflow: hidden;
+src//app/globals.css:1935:  overflow: hidden;
+src//app/globals.css:1936:  text-overflow: ellipsis;
+src//app/globals.css:1950:  overflow: hidden;
+src//app/globals.css:1951:  text-overflow: ellipsis;
+src//app/globals.css:1968:  overflow: hidden;
+src//app/globals.css:1992:  overflow: hidden;
+src//app/globals.css:2000:  overflow: hidden;
+src//app/globals.css:2064:  overflow: visible;
+src//app/globals.css:2200:  overflow-y: auto;
+src//app/globals.css:2472:  overflow: hidden;
+src//app/globals.css:2512:  overflow: hidden;
+src//app/globals.css:2513:  text-overflow: ellipsis;
+src//app/globals.css:2522:  overflow: hidden;
+src//app/globals.css:2523:  text-overflow: ellipsis;
+src//app/globals.css:3065:  overflow-y: auto;
+src//app/globals.css:3407:  overflow: hidden;
+src//app/globals.css:3476:  overflow: hidden;
+src//app/globals.css:3503:  overflow: hidden;
+src//app/globals.css:3530:  overflow: hidden;
+src//app/globals.css:4112:    overflow-y: auto;
+src//app/globals.css:4165:  overflow: hidden;
+src//app/globals.css:4166:  text-overflow: ellipsis;
+src//app/globals.css:4204:.sc{position:absolute;inset:0;overflow:hidden;}
+src//app/globals.css:4212:.sc-rays{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
+src//state/ui/modalStackStore.js:12:  savedBodyOverflow = document.body.style.overflow;
+src//state/ui/modalStackStore.js:13:  document.body.style.overflow = "hidden";
+src//state/ui/modalStackStore.js:19:  document.body.style.overflow = savedBodyOverflow ?? "";
+src//state/ui/modalStackStore.js:25: * Register an open modal/sheet. First registration applies a single body scroll lock.
+src//state/ui/modalStackStore.js:35: * Unregister on close/unmount. Restores body scroll only when stack is empty.
+src//system/recovery/useScrollRecovery.js:12:      store.save(`scroll:${pathname}`, window.scrollY);
+src//system/recovery/useScrollRecovery.js:14:    window.addEventListener("scroll", onScroll, { passive: true });
+src//system/recovery/useScrollRecovery.js:15:    return () => window.removeEventListener("scroll", onScroll);
+src//system/recovery/useScrollRecovery.js:19:    const y = store.load(`scroll:${path}`);
+src//system/recovery/useScrollRecovery.js:23:        window.scrollTo(0, Number(y) || 0);
+src//system/errors/ModalErrorBoundary.js:21: * Modal tree boundary — recoverable fallback with retry/close; releases scroll lock.
+src//components/music/MyMusicTab.js:89:          overflowX: "auto",
+src//components/music/MyMusicTab.js:91:          scrollSnapType: "x mandatory",
+src//components/music/MyMusicTab.js:106:                scrollSnapAlign: "start",
+src//components/music/MyMusicTab.js:110:                overflow: "hidden",
+src//components/music/MyMusicTab.js:215:          overflowX: "auto",
+src//components/music/MyMusicTab.js:217:          scrollSnapType: "x mandatory",
+src//components/music/MyMusicTab.js:231:                scrollSnapAlign: "start",
+src//components/music/MyMusicTab.js:236:                overflow: "hidden",
+src//components/music/MyMusicTab.js:271:                  overflow: "hidden",
+src//components/music/MyMusicTab.js:566:                  <div style={{ height: 3, background: "rgba(0,0,0,0.35)", borderRadius: 2, overflow: "hidden" }}>
+src//components/music/PlaylistCard.js:16:        overflow: "hidden",
+src//components/music/PlaylistCard.js:78:            overflow: "hidden",
+src//components/music/PlaylistSection.js:535:          <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6, maxHeight: 240, overflowY: "auto" }}>
+src//components/music/AlbumTracklistSheet.js:183:                  overflow: "hidden",
+src//components/music/AlbumTracklistSheet.js:237:          <div style={{ overflowY: "auto", flex: 1, minHeight: 0, padding: "0 8px" }}>
+src//components/music/AlbumTracklistSheet.js:294:                        overflow: "hidden",
+src//components/music/ContinueListening.js:38:        <div style={{ fontSize: 15, fontWeight: 800, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+src//components/music/ContinueListening.js:48:                overflow: "hidden",
+src//components/ui/CoverArtCS.js:53:        overflow: "hidden",
+src//components/home/FeaturesRail.js:10:    <div className="features-row" style={{display:"flex",flexWrap:"nowrap",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollSnapType:"x mandatory",overscrollBehaviorX:"contain",gap:isMobile?12:18,paddingBottom:14}}>
+src//components/home/FeaturesRail.js:16:        <div key={feat.slug || feat.id || `feature-${i}`} style={{flex:"0 0 auto",width:isMobile?160:220,scrollSnapAlign:"start",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,transition:"border-color 0.25s",position:"relative"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#a259ff55"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
+src//components/home/CatalogGrid.js:25:    ? { display:"flex", flexWrap:"nowrap", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollSnapType:"x mandatory", overscrollBehaviorX:"contain", gap:12, paddingBottom:10 }
+src//components/home/CatalogGrid.js:50:                ...(isMobile ? { flex: "0 0 160px", width: 160, scrollSnapAlign: "start" } : {}),
+src//components/home/CatalogGrid.js:54:                overflow: "hidden",
+src//components/home/CatalogGrid.js:85:        <div key={item.slug} style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
+src//components/home/RadioCarousel.js:35:        overflow: "hidden",
+src//components/home/RadioCarousel.js:53:        <div style={{ flexShrink: 0, width: coverW, position: "relative", overflow: "hidden" }}>
+src//components/home/CarouselUI.js:23:    <div style={{display:"flex",flexDirection:isMobile?"column":"row",alignItems:isMobile?"stretch":"center",gap:isMobile?16:20,background:"linear-gradient(135deg,#0e0e0e,#111)",border:"1px solid #1e1e1e",borderRadius:isMobile?16:20,padding:isMobile?"20px 16px":large?"32px 28px":"28px 24px",position:"relative",overflow:"hidden",boxShadow:"0 4px 40px rgba(0,0,0,0.5)"}}>
+src//components/home/FlowState.js:13:        overflow: "hidden",
+src//components/home/FlowState.js:126:        <div style={{ position: "absolute", inset: 0, overflow: "hidden" }}>
+src//components/home/LivePanel.js:16:        overflow: "hidden",
+src//components/ReleaseDetailExtras.js:41:            className={lyricsMode === "timed" ? "living-scroll-lyrics" : "static-lyrics-panel"}
+src//components/ReleaseDetailExtras.js:47:                    overflowY: "auto",
+src//components/ReleaseDetailExtras.js:59:              <p key={`${index}-${line.slice(0, 12)}`} className="living-scroll-line">
+src//components/auth/AuthGate.js:333:    overflowY: "auto",
+src//components/collectors-cards/CollectorsCardsPlaceholder.js:74:          overflow: "visible",
+src//components/collectors-cards/CollectorCardModal.js:144:          overflowY: "auto",
+src//components/collectors-cards/CollectorCardItem.js:30:          overflow: "hidden",
+src//components/admin/CollectorCardAdminPanel.js:131:      <div style={{ maxHeight: 180, overflowY: "auto", fontSize: 11, color: "#888" }}>
+src//components/gifts/GiftBottomSheet.js:177:            overflow: "hidden",
+src//components/gifts/GiftBottomSheet.js:204:              overflowY: "auto",
+src//components/gifts/GiftsSentSection.js:106:                    overflow: "hidden",
+src//components/gifts/GiftRevealExperience.js:4:// cinematic overlay with independent scroll/lock behavior (see Phase 11 Step 1).
+src//components/preview/GlyphLyricsPanel.js:12:  const scrollRef = useRef(null);
+src//components/preview/GlyphLyricsPanel.js:23:    const container = scrollRef.current;
+src//components/preview/GlyphLyricsPanel.js:26:    container.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+src//components/preview/GlyphLyricsPanel.js:119:            ref={scrollRef}
+src//components/preview/GlyphLyricsPanel.js:122:              overflowY: "auto",
+src//components/preview/ImmersivePreviewModal.js:582:          overflow: "hidden",
+src//components/preview/ImmersivePreviewModal.js:596:        <div style={{ flex: "0 0 62%", position: "relative", overflow: "hidden" }}>
+src//components/preview/ImmersivePreviewModal.js:680:        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: t.dark, ...vars }}>
+src//components/preview/ImmersivePreviewModal.js:681:          <div style={{ flex: 1, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18, overflowY: "auto" }}>
+src//components/preview/ImmersivePreviewModal.js:913:          overflow: "hidden",
+src//components/preview/ImmersivePreviewModal.js:927:        <div style={{ flex: "0 0 62%", position: "relative", overflow: "hidden" }}>
+src//components/preview/ImmersivePreviewModal.js:958:        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: t.dark, ...vars }}>
+src//components/preview/ImmersivePreviewModal.js:981:          <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>
+src//components/preview/ImmersivePreviewModal.js:1007:                    <div style={{ fontSize: 12, fontWeight: 400, color: isActive ? t.accent : "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tr.title}</div>
+src//components/preview/ImmersivePreviewModal.js:1071:              <div style={{ fontSize: 12, color: "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{activeTrack?.title}</div>
+src//components/nav/VaultNavLockIcon.js:46:            overflow: "hidden",
+src//components/nav/MobileNavAnimatedIcon.js:13:  overflow: "hidden",
+src//components/vault/VaultUnlockedShelf.js:28:      style={{ maxHeight: "min(70vh, 720px)", overflowY: "auto" }}
+src//lib/player/usePlayerBodyState.js:8: * Body scroll lock is owned by modalStackStore (ModalShell, sheets, expanded player).

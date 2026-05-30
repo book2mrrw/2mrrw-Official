@@ -1,0 +1,9 @@
+.tmp-singles-vs-features-audit-20260529/report.md
+.tmp-singles-vs-features-audit-20260529/r2-probes.txt
+.tmp-singles-vs-features-audit-20260529/db-products.json
+.tmp-singles-vs-features-audit-20260529/manifest.txt
+
+Audit date: 2026-05-29
+Repo HEAD: 85e7ccd57797369c31262d9d0d0619c6490d90b7
+Mode: READ ONLY
+Slugs: hour-glass, w2d, i-dont-believe-you, 2-heavy

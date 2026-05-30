@@ -1,0 +1,13 @@
+BEFORE:
+  audio.src = /api/library/stream?slug=w2d&redirect=1
+  → 302 → https://2mrrw-media.{account}.r2.cloudflarestorage.com/digital-assets/...
+  → browser Range/seek on S3 host → 403
+
+AFTER:
+  audio.src = /api/library/stream?slug=w2d&redirect=1
+  → 200/206 streamed from Next.js (server fetch presigned URL)
+  → browser Range/seek on same origin → OK
+
+PREVIEW (unchanged):
+  /api/media/preview?folder=previews/singles/w2d/
+  → 302 → https://pub-….r2.dev/... (public CDN, not cloudflarestorage.com)

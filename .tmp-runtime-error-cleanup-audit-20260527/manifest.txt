@@ -1,0 +1,30 @@
+runtime-error-cleanup-audit-20260527
+Generated: 2026-05-27T16:58:25Z
+
+Files:
+01-network-console-inventory.md
+02-playback-events-route.md
+03-image-failures.md
+04-preload-prefetch.md
+05-classification-table.md
+06-hardening-plan.md
+07-fix-summary.md
+report.md
+manifest.txt
+
+Probes:
+- POST https://www.2mrrw.com/api/playback/events → 404 (pre-fix)
+- POST https://www.2mrrw.com/api/playback/events → 200 (post-fix, deploy dpl_JDLPREgNyp5Uhurx1PsMHTgioh2h)
+- POST https://2mrrw-control-system.vercel.app/api/playback/events → 200
+- OPTIONS both origins → 204
+
+Ship:
+- commits: e0ca4c3, 1d7bd04, 9339e86
+- deploy: dpl_JDLPREgNyp5Uhurx1PsMHTgioh2h
+
+Code references (read-only):
+- src/app/api/playback/events/route.js
+- src/lib/control-system/client.js
+- src/lib/control-system/playback.js
+- src/context/AudioContext.js
+- 2MRRW-Control-System/src/app/api/playback/events/route.ts

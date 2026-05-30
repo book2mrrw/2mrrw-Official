@@ -1,0 +1,6 @@
+.tmp-entitlement-audio-fix-20260528/manifest.txt
+.tmp-entitlement-audio-fix-20260528/report.md
+src/lib/music-access.js
+src/lib/music-playback.js
+src/lib/media-urls.js
+src/context/AudioContext.js

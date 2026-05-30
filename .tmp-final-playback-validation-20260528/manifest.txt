@@ -1,0 +1,20 @@
+final-playback-validation-20260528
+Generated: 2026-05-29
+Repo: /Users/recharge/artist-platform
+
+Files:
+  report.md          — matrix, code audit, remediation
+  curl-results.txt   — production + local + CDN probes
+  r2-verify.json     — node scripts/verify-r2-entity-folders.mjs --json
+  manifest.txt       — this file
+
+Commands:
+  node scripts/verify-r2-entity-folders.mjs --json
+  Production: https://www.2mrrw.com (Origin: https://www.2mrrw.com)
+  Local dev: http://127.0.0.1:3099 (current branch, .env.local R2)
+  CDN: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev
+
+Entities (12):
+  Singles: hour-glass, w2d, turnt-me-2-dis, artificial
+  Features: i-dont-believe-you, 2-heavy
+  Mixtape tracks: love-hz-vol-1/{01-roll-call,09-hour-glass}, ad/01-2mrrws-ntro, tbh/01-glass-full

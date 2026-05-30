@@ -1,0 +1,20 @@
+master-playback-architecture-audit-20260528
+generated_at=2026-05-28T12:00:00Z
+mode=read-only-analysis
+repo=/Users/recharge/artist-platform
+
+files:
+- report.md
+- audit-1-state-machine.md
+- audit-2-mobile-lifecycle-hydration.md
+- audit-3-r2-wav-streaming.md
+- audit-4-media-session-queue-sync.md
+- race-conditions-matrix.md
+- hidden-divergence-map.md
+- prioritized-remediation-plan.md
+- manifest.txt
+
+runtime_evidence:
+- production_stream_probe=unauthenticated_401_html
+- artifact_probe_1=.tmp-features-no-audio-diagnostic-20260527/curl-probes.txt
+- artifact_probe_2=.tmp-playback-performance-audit-20260527/raw-curl-probes.txt

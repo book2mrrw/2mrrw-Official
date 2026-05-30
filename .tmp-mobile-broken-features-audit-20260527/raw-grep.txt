@@ -1,0 +1,53 @@
+=== GREP 1: something wrong / error boundary ===
+src//app/layout.js:9:import { MediaErrorBoundary } from "@/system/errors";
+src//app/layout.js:45:                    <MediaErrorBoundary assetId="app-layout" mediaType="layout">
+src//app/layout.js:47:                    </MediaErrorBoundary>
+src//app/page.js:46:import { ModalErrorBoundary } from "@/system/errors";
+src//app/page.js:2539:              <ModalErrorBoundary stackId="mobile-nav-sheet" onClose={closeMobileNav} resetKey={mobileNavSheetOpen ? "open" : "closed"}>
+src//app/page.js:2632:              </ModalErrorBoundary>
+src//app/page.js:2638:              <ModalErrorBoundary stackId="mobile-cart-sheet" onClose={() => setMobileCartOpen(false)} resetKey={mobileCartOpen ? "open" : "closed"}>
+src//app/page.js:2659:              </ModalErrorBoundary>
+src//app/page.js:2739:          <ModalErrorBoundary
+src//app/page.js:2760:          </ModalErrorBoundary>
+src//app/error.js:42:        Something went wrong
+src//system/telemetry/events.js:13: *   | { type: 'error.boundary.caught', boundary: string, error: string }
+src//system/telemetry/events.js:30:  "error.boundary.caught",
+src//system/errors/MediaErrorBoundary.js:20:export default class MediaErrorBoundary extends Component {
+src//system/errors/MediaErrorBoundary.js:32:    console.error("[MediaErrorBoundary]", {
+src//system/errors/index.js:1:export { default as ErrorBoundary } from "./ErrorBoundary";
+src//system/errors/index.js:2:export { default as ModalErrorBoundary } from "./ModalErrorBoundary";
+src//system/errors/index.js:3:export { default as MediaErrorBoundary } from "./MediaErrorBoundary";
+src//system/errors/index.js:4:export { default as ImmersiveErrorBoundary } from "./ImmersiveErrorBoundary";
+src//system/errors/ErrorBoundary.js:21: * Base error boundary — class component for componentDidCatch.
+src//system/errors/ErrorBoundary.js:23:export default class ErrorBoundary extends Component {
+src//system/errors/ErrorBoundary.js:34:    const boundary = this.props.context || "ErrorBoundary";
+src//system/errors/ErrorBoundary.js:35:    clientLog("error", "boundary_caught", {
+src//system/errors/ErrorBoundary.js:42:      type: "error.boundary.caught",
+src//system/errors/ErrorBoundary.js:60:          message="Something went wrong in this view."
+src//system/errors/AsyncBoundary.js:4:import ErrorBoundary from "./ErrorBoundary";
+src//system/errors/AsyncBoundary.js:8: * Suspense + ErrorBoundary composition for async trees.
+src//system/errors/AsyncBoundary.js:23:    <ErrorBoundary context={context} fallback={fallback} resetKey={resetKey}>
+src//system/errors/AsyncBoundary.js:25:    </ErrorBoundary>
+src//system/errors/ModalErrorBoundary.js:23:export default class ModalErrorBoundary extends Component {
+src//system/errors/ModalErrorBoundary.js:37:    clientLog("error", "boundary_caught", {
+src//system/errors/ModalErrorBoundary.js:38:      boundary: "ModalErrorBoundary",
+src//system/errors/ModalErrorBoundary.js:44:      type: "error.boundary.caught",
+src//system/errors/ModalErrorBoundary.js:45:      boundary: "ModalErrorBoundary",
+src//system/errors/FallbackRenderer.js:14:export function MinimalErrorSurface({ message = "Something went wrong", onRetry }) {
+src//system/errors/ImmersiveErrorBoundary.js:21:export default class ImmersiveErrorBoundary extends Component {
+src//system/errors/ImmersiveErrorBoundary.js:34:    clientLog("error", "boundary_caught", {
+src//system/errors/ImmersiveErrorBoundary.js:35:      boundary: "ImmersiveErrorBoundary",
+src//system/errors/ImmersiveErrorBoundary.js:40:      type: "error.boundary.caught",
+src//system/errors/ImmersiveErrorBoundary.js:41:      boundary: "ImmersiveErrorBoundary",
+src//components/music/AlbumTracklistSheet.js:12:import { ModalErrorBoundary } from "@/system/errors";
+src//components/music/AlbumTracklistSheet.js:103:    <ModalErrorBoundary stackId="album-tracklist-sheet" onClose={onClose}>
+src//components/music/AlbumTracklistSheet.js:386:    </ModalErrorBoundary>
+src//components/payments/DonateModal.js:9:import { ModalErrorBoundary } from "@/system/errors";
+src//components/payments/DonateModal.js:117:    <ModalErrorBoundary stackId="donate-modal" onClose={handleClose} resetKey={open ? "open" : "closed"}>
+src//components/payments/DonateModal.js:305:    </ModalErrorBoundary>
+src//components/player/ImmersivePlayerEngine/ModalPlayerShell.js:7:import { ModalErrorBoundary } from "@/system/errors";
+src//components/player/ImmersivePlayerEngine/ModalPlayerShell.js:91:        <ModalErrorBoundary stackId={stackId} onClose={onClose}>
+src//components/player/ImmersivePlayerEngine/ModalPlayerShell.js:93:        </ModalErrorBoundary>
+
+=== GREP 2: my-account / account page (src/app/) ===
+(no matches)

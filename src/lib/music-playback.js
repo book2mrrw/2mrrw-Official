@@ -113,18 +113,15 @@ export function resolveCatalogPlaybackItem(item, catalogLookup) {
   return normalized;
 }
 
-function resolveAlbumTrackStreamSlug(albumSlug, track, catalogLookup) {
-  if (!albumSlug) return null;
-  if (typeof track === "string") return albumSlug;
-  const candidate = track?.slug;
-  if (candidate && catalogLookup?.bySlug?.has(candidate)) return candidate;
-  return albumSlug;
+/** Album/EP stream entitlement uses the release product slug; trackSlug is passed separately. */
+function resolveAlbumTrackStreamSlug(albumSlug) {
+  return albumSlug || null;
 }
 
 export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup) {
   const albumNorm = normalizeCatalogItemForPlayback(album);
   const albumSlug = albumNorm.slug || album.slug;
-  const streamSlug = resolveAlbumTrackStreamSlug(albumSlug, track, catalogLookup);
+  const streamSlug = resolveAlbumTrackStreamSlug(albumSlug);
 
   if (typeof track === "string") {
     const title = track;
@@ -153,6 +150,7 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
     return normalizeCatalogItemForPlayback({
       ...base,
       albumSlug,
+      release_type: albumNorm.release_type || album.release_type,
       trackIndex: index,
       type: base.type || "album_track",
     });
@@ -170,6 +168,7 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
     title: canonicalTrack?.title || canonicalRelease?.title || track.title,
     storage_path: canonicalTrack?.storage_path || track.storage_path,
     albumSlug,
+    release_type: albumNorm.release_type || album.release_type,
     trackIndex: index,
     cover: track.cover || albumNorm.cover,
     preview: track.preview || canonicalTrack?.preview || catalogItem?.preview || albumNorm.preview,

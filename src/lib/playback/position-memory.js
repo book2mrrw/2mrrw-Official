@@ -1,3 +1,8 @@
+/**
+ * Playback position memory — slug-scoped localStorage keys (`2mrrw_pos_{userId}_{slug}`).
+ * Stores seconds only (no R2 paths). Stale paths in catalog do not corrupt these entries.
+ * Use clearPlaybackPosition(userId, slug) per track; no bulk clear helper (avoid accidental data loss).
+ */
 function positionKey(userId, slug) {
   return `2mrrw_pos_${userId}_${slug}`;
 }

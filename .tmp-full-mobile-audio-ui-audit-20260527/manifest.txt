@@ -1,0 +1,51 @@
+# Full Mobile Audio & UI Audit — manifest
+# Date: 2026-05-27
+# Mode: READ ONLY (no code changes)
+
+## Deliverables in this folder
+- report.md
+- audio-flow.md
+- colors.md
+- animations.md
+- tabs-map.md
+- raw-grep.txt
+- manifest.txt
+
+## Primary source files read (complete or substantial)
+src/context/AudioContext.js
+src/lib/playback/stream-client.js
+src/media/useMediaEngine.js
+src/components/audio/GlobalAudioPlayerBar.js
+src/components/preview/ImmersivePreviewModal.js
+src/components/music/ReleaseCardPlayButton.js
+src/lib/music-access.js
+src/lib/music-playback.js
+src/app/api/library/stream/route.js
+src/lib/playback/position-memory.js
+public/sw.js
+src/lib/media-session-artwork.js
+src/lib/player/constants.js
+src/lib/player/usePlayerBodyState.js
+src/app/layout.js
+src/app/globals.css (partial — 4300+ lines; grep + targeted sections)
+src/styles/motion/tokens.css
+public/manifest.json
+src/app/page.js (partial — navigation, modals, account, mobile shell)
+
+## Supporting grep / reference
+src/components/music/MyMusicTab.js
+src/components/music/AlbumTracklistSheet.js
+src/components/music/ContinueListening.js
+src/components/player/ImmersivePlayerEngine/*
+src/system/errors/ModalErrorBoundary.js
+src/state/ui/modalStackStore.js
+
+## Raw grep outputs (also merged into raw-grep.txt)
+raw-colors-grep.txt (1736 lines)
+raw-animations-grep.txt (562 lines)
+raw-scroll-grep.txt (173 lines)
+raw-touch-grep.txt (3 lines)
+raw-playback-entry-grep.txt (76 lines)
+
+## Not present in repo
+tailwind.config.js (project uses Tailwind v4 @import "tailwindcss" + @theme inline in globals.css)

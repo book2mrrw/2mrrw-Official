@@ -1,0 +1,6 @@
+mobile-admin-auth-fix-20260527
+commit=922381d
+message=fix(auth): consistent admin detection and entitlements on mobile Safari
+files=src/lib/supabase/auth-storage-key.js,src/lib/supabase/client.js,src/lib/supabase/server.js,src/lib/supabase/middleware.js,src/lib/guest-session.js,src/app/api/account/state/route.js,src/context/AuthContext.js
+deploy_id=dpl_687WP7gHeCiFq2graAz52iuEq6YV
+production=https://www.2mrrw.com

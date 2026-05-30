@@ -1,0 +1,76 @@
+src//context/AudioContext.js:114:    await audio.play();
+src//context/AudioContext.js:126:    await audio.play();
+src//context/AudioContext.js:317:  const playTrackRef = useRef(null);
+src//context/AudioContext.js:767:            audio.play().catch(() => {});
+src//context/AudioContext.js:881:          audio.play().catch(() => {});
+src//context/AudioContext.js:938:            void playTrackRef.current?.(current, {
+src//context/AudioContext.js:977:            await audio.play();
+src//context/AudioContext.js:1170:      await audioEl.play();
+src//context/AudioContext.js:1178:  const playTrack = useCallback(async (track, options = {}) => {
+src//context/AudioContext.js:1188:      console.error("[AudioContext] playTrack: invalid track", track);
+src//context/AudioContext.js:1193:      console.error("[AudioContext] playTrack: track missing identity and src", track);
+src//context/AudioContext.js:1211:      console.error("[AudioContext] playTrack: audio element not mounted");
+src//context/AudioContext.js:1223:      console.error("[AudioContext] playTrack: no playback src", {
+src//context/AudioContext.js:1550:          await audio.play();
+src//context/AudioContext.js:1697:    return playTrack(conflict.track, {
+src//context/AudioContext.js:1701:  }, [patchState, playTrack]);
+src//context/AudioContext.js:1713:    return playTrack(track, { resumeAt, forceStream: true });
+src//context/AudioContext.js:1714:  }, [patchState, playTrack]);
+src//context/AudioContext.js:1797:          await audio.play();
+src//context/AudioContext.js:1813:    playTrackRef.current = playTrack;
+src//context/AudioContext.js:1845:    const ok = await playTrack(track, { resumeAt: 0 });
+src//context/AudioContext.js:1848:  }, [playTrack, patchState, applyCSModeToTrack]);
+src//context/AudioContext.js:1865:    const ok = await playTrack(track, { resumeAt: 0 });
+src//context/AudioContext.js:1868:  }, [playTrack, patchState, syncPositionState, applyCSModeToTrack]);
+src//context/AudioContext.js:1894:  const playQueue = useCallback(async (tracks = [], startIndex = 0, options = {}) => {
+src//context/AudioContext.js:1897:    return playTrack(normalized[Math.max(0, Math.min(startIndex, normalized.length - 1))], options);
+src//context/AudioContext.js:1898:  }, [setQueue, playTrack]);
+src//context/AudioContext.js:1916:      await audio.play();
+src//context/AudioContext.js:2158:            el.play().catch(() => {});
+src//context/AudioContext.js:2250:          await audio.play();
+src//context/AudioContext.js:2300:            await audio.play();
+src//context/AudioContext.js:2319:    playTrack,
+src//context/AudioContext.js:2320:    playQueue,
+src//context/AudioContext.js:2355:    playQueue,
+src//context/AudioContext.js:2356:    playTrack,
+src//app/page.js:534:    playTrack,
+src//app/page.js:535:    playQueue,
+src//app/page.js:634:      if (inView) video.play().catch(() => {});
+src//app/page.js:955:      if (ambientRefs.current[src]) ambientRefs.current[src].play().catch(()=>{});
+src//app/page.js:1018:        void playQueue(tracks, startIndex);
+src//app/page.js:1023:      void playTrack(
+src//app/page.js:1027:    [accountState, catalogPlaybackLookup, currentUser?.id, playQueue, playTrack]
+src//app/page.js:1115:    if (playbackTrack?.src) void playTrack(playbackTrack);
+src//app/page.js:1126:    playTrack,
+src//app/page.js:1151:      if (playbackTrack?.src) void playTrack(playbackTrack);
+src//app/page.js:1163:      playTrack,
+src//app/page.js:2434:                <button onClick={() => { void toggle(); }} style={{width:36,height:36,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+src//app/page.js:2564:                  <button onClick={() => { void toggle(); }} style={{width:38,height:38,borderRadius:"50%",background:"#00ffff",border:"none",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+src//components/music/MyMusicTab.js:325:  const { playTrack, playQueue, resume, setShuffle } = useAudioPlayer();
+src//components/music/MyMusicTab.js:394:      void playTrack(track, { resumeAt });
+src//components/music/MyMusicTab.js:396:    [accountState, playTrack, user?.id]
+src//components/music/MyMusicTab.js:408:      void playQueue(tracks, 0);
+src//components/music/MyMusicTab.js:410:    [accountState, playItem, playQueue, user?.id]
+src//components/music/MyMusicTab.js:430:      void playQueue(tracks, 0);
+src//components/music/MyMusicTab.js:432:    [accountState, catalogTracks, playQueue, setShuffle, user?.id]
+src//components/music/PlaylistDetail.js:8:  const { playQueue, toggleShuffle, shuffle, toggleRepeat, repeatMode } = useAudioPlayer();
+src//components/music/PlaylistDetail.js:28:          onClick={() => playQueue(tracks, 0)}
+src//components/music/PlaylistDetail.js:69:              onClick={() => playQueue(tracks, i)}
+src//components/music/ReleaseCardPlayButton.js:13:  const { playQueue, toggle, currentTrack, isPlaying, hasStarted, upgradeToFullStream } = useAudioPlayer();
+src//components/music/ReleaseCardPlayButton.js:54:        void toggle();
+src//components/music/ReleaseCardPlayButton.js:58:      void playQueue([track], 0);
+src//components/music/ReleaseCardPlayButton.js:74:      playQueue,
+src//components/music/AlbumTracklistSheet.js:32:  const { playQueue, toggle, currentTrack, isPlaying, hasStarted, setShuffle, seekBack, seekForward } = useAudioPlayer();
+src//components/music/AlbumTracklistSheet.js:69:        void playQueue(order, 0);
+src//components/music/AlbumTracklistSheet.js:72:        void playQueue(tracks, startIndex);
+src//components/music/AlbumTracklistSheet.js:76:    [tracks, playQueue, setShuffle, onClose]
+src//components/music/AlbumTracklistSheet.js:357:                        void toggle();
+src//components/music/AlbumTracklistSheet.js:362:                        void toggle();
+src//components/music/ContinueListening.js:7:  const { playTrack } = useAudioPlayer();
+src//components/music/ContinueListening.js:72:        onClick={() => playTrack(track, { resumeAt: lastPlayed.positionSeconds || 0 })}
+src//components/preview/ImmersivePreviewModal.js:879:      toggle();
+src//lib/music-playback.js:36:/** R2-resolve cover/preview/video paths — same shape singles use before playTrack. */
+src//lib/vault-audio.js:173:      const playPromise = sound.play();
+src//lib/vault-audio.js:189:      const playPromise = sound.play();
+src//media/useMediaEngine.js:23: * Maps subscription play() payload to AudioContext playTrack input.
+src//media/useMediaEngine.js:126:    play: (track) => audio.playTrack(mapMediaTrackToPlayInput(track)),

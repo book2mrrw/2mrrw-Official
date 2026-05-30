@@ -1,0 +1,5 @@
+.tmp-features-audio-fix-20260528/report.md
+.tmp-features-audio-fix-20260528/files-changed.md
+.tmp-features-audio-fix-20260528/verification-checklist.md
+.tmp-features-audio-fix-20260528/before-after-paths.md
+src/lib/playback/resolve-playback-key.js

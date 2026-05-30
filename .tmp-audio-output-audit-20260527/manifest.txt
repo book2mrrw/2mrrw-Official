@@ -1,0 +1,36 @@
+audio-output-silent-playback-audit-20260527
+report.md
+01-playback-flow-trace.md
+02-audio-element-state.md
+03-audiocontext-state.md
+04-media-node-graph.md
+05-optimization-impact.md
+06-safari-compatibility.md
+07-root-cause-hypotheses-ranked.md
+manifest.txt
+
+Generated: 2026-05-27
+Repo: /Users/recharge/artist-platform
+Scope: Read-only runtime audio output pipeline audit
+Code changes: none
+Commits: none
+
+Primary sources:
+- src/context/AudioContext.js
+- src/lib/playback/stream-client.js
+- src/lib/music-access.js
+- src/media/useMediaEngine.js
+- src/components/auth/AppAuthRoot.js
+- src/components/system/AudioPhase10Bridge.js
+- src/media/preloader/MediaPreloader.js
+- src/hooks/useCsCoverTransition.js
+- src/lib/player/useImmersivePlayback.js
+- src/components/music/ReleaseCardPlayButton.js
+
+Browser probe:
+- URL: https://www.2mrrw.com
+- Result: unauthenticated AuthGate, audioCount=0
+- Limit: authenticated playback CDP inspection not performed
+
+Zip output:
+- /Users/recharge/Downloads/audio-output-silent-playback-audit-20260527.zip

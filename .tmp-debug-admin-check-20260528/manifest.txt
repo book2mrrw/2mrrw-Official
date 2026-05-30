@@ -1,0 +1,5 @@
+.tmp-debug-admin-check-20260528/report.md
+.tmp-debug-admin-check-20260528/isAdminUser-source.txt
+.tmp-debug-admin-check-20260528/simulated-user-object.md
+.tmp-debug-admin-check-20260528/verification-results.md
+.tmp-debug-admin-check-20260528/files-read.txt

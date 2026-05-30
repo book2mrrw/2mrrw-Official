@@ -1,0 +1,198 @@
+# curl probes 2026-05-29T15:21:49Z
+=== preview hourglass HEAD ===
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 15:21:50 GMT
+Content-Type: audio/mpeg
+Content-Length: 831656
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "d69eafd8c7b91fd732ef4b1caed614fb"
+Last-Modified: Fri, 22 May 2026 00:04:57 GMT
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a0367db76fa9677a-DFW
+
+
+=== preview idbu HEAD ===
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 15:21:50 GMT
+Content-Type: audio/wav
+Content-Length: 5203902
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "2fa3105e10d50146aba3db07584c698a"
+Last-Modified: Fri, 22 May 2026 00:05:02 GMT
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a0367db89e9f6c79-DFW
+
+
+=== master hour-glass Range ===
+HTTP/1.1 206 Partial Content
+Date: Fri, 29 May 2026 15:21:50 GMT
+Content-Type: audio/mpeg
+Content-Length: 1024
+Connection: keep-alive
+Content-Range: bytes 0-1023/7165827
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "89cb7e0d89032c72163c0f6332998c5e"
+Last-Modified: Fri, 22 May 2026 00:04:46 GMT
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a0367db9891f600c-DFW
+
+
+=== master idbu Range ===
+HTTP/1.1 404 Not Found
+Date: Fri, 29 May 2026 15:21:50 GMT
+Content-Type: text/plain;charset=UTF-8
+Connection: keep-alive
+Access-Control-Allow-Origin: https://www.2mrrw.com
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a0367dba4895f088-DFW
+
+
+=== capital Singles 404 ===
+HTTP/1.1 404 Not Found
+Date: Fri, 29 May 2026 15:21:50 GMT
+Content-Type: text/plain;charset=UTF-8
+Connection: keep-alive
+Access-Control-Allow-Origin: https://www.2mrrw.com
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a0367dbbd8576ba7-DFW
+
+
+=== features path (canonical) ===
+HTTP/1.1 404 Not Found
+Date: Fri, 29 May 2026 15:21:50 GMT
+Content-Type: text/plain;charset=UTF-8
+Connection: keep-alive
+Access-Control-Allow-Origin: https://www.2mrrw.com
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a0367dbcac48765b-DFW
+
+
+=== w2d master ===
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 15:21:51 GMT
+Content-Type: audio/mpeg
+Content-Length: 7321216
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "bf7c19c199c2afbf6ce71142853ecad4"
+Last-Modified: Fri, 22 May 2026 00:04:47 GMT
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+CF-RAY: a0367dbd6ada2e51-DFW
+
+
+=== legacy host ===
+HTTP/1.1 401 Unauthorized
+Date: Fri, 29 May 2026 15:21:51 GMT
+Content-Type: text/html
+Content-Length: 16794
+Connection: keep-alive
+Server: cloudflare
+CF-RAY: a0367dbefb532fe4-DFW
+
+
+=== stream API no auth ===
+HTTP/2 401 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Fri, 29 May 2026 15:21:52 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::dp5jj-1780068111593-724ecbdf86c6
+
+
+=== HEAD digital-assets/singles/artificial/audio.mp3 ===
+=== HEAD digital-assets/singles/artificial/audio.mp3 ===
+=== HEAD digital-assets/singles/artificial/audio.mp3 ===
+=== HEAD digital-assets/singles/artificial/audio.mp3 ===
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 15:22:25 GMT
+Content-Type: audio/mpeg
+Content-Length: 8329216
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "64e154bd4278b571e57bcc3d577018c1"
+
+=== HEAD digital-assets/singles/turnt-me-2-dis/audio.mp3 ===
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 15:22:25 GMT
+Content-Type: audio/mpeg
+Content-Length: 5799100
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "f286069dff096f8d804647fb04a6eb16"
+
+=== HEAD digital-assets/singles/2-heavy/audio.wav ===
+HTTP/1.1 404 Not Found
+Date: Fri, 29 May 2026 15:22:25 GMT
+Content-Type: text/plain;charset=UTF-8
+Connection: keep-alive
+Access-Control-Allow-Origin: https://www.2mrrw.com
+Vary: Origin
+Access-Control-Expose-Headers: Accept-Ranges,Content-Length,Content-Range,Content-Type,ETag,Last-Modified
+Server: cloudflare
+
+=== HEAD previews/2-heavy-preview.wav ===
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 15:22:25 GMT
+Content-Type: audio/wav
+Content-Length: 6649094
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "763737e739f24ce81247fab1e401de26"
+
+=== HEAD previews/w2d-preview.mp3 ===
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 15:22:25 GMT
+Content-Type: audio/mpeg
+Content-Length: 1230016
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "2ea70b252cd26573968edf6c2946d4e2"
+
+=== HEAD previews/artificial-preview.mp3 ===
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 15:22:26 GMT
+Content-Type: audio/mpeg
+Content-Length: 1039936
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "7acfe053c0d4728f3e370967ac61884c"
+
+=== HEAD previews/turntme2dis-preview.mp3 ===
+HTTP/1.1 200 OK
+Date: Fri, 29 May 2026 15:22:26 GMT
+Content-Type: audio/mpeg
+Content-Length: 1032276
+Connection: keep-alive
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+ETag: "70ab17fb3800d4ab986b9cc1f2794444"
+

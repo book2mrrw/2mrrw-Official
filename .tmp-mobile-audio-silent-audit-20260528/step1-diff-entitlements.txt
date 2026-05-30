@@ -1,0 +1,12 @@
+diff --git a/src/lib/commerce/entitlements.js b/src/lib/commerce/entitlements.js
+index 6f6c4de..c3a7b37 100644
+--- a/src/lib/commerce/entitlements.js
++++ b/src/lib/commerce/entitlements.js
+@@ -248,6 +248,7 @@ export function isDigitalProduct(product) {
+     type === "audio" ||
+     type === "single" ||
+     type === "album" ||
++    type === "ep" ||
+     type === "feature"
+   );
+ }

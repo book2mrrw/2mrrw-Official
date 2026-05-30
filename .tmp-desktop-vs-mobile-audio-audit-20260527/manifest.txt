@@ -1,0 +1,47 @@
+desktop-vs-mobile-audio-audit-20260527
+generated=2026-05-27
+mode=read-only
+repo=/Users/recharge/artist-platform
+production_host=https://www.2mrrw.com
+
+files:
+report.md
+desktop-path-map.md
+mobile-path-map.md
+divergence-matrix.md
+recommended-fixes.md
+qa-mobile-checklist.md
+manifest.txt
+
+core_sources_reviewed:
+src/context/AudioContext.js
+src/lib/playback/stream-client.js
+src/media/useMediaEngine.js
+src/components/audio/GlobalAudioPlayerBar.js
+src/components/preview/ImmersivePreviewModal.js
+src/components/music/ReleaseCardPlayButton.js
+src/app/page.js
+src/lib/supabase/client.js
+src/lib/supabase/server.js
+src/lib/supabase/middleware.js
+src/lib/supabase/auth-storage-key.js
+src/lib/music-access.js
+src/lib/music-playback.js
+src/app/api/library/stream/route.js
+src/app/api/account/state/route.js
+src/context/AuthContext.js
+src/lib/auth/session-user.js
+src/lib/guest-session.js
+public/sw.js
+
+prior_audits_referenced:
+.tmp-stream-401-root-cause-report-20260527/report.md
+.tmp-mobile-admin-auth-fix-20260527/report.md
+.tmp-audio-output-audit-20260527/report.md
+.tmp-stream-session-continuity-audit-20260527/report.md
+.tmp-mobile-broken-features-audit-20260527/report.md
+
+production_probes:
+OPTIONS /api/library/stream -> 204
+GET /api/library/stream?slug=hour-glass -> 401
+GET /api/account/state -> 200 guest

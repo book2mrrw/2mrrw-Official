@@ -1,0 +1,35 @@
+playback-entitlement-teardown-audit-20260527
+report.md
+01-auth-lifecycle.md
+02-playback-events-role.md
+03-preview-enforcement.md
+04-session-state.md
+05-termination-paths.md
+06-auth-continuity.md
+07-root-cause-ranked.md
+manifest.txt
+
+Source files read (not copied):
+- src/context/AudioContext.js
+- src/context/AuthContext.js
+- src/lib/control-system/playback.js
+- src/lib/control-system/client.js
+- src/lib/music-access.js
+- src/lib/music-playback.js
+- src/lib/playback/stream-client.js
+- src/lib/playback/stream-pipeline.js
+- src/lib/playback/playback-gate.js
+- src/lib/commerce/entitlements.js
+- src/lib/listening-history.js
+- src/app/api/library/stream/route.js
+- src/app/api/media/playback/route.js
+- src/app/api/stream/end/route.js
+- src/app/api/account/state/route.js
+- src/app/page.js
+- src/components/music/ReleaseCardPlayButton.js
+- src/components/audio/GlobalAudioPlayerBar.js
+- 2MRRW-Control-System/src/app/api/playback/events/route.ts
+- 2MRRW-Control-System/src/server/http.ts
+- 2MRRW-Control-System/src/server/releases/releaseService.ts
+
+Production probes: 2026-05-27 OPTIONS/POST playback/events (storefront + CS)

@@ -1,0 +1,735 @@
+=== preview/hour-glass ===
+URL: https://www.2mrrw.com/api/media/preview?folder=previews/singles/hour-glass/
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 76
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:48:57 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::94cbw-1780080537194-365883df7bdd
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== preview/w2d ===
+URL: https://www.2mrrw.com/api/media/preview?folder=previews/singles/w2d/
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 77
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:48:57 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::msr8n-1780080537410-cecdc444eec5
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== preview/turnt-me-2-dis ===
+URL: https://www.2mrrw.com/api/media/preview?folder=previews/singles/turnt-me-2-dis/
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 77
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:48:57 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::slsmn-1780080537563-9c71e52b4fa6
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== preview/artificial ===
+URL: https://www.2mrrw.com/api/media/preview?folder=previews/singles/artificial/
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 77
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:48:57 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::wjsxn-1780080537849-f0e8ba4f1678
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== preview/i-dont-believe-you ===
+URL: https://www.2mrrw.com/api/media/preview?folder=previews/features/i-dont-believe-you/
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 77
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:48:58 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::wjsxn-1780080538086-14e071ef5654
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== preview/2-heavy ===
+URL: https://www.2mrrw.com/api/media/preview?folder=previews/features/2-heavy/
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 78
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:48:58 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::cdrhf-1780080538316-4f8d5567ea2f
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== preview/love-hz-01-roll-call ===
+URL: https://www.2mrrw.com/api/media/preview?folder=previews/mixtapes-and-eps/love-hz-vol-1/01-roll-call/
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 78
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:48:58 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::447mw-1780080538468-7db3c719d9ea
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== preview/love-hz-09-hour-glass ===
+URL: https://www.2mrrw.com/api/media/preview?folder=previews/mixtapes-and-eps/love-hz-vol-1/09-hour-glass/
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 78
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:48:58 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::k8d6t-1780080538622-669157638fc0
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== preview/ad-01-intro ===
+URL: https://www.2mrrw.com/api/media/preview?folder=previews/mixtapes-and-eps/ad/01-2mrrws-ntro/
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 78
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:48:58 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::dsjqx-1780080538885-18003f08c6be
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== preview/tbh-01-glass-full ===
+URL: https://www.2mrrw.com/api/media/preview?folder=previews/mixtapes-and-eps/tbh/01-glass-full/
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 78
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:48:59 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::4ksg8-1780080539180-b794b3fa56c8
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== preview/idbu-legacy ===
+URL: https://www.2mrrw.com/api/media/preview?legacy=previews/i-dont-believe-you-preview.wav
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 79
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:48:59 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::4ksg8-1780080539439-f37035e9928a
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== preview/2heavy-legacy ===
+URL: https://www.2mrrw.com/api/media/preview?legacy=previews/2-heavy-preview.wav
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 79
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:48:59 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::7pc59-1780080539714-c17bf6360fbe
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== visual/hour-glass ===
+URL: https://www.2mrrw.com/api/media/visual?releaseType=singles&slug=hour-glass&meta=1
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 79
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:49:00 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::h2ctb-1780080540008-3f11835a1d5b
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== visual/w2d ===
+URL: https://www.2mrrw.com/api/media/visual?releaseType=singles&slug=w2d&meta=1
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 80
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:49:00 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::mnhrf-1780080540212-3f066252ce3f
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== visual/turnt-me-2-dis ===
+URL: https://www.2mrrw.com/api/media/visual?releaseType=singles&slug=turnt-me-2-dis&meta=1
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 80
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:49:00 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::9wwsg-1780080540500-629418de7b3e
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== visual/artificial ===
+URL: https://www.2mrrw.com/api/media/visual?releaseType=singles&slug=artificial&meta=1
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 80
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:49:00 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::9gm55-1780080540763-7eda55f6bea9
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== visual/i-dont-believe-you ===
+URL: https://www.2mrrw.com/api/media/visual?releaseType=features&slug=i-dont-believe-you&meta=1
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 80
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:49:01 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::gp75n-1780080541077-2f58b04e5ef5
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== visual/2-heavy ===
+URL: https://www.2mrrw.com/api/media/visual?releaseType=features&slug=2-heavy&meta=1
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 80
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:49:01 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::vcqzn-1780080541245-fe877dede3ce
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== visual/love-hz-vol-1 ===
+URL: https://www.2mrrw.com/api/media/visual?releaseType=mixtapes-and-eps&slug=love-hz-vol-1&meta=1
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 81
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:49:01 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::hpr5s-1780080541920-23e4dafd3b32
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== visual/ad ===
+URL: https://www.2mrrw.com/api/media/visual?releaseType=mixtapes-and-eps&slug=ad&meta=1
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 81
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:49:02 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::94cbw-1780080542183-490412e0dd66
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== visual/tbh ===
+URL: https://www.2mrrw.com/api/media/visual?releaseType=mixtapes-and-eps&slug=tbh&meta=1
+--- headers ---
+HTTP/2 404 
+accept-ranges: bytes
+access-control-allow-origin: *
+age: 82
+cache-control: public, max-age=0, must-revalidate
+content-disposition: inline; filename="404"
+content-type: text/html; charset=utf-8
+date: Fri, 29 May 2026 18:49:02 GMT
+etag: "c627a70e843b12fe8d9617509e784ed0"
+last-modified: Fri, 29 May 2026 18:47:40 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /404
+x-vercel-cache: HIT
+x-vercel-id: cle1::lrqh7-1780080542444-47aace1669a1
+content-length: 25759
+
+
+HTTP:404 redirect:
+
+=== stream/hour-glass ===
+URL: https://www.2mrrw.com/api/library/stream?slug=hour-glass&redirect=1
+--- headers ---
+HTTP/2 401 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Fri, 29 May 2026 18:49:02 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::znrbd-1780080542691-a1a60cd47574
+
+
+HTTP:401 redirect:
+
+=== stream/w2d ===
+URL: https://www.2mrrw.com/api/library/stream?slug=w2d&redirect=1
+--- headers ---
+HTTP/2 401 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Fri, 29 May 2026 18:49:03 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::hqbtz-1780080542967-7024d244c915
+
+
+HTTP:401 redirect:
+
+=== stream/turnt-me-2-dis ===
+URL: https://www.2mrrw.com/api/library/stream?slug=turnt-me-2-dis&redirect=1
+--- headers ---
+HTTP/2 401 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Fri, 29 May 2026 18:49:03 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::94qtt-1780080543168-82d1b159fa96
+
+
+HTTP:401 redirect:
+
+=== stream/artificial ===
+URL: https://www.2mrrw.com/api/library/stream?slug=artificial&redirect=1
+--- headers ---
+HTTP/2 401 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Fri, 29 May 2026 18:49:03 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::v6jw2-1780080543350-368a7e07543f
+
+
+HTTP:401 redirect:
+
+=== stream/i-dont-believe-you ===
+URL: https://www.2mrrw.com/api/library/stream?slug=i-dont-believe-you&redirect=1
+--- headers ---
+HTTP/2 401 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Fri, 29 May 2026 18:49:03 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::mhnpc-1780080543578-71e7aef1ba06
+
+
+HTTP:401 redirect:
+
+=== stream/2-heavy ===
+URL: https://www.2mrrw.com/api/library/stream?slug=2-heavy&redirect=1
+--- headers ---
+HTTP/2 401 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Fri, 29 May 2026 18:49:03 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::x2kvj-1780080543758-1cd8a9a447bc
+
+
+HTTP:401 redirect:
+
+=== stream/love-hz-01-roll-call ===
+URL: https://www.2mrrw.com/api/library/stream?slug=love-hz-vol-1&trackSlug=01-roll-call&redirect=1
+--- headers ---
+HTTP/2 401 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Fri, 29 May 2026 18:49:04 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::qmblk-1780080544044-5251caebe76e
+
+
+HTTP:401 redirect:
+
+=== stream/love-hz-09-hour-glass ===
+URL: https://www.2mrrw.com/api/library/stream?slug=love-hz-vol-1&trackSlug=09-hour-glass&redirect=1
+--- headers ---
+HTTP/2 401 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Fri, 29 May 2026 18:49:04 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::cd6gk-1780080544296-eb6f7be6a085
+
+
+HTTP:401 redirect:
+
+=== stream/ad-01-intro ===
+URL: https://www.2mrrw.com/api/library/stream?slug=ad&trackSlug=01-2mrrws-ntro&redirect=1
+--- headers ---
+HTTP/2 401 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Fri, 29 May 2026 18:49:04 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::9twsd-1780080544549-bd00f5db2800
+
+
+HTTP:401 redirect:
+
+=== stream/tbh-01-glass-full ===
+URL: https://www.2mrrw.com/api/library/stream?slug=tbh&trackSlug=01-glass-full&redirect=1
+--- headers ---
+HTTP/2 401 
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Fri, 29 May 2026 18:49:04 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::kchxf-1780080544738-95ad8950d2e5
+
+
+HTTP:401 redirect:
+
+=== CDN hour-glass-preview ===
+URL: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev/previews/singles/hour-glass/hourglass-preview.mp3
+--- headers ---
+probe_cdn:7: command not found: curl
+
+=== CDN PROBES (append) ===
+--- CDN hour-glass-preview ---
+URL: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev/previews/singles/hour-glass/hourglass-preview.mp3|hour-glass-audio|digital-assets/singles/hour-glass/audio.mp3
+(eval):21: command not found: curl
+
+=== LOCAL DEV (127.0.0.1:3099) — entity media API probes ===
+--- local preview/hour-glass ---
+URL: http://127.0.0.1:3099/api/media/preview?folder=previews/singles/hour-glass/|preview/w2d|http://127.0.0.1:3099/api/media/preview?folder=previews/singles/w2d/
+HTTP/1.1 404 Not Found
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+content-type: application/json
+Date: Fri, 29 May 2026 18:53:20 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
+
+HTTP:404 redirect:
+
+--- local preview/idbu-folder ---
+URL: http://127.0.0.1:3099/api/media/preview?folder=previews/features/i-dont-believe-you/|preview/idbu-legacy|http://127.0.0.1:3099/api/media/preview?legacy=previews/i-dont-believe-you-preview.wav
+HTTP/1.1 404 Not Found
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+content-type: application/json
+Date: Fri, 29 May 2026 18:53:20 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
+
+HTTP:404 redirect:
+
+--- local preview/love-hz-01 ---
+URL: http://127.0.0.1:3099/api/media/preview?folder=previews/mixtapes-and-eps/love-hz-vol-1/01-roll-call/|visual/hour-glass|http://127.0.0.1:3099/api/media/visual?releaseType=singles&slug=hour-glass&meta=1
+HTTP/1.1 404 Not Found
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+content-type: application/json
+Date: Fri, 29 May 2026 18:53:20 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
+
+HTTP:404 redirect:
+
+--- local visual/idbu ---
+URL: http://127.0.0.1:3099/api/media/visual?releaseType=features&slug=i-dont-believe-you&meta=1|visual/love-hz|http://127.0.0.1:3099/api/media/visual?releaseType=mixtapes-and-eps&slug=love-hz-vol-1&meta=1
+HTTP/1.1 404 Not Found
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+content-type: application/json
+Date: Fri, 29 May 2026 18:53:21 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
+
+HTTP:404 redirect:
+
+--- local stream/hour-glass ---
+URL: http://127.0.0.1:3099/api/library/stream?slug=hour-glass&redirect=1|stream/ad-intro|http://127.0.0.1:3099/api/library/stream?slug=ad&trackSlug=01-2mrrws-ntro&redirect=1
+HTTP/1.1 401 Unauthorized
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+content-type: application/json
+Date: Fri, 29 May 2026 18:53:21 GMT
+Connection: keep-alive
+Keep-Alive: timeout=5
+Transfer-Encoding: chunked
+
+
+HTTP:401 redirect:
+
+=== CDN (production public bucket) ===
+hour-glass-preview: 206
+hour-glass-audio: 206
+hour-glass-video: 206
+idbu-legacy: 404
+ad-intro: 206

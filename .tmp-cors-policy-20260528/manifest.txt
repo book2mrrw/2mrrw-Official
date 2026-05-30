@@ -1,0 +1,14 @@
+.tmp-cors-policy-20260528/
+├── report.md                 — Full audit + fixes summary (Steps 1–5)
+├── r2-cors-policy.json       — Paste-ready R2 bucket CORS policy
+├── dashboard-steps.md        — Cloudflare R2 dashboard apply steps
+├── verification-curls.sh     — Repeatable curl probes (R2 + /api/media/*)
+├── curl-probes.txt           — Live probe output (2026-05-29T22:02:28Z)
+└── manifest.txt              — This file
+
+Repo updates (not committed — prompt did not request commit):
+├── docs/reports/r2-cors-policy-recommended.json
+├── src/lib/server/media-cors.js
+├── src/app/api/media/preview/route.js
+├── src/app/api/media/visual/route.js
+└── src/app/api/media/playback/route.js

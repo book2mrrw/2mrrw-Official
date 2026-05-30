@@ -1,0 +1,22 @@
+# curl HEAD probes — 2026-05-28
+# CDN: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev
+
+## previews/i-dont-believe-you-preview.wav
+HTTP/1.1 200 OK
+Content-Type: audio/wav
+Content-Length: 5203902
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+
+## previews/2-heavy-preview.wav
+HTTP/1.1 200 OK
+Content-Type: audio/wav
+Content-Length: 6649094
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: https://www.2mrrw.com
+
+## previews/hourglass-preview.mp3 (control)
+HTTP/1.1 200 OK
+Content-Type: audio/mpeg
+Content-Length: 831656
+Accept-Ranges: bytes

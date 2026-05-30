@@ -1,0 +1,6 @@
+root-cause-findings.md
+fixes-applied.md
+qa-verification-checklist.md
+regression-prevention-checklist.md
+deployment-plan.md
+manifest.txt

@@ -1,0 +1,12 @@
+src/lib/media/normalize-release-type.js
+src/lib/media/canonical-paths.js
+src/lib/media/entity-resolver.js
+src/lib/media/media-availability.js
+src/lib/media/admin-media-diagnostics.js
+src/lib/media/cache-invalidation.js
+src/lib/playback/resolve-playback-key.js
+src/lib/music-playback.js
+src/components/home/catalogMedia.js
+src/app/api/media/preview/route.js
+src/app/api/media/visual/route.js
+src/app/api/admin/media-diagnostics/route.js

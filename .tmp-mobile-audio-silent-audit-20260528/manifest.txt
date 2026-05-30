@@ -1,0 +1,16 @@
+mobile-audio-silent-audit-20260528
+phase1-most-recent-commits-and-diffs.md
+phase2-desktop-vs-mobile-divergence.md
+phase3-play-path-trace.md
+phase4-mobile-console-check.md
+phase5-401-403-fallback.md
+phase6-album-slug-impact.md
+step1-git-log.txt
+step1-git-diff-stat.txt
+step1-diff-AudioContext.txt
+step1-diff-page.txt
+step1-diff-music-access.txt
+step1-diff-entitlements.txt
+step1-diff-GlobalAudioPlayerBar.txt
+step1-diff-ImmersivePreviewModal.txt
+report.md

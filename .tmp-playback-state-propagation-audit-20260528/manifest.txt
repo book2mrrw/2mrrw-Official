@@ -1,0 +1,14 @@
+playback-state-propagation-audit-20260528
+generated_at=2026-05-28
+mode=read-only
+files:
+- report.md
+- playtrack-commit-trace.md
+- player-visibility-conditions.md
+- usemediaengine-propagation.md
+- loading-state-flow.md
+- stale-invalidation-analysis.md
+- diagnostics-review.md
+- minimal-remediation-steps.md
+- manifest.txt
+

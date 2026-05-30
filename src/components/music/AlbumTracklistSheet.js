@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
-import { albumTracksForPlayback } from "@/lib/music-playback";
+import { albumTracksForPlayback, getPlayButtonState } from "@/lib/music-playback";
 import { resolveTrackAccess } from "@/lib/music-access";
 import { useAudioPlayer } from "@/context/AudioContext";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
@@ -62,7 +62,7 @@ export default function AlbumTracklistSheet({
 
   const playAndClose = useCallback(
     (startIndex, shuffle = false) => {
-      const playable = tracks.filter((t) => Boolean(t.src));
+      const playable = tracks.filter((t) => Boolean(t.src) && t.playbackStatus !== "unavailable");
       if (!playable.length) return;
       if (shuffle) {
         setShuffle(true);
@@ -258,6 +258,7 @@ export default function AlbumTracklistSheet({
               const trackCover = track.cover || album.cover;
               const trackCoverType = track.coverArtType || albumCoverType;
               const previewUnavailable = Boolean(track.metadata?.previewUnavailable);
+              const rowPlayState = getPlayButtonState(track, { ...accountState, userId });
               const trackAccess = resolveTrackAccess(
                 { ...track, slug: track.slug || album.slug, albumSlug: album.slug },
                 { ...accountState, userId }
@@ -359,7 +360,7 @@ export default function AlbumTracklistSheet({
                       onLibraryChange={onLibraryChange}
                     />
                   </span>
-                  {previewUnavailable ? (
+                  {previewUnavailable || rowPlayState.disabled ? (
                     <span
                       style={{
                         fontSize: 9,
@@ -372,12 +373,19 @@ export default function AlbumTracklistSheet({
                         lineHeight: 1.2,
                       }}
                     >
-                      Preview not available
+                      {rowPlayState.label === "Play" ? "Preview not available" : rowPlayState.label}
                     </span>
                   ) : (
                     <button
                       type="button"
-                      aria-label={active && isPlaying ? `Pause ${track.title}` : `Play ${track.title}`}
+                      aria-label={
+                        active && isPlaying
+                          ? `Pause ${track.title}`
+                          : rowPlayState.disabled
+                            ? rowPlayState.label
+                            : `Play ${track.title}`
+                      }
+                      disabled={rowPlayState.disabled}
                       onClick={() => {
                         if (active && isPlaying) {
                           void toggle();

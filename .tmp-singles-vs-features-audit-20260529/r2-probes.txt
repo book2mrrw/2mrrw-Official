@@ -1,0 +1,48 @@
+# R2 / CDN probes — 2026-05-29
+# CDN base: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev
+# Tool: node fetch HEAD + scripts/verify-r2-entity-folders.mjs --json
+
+## CDN HEAD (node fetch)
+
+200 previews/singles/w2d/w2d-preview.mp3 audio/mpeg
+200 previews/singles/hour-glass/hourglass-preview.mp3 audio/mpeg
+404 previews/features/i-dont-believe-you/i-dont-believe-you-preview.wav
+404 previews/features/2-heavy/2-heavy-preview.wav
+404 previews/i-dont-believe-you-preview.wav
+404 previews/2-heavy-preview.wav
+
+## verify-r2-entity-folders.mjs — audit slugs
+
+### hour-glass (single)
+audio: digital-assets/singles/hour-glass/audio.mp3 — hasAudio: true
+preview: previews/singles/hour-glass/hourglass-preview.mp3 — hasPreview: true
+video: videos/singles/hour-glass/hourglass.mp4 — hasVideo: true
+
+### w2d (single)
+audio: digital-assets/singles/w2d/audio.mp3 — hasAudio: true
+preview: previews/singles/w2d/w2d-preview.mp3 — hasPreview: true
+video: videos/singles/w2d/w2d.mp4 — hasVideo: true
+
+### i-dont-believe-you (feature)
+audio: digital-assets/features/i-dont-believe-you/I Don't Believe You ft. 2mrrw.wav — hasAudio: true
+preview: previews/features/i-dont-believe-you/ — keys: [] — hasPreview: false
+legacyPreview: previews/features/i-dont-believe-you/i-dont-believe-you-preview.wav — NOT IN BUCKET
+video: previews/features/i-dont-believe-you/ — empty
+
+### 2-heavy (feature)
+audio: digital-assets/features/2-heavy/2 Heavy ft. 2mrrw .wav — hasAudio: true
+preview: previews/features/2-heavy/ — keys: [] — hasPreview: false
+legacyPreview: previews/features/2-heavy/2-heavy-preview.wav — NOT IN BUCKET
+video: empty
+
+## Expected client preview API URLs
+
+w2d:
+  /api/media/preview?folder=previews/singles/w2d/&legacy=previews/singles/w2d/w2d-preview.mp3
+
+i-dont-believe-you:
+  /api/media/preview?folder=previews/features/i-dont-believe-you/&legacy=previews/features/i-dont-believe-you/i-dont-believe-you-preview.wav
+
+Expected stream entity folders (entitled):
+  digital-assets/singles/w2d/
+  digital-assets/features/i-dont-believe-you/

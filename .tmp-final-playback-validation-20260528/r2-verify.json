@@ -1,0 +1,1057 @@
+{
+  "skipped": false,
+  "bucket": "2mrrw-media",
+  "probed": 39,
+  "withAudio": 17,
+  "withPreview": 4,
+  "withArtwork": 9,
+  "withVideo": 4,
+  "missingAudio": [
+    "i-dont-believe-you",
+    "2-heavy",
+    "love-hz-vol-1/01-roll-call",
+    "love-hz-vol-1/02-w-2-d",
+    "love-hz-vol-1/07-stayed-2-long",
+    "love-hz-vol-1/08-knock-on-wood",
+    "love-hz-vol-1/09-hour-glass",
+    "ad/03-said-n-done",
+    "ad/04-a-d-d",
+    "ad/08-life-changes-ft-gwendolyn",
+    "tbh/01-glass-full",
+    "tbh/02-up-2-me",
+    "tbh/03-unxpcted",
+    "tbh/04-all-yours",
+    "tbh/05-locomotive",
+    "tbh/06-left",
+    "tbh/07-was-wrong",
+    "tbh/08-2late",
+    "tbh/09-artificial"
+  ],
+  "singlesFallbackHits": [],
+  "expectedFailures": [
+    {
+      "slug": "i-dont-believe-you",
+      "note": "Prior audit: master at digital-assets/singles/… (404 public CDN)"
+    },
+    {
+      "slug": "2-heavy",
+      "note": "Prior audit: master at digital-assets/singles/… (404 public CDN)"
+    },
+    {
+      "slug": "features/*",
+      "note": "DB uses features/; R2 may store under singles/ — code fallback added"
+    }
+  ],
+  "results": [
+    {
+      "slug": "hour-glass",
+      "kind": "single",
+      "audio": {
+        "prefix": "digital-assets/singles/hour-glass/",
+        "keys": [
+          "digital-assets/singles/hour-glass/audio.mp3"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/singles/hour-glass/",
+        "keys": [
+          "previews/singles/hour-glass/hourglass-preview.mp3"
+        ],
+        "hasPreview": true
+      },
+      "artwork": {
+        "prefix": "images/singles/hour-glass/",
+        "keys": [
+          "images/singles/hour-glass/images_singles_hourglass.jpg"
+        ],
+        "hasArtwork": true
+      },
+      "video": {
+        "prefix": "videos/singles/hour-glass/",
+        "keys": [
+          "videos/singles/hour-glass/hourglass.mp4"
+        ],
+        "hasVideo": true
+      },
+      "legacyPreview": null
+    },
+    {
+      "slug": "turnt-me-2-dis",
+      "kind": "single",
+      "audio": {
+        "prefix": "digital-assets/singles/turnt-me-2-dis/",
+        "keys": [
+          "digital-assets/singles/turnt-me-2-dis/audio.mp3"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/singles/turnt-me-2-dis/",
+        "keys": [
+          "previews/singles/turnt-me-2-dis/turntme2dis-preview.mp3"
+        ],
+        "hasPreview": true
+      },
+      "artwork": {
+        "prefix": "images/singles/turnt-me-2-dis/",
+        "keys": [
+          "images/singles/turnt-me-2-dis/IMG_2026-05-29-110914.jpg"
+        ],
+        "hasArtwork": true
+      },
+      "video": {
+        "prefix": "videos/singles/turnt-me-2-dis/",
+        "keys": [
+          "videos/singles/turnt-me-2-dis/turntme2dis.mp4"
+        ],
+        "hasVideo": true
+      },
+      "legacyPreview": null
+    },
+    {
+      "slug": "w2d",
+      "kind": "single",
+      "audio": {
+        "prefix": "digital-assets/singles/w2d/",
+        "keys": [
+          "digital-assets/singles/w2d/audio.mp3"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/singles/w2d/",
+        "keys": [
+          "previews/singles/w2d/w2d-preview.mp3"
+        ],
+        "hasPreview": true
+      },
+      "artwork": {
+        "prefix": "images/singles/w2d/",
+        "keys": [
+          "images/singles/w2d/images_singles_w2d.jpg"
+        ],
+        "hasArtwork": true
+      },
+      "video": {
+        "prefix": "videos/singles/w2d/",
+        "keys": [
+          "videos/singles/w2d/w2d.mp4"
+        ],
+        "hasVideo": true
+      },
+      "legacyPreview": null
+    },
+    {
+      "slug": "artificial",
+      "kind": "single",
+      "audio": {
+        "prefix": "digital-assets/singles/artificial/",
+        "keys": [
+          "digital-assets/singles/artificial/audio.mp3"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/singles/artificial/",
+        "keys": [
+          "previews/singles/artificial/artificial-preview.mp3"
+        ],
+        "hasPreview": true
+      },
+      "artwork": {
+        "prefix": "images/singles/artificial/",
+        "keys": [
+          "images/singles/artificial/images_singles_artificial.jpg"
+        ],
+        "hasArtwork": true
+      },
+      "video": {
+        "prefix": "videos/singles/artificial/",
+        "keys": [
+          "videos/singles/artificial/artificial.mp4"
+        ],
+        "hasVideo": true
+      },
+      "legacyPreview": null
+    },
+    {
+      "slug": "i-dont-believe-you",
+      "kind": "feature",
+      "audio": {
+        "prefix": "digital-assets/features/i-dont-believe-you/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/features/i-dont-believe-you/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/features/i-dont-believe-you/",
+        "keys": [
+          "images/features/i-dont-believe-you/images_features_idbu.jpg"
+        ],
+        "hasArtwork": true
+      },
+      "video": {
+        "prefix": "videos/features/i-dont-believe-you/",
+        "keys": [],
+        "hasVideo": false
+      },
+      "legacyPreview": "previews/i-dont-believe-you-preview.wav"
+    },
+    {
+      "slug": "2-heavy",
+      "kind": "feature",
+      "audio": {
+        "prefix": "digital-assets/features/2-heavy/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/features/2-heavy/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/features/2-heavy/",
+        "keys": [
+          "images/features/2-heavy/images_features_2heavy.jpg"
+        ],
+        "hasArtwork": true
+      },
+      "video": {
+        "prefix": "videos/features/2-heavy/",
+        "keys": [],
+        "hasVideo": false
+      },
+      "legacyPreview": "previews/2-heavy-preview.wav"
+    },
+    {
+      "slug": "love-hz-vol-1",
+      "kind": "album",
+      "audio": {
+        "prefix": null,
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": null,
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/love-hz-vol-1/",
+        "keys": [
+          "images/mixtapes-and-eps/love-hz-vol-1/images_albums_lovehz.jpg"
+        ],
+        "hasArtwork": true
+      },
+      "video": {
+        "prefix": null,
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "ad",
+      "kind": "album",
+      "audio": {
+        "prefix": null,
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": null,
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/ad/",
+        "keys": [
+          "images/mixtapes-and-eps/ad/images_albums_ad.jpg"
+        ],
+        "hasArtwork": true
+      },
+      "video": {
+        "prefix": null,
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "tbh",
+      "kind": "album",
+      "audio": {
+        "prefix": null,
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": null,
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/tbh/",
+        "keys": [
+          "images/mixtapes-and-eps/tbh/images_albums_tbh.jpg"
+        ],
+        "hasArtwork": true
+      },
+      "video": {
+        "prefix": null,
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "love-hz-vol-1/01-roll-call",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/01-roll-call/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/love-hz-vol-1/01-roll-call/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/01-roll-call/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/01-roll-call/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "love-hz-vol-1/02-w-2-d",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/02-w-2-d/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/love-hz-vol-1/02-w-2-d/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/02-w-2-d/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/02-w-2-d/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "love-hz-vol-1/03-guarded-heart",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/03-guarded-heart/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/love-hz-vol-1/03-guarded-heart/Gaurded Heart.wav"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/love-hz-vol-1/03-guarded-heart/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/03-guarded-heart/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/03-guarded-heart/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "love-hz-vol-1/04-all-love-it",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/04-all-love-it/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/love-hz-vol-1/04-all-love-it/All love it (official) 2.mp3"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/love-hz-vol-1/04-all-love-it/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/04-all-love-it/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/04-all-love-it/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "love-hz-vol-1/05-like-u-do",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/05-like-u-do/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/love-hz-vol-1/05-like-u-do/Like U Do.wav"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/love-hz-vol-1/05-like-u-do/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/05-like-u-do/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/05-like-u-do/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "love-hz-vol-1/06-tell-me",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/06-tell-me/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/love-hz-vol-1/06-tell-me/Tell Me (Love Hz Vol. 1).wav"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/love-hz-vol-1/06-tell-me/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/06-tell-me/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/06-tell-me/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "love-hz-vol-1/07-stayed-2-long",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/07-stayed-2-long/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/love-hz-vol-1/07-stayed-2-long/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/07-stayed-2-long/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/07-stayed-2-long/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "love-hz-vol-1/08-knock-on-wood",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/08-knock-on-wood/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/love-hz-vol-1/08-knock-on-wood/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/08-knock-on-wood/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/08-knock-on-wood/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "love-hz-vol-1/09-hour-glass",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/09-hour-glass/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/love-hz-vol-1/09-hour-glass/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/09-hour-glass/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/09-hour-glass/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "love-hz-vol-1/10-turnt-me-2-dis",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/10-turnt-me-2-dis/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/love-hz-vol-1/10-turnt-me-2-dis/Turnt Me 2 Dis (Footage) 3 x 3.wav"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/love-hz-vol-1/10-turnt-me-2-dis/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/10-turnt-me-2-dis/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/10-turnt-me-2-dis/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "ad/01-2mrrws-ntro",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/ad/01-2mrrws-ntro/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/ad/01-2mrrws-ntro/2mrrw's Ntro.wav"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/ad/01-2mrrws-ntro/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/01-2mrrws-ntro/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/01-2mrrws-ntro/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "ad/02-here-i-come",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/ad/02-here-i-come/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/ad/02-here-i-come/Here I Come (Freestyle) (A.D).mp3"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/ad/02-here-i-come/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/02-here-i-come/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/02-here-i-come/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "ad/03-said-n-done",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/ad/03-said-n-done/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/ad/03-said-n-done/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/03-said-n-done/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/03-said-n-done/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "ad/04-a-d-d",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/ad/04-a-d-d/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/ad/04-a-d-d/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/04-a-d-d/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/04-a-d-d/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "ad/05-perspective",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/ad/05-perspective/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/ad/05-perspective/Perspective.mp3"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/ad/05-perspective/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/05-perspective/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/05-perspective/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "ad/06-grand-scheme",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/ad/06-grand-scheme/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/ad/06-grand-scheme/Grand Scheme (A.D).wav"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/ad/06-grand-scheme/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/06-grand-scheme/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/06-grand-scheme/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "ad/07-a2b",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/ad/07-a2b/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/ad/07-a2b/A2B.wav"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/ad/07-a2b/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/07-a2b/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/07-a2b/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "ad/08-life-changes-ft-gwendolyn",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/ad/08-life-changes-ft-gwendolyn/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/ad/08-life-changes-ft-gwendolyn/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/08-life-changes-ft-gwendolyn/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/08-life-changes-ft-gwendolyn/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "ad/09-itself",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/ad/09-itself/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/ad/09-itself/Itself (A.D).wav"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/ad/09-itself/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/09-itself/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/09-itself/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "ad/10-wastin-time",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/ad/10-wastin-time/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/ad/10-wastin-time/Wastin' Time.mp3"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/ad/10-wastin-time/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/10-wastin-time/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/10-wastin-time/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "ad/11-like-me-or-not",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/ad/11-like-me-or-not/",
+        "keys": [
+          "digital-assets/mixtapes-and-eps/ad/11-like-me-or-not/Like Me Or Not (EVEN).wav"
+        ],
+        "hasAudio": true
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/ad/11-like-me-or-not/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/11-like-me-or-not/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/11-like-me-or-not/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "tbh/01-glass-full",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/tbh/01-glass-full/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/tbh/01-glass-full/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/01-glass-full/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/01-glass-full/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "tbh/02-up-2-me",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/tbh/02-up-2-me/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/tbh/02-up-2-me/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/02-up-2-me/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/02-up-2-me/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "tbh/03-unxpcted",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/tbh/03-unxpcted/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/tbh/03-unxpcted/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/03-unxpcted/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/03-unxpcted/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "tbh/04-all-yours",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/tbh/04-all-yours/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/tbh/04-all-yours/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/04-all-yours/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/04-all-yours/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "tbh/05-locomotive",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/tbh/05-locomotive/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/tbh/05-locomotive/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/05-locomotive/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/05-locomotive/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "tbh/06-left",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/tbh/06-left/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/tbh/06-left/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/06-left/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/06-left/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "tbh/07-was-wrong",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/tbh/07-was-wrong/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/tbh/07-was-wrong/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/07-was-wrong/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/07-was-wrong/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "tbh/08-2late",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/tbh/08-2late/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/tbh/08-2late/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/08-2late/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/08-2late/",
+        "keys": [],
+        "hasVideo": false
+      }
+    },
+    {
+      "slug": "tbh/09-artificial",
+      "kind": "album_track",
+      "audio": {
+        "prefix": "digital-assets/mixtapes-and-eps/tbh/09-artificial/",
+        "keys": [],
+        "hasAudio": false
+      },
+      "preview": {
+        "prefix": "previews/mixtapes-and-eps/tbh/09-artificial/",
+        "keys": [],
+        "hasPreview": false
+      },
+      "artwork": {
+        "prefix": "images/mixtapes-and-eps/09-artificial/",
+        "keys": [],
+        "hasArtwork": false
+      },
+      "video": {
+        "prefix": "videos/mixtapes-and-eps/09-artificial/",
+        "keys": [],
+        "hasVideo": false
+      }
+    }
+  ]
+}

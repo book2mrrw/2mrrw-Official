@@ -1,0 +1,30 @@
+[
+  {
+    "slug": "hour-glass",
+    "product_type": "single",
+    "storage_path": "singles/hour-glass/",
+    "preview_path": "previews/singles/hour-glass/",
+    "metadata": { "canonical": true, "release_category": "single" }
+  },
+  {
+    "slug": "w2d",
+    "product_type": "single",
+    "storage_path": "singles/w2d/",
+    "preview_path": "previews/singles/w2d/",
+    "metadata": { "canonical": true, "release_category": "single" }
+  },
+  {
+    "slug": "i-dont-believe-you",
+    "product_type": "feature",
+    "storage_path": "features/i-dont-believe-you/",
+    "preview_path": "previews/features/i-dont-believe-you/",
+    "metadata": { "canonical": true, "release_category": "feature" }
+  },
+  {
+    "slug": "2-heavy",
+    "product_type": "feature",
+    "storage_path": "features/2-heavy/",
+    "preview_path": "previews/features/2-heavy/",
+    "metadata": { "canonical": true, "release_category": "feature" }
+  }
+]

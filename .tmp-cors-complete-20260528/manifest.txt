@@ -1,0 +1,11 @@
+.tmp-cors-complete-20260528/
+  report.md
+  r2-cors-policy.json
+  dashboard-steps.md
+  verification-curls.sh
+  curl-probes.txt
+  manifest.txt
+
+Source prompt: /Users/recharge/Downloads/cursor-cors-complete.md
+Repo baseline commit (prior CORS work): 90c9941495df152c97ba5e908bf85ca560db5718
+Working tree changes (this pass): uncommitted

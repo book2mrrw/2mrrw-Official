@@ -1,0 +1,18 @@
+features-albums-audio-pipeline-fix-20260527/
+  root-causes.md
+  singles-vs-features-matrix.md
+  files-changed.md
+  verification-checklist.md
+  remaining-risks.md
+  manifest.txt
+
+Commit: 51af6ff
+Deploy: dpl_6TVL1w5PT4FakprbpU1dqmTnisDj
+Production: https://www.2mrrw.com
+
+Code paths:
+  src/lib/music-playback.js
+  src/app/page.js
+  src/components/home/FeaturesRail.js
+  src/components/home/CatalogGrid.js
+  src/components/music/AlbumTracklistSheet.js

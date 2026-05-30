@@ -1,0 +1,25 @@
+platform-readonly-audit-20260526
+Generated: 2026-05-26 (local)
+Mode: READ-ONLY — no code changes, no commits
+
+Repositories audited:
+  - ARTIST-PLATFORM: /Users/recharge/artist-platform
+  - 2MRRW-CONTROL-SYSTEM: /Users/recharge/2MRRW-Control-System
+
+Deliverables:
+  report.md                          Full audit with exact file:line citations
+  manifest.txt                       This file
+  raw-artist-grep.txt                Captured stdout from artist-platform greps (items 1-20)
+  raw-control-grep.txt               Captured stdout from control-system greps (items 22-24)
+  files/next.config.mjs              Item 5 — artist-platform next.config.mjs (full)
+  files/stream-client.js             Item 6 — artist-platform stream-client.js (full)
+  files/useCsCoverTransition.js      Item 15 — artist-platform useCsCoverTransition.js (full)
+  files/next.config.control-system.mjs  Item 21 — control-system next.config.mjs (full)
+  files/r2-cors-recommended-from-docs.json  Item 25 — saved policy from docs (not live API)
+
+Commands run (exact):
+  1-20, 22-24: grep/cat as specified in audit brief (artist-platform cwd for 1-20)
+  25: npx wrangler r2 bucket cors list 2mrrw-media (failed: no CLOUDFLARE_API_TOKEN)
+  26: Supabase MCP execute_sql on project qvfbgkbgczyqrglvgyqr (2MRRW-Frontend Project)
+
+Secrets: redacted in report; no .env contents included.

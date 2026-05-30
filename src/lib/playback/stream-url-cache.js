@@ -5,12 +5,12 @@ const cache = new Map();
 /** @type {Map<string, Promise<string>>} */
 const inflight = new Map();
 
-export function streamCacheKey(userId, slug) {
-  return `${userId}:${slug}`;
+export function streamCacheKey(userId, slug, trackSlug = null) {
+  return trackSlug ? `${userId}:${slug}:${trackSlug}` : `${userId}:${slug}`;
 }
 
-export async function getOrCreateStreamSignedUrl(userId, slug, factory) {
-  const key = streamCacheKey(userId, slug);
+export async function getOrCreateStreamSignedUrl(userId, slug, factory, trackSlug = null) {
+  const key = streamCacheKey(userId, slug, trackSlug);
   const now = Date.now();
   const hit = cache.get(key);
   if (hit && hit.expiresAt > now) return hit.url;
@@ -35,10 +35,24 @@ export async function getOrCreateStreamSignedUrl(userId, slug, factory) {
 
 export function invalidateStreamCacheForUser(userId, slug = null) {
   if (slug) {
-    cache.delete(streamCacheKey(userId, slug));
+    const key = streamCacheKey(userId, slug);
+    cache.delete(key);
+    inflight.delete(key);
     return;
   }
   for (const key of cache.keys()) {
     if (key.startsWith(`${userId}:`)) cache.delete(key);
   }
+  for (const key of inflight.keys()) {
+    if (key.startsWith(`${userId}:`)) inflight.delete(key);
+  }
 }
+
+/** Clear all in-memory signed stream URL entries (tests / hot reload). */
+export function clearStreamUrlCache() {
+  cache.clear();
+  inflight.clear();
+}
+
+/** @alias clearStreamUrlCache */
+export const clearCache = clearStreamUrlCache;

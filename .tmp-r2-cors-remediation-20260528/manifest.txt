@@ -1,0 +1,3 @@
+r2-cors-policy-production.json
+report.md
+manifest.txt

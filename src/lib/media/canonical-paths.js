@@ -12,7 +12,12 @@ import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
 export { RELEASE_FOLDER };
 
 function releaseFolder(releaseType) {
-  return normalizeReleaseType(releaseType);
+  const folder = normalizeReleaseType(releaseType);
+  if (!folder) {
+    console.error("[canonical-paths] missing or unknown release_type", { releaseType });
+    return null;
+  }
+  return folder;
 }
 
 const KNOWN_MEDIA_EXTENSIONS =
@@ -66,6 +71,7 @@ export function normalizeToEntityFolder(path) {
  */
 export function resolveStoragePath(releaseType, releaseSlug, trackSlug, albumSlug) {
   const folder = releaseFolder(releaseType);
+  if (!folder) return "";
   const release = cleanSegment(releaseSlug);
   if (!release) return "";
 
@@ -82,6 +88,7 @@ export function resolveStoragePath(releaseType, releaseSlug, trackSlug, albumSlu
 }
 
 function nestedCollectionFolder(folder, slug, trackSlug, albumSlug) {
+  if (!folder) return "";
   const release = cleanSegment(slug);
   if (!release) return "";
   if (folder === "mixtapes-and-eps" || folder === "albums") {
@@ -103,6 +110,7 @@ function nestedCollectionFolder(folder, slug, trackSlug, albumSlug) {
  */
 export function resolveArtworkPath(releaseType, slug, trackSlug, albumSlug) {
   const folder = releaseFolder(releaseType);
+  if (!folder) return "";
   const nested = nestedCollectionFolder(folder, slug, trackSlug, albumSlug);
   if (!nested) return "";
   return `${IMAGE_ROOT}/${folder}/${nested}`;
@@ -116,6 +124,7 @@ export function resolveArtworkPath(releaseType, slug, trackSlug, albumSlug) {
  */
 export function resolvePreviewPath(releaseType, slug, albumSlug) {
   const folder = releaseFolder(releaseType);
+  if (!folder) return "";
   const release = cleanSegment(slug);
   if (!release) return "";
 
@@ -140,6 +149,7 @@ export function resolvePreviewPath(releaseType, slug, albumSlug) {
  */
 export function resolveVideoPath(releaseType, slug, trackSlug, albumSlug) {
   const folder = releaseFolder(releaseType);
+  if (!folder) return "";
   const nested = nestedCollectionFolder(folder, slug, trackSlug, albumSlug);
   if (!nested) return "";
   return `${VIDEO_ROOT}/${folder}/${nested}`;
@@ -194,6 +204,7 @@ export function isEntityPreviewFolderPath(previewPath) {
 /** Legacy public/ path for storefront cover display (resolved via catalogCoverUrl). */
 export function legacyCoverPublicPath(releaseType, slug, legacyStem, ext = "jpg") {
   const folder = releaseFolder(releaseType);
+  if (!folder) return "";
   const release = cleanSegment(slug);
   if (!release) return "";
   const stem = cleanSegment(legacyStem || release.replace(/-/g, ""));
@@ -203,6 +214,7 @@ export function legacyCoverPublicPath(releaseType, slug, legacyStem, ext = "jpg"
 /** R2 preview legacy key — entity folder `previews/{releaseType}/{releaseSlug}/{stem}-preview.{ext}`. */
 export function legacyPreviewPublicPath(releaseType, slug, legacyStem, ext) {
   const folder = releaseFolder(releaseType);
+  if (!folder) return "";
   const release = cleanSegment(slug);
   if (!release) return "";
   const stem = cleanSegment(legacyStem || release.replace(/-/g, ""));
@@ -244,6 +256,7 @@ export function getArtworkPlaceholderUrl(releaseType = "single", slug = "placeho
 /** Legacy motion video public path — entity folder + legacy filename stem. */
 export function legacyVideoPublicPath(releaseType, slug, legacyStem, ext = "mp4") {
   const folder = releaseFolder(releaseType);
+  if (!folder) return "";
   const release = cleanSegment(slug);
   if (!release) return "";
   const stem = cleanSegment(legacyStem || release.replace(/-/g, ""));

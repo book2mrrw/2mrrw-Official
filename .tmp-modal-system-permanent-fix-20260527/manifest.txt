@@ -1,0 +1,7 @@
+modal-system-permanent-fix-20260527.zip
+root-cause-analysis.md
+files-changed.md
+architecture-improvements.md
+verification-checklist.md
+remaining-risks.md
+manifest.txt

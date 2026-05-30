@@ -1,0 +1,22 @@
+Storefront playback/path evidence snippets
+
+src/lib/music-access.js:206
+`/api/library/stream?slug=${encodeURIComponent(slug)}&redirect=1`
+
+src/lib/music-access.js:214
+`resolvePlaybackSrc(track, access, { userId })`
+
+src/context/AudioContext.js:795
+`const data = await fetchLibraryStream(slug, { force: false });`
+
+src/context/AudioContext.js:967
+`if (!slug || !isLibraryStreamSrc(track.src)) return { track, meta: null };`
+
+src/lib/playback/stream-client.js:3
+`export const LIBRARY_STREAM_PATH = "/api/library/stream";`
+
+src/app/api/library/stream/route.js:41
+`const canStream = await userCanStreamProduct(user.id, slug, user);`
+
+src/app/api/library/stream/route.js:77
+`const url = await getOrCreateStreamSignedUrl(user.id, slug, () =>`

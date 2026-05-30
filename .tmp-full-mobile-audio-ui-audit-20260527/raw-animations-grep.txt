@@ -1,0 +1,562 @@
+src//ui/skeletons/ArtworkSkeleton.js:87:              transition: `opacity var(--motion-duration-base) var(--motion-ease-out)`,
+src//ui/skeletons/SkeletonBase.js:20:        animation: `skeleton-shimmer var(--motion-duration-slow) var(--motion-ease-in-out) infinite`,
+src//ui/skeletons/ImmersiveModalSkeleton.js:15:        transition: `opacity var(--motion-duration-slow) var(--motion-ease-out)`,
+src//ui/skeletons/ProgressiveReveal.js:12:  const dur = duration ?? "var(--motion-duration-base)";
+src//ui/skeletons/ProgressiveReveal.js:13:  const transitionDelay = staggerMs ? `${delay + staggerMs}ms` : `${delay}ms`;
+src//ui/skeletons/ProgressiveReveal.js:20:        transition: `opacity ${dur} var(--motion-ease-out)`,
+src//ui/skeletons/ProgressiveReveal.js:21:        transitionDelay,
+src//app/success/page.js:186:    transition: "transform 400ms ease-in-out",
+src//app/success/page.js:187:    transitionDelay: exiting ? "50ms" : "0ms",
+src//app/success/page.js:200:    transition: exiting ? "opacity 400ms ease-in" : "opacity 800ms ease-out",
+src//app/success/page.js:214:    transition: exiting
+src//app/success/page.js:215:      ? "all 350ms ease-in"
+src//app/success/page.js:216:      : "opacity 700ms ease-out, transform 700ms cubic-bezier(0.22, 1, 0.36, 1)",
+src//app/success/page.js:310:                transition: "transform 0.1s ease",
+src//app/page.js:4:import { motion, AnimatePresence } from "framer-motion";
+src//app/page.js:67:const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
+src//app/page.js:69:const OVERLAY_FADE = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.22 } };
+src//app/page.js:70:const SHEET_UP = { initial: { y: "100%" }, animate: { y: 0 }, exit: { y: "100%" }, transition: SPRING_SOFT };
+src//app/page.js:74:  transition: { duration: MOBILE_NAV_SHEET_MS / 1000, ease: [0.4, 0, 0.2, 1] },
+src//app/page.js:76:const MODAL_CENTER = { initial: { opacity: 0, scale: 0.96 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.96 }, transition: SPRING_SOFT };
+src//app/page.js:396:                    transition:"border-color 0.2s, box-shadow 0.2s",
+src//app/page.js:449:                    <div style={{width:72,height:72,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"2px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform 0.2s"}} onMouseEnter={e=>e.currentTarget.style.transform="scale(1.1)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
+src//app/page.js:476:                    transition:"all 0.2s",
+src//app/page.js:499:                        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0)",transition:"background 0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(0,0,0,0.4)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0)"}>
+src//app/page.js:500:                          <svg viewBox="0 0 24 24" fill="rgba(255,255,255,0)" width="16" height="16" style={{transition:"fill 0.2s"}} onMouseEnter={e=>e.currentTarget.style.fill="white"} onMouseLeave={e=>e.currentTarget.style.fill="rgba(255,255,255,0)"}><path d="M8 5v14l11-7z"/></svg>
+src//app/page.js:1567:      <div ref={cursorRef} style={{position:"fixed",width:28,height:28,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.22) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99999,mixBlendMode:"screen",transition:"left 0.045s linear,top 0.045s linear",display:isMobile?"none":undefined}}/>
+src//app/page.js:1568:      <div ref={cursorTrailRef} style={{position:"fixed",width:16,height:16,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.10) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99998,mixBlendMode:"screen",transition:"left 0.18s ease,top 0.18s ease",display:isMobile?"none":undefined}}/>
+src//app/page.js:1694:                style={{padding:"12px 24px",background:exclusiveModal.stock<=0?"#222":exclusiveModal.badgeColor,color:exclusiveModal.stock<=0?"#555":"#000",fontWeight:900,border:"none",borderRadius:10,cursor:exclusiveModal.stock<=0?"not-allowed":"pointer",fontSize:14,letterSpacing:1,transition:"opacity 0.2s"}}
+src//app/page.js:1723:                    <button onClick={()=>{ if(group.subTabs.length===0){switchTab(group.directTab);}else{setExpandedGroup(isExpanded?null:group.groupId);}}} style={{width:"100%",padding:"13px 18px 13px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",background:isGroupActive?"linear-gradient(90deg,rgba(0,255,255,0.09) 0%,transparent 100%)":"transparent",border:"none",borderLeft:isGroupActive?"2px solid #00ffff":"2px solid transparent",color:isGroupActive?"#00ffff":"#b0b0b0",fontSize:11,fontWeight:700,letterSpacing:2.5,cursor:"pointer",textAlign:"left",transition:"all 0.18s",textShadow:isGroupActive?"0 0 12px rgba(0,255,255,0.4)":"none"}} onMouseEnter={e=>{if(!isGroupActive){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.035)";}}} onMouseLeave={e=>{if(!isGroupActive){e.currentTarget.style.color="#b0b0b0";e.currentTarget.style.background="transparent";}}}>
+src//app/page.js:1725:                      {group.subTabs.length>0 && <span style={{fontSize:14,color:isExpanded?"#888":"#555",display:"inline-block",transform:isExpanded?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.22s ease",lineHeight:1}}>›</span>}
+src//app/page.js:1730:                          <button key={st.id} onClick={()=>switchTab(st.id)} style={{width:"100%",padding:"10px 18px 10px 30px",background:activeTab===st.id?"rgba(0,255,255,0.055)":"transparent",border:"none",color:activeTab===st.id?"#00ffff":"#999",fontSize:12,letterSpacing:1.5,cursor:"pointer",textAlign:"left",transition:"all 0.14s",fontWeight:activeTab===st.id?700:400,display:"flex",alignItems:"center",gap:8}} onMouseEnter={e=>{if(activeTab!==st.id)e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{if(activeTab!==st.id)e.currentTarget.style.color="#999";}}>
+src//app/page.js:1731:                            <span style={{width:4,height:4,borderRadius:"50%",flexShrink:0,background:activeTab===st.id?"#00ffff":"transparent",boxShadow:activeTab===st.id?"0 0 6px rgba(0,255,255,0.9)":"none",transition:"all 0.15s"}}/>
+src//app/page.js:1742:              <button onClick={()=>switchTab("account")} style={{width:"100%",padding:"10px 12px",textAlign:"left",background:activeTab==="account"?"rgba(0,255,255,0.07)":"transparent",border:"none",borderLeft:activeTab==="account"?"2px solid #00ffff":"2px solid transparent",color:activeTab==="account"?"#00ffff":"#b0b0b0",fontSize:11,fontWeight:700,letterSpacing:2.5,cursor:"pointer",transition:"0.18s"}} onMouseEnter={e=>{if(activeTab!=="account")e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{if(activeTab!=="account")e.currentTarget.style.color="#b0b0b0";}}>ACCOUNT</button>
+src//app/page.js:1743:              <button onClick={()=>setSoundOn(!soundOn)} style={{width:"100%",padding:"9px 12px",textAlign:"left",background:"transparent",border:"none",color:soundOn?"#00ffff":"#888",fontSize:11,cursor:"pointer",letterSpacing:2,fontWeight:700,transition:"0.18s",textShadow:soundOn?"0 0 8px rgba(0,255,255,0.5)":"none"}}>{soundOn?"♫  SOUND ON":"♫  SOUND OFF"}</button>
+src//app/page.js:1754:            <motion.div style={{padding:isMobile?`0 0 ${mobileScrollPadding} 0`:"0 30px 30px"}}>
+src//app/page.js:1755:            <motion.div style={{padding:isMobile?"0 14px":"0"}}>
+src//app/page.js:1757:            <motion.div style={{
+src//app/page.js:1760:              transition: isMobile ? "height 0.08s cubic-bezier(0.25,0.46,0.45,0.94)" : "none",
+src//app/page.js:1768:                  transition: isMobile ? "filter 0.1s, transform 0.1s" : "none",
+src//app/page.js:1773:              <motion.div style={{position:"absolute",top:isMobile?16:25,left:isMobile?16:25,zIndex:10,opacity:heroTextOpacity,transform:`scale(${heroTextScale})`,transformOrigin:"top left",transition:isMobile?"opacity 0.08s, transform 0.08s":"none"}}>
+src//app/page.js:1775:              </motion.div>
+src//app/page.js:1776:              <motion.div style={{position:"absolute",bottom:isMobile?14:24,right:isMobile?14:25,display:"flex",gap:isMobile?12:16,alignItems:"center",zIndex:10,flexWrap:"wrap",justifyContent:"flex-end",opacity:heroSocialsOp,transition:isMobile?"opacity 0.08s":"none"}}>
+src//app/page.js:1777:                {SOCIALS.map(s=><a key={s.name} href={s.href} target="_blank" rel="noopener noreferrer" title={s.name} style={{color:"rgba(255,255,255,0.65)",transition:"transform 0.2s,color 0.2s,filter 0.2s",display:"flex",alignItems:"center",textDecoration:"none"}} onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.5)";e.currentTarget.style.color="#00ffff";e.currentTarget.style.filter="drop-shadow(0 0 6px rgba(0,255,255,0.8))";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.color="rgba(255,255,255,0.65)";e.currentTarget.style.filter="none";}}>{s.svg}</a>)}
+src//app/page.js:1778:              </motion.div>
+src//app/page.js:1779:            </motion.div>
+src//app/page.js:1794:                  <motion.div style={{marginTop:20,marginBottom:4}}>
+src//app/page.js:1795:                    <motion.div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:14,flexWrap:"wrap"}}>
+src//app/page.js:1805:                    </motion.div>
+src//app/page.js:1844:                              transition:"border-color 0.25s, box-shadow 0.25s",
+src//app/page.js:1879:                                transition:"transform 0.3s, filter 0.3s",
+src//app/page.js:1954:                  </motion.div>
+src//app/page.js:2061:                          <div style={{display:"flex",alignItems:"center",gap:10}}><div style={{fontSize:15,fontWeight:900,color:"#00ffff"}}>${evt.price.toFixed(2)}</div><button onClick={()=>setSelectedEvent(evt)} style={{padding:"8px 14px",background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontWeight:"bold",fontSize:12,transition:"0.2s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#00ffff"} onMouseLeave={e=>e.currentTarget.style.borderColor="#333"}>Tickets</button></div>
+src//app/page.js:2090:                        <button key={sub.id} onClick={()=>switchTab(sub.id)} style={{padding:isMobile?"11px 16px":"12px 22px",background:"none",border:"none",borderBottom:activeTab===sub.id?"2px solid #00ffff":"2px solid transparent",color:activeTab===sub.id?"#00ffff":"#555",fontSize:isMobile?12:13,fontWeight:700,letterSpacing:1.5,cursor:"pointer",transition:"all 0.18s",textTransform:"uppercase",marginBottom:-1}}>
+src//app/page.js:2102:                          <input placeholder="Search singles…" style={{width:"100%",padding:"11px 14px 11px 38px",background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:10,color:"white",fontSize:13,outline:"none",boxSizing:"border-box",transition:"border-color 0.2s"}} onFocus={e=>e.currentTarget.style.borderColor="#00ffff33"} onBlur={e=>e.currentTarget.style.borderColor="#1e1e1e"}/>
+src//app/page.js:2182:                          return <div key={day} onClick={()=>dayShows.length>0&&setSelectedEvent(dayShows[0])} style={{minHeight:44,borderRadius:8,background:dayShows.length>0?"rgba(0,255,255,0.08)":"transparent",border:isToday?"1px solid #00ffff":dayShows.length>0?"1px solid rgba(0,255,255,0.3)":"1px solid #1a1a1a",cursor:dayShows.length>0?"pointer":"default",padding:6,display:"flex",flexDirection:"column",alignItems:"center",gap:3,transition:"0.2s"}}><span style={{fontSize:12,color:isToday?"#00ffff":"#aaa"}}>{day}</span>{dayShows.map(s=><span key={s.id} style={{fontSize:9,background:"#00ffff",color:"#000",borderRadius:4,padding:"1px 4px",fontWeight:700}}>EVENT</span>)}</div>;
+src//app/page.js:2192:                        <div style={{display:"flex",alignItems:"center",gap:isMobile?10:14}}><div style={{fontSize:isMobile?15:18,fontWeight:900,color:"#00ffff"}}>${evt.price.toFixed(2)}</div><button onClick={()=>setSelectedEvent(evt)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"9px 14px":"10px 20px",background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontWeight:"bold",fontSize:isMobile?12:13,transition:"0.25s"}}>Get Tickets</button></div>
+src//app/page.js:2252:                          <div key={post.id} onClick={()=>setBlogPost(post)} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?18:24,cursor:"pointer",transition:"0.25s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.boxShadow="0 0 16px rgba(0,255,255,0.1)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1e1e1e";e.currentTarget.style.boxShadow="none";}}>
+src//app/page.js:2299:                    <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>{["question","thought","feedback","message"].map(cat=><button key={cat} onClick={()=>setCircleCategory(cat)} style={{padding:"6px 12px",fontSize:11,fontWeight:700,letterSpacing:1,cursor:"pointer",border:circleCategory===cat?"1px solid #00ffff":"1px solid #2a2a2a",borderRadius:20,background:circleCategory===cat?"rgba(0,255,255,0.1)":"transparent",color:circleCategory===cat?"#00ffff":"#555",textTransform:"uppercase",transition:"0.2s"}}>{cat}</button>)}</div>
+src//app/page.js:2303:                      <button onClick={handleCircleSubmit} style={{padding:"10px 24px",background:circleSubmitted?"#1a3a1a":"#00ffff",color:circleSubmitted?"#00ff88":"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:13,transition:"0.3s",letterSpacing:1}}>{circleSubmitted?"✓ Submitted":"Submit"}</button>
+src//app/page.js:2378:                              <div key={post.id} onClick={()=>setInnerCirclePost(post)} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:16,padding:isMobile?18:24,cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.1}s forwards`,transition:"border-color 0.25s,box-shadow 0.25s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#a259ff55";e.currentTarget.style.boxShadow="0 0 20px rgba(162,89,255,0.1)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a1a1a";e.currentTarget.style.boxShadow="none";}}>
+src//app/page.js:2404:                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Collection",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
+src//app/page.js:2407:                      <button onClick={handleSignOut} style={{width:"100%",height:44,padding:0,background:"transparent",color:"#444",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";}}>Sign Out</button>
+src//app/page.js:2418:            </motion.div>
+src//app/page.js:2419:            </motion.div>
+src//app/page.js:2426:                <div style={{width:duration?`${(currentTime/duration)*100}%`:"0%",height:"100%",background:"#00ffff",transition:"width 0.1s linear",boxShadow:"0 0 4px rgba(0,255,255,0.5)"}}/>
+src//app/page.js:2454:                <button onClick={()=>removeFromCart(i)} onMouseEnter={e=>e.currentTarget.style.color="#fff"} onMouseLeave={e=>e.currentTarget.style.color="#666"} style={{background:"none",border:"none",color:"#666",fontSize:16,cursor:"pointer",marginLeft:"auto",transition:"0.2s"}}>×</button>
+src//app/page.js:2458:            <button onClick={clearCart} style={{marginTop:15,width:"100%",padding:12,background:"rgba(255,30,30,0.15)",color:"#ff4d4d",fontWeight:"bold",border:"1px solid #ff4d4d33",borderRadius:8,cursor:"pointer",fontSize:12,transition:"0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,30,30,0.25)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,30,30,0.15)"}>CLEAR CART</button>
+src//app/page.js:2459:            <button onClick={handleCheckout} disabled={checkingOut||cart.length===0} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{marginTop:10,width:"100%",padding:12,background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",transition:"0.25s",fontSize:13,fontWeight:700}}>{checkingOut?"Loading…":"Checkout"}</button>
+src//app/page.js:2469:          <motion.button
+src//app/page.js:2473:            transition={SPRING_SOFT}
+src//app/page.js:2481:            {cart.length>0 && <motion.div style={{position:"absolute",top:-4,right:-4,minWidth:20,height:20,borderRadius:10,padding:"0 5px",background:"#ff4d4d",color:"white",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{cart.length}</motion.div>}
+src//app/page.js:2482:          </motion.button>
+src//app/page.js:2484:          <motion.div style={{
+src//app/page.js:2508:                    transition:"left 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
+src//app/page.js:2527:                    transition:"color 0.2s",
+src//app/page.js:2537:          </motion.div>
+src//app/page.js:2541:              <motion.div
+src//app/page.js:2546:                transition={SPRING_SOFT}
+src//app/page.js:2555:                <motion.div onClick={seekTo} style={{width:"100%",height:3,background:"#111",cursor:"pointer"}}>
+src//app/page.js:2556:                  <motion.div style={{width:duration?`${(currentTime/duration)*100}%`:"0%",height:"100%",background:"#00ffff",transition:"width 0.1s linear"}}/>
+src//app/page.js:2557:                </motion.div>
+src//app/page.js:2558:                <motion.div style={{padding:"8px 12px",display:"flex",alignItems:"center",gap:10}}>
+src//app/page.js:2560:                  <motion.div style={{flex:1,minWidth:0}}>
+src//app/page.js:2561:                    <motion.div style={{fontSize:12,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{nowPlaying.title}</motion.div>
+src//app/page.js:2562:                    <motion.div style={{fontSize:10,color:"#555",fontVariantNumeric:"tabular-nums"}}>{formatTime(currentTime)} / {formatTime(duration)}</motion.div>
+src//app/page.js:2563:                  </motion.div>
+src//app/page.js:2570:                </motion.div>
+src//app/page.js:2571:              </motion.div>
+src//app/page.js:2578:              <motion.div
+src//app/page.js:2583:                transition={{ duration: 0.22 }}
+src//app/page.js:2587:                <motion.div
+src//app/page.js:2590:                  transition={{ duration: MOBILE_NAV_SHEET_MS / 1000, ease: [0.4, 0, 0.2, 1] }}
+src//app/page.js:2594:                  <motion.div
+src//app/page.js:2605:                  {currentUser&&userStatus&&<motion.div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}><motion.div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>{accountDisplayInitial}</motion.div><motion.div><motion.div style={{fontSize:13,fontWeight:700,color:"white"}}>{accountDisplayName}</motion.div><motion.div style={{fontSize:9,color:userStatus.color,fontWeight:700,letterSpacing:1}}>{userStatus.label}</motion.div></motion.div></motion.div>}
+src//app/page.js:2613:                    <motion.div key={group.groupId} style={{marginBottom:2}}>
+src//app/page.js:2632:                          transition:"color 0.2s",
+src//app/page.js:2641:                          <span style={{fontSize:16,color:"#555",lineHeight:1,transform:isSheetExpanded?"rotate(45deg)":"rotate(0deg)",transition:"transform 0.22s ease"}}>+</span>
+src//app/page.js:2646:                          <motion.div
+src//app/page.js:2652:                            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+src//app/page.js:2656:                              <button key={st.id} type="button" onClick={()=>switchTab(st.id)} style={{width:"100%",padding:"10px 24px 10px 32px",background:"none",border:"none",color:activeTab===st.id?"#00ffff":"#666",fontSize:12,textAlign:"left",cursor:"pointer",letterSpacing:1,transition:"color 0.2s"}}>{st.label}</button>
+src//app/page.js:2658:                          </motion.div>
+src//app/page.js:2661:                    </motion.div>
+src//app/page.js:2664:                  <motion.div style={{padding:"14px 24px",borderTop:"1px solid #111",marginTop:4,display:"flex",flexDirection:"column",gap:10}}>
+src//app/page.js:2667:                  </motion.div>
+src//app/page.js:2668:                </motion.div>
+src//app/page.js:2669:              </motion.div>
+src//app/page.js:2677:              <motion.div
+src//app/page.js:2683:                <motion.div
+src//app/page.js:2688:                  <motion.div style={{width:36,height:4,borderRadius:2,background:"#333",margin:"14px auto 0"}}/>
+src//app/page.js:2689:                  <motion.div style={{padding:"16px 20px 0"}}><h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Cart {cart.length>0&&`(${cart.length})`}</h3></motion.div>
+src//app/page.js:2691:                  <motion.div style={{padding:"0 20px"}}>{cart.map((item,i)=><motion.div key={i} style={{marginBottom:10,display:"flex",alignItems:"center",gap:10,padding:"10px 0",borderBottom:"1px solid #1a1a1a"}}>{item.cover&&<img src={item.cover} style={{width:44,height:44,borderRadius:8,objectFit:"cover",flexShrink:0}} alt="" />}<span style={{fontSize:13,flex:1,lineHeight:1.4}}>{item.title}<br/><span style={{color:"#00ffff",fontSize:12}}>${item.price.toFixed(2)}</span></span><button onClick={()=>removeFromCart(i)} style={{background:"none",border:"none",color:"#666",fontSize:22,cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button></motion.div>)}</motion.div>
+src//app/page.js:2692:                  {cart.length>0 && <motion.div style={{padding:"16px 20px 0",display:"flex",flexDirection:"column",gap:10}}><motion.div style={{fontSize:15,fontWeight:700}}>Total: <span style={{color:"#00ffff"}}>${total.toFixed(2)}</span></motion.div><button onClick={handleCheckout} disabled={checkingOut} style={{width:"100%",padding:"14px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:15}}>{checkingOut?"Loading…":"Checkout"}</button><button onClick={()=>{clearCart();setMobileCartOpen(false);}} style={{width:"100%",padding:"12px 0",background:"transparent",color:"#ff4d4d",border:"1px solid #ff4d4d33",borderRadius:10,cursor:"pointer",fontSize:13}}>Clear Cart</button></motion.div>}
+src//app/page.js:2694:                  <motion.div style={{padding:"12px 20px 0"}}><button onClick={()=>setMobileCartOpen(false)} style={{width:"100%",padding:"12px 0",background:"none",border:"1px solid #1e1e1e",color:"#555",cursor:"pointer",fontSize:13,borderRadius:10}}>Close</button></motion.div>
+src//app/page.js:2695:                </motion.div>
+src//app/page.js:2696:              </motion.div>
+src//app/page.js:2716:        @keyframes pulse{0%{transform:scale(1);opacity:1}50%{transform:scale(1.05);opacity:.85}100%{transform:scale(1);opacity:1}}
+src//app/page.js:2717:        @keyframes fadeInUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
+src//app/page.js:2718:        @keyframes fadeInCover{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+src//app/page.js:2719:        @keyframes fadeInTab{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+src//app/page.js:2720:        @keyframes expandDown{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+src//app/page.js:2721:        @keyframes flowIdlePulse{0%{opacity:.4}50%{opacity:.9}100%{opacity:.4}}
+src//app/page.js:2722:        @keyframes flowIdleDot{0%{opacity:.15;transform:scale(.8)}50%{opacity:.7;transform:scale(1.2)}100%{opacity:.15;transform:scale(.8)}}
+src//app/page.js:2723:        @keyframes eqBar1{from{height:6px}to{height:16px}}
+src//app/page.js:2724:        @keyframes eqBar2{from{height:10px}to{height:18px}}
+src//app/page.js:2725:        @keyframes eqBar3{from{height:14px}to{height:8px}}
+src//app/page.js:2726:        @keyframes eqBar4{from{height:8px}to{height:14px}}
+src//app/page.js:2727:        @keyframes donateSweep{0%{transform:translateX(-140%) skewX(-18deg);opacity:0}22%{opacity:.45}54%{opacity:.18}100%{transform:translateX(190%) skewX(-18deg);opacity:0}}
+src//app/page.js:2728:        @keyframes subscribeSweep{0%{transform:translateX(-145%) skewX(-18deg);opacity:0}18%{opacity:.5}48%{opacity:.2}100%{transform:translateX(195%) skewX(-18deg);opacity:0}}
+src//app/page.js:2729:        .donate-glow-button,.subscribe-shimmer-button{position:relative;overflow:hidden;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;transition:color .2s,border-color .2s,background .2s,box-shadow .2s,transform .2s;border:1px solid #2a2a2a;isolation:isolate}
+src//app/page.js:2732:        .donate-glow-button::after{content:"";position:absolute;top:-30%;bottom:-30%;left:0;width:42%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.45),transparent);animation:donateSweep 5.8s ease-in-out infinite;pointer-events:none}
+src//app/page.js:2735:        .subscribe-shimmer-button::after{content:"";position:absolute;top:-32%;bottom:-32%;left:0;width:48%;background:linear-gradient(90deg,transparent,rgba(162,89,255,.55),rgba(198,169,255,.28),transparent);animation:subscribeSweep 5.8s ease-in-out infinite;pointer-events:none}
+src//app/page.js:2742:          <motion.div key="membership-upsell" {...OVERLAY_FADE} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
+src//app/page.js:2743:            <motion.div {...(isMobile ? SHEET_UP : MODAL_CENTER)} style={{background:"#0a0a0a",padding:isMobile?22:30,borderRadius:isMobile?"20px 20px 0 0":20,width:isMobile?"100%":420,border:"1px solid #222",alignSelf:isMobile?"flex-end":"center",boxShadow:"0 0 40px rgba(0,255,255,0.12)"}}>
+src//app/page.js:2749:            </motion.div>
+src//app/page.js:2750:          </motion.div>
+src//app/page.js:2783:          <motion.div
+src//app/page.js:2788:            <motion.div
+src//app/page.js:2792:              <motion.div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Checkout</motion.div>
+src//app/page.js:2797:            </motion.div>
+src//app/page.js:2798:          </motion.div>
+src//app/subscribe/page.js:4:import { AnimatePresence, motion } from "framer-motion";
+src//app/subscribe/page.js:14:  transition: { duration: 0.7, ease: [0.22, 1, 0.36, 1] },
+src//app/subscribe/page.js:146:        <motion.section className="subscribe-hero" {...fadeUp} style={{minHeight:"68vh",display:"grid",gridTemplateColumns:"minmax(0,1.1fr) minmax(320px,0.9fr)",gap:36,alignItems:"center"}}>
+src//app/subscribe/page.js:184:        </motion.section>
+src//app/subscribe/page.js:190:              <motion.div key={item} initial={{opacity:0,y:18}} whileInView={{opacity:1,y:0}} viewport={{once:true}} transition={{delay:index*0.035,duration:0.45}} style={{padding:"18px 16px",border:"1px solid #171717",borderRadius:18,background:"#090909",color:"#ddd",fontSize:14,lineHeight:1.4}}>
+src//app/subscribe/page.js:192:              </motion.div>
+src//app/subscribe/page.js:238:          <motion.div
+src//app/subscribe/page.js:244:            <motion.div
+src//app/subscribe/page.js:257:            </motion.div>
+src//app/subscribe/page.js:258:          </motion.div>
+src//app/subscribe/page.js:282:        @keyframes subscribeSweep {
+src//app/subscribe/page.js:317:          animation: subscribeSweep 5.8s ease-in-out infinite;
+src//app/globals.css:3:@import "../styles/motion/tokens.css";
+src//app/globals.css:44:  animation: livingScrollDrift 14s ease-in-out infinite;
+src//app/globals.css:55:  animation: heroTitleGlow 2.5s ease-in-out infinite;
+src//app/globals.css:58:@media (prefers-reduced-motion: reduce) {
+src//app/globals.css:64:@keyframes heroTitleGlow {
+src//app/globals.css:80:  animation: songTitleTurquoisePulse 3.2s ease-in-out infinite;
+src//app/globals.css:83:@media (prefers-reduced-motion: reduce) {
+src//app/globals.css:92:@keyframes songTitleTurquoisePulse {
+src//app/globals.css:197:  /* Opacity driven by framer-motion; avoid animating backdrop-filter in parallel (repaint recursion). */
+src//app/globals.css:198:  transition: background-color var(--motion-modal-backdrop);
+src//app/globals.css:220:  transition:
+src//app/globals.css:221:    --modal-accent var(--motion-modal-sheet),
+src//app/globals.css:222:    --modal-accent-glow var(--motion-modal-sheet),
+src//app/globals.css:223:    box-shadow var(--motion-modal-sheet),
+src//app/globals.css:224:    border-color var(--motion-modal-sheet);
+src//app/globals.css:385:  transition:
+src//app/globals.css:386:    box-shadow var(--motion-duration-fast) var(--motion-ease-in-out),
+src//app/globals.css:387:    background var(--motion-duration-fast) var(--motion-ease-in-out);
+src//app/globals.css:412:  transition:
+src//app/globals.css:413:    border-color var(--motion-duration-fast) var(--motion-ease-in-out),
+src//app/globals.css:414:    box-shadow var(--motion-duration-fast) var(--motion-ease-in-out);
+src//app/globals.css:485:  animation: modalSceneOrbA 10s ease-in-out infinite alternate;
+src//app/globals.css:494:  animation: modalSceneOrbB 13s ease-in-out infinite alternate;
+src//app/globals.css:503:  animation: modalSceneOrbC 8s ease-in-out infinite alternate;
+src//app/globals.css:506:@keyframes modalSceneOrbA {
+src//app/globals.css:515:@keyframes modalSceneOrbB {
+src//app/globals.css:524:@keyframes modalSceneOrbC {
+src//app/globals.css:548:  animation: modalSceneRay 7s ease-in-out infinite;
+src//app/globals.css:565:@keyframes modalSceneRay {
+src//app/globals.css:591:@keyframes modalSceneScan {
+src//app/globals.css:704:  animation: modalWaveBar 0.7s ease-in-out infinite alternate;
+src//app/globals.css:707:@keyframes modalWaveBar {
+src//app/globals.css:793:  transition: transform 0.15s ease;
+src//app/globals.css:801:  animation: modalCartPulse 3s ease-in-out infinite;
+src//app/globals.css:805:  animation: mm-cart-pulse 2.6s ease-in-out infinite;
+src//app/globals.css:808:@keyframes modalCartPulse {
+src//app/globals.css:819:@keyframes mm-cart-pulse {
+src//app/globals.css:836:  animation: modalColGlow 4s ease-in-out infinite;
+src//app/globals.css:841:  animation: mm-col-glow 3s ease-in-out infinite;
+src//app/globals.css:844:@keyframes modalColGlow {
+src//app/globals.css:854:@keyframes mm-col-glow {
+src//app/globals.css:953:  animation: modalAmbientPulse 5s ease-in-out infinite;
+src//app/globals.css:956:.modal-immersive-ambient__blur--motion {
+src//app/globals.css:964:.modal-immersive-ambient__blur--motion .modal-immersive-ambient__media {
+src//app/globals.css:985:  animation: modalAmbientPulse 5.5s ease-in-out infinite;
+src//app/globals.css:989:@keyframes modalAmbientPulse {
+src//app/globals.css:1044:  transition: box-shadow var(--motion-duration-base) var(--motion-ease-in-out);
+src//app/globals.css:1048:  animation: modalArtGlowPulse 5.2s ease-in-out infinite;
+src//app/globals.css:1051:@keyframes modalArtGlowPulse {
+src//app/globals.css:1103:  transition:
+src//app/globals.css:1104:    border-color var(--motion-duration-fast) var(--motion-ease-in-out),
+src//app/globals.css:1105:    box-shadow var(--motion-duration-fast) var(--motion-ease-in-out),
+src//app/globals.css:1106:    transform var(--motion-duration-fast) var(--motion-ease-out),
+src//app/globals.css:1107:    opacity var(--motion-duration-fast) var(--motion-ease-in-out);
+src//app/globals.css:1121:  transform: scale(var(--motion-press-scale));
+src//app/globals.css:1156:  transition: background 0.2s ease, box-shadow 0.2s ease;
+src//app/globals.css:1284:  transition: transform 0.1s linear;
+src//app/globals.css:1349:  transition:
+src//app/globals.css:1350:    transform var(--motion-duration-fast) var(--motion-ease-out),
+src//app/globals.css:1351:    border-color var(--motion-duration-fast) var(--motion-ease-in-out),
+src//app/globals.css:1352:    box-shadow var(--motion-duration-fast) var(--motion-ease-in-out);
+src//app/globals.css:1364:  transform: scale(var(--motion-press-scale));
+src//app/globals.css:1406:  transition:
+src//app/globals.css:1407:    opacity var(--motion-duration-fast) var(--motion-ease-in-out),
+src//app/globals.css:1408:    text-shadow var(--motion-duration-fast) var(--motion-ease-in-out);
+src//app/globals.css:1445:@media (prefers-reduced-motion: reduce) {
+src//app/globals.css:1466:@keyframes livingScrollDrift {
+src//app/globals.css:1499:  animation: collectorCardSheen 4.8s ease-in-out infinite;
+src//app/globals.css:1502:@keyframes collectorCardSheen {
+src//app/globals.css:1513:@media (prefers-reduced-motion: reduce) {
+src//app/globals.css:1565:  transition: transform 0.35s ease, box-shadow 0.35s ease;
+src//app/globals.css:1663:  animation: audioIslandWave 0.55s ease-in-out infinite;
+src//app/globals.css:1674:@keyframes playerBufferSpin {
+src//app/globals.css:1680:@keyframes audioIslandWave {
+src//app/globals.css:1691:  animation: audioImmersiveIn 380ms ease-out forwards;
+src//app/globals.css:1694:@keyframes audioImmersiveIn {
+src//app/globals.css:1706:  animation: audioCoverPulse 2.4s ease-in-out infinite;
+src//app/globals.css:1709:@keyframes audioCoverPulse {
+src//app/globals.css:1724:@keyframes csReelSpin {
+src//app/globals.css:1734:  animation: csRipple 0.35s ease-out;
+src//app/globals.css:1737:@keyframes csRipple {
+src//app/globals.css:1754:  animation: csBreath 1.2s ease-in-out infinite;
+src//app/globals.css:1757:@keyframes csBreath {
+src//app/globals.css:1786:  animation: csDistortWave 1.2s ease-in-out infinite;
+src//app/globals.css:1793:@keyframes csDistortWave {
+src//app/globals.css:1818:  transition: opacity 0.45s ease;
+src//app/globals.css:1923:  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
+src//app/globals.css:1929:  transform: scale(var(--motion-press-scale));
+src//app/globals.css:1972:  transition:
+src//app/globals.css:1973:    box-shadow var(--motion-duration-base) var(--motion-ease-in-out),
+src//app/globals.css:1974:    filter var(--motion-duration-base) var(--motion-ease-in-out);
+src//app/globals.css:2008:  transition: transform var(--motion-duration-fast) linear;
+src//app/globals.css:2033:  transition: opacity 0.4s ease;
+src//app/globals.css:2038:  animation: playerSignatureBloom 2.4s ease-in-out infinite;
+src//app/globals.css:2041:@keyframes playerSignatureBloom {
+src//app/globals.css:2065:  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
+src//app/globals.css:2081:  transition: stroke-dashoffset 0.12s linear;
+src//app/globals.css:2101:  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
+src//app/globals.css:2123:  animation: playerSignatureViz 1.1s ease-in-out infinite;
+src//app/globals.css:2142:@keyframes playerSignatureViz {
+src//app/globals.css:2163:  transform: scale(var(--motion-press-scale));
+src//app/globals.css:2174:  transform: scale(var(--motion-press-scale));
+src//app/globals.css:2409:  animation: audioIslandWave 0.9s ease-in-out infinite;
+src//app/globals.css:2428:  transition: box-shadow var(--motion-modal-sheet);
+src//app/globals.css:2546:  transition: color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+src//app/globals.css:2630:  transition: transform 0.12s ease, opacity 0.15s ease;
+src//app/globals.css:2716:  transition:
+src//app/globals.css:2806:  transition: opacity 0.35s ease;
+src//app/globals.css:2811:  animation: playerHeroBloom 2.2s ease-in-out infinite;
+src//app/globals.css:2814:@keyframes playerHeroBloom {
+src//app/globals.css:2873:  animation: playerHeroPulse 2s ease-in-out infinite;
+src//app/globals.css:2876:@keyframes playerHeroPulse {
+src//app/globals.css:2950:  animation: barPulse 1.1s ease-in-out infinite;
+src//app/globals.css:2978:@keyframes barPulse {
+src//app/globals.css:2997:@media (prefers-reduced-motion: reduce) {
+src//app/globals.css:3028:    transition: none;
+src//app/globals.css:3151:  transition: border-color 0.2s, box-shadow 0.2s;
+src//app/globals.css:3175:  transition: transform 0.2s, filter 0.2s, opacity 0.2s;
+src//app/globals.css:3226:  transition: border-color 0.2s, box-shadow 0.2s;
+src//app/globals.css:3373:  transition: background 0.2s, box-shadow 0.2s;
+src//app/globals.css:3401:  transition:
+src//app/globals.css:3402:    border-color var(--motion-duration-fast) var(--motion-ease-in-out),
+src//app/globals.css:3403:    box-shadow var(--motion-duration-fast) var(--motion-ease-in-out),
+src//app/globals.css:3404:    background var(--motion-duration-fast) var(--motion-ease-in-out),
+src//app/globals.css:3405:    color var(--motion-duration-fast) var(--motion-ease-in-out),
+src//app/globals.css:3406:    transform var(--motion-duration-fast) var(--motion-ease-out);
+src//app/globals.css:3421:  transform: scale(var(--motion-press-scale));
+src//app/globals.css:3432:  animation: collectionPortalSheen 6s ease-in-out infinite;
+src//app/globals.css:3445:@media (prefers-reduced-motion: reduce) {
+src//app/globals.css:3451:@keyframes collectionPortalSheen {
+src//app/globals.css:3479:@keyframes giftBadgePulse {
+src//app/globals.css:3490:@keyframes giftIconSpin {
+src//app/globals.css:3538:  animation: giftRevealParticleRise 2.4s ease-out infinite;
+src//app/globals.css:3542:@keyframes giftRevealParticleRise {
+src//app/globals.css:3565:  transition: transform var(--motion-duration-fast) var(--motion-ease-out);
+src//app/globals.css:3569:  transform: scale(var(--motion-press-scale));
+src//app/globals.css:3580:  animation: giftRevealArtifactFloat 3.2s ease-in-out infinite;
+src//app/globals.css:3584:@keyframes giftRevealArtifactFloat {
+src//app/globals.css:3603:  animation: giftRevealHintPulse 1.8s ease-in-out infinite;
+src//app/globals.css:3606:@keyframes giftRevealHintPulse {
+src//app/globals.css:3619:  animation: giftRevealBurst 0.45s ease-out forwards;
+src//app/globals.css:3624:@keyframes giftRevealBurst {
+src//app/globals.css:3711:  animation: giftRevealDockGlow 0.9s ease-in-out infinite;
+src//app/globals.css:3714:@keyframes giftRevealDockGlow {
+src//app/globals.css:3730:  animation: giftCollectionHighlight 2.8s ease-in-out 2;
+src//app/globals.css:3735:@keyframes giftCollectionHighlight {
+src//app/globals.css:3744:@keyframes skeleton-shimmer {
+src//app/globals.css:3756:  animation: preview-vignette 5s ease-in forwards;
+src//app/globals.css:3758:@keyframes preview-vignette {
+src//app/globals.css:3791:  transition: background 0.2s;
+src//app/globals.css:3816:  transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
+src//app/globals.css:3822:  animation: cs-pulse 2s ease-in-out infinite;
+src//app/globals.css:3824:@keyframes cs-pulse {
+src//app/globals.css:3847:  transition: color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+src//app/globals.css:3852:  animation: cs-pulse 2s ease-in-out infinite;
+src//app/globals.css:3881:  animation: cs-orb-pulse 800ms ease-in-out;
+src//app/globals.css:3895:@keyframes cs-cover-blur-in {
+src//app/globals.css:3906:@keyframes cs-cover-blur-out {
+src//app/globals.css:3917:@keyframes cs-orb-pulse {
+src//app/globals.css:3929:@keyframes cs-title-electric {
+src//app/globals.css:3972:  transition: border-color 0.15s, color 0.15s, box-shadow 0.15s;
+src//app/globals.css:3981:  animation: scene-intro 2.5s ease-out forwards;
+src//app/globals.css:3983:@keyframes scene-intro {
+src//app/globals.css:3989:  animation: art-intro 2s ease-out 0.5s both;
+src//app/globals.css:3991:@keyframes art-intro {
+src//app/globals.css:3996:  animation: title-intro 2s ease-out 1s both;
+src//app/globals.css:3998:@keyframes title-intro {
+src//app/globals.css:4004:  animation: owned-flash 0.8s ease-out forwards;
+src//app/globals.css:4006:@keyframes owned-flash {
+src//app/globals.css:4015:@keyframes badge-stamp {
+src//app/globals.css:4021:  animation: scene-exhale 2s ease-out forwards;
+src//app/globals.css:4023:@keyframes scene-exhale {
+src//app/globals.css:4028:.release-card-cover--locked {
+src//app/globals.css:4031:.release-card-cover-img--blur {
+src//app/globals.css:4034:.release-card-upcoming-overlay {
+src//app/globals.css:4044:.release-card-lock-icon {
+src//app/globals.css:4047:.release-card-countdown,
+src//app/globals.css:4060:.release-card-upcoming-label {
+src//app/globals.css:4181:  animation: eqPulse 0.8s ease-in-out infinite;
+src//app/globals.css:4192:@keyframes eqPulse {
+src//app/globals.css:4206:.orb-a{width:85%;padding-top:85%;top:-25%;left:-20%;animation:oa 10s ease-in-out infinite alternate;}
+src//app/globals.css:4207:.orb-b{width:70%;padding-top:70%;bottom:-22%;right:-18%;animation:ob 13s ease-in-out infinite alternate;}
+src//app/globals.css:4208:.orb-c{width:55%;padding-top:55%;top:20%;left:20%;animation:oc 8s ease-in-out infinite alternate;}
+src//app/globals.css:4209:@keyframes oa{from{transform:translate(0,0)}to{transform:translate(7%,9%)}}
+src//app/globals.css:4210:@keyframes ob{from{transform:translate(0,0)}to{transform:translate(-7%,-6%)}}
+src//app/globals.css:4211:@keyframes oc{from{transform:translate(0,0)}to{transform:translate(5%,-8%)}}
+src//app/globals.css:4213:.sc-ray{position:absolute;top:-20%;width:1px;height:140%;opacity:0;transform-origin:top center;animation:ray 8s ease-in-out infinite;}
+src//app/globals.css:4217:@keyframes ray{0%,100%{opacity:0;transform:rotate(-5deg)}50%{opacity:.28;transform:rotate(5deg)}}
+src//app/globals.css:4219:@keyframes scan{from{background-position:0 0}to{background-position:0 80px}}
+src//app/globals.css:4223:.art-lbl{font-family:'Cormorant Garamond',serif;font-size:clamp(44px,11vw,68px);font-weight:300;font-style:italic;letter-spacing:.04em;animation:al-glow 4s ease-in-out infinite;color:rgba(255,255,255,.07);}
+src//app/globals.css:4224:@keyframes al-glow{0%,100%{text-shadow:0 0 40px var(--glow),0 0 80px var(--glow-dim)}50%{text-shadow:0 0 70px var(--glow),0 0 130px var(--glow-dim)}}
+src//app/globals.css:4227:.drag-pill{width:36px;height:4px;background:rgba(255,255,255,.22);border-radius:2px;cursor:pointer;transition:background .2s,transform .2s;}
+src//app/globals.css:4232:.c-sm{width:32px;height:32px;border-radius:50%;background:transparent;border:1px solid rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;cursor:pointer;color:rgba(255,255,255,.5);flex-shrink:0;transition:border-color .15s,color .15s,transform .1s;}
+src//app/globals.css:4235:.c-md{width:42px;height:42px;border-radius:50%;background:transparent;border:1.5px solid rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;cursor:pointer;color:rgba(255,255,255,.65);flex-shrink:0;transition:border-color .15s,color .15s,transform .1s;}
+src//app/globals.css:4238:.c-lg{width:60px;height:60px;border-radius:50%;border:2px solid var(--p1);background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;flex-shrink:0;transition:box-shadow .2s,transform .1s;color:var(--accent);}
+src//app/globals.css:4246:.eq-b{width:3px;border-radius:1px;height:13px;transform-origin:bottom;animation:eq-sc .65s ease-in-out infinite alternate;}
+src//app/globals.css:4249:@keyframes eq-sc{from{transform:scaleY(.18)}to{transform:scaleY(1)}}
+src//app/globals.css:4252:.cart-pulse{animation:cp 2.6s ease-in-out infinite;}
+src//app/globals.css:4253:@keyframes cp{0%,100%{filter:drop-shadow(0 0 5px var(--glow)) drop-shadow(0 0 10px var(--glow-dim))}50%{filter:drop-shadow(0 0 14px var(--glow)) drop-shadow(0 0 28px var(--glow-dim)) brightness(1.12)}}
+src//app/globals.css:4256:.col-glow{animation:cg 3s ease-in-out infinite;}
+src//app/globals.css:4257:@keyframes cg{0%,100%{filter:drop-shadow(0 0 4px var(--glow))}50%{filter:drop-shadow(0 0 14px var(--glow))}}
+src//app/globals.css:4261:@keyframes sh-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+src//app/globals.css:4262:.sheet-hdl{width:32px;height:4px;background:rgba(255,255,255,.15);border-radius:2px;margin:12px auto 8px;cursor:pointer;transition:background .2s;}
+src//app/globals.css:4266:.tr{display:flex;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;position:relative;transition:background .15s;}
+src//app/globals.css:4271:.icon-btn{background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center;transition:transform .1s,opacity .1s;}
+src//app/globals.css:4284:  transition:background .2s,box-shadow .2s;
+src//app/globals.css:4299:/* Low power / reduced motion — soften decorative motion only */
+src//app/globals.css:4300:@media (prefers-reduced-motion: reduce) {
+src//styles/motion/tokens.css:2: * Phase 9 — shared motion tokens (CSS variables only).
+src//styles/motion/tokens.css:6:  --motion-duration-fast: 0.18s;
+src//styles/motion/tokens.css:7:  --motion-duration-base: 0.34s;
+src//styles/motion/tokens.css:8:  --motion-duration-slow: 0.48s;
+src//styles/motion/tokens.css:10:  --motion-ease-out: cubic-bezier(0.33, 0, 0.2, 1);
+src//styles/motion/tokens.css:11:  --motion-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+src//styles/motion/tokens.css:12:  --motion-ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+src//styles/motion/tokens.css:14:  --motion-modal-backdrop: var(--motion-duration-base) var(--motion-ease-out);
+src//styles/motion/tokens.css:15:  --motion-modal-sheet: var(--motion-duration-slow) var(--motion-ease-spring);
+src//styles/motion/tokens.css:16:  --motion-press-scale: 0.97;
+src//styles/motion/tokens.css:19:@media (prefers-reduced-motion: reduce) {
+src//styles/motion/tokens.css:21:    --motion-duration-fast: 0.01ms;
+src//styles/motion/tokens.css:22:    --motion-duration-base: 0.01ms;
+src//styles/motion/tokens.css:23:    --motion-duration-slow: 0.01ms;
+src//styles/motion/tokens.css:24:    --motion-press-scale: 1;
+src//system/telemetry/events.js:9: *   | { type: 'transition.failed', from: string, to: string, error: string }
+src//system/telemetry/events.js:26:  "transition.failed",
+src//system/errors/FallbackRenderer.js:23:        transition: `opacity var(--motion-duration-base) var(--motion-ease-out)`,
+src//system/errors/FallbackRenderer.js:148:        transition: `opacity var(--motion-duration-fast) var(--motion-ease-out)`,
+src//system/guards/useTransitionGuard.js:6: * Prevents overlapping navigation/transition operations.
+src//components/music/MyMusicTab.js:143:                    animation: "giftBadgePulse 3s ease-in-out infinite",
+src//components/music/MyMusicTab.js:148:                        animation: "giftIconSpin 4s ease-in-out infinite",
+src//components/music/ChoppedSlowedToggle.js:40:        transition: "border-color 0.2s, box-shadow 0.2s, color 0.2s",
+src//components/music/PlaylistSection.js:4:import { Reorder, useDragControls } from "framer-motion";
+src//components/music/PlaylistSection.js:44:      transition={{ type: "spring", stiffness: 420, damping: 32 }}
+src//components/music/MusicPlusButton.js:140:          transition: "color 0.15s",
+src//components/music/ReleaseCardPlayButton.js:111:        transition: "all 0.2s",
+src//components/music/ReleaseCardPlayButton.js:164:            transition: "0.2s",
+src//components/music/AlbumTracklistSheet.js:4:import { motion, useMotionValue, useTransform, animate } from "framer-motion";
+src//components/music/AlbumTracklistSheet.js:21:const sheetSpring = { type: "spring", stiffness: 420, damping: 36, mass: 0.85 };
+src//components/music/AlbumTracklistSheet.js:127:      <motion.div
+src//components/music/AlbumTracklistSheet.js:393:      </motion.div>
+src//components/ui/CoverArt.js:9:  if (type === "video" || type === "motion") return "video";
+src//components/home/FeaturesRail.js:16:        <div key={feat.slug || feat.id || `feature-${i}`} style={{flex:"0 0 auto",width:isMobile?160:220,scrollSnapAlign:"start",background:"#0a0a0a",borderRadius:14,border:"1px solid #1a1a1a",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,transition:"border-color 0.25s",position:"relative"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#a259ff55"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
+src//components/home/CatalogGrid.js:48:              className="release-card release-card--upcoming"
+src//components/home/CatalogGrid.js:58:              <div className="release-card-cover release-card-cover--locked">
+src//components/home/CatalogGrid.js:62:                  className="release-card-cover-img--blur"
+src//components/home/CatalogGrid.js:65:                <div className="release-card-upcoming-overlay">
+src//components/home/CatalogGrid.js:66:                  <div className="release-card-lock-icon">
+src//components/home/CatalogGrid.js:69:                  <div className="release-card-countdown">
+src//components/home/CatalogGrid.js:74:              <div className="release-card-meta" style={{ padding: isMobile ? "10px" : "14px 16px" }}>
+src//components/home/CatalogGrid.js:75:                <div className="release-card-title" style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700 }}>
+src//components/home/CatalogGrid.js:78:                <div className="release-card-upcoming-label">DROPPING SOON</div>
+src//components/home/CatalogGrid.js:85:        <div key={item.slug} style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
+src//components/home/CatalogGrid.js:96:                transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s",
+src//components/home/CatalogGrid.js:118:                animation: "giftBadgePulse 3s ease-in-out infinite",
+src//components/home/CatalogGrid.js:124:                <GiftIcon size={12} style={{ animation: "giftIconSpin 4s ease-in-out infinite" }} />
+src//components/home/CatalogGrid.js:155:                <button onClick={()=>addToCart(item)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>
+src//components/home/RadioCarousel.js:154:                  transition: "0.25s",
+src//components/home/RadioCarousel.js:179:                  transition: "all 0.3s",
+src//components/home/RadioCarousel.js:216:                transition: "all 0.2s",
+src//components/home/AmbientPlaybackBackground.js:23:    transition: "opacity 500ms ease",
+src//components/home/AmbientPlaybackBackground.js:35:    transition: "opacity 500ms ease",
+src//components/home/CarouselUI.js:40:                transition: "filter 0.3s",
+src//components/home/CarouselUI.js:45:            <div onClick={()=>onSingleClick?.(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,borderRadius:14,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
+src//components/home/CarouselUI.js:53:        <button onClick={prevSingle} style={{width:large?50:44,height:large?50:44,borderRadius:"50%",background:"rgba(255,255,255,0.04)",border:"1px solid #2a2a2a",color:"#555",fontSize:large?22:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";e.currentTarget.style.boxShadow="0 0 10px rgba(0,255,255,0.3)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#555";e.currentTarget.style.boxShadow="none";}}>‹</button>
+src//components/home/CarouselUI.js:67:              transition: "filter 0.3s",
+src//components/home/CarouselUI.js:72:          <div onClick={()=>onSingleClick?.(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,borderRadius:large?18:16,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
+src//components/home/CarouselUI.js:92:              animation: "giftBadgePulse 3s ease-in-out infinite",
+src//components/home/CarouselUI.js:98:              <GiftIcon size={12} style={{ animation: "giftIconSpin 4s ease-in-out infinite" }} />
+src//components/home/CarouselUI.js:107:          {singles.map((s,i)=><div key={s.slug} onClick={()=>goToSingle(i,i>singleIndex?"right":"left")} style={{width:i===singleIndex?(isMobile?20:large?24:20):(isMobile?6:large?7:6),height:isMobile?6:large?7:6,borderRadius:4,background:i===singleIndex?"#00ffff":"#333",cursor:"pointer",transition:"all 0.3s",boxShadow:i===singleIndex?"0 0 8px rgba(0,255,255,0.6)":"none"}}/>)}
+src//components/home/CarouselUI.js:110:          {access?.showCart && <button onClick={()=>addToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"12px 0":large?"11px 20px":"10px 18px",background:"#0a0a0a",color:"#00ffff",border:"1px solid #00ffff",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:"bold",transition:"0.25s",width:isMobile?"100%":"auto"}}>+ Add to Cart</button>}
+src//components/home/CarouselUI.js:111:          {access?.showCart && (large||isMobile) && <button onClick={()=>addVinylToCart(currentSingle)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"12px 0":"11px 20px",background:"#0a0a0a",color:"#aaa",border:"1px solid #2a2a2a",borderRadius:8,cursor:"pointer",fontSize:13,transition:"0.25s",width:isMobile?"100%":"auto"}}>+ Vinyl $47.99</button>}
+src//components/home/FlowState.js:28:        transition: "border-color 0.7s,box-shadow 0.7s",
+src//components/home/FlowState.js:55:            transition: "color 0.5s",
+src//components/home/FlowState.js:67:          transition: "opacity 0.6s",
+src//components/home/FlowState.js:92:              animation: "flowIdlePulse 5s ease-in-out infinite",
+src//components/home/FlowState.js:107:                  animation: `flowIdleDot 2.4s ease-in-out ${i * 0.5}s infinite`,
+src//components/home/FlowState.js:123:          transition: "opacity 0.6s",
+src//components/home/FlowState.js:136:              transition: "all 0.9s",
+src//components/home/FlowState.js:145:            transition: "background 0.9s",
+src//components/home/FlowState.js:172:              transition: "all 0.7s",
+src//components/home/FlowState.js:196:                  animation: `eqBar${((i - 1) % 4) + 1} ${0.38 + i * 0.09}s ease-in-out infinite alternate`,
+src//components/home/FlowState.js:226:            transition: "opacity 0.45s",
+src//components/home/FlowState.js:289:                transition: "opacity 0.2s,transform 0.2s",
+src//components/payments/DonateModal.js:4:import { AnimatePresence, motion } from "framer-motion";
+src//components/payments/DonateModal.js:16:const OVERLAY_FADE = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.22 } };
+src//components/payments/DonateModal.js:17:const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
+src//components/payments/DonateModal.js:18:const MODAL_CENTER = { initial: { opacity: 0, scale: 0.96 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.96 }, transition: SPRING_SOFT };
+src//components/payments/DonateModal.js:19:const SHEET_UP = { initial: { y: "100%" }, animate: { y: 0 }, exit: { y: "100%" }, transition: SPRING_SOFT };
+src//components/payments/DonateModal.js:120:        <motion.div
+src//components/payments/DonateModal.js:135:          <motion.div
+src//components/payments/DonateModal.js:301:          </motion.div>
+src//components/payments/DonateModal.js:302:        </motion.div>
+src//components/ReleaseDetailExtras.js:26:    <div className="release-detail-extras" style={{ marginTop: 16, width: "100%" }}>
+src//components/auth/AuthScreenCard.js:58:              transition:
+src//components/auth/AuthGate.js:55:  @keyframes wordmarkGlow {
+src//components/auth/AuthGate.js:70:  @keyframes sheen {
+src//components/auth/AuthGate.js:331:    transition: sheetDragY > 0 ? "none" : "transform 0.25s ease",
+src//components/auth/AuthGate.js:368:    animationTimingFunction: "ease-in-out, linear",
+src//components/collectors-cards/CollectorsCardsGrid.js:5:import { motion } from "framer-motion";
+src//components/collectors-cards/CollectorsCardsGrid.js:16:  transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] },
+src//components/collectors-cards/CollectorsCardsGrid.js:39:    <motion.main
+src//components/collectors-cards/CollectorsCardsGrid.js:151:    </motion.main>
+src//components/collectors-cards/CollectorsCardsPlaceholder.js:3:import { motion } from "framer-motion";
+src//components/collectors-cards/CollectorsCardsPlaceholder.js:10:  transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] },
+src//components/collectors-cards/CollectorsCardsPlaceholder.js:15:    <motion.main
+src//components/collectors-cards/CollectorsCardsPlaceholder.js:51:      <motion.div
+src//components/collectors-cards/CollectorsCardsPlaceholder.js:59:        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+src//components/collectors-cards/CollectorsCardsPlaceholder.js:82:      </motion.div>
+src//components/collectors-cards/CollectorsCardsPlaceholder.js:101:    </motion.main>
+src//components/collectors-cards/CollectorCardItem.js:3:import { useReducedMotion } from "framer-motion";
+src//components/audio/CSModeButton.js:4:import { motion } from "framer-motion";
+src//components/audio/CSModeButton.js:7:const pressSpring = { type: "spring", stiffness: 520, damping: 28, mass: 0.55 };
+src//components/audio/CSModeButton.js:77:    <motion.button
+src//components/audio/CSModeButton.js:92:      transition={pressSpring}
+src//components/audio/CSModeButton.js:106:    </motion.button>
+src//components/audio/GlobalAudioPlayerBar.js:248:          animation: "giftIconSpin 4s ease-in-out infinite",
+src//components/audio/PlayerControlButton.js:4:import { motion } from "framer-motion";
+src//components/audio/PlayerControlButton.js:19:const pressSpring = { type: "spring", stiffness: 520, damping: 28, mass: 0.55 };
+src//components/audio/PlayerControlButton.js:44:    <motion.button
+src//components/audio/PlayerControlButton.js:57:      transition={pressSpring}
+src//components/audio/PlayerControlButton.js:66:    </motion.button>
+src//components/audio/PlayerControlButton.js:159:      <motion.button
+src//components/audio/PlayerControlButton.js:171:        transition={pressSpring}
+src//components/audio/PlayerControlButton.js:187:      </motion.button>
+src//components/audio/PlayerControlButton.js:231:      <motion.button
+src//components/audio/PlayerControlButton.js:243:        transition={pressSpring}
+src//components/audio/PlayerControlButton.js:262:      </motion.button>
+src//components/audio/PlayerControlButton.js:269:    <motion.button
+src//components/audio/PlayerControlButton.js:274:      transition={pressSpring}
+src//components/audio/PlayerControlButton.js:280:    </motion.button>
+src//components/gifts/GiftBottomSheet.js:4:import { motion, AnimatePresence } from "framer-motion";
+src//components/gifts/GiftBottomSheet.js:8:const SPRING = { type: "spring", stiffness: 320, damping: 34 };
+src//components/gifts/GiftBottomSheet.js:144:      <motion.div
+src//components/gifts/GiftBottomSheet.js:160:        <motion.form
+src//components/gifts/GiftBottomSheet.js:165:          transition={SPRING}
+src//components/gifts/GiftBottomSheet.js:434:        </motion.form>
+src//components/gifts/GiftBottomSheet.js:435:      </motion.div>
+src//components/gifts/GiftRevealExperience.js:7:import { motion, useReducedMotion } from "framer-motion";
+src//components/gifts/GiftRevealExperience.js:125:      <motion.div
+src//components/gifts/GiftRevealExperience.js:130:        transition={{ duration: reduced ? 0.15 : 0.9 }}
+src//components/gifts/GiftRevealExperience.js:136:        <motion.button
+src//components/gifts/GiftRevealExperience.js:147:          transition={{ duration: reduced ? 0.2 : 0.65, ease: [0.22, 1, 0.36, 1] }}
+src//components/gifts/GiftRevealExperience.js:153:        </motion.button>
+src//components/gifts/GiftRevealExperience.js:159:        <motion.div
+src//components/gifts/GiftRevealExperience.js:163:          transition={{ duration: reduced ? 0.25 : 0.85, ease: [0.16, 1, 0.3, 1] }}
+src//components/gifts/GiftRevealExperience.js:176:        </motion.div>
+src//components/gifts/GiftRevealExperience.js:180:        <motion.p
+src//components/gifts/GiftRevealExperience.js:184:          transition={{ delay: reduced ? 0 : 0.25, duration: 0.5 }}
+src//components/gifts/GiftRevealExperience.js:196:        </motion.p>
+src//components/gifts/GiftRevealExperience.js:200:        <motion.div
+src//components/gifts/GiftRevealExperience.js:210:          transition={{ duration: reduced ? 0.35 : 0.95, ease: [0.4, 0, 0.2, 1] }}
+src//components/gifts/GiftRevealExperience.js:213:        </motion.div>
+src//components/preview/GlyphLyricsPanel.js:4:import { motion, AnimatePresence } from "framer-motion";
+src//components/preview/GlyphLyricsPanel.js:32:        <motion.div
+src//components/preview/GlyphLyricsPanel.js:37:          transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+src//components/preview/GlyphLyricsPanel.js:145:                      transition: "color 0.25s, font-size 0.25s, opacity 0.25s",
+src//components/preview/GlyphLyricsPanel.js:169:        </motion.div>
+src//components/preview/ImmersivePreviewModal.js:204:            transition: "opacity .7s ease",
+src//components/preview/ImmersivePreviewModal.js:261:            transition: "transform .08s ease",
+src//components/preview/ImmersivePreviewModal.js:313:          transition: "width .1s linear",
+src//components/preview/ImmersivePreviewModal.js:570:        transition: "background .35s ease, backdrop-filter .35s ease",
+src//components/preview/ImmersivePreviewModal.js:590:          transition: closing
+src//components/preview/ImmersivePreviewModal.js:901:        transition: "background .35s ease, backdrop-filter .35s ease",
+src//components/preview/ImmersivePreviewModal.js:921:          transition: closing
+src//components/preview/ImmersivePreviewModal.js:1065:              <div style={{ height: "100%", width: `${miniPct}%`, background: `linear-gradient(90deg,${t.p1},${t.accent})`, boxShadow: `0 0 6px ${t.glow}`, transition: "width .4s linear" }} />
+src//components/preview/ImmersivePreviewModal.js:1091:                transition: "box-shadow .2s",
+src//components/nav/VaultNavLockIcon.js:3:import { motion } from "framer-motion";
+src//components/nav/VaultNavLockIcon.js:31:      <motion.div
+src//components/nav/VaultNavLockIcon.js:33:        transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+src//components/nav/VaultNavLockIcon.js:62:          <motion.div
+src//components/nav/VaultNavLockIcon.js:65:            transition={{
+src//components/nav/VaultNavLockIcon.js:84:      </motion.div>
+src//components/account/NotificationCenterPanel.js:28:              <span style={{width:34,height:20,borderRadius:999,background:active?"#00ffff":"#1a1a1a",position:"relative",boxShadow:active?"0 0 16px rgba(0,255,255,0.22)":"none",transition:"0.2s",flexShrink:0}}><span style={{position:"absolute",top:3,left:active?17:3,width:14,height:14,borderRadius:"50%",background:active?"#000":"#555",transition:"0.2s"}}/></span>
+src//components/player/ImmersivePlayerEngine/SignaturePlayRing.js:4:import { motion } from "framer-motion";
+src//components/player/ImmersivePlayerEngine/SignaturePlayRing.js:6:const pressSpring = { type: "spring", stiffness: 520, damping: 28, mass: 0.55 };
+src//components/player/ImmersivePlayerEngine/SignaturePlayRing.js:59:      <motion.button
+src//components/player/ImmersivePlayerEngine/SignaturePlayRing.js:66:        transition={pressSpring}
+src//components/player/ImmersivePlayerEngine/SignaturePlayRing.js:117:      </motion.button>
+src//components/player/ImmersivePlayerEngine/ModalPlayerShell.js:4:import { motion } from "framer-motion";
+src//components/player/ImmersivePlayerEngine/ModalPlayerShell.js:14:  transition: { duration: 0.34, ease: [0.33, 0, 0.2, 1] },
+src//components/player/ImmersivePlayerEngine/ModalPlayerShell.js:21:  transition: PLAYER_SPRING,
+src//components/player/ImmersivePlayerEngine/ModalPlayerShell.js:28:  transition: { duration: 0.48, ease: [0.22, 1, 0.36, 1] },
+src//components/player/ImmersivePlayerEngine/ModalPlayerShell.js:71:    <motion.div
+src//components/player/ImmersivePlayerEngine/ModalPlayerShell.js:79:      <motion.div
+src//components/player/ImmersivePlayerEngine/ModalPlayerShell.js:82:        exit={{ ...shellVariant.exit, transition: isMobile ? PLAYER_SPRING_EXIT : { duration: 0.32 } }}
+src//components/player/ImmersivePlayerEngine/ModalPlayerShell.js:94:      </motion.div>
+src//components/player/ImmersivePlayerEngine/ModalPlayerShell.js:95:    </motion.div>
+src//components/player/ImmersivePlayerEngine/FloatingMainPlayer.js:78:        transition: swipeClosing || swipeOffset === 0 ? "transform 0.22s ease-out" : "none",
+src//components/player/ImmersivePlayerEngine/FloatingMainPlayer.js:133:                    animation: "giftIconSpin 4s ease-in-out infinite",
+src//components/player/ImmersivePlayerEngine/CompactDockPlayer.js:57:          animation: "giftIconSpin 4s ease-in-out infinite",
+src//components/player/ImmersivePlayerEngine/PlayerArtwork.js:4:import { motion } from "framer-motion";
+src//components/player/ImmersivePlayerEngine/PlayerArtwork.js:40:    <motion.div
+src//components/player/ImmersivePlayerEngine/PlayerArtwork.js:85:    </motion.div>
+src//components/media/_deprecated/ModalAudioPlayer.js:36:        <div style={{width:localProgress.duration?`${(localProgress.current/localProgress.duration)*100}%`:"0%",height:"100%",background:error?"#ff8a8a":"#00ffff",borderRadius:3,transition:"width 0.1s linear",boxShadow:error?"0 0 6px rgba(255,138,138,0.5)":"0 0 6px rgba(0,255,255,0.5)"}}/>
+src//hooks/useCoverPalette.js:16:  if (type === "video" || type === "motion") return true;
+src//lib/music-playback.js:145:  const motionRaw = normalized?.motion_cover_url || normalized?.motionCoverUrl || normalized?.video || null;
+src//lib/music-playback.js:146:  const coverArtType = normalized?.coverArtType || normalized?.cover_art_type || (motionRaw ? "video" : "image");
+src//lib/music-playback.js:150:  const videoRaw = motionRaw;
+src//lib/signals.js:154:      motionSafe: true,
+src//lib/control-system/releases.js:197:  const directLoop = directMediaUrl(track, ["video", "videoUrl", "video_url", "motion_cover_url", "motionCoverUrl", "loop", "loopUrl", "loop_url"], apiBaseUrl);
+src//lib/control-system/releases.js:239:  const directMotion = directMediaUrl(release, ["motion_cover_url", "motionCoverUrl", "motionCover", "motion_cover"], apiBaseUrl);
+src//lib/control-system/releases.js:244:    directMediaUrl(primaryTrack, ["video", "videoUrl", "video_url", "motion_cover_url", "motionCoverUrl", "loop", "loopUrl", "loop_url"], apiBaseUrl) ||
+src//lib/control-system/releases.js:245:    directMediaUrl(release, ["video", "videoUrl", "video_url", "motion_cover_url", "motionCoverUrl", "loop", "loopUrl", "loop_url"], apiBaseUrl) ||
+src//lib/control-system/releases.js:278:    motion_cover_url: directMotion || directVideo || video,
+src//lib/dev/performanceMarks.js:15:  TRANSITION_START: "2mrrw:transition-start",
+src//lib/dev/performanceMarks.js:16:  TRANSITION_END: "2mrrw:transition-end",
+src//lib/player/constants.js:1:/** Shared motion + gesture constants for immersive player surfaces */
+src//lib/player/constants.js:5:export const PLAYER_SPRING = { type: "spring", stiffness: 320, damping: 34 };
+src//lib/player/constants.js:6:export const PLAYER_SPRING_EXIT = { type: "spring", stiffness: 380, damping: 36 };
+src//media/imagePipeline/ImagePipeline.js:9:  if (coverArtType === "video" || coverArtType === "motion") return false;

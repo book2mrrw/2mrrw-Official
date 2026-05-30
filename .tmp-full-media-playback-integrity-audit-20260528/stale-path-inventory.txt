@@ -1,0 +1,25 @@
+# Stale / non-canonical path inventory — 2026-05-29
+# Canonical: digital-assets/{singles,features,albums,mixtapes-and-eps}/ (lowercase, dash-separated)
+
+## Capitalized R2 prefixes (NOT in src — CDN 404 when probed)
+digital-assets/Singles/
+digital-assets/Features/
+digital-assets/Albums/
+digital-assets/Mixtapes & EPs/
+
+## Wrong feature folder (canonical uses singles/)
+digital-assets/features/i-dont-believe-you/audio.wav  # 404 on public CDN probe
+
+## Legacy public CDN host (.env.example warns)
+https://pub-992d4f5d8e2f4b0a9c1d2e3f4a5b6c7.r2.dev  # 401 on probe
+
+## Legacy local paths (remapped at runtime — OK if R2 has object)
+/audio/previews/*  → catalogPreviewAudioUrl → previews/*
+/public/audio/full/*  (migration docs only; not referenced in current src playback)
+
+## storage_path shape inconsistency (both normalize correctly)
+singles/hour-glass/audio.mp3                    # singles omit digital-assets/ prefix
+digital-assets/singles/i-dont-believe-you/audio.wav  # features include full prefix
+
+## Album track slugs
+Album inline tracks are title strings; stream slug often album slug only — per-track product rows may be missing in DB
