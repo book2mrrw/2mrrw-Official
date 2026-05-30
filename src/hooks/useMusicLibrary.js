@@ -9,7 +9,7 @@ import {
   isStreamingLibraryItem,
 } from "@/lib/library-ownership";
 
-export function useMusicLibrary({ singles = [], albums = [] } = {}) {
+export function useMusicLibrary({ singles = [], albums = [], mixtapesAndEps = [] } = {}) {
   const {
     user,
     library,
@@ -27,7 +27,7 @@ export function useMusicLibrary({ singles = [], albums = [] } = {}) {
   const recentlyPlayed = useMemo(() => {
     const progress = accountState?.mediaProgress || [];
     const slugToItem = new Map();
-    [...singles, ...albums, ...library].forEach((item) => {
+    [...singles, ...albums, ...mixtapesAndEps, ...library].forEach((item) => {
       if (item?.slug) slugToItem.set(item.slug, item);
     });
     return progress
@@ -47,16 +47,16 @@ export function useMusicLibrary({ singles = [], albums = [] } = {}) {
           src: catalog?.src,
         };
       });
-  }, [accountState?.mediaProgress, singles, albums, library]);
+  }, [accountState?.mediaProgress, singles, albums, mixtapesAndEps, library]);
 
   const permanentLibrary = useMemo(
     () => (library || []).filter(isPermanentLibraryItem),
     [library]
   );
 
-  const { ownedSingles, ownedAlbums } = useMemo(
-    () => partitionLibraryByType(permanentLibrary, { singles, albums }),
-    [permanentLibrary, singles, albums]
+  const { ownedSingles, ownedAlbums, ownedMixtapes, ownedEps } = useMemo(
+    () => partitionLibraryByType(permanentLibrary, { singles, albums, mixtapesAndEps }),
+    [permanentLibrary, singles, albums, mixtapesAndEps]
   );
 
   const subscriptionItems = useMemo(
@@ -78,6 +78,8 @@ export function useMusicLibrary({ singles = [], albums = [] } = {}) {
     loading,
     ownedSingles,
     ownedAlbums,
+    ownedMixtapes,
+    ownedEps,
     subscriptionItems,
     collectorItems,
     recentlyPlayed,

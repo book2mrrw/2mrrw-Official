@@ -45,7 +45,12 @@ import AmbientPlaybackBackground from "@/components/home/AmbientPlaybackBackgrou
 import CarouselUI from "@/components/home/CarouselUI";
 import FeaturesRail from "@/components/home/FeaturesRail";
 import CatalogGrid from "@/components/home/CatalogGrid";
+import LatestSinglesStyleRow from "@/components/home/LatestSinglesStyleRow";
 import { withR2CatalogMedia, catalogCoverDisplay } from "@/components/home/catalogMedia";
+import {
+  getStorefrontAlbums,
+  getStorefrontMixtapesAndEps,
+} from "@/lib/media/canonical-catalog";
 import { imagePipeline } from "@/media/imagePipeline";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { ModalErrorBoundary } from "@/system/errors";
@@ -223,16 +228,14 @@ const singles = [
   },
 ];
 
-const albums = [
-  { title:"T.B.H.",        slug:"tbh",     type:"album", cover:"/images/albums/tbh.jpg",    price:9.99,  date:"July 7, 2022",   vinyl:47.99, tracks:["Glass Full","Up 2 Me","Unexpcted","All Yours","Locomotive","LEFT","Was Wrong","ArTiFICiaL"] },
-  { title:"(A.D)",         slug:"ad",      type:"album", cover:"/images/albums/ad.jpg",     price:9.99,  date:"March 24, 2024", vinyl:47.99, tracks:["2mrrw's Ntro","Said N' Done","A.D.D","Perspective (2018)","Grand Scheme","A2B","Life Changes (2018)","Itself (2018)","Wastin Time","Like Me Or Not"] },
-  { title:"Love Hz Vol.1", slug:"love-hz", type:"album", cover:"/images/albums/lovehz.jpg", price:12.99, date:"August 2026",    vinyl:47.99, tracks:["Roll Call","W.2.D","All Of It","Knock On Wood","Stayed 2 Long","Hour Glass"] },
-];
+const albums = getStorefrontAlbums().map((release) => withR2CatalogMedia(release));
+const mixtapesAndEps = getStorefrontMixtapesAndEps().map((release) => withR2CatalogMedia(release));
 
 /** Last-resort catalog when Control System or `/api/catalog/releases` is unavailable */
 const INLINE_SINGLES = singles;
 const INLINE_FEATURES = features;
 const INLINE_ALBUMS = albums;
+const INLINE_MIXTAPES_AND_EPS = mixtapesAndEps;
 
 const fallbackMerch = [
   { title:"2MRRW HOODIE",  slug:"hoodie", cover:"/images/albums/tbh.jpg",    price:59.99 },
@@ -786,6 +789,7 @@ export default function Page() {
         ...displaySingles,
         ...displayFeatures,
         ...INLINE_ALBUMS,
+        ...INLINE_MIXTAPES_AND_EPS,
       ]),
     [displaySingles, displayFeatures]
   );
@@ -1822,121 +1826,41 @@ export default function Page() {
                     </motion.div>
 
                     <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:18,alignItems:"flex-start"}}>
-
-                      <div
-                        ref={singlesRowRef}
-                        className="singles-row"
-                        style={{
-                          flex:1,
-                          display:"flex",
-                          gap:isMobile?12:18,
-                          overflowX:"auto",
-                          paddingBottom:14,
-                          scrollSnapType:"x mandatory",
-                          WebkitOverflowScrolling:"touch",
-                          overscrollBehaviorX:"contain",
-                          flexWrap:"nowrap",
-                          width:"100%",
-                          minWidth:0,
-                        }}
-                      >
-                        {displaySingles.map((single, i) => {
-                          const singleUi = withR2CatalogMedia(single);
-                          const singleAccess = resolveContentAccess(singleUi, entitlementAccountState);
-                          return (
-                          <div
-                            key={single.slug || single.id || `single-${i}`}
-                            data-single-card
-                            onClick={() => openSingleModal(singleUi)}
-                            style={{
-                              flex:"0 0 auto",
-                              width:isMobile?160:200,
-                              cursor:"pointer",
-                              scrollSnapAlign:"start",
-                              opacity:0,
-                              animation:`fadeInUp 0.5s ease ${i*0.09}s forwards`,
-                              background:"#0a0a0a",
-                              borderRadius:14,
-                              border:"1px solid #1a1a1a",
-                              transition:"border-color 0.25s, box-shadow 0.25s",
-                              position:"relative",
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.borderColor = "#00ffff33";
-                              e.currentTarget.style.boxShadow = "0 0 18px rgba(0,255,255,0.35)";
-                              const vid = e.currentTarget.querySelector("video");
-                              if (vid) { vid.style.transform = "scale(1.05)"; vid.style.filter = "brightness(1.12)"; }
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.borderColor = "#1a1a1a";
-                              e.currentTarget.style.boxShadow = "none";
-                              const vid = e.currentTarget.querySelector("video");
-                              if (vid) { vid.style.transform = "scale(1)"; vid.style.filter = "brightness(1)"; }
-                            }}
-                          >
-                            {isAdmin ? (
-                              <GiftOverlayButton onClick={() => openGiftSheet(singleUi)} />
-                            ) : null}
-                            {/* FIXED: src points to /videos/singles/, webkit-playsinline for iOS Safari */}
-                            <video
-                              data-single-carousel
-                              src={singleUi.video || undefined}
-                              poster={singleUi.cover || undefined}
-                              muted
-                              loop
-                              playsInline
-                              preload="metadata"
-                              webkit-playsinline="true"
-                              style={{
-                                width:"100%",
-                                aspectRatio:"1/1",
-                                objectFit:"cover",
-                                display:"block",
-                                borderRadius:"13px 13px 0 0",
-                                transition:"transform 0.3s, filter 0.3s",
-                                pointerEvents:"none",
-                              }}
-                            />
-                            <div style={{padding:isMobile?"10px 12px 14px":"12px 14px 16px"}}>
-                              <div className="song-title-turquoise-glow" style={{fontSize:isMobile?12:13,fontWeight:700,marginBottom:4}}>{single.title}</div>
-                              {singleAccess?.showPrice ? (
-                                <div style={{fontSize:12,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${single.price.toFixed(2)}</div>
-                              ) : null}
-                              <ReleaseCardActions
-                                item={singleUi}
-                                accountState={entitlementAccountState}
-                                userId={currentUser?.id}
-                                source="home_single_card"
-                                showCart={Boolean(singleAccess?.showCart)}
-                                onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
-                                onAddToCart={e => { e.stopPropagation(); addToCart(single); }}
-                                cartButtonStyle={{
-                                  background:"#1a1a1a",
-                                  color:"white",
-                                  border:"1px solid #2a2a2a",
-                                }}
-                                cartLabel="+ Cart"
-                              />
-                            </div>
-                          </div>
-                        );})}
+                      <div style={{flex:1,width:"100%",minWidth:0}}>
+                        <LatestSinglesStyleRow
+                          ref={singlesRowRef}
+                          items={displaySingles}
+                          isMobile={isMobile}
+                          isAdmin={isAdmin}
+                          onGift={openGiftSheet}
+                          onCardClick={openSingleModal}
+                          addToCart={addToCart}
+                          accountState={entitlementAccountState}
+                          userId={currentUser?.id}
+                          onLibraryChange={() => {
+                            void refreshAccountState();
+                            void refreshLibrary();
+                          }}
+                          source="home_single_card"
+                          cardMedia="video"
+                        />
                         {catalogLoading ? (
                           <>
                             <TrackCardSkeleton />
                             <TrackCardSkeleton />
                           </>
                         ) : null}
+                        {catalogHasMore ? (
+                          <button
+                            type="button"
+                            onClick={loadMoreCatalog}
+                            disabled={catalogLoading}
+                            style={{marginTop:12,padding:"10px 18px",background:"transparent",border:"1px solid #333",color:"#888",borderRadius:8,cursor:catalogLoading?"default":"pointer",fontSize:12,letterSpacing:1.5}}
+                          >
+                            {catalogLoading ? "Loading…" : "Load more"}
+                          </button>
+                        ) : null}
                       </div>
-                      {catalogHasMore ? (
-                        <button
-                          type="button"
-                          onClick={loadMoreCatalog}
-                          disabled={catalogLoading}
-                          style={{marginTop:12,padding:"10px 18px",background:"transparent",border:"1px solid #333",color:"#888",borderRadius:8,cursor:catalogLoading?"default":"pointer",fontSize:12,letterSpacing:1.5}}
-                        >
-                          {catalogLoading ? "Loading…" : "Load more"}
-                        </button>
-                      ) : null}
 
                       {!isMobile && (
                         <LivePanel
@@ -2029,6 +1953,30 @@ export default function Page() {
                   <div id="home-albums">
                     <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
                     <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
+                  </div>
+
+                  {/* Mixtapes & EPs — same row chrome as Latest Singles on mobile */}
+                  <div id="home-mixtapes-eps" style={{marginTop:28}}>
+                    <h2 className="section-heading" style={{marginBottom:14}}>Mixtapes &amp; EPs</h2>
+                    <div style={{flex:1,width:"100%",minWidth:0}}>
+                      <LatestSinglesStyleRow
+                        items={mixtapesAndEps}
+                        isMobile={isMobile}
+                        isAdmin={isAdmin}
+                        onGift={openGiftSheet}
+                        onCardClick={openAlbumModal}
+                        addToCart={addToCart}
+                        accountState={entitlementAccountState}
+                        userId={currentUser?.id}
+                        onLibraryChange={() => {
+                          void refreshAccountState();
+                          void refreshLibrary();
+                        }}
+                        source="home_mixtape_ep_card"
+                        cardMedia="cover"
+                        catalogPlaybackLookup={catalogPlaybackLookup}
+                      />
+                    </div>
                   </div>
 
                   {/* Audio Visuals */}
@@ -2144,12 +2092,17 @@ export default function Page() {
                       <MyMusicTab
                         singles={displaySingles}
                         albums={albums}
+                        mixtapesAndEps={mixtapesAndEps}
                         isMobile={isMobile}
                         isAdmin={isAdmin}
                         highlightSlug={giftHighlightSlug}
                         onSwitchTab={switchTab}
                         onOpenSingle={openSingleModal}
                         onOpenAlbum={openAlbumModal}
+                        onOpenAlbumTracklist={(album) => {
+                          const resolved = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
+                          setAlbumTracklistRelease(resolved || album);
+                        }}
                       />
                     </>
                   )}
@@ -2724,12 +2677,12 @@ export default function Page() {
         html,body{width:100%;overflow-x:clip;}
         *,*::before,*::after{box-sizing:border-box;}
         @media(max-width:768px){
-          .singles-row,.albums-row,.features-row,.products-row,.videos-row{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scroll-snap-type:x mandatory!important;overscroll-behavior-x:contain!important;gap:12px!important;padding-bottom:10px!important;}
-          .singles-row>*,.albums-row>*,.features-row>*,.products-row>*,.videos-row>*{flex:0 0 auto!important;scroll-snap-align:start!important;}
+          .singles-row,.mixtapes-eps-row,.albums-row,.features-row,.products-row,.videos-row{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scroll-snap-type:x mandatory!important;overscroll-behavior-x:contain!important;gap:12px!important;padding-bottom:10px!important;}
+          .singles-row>*,.mixtapes-eps-row>*,.albums-row>*,.features-row>*,.products-row>*,.videos-row>*{flex:0 0 auto!important;scroll-snap-align:start!important;}
         }
-        .singles-row::-webkit-scrollbar,.albums-row::-webkit-scrollbar,.features-row::-webkit-scrollbar,.products-row::-webkit-scrollbar,.videos-row::-webkit-scrollbar{height:4px;}
-        .singles-row::-webkit-scrollbar-track,.albums-row::-webkit-scrollbar-track,.features-row::-webkit-scrollbar-track,.products-row::-webkit-scrollbar-track,.videos-row::-webkit-scrollbar-track{background:#111;border-radius:4px;}
-        .singles-row::-webkit-scrollbar-thumb,.albums-row::-webkit-scrollbar-thumb,.features-row::-webkit-scrollbar-thumb,.products-row::-webkit-scrollbar-thumb,.videos-row::-webkit-scrollbar-thumb{background:#00ffff;border-radius:4px;}
+        .singles-row::-webkit-scrollbar,.mixtapes-eps-row::-webkit-scrollbar,.albums-row::-webkit-scrollbar,.features-row::-webkit-scrollbar,.products-row::-webkit-scrollbar,.videos-row::-webkit-scrollbar{height:4px;}
+        .singles-row::-webkit-scrollbar-track,.mixtapes-eps-row::-webkit-scrollbar-track,.albums-row::-webkit-scrollbar-track,.features-row::-webkit-scrollbar-track,.products-row::-webkit-scrollbar-track,.videos-row::-webkit-scrollbar-track{background:#111;border-radius:4px;}
+        .singles-row::-webkit-scrollbar-thumb,.mixtapes-eps-row::-webkit-scrollbar-thumb,.albums-row::-webkit-scrollbar-thumb,.features-row::-webkit-scrollbar-thumb,.products-row::-webkit-scrollbar-thumb,.videos-row::-webkit-scrollbar-thumb{background:#00ffff;border-radius:4px;}
         @keyframes pulse{0%{transform:scale(1);opacity:1}50%{transform:scale(1.05);opacity:.85}100%{transform:scale(1);opacity:1}}
         @keyframes fadeInUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
         @keyframes fadeInCover{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
@@ -2785,6 +2738,7 @@ export default function Page() {
         catalogPlaybackLookup={catalogPlaybackLookup}
         accountState={entitlementAccountState}
         userId={currentUser?.id}
+        isMobile={isMobile}
         onClose={() => setAlbumTracklistRelease(null)}
         onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}
       />

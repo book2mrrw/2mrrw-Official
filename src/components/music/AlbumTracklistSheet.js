@@ -26,6 +26,7 @@ export default function AlbumTracklistSheet({
   catalogPlaybackLookup,
   accountState,
   userId,
+  isMobile = false,
   onClose,
   onLibraryChange,
 }) {
@@ -131,6 +132,9 @@ export default function AlbumTracklistSheet({
         display: "flex",
         alignItems: "flex-end",
         justifyContent: "center",
+        overflow: "hidden",
+        paddingLeft: "max(0px, env(safe-area-inset-left))",
+        paddingRight: "max(0px, env(safe-area-inset-right))",
       }}
     >
       <motion.div
@@ -138,18 +142,29 @@ export default function AlbumTracklistSheet({
         drag="y"
         dragConstraints={{ top: 0, bottom: 200 }}
         dragElastic={{ top: 0, bottom: 0.35 }}
-        style={{ y: dragY, opacity: sheetOpacity, width: "100%", maxWidth: 480, touchAction: "none" }}
+        style={{
+          y: dragY,
+          opacity: sheetOpacity,
+          width: "100%",
+          maxWidth: isMobile ? "100%" : 480,
+          touchAction: "none",
+          boxSizing: "border-box",
+        }}
         onDragEnd={handleDragEnd}
       >
         <div
           style={{
-            maxHeight: "70vh",
+            maxHeight: isMobile
+              ? "min(78dvh, calc(100dvh - env(safe-area-inset-top) - 48px))"
+              : "70vh",
             background: "linear-gradient(165deg, rgba(20,20,24,0.96) 0%, rgba(8,8,12,0.98) 100%)",
             border: "1px solid rgba(255,255,255,0.06)",
             borderRadius: "16px 16px 0 0",
             display: "flex",
             flexDirection: "column",
             boxShadow: "0 -12px 40px rgba(0,0,0,0.5), 0 0 24px rgba(0,191,255,0.06)",
+            overflow: "hidden",
+            width: "100%",
           }}
         >
           <div
@@ -243,7 +258,16 @@ export default function AlbumTracklistSheet({
             <CSModeButton />
           </div>
 
-          <div style={{ overflowY: "auto", flex: 1, minHeight: 0, padding: "0 8px" }}>
+          <div
+            style={{
+              overflowY: "auto",
+              overflowX: "hidden",
+              flex: 1,
+              minHeight: 0,
+              padding: isMobile ? "0 4px" : "0 8px",
+              WebkitOverflowScrolling: "touch",
+            }}
+          >
             {(tracks.length ? tracks : (album.tracks || []).map((t, i) => ({
               id: `${album.slug}-${i}`,
               title: typeof t === "string" ? t : t?.title || `Track ${i + 1}`,
@@ -275,10 +299,13 @@ export default function AlbumTracklistSheet({
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: 10,
-                    padding: "10px 8px",
+                    gap: isMobile ? 6 : 10,
+                    padding: isMobile ? "10px 6px" : "10px 8px",
                     borderBottom: "1px solid rgba(255,255,255,0.04)",
                     background: active ? "rgba(0,191,255,0.06)" : "transparent",
+                    minWidth: 0,
+                    width: "100%",
+                    boxSizing: "border-box",
                   }}
                 >
                   <span style={{ width: 22, fontSize: 11, color: "rgba(255,255,255,0.35)", textAlign: "right", flexShrink: 0 }}>
@@ -309,10 +336,12 @@ export default function AlbumTracklistSheet({
                       {track.title}
                     </div>
                   </div>
-                  <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-                    {formatDuration(duration) || "—"}
-                  </span>
-                  {active && (
+                  {!isMobile ? (
+                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                      {formatDuration(duration) || "—"}
+                    </span>
+                  ) : null}
+                  {active && !isMobile ? (
                     <>
                       <button
                         type="button"
@@ -351,7 +380,7 @@ export default function AlbumTracklistSheet({
                         +15
                       </button>
                     </>
-                  )}
+                  ) : null}
                   <span onClick={(e) => e.stopPropagation()}>
                     <MusicPlusButton
                       track={plusTrack}
@@ -400,8 +429,8 @@ export default function AlbumTracklistSheet({
                         playAndClose(index, false);
                       }}
                       style={{
-                        width: 32,
-                        height: 32,
+                        width: isMobile ? 40 : 32,
+                        height: isMobile ? 40 : 32,
                         borderRadius: "50%",
                         border: "1px solid rgba(255,255,255,0.1)",
                         background: "rgba(255,255,255,0.05)",

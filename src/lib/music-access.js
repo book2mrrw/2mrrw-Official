@@ -243,29 +243,85 @@ export function resolvePlaybackSrc(track, access, { userId, accountState } = {})
   return track.preview || track.src || track.audio || "";
 }
 
-export function partitionLibraryByType(library = [], catalog = { singles: [], albums: [] }) {
+export function partitionLibraryByType(
+  library = [],
+  catalog = { singles: [], albums: [], mixtapesAndEps: [] }
+) {
   const singles = [];
   const albums = [];
+  const mixtapes = [];
+  const eps = [];
   const seenSingle = new Set();
   const seenAlbum = new Set();
+  const seenMixtape = new Set();
+  const seenEp = new Set();
 
   const albumSlugs = new Set((catalog.albums || []).map((a) => a.slug));
   const singleSlugs = new Set((catalog.singles || []).map((s) => s.slug));
+  const epSlugs = new Set();
+  const mixtapeSlugs = new Set();
+  (catalog.mixtapesAndEps || []).forEach((release) => {
+    if (release.release_category === "EP" || release.release_type === "ep") {
+      epSlugs.add(release.slug);
+    } else {
+      mixtapeSlugs.add(release.slug);
+    }
+  });
+
+  const resolveMultiTrackCategory = (item) => {
+    const slug = item?.slug;
+    if (slug && epSlugs.has(slug)) return "ep";
+    if (slug && mixtapeSlugs.has(slug)) return "mixtape";
+    if (slug && albumSlugs.has(slug)) return "album";
+    const category = String(
+      item?.metadata?.release_category || item?.release_category || ""
+    ).trim();
+    if (category === "EP") return "ep";
+    if (category === "Mixtape") return "mixtape";
+    const releaseType = String(
+      item?.metadata?.release_type || item?.release_type || item?.product_type || ""
+    ).toLowerCase();
+    if (releaseType === "ep") return "ep";
+    if (releaseType === "mixtape") return "mixtape";
+    return "album";
+  };
 
   (library || []).forEach((item) => {
     if (!item?.slug || item.slug.startsWith("exc-")) return;
     const type = String(item.product_type || "").toLowerCase();
-    const isAlbum =
+    const isMultiTrack =
       type === "album" ||
       type === "ep" ||
+      type === "mixtape" ||
       albumSlugs.has(item.slug) ||
+      epSlugs.has(item.slug) ||
+      mixtapeSlugs.has(item.slug) ||
       (Array.isArray(item.tracks) && item.tracks.length > 1);
-    if (isAlbum) {
+
+    if (isMultiTrack) {
+      const bucket = resolveMultiTrackCategory(item);
+      if (bucket === "ep") {
+        if (!seenEp.has(item.slug)) {
+          seenEp.add(item.slug);
+          eps.push(item);
+        }
+        return;
+      }
+      if (bucket === "mixtape") {
+        if (!seenMixtape.has(item.slug)) {
+          seenMixtape.add(item.slug);
+          mixtapes.push(item);
+        }
+        return;
+      }
       if (!seenAlbum.has(item.slug)) {
         seenAlbum.add(item.slug);
         albums.push(item);
       }
-    } else if (singleSlugs.has(item.slug) || type === "single" || type === "audio" || type === "digital") {
+      return;
+    }
+
+    if (singleSlugs.has(item.slug) || type === "single" || type === "audio" || type === "digital") {
       if (!seenSingle.has(item.slug)) {
         seenSingle.add(item.slug);
         singles.push(item);
@@ -276,7 +332,7 @@ export function partitionLibraryByType(library = [], catalog = { singles: [], al
     }
   });
 
-  return { ownedSingles: singles, ownedAlbums: albums };
+  return { ownedSingles: singles, ownedAlbums: albums, ownedMixtapes: mixtapes, ownedEps: eps };
 }
 
 /**

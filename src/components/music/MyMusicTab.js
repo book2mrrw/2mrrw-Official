@@ -90,6 +90,10 @@ function LibraryCarousel({
           paddingBottom: 8,
           scrollSnapType: "x mandatory",
           WebkitOverflowScrolling: "touch",
+          overscrollBehaviorX: "contain",
+          width: "100%",
+          minWidth: 0,
+          maxWidth: "100%",
         }}
       >
         {items.map((item) => {
@@ -283,9 +287,165 @@ function RecentlyAddedRow({ items, onPlay, accountState }) {
   );
 }
 
+function OwnedReleaseList({
+  title,
+  items,
+  catalog,
+  accountState,
+  userId,
+  isMobile,
+  onPlayAlbum,
+  onOpenAlbum,
+  onOpenAlbumTracklist,
+  onLibraryChange,
+}) {
+  if (!items?.length) {
+    return (
+      <section style={{ marginBottom: 32 }}>
+        <div
+          style={{
+            fontSize: 11,
+            color: "#555",
+            letterSpacing: 2,
+            textTransform: "uppercase",
+            fontWeight: 700,
+            marginBottom: 12,
+          }}
+        >
+          {title}
+        </div>
+        <div style={{ fontSize: 13, color: "#555" }}>No owned releases yet.</div>
+      </section>
+    );
+  }
+
+  return (
+    <section style={{ marginBottom: 32, width: "100%", minWidth: 0, maxWidth: "100%", overflow: "hidden" }}>
+      <div
+        style={{
+          fontSize: 11,
+          color: "#555",
+          letterSpacing: 2,
+          textTransform: "uppercase",
+          fontWeight: 700,
+          marginBottom: 12,
+        }}
+      >
+        {title}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%", minWidth: 0 }}>
+        {items.map((album) => {
+          const merged = { ...album, ...(catalog.find((a) => a.slug === album.slug) || {}) };
+          const access = resolveContentAccess(merged, accountState);
+          return (
+            <div
+              key={album.slug}
+              style={{
+                display: "flex",
+                flexDirection: isMobile ? "column" : "row",
+                alignItems: isMobile ? "stretch" : "center",
+                gap: isMobile ? 12 : 14,
+                padding: "14px 16px",
+                background: "#0a0a0a",
+                border: "1px solid #1a1a1a",
+                borderRadius: 14,
+                width: "100%",
+                minWidth: 0,
+                boxSizing: "border-box",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  minWidth: 0,
+                  flex: 1,
+                }}
+              >
+                {merged.cover ? (
+                  <img
+                    src={merged.cover}
+                    alt=""
+                    style={{ width: 52, height: 52, borderRadius: 8, objectFit: "cover", flexShrink: 0 }}
+                  />
+                ) : null}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 700,
+                      marginBottom: 6,
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {merged.title || album.title}
+                  </div>
+                  <MusicAccessBadge label={access.badge} compact />
+                </div>
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: isMobile ? "wrap" : "nowrap",
+                  width: isMobile ? "100%" : "auto",
+                  flexShrink: 0,
+                }}
+              >
+                <button
+                  type="button"
+                  disabled={!access.canStream}
+                  onClick={() => onPlayAlbum?.(merged)}
+                  style={{
+                    flex: isMobile ? "1 1 120px" : "0 0 auto",
+                    minHeight: 44,
+                    padding: "8px 16px",
+                    background: access.canStream ? "#00ffff" : "#222",
+                    color: access.canStream ? "#000" : "#666",
+                    border: "none",
+                    borderRadius: 8,
+                    cursor: access.canStream ? "pointer" : "not-allowed",
+                    fontSize: 12,
+                    fontWeight: 800,
+                  }}
+                >
+                  Play Album
+                </button>
+                <button
+                  type="button"
+                  onClick={() => (onOpenAlbumTracklist || onOpenAlbum)?.(merged)}
+                  style={{
+                    flex: isMobile ? "1 1 100px" : "0 0 auto",
+                    minHeight: 44,
+                    padding: "8px 14px",
+                    background: "transparent",
+                    color: "#888",
+                    border: "1px solid #333",
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    fontSize: 12,
+                  }}
+                >
+                  Tracklist
+                </button>
+                <MusicPlusButton track={merged} userId={userId} access={access} onLibraryChange={onLibraryChange} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function MyMusicTab({
   singles = [],
   albums = [],
+  mixtapesAndEps = [],
   isMobile,
   isAdmin = false,
   highlightSlug = null,
@@ -295,6 +455,7 @@ function MyMusicTab({
   onDiscoverVault,
   onOpenSingle,
   onOpenAlbum,
+  onOpenAlbumTracklist,
 }) {
   const goAccount = onGoToAccount || (() => onSwitchTab?.("account"));
   const goSingles = onDiscoverSingles || (() => onSwitchTab?.("singles"));
@@ -306,18 +467,25 @@ function MyMusicTab({
     loading,
     ownedSingles,
     ownedAlbums,
+    ownedMixtapes,
+    ownedEps,
     subscriptionItems,
     collectorItems,
     recentlyPlayed,
     lastPlayed,
     refresh,
-  } = useMusicLibrary({ singles, albums });
+  } = useMusicLibrary({ singles, albums, mixtapesAndEps });
+
+  const multiTrackCatalog = useMemo(
+    () => [...albums, ...(mixtapesAndEps || [])],
+    [albums, mixtapesAndEps]
+  );
 
   const {
     continueListening,
     recentlyPlayedRail,
     recentlyAddedRail,
-  } = useListeningHistory({ accountState, singles, albums, userId: user?.id });
+  } = useListeningHistory({ accountState, singles, albums: multiTrackCatalog, userId: user?.id });
 
   const activeContinue = continueListening || lastPlayed;
   const activeRecentlyPlayed = recentlyPlayedRail.length ? recentlyPlayedRail : recentlyPlayed;
@@ -449,13 +617,24 @@ function MyMusicTab({
   const hasAnyContent =
     ownedSingles.length > 0 ||
     ownedAlbums.length > 0 ||
+    ownedMixtapes.length > 0 ||
+    ownedEps.length > 0 ||
     subscriptionItems.length > 0 ||
     collectorItems.length > 0 ||
     activeRecentlyPlayed.length > 0 ||
     isAdmin;
 
   return (
-    <div style={{ paddingBottom: isMobile ? 160 : 40 }}>
+    <div
+      style={{
+        paddingBottom: isMobile ? 160 : 40,
+        width: "100%",
+        maxWidth: "100%",
+        minWidth: 0,
+        overflowX: "hidden",
+        boxSizing: "border-box",
+      }}
+    >
       <div
         style={{
           display: "flex",
@@ -668,35 +847,44 @@ function MyMusicTab({
         highlightSlug={highlightSlug}
       />
 
-      <section style={{ marginBottom: 32 }}>
-        <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>Owned Albums</div>
-        {ownedAlbums.length === 0 ? (
-          <div style={{ fontSize: 13, color: "#555" }}>No owned albums yet.</div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {ownedAlbums.map((album) => {
-              const merged = { ...album, ...(albums.find((a) => a.slug === album.slug) || {}) };
-              const access = resolveContentAccess(merged, accountState);
-              return (
-                <div key={album.slug} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", background: "#0a0a0a", border: "1px solid #1a1a1a", borderRadius: 14, flexWrap: "wrap" }}>
-                  {merged.cover && <img src={merged.cover} alt="" style={{ width: 52, height: 52, borderRadius: 8, objectFit: "cover" }} />}
-                  <div style={{ flex: 1, minWidth: 120 }}>
-                    <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{merged.title || album.title}</div>
-                    <MusicAccessBadge label={access.badge} compact />
-                  </div>
-                  <button type="button" disabled={!access.canStream} onClick={() => playAlbum(merged)} style={{ padding: "8px 16px", background: access.canStream ? "#00ffff" : "#222", color: access.canStream ? "#000" : "#666", border: "none", borderRadius: 8, cursor: access.canStream ? "pointer" : "not-allowed", fontSize: 12, fontWeight: 800 }}>
-                    Play Album
-                  </button>
-                  <button type="button" onClick={() => onOpenAlbum?.(merged)} style={{ padding: "8px 14px", background: "transparent", color: "#888", border: "1px solid #333", borderRadius: 8, cursor: "pointer", fontSize: 12 }}>
-                    Tracklist
-                  </button>
-                  <MusicPlusButton track={merged} userId={user?.id} access={access} onLibraryChange={refresh} />
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      <OwnedReleaseList
+        title="Owned Mixtapes"
+        items={ownedMixtapes}
+        catalog={multiTrackCatalog}
+        accountState={accountState}
+        userId={user?.id}
+        isMobile={isMobile}
+        onPlayAlbum={playAlbum}
+        onOpenAlbum={onOpenAlbum}
+        onOpenAlbumTracklist={onOpenAlbumTracklist}
+        onLibraryChange={refresh}
+      />
+
+      <OwnedReleaseList
+        title="Owned EPs"
+        items={ownedEps}
+        catalog={multiTrackCatalog}
+        accountState={accountState}
+        userId={user?.id}
+        isMobile={isMobile}
+        onPlayAlbum={playAlbum}
+        onOpenAlbum={onOpenAlbum}
+        onOpenAlbumTracklist={onOpenAlbumTracklist}
+        onLibraryChange={refresh}
+      />
+
+      <OwnedReleaseList
+        title="Owned Albums"
+        items={ownedAlbums}
+        catalog={multiTrackCatalog}
+        accountState={accountState}
+        userId={user?.id}
+        isMobile={isMobile}
+        onPlayAlbum={playAlbum}
+        onOpenAlbum={onOpenAlbum}
+        onOpenAlbumTracklist={onOpenAlbumTracklist}
+        onLibraryChange={refresh}
+      />
       </section>
 
       <section style={{ marginBottom: 36 }}>

@@ -122,8 +122,11 @@ export const CANONICAL_FEATURES = [
   },
 ];
 
-/** Albums / EPs / mixtapes — release slug is canonical product slug. */
-export const CANONICAL_ALBUMS = [
+/** Future true albums — storefront "Albums" section (empty until releases ship). */
+export const CANONICAL_TRUE_ALBUMS = [];
+
+/** Mixtapes & EPs — release slug is canonical product slug. */
+export const CANONICAL_MIXTAPES_AND_EPS = [
   {
     slug: "love-hz-vol-1",
     title: "Love Hz Vol. 1",
@@ -152,6 +155,9 @@ export const CANONICAL_ALBUMS = [
     legacy_cover_stem: "tbh",
   },
 ];
+
+/** All multi-track releases (true albums + mixtapes/EPs) for track enrichment. */
+export const CANONICAL_ALBUMS = [...CANONICAL_TRUE_ALBUMS, ...CANONICAL_MIXTAPES_AND_EPS];
 
 export const CANONICAL_TRACKS = [
   { album_slug: "love-hz-vol-1", track_number: 1, slug: "01-roll-call", title: "Roll Call" },
@@ -321,23 +327,36 @@ export function getStorefrontFeatures() {
   return CANONICAL_FEATURES.map((r) => _releasesBySlug.get(r.slug));
 }
 
+function enrichStorefrontMultiTrackRelease(album, { type }) {
+  const enriched = _releasesBySlug.get(album.slug);
+  const tracks = getCanonicalTracksForAlbum(album.slug);
+  return {
+    ...enriched,
+    type,
+    price: (enriched.price_cents || 0) / 100,
+    date: enriched.release_date,
+    vinyl: 47.99,
+    release_category: enriched.release_category,
+    tracks,
+    trackTitles: tracks.map((t) => t.title),
+  };
+}
+
 export function getStorefrontAlbums() {
   indexCatalog();
-  return [...CANONICAL_ALBUMS]
-    .map((album) => {
-      const enriched = _releasesBySlug.get(album.slug);
-      const tracks = getCanonicalTracksForAlbum(album.slug);
-      return {
-        ...enriched,
-        type: "album",
-        price: (enriched.price_cents || 0) / 100,
-        date: enriched.release_date,
-        vinyl: 47.99,
-        release_category: enriched.release_category,
-        tracks,
-        trackTitles: tracks.map((t) => t.title),
-      };
-    })
+  return [...CANONICAL_TRUE_ALBUMS]
+    .map((album) => enrichStorefrontMultiTrackRelease(album, { type: "album" }))
+    .sort((a, b) => String(b.release_date).localeCompare(String(a.release_date)));
+}
+
+export function getStorefrontMixtapesAndEps() {
+  indexCatalog();
+  return [...CANONICAL_MIXTAPES_AND_EPS]
+    .map((album) =>
+      enrichStorefrontMultiTrackRelease(album, {
+        type: album.release_type === "ep" ? "ep" : "mixtape",
+      })
+    )
     .sort((a, b) => String(b.release_date).localeCompare(String(a.release_date)));
 }
 
@@ -398,7 +417,29 @@ export function getCanonicalProductRows() {
     });
   });
 
-  CANONICAL_ALBUMS.forEach((raw) => {
+  CANONICAL_MIXTAPES_AND_EPS.forEach((raw) => {
+    const r = _releasesBySlug.get(raw.slug);
+    rows.push({
+      slug: r.slug,
+      title: r.title,
+      display_title: r.title,
+      product_type: "album",
+      price_cents: r.price_cents,
+      cover_url: r.cover,
+      storage_path: null,
+      preview_path: null,
+      artwork_path: r.artwork_path,
+      video_path: r.video_path,
+      release_date: r.release_date,
+      metadata: {
+        release_type: normalizeReleaseType(r.release_type),
+        release_category: r.release_category || r.release_type,
+        canonical: true,
+      },
+    });
+  });
+
+  CANONICAL_TRUE_ALBUMS.forEach((raw) => {
     const r = _releasesBySlug.get(raw.slug);
     rows.push({
       slug: r.slug,
@@ -507,6 +548,7 @@ export function rebuildCanonicalCatalogMappings() {
     singles: getStorefrontSingles(),
     features: getStorefrontFeatures(),
     albums: getStorefrontAlbums(),
+    mixtapesAndEps: getStorefrontMixtapesAndEps(),
     productRows: getCanonicalProductRows(),
     trackRows: getCanonicalTrackRows(),
   };
