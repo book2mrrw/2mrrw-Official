@@ -1,0 +1,74 @@
+Phase 5.3A — Feature Flag Audit and Activation Readiness
+Date: 2026-05-30
+Repository: /Users/recharge/artist-platform
+Recovery anchor: bac9eb71f93dcbc0bee4099bf6d80ddaac29e049 (bac9eb7)
+
+DELIVERABLES
+============
+report.md                          Executive summary — overall FAIL (operator prereqs)
+flag-inventory.md                  All 3 flags: definition, consumers, enabled vs disabled
+env-requirements.md                Safe defaults, exists vs missing, Vercel notes
+activation-readiness.md            PASS/FAIL per subsystem
+recommended-activation-sequence.md Operator rollout phases 0–4
+risks.md                           Risk matrix + mitigations
+manifest.txt                       This file
+
+AUDIT CONSTRAINTS
+=================
+- NO flags activated in env or Vercel
+- NO functional src/ changes (git diff src/ empty)
+- .env.example updated with disabled defaults (=0) only
+
+FLAGS AUDITED
+=============
+HYBRID_STREAMING_ENABLED           default false — master switch
+STREAM_PLAYBACK_PREFERRED          default false — resolver stream-first (gated)
+AUTO_GENERATE_STREAM_ASSETS        default false — upload transcode (gated)
+
+DEFINITION
+==========
+src/lib/feature-flags/hybrid-streaming.js
+src/lib/feature-flags/index.js
+
+CONSUMERS (src/)
+================
+src/lib/media/stream-registration.js
+src/lib/media/stream-upload-pipeline.js
+src/lib/playback/resolve-stream-playback.js
+src/lib/playback/resolve-playback-key.js
+src/app/api/library/stream/route.js
+src/app/api/admin/sync/catalog/route.js
+
+SCRIPTS
+=======
+scripts/backfill-stream-assets.mjs
+scripts/test-playback-resolver-fallback.mjs
+
+ACTIVATION READINESS SUMMARY
+============================
+Upload pipeline (Stage 3):         CONDITIONAL PASS
+Stream registration (Stage 2):     FAIL (migration pending)
+Resolver (Stage 4):                PASS
+Fallback tests (Stage 5):          PASS (21/21 re-run 2026-05-30)
+Rollback:                          PASS
+
+VALIDATION RUN
+==============
+npm run test:playback-resolver-fallback → 21/21 PASS
+
+PHASE 5.2 REFERENCES
+====================
+.tmp-phase52-implementation-20260530/
+.tmp-phase52-stage1-feature-flags-20260530/
+.tmp-phase52-stage2-stream-registration-20260530/
+.tmp-phase52-stage3-upload-pipeline-20260530/
+.tmp-phase52-stage4-resolver-20260530/
+.tmp-phase52-stage5-master-fallback-20260530/
+.tmp-phase52-stage6-backfill-20260530/
+.tmp-phase52-stage7-e2e-validation-20260530/
+
+ZIP OUTPUT
+==========
+/Users/recharge/Downloads/phase53a-feature-flag-audit-20260530.zip
+
+STOP — awaiting operator approval before flag activation

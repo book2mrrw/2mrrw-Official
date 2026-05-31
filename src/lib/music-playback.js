@@ -322,22 +322,28 @@ export function getPlayButtonState(track, accountState) {
   return { label: "Play", disabled: false, canAttemptPlay: true };
 }
 
-export function albumTracksForPlayback(album, accountState, source = "album", catalogLookup) {
+/** Map every release track in catalog order — full tracklist for queue construction and UI. */
+export function mapAlbumTracksForPlayback(album, accountState, source = "album", catalogLookup) {
   const trackList = album?.tracks || album?.trackTitles || [];
-  const mapped = trackList.map((track, index) => {
+  const albumSlug = album?.slug || "";
+  return trackList.map((track, index) => {
+    const trackSlug =
+      typeof track === "string" ? titleToCatalogSlug(track) : track?.slug || track?.id || `t${index + 1}`;
     const item = resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup);
     const playback = toPlaybackTrack(item, accountState, source, {
       trackIndex: index,
-      albumSlug: album.slug,
-      trackSlug: typeof track === "string" ? titleToCatalogSlug(track) : track?.slug || track?.id,
+      albumSlug,
+      trackSlug,
     });
     const access = playback.metadata?.access;
     const previewPath = item.preview || item.preview_path || item.previewPath;
     const hasPreview = Boolean(previewPath);
+    const queueId = albumSlug ? `${albumSlug}:${trackSlug}` : playback.id;
 
     if (!access?.canStream && !hasPreview && !playback.src) {
       return {
         ...playback,
+        id: queueId,
         src: "",
         playbackStatus: "unavailable",
         metadata: {
@@ -350,6 +356,7 @@ export function albumTracksForPlayback(album, accountState, source = "album", ca
     }
     return {
       ...playback,
+      id: queueId,
       playbackStatus: playback.src ? "ready" : "preview_only",
       metadata: {
         ...playback.metadata,
@@ -357,5 +364,25 @@ export function albumTracksForPlayback(album, accountState, source = "album", ca
       },
     };
   });
-  return filterPlayableQueueItems(mapped, accountState);
+}
+
+/** Playable subset for AudioContext queue — preserves release order and trackIndex metadata. */
+export function playableReleaseQueue(tracks = [], accountState) {
+  return filterPlayableQueueItems(tracks, accountState).filter((t) => Boolean(t.src));
+}
+
+/**
+ * Resolve queue start index from a release tracklist tap (0-based release position).
+ * Album tracks share the release stream slug; trackIndex is the stable discriminator.
+ */
+export function resolveReleaseQueueStartIndex(playableTracks, releaseTrackIndex) {
+  if (!Array.isArray(playableTracks) || !playableTracks.length) return 0;
+  const idx = Number(releaseTrackIndex);
+  if (!Number.isFinite(idx) || idx < 0) return 0;
+  const found = playableTracks.findIndex((t) => t.metadata?.trackIndex === idx);
+  return found >= 0 ? found : 0;
+}
+
+export function albumTracksForPlayback(album, accountState, source = "album", catalogLookup) {
+  return mapAlbumTracksForPlayback(album, accountState, source, catalogLookup);
 }

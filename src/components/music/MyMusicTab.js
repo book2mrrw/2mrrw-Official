@@ -6,7 +6,7 @@ import { useAudioPlayer } from "@/context/AudioContext";
 import { useMusicLibrary } from "@/hooks/useMusicLibrary";
 import { membershipHasPremiumAccess } from "@/lib/commerce/entitlements";
 import { resolveContentAccess, resolveTrackAccess } from "@/lib/music-access";
-import { albumTracksForPlayback, toPlaybackTrack } from "@/lib/music-playback";
+import { albumTracksForPlayback, playableReleaseQueue, toPlaybackTrack } from "@/lib/music-playback";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import PlaylistSection from "@/components/music/PlaylistSection";
@@ -569,11 +569,12 @@ function MyMusicTab({
       const access = resolveTrackAccess(album, accountState);
       if (!access.canStream) return;
       const tracks = albumTracksForPlayback(album, { ...accountState, userId: user?.id }, "my_music_album");
-      if (!tracks.length) {
+      const playable = playableReleaseQueue(tracks, { ...accountState, userId: user?.id });
+      if (!playable.length) {
         playItem(album, access);
         return;
       }
-      void playQueue(tracks, 0);
+      void playQueue(playable, 0);
     },
     [accountState, playItem, playQueue, user?.id]
   );

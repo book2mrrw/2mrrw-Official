@@ -33,6 +33,7 @@ import { consumeGiftHighlightSlug } from "@/lib/gifts/session-keys";
 import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess, isAdminAccount } from "@/lib/music-access";
 import {
   albumTracksForPlayback,
+  resolveReleaseQueueStartIndex,
   buildCatalogPlaybackLookup,
   normalizeTrackForPlayback,
   resolveCatalogPlaybackItem,
@@ -1162,14 +1163,7 @@ export default function Page() {
       );
       const playable = tracks.filter((t) => Boolean(t.src));
       if (playable.length) {
-        const tapped = tracks[startIndex];
-        let queueIndex = 0;
-        if (tapped?.src) {
-          const found = playable.findIndex(
-            (t) => t.id === tapped.id && t.metadata?.trackIndex === tapped.metadata?.trackIndex
-          );
-          if (found >= 0) queueIndex = found;
-        }
+        const queueIndex = resolveReleaseQueueStartIndex(playable, startIndex);
         void playQueue(playable, queueIndex);
         return;
       }

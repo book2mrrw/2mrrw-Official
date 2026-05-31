@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useMotionValue, useTransform, animate } from "framer-motion";
-import { albumTracksForPlayback, getPlayButtonState } from "@/lib/music-playback";
+import {
+  albumTracksForPlayback,
+  getPlayButtonState,
+  playableReleaseQueue,
+  resolveReleaseQueueStartIndex,
+} from "@/lib/music-playback";
 import { resolveTrackAccess } from "@/lib/music-access";
 import { useAudioPlayer } from "@/context/AudioContext";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
@@ -62,8 +67,10 @@ export default function AlbumTracklistSheet({
   }, [open]);
 
   const playAndClose = useCallback(
-    (startIndex, shuffle = false) => {
-      const playable = tracks.filter((t) => Boolean(t.src) && t.playbackStatus !== "unavailable");
+    (releaseTrackIndex, shuffle = false) => {
+      const playable = playableReleaseQueue(tracks, { ...accountState, userId }).filter(
+        (t) => t.playbackStatus !== "unavailable"
+      );
       if (!playable.length) return;
       if (shuffle) {
         setShuffle(true);
@@ -71,19 +78,12 @@ export default function AlbumTracklistSheet({
         void playQueue(order, 0);
       } else {
         setShuffle(false);
-        const tapped = tracks[startIndex];
-        let queueIndex = 0;
-        if (tapped?.src) {
-          const found = playable.findIndex(
-            (t) => t.id === tapped.id && t.metadata?.trackIndex === tapped.metadata?.trackIndex
-          );
-          if (found >= 0) queueIndex = found;
-        }
+        const queueIndex = resolveReleaseQueueStartIndex(playable, releaseTrackIndex);
         void playQueue(playable, queueIndex);
       }
       onClose?.();
     },
-    [tracks, playQueue, setShuffle, onClose]
+    [tracks, accountState, userId, playQueue, setShuffle, onClose]
   );
 
   const isTrackActive = useCallback(

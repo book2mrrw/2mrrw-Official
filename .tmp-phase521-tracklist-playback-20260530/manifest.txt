@@ -1,0 +1,20 @@
+PHASE 5.2.1 — TRACKLIST PLAYBACK CORRECTION
+Date: 2026-05-30
+Repository: /Users/recharge/artist-platform
+
+Modified files (playback scope only):
+- src/lib/music-playback.js
+- src/components/music/AlbumTracklistSheet.js
+- src/app/page.js
+- src/components/music/MyMusicTab.js
+
+Deliverable artifacts:
+- .tmp-phase521-tracklist-playback-20260530/report.md
+- .tmp-phase521-tracklist-playback-20260530/manifest.txt
+
+Zip output:
+- /Users/recharge/Downloads/phase521-tracklist-playback-20260530.zip
+
+Protected (not modified):
+- src/context/AudioContext.js
+- Signed URL / entitlement / hybrid streaming / audiovisual paths
