@@ -1352,14 +1352,12 @@ export default function Page() {
     setPreviewModalOpen(false);
     setSelectedSingle(null);
     setSelectedReleaseDetail(null);
-    pause();
-  }, [pause]);
+  }, []);
 
   const closeAlbumModal = useCallback(() => {
     setAlbumModalOpen(false);
     setSelectedAlbum(null);
-    pause();
-  }, [pause]);
+  }, []);
 
   useEffect(() => {
     if (!selectedAlbum) return;

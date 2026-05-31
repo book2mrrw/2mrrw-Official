@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import AuthGate from "@/components/auth/AuthGate";
+import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
 
 const BOOT_PLACEHOLDER = (
   <div
@@ -26,8 +27,13 @@ export default function AppAuthRoot({ children }) {
   const showAuthGate = authStatus === "unauthenticated";
 
   useEffect(() => {
+    perfMark(MARKS.HYDRATION_START);
     setHydrated(true);
   }, []);
+
+  useEffect(() => {
+    if (hydrated) perfMark(MARKS.HYDRATION_END);
+  }, [hydrated]);
 
   const handleVerified = useCallback(async () => {
     await refreshAccountState();

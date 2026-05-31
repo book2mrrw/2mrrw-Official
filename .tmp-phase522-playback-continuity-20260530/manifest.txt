@@ -1,0 +1,34 @@
+Phase 5.2.2 — Playback Continuity & Queue Validation
+Generated: 2026-05-31
+Repository: /Users/recharge/artist-platform
+Baseline: 8997d9e
+Mode: Validation only (no src/ changes)
+
+Files:
+  report.md
+  track-selection-validation.md
+  queue-validation.md
+  auto-advance-validation.md
+  continuity-validation.md
+  mobile-validation.md
+  defects.md
+  manifest.txt
+
+Automated commands run:
+  npm run build — PASS
+  npm run test:foundation — 2 pre-existing FAIL (anchor drift)
+  npm run test:playback-resolver-fallback — PASS (21/21)
+
+Static validation:
+  resolveReleaseQueueStartIndex on love-hz-vol-1, ad, tbh — PASS
+  Unique track IDs — PASS
+  Title metadata for album tracks — FAIL (D-522-001)
+
+Browser:
+  https://www.2mrrw.com @ 375px — partial (guest modal, no auth)
+
+Decision: NOT READY
+Defects: 2 significant (D-522-001 blocking, D-522-002 continuity)
+
+Zip output:
+  /Users/recharge/Downloads/phase522-playback-continuity-20260530.zip

@@ -518,10 +518,22 @@ export function mergeCanonicalMetadata(item) {
     item.legacy_preview_stem ?? release.legacy_preview_stem
   );
 
+  const isAlbumTrack =
+    item.type === "album_track" ||
+    item.trackSlug ||
+    item.metadata?.trackSlug;
+  const releaseTitleFields = isAlbumTrack
+    ? item.title
+      ? {
+          title: item.title,
+          display_title: item.display_title || item.title,
+        }
+      : {}
+    : { title: release.title, display_title: release.title };
+
   return {
     ...item,
-    title: release.title,
-    display_title: release.title,
+    ...releaseTitleFields,
     storage_path: item.storage_path || release.storage_path,
     artwork_path: release.artwork_path || item.artwork_path,
     preview_path: release.preview_path || item.preview_path,

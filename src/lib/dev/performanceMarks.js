@@ -32,6 +32,8 @@ export const MARKS = {
   PLAYBACK_FIRST_BYTE: "2mrrw:playback-first-byte",
   PLAYBACK_CANPLAY: "2mrrw:playback-canplay",
   PLAYBACK_AUDIBLE: "2mrrw:playback-audible",
+  PLAYBACK_PROVIDER_MOUNT: "2mrrw:playback-provider-mount",
+  PLAYBACK_AUDIO_ELEMENT_READY: "2mrrw:playback-audio-element-ready",
 };
 
 function canMark() {
@@ -84,6 +86,8 @@ const PLAYBACK_STAGE_MEASURES = [
   ["playback-first-byte-to-canplay", MARKS.PLAYBACK_FIRST_BYTE, MARKS.PLAYBACK_CANPLAY],
   ["playback-canplay-to-audible", MARKS.PLAYBACK_CANPLAY, MARKS.PLAYBACK_AUDIBLE],
   ["playback-tap-to-audible", MARKS.PLAYBACK_TAP, MARKS.PLAYBACK_AUDIBLE],
+  ["playback-provider-to-tap", MARKS.PLAYBACK_PROVIDER_MOUNT, MARKS.PLAYBACK_TAP],
+  ["playback-hydration-to-tap", MARKS.HYDRATION_END, MARKS.PLAYBACK_TAP],
   ["audio-start-latency", MARKS.AUDIO_START_LATENCY_START, MARKS.AUDIO_START_LATENCY_END],
 ];
 

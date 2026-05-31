@@ -114,7 +114,7 @@ function clampRestorePosition(positionSeconds, durationSeconds) {
   return positionSeconds;
 }
 
-/** Set src, wait for canplay/error/timeout with abort support, then load(). */
+/** Set src, wait for loadeddata/canplay/error/timeout with abort support, then load(). */
 async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_READY_TIMEOUT_MS } = {}) {
   if (!audio || typeof audio.load !== "function") {
     throw createPlaybackError("AUDIO_SRC_INVALID", "Audio element is unavailable");
@@ -125,8 +125,22 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
   if (signal?.aborted) {
     throw createPlaybackError("AUDIO_SRC_ABORTED", "Playback source readiness was aborted");
   }
+
+  const normalizedSrc = normalizePlaybackSrc(src);
+  const currentSrc = normalizePlaybackSrc(audio.src);
+  const sameSrc = normalizedSrc === currentSrc;
+
+  if (sameSrc && audio.readyState >= 2) {
+    perfMark(MARKS.PLAYBACK_SRC_ASSIGN);
+    perfMark(MARKS.PLAYBACK_CANPLAY);
+    return;
+  }
+
   perfMark(MARKS.PLAYBACK_SRC_ASSIGN);
-  audio.src = src;
+  if (!sameSrc) {
+    audio.src = src;
+  }
+
   await new Promise((resolve, reject) => {
     let settled = false;
     let timeoutId = null;
@@ -136,17 +150,18 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
       if (timeoutId) clearTimeout(timeoutId);
       audio.removeEventListener("canplay", onReady);
       audio.removeEventListener("loadedmetadata", onMetadataReady);
-      audio.removeEventListener("loadeddata", onFirstByte);
+      audio.removeEventListener("loadeddata", onDataReady);
       audio.removeEventListener("error", onError);
       signal?.removeEventListener("abort", onAbort);
       resolver(value);
     };
-    const onFirstByte = () => {
-      perfMark(MARKS.PLAYBACK_FIRST_BYTE);
-    };
     const onReady = () => {
       perfMark(MARKS.PLAYBACK_CANPLAY);
       settle(resolve);
+    };
+    const onDataReady = () => {
+      perfMark(MARKS.PLAYBACK_FIRST_BYTE);
+      if (audio.readyState >= 2) onReady();
     };
     const onMetadataReady = () => {
       if (audio.readyState >= 2) onReady();
@@ -163,7 +178,7 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
     const onAbort = () => {
       settle(reject, createPlaybackError("AUDIO_SRC_ABORTED", "Playback source readiness was aborted"));
     };
-    if (audio.readyState >= 1) {
+    if (audio.readyState >= 2) {
       settle(resolve);
       return;
     }
@@ -178,10 +193,12 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
     }, timeoutMs);
     audio.addEventListener("canplay", onReady);
     audio.addEventListener("loadedmetadata", onMetadataReady);
-    audio.addEventListener("loadeddata", onFirstByte);
+    audio.addEventListener("loadeddata", onDataReady);
     audio.addEventListener("error", onError);
     signal?.addEventListener("abort", onAbort, { once: true });
-    audio.load();
+    if (!sameSrc || audio.readyState < 2) {
+      audio.load();
+    }
   });
 }
 
@@ -489,6 +506,16 @@ export function AudioProvider({ children }) {
   useEffect(() => {
     listeningUserIdRef.current = user?.id || null;
   }, [user?.id]);
+
+  useEffect(() => {
+    perfMark(MARKS.PLAYBACK_PROVIDER_MOUNT);
+  }, []);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      perfMark(MARKS.PLAYBACK_AUDIO_ELEMENT_READY);
+    }
+  }, []);
 
   const stopPositionSaveTimer = useCallback(() => {
     if (positionSaveTimerRef.current) {
@@ -1443,7 +1470,7 @@ export function AudioProvider({ children }) {
     const streamAbortController = new AbortController();
     activeStreamAbortRef.current = streamAbortController;
     const audioEl = audioRef.current;
-    if (audioEl?.paused) {
+    if (audioEl?.paused && !sessionUnlockedRef.current) {
       await unlockAudioFromGesture(audioEl);
     }
 
@@ -1847,10 +1874,10 @@ export function AudioProvider({ children }) {
         audio.volume = 0;
         let vol = 0;
         const swell = setInterval(() => {
-          vol = Math.min(1, vol + 0.033);
+          vol = Math.min(1, vol + 0.1);
           audio.volume = vol;
           if (vol >= 1) clearInterval(swell);
-        }, 100);
+        }, 50);
       }
 
       if (isSameTrack) {

@@ -37,20 +37,20 @@ export default function RootLayout({ children }) {
         />
         <PostHogInit />
         <AuthProvider>
-          <AppAuthRoot>
-            <AuthGateProvider>
-              <AudioProvider>
+          <AudioProvider>
+            <AppAuthRoot>
+              <AuthGateProvider>
                 <SessionRecoveryRoot>
                   <StripeProvider>
                     <MediaErrorBoundary assetId="app-layout" mediaType="layout">
                       {children}
                     </MediaErrorBoundary>
-                    <GlobalAudioPlayerBar />
                   </StripeProvider>
                 </SessionRecoveryRoot>
-              </AudioProvider>
-            </AuthGateProvider>
-          </AppAuthRoot>
+              </AuthGateProvider>
+            </AppAuthRoot>
+            <GlobalAudioPlayerBar />
+          </AudioProvider>
         </AuthProvider>
       </body>
     </html>

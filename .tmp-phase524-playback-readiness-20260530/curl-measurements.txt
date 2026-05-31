@@ -1,0 +1,38 @@
+=== Phase 5.2.4 curl probes 2026-05-31T16:08:10Z ===
+Target: https://www.2mrrw.com
+
+--- guest/session-1 ---
+URL: https://www.2mrrw.com/api/guest/session
+http_code=200 ttfb_ms=0.578826 total_ms=0.579063
+HTTP/2 200 
+content-type: application/json
+
+--- guest/session-2 ---
+URL: https://www.2mrrw.com/api/guest/session
+http_code=200 ttfb_ms=0.167565 total_ms=0.167751
+HTTP/2 200 
+content-type: application/json
+
+--- preview-hour-glass ---
+URL: https://www.2mrrw.com/api/media/preview?folder=previews/singles/hour-glass/
+http_code=302 ttfb_ms=0.214751 total_ms=0.214862
+HTTP/2 302 
+location: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev/previews/singles/hour-glass/hourglass-preview.mp3
+
+--- stream-json-hour-glass ---
+URL: https://www.2mrrw.com/api/library/stream?slug=hour-glass
+http_code=401 ttfb_ms=0.257520 total_ms=0.257767
+HTTP/2 401 
+content-type: application/json
+
+--- stream-redirect-hour-glass ---
+URL: https://www.2mrrw.com/api/library/stream?slug=hour-glass&redirect=1
+http_code=401 ttfb_ms=0.191924 total_ms=0.192147
+HTTP/2 401 
+content-type: application/json
+
+--- stream-redirect-love-hz ---
+URL: https://www.2mrrw.com/api/library/stream?slug=love-hz-vol-1&redirect=1
+http_code=401 ttfb_ms=0.173739 total_ms=0.173983
+HTTP/2 401 
+content-type: application/json

@@ -1,0 +1,30 @@
+Phase 5.2.5 — Audio Readiness & Early Player Initialization
+Date: 2026-05-31
+Repository: /Users/recharge/artist-platform
+Zip: /Users/recharge/Downloads/phase525-audio-readiness-20260530.zip
+
+DELIVERABLES
+============
+report.md
+timing-breakdown.md
+manifest.txt
+
+SOURCE FILES MODIFIED (Phase 5.2.5)
+===================================
+src/app/layout.js
+src/components/auth/AppAuthRoot.js
+src/context/AudioContext.js
+src/lib/dev/performanceMarks.js
+src/lib/media/canonical-catalog.js
+
+WORKSPACE DRIFT (pre-existing, not authored by 5.2.5)
+=====================================================
+src/app/page.js — modal close no longer calls pause(); unstaged before this phase
+
+VALIDATION
+==========
+npm run build — PASS
+npm run test:playback-resolver-fallback — PASS (21 scenarios)
+npm run test:foundation — FAIL (2) anchor drift pre-existing
+
+STATUS: READY (client readiness scoped; no commit/push)
