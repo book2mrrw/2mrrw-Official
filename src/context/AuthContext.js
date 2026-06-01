@@ -61,7 +61,8 @@ export const DEFAULT_AUTH_CONTEXT = {
   isAdmin: false,
   markAdmin: noop,
   loading: true,
-  authStatus: "loading",
+  sessionHydrated: false,
+  authStatus: "checking",
   enterGuest: noopAsync,
   signOut: noopAsync,
   refreshGuest: noopAsync,
@@ -96,6 +97,7 @@ export function AuthProvider({ children }) {
   const [accountState, setAccountState] = useState(EMPTY_ACCOUNT_STATE);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [sessionHydrated, setSessionHydrated] = useState(false);
   const [entitlementSnapshotVersion, setEntitlementSnapshotVersion] = useState(0);
 
   const sessionBootstrappedRef = useRef(false);
@@ -429,15 +431,25 @@ export function AuthProvider({ children }) {
           const resolved = resolveUserFromSession(resolvedSession);
           if (resolved) {
             signedInUserIdRef.current = resolved.user.id;
-            setUser(resolved.user);
-            setIsAdmin(resolved.isAdmin);
             await clearGuestSessionCookie();
             invalidateEntitlementSnapshot("auth:bootstrap");
-            await refreshAccountStateRef.current?.({
+            const accountData = await refreshAccountStateRef.current?.({
               reason: "auth:bootstrap",
               source: "AuthContext:bootstrap",
               force: true,
             });
+            if (!mounted) return;
+            const verifiedUser = accountData?.user;
+            const verifiedResolved = verifiedUser
+              ? resolveUserFromSession({ user: verifiedUser })
+              : null;
+            if (verifiedResolved) {
+              setUser(verifiedResolved.user);
+              setIsAdmin(verifiedResolved.isAdmin);
+            } else {
+              signedInUserIdRef.current = null;
+              clearAuthenticatedState();
+            }
           } else {
             signedInUserIdRef.current = null;
             await refreshGuestRef.current?.();
@@ -446,9 +458,13 @@ export function AuthProvider({ children }) {
           /* session restore optional */
         }
       })().finally(() => {
-        if (mounted) setLoading(false);
+        if (mounted) {
+          setSessionHydrated(true);
+          setLoading(false);
+        }
       });
     } else if (mounted) {
+      setSessionHydrated(true);
       setLoading(false);
     }
 
@@ -553,13 +569,13 @@ export function AuthProvider({ children }) {
   const owns = useCallback((slug) => ownedSlugs.has(slug), [ownedSlugs]);
 
   const authStatus = useMemo(() => {
-    if (loading) return "loading";
+    if (!sessionHydrated) return "checking";
     if (!user?.id) return "unauthenticated";
     if (user.isGuest === true) return "unauthenticated";
     if (user.isGuest === false) return "authenticated";
     const email = String(user?.email || "").trim().toLowerCase();
     return email && !email.endsWith("@guest.2mrrw.local") ? "authenticated" : "unauthenticated";
-  }, [loading, user]);
+  }, [sessionHydrated, user]);
 
   const value = useMemo(() => ({
     user,
@@ -573,6 +589,7 @@ export function AuthProvider({ children }) {
     isAdmin,
     markAdmin,
     loading,
+    sessionHydrated,
     authStatus,
     enterGuest,
     signOut,
@@ -593,6 +610,7 @@ export function AuthProvider({ children }) {
     isAdmin,
     markAdmin,
     loading,
+    sessionHydrated,
     authStatus,
     enterGuest,
     signOut,
@@ -629,12 +647,12 @@ function mergeSnapshotIntoAccountState(accountState, snapshot) {
 
 /** Empty entitlements while session bootstrap runs — avoids stale guest/partial state. */
 export function useEntitlementAccountState() {
-  const { accountState, loading, getEntitlementSnapshot, entitlementSnapshotVersion } = useAuth();
+  const { accountState, sessionHydrated, getEntitlementSnapshot, entitlementSnapshotVersion } = useAuth();
   return useMemo(() => {
-    if (loading) return EMPTY_ACCOUNT_STATE;
+    if (!sessionHydrated) return EMPTY_ACCOUNT_STATE;
     const base = accountState ?? EMPTY_ACCOUNT_STATE;
     const snapshot = getEntitlementSnapshot?.();
     if (!snapshot || snapshot.version < 1) return base;
     return mergeSnapshotIntoAccountState(base, snapshot);
-  }, [loading, accountState, getEntitlementSnapshot, entitlementSnapshotVersion]);
+  }, [sessionHydrated, accountState, getEntitlementSnapshot, entitlementSnapshotVersion]);
 }

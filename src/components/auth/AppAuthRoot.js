@@ -19,12 +19,12 @@ const BOOT_PLACEHOLDER = (
 /**
  * SSR keeps a minimal placeholder (auth useEffect does not run on server).
  * After hydration, always mount children so the cinematic shell is visible while auth resolves.
- * OTP gate overlays the shell when authStatus is unauthenticated.
+ * OTP gate overlays the shell only after session bootstrap when unauthenticated.
  */
 export default function AppAuthRoot({ children }) {
-  const { authStatus } = useAuth();
+  const { authStatus, sessionHydrated } = useAuth();
   const [hydrated, setHydrated] = useState(false);
-  const showAuthGate = authStatus === "unauthenticated";
+  const showAuthGate = sessionHydrated && authStatus === "unauthenticated";
 
   useEffect(() => {
     perfMark(MARKS.HYDRATION_START);

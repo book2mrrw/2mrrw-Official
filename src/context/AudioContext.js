@@ -467,6 +467,7 @@ const EMPTY_STATE = {
   spaceMode: false,
   bassMode: false,
   atmosphereLevel: 3,
+  playbackNetworkState: "idle",
 };
 
 function stripSlowedSuffix(title) {
@@ -1146,6 +1147,7 @@ export function AudioProvider({ children }) {
           volume,
           queue: s.queue ?? [],
           playbackState: s.playbackState,
+          playbackNetworkState: s.playbackNetworkState ?? "idle",
           csMode: s.csMode,
           spaceMode: s.spaceMode,
           bassMode: s.bassMode,
@@ -1208,16 +1210,16 @@ export function AudioProvider({ children }) {
     };
 
     const onWaiting = () => {
-      patchState({ isBuffering: true });
+      patchState({ isBuffering: true, playbackNetworkState: "buffering" });
       startStallRecovery();
     };
     const onStalled = () => {
-      patchState({ isBuffering: true });
+      patchState({ isBuffering: true, playbackNetworkState: "buffering" });
       startStallRecovery();
     };
     const onPlaying = () => {
       stopStallRecovery();
-      patchState({ isBuffering: false });
+      patchState({ isBuffering: false, playbackNetworkState: "playing" });
       perfMark(MARKS.PLAYBACK_AUDIBLE);
       perfMark(MARKS.AUDIO_START_LATENCY_END);
       perfMeasure("audio-start-latency", MARKS.AUDIO_START_LATENCY_START, MARKS.AUDIO_START_LATENCY_END);
@@ -1226,12 +1228,18 @@ export function AudioProvider({ children }) {
     const onCanPlayThrough = () => {
       stopStallRecovery();
       perfMark(MARKS.PLAYBACK_CANPLAYTHROUGH);
-      patchState({ isBuffering: false });
+      patchState({ isBuffering: false, playbackNetworkState: "playing" });
     };
 
     const onPlay = () => {
       userPausedRef.current = false;
-      patchState({ isPlaying: true, error: null, hasStarted: true, isBuffering: false });
+      patchState({
+        isPlaying: true,
+        error: null,
+        hasStarted: true,
+        isBuffering: false,
+        playbackNetworkState: "playing",
+      });
       startKeepAlivePing();
       startProgressRaf();
       startPositionSaveTimer();
@@ -1285,7 +1293,7 @@ export function AudioProvider({ children }) {
       stopKeepAlivePing();
       stopProgressRaf();
       stopPositionSaveTimer();
-      patchState({ isPlaying: false });
+      patchState({ isPlaying: false, playbackNetworkState: "idle" });
       persistPlayback("pause");
 
       const track = stateRef.current.currentTrack;
@@ -1545,7 +1553,7 @@ export function AudioProvider({ children }) {
           }
         };
         window.addEventListener("online", onOnline);
-        patchState({ error: "RECONNECTING", isBuffering: true });
+        patchState({ error: "RECONNECTING", isBuffering: true, playbackNetworkState: "retrying_stream" });
         return;
       }
 
@@ -1557,6 +1565,7 @@ export function AudioProvider({ children }) {
         isLibraryStreamSrc(track?.src || "");
       if (slug && (streamMetaRef.current || onLibraryStreamSrc) && !streamErrorRetriedRef.current) {
         streamErrorRetriedRef.current = true;
+        patchState({ playbackNetworkState: "retrying_stream", isBuffering: true });
         try {
           const data = await fetchLibraryStream(slug, { force: false });
           streamMetaRef.current = {
@@ -1593,6 +1602,7 @@ export function AudioProvider({ children }) {
               streamRetryable: true,
               isBuffering: false,
               playbackState: "paused",
+              playbackNetworkState: "error_stream",
             });
             return;
           }
@@ -1602,6 +1612,7 @@ export function AudioProvider({ children }) {
             isBuffering: false,
             hasStarted: true,
             playbackState: "playing",
+            playbackNetworkState: "playing",
           });
           return;
         } catch (retryErr) {
@@ -1625,6 +1636,7 @@ export function AudioProvider({ children }) {
                 error: played ? null : "Preview unavailable",
                 source: "preview",
                 playbackState: played ? "preview_fallback" : "idle",
+                playbackNetworkState: played ? "playing" : "error_stream",
                 hasStarted: played,
                 currentTrack: {
                   ...track,
@@ -1650,6 +1662,7 @@ export function AudioProvider({ children }) {
               accessDenied: true,
               streamRetryable: false,
               error: "Access unavailable",
+              playbackNetworkState: "error_stream",
             });
             return;
           }
@@ -1681,6 +1694,7 @@ export function AudioProvider({ children }) {
           streamRetryable: false,
           isBuffering: false,
           playbackState: "idle",
+          playbackNetworkState: "error_stream",
         });
         return;
       }
@@ -1696,6 +1710,7 @@ export function AudioProvider({ children }) {
         error: "Stream unavailable — tap to retry",
         streamRetryable: true,
         isBuffering: false,
+        playbackNetworkState: "error_stream",
       });
     };
     const onEmptied = () => {
@@ -1814,6 +1829,7 @@ export function AudioProvider({ children }) {
     const slug = parseStreamSlugFromSrc(track.src) || track.slug;
     if (!slug || !isLibraryStreamSrc(track.src)) return { track, meta: null };
 
+    patchState({ playbackNetworkState: "loading_stream" });
     const data = await fetchLibraryStream(slug, { force, signal });
     if (data?.contentType && !AUDIO_CONTENT_TYPE_RE.test(data.contentType)) {
       const err = new Error("stream_invalid_content_type");
@@ -1835,7 +1851,7 @@ export function AudioProvider({ children }) {
       track: { ...track, src: data.url },
       meta,
     };
-  }, []);
+  }, [patchState]);
 
   const unlockAudioFromGesture = useCallback(async (audioEl) => {
     if (!audioEl || !audioEl.paused) return;
@@ -1988,6 +2004,7 @@ export function AudioProvider({ children }) {
               error: played ? null : "Preview unavailable",
               source: "preview",
               playbackState: played ? "preview_fallback" : "idle",
+              playbackNetworkState: played ? "playing" : "error_stream",
               hasStarted: played,
               currentTrack: {
                 ...nextTrack,
@@ -2016,6 +2033,7 @@ export function AudioProvider({ children }) {
           streamRetryable: false,
           error: "Access unavailable",
           hasStarted: false,
+          playbackNetworkState: "error_stream",
           currentTrack: nextTrack,
           currentTrackId: nextTrack.id,
         });
@@ -2040,6 +2058,7 @@ export function AudioProvider({ children }) {
         error: "Stream unavailable — tap to retry",
         streamRetryable: true,
         hasStarted: false,
+        playbackNetworkState: "error_stream",
         currentTrack: nextTrack,
         currentTrackId: nextTrack.id,
       });
@@ -2051,6 +2070,7 @@ export function AudioProvider({ children }) {
       if (!signedUrl || signedUrl === syncSrc) return;
       const resumeAt = audio.currentTime || 0;
       skipPauseInterruptionRef.current = true;
+      patchState({ playbackNetworkState: "loading_stream" });
       await waitAudioSrcReady(audio, signedUrl, { signal: streamAbortController.signal });
       const applySeek = () => {
         if (resumeAt > 0 && isFinite(audio.duration)) {
@@ -2085,6 +2105,7 @@ export function AudioProvider({ children }) {
     };
 
     if (backgroundStreamResolve && streamSlug) {
+      patchState({ playbackNetworkState: "loading_stream" });
       void resolveLibraryStreamForTrack(nextTrack, {
         force: options.forceStream,
         signal: streamAbortController.signal,
@@ -2185,6 +2206,7 @@ export function AudioProvider({ children }) {
       hasStarted: false,
       csTrack: csModeRef.current ? normalized : null,
       playbackState: "loading",
+      playbackNetworkState: "loading_stream",
     });
 
     preloadCsAssets(normalized, { csImgRef, csVidRef, csAudioRef });
@@ -2231,6 +2253,7 @@ export function AudioProvider({ children }) {
             isPlaying: false,
             error: "Audio playback failed. Try again in a moment.",
             playbackState: "paused",
+            playbackNetworkState: "error_stream",
           });
           void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: false });
           return false;
@@ -2297,6 +2320,7 @@ export function AudioProvider({ children }) {
             isPlaying: false,
             error: "Audio playback failed. Try again in a moment.",
             playbackState: "paused",
+            playbackNetworkState: "error_stream",
           });
           void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: false });
           return false;
@@ -2344,6 +2368,7 @@ export function AudioProvider({ children }) {
             error: played ? null : "Preview unavailable",
             source: "preview",
             playbackState: played ? "preview_fallback" : "idle",
+            playbackNetworkState: played ? "playing" : "error_stream",
             hasStarted: played,
             currentTrack: {
               ...nextTrack,
@@ -2380,6 +2405,7 @@ export function AudioProvider({ children }) {
             streamRetryable: false,
             hasStarted: false,
             playbackState: "idle",
+            playbackNetworkState: "error_stream",
           });
           void updateMediaSession(nextTrack, { playing: false });
           return false;
@@ -2390,7 +2416,12 @@ export function AudioProvider({ children }) {
         code: err?.code || null,
         slug: nextTrack?.slug || null,
       });
-      patchState({ isPlaying: false, error: "Audio playback failed. Try again in a moment.", playbackState: "paused" });
+      patchState({
+        isPlaying: false,
+        error: "Audio playback failed. Try again in a moment.",
+        playbackState: "paused",
+        playbackNetworkState: "error_stream",
+      });
       void updateMediaSession(nextTrack, { playing: false });
       return false;
     }
@@ -2454,6 +2485,7 @@ export function AudioProvider({ children }) {
       src: `/api/library/stream?slug=${encodeURIComponent(track.slug)}&redirect=1`,
     };
 
+    patchState({ playbackNetworkState: "loading_stream" });
     try {
       const resolved = await resolveLibraryStreamForTrack(libraryTrack, { force: false });
       const nextSrc = normalizePlaybackSrc(resolved.track.src);
@@ -2479,6 +2511,7 @@ export function AudioProvider({ children }) {
       }
       const resumeAt = audio.currentTime || 0;
       skipPauseInterruptionRef.current = true;
+      patchState({ playbackNetworkState: "loading_stream" });
       await waitAudioSrcReady(audio, resolved.track.src);
       const applySeek = () => {
         if (resumeAt > 0 && isFinite(audio.duration)) {
@@ -2502,6 +2535,7 @@ export function AudioProvider({ children }) {
           },
         },
         playbackState: audio.paused ? "paused" : "playing",
+        playbackNetworkState: audio.paused ? "idle" : "playing",
         error: null,
         accessDenied: false,
       });
@@ -2509,7 +2543,17 @@ export function AudioProvider({ children }) {
       return true;
     } catch (err) {
       if (err?.code === "ACCESS_DENIED") {
-        patchState({ accessDenied: true, error: "Access unavailable" });
+        patchState({
+          accessDenied: true,
+          error: "Access unavailable",
+          isPlaying: false,
+          playbackNetworkState: "error_stream",
+        });
+      } else {
+        patchState({
+          isPlaying: false,
+          playbackNetworkState: "error_stream",
+        });
       }
       return false;
     }
