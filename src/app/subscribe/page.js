@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, ExpressCheckoutElement, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
@@ -45,9 +45,8 @@ export default function SubscribePage() {
   const [error, setError] = useState("");
   const [subscriptionUnlocked, setSubscriptionUnlocked] = useState(false);
   const [subscriptionClientSecret, setSubscriptionClientSecret] = useState(null);
-  const checkoutStartedRef = useRef(false);
 
-  const { isSubscriber, isLifetimeOwner, isEligible, showSubscribe: showSubscribeButtons } =
+  const { isSubscriber, isLifetimeOwner, showSubscribe: showSubscribeButtons } =
     resolveSubscriptionEntitlements(accountState, membership);
 
   useEffect(() => {
@@ -66,7 +65,7 @@ export default function SubscribePage() {
     return () => window.clearInterval(interval);
   }, [refreshAccountState]);
 
-  const startSubscription = useCallback(async () => {
+  const startSubscription = async () => {
     setLoading(true);
     setError("");
     try {
@@ -80,28 +79,18 @@ export default function SubscribePage() {
       setSubscriptionClientSecret(data.clientSecret);
     } catch (err) {
       setError(err.message);
-      checkoutStartedRef.current = false;
     } finally {
       setLoading(false);
     }
-  }, []);
-
-  useEffect(() => {
-    if (accountLoading || !isEligible) return;
-    if (subscriptionClientSecret || checkoutStartedRef.current) return;
-    checkoutStartedRef.current = true;
-    void startSubscription();
-  }, [accountLoading, isEligible, subscriptionClientSecret, startSubscription]);
+  };
 
   const closeSubscriptionModal = () => {
     setSubscriptionClientSecret(null);
     setError("");
-    checkoutStartedRef.current = false;
   };
   const handleSubscriptionSuccess = async () => {
     setSubscriptionClientSecret(null);
     setSubscriptionUnlocked(true);
-    checkoutStartedRef.current = false;
     let attempts = 0;
     const sync = () => {
       attempts += 1;
