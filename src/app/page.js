@@ -707,6 +707,7 @@ export default function Page() {
     exitAudioVisualViewport,
     toggle,
     seek,
+    pause,
   } = useAudioPlayer();
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState(() => {

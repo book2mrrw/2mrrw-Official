@@ -3835,11 +3835,17 @@ export function useAudioPlayer() {
   return value;
 }
 
+const SERVER_PLAYBACK_PROGRESS_SNAPSHOT = Object.freeze({
+  currentTime: 0,
+  duration: 0,
+});
+
 /** Subscribe to high-frequency playback progress without re-rendering the full AudioContext tree. */
 export function usePlaybackProgress() {
   const { subscribeProgress, getProgressSnapshot } = useAudioPlayer();
-  return useSyncExternalStore(subscribeProgress, getProgressSnapshot, () => ({
-    currentTime: 0,
-    duration: 0,
-  }));
+  return useSyncExternalStore(
+    subscribeProgress,
+    getProgressSnapshot,
+    () => SERVER_PLAYBACK_PROGRESS_SNAPSHOT
+  );
 }
