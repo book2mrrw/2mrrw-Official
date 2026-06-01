@@ -1,5 +1,9 @@
 /**
  * Phase 14F — audibility truth (element + Web Audio + time advancement).
+ *
+ * Truth hierarchy (highest → lowest):
+ *   audibility (isAudioActuallyAudible) > element (!paused) > machine (orchestration) > React isPlaying
+ *
  * Audibility = truth; not merely !audio.paused or React isPlaying.
  */
 

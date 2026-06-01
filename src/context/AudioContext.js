@@ -3909,62 +3909,6 @@ export function AudioProvider({ children }) {
     return false;
   }, [pause, resume]);
 
-  const syncPlaybackUiFromAudioElement = useCallback(
-    ({ wasPlayingBeforeHide = false } = {}) => {
-      const audio = audioRef.current;
-      const track = stateRef.current.currentTrack;
-      if (!audio || !track || !stateRef.current.hasStarted) {
-        return "none";
-      }
-
-      updateAudibilitySample(audio, audibilitySampleRef);
-      const audible = isAudioActuallyAudible({
-        audio,
-        webAudioContext: audioCtxRef.current,
-        sampleRef: audibilitySampleRef,
-      });
-      if (audible) {
-        if (!stateRef.current.isPlaying || stateRef.current.playbackState !== "playing") {
-          patchState({
-            isPlaying: true,
-            playbackState: "playing",
-            isBuffering: false,
-          });
-        }
-        startKeepAlivePing();
-        startProgressRaf();
-        startPositionSaveTimer();
-        void updateMediaSession(track, { playing: true });
-        syncPositionState(true);
-        return "synced-playing";
-      }
-      if (!audio.paused) {
-        return "recover";
-      }
-
-      if (
-        wasPlayingBeforeHide &&
-        isEntitledFullPlaybackTrack(track)
-      ) {
-        return "recover";
-      }
-
-      if (stateRef.current.isPlaying) {
-        patchState({ isPlaying: false, playbackState: "paused" });
-        void updateMediaSession(track, { playing: false });
-      }
-      return "synced-paused";
-    },
-    [
-      patchState,
-      startKeepAlivePing,
-      startPositionSaveTimer,
-      startProgressRaf,
-      syncPositionState,
-      updateMediaSession,
-    ]
-  );
-
   useEffect(() => {
     playTrackRef.current = playTrack;
     applyCSModeToTrackRef.current = applyCSModeToTrack;
