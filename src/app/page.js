@@ -6,6 +6,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 const CheckoutForm = dynamic(() => import("@/components/payments/CheckoutForm"), { ssr: false });
 const DonateModal = dynamic(() => import("@/components/payments/DonateModal"), { ssr: false });
+import { stripePaymentOverlayStyle, stripePaymentPanelStyle } from "@/components/payments/stripePaymentShell";
 const ImmersivePreviewModal = dynamic(() => import("@/components/preview/ImmersivePreviewModal"), { ssr: false });
 const AlbumModal = dynamic(
   () => import("@/components/preview/ImmersivePreviewModal").then((mod) => ({ default: mod.AlbumModal })),
@@ -2857,11 +2858,19 @@ export default function Page() {
           <motion.div
             key="stripe"
             {...OVERLAY_FADE}
-            style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}
+            style={{...stripePaymentOverlayStyle({ isMobile, padding: isMobile ? 0 : 16 }), background:"rgba(0,0,0,0.9)"}}
           >
             <motion.div
               {...(isMobile ? SHEET_UP : MODAL_CENTER)}
-              style={{background:"#0a0a0a",padding:isMobile?20:30,borderRadius:isMobile?"20px 20px 0 0":20,width:isMobile?"100%":400,maxWidth:isMobile?"100%":"none",border:"1px solid #222",alignSelf:isMobile?"flex-end":"center"}}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                ...stripePaymentPanelStyle({ isMobile, maxWidth: 400 }),
+                background:"#0a0a0a",
+                padding: isMobile ? "20px 20px max(20px, env(safe-area-inset-bottom))" : 30,
+                borderRadius: isMobile ? "20px 20px 0 0" : 20,
+                border:"1px solid #222",
+                alignSelf: isMobile ? "flex-end" : "center",
+              }}
             >
               <motion.div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Checkout</motion.div>
               <Elements stripe={stripePromise} options={{clientSecret,appearance:{theme:"night",variables:{colorPrimary:"#00ffff",colorBackground:"#0a0a0a",colorText:"#ffffff",borderRadius:"8px"}}}}>

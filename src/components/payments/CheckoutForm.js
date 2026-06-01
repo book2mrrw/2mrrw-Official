@@ -2,6 +2,7 @@
 
 import { memo, useState } from "react";
 import { AddressElement, ExpressCheckoutElement, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { stripePaymentFormStyle } from "@/components/payments/stripePaymentShell";
 
 function CheckoutForm({ onSuccess, requiresShipping, submitLabel = "Pay Now" }) {
   const stripe   = useStripe();
@@ -36,7 +37,7 @@ function CheckoutForm({ onSuccess, requiresShipping, submitLabel = "Pay Now" }) 
     else { onSuccess(result.paymentIntent?.id); }
   };
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} style={stripePaymentFormStyle()}>
       <ExpressCheckoutElement
         options={{
           buttonTheme: { applePay: "black", googlePay: "black", link: "black" },

@@ -6,6 +6,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements, ExpressCheckoutElement, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { useAuth } from "@/context/AuthContext";
 import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
+import { stripePaymentOverlayStyle, stripePaymentPanelStyle, stripePaymentFormStyle } from "@/components/payments/stripePaymentShell";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
@@ -45,6 +46,14 @@ export default function SubscribePage() {
   const [error, setError] = useState("");
   const [subscriptionUnlocked, setSubscriptionUnlocked] = useState(false);
   const [subscriptionClientSecret, setSubscriptionClientSecret] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   const { isSubscriber, isLifetimeOwner, showSubscribe: showSubscribeButtons } =
     resolveSubscriptionEntitlements(accountState, membership);
@@ -199,13 +208,22 @@ export default function SubscribePage() {
             initial={{opacity:0}}
             animate={{opacity:1}}
             exit={{opacity:0}}
-            style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}
+            style={{...stripePaymentOverlayStyle({ isMobile, padding: isMobile ? 0 : 16 }), background:"rgba(0,0,0,0.9)"}}
           >
             <motion.div
               initial={{opacity:0,y:18,scale:.98}}
               animate={{opacity:1,y:0,scale:1}}
               exit={{opacity:0,y:12,scale:.98}}
-              style={{background:"#0a0a0a",padding:28,borderRadius:22,width:"100%",maxWidth:420,border:"1px solid #222",boxShadow:"0 30px 90px rgba(0,0,0,.55)"}}
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                ...stripePaymentPanelStyle({ isMobile, maxWidth: 420 }),
+                background:"#0a0a0a",
+                padding: "28px 28px max(28px, env(safe-area-inset-bottom))",
+                borderRadius: isMobile ? "20px 20px 0 0" : 22,
+                border:"1px solid #222",
+                boxShadow:"0 30px 90px rgba(0,0,0,.55)",
+                alignSelf: isMobile ? "flex-end" : "center",
+              }}
             >
               <div style={{fontSize:11,color:"#a259ff",letterSpacing:3,marginBottom:12,textTransform:"uppercase"}}>Inner Circle</div>
               <div style={{fontSize:24,fontWeight:950,letterSpacing:"-0.04em",marginBottom:8}}>Complete membership</div>
@@ -317,7 +335,7 @@ function SubscriptionPaymentForm({ onSuccess }) {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} style={stripePaymentFormStyle()}>
       <ExpressCheckoutElement
         options={{
           buttonTheme: { applePay: "black", googlePay: "black", link: "black" },

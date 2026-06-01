@@ -5,6 +5,7 @@ import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import { benefitsForCard, editionLabel } from "./collectorCardCatalog";
 import CheckoutForm from "@/components/payments/CheckoutForm";
+import { stripePaymentOverlayStyle, stripePaymentPanelStyle } from "@/components/payments/stripePaymentShell";
 import { useAuth } from "@/context/AuthContext";
 import {
   cartLineFromCard,
@@ -123,13 +124,7 @@ export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurch
       aria-labelledby="collector-card-modal-title"
       onClick={onClose}
       style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 10000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: isMobile ? 16 : 24,
+        ...stripePaymentOverlayStyle({ isMobile, zIndex: 10000, padding: isMobile ? 0 : 24 }),
         background: "rgba(0,0,0,0.72)",
         backdropFilter: "blur(12px)",
         WebkitBackdropFilter: "blur(12px)",
@@ -138,15 +133,13 @@ export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurch
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          width: "100%",
-          maxWidth: 420,
-          maxHeight: "90vh",
-          overflowY: "auto",
+          ...stripePaymentPanelStyle({ isMobile, maxWidth: 420 }),
           background: "#0d0d0d",
           border: `1px solid ${accent}33`,
-          borderRadius: 24,
-          padding: isMobile ? 20 : 28,
+          borderRadius: isMobile ? "20px 20px 0 0" : 24,
+          padding: isMobile ? "20px 20px max(20px, env(safe-area-inset-bottom))" : 28,
           boxShadow: `0 0 60px ${accent}18`,
+          alignSelf: isMobile ? "flex-end" : "center",
         }}
       >
         {!clientSecret && (

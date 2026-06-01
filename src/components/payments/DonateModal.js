@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "@/components/payments/CheckoutForm";
+import { stripePaymentOverlayStyle, stripePaymentPanelStyle } from "@/components/payments/stripePaymentShell";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { ModalErrorBoundary } from "@/system/errors";
 
@@ -121,14 +122,8 @@ export default function DonateModal({ open, onClose, isMobile }) {
           key="donate-modal"
           {...OVERLAY_FADE}
           style={{
-            position: "fixed",
-            inset: 0,
+            ...stripePaymentOverlayStyle({ isMobile, padding: isMobile ? 0 : 16 }),
             background: "rgba(0,0,0,0.9)",
-            zIndex: 9999,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: isMobile ? 16 : 0,
           }}
           onClick={handleClose}
         >
@@ -136,11 +131,10 @@ export default function DonateModal({ open, onClose, isMobile }) {
             {...(isMobile ? SHEET_UP : MODAL_CENTER)}
             onClick={(e) => e.stopPropagation()}
             style={{
+              ...stripePaymentPanelStyle({ isMobile, maxWidth: 400 }),
               background: "#0a0a0a",
-              padding: isMobile ? 20 : 30,
+              padding: isMobile ? "20px 20px max(20px, env(safe-area-inset-bottom))" : 30,
               borderRadius: isMobile ? "20px 20px 0 0" : 20,
-              width: isMobile ? "100%" : 400,
-              maxWidth: isMobile ? "100%" : "none",
               border: "1px solid #222",
               alignSelf: isMobile ? "flex-end" : "center",
             }}
