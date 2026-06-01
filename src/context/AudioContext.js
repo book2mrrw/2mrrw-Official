@@ -83,6 +83,13 @@ import AudioPhase10Bridge from "@/components/system/AudioPhase10Bridge";
 import { isFirstListen, markListened } from "@/lib/first-listen";
 import { isSamePlaybackTrack } from "@/lib/music-playback";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
+import {
+  createAudibilitySample,
+  isAudioActuallyAudible,
+  resetAudibilitySample,
+  teardownWebAudioGraph,
+  updateAudibilitySample,
+} from "@/lib/playback/audibility";
 
 const AudioContext = createContext(null);
 
@@ -102,6 +109,7 @@ const AUDIO_CONTENT_TYPE_RE = /^(audio\/|application\/octet-stream)/i;
 const AUDIO_SRC_READY_TIMEOUT_MS = 12000;
 const STALL_RECOVERY_MS = 12000;
 const PLAYBACK_COMMAND_TIMEOUT_MS = 15000;
+const SILENT_DESYNC_WATCHDOG_MS = 1250;
 const ACTIVE_COMMAND_STALE_MS = 20000;
 const PLAYBACK_COMMANDS = {
   PLAY_TRACK: "PLAY_TRACK",
@@ -385,6 +393,14 @@ async function resumeWebAudioContextIfSuspended(ctxRef) {
   }
 }
 
+/** Phase 14F — Web Audio must be running before element play is treated as audible. */
+async function ensureWebAudioRunning(ctxRef) {
+  await resumeWebAudioContextIfSuspended(ctxRef);
+  const ctx = ctxRef?.current;
+  if (!ctx) return true;
+  return ctx.state === "running";
+}
+
 function isFlatPreviewCdnSrc(src) {
   if (!src || isSiteApiMediaPath(src) || isLibraryStreamSrc(src)) return false;
   return /\/previews\/[^/]+-preview\.(wav|mp3|m4a|flac)(\?|$)/i.test(String(src));
@@ -641,6 +657,10 @@ export function AudioProvider({ children }) {
   const sessionUnlockedRef = useRef(false);
   const webAudioInitializedRef = useRef(false);
   const webAudioAvailableRef = useRef(true);
+  const audibilitySampleRef = useRef(createAudibilitySample());
+  const recoverAudioHardRef = useRef(null);
+  const recoverInFlightRef = useRef(false);
+  const pendingInvariantRecoverRef = useRef(false);
   const retryStreamPlaybackRef = useRef(null);
   const positionSaveTimerRef = useRef(null);
   const lastPlayedSlugRef = useRef(null);
@@ -869,6 +889,43 @@ export function AudioProvider({ children }) {
         }
         next = { ...next, hasStarted: true };
       }
+      if (
+        next.isPlaying &&
+        next.playbackState === "playing" &&
+        !recoverInFlightRef.current &&
+        next.playbackState !== "recovering"
+      ) {
+        const audio = audioRef.current;
+        const ctx = audioCtxRef.current;
+        if (
+          audio &&
+          !isAudioActuallyAudible({
+            audio,
+            webAudioContext: ctx,
+            sampleRef: audibilitySampleRef,
+          })
+        ) {
+          if (!pendingInvariantRecoverRef.current) {
+            pendingInvariantRecoverRef.current = true;
+            queueMicrotask(() => {
+              pendingInvariantRecoverRef.current = false;
+              logPlaybackResilience("audio-invariant-violation", {
+                source: "AudioContext",
+                code: "AUDIO_INVARIANT_VIOLATION",
+                slug: next.currentTrack?.slug ?? null,
+              });
+              void recoverAudioHardRef.current?.("audio_invariant_violation", { resumeAfter: true });
+            });
+          }
+          next = {
+            ...next,
+            isPlaying: false,
+            playbackState: "recovering",
+            isBuffering: true,
+            playbackNetworkState: "recovering",
+          };
+        }
+      }
       return reconcileIsPlayingWithElement(prev, next);
     });
   }, [reconcileIsPlayingWithElement]);
@@ -888,6 +945,7 @@ export function AudioProvider({ children }) {
         stopProgressRaf();
         return;
       }
+      updateAudibilitySample(audio, audibilitySampleRef);
       const t = audio.currentTime || 0;
       const prev = stateRef.current;
       if (Math.abs(t - prev.currentTime) >= 0.001) {
@@ -1326,6 +1384,9 @@ export function AudioProvider({ children }) {
     };
 
     const onTime = () => {
+      if (!audio.paused && !audio.ended) {
+        updateAudibilitySample(audio, audibilitySampleRef);
+      }
       persistPlayback("progress");
       syncPositionState(false);
 
@@ -1885,6 +1946,10 @@ export function AudioProvider({ children }) {
     initWebAudio();
     await resumeWebAudioContextIfSuspended(audioCtxRef);
     recordAudioContextState(audioCtxRef.current, "playTrack-resume");
+    if (!(await ensureWebAudioRunning(audioCtxRef))) {
+      await recoverAudioHardRef.current?.("audio_context_suspended", { resumeAfter: true });
+      return false;
+    }
     setPreviewEnded(false);
     if (!track || (typeof track !== "object")) {
       console.error("[AudioContext] playTrack: invalid track", track);
@@ -2261,9 +2326,19 @@ export function AudioProvider({ children }) {
         pendingSeekRef.current = resumeAt;
       } else {
         if (!audio.paused) {
-          patchState({ hasStarted: true, playbackState: "playing", error: null });
+          const audible = isAudioActuallyAudible({
+            audio,
+            webAudioContext: audioCtxRef.current,
+            sampleRef: audibilitySampleRef,
+          });
+          patchState({
+            hasStarted: true,
+            playbackState: audible ? "playing" : "ready",
+            isPlaying: audible,
+            error: null,
+          });
           applyCsToElement(audio, presentation, pendingSeekRef.current || null);
-          return true;
+          return audible;
         }
         if (resumeAt) {
           const dur = isFinite(audio.duration) ? audio.duration : 0;
@@ -2338,7 +2413,7 @@ export function AudioProvider({ children }) {
       patchState({
         error: null,
         hasStarted: true,
-        playbackState: audio.paused ? "paused" : "playing",
+        playbackState: audio.paused ? "paused" : "ready",
       });
       return !audio.paused;
     } catch (err) {
@@ -2597,6 +2672,240 @@ export function AudioProvider({ children }) {
   useEffect(() => {
     retryStreamPlaybackRef.current = retryStreamPlayback;
   }, [retryStreamPlayback]);
+
+  const recoverAudioHard = useCallback(
+    async (reason, { resumeAfter = false } = {}) => {
+      if (recoverInFlightRef.current) return false;
+      recoverInFlightRef.current = true;
+      internalPlaybackAuthorityRef.current = true;
+      const track = stateRef.current.currentTrack;
+      const audio = audioRef.current;
+      const resumeAt = audio?.currentTime || stateRef.current.currentTime || 0;
+      const shouldResume =
+        Boolean(resumeAfter) &&
+        Boolean(track) &&
+        (isEntitledFullPlaybackTrack(track) || !track?.metadata?.access?.previewOnly);
+
+      try {
+        logPlaybackResilience("recover-audio-hard", {
+          source: "AudioContext",
+          code: "RECOVER_AUDIO_HARD",
+          reason,
+          slug: track?.slug ?? null,
+          resumeAfter: shouldResume,
+        });
+        tracePlayback("recovery", "recoverAudioHard", { reason, resumeAfter: shouldResume });
+
+        stopStallRecovery();
+        stopProgressRaf();
+        stopKeepAlivePing();
+        stopPositionSaveTimer();
+
+        if (audio) {
+          skipPauseInterruptionRef.current = true;
+          audio.pause();
+          try {
+            audio.removeAttribute("src");
+            audio.load();
+          } catch {
+            /* brief src clear for iOS silent graph */
+          }
+        }
+
+        teardownWebAudioGraph({
+          audioCtxRef,
+          sourceRef,
+          analyserRef,
+          stereoPannerRef,
+          bassFilterRef,
+          webAudioInitializedRef,
+          webAudioAvailableRef,
+        });
+        resetAudibilitySample(audibilitySampleRef);
+
+        patchState({
+          isPlaying: false,
+          playbackState: "recovering",
+          isBuffering: true,
+          playbackNetworkState: "recovering",
+          error: null,
+        });
+
+        if (!audio || !track?.src) return false;
+
+        initWebAudio();
+        await resumeWebAudioContextIfSuspended(audioCtxRef);
+        recordAudioContextState(audioCtxRef.current, `recoverAudioHard:${reason}`);
+
+        let src = track.src;
+        const streamSlug = parseStreamSlugFromSrc(src) || track.slug;
+        if (streamSlug && isLibraryStreamSrc(src) && isEntitledFullPlaybackTrack(track)) {
+          try {
+            const resolved = await resolveLibraryStreamForTrack(track, { force: true });
+            src = resolved.track?.src || src;
+          } catch (error) {
+            reportPlaybackDiagnostic({
+              level: "warn",
+              code: "RECOVER_STREAM_REFRESH_FAILED",
+              command: PLAYBACK_COMMANDS.RECOVER,
+              requestId: activeCommandRef.current?.requestId || null,
+              state: stateRef.current,
+              error,
+              context: { reason, slug: streamSlug },
+            });
+          }
+        }
+
+        skipPauseInterruptionRef.current = true;
+        await waitAudioSrcReady(audio, src);
+        if (resumeAt > 0 && Number.isFinite(audio.duration) && audio.duration > 0) {
+          const safe = clampRestorePosition(resumeAt, audio.duration);
+          if (safe != null) audio.currentTime = safe;
+        }
+
+        patchState({
+          currentTrack: { ...track, src },
+          currentTrackId: track.id || track.trackId || null,
+          playbackState: "ready",
+          isBuffering: false,
+          playbackNetworkState: "idle",
+          hasStarted: true,
+        });
+
+        if (!(await ensureWebAudioRunning(audioCtxRef))) {
+          reportPlaybackDiagnostic({
+            level: "warn",
+            code: "RECOVER_AUDIO_CONTEXT_SUSPENDED",
+            command: PLAYBACK_COMMANDS.RECOVER,
+            requestId: activeCommandRef.current?.requestId || null,
+            state: stateRef.current,
+            context: { reason },
+          });
+          return false;
+        }
+
+        if (shouldResume) {
+          await playAudioIfNotPaused(audio, true, {
+            command: PLAYBACK_COMMANDS.RECOVER,
+            requestId: activeCommandRef.current?.requestId || null,
+            state: stateRef.current,
+            context: { reason, hard: true },
+          });
+        }
+        return true;
+      } catch (error) {
+        reportPlaybackDiagnostic({
+          level: "warn",
+          code: "RECOVER_AUDIO_HARD_FAILED",
+          command: PLAYBACK_COMMANDS.RECOVER,
+          requestId: activeCommandRef.current?.requestId || null,
+          state: stateRef.current,
+          error,
+          context: { reason },
+        });
+        patchState({
+          isPlaying: false,
+          playbackState: "paused",
+          isBuffering: false,
+          playbackNetworkState: "error_stream",
+          error: "Playback needs a moment — tap play to continue.",
+        });
+        return false;
+      } finally {
+        recoverInFlightRef.current = false;
+        internalPlaybackAuthorityRef.current = false;
+      }
+    },
+    [
+      initWebAudio,
+      patchState,
+      resolveLibraryStreamForTrack,
+      stopKeepAlivePing,
+      stopPositionSaveTimer,
+      stopProgressRaf,
+      stopStallRecovery,
+      tracePlayback,
+    ]
+  );
+
+  useEffect(() => {
+    recoverAudioHardRef.current = recoverAudioHard;
+  }, [recoverAudioHard]);
+
+  const resumePlaybackTransport = useCallback(async () => {
+    internalPlaybackAuthorityRef.current = true;
+    try {
+      const queue = queueRef.current;
+      const idx = queueIndexRef.current >= 0 ? queueIndexRef.current : 0;
+      const track = stateRef.current.currentTrack || queue[idx];
+      const audio = audioRef.current;
+      if (!audio || !track?.src) return false;
+
+      if (stateRef.current.hasStarted && stateRef.current.currentTrack) {
+        return recoverAudioHard("session_recovery_transport", { resumeAfter: false });
+      }
+
+      initWebAudio();
+      await resumeWebAudioContextIfSuspended(audioCtxRef);
+      recordAudioContextState(audioCtxRef.current, "resumePlaybackTransport");
+
+      let src = track.src;
+      if (isEntitledFullPlaybackTrack(track) && isLibraryStreamSrc(src)) {
+        try {
+          const resolved = await resolveLibraryStreamForTrack(track, { force: false });
+          src = resolved.track?.src || src;
+        } catch {
+          /* keep queue placeholder src */
+        }
+      }
+
+      skipPauseInterruptionRef.current = true;
+      audio.pause();
+      await waitAudioSrcReady(audio, src);
+      patchState({
+        currentTrack: { ...track, src },
+        currentTrackId: track.id || track.trackId || null,
+        isPlaying: false,
+        playbackState: "ready",
+        hasStarted: false,
+        isBuffering: false,
+        playbackNetworkState: "idle",
+      });
+      return true;
+    } finally {
+      internalPlaybackAuthorityRef.current = false;
+    }
+  }, [initWebAudio, patchState, recoverAudioHard, resolveLibraryStreamForTrack]);
+
+  useEffect(() => {
+    if (!state.hasStarted || !state.isPlaying) return undefined;
+    const intervalId = setInterval(() => {
+      if (!stateRef.current.hasStarted || !stateRef.current.isPlaying) return;
+      if (recoverInFlightRef.current) return;
+      const audio = audioRef.current;
+      if (!audio) return;
+      updateAudibilitySample(audio, audibilitySampleRef);
+      if (
+        isAudioActuallyAudible({
+          audio,
+          webAudioContext: audioCtxRef.current,
+          sampleRef: audibilitySampleRef,
+        })
+      ) {
+        return;
+      }
+      logPlaybackResilience("silent-desync", {
+        source: "AudioContext",
+        code: "AUDIO_SILENT_DESYNC",
+        slug: stateRef.current.currentTrack?.slug ?? null,
+        currentTime: audio.currentTime,
+        readyState: audio.readyState,
+        ctxState: audioCtxRef.current?.state ?? null,
+      });
+      void recoverAudioHard("silent_desync_detected", { resumeAfter: true });
+    }, SILENT_DESYNC_WATCHDOG_MS);
+    return () => clearInterval(intervalId);
+  }, [recoverAudioHard, state.hasStarted, state.isPlaying]);
 
   const applyCSModeToTrack = useCallback(
     async (track) => {
@@ -2901,6 +3210,9 @@ export function AudioProvider({ children }) {
       await unlockAudioFromGesture(audio);
       initWebAudio();
       await resumeWebAudioContextIfSuspended(audioCtxRef);
+      if (!(await ensureWebAudioRunning(audioCtxRef))) {
+        return recoverAudioHard("audio_context_suspended", { resumeAfter: true });
+      }
       await audio.play();
       if (audio.paused) {
         patchState({
@@ -2910,12 +3222,11 @@ export function AudioProvider({ children }) {
         });
         return false;
       }
-      if (track) void updateMediaSession(track, { playing: true });
+      if (track) void updateMediaSession(track, { playing: !audio.paused });
       patchState({
         error: null,
         accessDenied: false,
         hasStarted: true,
-        playbackState: "playing",
       });
 
       const meta = streamMetaRef.current;
@@ -2984,6 +3295,7 @@ export function AudioProvider({ children }) {
     updateMediaSession,
     finalizeStreamSession,
     initWebAudio,
+    recoverAudioHard,
     unlockAudioFromGesture,
     tracePlayback,
     logDirectInternalCallViolation,
@@ -3174,9 +3486,18 @@ export function AudioProvider({ children }) {
         return true;
       case PLAYBACK_COMMANDS.RESUME:
         return resumeInternal();
-      case PLAYBACK_COMMANDS.RECOVER:
-        tracePlayback("recovery", "executePlaybackCommand", { command: "RECOVER" });
-        return resumeInternal();
+      case PLAYBACK_COMMANDS.RECOVER: {
+        tracePlayback("recovery", "executePlaybackCommand", {
+          command: "RECOVER",
+          reason: command.payload?.reason ?? null,
+        });
+        if (command.payload?.hard === false) {
+          return resumeInternal();
+        }
+        return recoverAudioHard(command.payload?.reason || "recover_command", {
+          resumeAfter: Boolean(command.payload?.resumeAfter ?? true),
+        });
+      }
       case PLAYBACK_COMMANDS.SEEK:
         seekInternal(command.payload.time);
         return true;
@@ -3213,6 +3534,7 @@ export function AudioProvider({ children }) {
     playQueueInternal,
     playTrackInternal,
     resumeFromViewport,
+    recoverAudioHard,
     resumeInternal,
     retryStreamPlayback,
     seekInternal,
@@ -3433,19 +3755,28 @@ export function AudioProvider({ children }) {
       }
 
       if (!audio.paused) {
-        if (!stateRef.current.isPlaying || stateRef.current.playbackState !== "playing") {
-          patchState({
-            isPlaying: true,
-            playbackState: "playing",
-            isBuffering: false,
-          });
+        updateAudibilitySample(audio, audibilitySampleRef);
+        const audible = isAudioActuallyAudible({
+          audio,
+          webAudioContext: audioCtxRef.current,
+          sampleRef: audibilitySampleRef,
+        });
+        if (audible) {
+          if (!stateRef.current.isPlaying || stateRef.current.playbackState !== "playing") {
+            patchState({
+              isPlaying: true,
+              playbackState: "playing",
+              isBuffering: false,
+            });
+          }
+          startKeepAlivePing();
+          startProgressRaf();
+          startPositionSaveTimer();
+          void updateMediaSession(track, { playing: true });
+          syncPositionState(true);
+          return "synced-playing";
         }
-        startKeepAlivePing();
-        startProgressRaf();
-        startPositionSaveTimer();
-        void updateMediaSession(track, { playing: true });
-        syncPositionState(true);
-        return "synced-playing";
+        return "recover";
       }
 
       if (
@@ -3560,7 +3891,9 @@ export function AudioProvider({ children }) {
 
       if (document.visibilityState === "hidden") {
         if (!track || !stateRef.current.hasStarted || !audio) return;
-        wasPlayingBeforeHideRef.current = !audio.paused;
+        wasPlayingBeforeHideRef.current = Boolean(
+          stateRef.current.isPlaying && stateRef.current.hasStarted
+        );
         const position = audio.currentTime || 0;
         const userId = listeningUserIdRef.current;
         if (userId && track.slug) {
@@ -3602,43 +3935,45 @@ export function AudioProvider({ children }) {
         const wasPlayingBeforeHide = wasPlayingBeforeHideRef.current;
         wasPlayingBeforeHideRef.current = false;
 
-        const syncResult = syncPlaybackUiFromAudioElement({ wasPlayingBeforeHide });
-        if (syncResult === "recover") {
-          void dispatchPlaybackCommand(PLAYBACK_COMMANDS.RECOVER).catch((error) => {
-            reportPlaybackDiagnostic({
-              level: "warn",
-              code: "VISIBILITY_RECOVER_BLOCKED",
-              command: PLAYBACK_COMMANDS.RECOVER,
-              requestId: activeCommandRef.current?.requestId || null,
-              state: stateRef.current,
-              error,
-              context: {
-                platform: isLikelyIOS() ? "ios" : "other",
-              },
-            });
-            syncPlaybackUiFromAudioElement({ wasPlayingBeforeHide: false });
+        if (track && stateRef.current.hasStarted) {
+          void recoverAudioHard("visibility_return", {
+            resumeAfter:
+              wasPlayingBeforeHide && isEntitledFullPlaybackTrack(track),
+          }).then(() => {
+            if (stateRef.current.currentTrack) {
+              void updateMediaSession(stateRef.current.currentTrack, {
+                playing: stateRef.current.isPlaying,
+              });
+            }
+            syncPositionState(true);
           });
         } else if (stateRef.current.currentTrack) {
           void updateMediaSession(stateRef.current.currentTrack, {
             playing: stateRef.current.isPlaying,
           });
+          syncPositionState(true);
         } else {
           rehydrateMediaSession();
         }
-        syncPositionState(true);
       }
     };
     const onPageShow = (event) => {
-      if (event.persisted || document.visibilityState === "visible") {
-        const s = stateRef.current;
-        if (s.currentTrack && s.hasStarted) {
+      const s = stateRef.current;
+      if (event.persisted) {
+        const track = s.currentTrack;
+        if (!track || !s.hasStarted) return;
+        const wasPlaying = wasPlayingBeforeHideRef.current || s.isPlaying;
+        wasPlayingBeforeHideRef.current = false;
+        void recoverAudioHard("bfcache_restore", {
+          resumeAfter: wasPlaying && isEntitledFullPlaybackTrack(track),
+        }).then(() => {
           rehydrateMediaSession();
-          return;
-        }
-        const persisted = readPersistedMediaSessionTrack();
-        if (persisted?.slug && s.hasStarted) {
-          rehydrateMediaSession();
-        }
+          syncPositionState(true);
+        });
+        return;
+      }
+      if (document.visibilityState === "visible" && s.currentTrack && s.hasStarted) {
+        rehydrateMediaSession();
       }
     };
     const onBeforeUnload = () => {
@@ -3679,10 +4014,9 @@ export function AudioProvider({ children }) {
     };
   }, [
     rehydrateMediaSession,
-    syncPlaybackUiFromAudioElement,
+    recoverAudioHard,
     updateMediaSession,
     syncPositionState,
-    dispatchPlaybackCommand,
   ]);
 
   const beginCsHoldPreview = useCallback((csAudioUrl) => {
@@ -3827,6 +4161,7 @@ export function AudioProvider({ children }) {
       overrideConcurrentStream,
       dismissStreamConflict,
       retryStreamPlayback,
+      resumePlaybackTransport,
       storeLinkHref: STORE_LINK_HREF,
       beginCsHoldPreview,
       setCsHoldPlaybackRate,
@@ -3871,6 +4206,7 @@ export function AudioProvider({ children }) {
     overrideConcurrentStream,
     dismissStreamConflict,
     retryStreamPlayback,
+    resumePlaybackTransport,
     beginCsHoldPreview,
     setCsHoldPlaybackRate,
     endCsHoldPreview,

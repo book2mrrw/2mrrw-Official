@@ -10,8 +10,17 @@ import { logStateChurn } from "@/lib/diagnostics/state-churn-log";
  * Wires queue preloading + playback persistence without bloating AudioContext.
  */
 export default function AudioPhase10Bridge() {
-  const { queue, queueIndex, getCurrentTime, hasStarted, currentTrack, playbackState, dispatchPlaybackCommand, seek } =
-    useAudioPlayer();
+  const {
+    queue,
+    queueIndex,
+    getCurrentTime,
+    hasStarted,
+    currentTrack,
+    playbackState,
+    dispatchPlaybackCommand,
+    resumePlaybackTransport,
+    seek,
+  } = useAudioPlayer();
   const queueRef = useRef(queue);
   const hasStartedRef = useRef(hasStarted);
 
@@ -66,7 +75,7 @@ export default function AudioPhase10Bridge() {
       void dispatchPlaybackCommand("setQueue", {
         tracks,
         startIndex: detail.queueIndex ?? 0,
-      });
+      }).then(() => resumePlaybackTransport());
       if (detail.currentTime > 0) {
         let attempts = 0;
         const trySeekWhenStable = () => {
@@ -87,7 +96,7 @@ export default function AudioPhase10Bridge() {
     };
     window.addEventListener("2mrrw:playback-recovery", handler);
     return () => window.removeEventListener("2mrrw:playback-recovery", handler);
-  }, [dispatchPlaybackCommand, seek, hasStarted, currentTrack, playbackState]);
+  }, [dispatchPlaybackCommand, resumePlaybackTransport, seek, hasStarted, currentTrack, playbackState]);
 
   return null;
 }
