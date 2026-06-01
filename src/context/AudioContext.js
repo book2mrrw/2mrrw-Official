@@ -713,6 +713,45 @@ export function AudioProvider({ children }) {
     return isAudioActuallyAudible(params);
   }, [getAudibilityParams]);
 
+  /** Phase 15F — skip lifecycle recovery when transport is already healthy. */
+  const evaluateLifecyclePlaybackHealth = useCallback(({ resumeAfter = false } = {}) => {
+    const s = stateRef.current;
+    const track = s.currentTrack;
+    if (!track) return { healthy: false, reason: "no_track" };
+    if (!s.hasStarted) return { healthy: false, reason: "not_started" };
+
+    const audio = audioRef.current;
+    if (!audio) return { healthy: false, reason: "no_audio_element" };
+    if (audio.ended) return { healthy: false, reason: "ended" };
+
+    const ctx = audioCtxRef.current;
+    if (ctx?.state === "suspended") {
+      return { healthy: false, reason: "audio_context_suspended" };
+    }
+    if (ctx && ctx.state !== "running") {
+      return { healthy: false, reason: "audio_context_not_running" };
+    }
+
+    if (!resumeAfter) {
+      return { healthy: true, reason: "transport_ok_paused" };
+    }
+
+    updateAudibilitySample(audio, audibilitySampleRef);
+    const params = getAudibilityParams();
+    if (isAudioActuallyAudible(params)) {
+      return { healthy: true, reason: "audible" };
+    }
+
+    if (audio.paused) {
+      return { healthy: false, reason: "paused_expected_playing" };
+    }
+    if (audio.readyState < 2) {
+      return { healthy: false, reason: "not_ready" };
+    }
+
+    return { healthy: false, reason: "not_audible" };
+  }, [getAudibilityParams]);
+
   const tracePlayback = useCallback((type, source, extra = {}) => {
     const t = stateRef.current.currentTrack;
     logPlaybackEvent({
@@ -4222,6 +4261,24 @@ export function AudioProvider({ children }) {
               }
             }
 
+            const health = evaluateLifecyclePlaybackHealth({ resumeAfter });
+            if (health.healthy) {
+              if (isPlaybackTraceEnabled()) {
+                logPlaybackEvent({
+                  type: "LIFECYCLE_HEALTHY_SKIP_RECOVERY",
+                  source: "visibility_return",
+                  extra: { reason: health.reason, resumeAfter },
+                });
+              }
+              logPlayback("LIFECYCLE_HEALTHY_SKIP_RECOVERY", {
+                trigger: "visibility_return",
+                reason: health.reason,
+                resumeAfter,
+              });
+              syncMediaAfterLifecycle();
+              return;
+            }
+
             await runCoalescedLifecycleRecovery({
               reason: "visibility_return",
               resumeAfter,
@@ -4248,9 +4305,28 @@ export function AudioProvider({ children }) {
           wasPlayingBeforeHideRef.current ||
           (s.isPlaying && !userPausedRef.current);
         wasPlayingBeforeHideRef.current = false;
+        const resumeAfter = wasPlaying && isEntitledFullPlaybackTrack(track);
+        const health = evaluateLifecyclePlaybackHealth({ resumeAfter });
+        if (health.healthy) {
+          if (isPlaybackTraceEnabled()) {
+            logPlaybackEvent({
+              type: "BFCACHE_HEALTHY_SKIP_RECOVERY",
+              source: "pageshow",
+              extra: { reason: health.reason, resumeAfter },
+            });
+          }
+          logPlayback("BFCACHE_HEALTHY_SKIP_RECOVERY", {
+            trigger: "bfcache_restore",
+            reason: health.reason,
+            resumeAfter,
+          });
+          rehydrateMediaSession();
+          syncPositionState(true);
+          return;
+        }
         void runCoalescedLifecycleRecovery({
           reason: "bfcache_restore",
-          resumeAfter: wasPlaying && isEntitledFullPlaybackTrack(track),
+          resumeAfter,
           trigger: "bfcache_restore",
         }).then(() => {
           rehydrateMediaSession();
@@ -4309,6 +4385,7 @@ export function AudioProvider({ children }) {
       bfcacheRecoveryInProgressRef.current = false;
     };
   }, [
+    evaluateLifecyclePlaybackHealth,
     rehydrateMediaSession,
     runCoalescedLifecycleRecovery,
     updateMediaSession,
