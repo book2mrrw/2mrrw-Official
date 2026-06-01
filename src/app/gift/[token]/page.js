@@ -72,7 +72,11 @@ export default function GiftClaimPage() {
         return;
       }
       if (!res.ok) throw new Error(data.message || data.error || "Could not claim gift");
-      await refreshAccountState();
+      await refreshAccountState({
+        reason: "purchase:completed",
+        source: "gift/[token]",
+        force: true,
+      });
       beginReveal(data);
     } catch (err) {
       setError(err.message);

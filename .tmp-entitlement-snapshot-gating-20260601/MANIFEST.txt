@@ -1,0 +1,19 @@
+ENTITLEMENT_SNAPSHOT_ARCHITECTURE.md
+REFRESH_GATING_RULES.md
+ACCOUNT_STATE_DEBOUNCE_FLOW.md
+EVENT_INVALIDATION_MAP.md
+PLAYBACK_IMPACT_ANALYSIS.md
+MANIFEST.txt
+
+Source changes:
+src/context/AuthContext.js
+src/lib/auth/entitlement-refresh-gating.js
+src/lib/diagnostics/state-churn-log.js
+src/app/page.js
+src/app/success/page.js
+src/app/subscribe/page.js
+src/hooks/useMusicLibrary.js
+src/components/collectors-cards/CollectorCardModal.js
+src/components/collectors-cards/CollectorsCardsGrid.js
+src/app/collector/activate/page.js
+src/app/gift/[token]/page.js

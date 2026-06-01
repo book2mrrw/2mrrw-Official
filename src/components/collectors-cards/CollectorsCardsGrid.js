@@ -24,7 +24,7 @@ export function CollectorsCardsGrid() {
 
   const handlePurchaseComplete = (slug) => {
     decrement(slug);
-    void refreshAccountState();
+    void refreshAccountState({ reason: "collector:updated", source: "CollectorsCardsGrid" });
   };
 
   useEffect(() => {

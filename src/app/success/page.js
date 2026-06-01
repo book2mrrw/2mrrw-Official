@@ -83,7 +83,7 @@ function SuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session_id");
-  const { refreshLibrary, refreshAccountState } = useAuth();
+  const { refreshLibrary, refreshAccountState, invalidateEntitlementSnapshot } = useAuth();
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -116,9 +116,13 @@ function SuccessContent() {
           if (cancelled) return;
           if (attempt > 0) await sleep(SUCCESS_POLL_DELAYS_MS[attempt - 1]);
 
+          if (attempt === 0) {
+            invalidateEntitlementSnapshot("purchase:completed");
+          }
           const account = await refreshAccountState({
             source: "success/page",
-            reason: attempt === 0 ? "initial" : `poll-${attempt}`,
+            reason: "purchase:completed",
+            force: true,
           });
           await refreshLibrary({
             source: "success/page",
@@ -174,7 +178,7 @@ function SuccessContent() {
     return () => {
       cancelled = true;
     };
-  }, [sessionId, refreshLibrary, refreshAccountState, searchParams]);
+  }, [sessionId, refreshLibrary, refreshAccountState, invalidateEntitlementSnapshot, searchParams]);
 
   useEffect(() => {
     if (loading) return undefined;

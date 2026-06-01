@@ -20,7 +20,8 @@ async function pollSubscriptionAccountState(refreshAccountState, source) {
     }
     const data = await refreshAccountState?.({
       source,
-      reason: attempt === 0 ? "initial" : `poll-${attempt}`,
+      reason: "subscription:updated",
+      force: true,
     });
     if (!data) continue;
     const { isSubscriber, isLifetimeOwner } = resolveSubscriptionEntitlements(data, data.membership);

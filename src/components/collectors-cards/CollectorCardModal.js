@@ -111,7 +111,10 @@ export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurch
 
   const handleCheckoutSuccess = async (paymentIntentId) => {
     await confirmCollectorPurchase(paymentIntentId);
-    await Promise.all([refreshAccountState(), refreshLibrary()]);
+    await Promise.all([
+      refreshAccountState({ reason: "collector:updated", source: "CollectorCardModal", force: true }),
+      refreshLibrary({ reason: "collector:updated", source: "CollectorCardModal" }),
+    ]);
     onPurchaseComplete?.(card.slug);
     resetPayment();
     onClose();

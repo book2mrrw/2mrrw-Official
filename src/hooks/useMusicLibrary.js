@@ -20,8 +20,8 @@ export function useMusicLibrary({ singles = [], albums = [], mixtapesAndEps = []
   const accountState = useEntitlementAccountState();
 
   const refresh = useCallback(async () => {
-    await refreshAccountState();
-    await refreshLibrary();
+    await refreshAccountState({ reason: "library:change", source: "useMusicLibrary" });
+    await refreshLibrary({ reason: "library:change", source: "useMusicLibrary" });
   }, [refreshAccountState, refreshLibrary]);
 
   const recentlyPlayed = useMemo(() => {

@@ -51,7 +51,11 @@ export default function CollectorActivatePage() {
           return;
         }
         setSuccess(data);
-        await refreshAccountState?.();
+        await refreshAccountState?.({
+          reason: "collector:updated",
+          source: "collector/activate",
+          force: true,
+        });
       } catch (err) {
         setError(err.message || "Activation failed.");
       } finally {

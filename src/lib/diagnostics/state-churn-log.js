@@ -38,6 +38,23 @@ export function logStateChurn(kind, meta = {}) {
 }
 
 /**
+ * Dev-only log when refreshAccountState skips a network fetch.
+ * @param {{ reason?: string, blockReason?: string, source?: string, [key: string]: unknown }} [meta]
+ */
+export function logEntitlementRefreshBlocked(meta = {}) {
+  if (!isStateChurnLogEnabled()) return;
+  const { source = "unknown", reason = "", blockReason = "unknown", ...rest } = meta;
+  // eslint-disable-next-line no-console
+  console.debug("[ENTITLEMENT-REFRESH-BLOCKED]", {
+    source,
+    reason,
+    blockReason,
+    ts: Date.now(),
+    ...rest,
+  });
+}
+
+/**
  * Dev-only playback / stream / queue / media-session failure diagnostics.
  * Same enable/disable flag as logStateChurn.
  *

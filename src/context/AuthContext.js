@@ -9,7 +9,14 @@ import {
   ownedSlugsArraysEqual,
   slugSetsEqual,
 } from "@/lib/auth/state-equality";
-import { logStateChurn } from "@/lib/diagnostics/state-churn-log";
+import {
+  buildEntitlementSnapshot,
+  ENTITLEMENT_REFRESH_DEBOUNCE_MS,
+  ENTITLEMENT_RENDER_LOOP_MS,
+  normalizeRefreshReason,
+  snapshotToAccountPayload,
+} from "@/lib/auth/entitlement-refresh-gating";
+import { logEntitlementRefreshBlocked, logStateChurn } from "@/lib/diagnostics/state-churn-log";
 
 const EMPTY_ACCOUNT_STATE = {
   library: [],
@@ -49,6 +56,9 @@ export const DEFAULT_AUTH_CONTEXT = {
   refreshLibrary: noopAsync,
   refreshAccountState: noopAsync,
   applySessionUser: noopAsync,
+  getEntitlementSnapshot: () => null,
+  invalidateEntitlementSnapshot: noop,
+  entitlementSnapshotVersion: 0,
 };
 
 const AuthContext = createContext(DEFAULT_AUTH_CONTEXT);
@@ -74,13 +84,23 @@ export function AuthProvider({ children }) {
   const [accountState, setAccountState] = useState(EMPTY_ACCOUNT_STATE);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [entitlementSnapshotVersion, setEntitlementSnapshotVersion] = useState(0);
 
   const sessionBootstrappedRef = useRef(false);
   const accountStateFetchingRef = useRef(false);
+  const accountStateInFlightRef = useRef(null);
   const signedInUserIdRef = useRef(null);
   const applySessionUserRef = useRef(null);
   const refreshAccountStateRef = useRef(null);
   const refreshGuestRef = useRef(null);
+  const accountStateRef = useRef(EMPTY_ACCOUNT_STATE);
+
+  const entitlementSnapshotRef = useRef(null);
+  const lastRefreshReasonRef = useRef({ reason: null, at: 0 });
+
+  useEffect(() => {
+    accountStateRef.current = accountState;
+  }, [accountState]);
 
   const applyAccountPayload = useCallback((data = {}) => {
     const items = data.library || data.items || [];
@@ -125,6 +145,38 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
+  const commitEntitlementSnapshot = useCallback((data, userId) => {
+    const prevVersion = entitlementSnapshotRef.current?.version ?? 0;
+    entitlementSnapshotRef.current = buildEntitlementSnapshot(data, userId, prevVersion);
+    setEntitlementSnapshotVersion(entitlementSnapshotRef.current.version);
+  }, []);
+
+  const getEntitlementSnapshot = useCallback(() => {
+    const snap = entitlementSnapshotRef.current;
+    if (!snap) return null;
+    return { ...snap, ownedSlugs: [...snap.ownedSlugs], permissions: { ...snap.permissions } };
+  }, []);
+
+  const invalidateEntitlementSnapshot = useCallback((reason = "manual") => {
+    logStateChurn("invalidateEntitlementSnapshot", {
+      source: "AuthContext",
+      reason: reason || "manual",
+    });
+    if (entitlementSnapshotRef.current) {
+      entitlementSnapshotRef.current = {
+        ...entitlementSnapshotRef.current,
+        lastUpdated: 0,
+      };
+    }
+    lastRefreshReasonRef.current = { reason: null, at: 0 };
+  }, []);
+
+  const clearEntitlementSnapshot = useCallback(() => {
+    entitlementSnapshotRef.current = null;
+    lastRefreshReasonRef.current = { reason: null, at: 0 };
+    setEntitlementSnapshotVersion(0);
+  }, []);
+
   const refreshLibrary = useCallback(async (meta = {}) => {
     logStateChurn("refreshLibrary", {
       source: meta.source || "AuthContext",
@@ -153,52 +205,142 @@ export function AuthProvider({ children }) {
     });
   }, []);
 
-  const refreshAccountState = useCallback(async (meta = {}) => {
-    logStateChurn("refreshAccountState", {
-      source: meta.source || "AuthContext",
-      reason: meta.reason || "invoke",
-    });
-    if (accountStateFetchingRef.current) return null;
-    accountStateFetchingRef.current = true;
+  const evaluateRefreshGate = useCallback((meta = {}) => {
+    const source = meta.source || "AuthContext";
+    const force = Boolean(meta.force);
+    const canonicalReason = normalizeRefreshReason(meta);
 
-    try {
-      const res = await fetch("/api/account/state", {
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        if (res.status === 401) {
-          setUser(null);
-          setIsAdmin(false);
-          setLibrary([]);
-          setOwnedSlugs(new Set());
-          setAccountState(EMPTY_ACCOUNT_STATE);
-        }
-        return null;
-      }
-      const data = await res.json();
-      if (data.user) {
-        const resolved = resolveUserFromSession({ user: data.user });
-        const serverIsGuest = Boolean(data.user.isGuest);
-        const adminFromServer = Boolean(data.permissions?.admin) || Boolean(resolved?.isAdmin);
-
-        if (serverIsGuest) {
-          setUser((prev) => (prev && !prev.isGuest ? prev : data.user));
-          setIsAdmin((prev) => (prev === adminFromServer ? prev : adminFromServer));
-        } else {
-          setUser((prev) => (prev?.id === data.user.id ? prev : data.user));
-          setIsAdmin((prev) => (prev === adminFromServer ? prev : adminFromServer));
-        }
-      }
-      applyAccountPayload(data);
-      return data;
-    } catch (err) {
-      console.error("[account/state] fetch failed:", err);
-      return null;
-    } finally {
-      accountStateFetchingRef.current = false;
+    if (!canonicalReason) {
+      return {
+        blocked: true,
+        blockReason: "reason-not-allowlisted",
+        canonicalReason: null,
+        source,
+      };
     }
-  }, [applyAccountPayload]);
+
+    if (force) {
+      return { blocked: false, blockReason: null, canonicalReason, source };
+    }
+
+    const now = Date.now();
+    const snap = entitlementSnapshotRef.current;
+    if (snap?.lastUpdated && now - snap.lastUpdated < ENTITLEMENT_REFRESH_DEBOUNCE_MS) {
+      return {
+        blocked: true,
+        blockReason: "debounce-10s",
+        canonicalReason,
+        source,
+      };
+    }
+
+    const last = lastRefreshReasonRef.current;
+    if (
+      last.reason === canonicalReason &&
+      now - last.at < ENTITLEMENT_RENDER_LOOP_MS
+    ) {
+      return {
+        blocked: true,
+        blockReason: "render-loop",
+        canonicalReason,
+        source,
+      };
+    }
+
+    return { blocked: false, blockReason: null, canonicalReason, source };
+  }, []);
+
+  const refreshAccountState = useCallback(
+    async (options = {}) => {
+      const meta =
+        options && typeof options === "object"
+          ? options
+          : { reason: typeof options === "string" ? options : undefined };
+
+      const gate = evaluateRefreshGate(meta);
+      const logReason = gate.canonicalReason || meta.reason || "invoke";
+
+      logStateChurn("refreshAccountState", {
+        source: meta.source || "AuthContext",
+        reason: logReason,
+        force: Boolean(meta.force),
+        blocked: gate.blocked,
+        blockReason: gate.blockReason,
+      });
+
+      if (gate.blocked) {
+        logEntitlementRefreshBlocked({
+          source: gate.source,
+          reason: logReason,
+          blockReason: gate.blockReason,
+        });
+        return snapshotToAccountPayload(entitlementSnapshotRef.current, accountStateRef.current);
+      }
+
+      if (accountStateInFlightRef.current) {
+        logEntitlementRefreshBlocked({
+          source: meta.source || "AuthContext",
+          reason: logReason,
+          blockReason: "duplicate-in-flight",
+        });
+        return accountStateInFlightRef.current;
+      }
+
+      lastRefreshReasonRef.current = {
+        reason: gate.canonicalReason,
+        at: Date.now(),
+      };
+
+      accountStateFetchingRef.current = true;
+
+      const fetchPromise = (async () => {
+        try {
+          const res = await fetch("/api/account/state", {
+            credentials: "include",
+            cache: "no-store",
+          });
+          if (!res.ok) {
+            if (res.status === 401) {
+              setUser(null);
+              setIsAdmin(false);
+              setLibrary([]);
+              setOwnedSlugs(new Set());
+              setAccountState(EMPTY_ACCOUNT_STATE);
+              clearEntitlementSnapshot();
+            }
+            return snapshotToAccountPayload(entitlementSnapshotRef.current, accountStateRef.current);
+          }
+          const data = await res.json();
+          if (data.user) {
+            const resolved = resolveUserFromSession({ user: data.user });
+            const serverIsGuest = Boolean(data.user.isGuest);
+            const adminFromServer = Boolean(data.permissions?.admin) || Boolean(resolved?.isAdmin);
+
+            if (serverIsGuest) {
+              setUser((prev) => (prev && !prev.isGuest ? prev : data.user));
+              setIsAdmin((prev) => (prev === adminFromServer ? prev : adminFromServer));
+            } else {
+              setUser((prev) => (prev?.id === data.user.id ? prev : data.user));
+              setIsAdmin((prev) => (prev === adminFromServer ? prev : adminFromServer));
+            }
+          }
+          applyAccountPayload(data);
+          commitEntitlementSnapshot(data, data.user?.id ?? signedInUserIdRef.current);
+          return data;
+        } catch (err) {
+          console.error("[account/state] fetch failed:", err);
+          return snapshotToAccountPayload(entitlementSnapshotRef.current, accountStateRef.current);
+        } finally {
+          accountStateFetchingRef.current = false;
+          accountStateInFlightRef.current = null;
+        }
+      })();
+
+      accountStateInFlightRef.current = fetchPromise;
+      return fetchPromise;
+    },
+    [applyAccountPayload, clearEntitlementSnapshot, commitEntitlementSnapshot, evaluateRefreshGate]
+  );
 
   const refreshGuest = useCallback(async () => {
     const res = await fetch("/api/guest/session", { credentials: "include" });
@@ -207,21 +349,23 @@ export function AuthProvider({ children }) {
       setLibrary([]);
       setOwnedSlugs(new Set());
       setAccountState(EMPTY_ACCOUNT_STATE);
+      clearEntitlementSnapshot();
       return null;
     }
     const data = await res.json();
     setUser(data.user || null);
     if (data.user) {
       setIsAdmin(isAdminUser(data.user));
-      await refreshAccountState();
+      await refreshAccountState({ reason: "auth:bootstrap", source: "AuthContext:refreshGuest" });
     } else {
       setIsAdmin(false);
       setLibrary([]);
       setOwnedSlugs(new Set());
       setAccountState(EMPTY_ACCOUNT_STATE);
+      clearEntitlementSnapshot();
     }
     return data.user || null;
-  }, [refreshAccountState]);
+  }, [clearEntitlementSnapshot, refreshAccountState]);
 
   const applySessionUser = useCallback(
     async (session) => {
@@ -231,12 +375,16 @@ export function AuthProvider({ children }) {
       setUser(resolved.user);
       setIsAdmin(resolved.isAdmin);
       await clearGuestSessionCookie();
-      await refreshAccountState();
+      invalidateEntitlementSnapshot("auth:login");
+      await refreshAccountState({
+        reason: "auth:login",
+        source: "AuthContext:applySessionUser",
+        force: true,
+      });
       return resolved.user;
     },
-    [refreshAccountState]
+    [invalidateEntitlementSnapshot, refreshAccountState]
   );
-
 
   applySessionUserRef.current = applySessionUser;
   refreshAccountStateRef.current = refreshAccountState;
@@ -252,9 +400,9 @@ export function AuthProvider({ children }) {
       setLibrary([]);
       setOwnedSlugs(new Set());
       setAccountState(EMPTY_ACCOUNT_STATE);
+      clearEntitlementSnapshot();
     };
 
-    // Bootstrap once per provider lifetime; authService.bootstrapSession is module-singleton.
     if (!sessionBootstrappedRef.current) {
       sessionBootstrappedRef.current = true;
       (async () => {
@@ -262,14 +410,18 @@ export function AuthProvider({ children }) {
           const { session: resolvedSession } = await bootstrapSession();
           if (!mounted) return;
 
-          // SAFETY: user state only from Supabase session (authService) — never device-trust localStorage.
           const resolved = resolveUserFromSession(resolvedSession);
           if (resolved) {
             signedInUserIdRef.current = resolved.user.id;
             setUser(resolved.user);
             setIsAdmin(resolved.isAdmin);
             await clearGuestSessionCookie();
-            await refreshAccountStateRef.current?.();
+            invalidateEntitlementSnapshot("auth:bootstrap");
+            await refreshAccountStateRef.current?.({
+              reason: "auth:bootstrap",
+              source: "AuthContext:bootstrap",
+              force: true,
+            });
           } else {
             signedInUserIdRef.current = null;
             await refreshGuestRef.current?.();
@@ -281,18 +433,15 @@ export function AuthProvider({ children }) {
         if (mounted) setLoading(false);
       });
     } else if (mounted) {
-      // Strict Mode remount: bootstrap already ran; restore loading gate without re-fetch storm.
       setLoading(false);
     }
 
-    // Always subscribe — Strict Mode cleanup must not leave the app without auth listeners.
     const unsubscribe = subscribeAuthState(async (event, session) => {
       if (!mounted) return;
       if (event === "SIGNED_OUT") {
         clearAuthenticatedState();
         return;
       }
-      // Silent reauth: background token refresh must not flash login or re-fetch entitlements.
       if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
         return;
       }
@@ -308,7 +457,7 @@ export function AuthProvider({ children }) {
       mounted = false;
       unsubscribe();
     };
-  }, []);
+  }, [clearEntitlementSnapshot, invalidateEntitlementSnapshot]);
 
   const enterGuest = useCallback(async ({ email, phone, name }) => {
     const res = await fetch("/api/guest/session", {
@@ -321,7 +470,12 @@ export function AuthProvider({ children }) {
     if (!res.ok) throw new Error(data.error || "Could not enter");
     setUser(data.user);
     setIsAdmin(isAdminUser(data.user));
-    await refreshAccountState();
+    invalidateEntitlementSnapshot("auth:login");
+    await refreshAccountState({
+      reason: "auth:login",
+      source: "AuthContext:enterGuest",
+      force: true,
+    });
     if (typeof window !== "undefined") {
       const redirect = sessionStorage.getItem("postAuthRedirect");
       if (redirect) {
@@ -331,7 +485,7 @@ export function AuthProvider({ children }) {
       }
     }
     return data.user;
-  }, [refreshAccountState]);
+  }, [invalidateEntitlementSnapshot, refreshAccountState]);
 
   const signOut = useCallback(async () => {
     try {
@@ -350,7 +504,8 @@ export function AuthProvider({ children }) {
     setLibrary([]);
     setOwnedSlugs(new Set());
     setAccountState(EMPTY_ACCOUNT_STATE);
-  }, []);
+    clearEntitlementSnapshot();
+  }, [clearEntitlementSnapshot]);
 
   const markAdmin = useCallback((nextUser) => {
     if (isAdminUser(nextUser)) setIsAdmin(true);
@@ -409,6 +564,9 @@ export function AuthProvider({ children }) {
     refreshLibrary,
     refreshAccountState,
     applySessionUser,
+    getEntitlementSnapshot,
+    invalidateEntitlementSnapshot,
+    entitlementSnapshotVersion,
   }), [
     user,
     library,
@@ -426,6 +584,9 @@ export function AuthProvider({ children }) {
     refreshLibrary,
     refreshAccountState,
     applySessionUser,
+    getEntitlementSnapshot,
+    invalidateEntitlementSnapshot,
+    entitlementSnapshotVersion,
   ]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -437,11 +598,25 @@ export function useAuth() {
   return ctx;
 }
 
+function mergeSnapshotIntoAccountState(accountState, snapshot) {
+  if (!snapshot) return accountState;
+  const next = {
+    ...accountState,
+    ownedSlugs: snapshot.ownedSlugs,
+    subscriberActive: snapshot.subscriberActive,
+    collectorCard: snapshot.collectorCard,
+    vaultAccess: snapshot.vaultAccess,
+    permissions: { ...snapshot.permissions },
+  };
+  return accountStateShallowEqual(accountState, next) ? accountState : next;
+}
+
 /** Empty entitlements while session bootstrap runs — avoids stale guest/partial state. */
 export function useEntitlementAccountState() {
-  const { accountState, loading } = useAuth();
-  return useMemo(
-    () => (loading ? EMPTY_ACCOUNT_STATE : accountState),
-    [loading, accountState]
-  );
+  const { accountState, loading, getEntitlementSnapshot, entitlementSnapshotVersion } = useAuth();
+  return useMemo(() => {
+    if (loading) return EMPTY_ACCOUNT_STATE;
+    const snapshot = getEntitlementSnapshot();
+    return mergeSnapshotIntoAccountState(accountState, snapshot);
+  }, [loading, accountState, getEntitlementSnapshot, entitlementSnapshotVersion]);
 }
