@@ -11,7 +11,7 @@ import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 
 export default function ReleaseCardPlayButton({ item, accountState, userId, source = "home_card", onPlayClick }) {
-  const { playQueue, toggle, currentTrack, isPlaying, hasStarted, upgradeToFullStream } = useAudioPlayer();
+  const { dispatchPlaybackCommand, toggle, currentTrack, isPlaying, hasStarted } = useAudioPlayer();
   const upgradeTimerRef = useRef(null);
   const lastTapRef = useRef(0);
 
@@ -63,12 +63,12 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         return;
       }
       if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
-      void playQueue([track], 0);
+      void dispatchPlaybackCommand("playQueue", { tracks: [track], startIndex: 0 });
       const needsPreviewUpgrade =
         track.metadata?.access?.canStream && track.metadata?.access?.previewOnly;
       if (needsPreviewUpgrade) {
         upgradeTimerRef.current = setTimeout(() => {
-          void upgradeToFullStream();
+          void dispatchPlaybackCommand("upgradeStream");
         }, 2000);
       }
     },
@@ -76,13 +76,12 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
       accountState,
       currentTrack?.id,
       currentTrack?.slug,
+      dispatchPlaybackCommand,
       hasStarted,
       item,
       onPlayClick,
-      playQueue,
       source,
       toggle,
-      upgradeToFullStream,
       userId,
     ]
   );

@@ -36,7 +36,16 @@ export default function AlbumTracklistSheet({
   onClose,
   onLibraryChange,
 }) {
-  const { playQueue, toggle, currentTrack, isPlaying, hasStarted, setShuffle, seekBack, seekForward } = useAudioPlayer();
+  const {
+    dispatchPlaybackCommand,
+    toggle,
+    currentTrack,
+    isPlaying,
+    hasStarted,
+    setShuffle,
+    seekBack,
+    seekForward,
+  } = useAudioPlayer();
   const dragY = useMotionValue(0);
   const sheetOpacity = useTransform(dragY, [0, 120], [1, 0.55]);
   const dismissTriggered = useRef(false);
@@ -74,16 +83,16 @@ export default function AlbumTracklistSheet({
       if (shuffle) {
         setShuffle(true);
         const order = [...playable].sort(() => Math.random() - 0.5);
-        void playQueue(order, 0);
+        void dispatchPlaybackCommand("playQueue", { tracks: order, startIndex: 0 });
       } else {
         setShuffle(false);
         const sourceTrack = tracks[releaseTrackIndex];
         const queueIndex = resolveReleaseQueueStartIndex(playable, releaseTrackIndex, sourceTrack);
-        void playQueue(playable, queueIndex);
+        void dispatchPlaybackCommand("playQueue", { tracks: playable, startIndex: queueIndex });
       }
       onClose?.();
     },
-    [tracks, accountState, userId, playQueue, setShuffle, onClose]
+    [tracks, accountState, userId, dispatchPlaybackCommand, setShuffle, onClose]
   );
 
   const isTrackActive = useCallback(

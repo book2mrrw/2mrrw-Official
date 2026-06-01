@@ -1,0 +1,40 @@
+Phase 7 — Playback Stability Conflict Audit
+Repository: /Users/recharge/artist-platform
+HEAD: 34df1346060685ea2e7d5bfd434f8f91c6087f90
+Date: 2026-06-01
+Mode: READ-ONLY (no code changes)
+
+Deliverables:
+  PHASE7_CONFLICT_MAP.md          — Inventory A–G, conflict matrix, lifecycle/false reload
+  PLAYBACK_CONTROLLER_AUTHORITY_GRAPH.md — Mermaid authority graph, call-path tables
+  STATE_OF_TRUTH_MATRIX.md        — SOT vs mirror vs shadow per state field
+  RENDER_VS_AUDIO_DESYNC_REPORT.md — nowPlaying, bridge, churn, IO closures
+  TOP_5_ROOT_CONFLICTS.md         — Ranked conflicts + executive one-liner
+  MANIFEST.txt                    — This file
+
+Zip output (requested):
+  /Users/recharge/Downloads/phase7-playback-stability-conflict-audit-20260601.zip
+
+Key source files read:
+  src/context/AudioContext.js
+  src/context/AuthContext.js
+  src/app/page.js
+  src/components/system/AudioPhase10Bridge.js
+  src/system/recovery/useSessionRecovery.js
+  src/system/recovery/usePlaybackRecovery.js
+  src/lib/playback/stream-client.js
+  src/lib/playback/focus-controller.js (orphaned)
+  src/lib/diagnostics/playback-trace.js
+  src/media/useMediaEngine.js
+  src/app/layout.js
+
+Prior audits referenced:
+  .tmp-phase5b-playback-death-admin-hydration-20260531/
+  .tmp-phase6b-final-viewport-safe-resume-20260531/
+  .tmp-phase6c-playback-interruption-trace-20260531/
+
+Phase 6B status: APPROVED — enter/exit AudioVisual viewport in AudioContext; focus-controller superseded.
+
+Top conflict one-liner:
+  Viewport resume bypasses the serial playback command queue and races visibility RECOVER,
+  onPause auto-resume, and stream abort — intermittent stop/no-resume on AV scroll.

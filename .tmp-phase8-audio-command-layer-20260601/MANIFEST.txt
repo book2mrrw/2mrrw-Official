@@ -1,0 +1,19 @@
+Phase 8 — Audio Playback Authority Lock
+Date: 2026-06-01
+HEAD: 34df134
+
+Documentation:
+  PHASE8_AUDIO_COMMAND_LAYER.md
+  PLAYBACK_AUTHORITY_ENFORCEMENT_MAP.md
+  DIRECT_CALL_VIOLATION_REPORT.md
+  SAFE_MIGRATION_PLAN.md
+  MANIFEST.txt
+
+Code touched:
+  src/context/AudioContext.js
+  src/lib/diagnostics/playback-trace.js
+  src/components/system/AudioPhase10Bridge.js
+
+Reference (read-only):
+  .tmp-phase7-playback-stability-conflict-audit-20260601/PHASE7_CONFLICT_MAP.md
+  .tmp-phase7-playback-stability-conflict-audit-20260601/TOP_5_ROOT_CONFLICTS.md

@@ -1,0 +1,18 @@
+Phase 9 — Playback Single Authority Enforcement
+Generated: 2026-06-01
+
+Documents:
+  PLAYBACK_SINGLE_AUTHORITY_RULES.md
+  PLAYBACK_INTENT_ARCHITECTURE.md
+  VIOLATION_TRACE_MAP.md
+  REACT_PLAYBACK_SIDE_EFFECT_CLEANUP.md
+  MANIFEST.txt
+
+Code touched:
+  src/lib/diagnostics/playback-trace.js
+  src/lib/playback/resolve-playback-intent.js (new)
+  src/context/AudioContext.js
+  src/components/music/ReleaseCardPlayButton.js
+  src/components/music/AlbumTracklistSheet.js
+
+Builds on Phase 8 dispatchPlaybackCommand layer.

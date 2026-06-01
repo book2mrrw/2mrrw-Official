@@ -58,6 +58,37 @@ function captureStack(maxLines = 4) {
   return stack.split("\n").slice(2, 2 + maxLines).join("\n");
 }
 
+const INTERNAL_PLAYBACK_FRAME_RE =
+  /AudioContext\.(js|jsx)|audio-engine-runtime\.js|playback-trace\.js|dispatchPlaybackCommand|executePlaybackCommand|logDirectInternalCallViolation/;
+
+/**
+ * Best-effort caller module from a stack string (Phase 9 authority trace).
+ * @param {string | null | undefined} stack
+ * @returns {{ module: string; action: string }}
+ */
+export function parsePlaybackCallerFromStack(stack) {
+  if (!stack || typeof stack !== "string") {
+    return { module: "unknown", action: "unknown" };
+  }
+  const lines = stack.split("\n").slice(1);
+  for (const line of lines) {
+    if (INTERNAL_PLAYBACK_FRAME_RE.test(line)) continue;
+    const fileMatch = line.match(/\/([^/]+\.(?:js|jsx|ts|tsx)):\d+/);
+    const fnMatch = line.match(/at\s+(?:async\s+)?([^\s(]+)/);
+    if (fileMatch) {
+      return {
+        module: fileMatch[1],
+        action: fnMatch?.[1] || line.trim().slice(0, 120),
+      };
+    }
+  }
+  const fallback = lines.find((l) => l.trim().startsWith("at "));
+  return {
+    module: "unknown",
+    action: fallback?.trim().slice(0, 120) || "unknown",
+  };
+}
+
 /**
  * @param {{
  *   type: string;
@@ -96,6 +127,68 @@ export function logPlaybackEvent({
 export function getLastPlaybackEvents(count = 5) {
   const n = Math.max(1, Math.min(RING_SIZE, count));
   return playbackEventRing.slice(-n);
+}
+
+/**
+ * Phase 9 — structured source trace for playback authority audits (dev/trace only).
+ *
+ * @param {{
+ *   module?: string;
+ *   action?: string;
+ *   reason?: string;
+ *   fn?: string;
+ * }} meta
+ */
+export function logPlaybackSourceTrace(meta = {}) {
+  if (!isPlaybackTraceEnabled()) return;
+  const { module = "unknown", action = "unknown", reason = "unspecified", fn, ...rest } = meta;
+  // eslint-disable-next-line no-console
+  console.debug("[PLAYBACK-SOURCE-TRACE]", {
+    module,
+    action,
+    reason,
+    fn: fn ?? null,
+    timestamp: Date.now(),
+    ...rest,
+  });
+}
+
+/**
+ * Phase 8/9 — log direct internal playback API use from outside command executor (dev/trace only).
+ * Does not block execution.
+ *
+ * @param {string} internalFn
+ * @param {Record<string, unknown>} [extra]
+ */
+export function logPlaybackAuthViolation(internalFn, extra = {}) {
+  if (!isPlaybackTraceEnabled()) return;
+  const stack = typeof extra.stack === "string" ? extra.stack : captureStack(8);
+  const parsed =
+    extra.module && extra.action
+      ? { module: String(extra.module), action: String(extra.action) }
+      : parsePlaybackCallerFromStack(stack);
+  const module = extra.module ?? parsed.module;
+  const action = extra.action ?? parsed.action;
+  const reason =
+    extra.reason ?? "direct_internal_call_outside_command_executor";
+  const payload = {
+    fn: internalFn,
+    module,
+    action,
+    reason,
+    stack,
+    timestamp: Date.now(),
+    ...extra,
+  };
+  // eslint-disable-next-line no-console
+  console.warn("[PLAYBACK-AUTH-VIOLATION]", payload);
+  logPlaybackSourceTrace({
+    module,
+    action,
+    reason,
+    fn: internalFn,
+    violation: true,
+  });
 }
 
 /**
@@ -220,6 +313,33 @@ export function logAudioProviderRender(meta = {}) {
   if (!isPlaybackTraceEnabled()) return;
   // eslint-disable-next-line no-console
   console.debug("[render-churn]", {
+    scope: "AudioProvider",
+    ts: Date.now(),
+    ...meta,
+  });
+}
+
+/**
+ * Phase 10 — engine singleton lifecycle (dev/trace only).
+ * @param {Record<string, unknown>} [meta]
+ */
+export function logPlaybackEngineLifecycle(meta = {}) {
+  if (!isPlaybackTraceEnabled()) return;
+  // eslint-disable-next-line no-console
+  console.debug("[PLAYBACK-ENGINE-LIFECYCLE]", {
+    ts: Date.now(),
+    ...meta,
+  });
+}
+
+/**
+ * Phase 10 — AudioProvider re-render with no playback state mutation (dev/trace only).
+ * @param {Record<string, unknown>} [meta]
+ */
+export function logPlaybackRenderNoImpact(meta = {}) {
+  if (!isPlaybackTraceEnabled()) return;
+  // eslint-disable-next-line no-console
+  console.debug("[PLAYBACK-RENDER-NO-IMPACT]", {
     scope: "AudioProvider",
     ts: Date.now(),
     ...meta,
