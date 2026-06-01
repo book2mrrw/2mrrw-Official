@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { getAuthenticatedUser, sendEmailOtp, formatOtpSendError } from "@/auth/authService";
+import { getAuthenticatedUser, sendEmailOtp, formatOtpSendError, resetOtpEmailIntent, normalizeAuthEmail } from "@/auth/authService";
 import { validateEmail } from "@/lib/auth/validation";
 
 const inputStyle = {
@@ -62,6 +62,17 @@ function LoginForm() {
 
   const nextPath =
     giftToken ? `/gift/${giftToken}` : returnTo && returnTo.startsWith("/") ? returnTo : "/?tab=mymusic";
+
+  const handleEmailChange = (next) => {
+    if (normalizeAuthEmail(next) !== normalizeAuthEmail(email)) {
+      resetOtpEmailIntent(email, { requestId: submitRequestIdRef.current });
+      submitRequestIdRef.current = null;
+      otpSendInFlightRef.current = false;
+      setLoading(false);
+    }
+    setEmail(next);
+    if (emailError) setEmailError("");
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -162,10 +173,7 @@ function LoginForm() {
             placeholder="Email"
             type="email"
             value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              if (emailError) setEmailError("");
-            }}
+            onChange={(e) => handleEmailChange(e.target.value)}
             required
             style={{ ...inputStyle, borderColor: emailError ? "#ef4444" : "#2a2a2a" }}
           />

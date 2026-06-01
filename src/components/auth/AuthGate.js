@@ -1,7 +1,7 @@
 
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { verifyEmailOtp, sendEmailOtp, formatOtpSendError } from "@/auth/authService";
+import { verifyEmailOtp, sendEmailOtp, formatOtpSendError, resetOtpEmailIntent, normalizeAuthEmail } from "@/auth/authService";
 import { writePendingPhone, clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
 import { validateEmail, validatePhone, formatResendCountdown } from "@/lib/auth/validation";
 import { useAuth } from "@/context/AuthContext";
@@ -122,6 +122,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     touchStartYRef.current = null;
     draggingRef.current = false;
     otpAutoSubmittedRef.current = false;
+    otpRequestIdRef.current = null;
   }, []);
   useEffect(() => {
     if (!open) resetForm();
@@ -142,6 +143,17 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     const timer = setInterval(() => setResendIn((v) => Math.max(0, v - 1)), 1000);
     return () => clearInterval(timer);
   }, [screen, resendIn]);
+  const handleEmailChange = (next) => {
+    if (normalizeAuthEmail(next) !== normalizeAuthEmail(email)) {
+      resetOtpEmailIntent(email, { requestId: otpRequestIdRef.current });
+      otpRequestIdRef.current = null;
+      otpSendInFlightRef.current = false;
+      setLoading(false);
+      setOtpSending(false);
+    }
+    setEmail(next);
+    if (emailError) setEmailError("");
+  };
   const sendOtpToEmail = useCallback(async (targetEmail, shouldCreateUser) => {
     if (otpSendInFlightRef.current) return;
     otpSendInFlightRef.current = true;
@@ -543,10 +555,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
                 placeholder="Email"
                 type="email"
                 value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  if (emailError) setEmailError("");
-                }}
+                onChange={(e) => handleEmailChange(e.target.value)}
                 required
                 style={{
                   ...inputStyle,
@@ -606,10 +615,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
                 placeholder="Email"
                 type="email"
                 value={email}
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                  if (emailError) setEmailError("");
-                }}
+                onChange={(e) => handleEmailChange(e.target.value)}
                 required
                 style={{
                   ...inputStyle,

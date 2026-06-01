@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { sendEmailOtp, formatOtpSendError } from "@/auth/authService";
+import { sendEmailOtp, formatOtpSendError, resetOtpEmailIntent, normalizeAuthEmail } from "@/auth/authService";
 import { writePendingPhone } from "@/lib/auth/otp-pending";
 import { validateEmail, validatePhone } from "@/lib/auth/validation";
 
@@ -64,6 +64,17 @@ function JoinForm() {
   }, [giftToken]);
 
   const nextPath = giftToken ? `/gift/${giftToken}` : "/?tab=mymusic";
+
+  const handleEmailChange = (next) => {
+    if (normalizeAuthEmail(next) !== normalizeAuthEmail(email)) {
+      resetOtpEmailIntent(email, { requestId: submitRequestIdRef.current });
+      submitRequestIdRef.current = null;
+      otpSendInFlightRef.current = false;
+      setLoading(false);
+    }
+    setEmail(next);
+    if (emailError) setEmailError("");
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -194,10 +205,7 @@ function JoinForm() {
             placeholder="Email"
             type="email"
             value={email}
-            onChange={(e) => {
-              setEmail(e.target.value);
-              if (emailError) setEmailError("");
-            }}
+            onChange={(e) => handleEmailChange(e.target.value)}
             required
             style={{ ...inputStyle, borderColor: emailError ? "#ef4444" : "#2a2a2a" }}
           />

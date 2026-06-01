@@ -7,4 +7,6 @@ export {
   isOtpRateLimitError,
   formatOtpSendError,
   getOtpCooldownRemainingMs,
+  resetOtpEmailIntent,
+  normalizeAuthEmail,
 } from "@/auth/authService";

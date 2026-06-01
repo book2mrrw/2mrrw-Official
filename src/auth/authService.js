@@ -30,7 +30,7 @@ const otpFlights = new Map();
 /** email → cooldown expiry timestamp (memory) */
 const otpCooldownUntil = new Map();
 
-/** requestId → true (idempotency window) */
+/** `${email}:${requestId}` → timestamp (idempotency window, scoped per email) */
 const otpSeenRequestIds = new Map();
 
 /** Module-level bootstrap guard — survives React Strict Mode remounts. */
@@ -50,8 +50,12 @@ function getSupabase() {
   return supabaseSingleton;
 }
 
-function normalizeEmail(email) {
+export function normalizeAuthEmail(email) {
   return String(email || "").trim().toLowerCase();
+}
+
+function normalizeEmail(email) {
+  return normalizeAuthEmail(email);
 }
 
 /**
@@ -121,12 +125,31 @@ function createRequestId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
-function rememberRequestId(requestId) {
-  otpSeenRequestIds.set(requestId, Date.now());
+function otpRequestKey(email, requestId) {
+  return `${normalizeEmail(email)}:${requestId}`;
+}
+
+function rememberRequestId(email, requestId) {
+  otpSeenRequestIds.set(otpRequestKey(email, requestId), Date.now());
   // Prune entries older than cooldown window
   const cutoff = Date.now() - OTP_COOLDOWN_MS;
   for (const [id, ts] of otpSeenRequestIds) {
     if (ts < cutoff) otpSeenRequestIds.delete(id);
+  }
+}
+
+/**
+ * Drop OTP send context for a prior email when the user changes address.
+ * Cooldown for the previous email is preserved; unrelated emails must not inherit locks.
+ * @param {string} previousEmail
+ * @param {{ requestId?: string }} [options]
+ */
+export function resetOtpEmailIntent(previousEmail, { requestId } = {}) {
+  const key = normalizeEmail(previousEmail);
+  if (!key) return;
+  otpFlights.delete(key);
+  if (requestId) {
+    otpSeenRequestIds.delete(otpRequestKey(key, requestId));
   }
 }
 
@@ -306,8 +329,8 @@ export async function sendEmailOtp({ email, shouldCreateUser = false, requestId 
 
   const id = requestId || createRequestId();
 
-  // Idempotency: duplicate requestId from same user action → silent no-op success
-  if (otpSeenRequestIds.has(id)) {
+  // Idempotency: duplicate requestId for the same email → silent no-op success
+  if (otpSeenRequestIds.has(otpRequestKey(normalized, id))) {
     return { data: null, error: null, deduplicated: true };
   }
 
@@ -328,7 +351,7 @@ export async function sendEmailOtp({ email, shouldCreateUser = false, requestId 
     return otpFlights.get(normalized);
   }
 
-  rememberRequestId(id);
+  rememberRequestId(normalized, id);
 
   const flight = (async () => {
     // Cooldown starts at attempt time — prevents rapid re-fire even on failure
@@ -389,4 +412,6 @@ export const authService = {
   getOtpCooldownRemainingMs,
   isOtpRateLimitError,
   formatOtpSendError,
+  resetOtpEmailIntent,
+  normalizeAuthEmail,
 };
