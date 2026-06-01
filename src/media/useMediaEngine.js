@@ -46,6 +46,11 @@ function readVolume(audioRef) {
   return 1;
 }
 
+function readElementPlaying(audioRef) {
+  const el = audioRef?.current;
+  return Boolean(el && !el.paused && !el.ended);
+}
+
 let _cachedMediaEngineState = null;
 
 function tracksEqual(a, b) {
@@ -119,11 +124,16 @@ function getMediaEngineSnapshot() {
 export function mapAudioContextToMediaEngine(audio) {
   const currentTrack = mapContextTrackToMediaTrack(audio.currentTrack);
   const bridge = getMediaEngineBridge();
+  const bridgePlaying = bridge?.getState?.()?.isPlaying;
+  const isPlaying =
+    typeof bridgePlaying === "boolean"
+      ? bridgePlaying
+      : readElementPlaying(audio.audioRef);
 
   return {
     state: {
       currentTrack,
-      isPlaying: Boolean(audio.isPlaying),
+      isPlaying,
       currentTime: audio.getCurrentTime?.() ?? audio.currentTime ?? 0,
       duration: audio.duration ?? 0,
       volume: readVolume(audio.audioRef),

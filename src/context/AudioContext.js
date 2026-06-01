@@ -327,12 +327,17 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
   });
 }
 
+function isAudioElementPlaying(audio) {
+  return Boolean(audio && !audio.paused && !audio.ended);
+}
+
 async function loadAudioSrcAndPlay(audio, src, { signal, command, requestId, state, context } = {}) {
   await waitAudioSrcReady(audio, src, { signal });
   try {
     perfMark(MARKS.PLAYBACK_AUDIO_PLAY_CALL);
     await audio.play();
     perfMark(MARKS.PLAYBACK_PLAY_PROMISE_RESOLVED);
+    return isAudioElementPlaying(audio);
   } catch (e) {
     reportPlaybackDiagnostic({
       level: e?.name === "AbortError" ? "warn" : "error",
@@ -343,16 +348,18 @@ async function loadAudioSrcAndPlay(audio, src, { signal, command, requestId, sta
       error: e,
       context: { src, ...(context || {}) },
     });
+    return false;
   }
 }
 
 async function playAudioIfNotPaused(audio, isPlaying, { command, requestId, state, context } = {}) {
-  if (!isPlaying) return;
-  if (!audio.paused) return;
+  if (!isPlaying) return true;
+  if (!audio.paused) return true;
   try {
     perfMark(MARKS.PLAYBACK_AUDIO_PLAY_CALL);
     await audio.play();
     perfMark(MARKS.PLAYBACK_PLAY_PROMISE_RESOLVED);
+    return isAudioElementPlaying(audio);
   } catch (e) {
     reportPlaybackDiagnostic({
       level: e?.name === "AbortError" ? "warn" : "error",
@@ -363,6 +370,7 @@ async function playAudioIfNotPaused(audio, isPlaying, { command, requestId, stat
       error: e,
       context,
     });
+    return false;
   }
 }
 
@@ -816,9 +824,34 @@ export function AudioProvider({ children }) {
     );
   }, []);
 
+  const logPlaybackDesyncIfNeeded = useCallback((prev, next) => {
+    const el = audioRef.current;
+    if (!el?.paused || !next.isPlaying) return;
+    if (isPlaybackTraceEnabled()) {
+      console.warn("[PLAYBACK-DESYNC] state.isPlaying but audio.paused", {
+        playbackState: next.playbackState,
+        slug: next.currentTrack?.slug ?? null,
+        command: activeCommandRef.current?.type ?? null,
+        wasPlayingInPrev: Boolean(prev.isPlaying),
+      });
+    }
+  }, []);
+
+  const reconcileIsPlayingWithElement = useCallback((prev, next) => {
+    const el = audioRef.current;
+    if (!next.isPlaying || !el?.paused) return next;
+    logPlaybackDesyncIfNeeded(prev, next);
+    return {
+      ...next,
+      isPlaying: false,
+      playbackState:
+        next.playbackState === "playing" ? "paused" : next.playbackState,
+    };
+  }, [logPlaybackDesyncIfNeeded]);
+
   const patchState = useCallback((patch) => {
     setState((prev) => {
-      const next = { ...prev, ...patch };
+      let next = { ...prev, ...patch };
       const shouldHaveStarted =
         next.hasStarted === false &&
         (next.isPlaying === true || next.playbackState === "ready" || next.playbackState === "playing");
@@ -833,11 +866,11 @@ export function AudioProvider({ children }) {
             context: { reason: "playing_with_hasStarted_false" },
           });
         }
-        return { ...next, hasStarted: true };
+        next = { ...next, hasStarted: true };
       }
-      return next;
+      return reconcileIsPlayingWithElement(prev, next);
     });
-  }, []);
+  }, [reconcileIsPlayingWithElement]);
 
   const stopProgressRaf = useCallback(() => {
     if (progressRafRef.current != null) {
@@ -1107,7 +1140,7 @@ export function AudioProvider({ children }) {
         const volume = el && typeof el.volume === "number" ? el.volume : 1;
         return {
           currentTrack: mapContextTrackToMediaTrack(s.currentTrack),
-          isPlaying: Boolean(s.isPlaying),
+          isPlaying: Boolean(el && !el.paused && !el.ended),
           currentTime: s.currentTime ?? 0,
           duration: s.duration ?? 0,
           volume,
@@ -1338,6 +1371,10 @@ export function AudioProvider({ children }) {
       const track = stateRef.current.currentTrack;
       const previewOnly = track?.metadata?.access?.previewOnly;
 
+      if (stateRef.current.isPlaying) {
+        patchState({ isPlaying: false });
+      }
+
       if (Date.now() < spuriousEndedGuardRef.current) {
         const dur = isFinite(audio.duration) ? audio.duration : 0;
         if (dur > 0 && audio.currentTime >= dur - RESTORE_NEAR_END_BUFFER_SEC) {
@@ -1549,8 +1586,17 @@ export function AudioProvider({ children }) {
               console.error("[AUDIO]", e.name, e.message);
             }
           }
+          if (audio.paused) {
+            patchState({
+              isPlaying: false,
+              error: "Stream unavailable — tap to retry",
+              streamRetryable: true,
+              isBuffering: false,
+              playbackState: "paused",
+            });
+            return;
+          }
           patchState({
-            isPlaying: true,
             error: null,
             streamRetryable: false,
             isBuffering: false,
@@ -1573,13 +1619,13 @@ export function AudioProvider({ children }) {
               null;
             if (previewFallbackSrc) {
               skipPauseInterruptionRef.current = true;
-              await loadAudioSrcAndPlay(audio, previewFallbackSrc);
+              const played = await loadAudioSrcAndPlay(audio, previewFallbackSrc);
               patchState({
-                isPlaying: true,
-                error: null,
+                isPlaying: false,
+                error: played ? null : "Preview unavailable",
                 source: "preview",
-                playbackState: "preview_fallback",
-                hasStarted: true,
+                playbackState: played ? "preview_fallback" : "idle",
+                hasStarted: played,
                 currentTrack: {
                   ...track,
                   src: previewFallbackSrc,
@@ -1935,24 +1981,26 @@ export function AudioProvider({ children }) {
           null;
         if (previewFallbackSrc) {
           skipPauseInterruptionRef.current = true;
-          void loadAudioSrcAndPlay(audio, previewFallbackSrc);
-          patchState({
-            isPlaying: true,
-            error: null,
-            source: "preview",
-            playbackState: "preview_fallback",
-            hasStarted: true,
-            currentTrack: {
-              ...nextTrack,
-              src: previewFallbackSrc,
-              metadata: {
-                ...(nextTrack.metadata || {}),
-                access: {
-                  ...(nextTrack.metadata?.access || {}),
-                  previewOnly: true,
+          void loadAudioSrcAndPlay(audio, previewFallbackSrc).then((played) => {
+            if (requestId !== playRequestIdRef.current) return;
+            patchState({
+              isPlaying: false,
+              error: played ? null : "Preview unavailable",
+              source: "preview",
+              playbackState: played ? "preview_fallback" : "idle",
+              hasStarted: played,
+              currentTrack: {
+                ...nextTrack,
+                src: previewFallbackSrc,
+                metadata: {
+                  ...(nextTrack.metadata || {}),
+                  access: {
+                    ...(nextTrack.metadata?.access || {}),
+                    previewOnly: true,
+                  },
                 },
               },
-            },
+            });
           });
           return;
         }
@@ -2172,16 +2220,25 @@ export function AudioProvider({ children }) {
         spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
         await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal });
         patchState({ hasStarted: true, playbackState: "ready" });
-        await playAudioIfNotPaused(audio, true, {
+        const startedPlay = await playAudioIfNotPaused(audio, true, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
           requestId,
           state: stateRef.current,
           context: { source: nextTrack.source },
         });
+        if (!startedPlay) {
+          patchState({
+            isPlaying: false,
+            error: "Audio playback failed. Try again in a moment.",
+            playbackState: "paused",
+          });
+          void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: false });
+          return false;
+        }
         pendingSeekRef.current = resumeAt;
       } else {
-        if (!audio.paused && stateRef.current.isPlaying) {
-          patchState({ hasStarted: true, isPlaying: true, playbackState: "playing", error: null });
+        if (!audio.paused) {
+          patchState({ hasStarted: true, playbackState: "playing", error: null });
           applyCsToElement(audio, presentation, pendingSeekRef.current || null);
           return true;
         }
@@ -2229,14 +2286,23 @@ export function AudioProvider({ children }) {
       }
 
       if (isSameTrack) {
-        await playAudioIfNotPaused(audio, true, {
+        const played = await playAudioIfNotPaused(audio, true, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
           requestId,
           state: stateRef.current,
           context: { source: nextTrack.source, sameTrack: true },
         });
+        if (!played) {
+          patchState({
+            isPlaying: false,
+            error: "Audio playback failed. Try again in a moment.",
+            playbackState: "paused",
+          });
+          void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: false });
+          return false;
+        }
       }
-      void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: true });
+      void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: !audio.paused });
 
       if (isReplay) {
         sendControlSystemPlaybackEvent(nextTrack, "replay", {
@@ -2245,8 +2311,12 @@ export function AudioProvider({ children }) {
           durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
         });
       }
-      patchState({ isPlaying: true, error: null, hasStarted: true, playbackState: "playing" });
-      return true;
+      patchState({
+        error: null,
+        hasStarted: true,
+        playbackState: audio.paused ? "paused" : "playing",
+      });
+      return !audio.paused;
     } catch (err) {
       const previewFallbackSrc =
         getTrackPreviewSrc(nextTrack) ||
@@ -2266,15 +2336,15 @@ export function AudioProvider({ children }) {
         });
         try {
           skipPauseInterruptionRef.current = true;
-          await loadAudioSrcAndPlay(audio, previewFallbackSrc, {
+          const played = await loadAudioSrcAndPlay(audio, previewFallbackSrc, {
             signal: streamAbortController.signal,
           });
           patchState({
-            isPlaying: true,
-            error: null,
+            isPlaying: false,
+            error: played ? null : "Preview unavailable",
             source: "preview",
-            playbackState: "preview_fallback",
-            hasStarted: true,
+            playbackState: played ? "preview_fallback" : "idle",
+            hasStarted: played,
             currentTrack: {
               ...nextTrack,
               src: previewFallbackSrc,
@@ -2288,7 +2358,7 @@ export function AudioProvider({ children }) {
               },
             },
           });
-          return true;
+          return played;
         } catch (previewErr) {
           console.error("[AudioContext] preview fallback failed", {
             slug: nextTrack?.slug,
@@ -2788,9 +2858,16 @@ export function AudioProvider({ children }) {
       initWebAudio();
       await resumeWebAudioContextIfSuspended(audioCtxRef);
       await audio.play();
+      if (audio.paused) {
+        patchState({
+          isPlaying: false,
+          error: "Audio playback failed. Try again in a moment.",
+          playbackState: "paused",
+        });
+        return false;
+      }
       if (track) void updateMediaSession(track, { playing: true });
       patchState({
-        isPlaying: true,
         error: null,
         accessDenied: false,
         hasStarted: true,
@@ -3779,6 +3856,13 @@ export function AudioProvider({ children }) {
 
   if (isPlaybackTraceEnabled()) {
     renderCountRef.current += 1;
+    const traceAudio = audioRef.current;
+    if (state.isPlaying && traceAudio?.paused) {
+      console.warn("[PLAYBACK-DESYNC] render: state.isPlaying but audio.paused", {
+        playbackState: state.playbackState,
+        slug: state.currentTrack?.slug ?? null,
+      });
+    }
     const deps = {
       userId: user?.id ?? null,
       authLoading,
