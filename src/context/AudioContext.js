@@ -92,6 +92,10 @@ import {
   updateAudibilitySample,
   validatePlaybackTruthIntegrity,
 } from "@/lib/playback/audibility";
+import {
+  playbackStateMachine,
+  PLAYBACK_ORCHESTRATION_EVENTS,
+} from "@/media/PlaybackStateMachine";
 
 const AudioContext = createContext(null);
 
@@ -944,6 +948,16 @@ export function AudioProvider({ children }) {
             isBuffering: true,
             playbackNetworkState: "recovering",
           };
+          queueMicrotask(() => {
+            void playbackStateMachine.transition(
+              PLAYBACK_ORCHESTRATION_EVENTS.AUDIO_DESYNC_DETECTED,
+              {
+                reason: "fatal_audio_desync_invariant",
+                resumeAfter:
+                  !userPausedRef.current && Boolean(next.currentTrack),
+              }
+            );
+          });
         }
       }
       return reconcileIsPlayingWithElement(prev, next);
@@ -2007,7 +2021,10 @@ export function AudioProvider({ children }) {
     await resumeWebAudioContextIfSuspended(audioCtxRef);
     recordAudioContextState(audioCtxRef.current, "playTrack-resume");
     if (!(await ensureWebAudioRunning(audioCtxRef))) {
-      await recoverAudioHardRef.current?.("audio_context_suspended", { resumeAfter: true });
+      await playbackStateMachine.transition(
+        PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
+        { reason: "audio_context_suspended", resumeAfter: true }
+      );
       return false;
     }
     setPreviewEnded(false);
@@ -2919,6 +2936,17 @@ export function AudioProvider({ children }) {
     recoverAudioHardRef.current = recoverAudioHard;
   }, [recoverAudioHard]);
 
+  useEffect(() => {
+    playbackStateMachine.setRecoverExecutor((reason, opts) =>
+      recoverAudioHard(reason, opts)
+    );
+    return () => playbackStateMachine.setRecoverExecutor(null);
+  }, [recoverAudioHard]);
+
+  const requestPlaybackRecovery = useCallback((event, payload) => {
+    return playbackStateMachine.transition(event, payload);
+  }, []);
+
   const resumePlaybackTransport = useCallback(async () => {
     internalPlaybackAuthorityRef.current = true;
     try {
@@ -2929,7 +2957,10 @@ export function AudioProvider({ children }) {
       if (!audio || !track?.src) return false;
 
       if (stateRef.current.hasStarted && stateRef.current.currentTrack) {
-        return recoverAudioHard("session_recovery_transport", { resumeAfter: false });
+        return playbackStateMachine.transition(
+          PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
+          { reason: "session_recovery_transport", resumeAfter: false }
+        );
       }
 
       initWebAudio();
@@ -2962,7 +2993,7 @@ export function AudioProvider({ children }) {
     } finally {
       internalPlaybackAuthorityRef.current = false;
     }
-  }, [initWebAudio, patchState, recoverAudioHard, resolveLibraryStreamForTrack]);
+  }, [initWebAudio, patchState, resolveLibraryStreamForTrack]);
 
   useEffect(() => {
     if (!state.hasStarted) return undefined;
@@ -2988,12 +3019,16 @@ export function AudioProvider({ children }) {
           reason: truth.reason,
           slug: stateRef.current.currentTrack?.slug ?? null,
         });
-        void recoverAudioHard("truth_violation", {
-          resumeAfter:
-            stateRef.current.isPlaying &&
-            !userPausedRef.current &&
-            Boolean(stateRef.current.currentTrack),
-        });
+        void requestPlaybackRecovery(
+          PLAYBACK_ORCHESTRATION_EVENTS.AUDIO_DESYNC_DETECTED,
+          {
+            reason: "truth_violation",
+            resumeAfter:
+              stateRef.current.isPlaying &&
+              !userPausedRef.current &&
+              Boolean(stateRef.current.currentTrack),
+          }
+        );
         return;
       }
 
@@ -3009,12 +3044,16 @@ export function AudioProvider({ children }) {
         readyState: audio.readyState,
         ctxState: audioCtxRef.current?.state ?? null,
       });
-      void recoverAudioHard("silent_desync_detected", {
-        resumeAfter: !userPausedRef.current,
-      });
+      void requestPlaybackRecovery(
+        PLAYBACK_ORCHESTRATION_EVENTS.AUDIO_DESYNC_DETECTED,
+        {
+          reason: "silent_desync_detected",
+          resumeAfter: !userPausedRef.current,
+        }
+      );
     }, AUDIBILITY_WATCHDOG_MS);
     return () => clearInterval(intervalId);
-  }, [getAudibilityParams, recoverAudioHard, state.hasStarted]);
+  }, [getAudibilityParams, requestPlaybackRecovery, state.hasStarted]);
 
   const applyCSModeToTrack = useCallback(
     async (track) => {
@@ -3328,7 +3367,10 @@ export function AudioProvider({ children }) {
       initWebAudio();
       await resumeWebAudioContextIfSuspended(audioCtxRef);
       if (!(await ensureWebAudioRunning(audioCtxRef))) {
-        return recoverAudioHard("audio_context_suspended", { resumeAfter: true });
+        return requestPlaybackRecovery(
+          PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
+          { reason: "audio_context_suspended", resumeAfter: true }
+        );
       }
       await audio.play();
       if (audio.paused) {
@@ -3412,7 +3454,7 @@ export function AudioProvider({ children }) {
     updateMediaSession,
     finalizeStreamSession,
     initWebAudio,
-    recoverAudioHard,
+    requestPlaybackRecovery,
     unlockAudioFromGesture,
     tracePlayback,
     logDirectInternalCallViolation,
@@ -3611,9 +3653,13 @@ export function AudioProvider({ children }) {
         if (command.payload?.hard === false) {
           return resumeInternal();
         }
-        return recoverAudioHard(command.payload?.reason || "recover_command", {
-          resumeAfter: Boolean(command.payload?.resumeAfter ?? true),
-        });
+        return requestPlaybackRecovery(
+          PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
+          {
+            reason: command.payload?.reason || "recover_command",
+            resumeAfter: Boolean(command.payload?.resumeAfter ?? true),
+          }
+        );
       }
       case PLAYBACK_COMMANDS.SEEK:
         seekInternal(command.payload.time);
@@ -3651,7 +3697,7 @@ export function AudioProvider({ children }) {
     playQueueInternal,
     playTrackInternal,
     resumeFromViewport,
-    recoverAudioHard,
+    requestPlaybackRecovery,
     resumeInternal,
     retryStreamPlayback,
     seekInternal,
@@ -4053,10 +4099,14 @@ export function AudioProvider({ children }) {
         wasPlayingBeforeHideRef.current = false;
 
         if (track && stateRef.current.hasStarted) {
-          void recoverAudioHard("visibility_return", {
-            resumeAfter:
-              wasPlayingBeforeHide && isEntitledFullPlaybackTrack(track),
-          }).then(() => {
+          void requestPlaybackRecovery(
+            PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
+            {
+              reason: "visibility_return",
+              resumeAfter:
+                wasPlayingBeforeHide && isEntitledFullPlaybackTrack(track),
+            }
+          ).then(() => {
             if (stateRef.current.currentTrack) {
               void updateMediaSession(stateRef.current.currentTrack, {
                 playing: stateRef.current.isPlaying,
@@ -4081,9 +4131,13 @@ export function AudioProvider({ children }) {
         if (!track || !s.hasStarted) return;
         const wasPlaying = wasPlayingBeforeHideRef.current || s.isPlaying;
         wasPlayingBeforeHideRef.current = false;
-        void recoverAudioHard("bfcache_restore", {
-          resumeAfter: wasPlaying && isEntitledFullPlaybackTrack(track),
-        }).then(() => {
+        void requestPlaybackRecovery(
+          PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
+          {
+            reason: "bfcache_restore",
+            resumeAfter: wasPlaying && isEntitledFullPlaybackTrack(track),
+          }
+        ).then(() => {
           rehydrateMediaSession();
           syncPositionState(true);
         });
@@ -4131,7 +4185,7 @@ export function AudioProvider({ children }) {
     };
   }, [
     rehydrateMediaSession,
-    recoverAudioHard,
+    requestPlaybackRecovery,
     updateMediaSession,
     syncPositionState,
   ]);
@@ -4246,10 +4300,18 @@ export function AudioProvider({ children }) {
     csHoldSavedRef.current = null;
   }, []);
 
+  const playbackOrchestrationState = useSyncExternalStore(
+    (onStoreChange) => playbackStateMachine.subscribe(() => onStoreChange()),
+    () => playbackStateMachine.getState(),
+    () => playbackStateMachine.getState()
+  );
+
   const value = useMemo(() => {
     const { currentTime: _progressTime, ...playbackState } = state;
     return {
       ...playbackState,
+      playbackOrchestrationState,
+      subscribePlaybackOrchestration: playbackStateMachine.subscribe,
       playTrack,
       playQueue,
       setQueue,
@@ -4316,6 +4378,7 @@ export function AudioProvider({ children }) {
     setRepeatMode,
     setShuffle,
     state,
+    playbackOrchestrationState,
     stop,
     toggle,
     toggleRepeat,

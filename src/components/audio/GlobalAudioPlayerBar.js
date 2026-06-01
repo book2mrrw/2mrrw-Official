@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 import { SignaturePlayRing, useImmersivePlayback, usePlayerBodyState } from "@/components/player/ImmersivePlayerEngine";
 import { useMediaEngine } from "@/media/useMediaEngine";
+import { usePlaybackStateMachine } from "@/media/PlaybackStateMachine";
 import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import { useRenderTracker } from "@/lib/dev/useRenderTracker";
@@ -307,6 +308,7 @@ function MiniPlayerDock({
 function GlobalAudioPlayerBar() {
   useBlackscreenMountTrace("GlobalAudioPlayerBar");
   useRenderTracker("GlobalAudioPlayerBar");
+  const playbackOrchestrationState = usePlaybackStateMachine();
   const playback = useImmersivePlayback();
   const {
     state: {
@@ -622,8 +624,14 @@ function GlobalAudioPlayerBar() {
   return (
     <>
       {conflictDialog}
-      {isBuffering && (
-        <div className="player-immersive-buffer-indicator" aria-live="polite" aria-label="Buffering" data-mobile={isMobile ? "1" : undefined} />
+      {(isBuffering || playbackOrchestrationState === "RECOVERING") && (
+        <div
+          className="player-immersive-buffer-indicator"
+          aria-live="polite"
+          aria-label="Buffering"
+          data-mobile={isMobile ? "1" : undefined}
+          data-playback-orchestration={playbackOrchestrationState}
+        />
       )}
       {playbackState === "ended_preview" && currentTrack ? (
         <div className="player-preview-ended-cta" data-mobile={isMobile ? "1" : undefined}>
