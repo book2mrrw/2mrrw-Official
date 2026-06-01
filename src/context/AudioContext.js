@@ -351,6 +351,14 @@ function isLikelyIOS() {
   return /iP(hone|ad|od)/i.test(ua) || (/Macintosh/i.test(ua) && hasTouchDocument);
 }
 
+/** Entitled library stream (not guest/preview-only cap path). */
+function isEntitledFullPlaybackTrack(track) {
+  if (!track) return false;
+  const access = track.metadata?.access;
+  if (access?.previewOnly) return false;
+  return Boolean(access?.canStream);
+}
+
 function dispatchPreviewEnded(slug) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("preview:ended", { detail: { slug } }));
@@ -2825,6 +2833,53 @@ export function AudioProvider({ children }) {
     return false;
   }, [pause, resume]);
 
+  const syncPlaybackUiFromAudioElement = useCallback(
+    ({ wasPlayingBeforeHide = false } = {}) => {
+      const audio = audioRef.current;
+      const track = stateRef.current.currentTrack;
+      if (!audio || !track || !stateRef.current.hasStarted) {
+        return "none";
+      }
+
+      if (!audio.paused) {
+        if (!stateRef.current.isPlaying || stateRef.current.playbackState !== "playing") {
+          patchState({
+            isPlaying: true,
+            playbackState: "playing",
+            isBuffering: false,
+          });
+        }
+        startKeepAlivePing();
+        startProgressRaf();
+        startPositionSaveTimer();
+        void updateMediaSession(track, { playing: true });
+        syncPositionState(true);
+        return "synced-playing";
+      }
+
+      if (
+        wasPlayingBeforeHide &&
+        isEntitledFullPlaybackTrack(track)
+      ) {
+        return "recover";
+      }
+
+      if (stateRef.current.isPlaying) {
+        patchState({ isPlaying: false, playbackState: "paused" });
+        void updateMediaSession(track, { playing: false });
+      }
+      return "synced-paused";
+    },
+    [
+      patchState,
+      startKeepAlivePing,
+      startPositionSaveTimer,
+      startProgressRaf,
+      syncPositionState,
+      updateMediaSession,
+    ]
+  );
+
   useEffect(() => {
     playTrackRef.current = playTrack;
     applyCSModeToTrackRef.current = applyCSModeToTrack;
@@ -2902,7 +2957,7 @@ export function AudioProvider({ children }) {
 
       if (document.visibilityState === "hidden") {
         if (!track || !stateRef.current.hasStarted || !audio) return;
-        wasPlayingBeforeHideRef.current = stateRef.current.isPlaying && !audio.paused;
+        wasPlayingBeforeHideRef.current = !audio.paused;
         const position = audio.currentTime || 0;
         const userId = listeningUserIdRef.current;
         if (userId && track.slug) {
@@ -2941,31 +2996,26 @@ export function AudioProvider({ children }) {
       }
 
       if (document.visibilityState === "visible") {
-        const shouldResume = wasPlayingBeforeHideRef.current;
+        const wasPlayingBeforeHide = wasPlayingBeforeHideRef.current;
         wasPlayingBeforeHideRef.current = false;
 
-        if (shouldResume && audio) {
-          const el = audioRef.current;
-          if (el?.paused && stateRef.current.isPlaying) {
-            if (isLikelyIOS()) {
-              patchState({ isPlaying: false, playbackState: "paused" });
-            } else {
-              void dispatchPlaybackCommand(PLAYBACK_COMMANDS.RECOVER).catch((error) => {
-                reportPlaybackDiagnostic({
-                  level: "warn",
-                  code: "VISIBILITY_RECOVER_BLOCKED",
-                  command: PLAYBACK_COMMANDS.RECOVER,
-                  requestId: activeCommandRef.current?.requestId || null,
-                  state: stateRef.current,
-                  error,
-                });
-                patchState({ isPlaying: false, playbackState: "paused" });
-              });
-            }
-          }
-        }
-
-        if (stateRef.current.currentTrack) {
+        const syncResult = syncPlaybackUiFromAudioElement({ wasPlayingBeforeHide });
+        if (syncResult === "recover") {
+          void dispatchPlaybackCommand(PLAYBACK_COMMANDS.RECOVER).catch((error) => {
+            reportPlaybackDiagnostic({
+              level: "warn",
+              code: "VISIBILITY_RECOVER_BLOCKED",
+              command: PLAYBACK_COMMANDS.RECOVER,
+              requestId: activeCommandRef.current?.requestId || null,
+              state: stateRef.current,
+              error,
+              context: {
+                platform: isLikelyIOS() ? "ios" : "other",
+              },
+            });
+            syncPlaybackUiFromAudioElement({ wasPlayingBeforeHide: false });
+          });
+        } else if (stateRef.current.currentTrack) {
           void updateMediaSession(stateRef.current.currentTrack, {
             playing: stateRef.current.isPlaying,
           });
@@ -3024,7 +3074,13 @@ export function AudioProvider({ children }) {
       window.removeEventListener("beforeunload", onBeforeUnload);
       window.removeEventListener("pagehide", onPageHide);
     };
-  }, [rehydrateMediaSession, patchState, updateMediaSession, syncPositionState, dispatchPlaybackCommand]);
+  }, [
+    rehydrateMediaSession,
+    syncPlaybackUiFromAudioElement,
+    updateMediaSession,
+    syncPositionState,
+    dispatchPlaybackCommand,
+  ]);
 
   const beginCsHoldPreview = useCallback((csAudioUrl) => {
     const audio = audioRef.current;
