@@ -11,6 +11,12 @@ export const AUDIBILITY_FROZEN_MS = 2000;
 export const AUDIBILITY_ADVANCE_MIN_SEC = 0.08;
 /** Grace before requiring currentTime advancement after play starts. */
 export const AUDIBILITY_WARMUP_MS = 1200;
+/** Short poll window before RECOVER_COMPLETE when resumeAfter is set (Phase 15D). */
+export const AUDIBILITY_RECOVERY_WAIT_MS = 450;
+export const AUDIBILITY_RECOVERY_POLL_MS = 50;
+/** Delay between audibility retry attempts in hard recovery (initial + 2 retries). */
+export const AUDIBILITY_RECOVERY_RETRY_DELAY_MS = 350;
+export const AUDIBILITY_RECOVERY_MAX_ATTEMPTS = 3;
 
 /**
  * @param {{ lastTime: number, lastAt: number, frozenSince: number | null }} sample
@@ -117,6 +123,29 @@ export function isAudioActuallyAudible({ audio, webAudioContext = null, sampleRe
   }
 
   return false;
+}
+
+/**
+ * Poll until audible or timeout (Phase 15D recovery gate).
+ * @param {Parameters<typeof isAudioActuallyAudible>[0]} params
+ * @param {number} [maxWaitMs]
+ */
+export async function waitForPlaybackAudibility(
+  params,
+  maxWaitMs = AUDIBILITY_RECOVERY_WAIT_MS
+) {
+  const { audio, sampleRef } = params;
+  if (!audio) return false;
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    updateAudibilitySample(audio, sampleRef);
+    if (isAudioActuallyAudible(params)) return true;
+    await new Promise((resolve) => {
+      setTimeout(resolve, AUDIBILITY_RECOVERY_POLL_MS);
+    });
+  }
+  updateAudibilitySample(audio, sampleRef);
+  return isAudioActuallyAudible(params);
 }
 
 /**

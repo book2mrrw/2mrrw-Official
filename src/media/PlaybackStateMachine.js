@@ -175,7 +175,9 @@ class PlaybackStateMachine {
             playing: resumeAfter,
           });
         } else {
-          this.transition(PLAYBACK_ORCHESTRATION_EVENTS.RECOVER_FAILED, { reason });
+          this.transition(PLAYBACK_ORCHESTRATION_EVENTS.RECOVER_FAILED, {
+            reason: resumeAfter ? `${reason}:audibility_or_resume` : reason,
+          });
         }
         return ok;
       } catch {
