@@ -1,0 +1,182 @@
+diff --git a/src/app/verify-otp/page.js b/src/app/verify-otp/page.js
+index a54604a..c9b6b47 100644
+--- a/src/app/verify-otp/page.js
++++ b/src/app/verify-otp/page.js
+@@ -3,7 +3,12 @@
+ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+ import Link from "next/link";
+ import { useRouter, useSearchParams } from "next/navigation";
+-import { verifyEmailOtp, sendEmailOtp, formatOtpSendError } from "@/auth/authService";
++import {
++  verifyEmailOtp,
++  sendEmailOtp,
++  formatOtpSendError,
++  getOtpCooldownRemainingMs,
++} from "@/auth/authService";
+ import { clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
+ import { formatResendCountdown } from "@/lib/auth/validation";
+ import { useAuth } from "@/context/AuthContext";
+@@ -23,7 +28,7 @@ function VerifyOtpForm() {
+   const [otpError, setOtpError] = useState("");
+   const [otpLoading, setOtpLoading] = useState(false);
+   const [otpSending, setOtpSending] = useState(false);
+-  const [resendIn, setResendIn] = useState(30);
++  const [resendIn, setResendIn] = useState(0);
+   const inputsRef = useRef([]);
+   const otpAutoSubmittedRef = useRef(false);
+   const otpSendInFlightRef = useRef(false);
+@@ -38,10 +43,14 @@ function VerifyOtpForm() {
+   }, [email, router]);
+ 
+   useEffect(() => {
+-    if (resendIn <= 0) return undefined;
+-    const timer = setInterval(() => setResendIn((v) => Math.max(0, v - 1)), 1000);
++    if (!email) return undefined;
++    const syncCooldown = () => {
++      setResendIn(Math.ceil(getOtpCooldownRemainingMs(email) / 1000));
++    };
++    syncCooldown();
++    const timer = setInterval(syncCooldown, 500);
+     return () => clearInterval(timer);
+-  }, [resendIn]);
++  }, [email]);
+ 
+   const updateDigit = (index, value) => {
+     const char = value.replace(/\D/g, "").slice(-1);
+@@ -136,7 +145,15 @@ function VerifyOtpForm() {
+   }, [code, otpLoading, verifyOtp]);
+ 
+   const resendOtp = async () => {
+-    if (resendIn > 0 || !email || otpSending || otpSendInFlightRef.current) return;
++    if (
++      getOtpCooldownRemainingMs(email) > 0 ||
++      resendIn > 0 ||
++      !email ||
++      otpSending ||
++      otpSendInFlightRef.current
++    ) {
++      return;
++    }
+     setOtpError("");
+     otpAutoSubmittedRef.current = false;
+     otpSendInFlightRef.current = true;
+@@ -148,14 +165,20 @@ function VerifyOtpForm() {
+             ? crypto.randomUUID()
+             : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+       }
+-      const { error: otpErr, deduplicated } = await sendEmailOtp({
++      const { error: otpErr, deduplicated, cooldownMs } = await sendEmailOtp({
+         email,
+         shouldCreateUser,
+         requestId: resendRequestIdRef.current,
+       });
+-      if (otpErr && !deduplicated) throw otpErr;
++      if (otpErr && !deduplicated) {
++        if (cooldownMs > 0) {
++          setOtpError("Please wait before requesting another code.");
++        } else {
++          setOtpError(formatOtpSendError(otpErr));
++        }
++        return;
++      }
+       setDigits(EMPTY_DIGITS());
+-      setResendIn(30);
+     } catch (err) {
+       setOtpError(formatOtpSendError(err));
+     } finally {
+diff --git a/src/components/auth/AuthGate.js b/src/components/auth/AuthGate.js
+index 326f920..84a8e54 100644
+--- a/src/components/auth/AuthGate.js
++++ b/src/components/auth/AuthGate.js
+@@ -1,7 +1,14 @@
+ 
+ "use client";
+ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+-import { verifyEmailOtp, sendEmailOtp, formatOtpSendError, resetOtpEmailIntent, normalizeAuthEmail } from "@/auth/authService";
++import {
++  verifyEmailOtp,
++  sendEmailOtp,
++  formatOtpSendError,
++  getOtpCooldownRemainingMs,
++  resetOtpEmailIntent,
++  normalizeAuthEmail,
++} from "@/auth/authService";
+ import { writePendingPhone, clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
+ import { validateEmail, validatePhone, formatResendCountdown } from "@/lib/auth/validation";
+ import { useAuth } from "@/context/AuthContext";
+@@ -89,7 +96,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet"
+   const [otpError, setOtpError] = useState("");
+   const [otpLoading, setOtpLoading] = useState(false);
+   const [otpSending, setOtpSending] = useState(false);
+-  const [resendIn, setResendIn] = useState(30);
++  const [resendIn, setResendIn] = useState(0);
+   const [otpAwaitingEntry, setOtpAwaitingEntry] = useState(false);
+   const [sheetDragY, setSheetDragY] = useState(0);
+   const inputsRef = useRef([]);
+@@ -115,7 +122,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet"
+     setOtpError("");
+     setOtpSending(false);
+     setOtpAwaitingEntry(false);
+-    setResendIn(30);
++    setResendIn(0);
+     setSheetDragY(0);
+     otpSendInFlightRef.current = false;
+     verifyInFlightRef.current = false;
+@@ -139,10 +146,14 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet"
+     }
+   }, [open]);
+   useEffect(() => {
+-    if (screen !== "otp" || resendIn <= 0) return undefined;
+-    const timer = setInterval(() => setResendIn((v) => Math.max(0, v - 1)), 1000);
++    if (screen !== "otp" || !otpEmail) return undefined;
++    const syncCooldown = () => {
++      setResendIn(Math.ceil(getOtpCooldownRemainingMs(otpEmail) / 1000));
++    };
++    syncCooldown();
++    const timer = setInterval(syncCooldown, 500);
+     return () => clearInterval(timer);
+-  }, [screen, resendIn]);
++  }, [screen, otpEmail]);
+   const handleEmailChange = (next) => {
+     if (normalizeAuthEmail(next) !== normalizeAuthEmail(email)) {
+       resetOtpEmailIntent(email, { requestId: otpRequestIdRef.current });
+@@ -166,16 +177,20 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet"
+             ? crypto.randomUUID()
+             : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+       }
+-      const { error: otpErr, deduplicated } = await sendEmailOtp({
++      const { error: otpErr, deduplicated, cooldownMs } = await sendEmailOtp({
+         email: targetEmail,
+         shouldCreateUser,
+         requestId: otpRequestIdRef.current,
+       });
+-      if (otpErr && !deduplicated) throw otpErr;
++      if (otpErr && !deduplicated) {
++        if (cooldownMs > 0) {
++          throw new Error("Please wait before requesting another code.");
++        }
++        throw otpErr;
++      }
+       setOtpEmail(targetEmail);
+       setOtpCreateUser(shouldCreateUser);
+       setDigits(EMPTY_DIGITS());
+-      setResendIn(30);
+       setOtpAwaitingEntry(false);
+       otpAutoSubmittedRef.current = false;
+       setMode("otp");
+@@ -333,7 +348,14 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet"
+     void verifyOtp();
+   }, [screen, code, otpLoading, verifyOtp]);
+   const resendOtp = async () => {
+-    if (resendIn > 0 || !otpEmail || otpSending) return;
++    if (
++      getOtpCooldownRemainingMs(otpEmail) > 0 ||
++      resendIn > 0 ||
++      !otpEmail ||
++      otpSending
++    ) {
++      return;
++    }
+     setOtpError("");
+     otpAutoSubmittedRef.current = false;
+     try {

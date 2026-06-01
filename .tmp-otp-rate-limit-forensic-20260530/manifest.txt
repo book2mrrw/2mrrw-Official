@@ -1,0 +1,64 @@
+OTP Rate-Limit Forensic Trace — Manifest
+=========================================
+Generated: 2026-05-31
+Repo: /Users/recharge/artist-platform
+HEAD: 04d326fc75080126070d8f8de9944ab95acf9027
+Email-intent fix: 43d37ff4f7943d84422342e41b59cd0d3dfe28ab
+Mode: READ-ONLY — no source modifications
+
+DELIVERABLES
+------------
+report.md                 Full forensic report (sections A–E)
+entry-point-map.md        OTP entry point map
+duplication-analysis.md   Execution frequency / duplication findings
+flow-simulation.md        Event flow simulations with request counts
+manifest.txt              This file
+
+VERDICT SUMMARY
+---------------
+Root cause:        MIXED
+Entry point paths: 6 UI handler paths (4 files)
+Canonical sends:   1 (authService.sendEmailOtp)
+Bypass count:      0 direct signInWithOtp outside authService
+Auto-send effects: 0
+
+FILES READ (primary)
+--------------------
+src/auth/authService.js
+src/lib/auth/email-otp.js
+src/app/login/page.js
+src/app/join/page.js
+src/app/verify-otp/page.js
+src/components/auth/AuthGate.js
+src/components/auth/AppAuthRoot.js
+src/context/AuthContext.js
+src/context/AuthGateContext.js
+next.config.mjs
+
+REFERENCE REPORTS (historical context, not modified)
+----------------------------------------------------
+.tmp-auth-email-intent-fix-20260530/report.md
+.tmp-auth-stability-audit-20260530/report.md
+.tmp-otp-fix-20260528/report.md
+
+GREP COMMANDS
+-------------
+rg 'signInWithOtp|sendEmailOtp|verifyOtp|send.*[Oo]tp|requestOtp' src/
+rg -i 'too many|rate.?limit|cooldown|requestId|email.?intent' src/
+rg 'signInWithOtp' (repo-wide, src/ only hit in authService.js)
+rg -U 'useEffect[\s\S]{0,500}(sendEmailOtp|sendOtpToEmail|signInWithOtp)' src/
+rg 'setItem\(["'\'']pendingOtpEmail' src/
+rg 'from ["'\'']@/lib/auth/email-otp|from ["'\'']@/auth/authService' src/
+rg 'AuthGate' src/
+
+GIT
+---
+git rev-parse HEAD
+git log -3 --oneline
+git show 43d37ff --stat
+git show 43d37ff -p -- src/auth/authService.js
+git diff HEAD -- src/auth/authService.js src/app/login/page.js src/app/join/page.js src/components/auth/AuthGate.js src/lib/auth/email-otp.js
+
+ZIP OUTPUT
+----------
+/Users/recharge/Downloads/otp-rate-limit-forensic-20260530.zip

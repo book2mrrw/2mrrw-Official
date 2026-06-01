@@ -3,7 +3,12 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { verifyEmailOtp, sendEmailOtp, formatOtpSendError } from "@/auth/authService";
+import {
+  verifyEmailOtp,
+  sendEmailOtp,
+  formatOtpSendError,
+  getOtpCooldownRemainingMs,
+} from "@/auth/authService";
 import { clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
 import { formatResendCountdown } from "@/lib/auth/validation";
 import { useAuth } from "@/context/AuthContext";
@@ -23,7 +28,7 @@ function VerifyOtpForm() {
   const [otpError, setOtpError] = useState("");
   const [otpLoading, setOtpLoading] = useState(false);
   const [otpSending, setOtpSending] = useState(false);
-  const [resendIn, setResendIn] = useState(30);
+  const [resendIn, setResendIn] = useState(0);
   const inputsRef = useRef([]);
   const otpAutoSubmittedRef = useRef(false);
   const otpSendInFlightRef = useRef(false);
@@ -38,10 +43,14 @@ function VerifyOtpForm() {
   }, [email, router]);
 
   useEffect(() => {
-    if (resendIn <= 0) return undefined;
-    const timer = setInterval(() => setResendIn((v) => Math.max(0, v - 1)), 1000);
+    if (!email) return undefined;
+    const syncCooldown = () => {
+      setResendIn(Math.ceil(getOtpCooldownRemainingMs(email) / 1000));
+    };
+    syncCooldown();
+    const timer = setInterval(syncCooldown, 500);
     return () => clearInterval(timer);
-  }, [resendIn]);
+  }, [email]);
 
   const updateDigit = (index, value) => {
     const char = value.replace(/\D/g, "").slice(-1);
@@ -136,7 +145,15 @@ function VerifyOtpForm() {
   }, [code, otpLoading, verifyOtp]);
 
   const resendOtp = async () => {
-    if (resendIn > 0 || !email || otpSending || otpSendInFlightRef.current) return;
+    if (
+      getOtpCooldownRemainingMs(email) > 0 ||
+      resendIn > 0 ||
+      !email ||
+      otpSending ||
+      otpSendInFlightRef.current
+    ) {
+      return;
+    }
     setOtpError("");
     otpAutoSubmittedRef.current = false;
     otpSendInFlightRef.current = true;
@@ -148,14 +165,20 @@ function VerifyOtpForm() {
             ? crypto.randomUUID()
             : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
       }
-      const { error: otpErr, deduplicated } = await sendEmailOtp({
+      const { error: otpErr, deduplicated, cooldownMs } = await sendEmailOtp({
         email,
         shouldCreateUser,
         requestId: resendRequestIdRef.current,
       });
-      if (otpErr && !deduplicated) throw otpErr;
+      if (otpErr && !deduplicated) {
+        if (cooldownMs > 0) {
+          setOtpError("Please wait before requesting another code.");
+        } else {
+          setOtpError(formatOtpSendError(otpErr));
+        }
+        return;
+      }
       setDigits(EMPTY_DIGITS());
-      setResendIn(30);
     } catch (err) {
       setOtpError(formatOtpSendError(err));
     } finally {
