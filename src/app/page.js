@@ -47,28 +47,23 @@ import {
   normalizeTrackForPlayback,
   resolveCatalogPlaybackItem,
 } from "@/lib/music-playback";
-import { useAudioPlayer, usePlaybackProgress } from "@/context/AudioContext";
-import { useMediaEngine } from "@/media/useMediaEngine";
+import { useAudioPlayer } from "@/context/AudioContext";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
 import { MobileNavAnimatedIcon } from "@/components/nav/MobileNavAnimatedIcon";
 import { VaultNavLockIcon } from "@/components/nav/VaultNavLockIcon";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
-import { catalogCoverUrl, catalogMotionVideoUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
+import { catalogCoverUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
 import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
 import { LiveCountdownProvider } from "@/components/home/LiveCountdownContext";
-import {
-  LiveCountdownDesktopPanel,
-  LiveCountdownHomeSection,
-  LiveCountdownLiveTab,
-  LiveCountdownMobileHomeStrip,
-} from "@/components/home/LiveCountdownDisplays";
-import FlowState from "@/components/home/FlowState";
-import RadioCarousel from "@/components/home/RadioCarousel";
+import { LiveCountdownLiveTab } from "@/components/home/LiveCountdownDisplays";
 import AmbientPlaybackBackground from "@/components/home/AmbientPlaybackBackground";
 import CarouselUI from "@/components/home/CarouselUI";
 import FeaturesRail from "@/components/home/FeaturesRail";
 import CatalogGrid from "@/components/home/CatalogGrid";
-import LatestSinglesStyleRow from "@/components/home/LatestSinglesStyleRow";
+import HeroSection from "@/components/home/HeroSection";
+import HomeStorefront from "@/components/home/HomeStorefront";
+import StorefrontMiniPlayerBar from "@/components/home/StorefrontMiniPlayerBar";
+import AudioVisualsSection from "@/components/home/AudioVisualsSection";
 import { withR2CatalogMedia, catalogCoverDisplay } from "@/components/home/catalogMedia";
 import {
   getStorefrontAlbums,
@@ -78,7 +73,6 @@ import { imagePipeline } from "@/media/imagePipeline";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { ModalErrorBoundary } from "@/system/errors";
 import { useAbortController } from "@/system/guards/useAbortController";
-import { TrackCardSkeleton } from "@/ui/skeletons";
 import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
 
 const MOBILE_NAV_TABS = [
@@ -119,95 +113,6 @@ const formatTime = (s) => {
   return `${m}:${sec.toString().padStart(2, "0")}`;
 };
 
-const StorefrontMiniPlayerBar = memo(function StorefrontMiniPlayerBar({
-  nowPlaying,
-  isPlaying,
-  onSeekRatio,
-  onToggle,
-  onDismiss,
-  isMobile,
-  bottom,
-}) {
-  const { currentTime, duration } = usePlaybackProgress();
-
-  const handleSeek = useCallback(
-    (e) => {
-      if (!duration) return;
-      const rect = e.currentTarget.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      onSeekRatio(ratio * duration);
-    },
-    [duration, onSeekRatio]
-  );
-
-  const progressWidth = duration ? `${(currentTime / duration) * 100}%` : "0%";
-  const timeLabel = `${formatTime(currentTime)} / ${formatTime(duration)}`;
-
-  if (isMobile) {
-    return (
-      <motion.div
-        key="mobile-mini-player"
-        initial={{ y: 72, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 72, opacity: 0 }}
-        transition={SPRING_SOFT}
-        style={{
-          position: "fixed",
-          left: 12,
-          right: 12,
-          bottom,
-          zIndex: 6750,
-          borderRadius: 16,
-          overflow: "hidden",
-          background: "rgba(10,10,10,0.9)",
-          backdropFilter: "blur(24px)",
-          WebkitBackdropFilter: "blur(24px)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,255,255,0.05)",
-        }}
-      >
-        <motion.div onClick={handleSeek} style={{ width: "100%", height: 3, background: "#111", cursor: "pointer" }}>
-          <motion.div style={{ width: progressWidth, height: "100%", background: "#00ffff", transition: "width 0.1s linear" }} />
-        </motion.div>
-        <motion.div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 10 }}>
-          <img src={nowPlaying.cover} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
-          <motion.div style={{ flex: 1, minWidth: 0 }}>
-            <motion.div style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nowPlaying.title}</motion.div>
-            <motion.div style={{ fontSize: 10, color: "#555", fontVariantNumeric: "tabular-nums" }}>{timeLabel}</motion.div>
-          </motion.div>
-          <button onClick={onToggle} style={{ width: 38, height: 38, borderRadius: "50%", background: "#00ffff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-            {isPlaying
-              ? <svg viewBox="0 0 24 24" fill="#000" width="14" height="14"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
-              : <svg viewBox="0 0 24 24" fill="#000" width="14" height="14" style={{ marginLeft: 2 }}><path d="M8 5v14l11-7z"/></svg>}
-          </button>
-          <button onClick={onDismiss} style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: "0 4px" }}>×</button>
-        </motion.div>
-      </motion.div>
-    );
-  }
-
-  return (
-    <div style={{ flexShrink: 0, borderTop: "1px solid #141414", background: "rgba(4,4,4,0.97)", backdropFilter: "blur(20px)", zIndex: 1 }}>
-      <div onClick={handleSeek} style={{ width: "100%", height: 3, background: "#111", cursor: "pointer", position: "relative" }}>
-        <div style={{ width: progressWidth, height: "100%", background: "#00ffff", transition: "width 0.1s linear", boxShadow: "0 0 4px rgba(0,255,255,0.5)" }} />
-      </div>
-      <div style={{ padding: "10px 20px", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 -4px 30px rgba(0,0,0,0.5)" }}>
-        <img src={nowPlaying.cover} style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} alt="" />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nowPlaying.title}</div>
-          <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, fontVariantNumeric: "tabular-nums" }}>{timeLabel}</div>
-        </div>
-        <button onClick={onToggle} style={{ width: 36, height: 36, borderRadius: "50%", background: "#00ffff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
-          {isPlaying
-            ? <svg viewBox="0 0 24 24" fill="#000" width="14" height="14"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
-            : <svg viewBox="0 0 24 24" fill="#000" width="14" height="14" style={{ marginLeft: 2 }}><path d="M8 5v14l11-7z"/></svg>}
-        </button>
-        <button onClick={onDismiss} style={{ background: "none", border: "none", color: "#444", cursor: "pointer", fontSize: 18, lineHeight: 1, flexShrink: 0 }}>×</button>
-      </div>
-    </div>
-  );
-});
-
 function normalizeAlbumTracksForModal(tracks) {
   if (!Array.isArray(tracks)) return [];
   return tracks.map((track, index) => {
@@ -225,23 +130,6 @@ function normalizeAlbumTracksForModal(tracks) {
     };
   });
 }
-
-// ── SOCIALS ───────────────────────────────────────────────────────────────────
-const SOCIALS = [
-  { name: "YouTube",   href: "https://youtube.com/@callme2mrrw?si=Bwvli5p7hhvED7eq",                svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>) },
-  { name: "Instagram", href: "https://www.instagram.com/callme2mrrw?igsh=MXMwdzNiZGE5NTJwaw==",      svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg>) },
-  { name: "TikTok",    href: "https://tiktok.com/@thareal2mrrw",                                      svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z"/></svg>) },
-  { name: "Twitch",    href: "https://twitch.tv/callme2mrrw",                                         svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/></svg>) },
-  { name: "X",         href: "https://x.com/callme2mrrw",                                            svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.747l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>) },
-  { name: "Patreon",   href: "https://patreon.com/2mrrw",                                             svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M0 .48v23.04h4.22V.48zm15.385 0c-4.764 0-8.641 3.88-8.641 8.65 0 4.755 3.877 8.623 8.641 8.623 4.75 0 8.615-3.868 8.615-8.623C24 4.36 20.136.48 15.385.48z"/></svg>) },
-];
-
-// ── AUDIO VISUALS (music videos) ─────────────────────────────────────────────
-const musicVideos = [
-  { id:"mv-1", title:"Hour Glass", youtubeId:"tv_aS-hJ880", description:"Official Music Video" },
-  { id:"mv-2", title:"A2B",        youtubeId:"kPITYHMVeXM", description:"Official Music Video" },
-  { id:"mv-3", title:"W.2.D",      youtubeId:"jsrA1SL3_GU", description:"Official Music Video" },
-];
 
 // ── EXCLUSIVE ITEMS ───────────────────────────────────────────────────────────
 const REAL_INVENTORY = {
@@ -379,310 +267,6 @@ function decrementInventory(inv, slug) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ── AUDIO VISUALS SECTION ────────────────────────────────────────────────────
-const AudioVisualsSection = memo(function AudioVisualsSection({
-  isMobile,
-  onAudioVisualsFocused,
-  onAudioVisualsExit,
-}) {
-  const [featuredId, setFeaturedId] = useState(musicVideos[0].youtubeId);
-  const [hasEntered, setHasEntered] = useState(false);
-  const sectionRef = useRef(null);
-  const iframeRef = useRef(null);
-  const firedFocusRef = useRef(false);
-
-  const featuredVid = useMemo(
-    () => musicVideos.find(v => v.youtubeId === featuredId) || musicVideos[0],
-    [featuredId]
-  );
-
-  const startAudioVisualPlayback = useCallback(() => {
-    if (!firedFocusRef.current) {
-      firedFocusRef.current = true;
-    }
-    setHasEntered(true);
-  }, []);
-
-  const stopAudioVisualPlayback = useCallback(() => {
-    try {
-      iframeRef.current?.contentWindow?.postMessage(
-        JSON.stringify({ event: "command", func: "pauseVideo", args: [] }),
-        "*"
-      );
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    const el = sectionRef.current;
-    if (!el) return;
-    const threshold = isMobile ? 0.5 : 0.4;
-    let hasBeenInView = false;
-
-    const sendCmd = (cmd) => {
-      try {
-        iframeRef.current?.contentWindow?.postMessage(
-          JSON.stringify({ event: "command", func: cmd, args: [] }),
-          "*"
-        );
-      } catch {}
-    };
-
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          if (isPlaybackTraceEnabled()) {
-            logUiChurn("intersection", {
-              target: "audioVisuals",
-              intersecting: true,
-              ratio: entry.intersectionRatio,
-            });
-            recordPlaybackTraceContext({ lastUiSection: "audioVisuals" });
-          }
-          if (typeof onAudioVisualsFocused === "function") {
-            onAudioVisualsFocused();
-          }
-          startAudioVisualPlayback();
-          if (hasBeenInView) {
-            sendCmd("playVideo");
-          }
-          hasBeenInView = true;
-        } else if (hasBeenInView) {
-          if (isPlaybackTraceEnabled()) {
-            logUiChurn("intersection", {
-              target: "audioVisuals",
-              intersecting: false,
-              ratio: entry.intersectionRatio,
-            });
-          }
-          stopAudioVisualPlayback();
-          if (typeof onAudioVisualsExit === "function") {
-            onAudioVisualsExit();
-          }
-        }
-      },
-      { threshold: [0, threshold] }
-    );
-
-    obs.observe(el);
-    return () => {
-      if (hasBeenInView && typeof onAudioVisualsExit === "function") {
-        onAudioVisualsExit();
-      }
-      obs.disconnect();
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleSelect = useCallback((id) => {
-    setFeaturedId(id);
-  }, []);
-
-  const iframeSrc = useMemo(
-    () => `https://www.youtube.com/embed/${featuredId}?rel=0&playsinline=1&autoplay=1&mute=0&enablejsapi=1`,
-    [featuredId]
-  );
-
-  const handlePlaceholderClick = useCallback(() => {
-    if (typeof onAudioVisualsFocused === "function") {
-      onAudioVisualsFocused();
-    }
-    startAudioVisualPlayback();
-  }, [onAudioVisualsFocused, startAudioVisualPlayback]);
-
-  return (
-    <div ref={sectionRef}>
-      <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:isMobile?12:20,marginTop:isMobile?24:32}}>
-        <h2 className="section-heading" style={{margin:0,fontSize:isMobile?17:22}}>Audio Visuals</h2>
-        <span style={{fontSize:10,color:"#333",letterSpacing:3,textTransform:"uppercase",fontWeight:700}}>Official Visuals</span>
-      </div>
-
-      {isMobile ? (
-        <div style={{display:"flex",flexDirection:"column",gap:14}}>
-          <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:16,overflow:"hidden"}}>
-            <div style={{position:"relative",paddingBottom:"56.25%",height:0,background:"#000"}}>
-              {hasEntered ? (
-                <iframe
-                  key={featuredId}
-                  ref={iframeRef}
-                  src={iframeSrc}
-                  title={featuredVid.title}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}}
-                />
-              ) : (
-                <div style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",cursor:"pointer"}} onClick={handlePlaceholderClick}>
-                  <img
-                    src={`https://img.youtube.com/vi/${featuredId}/mqdefault.jpg`}
-                    alt={featuredVid.title}
-                    style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
-                  />
-                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.35)"}}>
-                    <div style={{width:52,height:52,borderRadius:"50%",background:"rgba(0,0,0,0.7)",border:"2px solid rgba(255,255,255,0.3)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <svg viewBox="0 0 24 24" fill="white" width="22" height="22" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div style={{padding:"12px 14px"}}>
-              <div style={{fontSize:14,fontWeight:800,letterSpacing:1}}>{featuredVid.title}</div>
-              <div style={{fontSize:11,color:"#555",marginTop:3}}>{featuredVid.description}</div>
-            </div>
-          </div>
-
-          <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:6,scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch"}}>
-            {musicVideos.map(vid => {
-              const isActive = featuredId === vid.youtubeId;
-              return (
-                <div
-                  key={vid.id}
-                  onClick={() => handleSelect(vid.youtubeId)}
-                  style={{
-                    flex:"0 0 auto",
-                    width:140,
-                    scrollSnapAlign:"start",
-                    background:"#0e0e0e",
-                    border:`1px solid ${isActive ? "#00ffff55" : "#1e1e1e"}`,
-                    borderRadius:12,
-                    overflow:"hidden",
-                    cursor:"pointer",
-                    transition:"border-color 0.2s, box-shadow 0.2s",
-                    boxShadow:isActive ? "0 0 12px rgba(0,255,255,0.18)" : "none",
-                  }}
-                >
-                  <div style={{position:"relative",paddingBottom:"56.25%",height:0}}>
-                    <img
-                      src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
-                      alt={vid.title}
-                      style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",objectFit:"cover"}}
-                    />
-                    {isActive && (
-                      <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.45)"}}>
-                        <div style={{width:28,height:28,borderRadius:"50%",background:"#00ffff",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                          <svg viewBox="0 0 24 24" fill="#000" width="12" height="12"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div style={{padding:"8px 10px"}}>
-                    <div style={{fontSize:11,fontWeight:700,lineHeight:1.3,color:isActive ? "#00ffff" : "white"}}>{vid.title}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div style={{display:"flex",gap:20,alignItems:"flex-start"}}>
-          <div style={{flex:"1 1 0",minWidth:0,background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden",boxShadow:"0 8px 40px rgba(0,0,0,0.5)"}}>
-            <div style={{position:"relative",paddingBottom:"56.25%",height:0,background:"#000"}}>
-              {hasEntered ? (
-                <iframe
-                  key={featuredId}
-                  ref={iframeRef}
-                  src={iframeSrc}
-                  title={featuredVid.title}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",border:"none"}}
-                />
-              ) : (
-                <div
-                  style={{position:"absolute",top:0,left:0,width:"100%",height:"100%",cursor:"pointer"}}
-                  onClick={handlePlaceholderClick}
-                >
-                  <img
-                    src={`https://img.youtube.com/vi/${featuredId}/maxresdefault.jpg`}
-                    alt={featuredVid.title}
-                    style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
-                    onError={e => { e.currentTarget.src = `https://img.youtube.com/vi/${featuredId}/mqdefault.jpg`; }}
-                  />
-                  <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.3)"}}>
-                    <div style={{width:72,height:72,borderRadius:"50%",background:"rgba(0,0,0,0.65)",border:"2px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",transition:"transform 0.2s"}} onMouseEnter={e=>e.currentTarget.style.transform="scale(1.1)"} onMouseLeave={e=>e.currentTarget.style.transform="scale(1)"}>
-                      <svg viewBox="0 0 24 24" fill="white" width="32" height="32" style={{marginLeft:4}}><path d="M8 5v14l11-7z"/></svg>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div style={{padding:"16px 20px"}}>
-              <div style={{fontSize:17,fontWeight:800,letterSpacing:1,marginBottom:4}}>{featuredVid.title}</div>
-              <div style={{fontSize:12,color:"#555"}}>{featuredVid.description}</div>
-            </div>
-          </div>
-
-          <div style={{width:236,flexShrink:0,display:"flex",flexDirection:"column",gap:10}}>
-            <div style={{fontSize:9,color:"#2a2a2a",letterSpacing:3,textTransform:"uppercase",fontWeight:700,marginBottom:2}}>Up Next</div>
-            {musicVideos.map(vid => {
-              const isActive = featuredId === vid.youtubeId;
-              return (
-                <div
-                  key={vid.id}
-                  onClick={() => handleSelect(vid.youtubeId)}
-                  style={{
-                    background:isActive ? "#111" : "#0a0a0a",
-                    border:`1px solid ${isActive ? "rgba(0,255,255,0.3)" : "#1a1a1a"}`,
-                    borderRadius:14,
-                    overflow:"hidden",
-                    cursor:"pointer",
-                    transition:"all 0.2s",
-                    boxShadow:isActive ? "0 0 18px rgba(0,255,255,0.1)" : "none",
-                  }}
-                  onMouseEnter={e => {
-                    if (!isActive) { e.currentTarget.style.borderColor = "rgba(0,255,255,0.2)"; e.currentTarget.style.background = "#0e0e0e"; }
-                  }}
-                  onMouseLeave={e => {
-                    if (!isActive) { e.currentTarget.style.borderColor = "#1a1a1a"; e.currentTarget.style.background = "#0a0a0a"; }
-                  }}
-                >
-                  <div style={{display:"flex",gap:10,padding:10,alignItems:"center"}}>
-                    <div style={{position:"relative",width:90,height:50,borderRadius:8,overflow:"hidden",flexShrink:0}}>
-                      <img
-                        src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
-                        alt={vid.title}
-                        style={{width:"100%",height:"100%",objectFit:"cover",display:"block"}}
-                      />
-                      {isActive && (
-                        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.5)"}}>
-                          <svg viewBox="0 0 24 24" fill="#00ffff" width="16" height="16"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
-                        </div>
-                      )}
-                      {!isActive && (
-                        <div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0)",transition:"background 0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(0,0,0,0.4)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0)"}>
-                          <svg viewBox="0 0 24 24" fill="rgba(255,255,255,0)" width="16" height="16" style={{transition:"fill 0.2s"}} onMouseEnter={e=>e.currentTarget.style.fill="white"} onMouseLeave={e=>e.currentTarget.style.fill="rgba(255,255,255,0)"}><path d="M8 5v14l11-7z"/></svg>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{
-                        fontSize:12,
-                        fontWeight:700,
-                        color:isActive ? "#00ffff" : "white",
-                        lineHeight:1.3,
-                        overflow:"hidden",
-                        textOverflow:"ellipsis",
-                        whiteSpace:"nowrap",
-                      }}>{vid.title}</div>
-                      <div style={{fontSize:10,color:"#444",marginTop:2,lineHeight:1.3}}>{vid.description}</div>
-                      {isActive && (
-                        <div style={{fontSize:8,color:"#00ffff",letterSpacing:2.5,marginTop:4,fontWeight:700,textTransform:"uppercase"}}>Now Playing</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-});
-
-// ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
   useBlackscreenMountTrace("Page");
   const {
@@ -692,6 +276,7 @@ export default function Page() {
     accountState,
     membership,
     isAdmin,
+    sessionHydrated,
     signOut,
     refreshLibrary,
     refreshAccountState,
@@ -699,6 +284,10 @@ export default function Page() {
     loading: authLoading,
   } = useAuth();
   const entitlementAccountState = useEntitlementAccountState();
+  const isAdminStable = useMemo(
+    () => Boolean(sessionHydrated && (isAdmin || accountState?.permissions?.admin)),
+    [sessionHydrated, isAdmin, accountState?.permissions?.admin]
+  );
   const showSubscribeCta = useMemo(
     () => resolveSubscriptionEntitlements(entitlementAccountState, membership).showSubscribe,
     [entitlementAccountState, membership]
@@ -778,7 +367,7 @@ export default function Page() {
   const [mobileCartOpen, setMobileCartOpen]       = useState(false);
   const [mobileNavOpen, setMobileNavOpen]         = useState(false);
   const [mobileNavClosing, setMobileNavClosing]   = useState(false);
-  const [homeScrollSection, setHomeScrollSection] = useState(null);
+  const [homeNavSyncEpoch, setHomeNavSyncEpoch] = useState(0);
   const [browseSingles, setBrowseSingles]         = useState(singles);
   const [catalogPage, setCatalogPage]             = useState(1);
   const [catalogHasMore, setCatalogHasMore]       = useState(false);
@@ -802,7 +391,6 @@ export default function Page() {
   const prevActiveTabRef   = useRef("home");
   const prevBrowseSinglesLenRef = useRef(0);
   const homeScrollSectionRef = useRef(null);
-  const homeScrollIoTimerRef = useRef(null);
   const syncSinglesCarouselVideos = useCallback(() => {
     const row = singlesRowRef.current;
     if (!row) return;
@@ -918,21 +506,21 @@ export default function Page() {
             const nextSection = match.section;
             if (nextSection === homeScrollSectionRef.current) return;
             homeScrollSectionRef.current = nextSection;
-            window.clearTimeout(homeScrollIoTimerRef.current);
-            homeScrollIoTimerRef.current = window.setTimeout(() => {
-              setHomeScrollSection(nextSection);
-            }, 220);
           }
         }
       },
       { root, threshold: [0.2, 0.45, 0.65], rootMargin: "-12% 0px -55% 0px" }
     );
     nodes.forEach(n => obs.observe(n.el));
-    return () => {
-      window.clearTimeout(homeScrollIoTimerRef.current);
-      obs.disconnect();
-    };
+    return () => obs.disconnect();
   }, [isMobile, activeTab]);
+
+  useEffect(() => {
+    if (activeTab !== "home") {
+      homeScrollSectionRef.current = null;
+    }
+    setHomeNavSyncEpoch((epoch) => epoch + 1);
+  }, [activeTab]);
 
   useEffect(() => {
     setInventory(loadInventory());
@@ -1190,19 +778,6 @@ export default function Page() {
     }
     return () => { Object.values(ambientRefs.current).forEach(a => { try { a.pause(); } catch {} }); };
   }, [activeTab, soundOn]);
-
-  const { state: { isPlaying: engineIsPlaying } } = useMediaEngine();
-
-  useEffect(() => {
-    if (!engineIsPlaying) return;
-    Object.values(ambientRefs.current).forEach((a) => {
-      try {
-        a.pause();
-      } catch {
-        /* ambient refs are best-effort */
-      }
-    });
-  }, [engineIsPlaying]);
 
   useEffect(() => {
     if (isPlaying) {
@@ -1710,9 +1285,11 @@ export default function Page() {
   }, []);
 
   const isMobileNavTabActive = tabId => {
-    if (tabId === "cards") return activeTab === "cards" || (activeTab === "home" && homeScrollSection === "cards");
-    if (tabId === "vault") return activeTab === "vault" || (activeTab === "home" && homeScrollSection === "vault");
-    if (tabId === "shows") return activeTab === "shows" || (activeTab === "home" && homeScrollSection === "shows");
+    void homeNavSyncEpoch;
+    const homeSection = homeScrollSectionRef.current;
+    if (tabId === "cards") return activeTab === "cards" || (activeTab === "home" && homeSection === "cards");
+    if (tabId === "vault") return activeTab === "vault" || (activeTab === "home" && homeSection === "vault");
+    if (tabId === "shows") return activeTab === "shows" || (activeTab === "home" && homeSection === "shows");
     if (tabId === "singles") return activeTab === "singles" || activeTab === "albums";
     if (tabId === "mymusic") return activeTab === "mymusic";
     return activeTab === tabId;
@@ -1826,7 +1403,7 @@ export default function Page() {
               isMobile={isMobile}
               access={resolveTrackAccess(selectedSingle, entitlementAccountState)?.canStream ? "full" : "preview"}
               userId={currentUser?.id}
-              isAdmin={isAdmin}
+              isAdmin={isAdminStable}
               onGift={handlePreviewGift}
               onLibraryChange={handlePreviewLibraryChange}
               onClose={closeSingleModal}
@@ -1848,7 +1425,7 @@ export default function Page() {
               isMobile={isMobile}
               access={resolveTrackAccess(featureModalItem, entitlementAccountState)?.canStream ? "full" : "preview"}
               userId={currentUser?.id}
-              isAdmin={isAdmin}
+              isAdmin={isAdminStable}
               onGift={handleFeaturePreviewGift}
               onLibraryChange={handlePreviewLibraryChange}
               onClose={closeFeatureModal}
@@ -2003,253 +1580,65 @@ export default function Page() {
           >
             <motion.div style={{padding:isMobile?`0 0 ${mobileScrollPadding} 0`:"0 30px 30px"}}>
             <motion.div style={{padding:isMobile?"0 14px":"0"}}>
-            {/* HERO — scroll compression on mobile */}
-            <motion.div
-              ref={heroContainerRef}
-              style={{
-              position:"relative", height: mobileHeroHeight, marginBottom: 0,
-              borderRadius: isMobile ? 0 : 20, overflow:"hidden", background:"black",
-              transition: isMobile ? "none" : "none",
-            }}>
-              <video
-                ref={heroVideoRef}
-                autoPlay muted loop playsInline preload="metadata" webkit-playsinline="true" src={catalogMotionVideoUrl("videos/A2B.mp4")}
-                style={{
-                  position:"absolute",width:"100%",height:"100%",objectFit:"cover",
-                  opacity: isMobile ? 0.35 : 0.35,
-                  filter: isMobile ? "brightness(1) blur(0px)" : "brightness(1) blur(1px)",
-                  transform: "scale(1)",
-                }}
-              />
-              <div style={{position:"absolute",inset:0,background:"linear-gradient(to top,black,transparent 60%)"}}/>
-              <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at center,transparent 30%,black 100%)"}}/>
-              <motion.div ref={heroTextRef} style={{position:"absolute",top:isMobile?16:25,left:isMobile?16:25,zIndex:10,transformOrigin:"top left"}}>
-                <div style={{fontSize:isMobile?28:42,fontWeight:900,letterSpacing:isMobile?5:8,animation:"pulse 2.5s infinite",textShadow:"0 0 20px rgba(0,255,255,0.8)"}}>2MRRW</div>
-              </motion.div>
-              <motion.div ref={heroSocialsRef} style={{position:"absolute",bottom:isMobile?14:24,right:isMobile?14:25,display:"flex",gap:isMobile?12:16,alignItems:"center",zIndex:10,flexWrap:"wrap",justifyContent:"flex-end"}}>
-                {SOCIALS.map(s=><a key={s.name} href={s.href} target="_blank" rel="noopener noreferrer" title={s.name} style={{color:"rgba(255,255,255,0.65)",transition:"transform 0.2s,color 0.2s,filter 0.2s",display:"flex",alignItems:"center",textDecoration:"none"}} onMouseEnter={e=>{e.currentTarget.style.transform="scale(1.5)";e.currentTarget.style.color="#00ffff";e.currentTarget.style.filter="drop-shadow(0 0 6px rgba(0,255,255,0.8))";}} onMouseLeave={e=>{e.currentTarget.style.transform="scale(1)";e.currentTarget.style.color="rgba(255,255,255,0.65)";e.currentTarget.style.filter="none";}}>{s.svg}</a>)}
-              </motion.div>
-            </motion.div>
-
-            {activeTab==="home" && (
-              <div style={{padding:"18px 0 8px",display:"flex",justifyContent:"flex-start",gap:10,flexWrap:"wrap",alignItems:"center"}}>
-                <button type="button" className="donate-glow-button" onClick={()=>setDonateOpen(true)}>♥ Donate</button>
-                {showSubscribeCta && (
-                  <button type="button" className="subscribe-shimmer-button" onClick={()=>{window.location.href="/subscribe";}}>Subscribe</button>
-                )}
-              </div>
-            )}
+            <HeroSection
+              isMobile={isMobile}
+              mobileHeroHeight={mobileHeroHeight}
+              heroContainerRef={heroContainerRef}
+              heroVideoRef={heroVideoRef}
+              heroTextRef={heroTextRef}
+              heroSocialsRef={heroSocialsRef}
+            />
 
             <div data-tab-panel>
 
               {/* ══ HOME ══ */}
               {activeTab==="home" && (
-                <>
-                  {/* Latest Singles */}
-                  <motion.div style={{marginTop:20,marginBottom:4}}>
-                    <motion.div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,marginBottom:14,flexWrap:"wrap"}}>
-                      <h2 className="section-heading" style={{margin:0}}>Latest Singles</h2>
-                      <button
-                        type="button"
-                        className="my-coll-btn"
-                        onClick={openCollection}
-                        aria-label="Open my music collection"
-                      >
-                        MY COLLECTION
-                      </button>
-                    </motion.div>
-
-                    <div style={{display:"flex",flexDirection:isMobile?"column":"row",gap:18,alignItems:"flex-start"}}>
-                      <div style={{flex:1,width:"100%",minWidth:0}}>
-                        <LatestSinglesStyleRow
-                          ref={singlesRowRef}
-                          items={displaySingles}
-                          isMobile={isMobile}
-                          isAdmin={isAdmin}
-                          onGift={openGiftSheet}
-                          onCardClick={openSingleModal}
-                          addToCart={addToCart}
-                          accountState={entitlementAccountState}
-                          userId={currentUser?.id}
-                          onLibraryChange={handleLibraryChange}
-                          source="home_single_card"
-                          cardMedia="video"
-                        />
-                        {catalogLoading ? (
-                          <>
-                            <TrackCardSkeleton />
-                            <TrackCardSkeleton />
-                          </>
-                        ) : null}
-                        {catalogHasMore ? (
-                          <button
-                            type="button"
-                            onClick={loadMoreCatalog}
-                            disabled={catalogLoading}
-                            style={{marginTop:12,padding:"10px 18px",background:"transparent",border:"1px solid #333",color:"#888",borderRadius:8,cursor:catalogLoading?"default":"pointer",fontSize:12,letterSpacing:1.5}}
-                          >
-                            {catalogLoading ? "Loading…" : "Load more"}
-                          </button>
-                        ) : null}
-                      </div>
-
-                      {!isMobile && (
-                        <LiveCountdownDesktopPanel
-                          liveStreamDate={liveStreamDate}
-                          liveStreamTime={liveStreamTime}
-                        />
-                      )}
-                    </div>
-
-                    {isMobile ? <LiveCountdownMobileHomeStrip /> : null}
-                  </motion.div>
-
-                  {/* Features */}
-                  <div style={{marginTop:28,marginBottom:4}}>
-                    <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                    <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
-                  </div>
-
-                  <div style={{margin:"0 0 24px",height:1,background:"#1a1a1a"}}/>
-
-                  {/* Albums */}
-                  <div id="home-albums">
-                    <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                    <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
-                  </div>
-
-                  {/* Mixtapes & EPs — same row chrome as Latest Singles on mobile */}
-                  <div id="home-mixtapes-eps" style={{marginTop:28}}>
-                    <h2 className="section-heading" style={{marginBottom:14}}>Mixtapes &amp; EPs</h2>
-                    <div style={{flex:1,width:"100%",minWidth:0}}>
-                      <LatestSinglesStyleRow
-                        items={mixtapesAndEps}
-                        isMobile={isMobile}
-                        isAdmin={isAdmin}
-                        onGift={openGiftSheet}
-                        onCardClick={openAlbumModal}
-                        onPlayClick={playMixtapeEpCard}
-                        addToCart={addToCart}
-                        accountState={entitlementAccountState}
-                        userId={currentUser?.id}
-                        onLibraryChange={handleLibraryChange}
-                        source="home_mixtape_ep_card"
-                        cardMedia="cover"
-                        catalogPlaybackLookup={catalogPlaybackLookup}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Radio */}
-                  <div style={{marginTop:28,marginBottom:28}}>
-                    <h2 className="section-heading" style={{marginBottom:14}}>2MRRW RADIO</h2>
-                    {isMobile ? (
-                      <RadioCarousel
-                        isMobile={isMobile}
-                        currentSlide={currentSlide}
-                        radioSlides={enrichedRadioSlides}
-                        radioIndex={radioIndex}
-                        goRadio={goRadio}
-                        isAdmin={isAdmin}
-                        onGift={openGiftSheet}
-                        onAddToCart={addToCart}
-                        onFlowConversionActive={setFlowConversionActive}
-                        accountState={entitlementAccountState}
-                        currentUserId={currentUser?.id}
-                        onLibraryChange={handleLibraryChange}
-                      />
-                    ) : (
-                      <div style={{display:"flex",gap:16,alignItems:"stretch",minHeight:320}}>
-                        <div style={{flex:"0 0 55%",minWidth:0}}>
-                          <RadioCarousel
-                            narrow
-                            isMobile={isMobile}
-                            currentSlide={currentSlide}
-                            radioSlides={enrichedRadioSlides}
-                            radioIndex={radioIndex}
-                            goRadio={goRadio}
-                            isAdmin={isAdmin}
-                            onGift={openGiftSheet}
-                            onAddToCart={addToCart}
-                            onFlowConversionActive={setFlowConversionActive}
-                            accountState={entitlementAccountState}
-                            currentUserId={currentUser?.id}
-                            onLibraryChange={handleLibraryChange}
-                          />
-                        </div>
-                        <FlowState
-                          activeFlowMode={activeFlowMode}
-                          currentSlide={currentSlide}
-                          showOwnTrackConversion={showOwnTrackConversion}
-                          onAddToCart={addToCart}
-                        />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Audio Visuals */}
-                  <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
-                  <AudioVisualsSection
-                    isMobile={isMobile}
-                    onAudioVisualsFocused={handleAudioVisualsFocused}
-                    onAudioVisualsExit={handleAudioVisualsExit}
-                  />
-
-                  <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
-
-                  {/* Shop */}
-                  <div id="home-shop">
-                    <h2 className="section-heading" style={{marginBottom:16}}>Shop</h2>
-                    {printfulLoading ? <div style={{padding:"32px 0",textAlign:"center",fontSize:13,color:"#333",letterSpacing:2}}>Loading products…</div> : (
-                      <>
-                        {shopIsFallback && <div style={{fontSize:11,color:"#333",letterSpacing:1,marginBottom:16}}>Store coming soon — preview below</div>}
-                        <CatalogGrid items={shopItems} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} isMobile={isMobile}/>
-                      </>
-                    )}
-                  </div>
-
-                  <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
-
-                  {/* Vault — empty placeholder; collector cards live on /collectors-cards */}
-                  <div id="home-vault">
-                    <h2 className="section-heading" style={{marginBottom:8}}>Vault</h2>
-                    <div style={{background:"#0d0d0d",border:"1px solid #1a1a1a",borderRadius:isMobile?14:18,padding:isMobile?"28px 20px":"40px 32px",textAlign:"center"}}>
-                      <p style={{fontSize:13,color:"#555",letterSpacing:1,lineHeight:1.8,margin:0}}>The Vault remains completely empty for now. Exclusive drops will be listed here when they launch.</p>
-                    </div>
-                  </div>
-
-                  <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
-
-                  <div id="home-cards">
-                    <h2 className="section-heading" style={{marginBottom:8}}>Collector&apos;s Cards</h2>
-                    <p style={{fontSize:13,color:"#444",marginBottom:18,letterSpacing:1,lineHeight:1.8}}>Physical ownership tokens — numbered editions on a dedicated page.</p>
-                    <button type="button" onClick={()=>{ window.location.href = COLLECTORS_CARDS_ROUTE; }} style={{padding:"11px 18px",background:"transparent",border:"1px solid rgba(0,255,255,0.35)",borderRadius:10,color:"#00ffff",fontSize:12,fontWeight:700,letterSpacing:1.5,cursor:"pointer"}}>View Collector&apos;s Cards →</button>
-                  </div>
-
-                  <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
-
-                  {/* Shows */}
-                  <div id="home-shows">
-                    <h2 className="section-heading" style={{marginBottom:16}}>Shows & Events</h2>
-                    <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                      {events.map(evt=>(
-                        <div key={evt.id} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?"14px":"16px 18px",display:"flex",alignItems:isMobile?"flex-start":"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-                          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:isMobile?13:14,marginBottom:3}}>{evt.name}</div><div style={{fontSize:12,color:"#aaa"}}>{evt.location}</div><div style={{fontSize:11,color:"#555",marginTop:2}}>{new Date(evt.date).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})} · {evt.time}</div></div>
-                          <div style={{display:"flex",alignItems:"center",gap:10}}><div style={{fontSize:15,fontWeight:900,color:"#00ffff"}}>${evt.price.toFixed(2)}</div><button onClick={()=>setSelectedEvent(evt)} style={{padding:"8px 14px",background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontWeight:"bold",fontSize:12,transition:"0.2s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#00ffff"} onMouseLeave={e=>e.currentTarget.style.borderColor="#333"}>Tickets</button></div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
-
-                  <LiveCountdownHomeSection
-                    isMobile={isMobile}
-                    liveStreamDate={liveStreamDate}
-                    liveStreamTime={liveStreamTime}
-                  />
-                  <div style={{height:40}}/>
-                </>
+                <HomeStorefront
+                  isMobile={isMobile}
+                  showSubscribeCta={showSubscribeCta}
+                  onDonateOpen={() => setDonateOpen(true)}
+                  singlesRowRef={singlesRowRef}
+                  displaySingles={displaySingles}
+                  isAdminStable={isAdminStable}
+                  onGift={openGiftSheet}
+                  onCardClick={openSingleModal}
+                  addToCart={addToCart}
+                  accountState={entitlementAccountState}
+                  userId={currentUser?.id}
+                  onLibraryChange={handleLibraryChange}
+                  catalogLoading={catalogLoading}
+                  catalogHasMore={catalogHasMore}
+                  onLoadMoreCatalog={loadMoreCatalog}
+                  liveStreamDate={liveStreamDate}
+                  liveStreamTime={liveStreamTime}
+                  displayFeatures={displayFeatures}
+                  onOpenFeature={openFeatureModal}
+                  albums={albums}
+                  hoverIn={hoverIn}
+                  hoverOut={hoverOut}
+                  buttonHoverIn={buttonHoverIn}
+                  buttonHoverOut={buttonHoverOut}
+                  onAlbumClick={openAlbumModal}
+                  onOpenAlbumTracklist={setAlbumTracklistRelease}
+                  catalogPlaybackLookup={catalogPlaybackLookup}
+                  mixtapesAndEps={mixtapesAndEps}
+                  onPlayMixtapeEp={playMixtapeEpCard}
+                  currentSlide={currentSlide}
+                  enrichedRadioSlides={enrichedRadioSlides}
+                  radioIndex={radioIndex}
+                  onGoRadio={goRadio}
+                  onFlowConversionActive={setFlowConversionActive}
+                  activeFlowMode={activeFlowMode}
+                  showOwnTrackConversion={showOwnTrackConversion}
+                  onAudioVisualsFocused={handleAudioVisualsFocused}
+                  onAudioVisualsExit={handleAudioVisualsExit}
+                  shopItems={shopItems}
+                  printfulLoading={printfulLoading}
+                  shopIsFallback={shopIsFallback}
+                  events={events}
+                  onSelectEvent={setSelectedEvent}
+                  onOpenCollection={openCollection}
+                />
               )}
 
               {/* ══ MUSIC TAB ══ */}
@@ -2275,10 +1664,10 @@ export default function Page() {
                         </div>
                       </div>
                       <h2 className="section-heading" style={{marginBottom:14}}>Singles</h2>
-                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} onSingleClick={handleSingleClick} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
+                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} onSingleClick={handleSingleClick} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdminStable} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
                       <div style={{marginTop:32,marginBottom:4}}>
                         <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                        <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
+                        <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdminStable} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
                       </div>
                       <AudioVisualsSection
                     isMobile={isMobile}
@@ -2292,7 +1681,7 @@ export default function Page() {
                   {activeTab==="albums" && (
                     <>
                       <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                      <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
+                      <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdminStable} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
                     </>
                   )}
 
@@ -2304,7 +1693,7 @@ export default function Page() {
                         albums={albums}
                         mixtapesAndEps={mixtapesAndEps}
                         isMobile={isMobile}
-                        isAdmin={isAdmin}
+                        isAdmin={isAdminStable}
                         highlightSlug={giftHighlightSlug}
                         onSwitchTab={switchTab}
                         onOpenSingle={openSingleModal}
@@ -2570,8 +1959,8 @@ export default function Page() {
                         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===accountCircleByline||s.by===currentUser?.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Collection",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
-                      {isAdmin ? <GiftsSentSection /> : null}
-                      {accountStateReady && isAdmin ? <CollectorCardAdminPanel accountState={accountState} /> : null}
+                      {isAdminStable ? <GiftsSentSection /> : null}
+                      {accountStateReady && isAdminStable ? <CollectorCardAdminPanel accountState={accountState} /> : null}
                       <button onClick={handleSignOut} style={{width:"100%",height:44,padding:0,background:"transparent",color:"#444",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";}}>Sign Out</button>
                     </div>
                   ) : (
@@ -2893,7 +2282,7 @@ export default function Page() {
         open={Boolean(giftSheetRelease)}
         release={giftSheetRelease}
         senderUserId={currentUser?.id}
-        isAdmin={isAdmin}
+        isAdmin={isAdminStable}
         isMobile={isMobile}
         onClose={() => setGiftSheetRelease(null)}
       />
