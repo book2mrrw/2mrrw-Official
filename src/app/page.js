@@ -19,7 +19,7 @@ const VaultUnlockedRoom = dynamic(
   { ssr: false }
 );
 const AlbumTracklistSheet = dynamic(() => import("@/components/music/AlbumTracklistSheet"), { ssr: false });
-import { useAuth, useEntitlementAccountState } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
 import GiftButton from "@/components/gifts/GiftButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
@@ -38,7 +38,7 @@ import {
   logUiChurn,
   recordPlaybackTraceContext,
 } from "@/lib/diagnostics/playback-trace";
-import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess, isAdminAccount } from "@/lib/music-access";
+import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess } from "@/lib/music-access";
 import {
   albumTracksForPlayback,
   playableReleaseQueue,
@@ -47,7 +47,8 @@ import {
   normalizeTrackForPlayback,
   resolveCatalogPlaybackItem,
 } from "@/lib/music-playback";
-import { useAudioPlayer } from "@/context/AudioContext";
+import { usePagePlaybackActions } from "@/hooks/usePagePlaybackActions";
+import { dismissNowPlayingFromBridge } from "@/lib/playback/page-playback-actions-bridge";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
 import { MobileNavAnimatedIcon } from "@/components/nav/MobileNavAnimatedIcon";
 import { VaultNavLockIcon } from "@/components/nav/VaultNavLockIcon";
@@ -56,14 +57,17 @@ import { catalogCoverUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "
 import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
 import { LiveCountdownProvider } from "@/components/home/LiveCountdownContext";
 import { LiveCountdownLiveTab } from "@/components/home/LiveCountdownDisplays";
-import AmbientPlaybackBackground from "@/components/home/AmbientPlaybackBackground";
 import CarouselUI from "@/components/home/CarouselUI";
 import FeaturesRail from "@/components/home/FeaturesRail";
 import CatalogGrid from "@/components/home/CatalogGrid";
 import HeroSection from "@/components/home/HeroSection";
-import HomeStorefront from "@/components/home/HomeStorefront";
-import StorefrontMiniPlayerBar from "@/components/home/StorefrontMiniPlayerBar";
 import AudioVisualsSection from "@/components/home/AudioVisualsSection";
+import PlaybackChromeIsland from "@/components/storefront/PlaybackChromeIsland";
+import AuthSurfaceIsland from "@/components/storefront/AuthSurfaceIsland";
+import EntitlementSurfaceIsland from "@/components/storefront/EntitlementSurfaceIsland";
+import HomeStorefrontFlowMode from "@/components/storefront/HomeStorefrontFlowMode";
+import MobileCartFab from "@/components/storefront/MobileCartFab";
+import ScrollPaddingShell from "@/components/storefront/ScrollPaddingShell";
 import { withR2CatalogMedia, catalogCoverDisplay } from "@/components/home/catalogMedia";
 import {
   getStorefrontAlbums,
@@ -275,7 +279,6 @@ export default function Page() {
     owns,
     accountState,
     membership,
-    isAdmin,
     sessionHydrated,
     signOut,
     refreshLibrary,
@@ -283,29 +286,17 @@ export default function Page() {
     invalidateEntitlementSnapshot,
     loading: authLoading,
   } = useAuth();
-  const entitlementAccountState = useEntitlementAccountState();
-  const isAdminStable = useMemo(
-    () => Boolean(sessionHydrated && (isAdmin || accountState?.permissions?.admin)),
-    [sessionHydrated, isAdmin, accountState?.permissions?.admin]
-  );
-  const showSubscribeCta = useMemo(
-    () => resolveSubscriptionEntitlements(entitlementAccountState, membership).showSubscribe,
-    [entitlementAccountState, membership]
-  );
   const {
     playTrack,
     playQueue,
-    hasStarted,
-    currentTrack,
-    playbackState,
-    csMode,
-    isPlaying,
+    pause,
     enterAudioVisualViewport,
     exitAudioVisualViewport,
-    toggle,
-    seek,
-    pause,
-  } = useAudioPlayer();
+  } = usePagePlaybackActions();
+  const showSubscribeCta = useMemo(
+    () => resolveSubscriptionEntitlements(accountState, membership).showSubscribe,
+    [accountState, membership]
+  );
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState(() => {
     if (typeof window === "undefined") return [];
@@ -355,7 +346,6 @@ export default function Page() {
   const [innerCirclePost, setInnerCirclePost]     = useState(null);
   const [expandedGroup, setExpandedGroup]         = useState(null);
   const [mobileNavExpandedGroups, setMobileNavExpandedGroups] = useState(() => new Set());
-  const [nowPlaying, setNowPlaying]               = useState(null);
   const [radioIndex, setRadioIndex]               = useState(0);
   const [flowConversionActive, setFlowConversionActive] = useState(false);
   const [printfulProducts, setPrintfulProducts]   = useState([]);
@@ -839,35 +829,6 @@ export default function Page() {
   }, [activeTab, soundOn]);
 
   useEffect(() => {
-    if (isPlaying) {
-      Object.values(ambientRefs.current || {}).forEach((audio) => {
-        if (audio && !audio.paused) audio.pause();
-      });
-    }
-  }, [isPlaying]);
-
-  useEffect(() => {
-    const shouldShowNowPlaying = Boolean(
-      currentTrack &&
-      !previewModalOpen &&
-      !featureModalOpen &&
-      !albumModalOpen &&
-      (hasStarted ||
-        playbackState === "loading" ||
-        playbackState === "ready" ||
-        playbackState === "playing" ||
-        playbackState === "preview_fallback")
-    );
-    if (shouldShowNowPlaying) {
-      setNowPlaying(currentTrack);
-      return;
-    }
-    if (!currentTrack || !hasStarted) {
-      setNowPlaying(null);
-    }
-  }, [hasStarted, currentTrack, playbackState, previewModalOpen, featureModalOpen, albumModalOpen]);
-
-  useEffect(() => {
     if (activeTab !== "live") {
       if (ytPlayerRef.current) { try { ytPlayerRef.current.destroy(); } catch {} ytPlayerRef.current = null; }
     }
@@ -876,7 +837,7 @@ export default function Page() {
   const playAlbumTracks = useCallback(
     (album, startIndex = 0) => {
       const albumItem = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
-      const account = { ...entitlementAccountState, userId: currentUser?.id };
+      const account = { ...accountState, userId: currentUser?.id };
       const tracks = albumTracksForPlayback(
         albumItem,
         account,
@@ -890,11 +851,11 @@ export default function Page() {
         void playQueue(playable, queueIndex);
         return;
       }
-      const access = resolveContentAccess(albumItem, entitlementAccountState);
+      const access = resolveContentAccess(albumItem, accountState);
       if (!access.canStream) return;
       void playTrack(normalizeTrackForPlayback(albumItem, account, "album_modal"));
     },
-    [entitlementAccountState, catalogPlaybackLookup, currentUser?.id, playQueue, playTrack]
+    [accountState, catalogPlaybackLookup, currentUser?.id, playQueue, playTrack]
   );
 
   const playMixtapeEpCard = useCallback(
@@ -909,13 +870,13 @@ export default function Page() {
   const playCanonicalCatalogItem = useCallback((item, source) => {
     const playbackTrack = normalizeTrackForPlayback(
       item,
-      { ...entitlementAccountState, userId: currentUser?.id },
+      { ...accountState, userId: currentUser?.id },
       source
     );
     if (playbackTrack?.src) {
       void playTrack(playbackTrack);
     }
-  }, [entitlementAccountState, currentUser?.id, playTrack]);
+  }, [accountState, currentUser?.id, playTrack]);
 
   const goRadio = useCallback((i) => {
     // phase11: startTransition — carousel index is non-urgent
@@ -968,8 +929,8 @@ export default function Page() {
   const nextSingle    = useCallback(() => goToSingle(singleIndex === displaySingles.length-1 ? 0 : singleIndex+1, "right"), [goToSingle, singleIndex, displaySingles.length]);
   const currentSingle = useMemo(() => withR2CatalogMedia(displaySingles[singleIndex]), [singleIndex, displaySingles]);
   const currentSingleAccess = useMemo(
-    () => (currentSingle ? resolveContentAccess(currentSingle, entitlementAccountState) : null),
-    [currentSingle, entitlementAccountState]
+    () => (currentSingle ? resolveContentAccess(currentSingle, accountState) : null),
+    [currentSingle, accountState]
   );
   const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
 
@@ -1002,10 +963,9 @@ export default function Page() {
       if (detail) setSelectedReleaseDetail(detail);
     });
   }, [
-    nowPlaying,
     featureModalOpen,
     albumModalOpen,
-    entitlementAccountState,
+    accountState,
     catalogPlaybackLookup,
     currentUser?.id,
     playCanonicalCatalogItem,
@@ -1013,7 +973,7 @@ export default function Page() {
 
   const openFeatureModal = useCallback(
     (feat) => {
-      if (nowPlaying) setNowPlaying(null);
+      dismissNowPlayingFromBridge();
       if (previewModalOpen) {
         setPreviewModalOpen(false);
         setSelectedSingle(null);
@@ -1034,10 +994,9 @@ export default function Page() {
       });
     },
     [
-      nowPlaying,
       previewModalOpen,
       albumModalOpen,
-      entitlementAccountState,
+      accountState,
       catalogPlaybackLookup,
       currentUser?.id,
       playCanonicalCatalogItem,
@@ -1095,41 +1054,17 @@ export default function Page() {
     return () => unregisterModal("album-modal");
   }, [selectedAlbum]);
 
-  const dismissNowPlaying = useCallback(() => {
-    setNowPlaying(null);
-    pause();
-  }, [pause]);
-
-  const seekToRatio = useCallback(
-    (time) => {
-      seek(time);
-    },
-    [seek]
-  );
-
-  const nowPlayingMatchesTrack =
-    nowPlaying && currentTrack?.slug === nowPlaying.slug;
-  const miniPlayerPlaying = Boolean(nowPlayingMatchesTrack && isPlaying);
-
-  const openGiftSheet = useCallback((release) => {
-    if (!isAdmin) return;
-    setGiftSheetRelease(release);
-  }, [isAdmin]);
-
   const handleLibraryChange = useCallback(() => {
     void refreshAccountState({ reason: "library:change", source: "page.js" });
     void refreshLibrary({ reason: "library:change", source: "page.js" });
   }, [refreshAccountState, refreshLibrary]);
 
-  const handlePreviewLibraryChange = handleLibraryChange;
-
-  const handleFeaturePreviewGift = useCallback(() => {
-    if (featureModalItem) openGiftSheet(featureModalItem);
-  }, [featureModalItem, openGiftSheet]);
-
-  const handlePreviewGift = useCallback(() => {
-    if (selectedSingle) openGiftSheet(selectedSingle);
-  }, [selectedSingle, openGiftSheet]);
+  const makePreviewGiftHandler = useCallback(
+    (openGiftSheet, release) => () => {
+      if (release) openGiftSheet(release);
+    },
+    []
+  );
 
   const handleCheckout = async () => {
     if (cart.length === 0) return;
@@ -1306,9 +1241,9 @@ export default function Page() {
     });
   };
 
-  const openCollection = () => {
+  const openCollection = useCallback(() => {
     switchTab("mymusic");
-  };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -1402,9 +1337,9 @@ export default function Page() {
   const liveStreamDate = nextLiveDateTime.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
   const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
   const currentSlide   = useMemo(() => enrichedRadioSlides[radioIndex], [enrichedRadioSlides, radioIndex]);
-  const activeFlowMode = flowConversionActive ? "conversion" : nowPlaying ? "nowplaying" : "idle";
   const accountStateReady = !authLoading;
-  const showOwnTrackConversion = accountStateReady && !isAdminAccount(entitlementAccountState);
+
+  const handleDonateOpen = useCallback(() => setDonateOpen(true), []);
 
   const exclusiveItems = exclusiveCatalog.map(item => ({
     ...item,
@@ -1433,11 +1368,6 @@ export default function Page() {
   };
 
   const mobileHeroHeight = isMobile ? 200 : 380;
-  const mobileScrollPadding = isMobile ? (nowPlaying ? "178px" : "110px") : "30px";
-  const mobileCartFabBottom = nowPlaying
-    ? "calc(62px + env(safe-area-inset-bottom, 0px) + 72px)"
-    : "calc(62px + env(safe-area-inset-bottom, 0px) + 12px)";
-  const mobileMiniPlayerBottom = "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)";
 
   // ═══════════════════════════════════════════════════════════════════════════
   return (
@@ -1446,84 +1376,103 @@ export default function Page() {
       <div ref={cursorRef} style={{position:"fixed",width:28,height:28,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.22) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99999,mixBlendMode:"screen",transition:"left 0.045s linear,top 0.045s linear",display:isMobile?"none":undefined}}/>
       <div ref={cursorTrailRef} style={{position:"fixed",width:16,height:16,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.10) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99998,mixBlendMode:"screen",transition:"left 0.18s ease,top 0.18s ease",display:isMobile?"none":undefined}}/>
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(circle at 18% 18%,rgba(0,255,255,0.026) 0%,transparent 55%),radial-gradient(circle at 82% 80%,rgba(162,89,255,0.018) 0%,transparent 52%)"}}/>
-      {/* ── SINGLE PREVIEW MODAL (immersive) ── */}
-      <AnimatePresence>
-        {previewModalOpen && selectedSingle && (
-          <ModalErrorBoundary
-            stackId="immersive-preview-modal"
-            onClose={closeSingleModal}
-            resetKey={selectedSingle?.slug || selectedSingle?.id || "preview"}
-          >
-            <ImmersivePreviewModal
-              key="immersive-preview-modal"
-              single={selectedSingle}
-              releaseDetail={selectedReleaseDetail}
-              isMobile={isMobile}
-              access={resolveTrackAccess(selectedSingle, entitlementAccountState)?.canStream ? "full" : "preview"}
-              userId={currentUser?.id}
-              isAdmin={isAdminStable}
-              onGift={handlePreviewGift}
-              onLibraryChange={handlePreviewLibraryChange}
-              onClose={closeSingleModal}
-              onAddToCart={addToCart}
-              onAddVinyl={addVinylToCart}
-            />
-          </ModalErrorBoundary>
+      {/* ── IMMERSIVE MODALS (entitlement + auth islands — not hero) ── */}
+      <EntitlementSurfaceIsland islandId="immersive-modals">
+        {(ent) => (
+          <AuthSurfaceIsland islandId="immersive-modals" onGiftRequest={setGiftSheetRelease}>
+            {(auth) => (
+              <>
+                <AnimatePresence>
+                  {previewModalOpen && selectedSingle && (
+                    <ModalErrorBoundary
+                      stackId="immersive-preview-modal"
+                      onClose={closeSingleModal}
+                      resetKey={selectedSingle?.slug || selectedSingle?.id || "preview"}
+                    >
+                      <ImmersivePreviewModal
+                        key="immersive-preview-modal"
+                        single={selectedSingle}
+                        releaseDetail={selectedReleaseDetail}
+                        isMobile={isMobile}
+                        access={
+                          resolveTrackAccess(selectedSingle, ent.entitlementAccountState)?.canStream
+                            ? "full"
+                            : "preview"
+                        }
+                        userId={auth.userId}
+                        isAdmin={auth.isAdminStable}
+                        onGift={makePreviewGiftHandler(auth.openGiftSheet, selectedSingle)}
+                        onLibraryChange={auth.handleLibraryChange}
+                        onClose={closeSingleModal}
+                        onAddToCart={addToCart}
+                        onAddVinyl={addVinylToCart}
+                      />
+                    </ModalErrorBoundary>
+                  )}
+                  {featureModalOpen && featureModalItem && (
+                    <ModalErrorBoundary
+                      stackId="immersive-feature-modal"
+                      onClose={closeFeatureModal}
+                      resetKey={featureModalItem?.slug || featureModalItem?.id || "feature"}
+                    >
+                      <ImmersivePreviewModal
+                        key="immersive-feature-modal"
+                        single={featureModalItem}
+                        releaseDetail={featureReleaseDetail}
+                        isMobile={isMobile}
+                        access={
+                          resolveTrackAccess(featureModalItem, ent.entitlementAccountState)?.canStream
+                            ? "full"
+                            : "preview"
+                        }
+                        userId={auth.userId}
+                        isAdmin={auth.isAdminStable}
+                        onGift={makePreviewGiftHandler(auth.openGiftSheet, featureModalItem)}
+                        onLibraryChange={auth.handleLibraryChange}
+                        onClose={closeFeatureModal}
+                        onAddToCart={addToCart}
+                        onAddVinyl={addVinylToCart}
+                      />
+                    </ModalErrorBoundary>
+                  )}
+                </AnimatePresence>
+                <AnimatePresence>
+                  {albumModalOpen && selectedAlbum && (
+                    <ModalErrorBoundary
+                      stackId="immersive-album-modal"
+                      onClose={closeAlbumModal}
+                      resetKey={selectedAlbum?.slug || selectedAlbum?.id || "album"}
+                    >
+                      <AlbumModal
+                        key={selectedAlbum.slug || selectedAlbum.id || "album"}
+                        album={{
+                          ...selectedAlbum,
+                          artist: selectedAlbum.artist || "2MRRW",
+                          year: selectedAlbum.year || selectedAlbum.date,
+                          coverArt: selectedAlbum.coverArt || selectedAlbum.cover,
+                          price:
+                            selectedAlbum.price != null &&
+                            Number.isFinite(Number(selectedAlbum.price))
+                              ? `$${Number(selectedAlbum.price).toFixed(2)}`
+                              : selectedAlbum.price,
+                          tracks: normalizeAlbumTracksForModal(selectedAlbum.tracks || []),
+                        }}
+                        access={
+                          resolveTrackAccess(selectedAlbum, ent.entitlementAccountState)?.canStream
+                            ? "full"
+                            : "preview"
+                        }
+                        onClose={closeAlbumModal}
+                        onPlayTrackAtIndex={playAlbumModalTrackAtIndex}
+                      />
+                    </ModalErrorBoundary>
+                  )}
+                </AnimatePresence>
+              </>
+            )}
+          </AuthSurfaceIsland>
         )}
-        {featureModalOpen && featureModalItem && (
-          <ModalErrorBoundary
-            stackId="immersive-feature-modal"
-            onClose={closeFeatureModal}
-            resetKey={featureModalItem?.slug || featureModalItem?.id || "feature"}
-          >
-            <ImmersivePreviewModal
-              key="immersive-feature-modal"
-              single={featureModalItem}
-              releaseDetail={featureReleaseDetail}
-              isMobile={isMobile}
-              access={resolveTrackAccess(featureModalItem, entitlementAccountState)?.canStream ? "full" : "preview"}
-              userId={currentUser?.id}
-              isAdmin={isAdminStable}
-              onGift={handleFeaturePreviewGift}
-              onLibraryChange={handlePreviewLibraryChange}
-              onClose={closeFeatureModal}
-              onAddToCart={addToCart}
-              onAddVinyl={addVinylToCart}
-            />
-          </ModalErrorBoundary>
-        )}
-      </AnimatePresence>
-
-
-
-      {/* ── ALBUM MODAL (V9 immersive) ── */}
-      <AnimatePresence>
-        {albumModalOpen && selectedAlbum && (
-          <ModalErrorBoundary
-            stackId="immersive-album-modal"
-            onClose={closeAlbumModal}
-            resetKey={selectedAlbum?.slug || selectedAlbum?.id || "album"}
-          >
-            <AlbumModal
-              key={selectedAlbum.slug || selectedAlbum.id || "album"}
-              album={{
-                ...selectedAlbum,
-                artist: selectedAlbum.artist || "2MRRW",
-                year: selectedAlbum.year || selectedAlbum.date,
-                coverArt: selectedAlbum.coverArt || selectedAlbum.cover,
-                price:
-                  selectedAlbum.price != null && Number.isFinite(Number(selectedAlbum.price))
-                    ? `$${Number(selectedAlbum.price).toFixed(2)}`
-                    : selectedAlbum.price,
-                tracks: normalizeAlbumTracksForModal(selectedAlbum.tracks || []),
-              }}
-              access={resolveTrackAccess(selectedAlbum, entitlementAccountState)?.canStream ? "full" : "preview"}
-              onClose={closeAlbumModal}
-              onPlayTrackAtIndex={playAlbumModalTrackAtIndex}
-            />
-          </ModalErrorBoundary>
-        )}
-      </AnimatePresence>
+      </EntitlementSurfaceIsland>
 
 
 
@@ -1581,16 +1530,14 @@ export default function Page() {
       )}
 
       {/* ══════════════════════ MAIN LAYOUT ═══════════════════════════════════ */}
+      <PlaybackChromeIsland
+        isMobile={isMobile}
+        previewModalOpen={previewModalOpen}
+        featureModalOpen={featureModalOpen}
+        albumModalOpen={albumModalOpen}
+        ambientRefs={ambientRefs}
+      >
       <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
-        {(hasStarted ||
-          playbackState === "loading" ||
-          playbackState === "ready" ||
-          playbackState === "playing" ||
-          playbackState === "preview_fallback") &&
-          currentTrack?.cover && (
-          <AmbientPlaybackBackground currentTrack={currentTrack} csMode={csMode} isMobile={isMobile} />
-        )}
-
         {/* ── DESKTOP SIDEBAR ── */}
         {!isMobile && (
           <div style={{width:220,flexShrink:0,borderRight:"1px solid #141414",background:"rgba(4,4,4,0.9)",backdropFilter:"blur(20px)",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto",boxShadow:"2px 0 32px rgba(0,0,0,0.5)"}}>
@@ -1636,8 +1583,6 @@ export default function Page() {
             data-main-scroll
             style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:0,WebkitOverflowScrolling:"touch"}}
           >
-            <motion.div style={{padding:isMobile?`0 0 ${mobileScrollPadding} 0`:"0 30px 30px"}}>
-            <motion.div style={{padding:isMobile?"0 14px":"0"}}>
             <HeroSection
               isMobile={isMobile}
               mobileHeroHeight={mobileHeroHeight}
@@ -1646,65 +1591,77 @@ export default function Page() {
               heroTextRef={heroTextRef}
               heroSocialsRef={heroSocialsRef}
             />
-
+            <ScrollPaddingShell isMobile={isMobile}>
             <div data-tab-panel>
 
-              {/* ══ HOME (Phase 17A: persist mount across tabs) ══ */}
+              {/* ══ HOME (Phase 17A/17B: persist mount + render islands) ══ */}
               <div
                 data-home-storefront
                 style={{ display: activeTab === "home" ? undefined : "none" }}
                 aria-hidden={activeTab !== "home"}
               >
-                <HomeStorefront
-                  isMobile={isMobile}
-                  showSubscribeCta={showSubscribeCta}
-                  onDonateOpen={() => setDonateOpen(true)}
-                  singlesRowRef={singlesRowRef}
-                  displaySingles={displaySingles}
-                  isAdminStable={isAdminStable}
-                  onGift={openGiftSheet}
-                  onCardClick={openSingleModal}
-                  addToCart={addToCart}
-                  accountState={entitlementAccountState}
-                  userId={currentUser?.id}
-                  onLibraryChange={handleLibraryChange}
-                  catalogLoading={catalogLoading}
-                  catalogHasMore={catalogHasMore}
-                  onLoadMoreCatalog={loadMoreCatalog}
-                  liveStreamDate={liveStreamDate}
-                  liveStreamTime={liveStreamTime}
-                  displayFeatures={displayFeatures}
-                  onOpenFeature={openFeatureModal}
-                  albums={albums}
-                  hoverIn={hoverIn}
-                  hoverOut={hoverOut}
-                  buttonHoverIn={buttonHoverIn}
-                  buttonHoverOut={buttonHoverOut}
-                  onAlbumClick={openAlbumModal}
-                  onOpenAlbumTracklist={setAlbumTracklistRelease}
-                  catalogPlaybackLookup={catalogPlaybackLookup}
-                  mixtapesAndEps={mixtapesAndEps}
-                  onPlayMixtapeEp={playMixtapeEpCard}
-                  currentSlide={currentSlide}
-                  enrichedRadioSlides={enrichedRadioSlides}
-                  radioIndex={radioIndex}
-                  onGoRadio={goRadio}
-                  onFlowConversionActive={setFlowConversionActive}
-                  activeFlowMode={activeFlowMode}
-                  showOwnTrackConversion={showOwnTrackConversion}
-                  onAudioVisualsFocused={handleAudioVisualsFocused}
-                  onAudioVisualsExit={handleAudioVisualsExit}
-                  shopItems={shopItems}
-                  printfulLoading={printfulLoading}
-                  shopIsFallback={shopIsFallback}
-                  events={events}
-                  onSelectEvent={setSelectedEvent}
-                  onOpenCollection={openCollection}
-                />
+                <EntitlementSurfaceIsland islandId="home-storefront">
+                  {(ent) => (
+                    <AuthSurfaceIsland islandId="home-storefront" onGiftRequest={setGiftSheetRelease}>
+                      {(auth) => (
+                        <HomeStorefrontFlowMode
+                          isMobile={isMobile}
+                          showSubscribeCta={ent.showSubscribeCta}
+                          onDonateOpen={handleDonateOpen}
+                          singlesRowRef={singlesRowRef}
+                          displaySingles={displaySingles}
+                          isAdminStable={auth.isAdminStable}
+                          onGift={auth.openGiftSheet}
+                          onCardClick={openSingleModal}
+                          addToCart={addToCart}
+                          accountState={ent.entitlementAccountState}
+                          userId={auth.userId}
+                          onLibraryChange={auth.handleLibraryChange}
+                          catalogLoading={catalogLoading}
+                          catalogHasMore={catalogHasMore}
+                          onLoadMoreCatalog={loadMoreCatalog}
+                          liveStreamDate={liveStreamDate}
+                          liveStreamTime={liveStreamTime}
+                          displayFeatures={displayFeatures}
+                          onOpenFeature={openFeatureModal}
+                          albums={albums}
+                          hoverIn={hoverIn}
+                          hoverOut={hoverOut}
+                          buttonHoverIn={buttonHoverIn}
+                          buttonHoverOut={buttonHoverOut}
+                          onAlbumClick={openAlbumModal}
+                          onOpenAlbumTracklist={setAlbumTracklistRelease}
+                          catalogPlaybackLookup={catalogPlaybackLookup}
+                          mixtapesAndEps={mixtapesAndEps}
+                          onPlayMixtapeEp={playMixtapeEpCard}
+                          currentSlide={currentSlide}
+                          enrichedRadioSlides={enrichedRadioSlides}
+                          radioIndex={radioIndex}
+                          onGoRadio={goRadio}
+                          flowConversionActive={flowConversionActive}
+                          onFlowConversionActive={setFlowConversionActive}
+                          showOwnTrackConversion={ent.showOwnTrackConversion}
+                          onAudioVisualsFocused={handleAudioVisualsFocused}
+                          onAudioVisualsExit={handleAudioVisualsExit}
+                          shopItems={shopItems}
+                          printfulLoading={printfulLoading}
+                          shopIsFallback={shopIsFallback}
+                          events={events}
+                          onSelectEvent={setSelectedEvent}
+                          onOpenCollection={openCollection}
+                        />
+                      )}
+                    </AuthSurfaceIsland>
+                  )}
+                </EntitlementSurfaceIsland>
               </div>
 
               {/* ══ MUSIC TAB ══ */}
               {(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic") && (
+                <EntitlementSurfaceIsland islandId="music-tab">
+                  {(ent) => (
+                    <AuthSurfaceIsland islandId="music-tab" onGiftRequest={setGiftSheetRelease}>
+                      {(auth) => (
                 <>
                   <div style={{marginTop:8,marginBottom:0}}>
                     <div style={{display:"flex",gap:0,borderBottom:"1px solid #1a1a1a",marginBottom:24}}>
@@ -1726,10 +1683,10 @@ export default function Page() {
                         </div>
                       </div>
                       <h2 className="section-heading" style={{marginBottom:14}}>Singles</h2>
-                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} onSingleClick={handleSingleClick} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdminStable} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
+                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} onSingleClick={handleSingleClick} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={ent.entitlementAccountState} userId={auth.userId} isAdmin={auth.isAdminStable} onGift={auth.openGiftSheet} onLibraryChange={auth.handleLibraryChange}/>
                       <div style={{marginTop:32,marginBottom:4}}>
                         <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                        <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdminStable} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
+                        <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={ent.entitlementAccountState} userId={auth.userId} isAdmin={auth.isAdminStable} onGift={auth.openGiftSheet} onLibraryChange={auth.handleLibraryChange}/>
                       </div>
                       <AudioVisualsSection
                     isMobile={isMobile}
@@ -1743,7 +1700,7 @@ export default function Page() {
                   {activeTab==="albums" && (
                     <>
                       <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                      <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdminStable} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
+                      <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={ent.entitlementAccountState} userId={auth.userId} isAdmin={auth.isAdminStable} onGift={auth.openGiftSheet} onLibraryChange={auth.handleLibraryChange}/>
                     </>
                   )}
 
@@ -1755,7 +1712,7 @@ export default function Page() {
                         albums={albums}
                         mixtapesAndEps={mixtapesAndEps}
                         isMobile={isMobile}
-                        isAdmin={isAdminStable}
+                        isAdmin={auth.isAdminStable}
                         highlightSlug={giftHighlightSlug}
                         onSwitchTab={switchTab}
                         onOpenSingle={openSingleModal}
@@ -1768,6 +1725,10 @@ export default function Page() {
                     </>
                   )}
                 </>
+                      )}
+                    </AuthSurfaceIsland>
+                  )}
+                </EntitlementSurfaceIsland>
               )}
 
               {/* ══ SHOP ══ */}
@@ -2021,8 +1982,16 @@ export default function Page() {
                         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===accountCircleByline||s.by===currentUser?.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Collection",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
-                      {isAdminStable ? <GiftsSentSection /> : null}
-                      {accountStateReady && isAdminStable ? <CollectorCardAdminPanel accountState={accountState} /> : null}
+                      <AuthSurfaceIsland islandId="account-admin">
+                        {(auth) => (
+                          <>
+                            {auth.isAdminStable ? <GiftsSentSection /> : null}
+                            {accountStateReady && auth.isAdminStable ? (
+                              <CollectorCardAdminPanel accountState={auth.accountState} />
+                            ) : null}
+                          </>
+                        )}
+                      </AuthSurfaceIsland>
                       <button onClick={handleSignOut} style={{width:"100%",height:44,padding:0,background:"transparent",color:"#444",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{e.currentTarget.style.color="#444";}}>Sign Out</button>
                     </div>
                   ) : (
@@ -2034,21 +2003,8 @@ export default function Page() {
               )}
 
             </div>{/* end tab panel */}
-            </motion.div>
-            </motion.div>
+            </ScrollPaddingShell>
           </div>{/* end scroll area */}
-
-          {/* ── NOW PLAYING BAR (desktop) ── */}
-          {nowPlaying && !isMobile && (
-            <StorefrontMiniPlayerBar
-              nowPlaying={nowPlaying}
-              isPlaying={miniPlayerPlaying}
-              onSeekRatio={seekToRatio}
-              onToggle={() => { void toggle(); }}
-              onDismiss={dismissNowPlaying}
-              isMobile={false}
-            />
-          )}
         </div>
 
         {/* ── DESKTOP CART SIDEBAR ── */}
@@ -2075,20 +2031,7 @@ export default function Page() {
       {/* ── MOBILE UI ── */}
       {isMobile && (
         <>
-          <motion.button
-            layout
-            onClick={()=>setMobileCartOpen(true)}
-            animate={{ bottom: mobileCartFabBottom }}
-            transition={SPRING_SOFT}
-            style={{
-              position:"fixed",right:16,zIndex:6800,width:50,height:50,borderRadius:"50%",
-              background:"#00ffff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",
-              justifyContent:"center",boxShadow:"0 4px 24px rgba(0,255,255,0.4)",flexShrink:0,
-            }}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2" width="20" height="20"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
-            {cart.length>0 && <motion.div style={{position:"absolute",top:-4,right:-4,minWidth:20,height:20,borderRadius:10,padding:"0 5px",background:"#ff4d4d",color:"white",fontSize:10,fontWeight:900,display:"flex",alignItems:"center",justifyContent:"center"}}>{cart.length}</motion.div>}
-          </motion.button>
+          <MobileCartFab cartCount={cart.length} onOpen={() => setMobileCartOpen(true)} />
 
           <motion.div style={{
             position:"fixed",bottom:0,left:0,right:0,zIndex:6700,
@@ -2144,20 +2087,6 @@ export default function Page() {
               );
             })}
           </motion.div>
-
-          <AnimatePresence>
-            {nowPlaying && (
-              <StorefrontMiniPlayerBar
-                nowPlaying={nowPlaying}
-                isPlaying={miniPlayerPlaying}
-                onSeekRatio={seekToRatio}
-                onToggle={() => { void toggle(); }}
-                onDismiss={dismissNowPlaying}
-                isMobile
-                bottom={mobileMiniPlayerBottom}
-              />
-            )}
-          </AnimatePresence>
 
           <AnimatePresence>
             {mobileNavSheetOpen && (
@@ -2286,8 +2215,7 @@ export default function Page() {
           </AnimatePresence>
         </>
       )}
-
-
+      </PlaybackChromeIsland>
 
       {/* ── CSS ── */}
       <style jsx>{`
@@ -2340,24 +2268,36 @@ export default function Page() {
       <Suspense fallback={null}>
         <DonateModal open={donateOpen} onClose={()=>setDonateOpen(false)} isMobile={isMobile}/>
       </Suspense>
-      <GiftBottomSheet
-        open={Boolean(giftSheetRelease)}
-        release={giftSheetRelease}
-        senderUserId={currentUser?.id}
-        isAdmin={isAdminStable}
-        isMobile={isMobile}
-        onClose={() => setGiftSheetRelease(null)}
-      />
-      <AlbumTracklistSheet
-        open={Boolean(albumTracklistRelease)}
-        album={albumTracklistRelease}
-        catalogPlaybackLookup={catalogPlaybackLookup}
-        accountState={entitlementAccountState}
-        userId={currentUser?.id}
-        isMobile={isMobile}
-        onClose={() => setAlbumTracklistRelease(null)}
-        onLibraryChange={handleLibraryChange}
-      />
+      <AuthSurfaceIsland islandId="gift-sheet" onGiftRequest={setGiftSheetRelease}>
+        {(auth) => (
+          <GiftBottomSheet
+            open={Boolean(giftSheetRelease)}
+            release={giftSheetRelease}
+            senderUserId={auth.userId}
+            isAdmin={auth.isAdminStable}
+            isMobile={isMobile}
+            onClose={() => setGiftSheetRelease(null)}
+          />
+        )}
+      </AuthSurfaceIsland>
+      <EntitlementSurfaceIsland islandId="album-tracklist-sheet">
+        {(ent) => (
+          <AuthSurfaceIsland islandId="album-tracklist-sheet" onGiftRequest={setGiftSheetRelease}>
+            {(auth) => (
+              <AlbumTracklistSheet
+                open={Boolean(albumTracklistRelease)}
+                album={albumTracklistRelease}
+                catalogPlaybackLookup={catalogPlaybackLookup}
+                accountState={ent.entitlementAccountState}
+                userId={auth.userId}
+                isMobile={isMobile}
+                onClose={() => setAlbumTracklistRelease(null)}
+                onLibraryChange={auth.handleLibraryChange}
+              />
+            )}
+          </AuthSurfaceIsland>
+        )}
+      </EntitlementSurfaceIsland>
 
       {/* ── STRIPE MODAL ── */}
       <AnimatePresence>
