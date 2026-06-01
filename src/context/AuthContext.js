@@ -36,6 +36,18 @@ const EMPTY_ACCOUNT_STATE = {
 const noop = () => {};
 const noopAsync = async () => null;
 
+/** Immutable empty snapshot for SSR / pre-provider — not authenticated entitlements. */
+export const EMPTY_ENTITLEMENT_SNAPSHOT = Object.freeze({
+  userId: null,
+  subscriberActive: false,
+  collectorCard: false,
+  ownedSlugs: [],
+  permissions: {},
+  vaultAccess: false,
+  lastUpdated: 0,
+  version: 0,
+});
+
 /** Safe pre-provider / SSR default — never treat as authenticated entitlements. */
 export const DEFAULT_AUTH_CONTEXT = {
   user: null,
@@ -56,7 +68,7 @@ export const DEFAULT_AUTH_CONTEXT = {
   refreshLibrary: noopAsync,
   refreshAccountState: noopAsync,
   applySessionUser: noopAsync,
-  getEntitlementSnapshot: () => null,
+  getEntitlementSnapshot: () => EMPTY_ENTITLEMENT_SNAPSHOT,
   invalidateEntitlementSnapshot: noop,
   entitlementSnapshotVersion: 0,
 };
@@ -153,8 +165,12 @@ export function AuthProvider({ children }) {
 
   const getEntitlementSnapshot = useCallback(() => {
     const snap = entitlementSnapshotRef.current;
-    if (!snap) return null;
-    return { ...snap, ownedSlugs: [...snap.ownedSlugs], permissions: { ...snap.permissions } };
+    if (!snap) return EMPTY_ENTITLEMENT_SNAPSHOT;
+    return {
+      ...snap,
+      ownedSlugs: [...(snap.ownedSlugs || [])],
+      permissions: { ...(snap.permissions || {}) },
+    };
   }, []);
 
   const invalidateEntitlementSnapshot = useCallback((reason = "manual") => {
@@ -616,7 +632,9 @@ export function useEntitlementAccountState() {
   const { accountState, loading, getEntitlementSnapshot, entitlementSnapshotVersion } = useAuth();
   return useMemo(() => {
     if (loading) return EMPTY_ACCOUNT_STATE;
-    const snapshot = getEntitlementSnapshot();
-    return mergeSnapshotIntoAccountState(accountState, snapshot);
+    const base = accountState ?? EMPTY_ACCOUNT_STATE;
+    const snapshot = getEntitlementSnapshot?.();
+    if (!snapshot || snapshot.version < 1) return base;
+    return mergeSnapshotIntoAccountState(base, snapshot);
   }, [loading, accountState, getEntitlementSnapshot, entitlementSnapshotVersion]);
 }

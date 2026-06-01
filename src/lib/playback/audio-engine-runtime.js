@@ -11,6 +11,11 @@ import {
 
 const GLOBAL_KEY = "__2MRRW_AUDIO_ENGINE_RUNTIME__";
 
+/** True only when DOM APIs needed for detached `<audio>` are available. */
+export function isBrowserPlaybackEnvironment() {
+  return typeof window !== "undefined" && typeof document !== "undefined";
+}
+
 function createRuntimeState() {
   return {
     providerMountCount: 0,
@@ -35,7 +40,7 @@ let ssrRuntime = null;
  * @returns {ReturnType<typeof createRuntimeState>}
  */
 export function getAudioEngineRuntime() {
-  if (typeof window === "undefined") {
+  if (!isBrowserPlaybackEnvironment()) {
     if (!ssrRuntime) ssrRuntime = createRuntimeState();
     return ssrRuntime;
   }
@@ -61,7 +66,7 @@ export function getAudioEngineRefs() {
  * @returns {HTMLAudioElement | null}
  */
 export function ensureDetachedAudioElement() {
-  if (typeof document === "undefined") return null;
+  if (!isBrowserPlaybackEnvironment() || !document.body) return null;
   const runtime = getAudioEngineRuntime();
   const { audioRef } = runtime.refs;
 

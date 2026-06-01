@@ -62,6 +62,7 @@ import {
 import {
   ensureDetachedAudioElement,
   getAudioEngineRefs,
+  isBrowserPlaybackEnvironment,
   noteAudioProviderMount,
   noteAudioProviderUnmount,
 } from "@/lib/playback/audio-engine-runtime";
@@ -573,6 +574,10 @@ export function AudioProvider({ children }) {
   const { user, loading: authLoading } = useAuth();
   const entitlementAccountState = useEntitlementAccountState();
   const authLoadingRef = useRef(authLoading);
+  const engineRefsRef = useRef(null);
+  if (!engineRefsRef.current || isBrowserPlaybackEnvironment()) {
+    engineRefsRef.current = getAudioEngineRefs();
+  }
   const {
     audioRef,
     commandQueueRef,
@@ -582,7 +587,7 @@ export function AudioProvider({ children }) {
     queueCircuitOpenRef,
     queueWatchdogRef,
     activeStreamAbortRef,
-  } = getAudioEngineRefs();
+  } = engineRefsRef.current;
   const csImgRef = useRef(null);
   const csVidRef = useRef(null);
   const csAudioRef = useRef(null);
@@ -715,6 +720,8 @@ export function AudioProvider({ children }) {
   }, [user?.id]);
 
   useEffect(() => {
+    if (!isBrowserPlaybackEnvironment()) return undefined;
+    engineRefsRef.current = getAudioEngineRefs();
     noteAudioProviderMount();
     perfMark(MARKS.PLAYBACK_PROVIDER_MOUNT);
     const el = ensureDetachedAudioElement();
