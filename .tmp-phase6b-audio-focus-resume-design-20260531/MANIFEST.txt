@@ -1,0 +1,58 @@
+Phase 6B — Viewport-Aware Audio Focus Resume System (Design Only)
+Generated: 2026-05-31
+Project: /Users/recharge/artist-platform
+Mode: READ-ONLY — no code changes
+
+DELIVERABLES
+============
+AUDIO_FOCUS_RESUME_SPEC.md
+  Primary specification covering Sections 1–6:
+  state model, enter/exit algorithms, anti-bug guards,
+  integration points, failure modes, implementation plan, test matrix.
+
+VIEWPORT_AUDIO_STATE_MACHINE.md
+  Formal state machine: variables, modes M0–M7, transition table,
+  invariants, shouldAutoResumeViewport guard, visibility orthogonality.
+
+INTERSECTION_RESUME_FLOW.md
+  IO callback design, sequence diagrams, triggerFocus decoupling,
+  page wiring, dual-mount cleanup, threshold recommendations,
+  file:line change map.
+
+RACE_CONDITION_ANALYSIS.md
+  Twelve race hazards (RC-1–RC-12) with mitigations,
+  implementation priority ordering, manual race test matrix.
+
+MANIFEST.txt
+  This file.
+
+SOURCE FILES REVIEWED
+=====================
+src/app/page.js
+  L371–426   AudioVisualsSection + IntersectionObserver
+  L760–762   handleAudioVisualsFocused (current pause hook)
+  L1334–1339 closeFeatureModal (explicit pause)
+  L2133, L2226 AudioVisualsSection mounts
+
+src/context/AudioContext.js
+  L84–96    PLAYBACK_COMMANDS
+  L384–407  EMPTY_STATE
+  L543–553  userPausedRef, wasPlayingBeforeHideRef
+  L1096–1137 onPause + auto-recover
+  L2557–2644 pauseInternal, resumeInternal
+  L2721–2750 executePlaybackCommand
+  L2904–2905 pause(), resume()
+  L2915–2960 syncPlaybackUiFromAudioElement
+  L3039–3112 visibility handler
+  L3281–3357 context value exports
+
+PRIOR AUDITS REFERENCED
+========================
+.tmp-phase5b-playback-death-admin-hydration-20260531/SCROLL_TRACE.md
+.tmp-playback-interruption-forensic-20260531/report.md
+.tmp-playback-interruption-forensic-20260531/event-chain.md
+docs/reports/audio-logic-audit-20260525.md (Section E)
+
+ZIP OUTPUT
+==========
+/Users/recharge/Downloads/phase6b-audio-focus-resume-design-20260531.zip

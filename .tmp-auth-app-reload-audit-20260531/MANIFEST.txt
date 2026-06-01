@@ -1,0 +1,24 @@
+2MRRW Auth / App Reload Root-Cause Audit — 2026-05-31
+READ-ONLY forensic. No code changes.
+
+Deliverables:
+  report.md                      — consolidated Parts 1–8
+  auth-bootstrap-trace.md        — Part 1
+  audioprovider-stability.md     — Part 2
+  reload-inventory.md            — Parts 3 & 7
+  playback-interruption-chains.md — Part 6
+  final-verdict.md               — Part 8 (no fix recommendations)
+
+Prior audits cross-checked (fresh grep re-verified):
+  .tmp-phase5a-session-hydration-audit-20260531/
+  .tmp-playback-interruption-forensic-20260531/
+  .tmp-phase524-playback-readiness-20260530/refresh-path-audit.md
+
+Primary source files:
+  src/context/AuthContext.js
+  src/context/AudioContext.js
+  src/app/layout.js
+  src/components/auth/AppAuthRoot.js
+  src/app/page.js
+  src/auth/authService.js
+  public/sw.js

@@ -1,0 +1,5 @@
+report.md
+MANIFEST.txt
+../src/lib/playback/focus-controller.js
+../src/context/AudioContext.js
+../src/app/page.js

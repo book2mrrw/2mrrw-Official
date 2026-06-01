@@ -1,0 +1,34 @@
+Phase 5A Session Hydration & Account-State Transition Audit
+Generated: 2026-05-31
+Repo: /Users/recharge/artist-platform
+Mode: READ-ONLY (no code changes)
+
+Deliverables:
+  SESSION_HYDRATION_AUDIT.md    Sections S1–S10 (main report)
+  AUTH_STATE_TIMELINE.md        T0–T5 timeline with network/state/rerender
+  RERENDER_HOTSPOTS.md          Top AuthContext consumers
+  PLAYBACK_CORRELATION.md       Hydration/admin/entitlement vs playback
+  ROOT_CAUSE_RANKING.md         Ranked causes A/B/C + combined top 3
+  MANIFEST.txt                  This file
+
+Key source files reviewed:
+  src/context/AuthContext.js
+  src/auth/authService.js
+  src/app/layout.js
+  src/components/auth/AppAuthRoot.js
+  src/app/page.js
+  src/context/AudioContext.js
+  src/app/api/account/state/route.js
+  src/lib/diagnostics/state-churn-log.js
+  src/components/system/AudioPhase10Bridge.js
+  src/system/recovery/useSessionRecovery.js
+  src/lib/auth/session-user.js
+  src/lib/auth/state-equality.js
+
+Methods:
+  ripgrep for refreshAccountState, entitlements:updated, applySessionUser, useAuth
+  Full read of AuthContext, authService, AppAuthRoot, account/state route
+  Targeted read of AudioContext auth/entitlement effects, page.js auth usage
+
+Zip output (requested):
+  /Users/recharge/Downloads/phase5a-session-hydration-audit-20260531.zip

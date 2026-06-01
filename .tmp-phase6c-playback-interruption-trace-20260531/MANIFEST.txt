@@ -1,0 +1,18 @@
+Phase 6C — Playback Interruption Root-Cause Trace (instrumentation only)
+Generated: 2026-05-31
+
+Docs:
+  PLAYBACK_INTERCEPTION_TRACE.md
+  RENDER_CHURN_LOG.md
+  STREAM_LIFECYCLE_LOG.md
+  UI_CHURN_MAP.md
+  MANIFEST.txt
+
+Source:
+  src/lib/diagnostics/playback-trace.js
+  src/lib/diagnostics/state-churn-log.js
+  src/context/AudioContext.js
+  src/app/page.js
+  src/lib/playback/stream-client.js
+
+Env: NEXT_PUBLIC_PLAYBACK_TRACE=1 (or NODE_ENV=development)

@@ -1,0 +1,38 @@
+Phase 5B — Playback Death + Admin Hydration Audit
+Generated: 2026-05-31
+Mode: READ-ONLY (no code changes)
+
+Deliverables:
+  PLAYBACK_DEATH_AUDIT.md      A1-A9 synthesis
+  AUDIO_EVENT_MAP.md           Complete <audio> event handler inventory
+  PLAYBACK_STOP_COMMANDS.md    pause/stop/setQueue/clear paths + callers
+  STREAM_SWAP_AUDIT.md         upgradeToFullStream, retry, refresh, preview fallback
+  RECOVERY_AUDIT.md            SessionRecoveryRoot, useSessionRecovery, AudioPhase10Bridge
+  SCROLL_TRACE.md              Modal close → scroll → stop reachable paths
+  ADMIN_HYDRATION_AUDIT.md     B1-B9 synthesis
+  AUTH_TIMELINE.md               Initial load → admin timeline
+  RERENDER_HOTSPOTS.md           Top 10 "site refreshed" rerender sources
+  ROOT_CAUSE_RANKING.md          Top 3 + connection verdict A/B/C
+  EXECUTIVE_SUMMARY.md           Executive summary + confidence table
+  MANIFEST.txt                   This file
+
+Prior artifacts referenced:
+  .tmp-phase5a-session-hydration-audit-20260531/
+  .tmp-playback-interruption-forensic-20260531/
+
+Primary source files verified:
+  src/context/AudioContext.js
+  src/context/AuthContext.js
+  src/app/page.js
+  src/app/layout.js
+  src/components/system/AudioPhase10Bridge.js
+  src/system/recovery/useSessionRecovery.js
+  src/components/system/SessionRecoveryRoot.js
+  src/lib/playback/stream-client.js
+  src/lib/diagnostics/state-churn-log.js
+  src/app/api/account/state/route.js
+  src/components/home/CatalogGrid.js
+  src/components/auth/AppAuthRoot.js
+
+Zip output:
+  /Users/recharge/Downloads/phase5b-playback-death-admin-hydration-20260531.zip

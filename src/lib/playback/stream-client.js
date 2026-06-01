@@ -1,5 +1,7 @@
 /** Client helpers for /api/library/stream signed URL lifecycle. */
 
+import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
+import { logStreamLifecycle } from "@/lib/diagnostics/playback-trace";
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
 
 export const LIBRARY_STREAM_PATH = "/api/library/stream";
@@ -124,6 +126,16 @@ export async function fetchLibraryStream(
   { force = false, sessionId = null, trackSlug = null, signal = undefined } = {}
 ) {
   perfMark(MARKS.PLAYBACK_RESOLVER_START);
+  logStreamLifecycle("start", { source: "stream-client", slug, force, trackSlug });
+  if (signal) {
+    signal.addEventListener(
+      "abort",
+      () => {
+        logStreamLifecycle("abort", { source: "stream-client", slug, trackSlug });
+      },
+      { once: true }
+    );
+  }
   const params = new URLSearchParams({ slug });
   if (force) params.set("force", "true");
   if (sessionId) params.set("sessionId", sessionId);
@@ -135,6 +147,12 @@ export async function fetchLibraryStream(
   });
 
   if (res.status === 403 || res.status === 401) {
+    logPlaybackResilience("stream-auth-denied", {
+      source: "stream-client",
+      code: res.status === 401 ? "AUTHENTICATION_REQUIRED" : "ACCESS_DENIED",
+      slug,
+      status: res.status,
+    });
     console.error(
       `[stream-client] library stream ${res.status} for slug=${slug}`
     );
@@ -178,6 +196,12 @@ export async function fetchLibraryStream(
     } catch {
       body = {};
     }
+    logPlaybackResilience("stream-unavailable", {
+      source: "stream-client",
+      code: body.code || "MEDIA_UNAVAILABLE",
+      slug,
+      status: res.status,
+    });
     const err = new Error(body.error || "Stream asset not found");
     err.code = body.code || "MEDIA_UNAVAILABLE";
     err.status = res.status;
@@ -187,6 +211,12 @@ export async function fetchLibraryStream(
   if (!res.ok) {
     assertJsonContentType(res, slug);
     const body = await res.json().catch(() => ({}));
+    logPlaybackResilience("stream-request-failed", {
+      source: "stream-client",
+      code: body.code || "STREAM_REQUEST_FAILED",
+      slug,
+      status: res.status,
+    });
     const err = new Error(body.error || `Stream request failed (${res.status})`);
     err.code = body.code || null;
     err.status = res.status;
@@ -197,6 +227,11 @@ export async function fetchLibraryStream(
   assertJsonContentType(res, slug);
   const body = await res.json();
   if (!body?.url || typeof body.url !== "string") {
+    logPlaybackResilience("stream-missing-url", {
+      source: "stream-client",
+      code: "SIGNED_STREAM_MISSING_URL",
+      slug,
+    });
     throw createStreamClientError("signed_stream_missing_url", {
       code: "SIGNED_STREAM_MISSING_URL",
       slug,
@@ -205,6 +240,12 @@ export async function fetchLibraryStream(
   perfMark(MARKS.PLAYBACK_RESOLVER_END);
   const contentType = await assertSignedAudioUrl(body.url, { slug, signal });
   perfMark(MARKS.PLAYBACK_SIGNED_URL);
+  logStreamLifecycle("ready", {
+    source: "stream-client",
+    slug,
+    trackSlug,
+    hasSession: Boolean(body.sessionId),
+  });
   return {
     ...body,
     contentType,
@@ -212,6 +253,12 @@ export async function fetchLibraryStream(
 }
 
 export async function clearLibraryStreamSession(slug, sessionId) {
+  logStreamLifecycle("replace", {
+    source: "stream-client",
+    slug,
+    phase: "clear-session",
+    sessionId: sessionId || null,
+  });
   const params = new URLSearchParams({ slug });
   if (sessionId) params.set("sessionId", sessionId);
   await fetch(`${LIBRARY_STREAM_PATH}?${params.toString()}`, {

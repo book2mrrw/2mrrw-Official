@@ -1,3 +1,5 @@
+import { isStateChurnLogEnabled, logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
+
 export function reportPlaybackDiagnostic({
   level = "error",
   code,
@@ -21,6 +23,19 @@ export function reportPlaybackDiagnostic({
     ...context,
     at: new Date().toISOString(),
   };
+  if (isStateChurnLogEnabled()) {
+    logPlaybackResilience("diagnostic", {
+      source: "reportPlaybackDiagnostic",
+      code: payload.code,
+      level,
+      command: payload.command,
+      trackSlug: payload.trackSlug,
+      errorMessage: payload.errorMessage,
+      errorCode: payload.errorCode,
+      errorStatus: payload.errorStatus,
+      ...context,
+    });
+  }
   const writer = level === "warn" ? console.warn : console.error;
   writer("[playback-diagnostic]", payload);
 }

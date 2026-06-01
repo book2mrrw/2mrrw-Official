@@ -1,0 +1,34 @@
+Playback Interruption Forensic Investigation — 2026-05-31
+Project: /Users/recharge/artist-platform
+Mode: READ-ONLY
+
+Deliverables:
+  report.md           — 11-item forensic report + confidence
+  event-chain.md      — Modal close → scroll → stop (file:line chain)
+  suspect-matrix.md   — 7 suspect areas with verdicts
+  manifest.txt        — This file
+
+Zip output:
+  /Users/recharge/Downloads/playback-interruption-forensic-20260531.zip
+
+Primary source files cited:
+  src/app/page.js                          — AudioVisualsSection, modal handlers, scroll IO
+  src/context/AudioContext.js              — pause pipeline, provider, audio element
+  src/app/layout.js                        — provider mount order
+  src/components/preview/ImmersivePreviewModal.js — modal close, useMediaEngine
+  src/components/system/AudioPhase10Bridge.js — recovery guard
+  src/system/recovery/useSessionRecovery.js — mount recovery
+  src/context/AuthContext.js               — entitlement hook, refresh (ruled out)
+  src/components/home/CatalogGrid.js         — UI refresh symptom surface
+  src/lib/player/usePlayerBodyState.js       — modal body classes
+
+Prior audits referenced:
+  docs/reports/audio-logic-audit-20260525.md
+  .tmp-playback-stability-churn-audit-20260531/route-refresh-inventory.md
+  .tmp-playback-stability-churn-audit-20260531/ranked-root-causes.md
+
+Findings summary:
+  First bad event:  page.js:761 — handleAudioVisualsFocused → pause()
+  Root cause:       Scroll-triggered AV-section audio handoff (intentional)
+  Category:         G (other)
+  Confidence:       High (playback); Medium–High (UI refresh)

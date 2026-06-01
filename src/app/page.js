@@ -33,6 +33,11 @@ import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/li
 import { consumeGiftHighlightSlug } from "@/lib/gifts/session-keys";
 import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 import { notifyEntitlementsUpdated } from "@/lib/diagnostics/state-churn-log";
+import {
+  isPlaybackTraceEnabled,
+  logUiChurn,
+  recordPlaybackTraceContext,
+} from "@/lib/diagnostics/playback-trace";
 import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess, isAdminAccount } from "@/lib/music-access";
 import {
   albumTracksForPlayback,
@@ -368,7 +373,11 @@ function decrementInventory(inv, slug) {
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ── AUDIO VISUALS SECTION ────────────────────────────────────────────────────
-const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudioVisualsFocused }) {
+const AudioVisualsSection = memo(function AudioVisualsSection({
+  isMobile,
+  onAudioVisualsFocused,
+  onAudioVisualsExit,
+}) {
   const [featuredId, setFeaturedId] = useState(musicVideos[0].youtubeId);
   const [hasEntered, setHasEntered] = useState(false);
   const sectionRef = useRef(null);
@@ -380,15 +389,21 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
     [featuredId]
   );
 
-  const triggerFocus = useCallback(() => {
+  const startAudioVisualPlayback = useCallback(() => {
     if (!firedFocusRef.current) {
       firedFocusRef.current = true;
-      if (typeof onAudioVisualsFocused === "function") {
-        onAudioVisualsFocused();
-      }
     }
     setHasEntered(true);
-  }, [onAudioVisualsFocused]);
+  }, []);
+
+  const stopAudioVisualPlayback = useCallback(() => {
+    try {
+      iframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ event: "command", func: "pauseVideo", args: [] }),
+        "*"
+      );
+    } catch {}
+  }, []);
 
   useEffect(() => {
     const el = sectionRef.current;
@@ -408,20 +423,46 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          triggerFocus();
+          if (isPlaybackTraceEnabled()) {
+            logUiChurn("intersection", {
+              target: "audioVisuals",
+              intersecting: true,
+              ratio: entry.intersectionRatio,
+            });
+            recordPlaybackTraceContext({ lastUiSection: "audioVisuals" });
+          }
+          if (typeof onAudioVisualsFocused === "function") {
+            onAudioVisualsFocused();
+          }
+          startAudioVisualPlayback();
           if (hasBeenInView) {
             sendCmd("playVideo");
           }
           hasBeenInView = true;
         } else if (hasBeenInView) {
-          sendCmd("pauseVideo");
+          if (isPlaybackTraceEnabled()) {
+            logUiChurn("intersection", {
+              target: "audioVisuals",
+              intersecting: false,
+              ratio: entry.intersectionRatio,
+            });
+          }
+          stopAudioVisualPlayback();
+          if (typeof onAudioVisualsExit === "function") {
+            onAudioVisualsExit();
+          }
         }
       },
       { threshold: [0, threshold] }
     );
 
     obs.observe(el);
-    return () => obs.disconnect();
+    return () => {
+      if (hasBeenInView && typeof onAudioVisualsExit === "function") {
+        onAudioVisualsExit();
+      }
+      obs.disconnect();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -435,8 +476,11 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
   );
 
   const handlePlaceholderClick = useCallback(() => {
-    triggerFocus();
-  }, [triggerFocus]);
+    if (typeof onAudioVisualsFocused === "function") {
+      onAudioVisualsFocused();
+    }
+    startAudioVisualPlayback();
+  }, [onAudioVisualsFocused, startAudioVisualPlayback]);
 
   return (
     <div ref={sectionRef}>
@@ -647,7 +691,8 @@ export default function Page() {
     playbackState,
     csMode,
     isPlaying,
-    pause,
+    enterAudioVisualViewport,
+    exitAudioVisualViewport,
     toggle,
     seek,
   } = useAudioPlayer();
@@ -735,6 +780,9 @@ export default function Page() {
   const heroTextRef        = useRef(null);
   const heroSocialsRef     = useRef(null);
   const isMobileRef        = useRef(false);
+  const uiScrollLogRef     = useRef(0);
+  const prevActiveTabRef   = useRef("home");
+  const prevBrowseSinglesLenRef = useRef(0);
   const syncSinglesCarouselVideos = useCallback(() => {
     const row = singlesRowRef.current;
     if (!row) return;
@@ -756,10 +804,14 @@ export default function Page() {
     inViewVideos.slice(2).forEach((video) => video.pause());
   }, []);
 
-  // ── AUDIO FOCUS HANDLER ───────────────────────────────────────────────────
+  // ── AUDIO VISUALS VIEWPORT (music pause/resume via AudioContext) ───────────
   const handleAudioVisualsFocused = useCallback(() => {
-    if (isPlaying) pause();
-  }, [isPlaying, pause]);
+    enterAudioVisualViewport();
+  }, [enterAudioVisualViewport]);
+
+  const handleAudioVisualsExit = useCallback(() => {
+    exitAudioVisualViewport();
+  }, [exitAudioVisualViewport]);
 
   // ── EFFECTS ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -803,11 +855,43 @@ export default function Page() {
   useEffect(() => {
     const el = mainScrollRef.current;
     if (!el) return;
-    const onScroll = () => applyHeroParallax(el.scrollTop);
+    const onScroll = () => {
+      applyHeroParallax(el.scrollTop);
+      if (isPlaybackTraceEnabled()) {
+        const now = Date.now();
+        if (now - uiScrollLogRef.current >= 300) {
+          uiScrollLogRef.current = now;
+          recordPlaybackTraceContext({ lastScrollAt: now });
+          logUiChurn("scroll", { scrollTop: el.scrollTop, activeTab });
+        }
+      }
+    };
     applyHeroParallax(el.scrollTop);
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
-  }, [applyHeroParallax]);
+  }, [applyHeroParallax, activeTab]);
+
+  useEffect(() => {
+    if (!isPlaybackTraceEnabled()) return;
+    if (prevActiveTabRef.current !== activeTab) {
+      logUiChurn("section-change", { from: prevActiveTabRef.current, to: activeTab });
+      prevActiveTabRef.current = activeTab;
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (!isPlaybackTraceEnabled()) return;
+    const len = browseSingles?.length ?? 0;
+    if (len !== prevBrowseSinglesLenRef.current || catalogLoading) {
+      prevBrowseSinglesLenRef.current = len;
+      recordPlaybackTraceContext({ lastCatalogRenderAt: Date.now() });
+      logUiChurn("catalog-rerender", {
+        catalogPage,
+        singlesCount: len,
+        catalogLoading,
+      });
+    }
+  }, [browseSingles, catalogPage, catalogLoading]);
 
   useEffect(() => {
     if (!isMobile || activeTab !== "home") return;
@@ -829,7 +913,17 @@ export default function Page() {
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
         if (visible[0]) {
           const match = nodes.find(n => n.el === visible[0].target);
-          if (match) setHomeScrollSection(match.section);
+          if (match) {
+            if (isPlaybackTraceEnabled()) {
+              logUiChurn("intersection", {
+                target: match.section,
+                homeScroll: true,
+                ratio: visible[0].intersectionRatio,
+              });
+              recordPlaybackTraceContext({ lastUiSection: match.section });
+            }
+            setHomeScrollSection(match.section);
+          }
         }
       },
       { root, threshold: [0.2, 0.45, 0.65], rootMargin: "-12% 0px -55% 0px" }
@@ -2130,7 +2224,11 @@ export default function Page() {
 
                   {/* Audio Visuals */}
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
-                  <AudioVisualsSection isMobile={isMobile} onAudioVisualsFocused={handleAudioVisualsFocused}/>
+                  <AudioVisualsSection
+                    isMobile={isMobile}
+                    onAudioVisualsFocused={handleAudioVisualsFocused}
+                    onAudioVisualsExit={handleAudioVisualsExit}
+                  />
 
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
 
@@ -2223,7 +2321,11 @@ export default function Page() {
                         <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
                         <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={() => { void refreshAccountState(); void refreshLibrary(); }}/>
                       </div>
-                      <AudioVisualsSection isMobile={isMobile} onAudioVisualsFocused={handleAudioVisualsFocused}/>
+                      <AudioVisualsSection
+                    isMobile={isMobile}
+                    onAudioVisualsFocused={handleAudioVisualsFocused}
+                    onAudioVisualsExit={handleAudioVisualsExit}
+                  />
                     </>
                   )}
 
