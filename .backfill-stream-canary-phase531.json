@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "updatedAt": "2026-05-31T21:34:45.097Z",
+  "completed": [
+    {
+      "kind": "product",
+      "slug": "hour-glass",
+      "completedAt": "2026-05-31T21:17:07.931Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/singles/hour-glass/hour-glass_192.m4a"
+    },
+    {
+      "kind": "product",
+      "slug": "2-heavy",
+      "completedAt": "2026-05-31T21:21:30.759Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/features/2-heavy/2-heavy_192.m4a"
+    },
+    {
+      "kind": "product",
+      "slug": "artificial",
+      "completedAt": "2026-05-31T21:22:09.148Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/singles/artificial/artificial_192.m4a"
+    },
+    {
+      "kind": "product",
+      "slug": "i-dont-believe-you",
+      "completedAt": "2026-05-31T21:25:05.577Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/features/i-dont-believe-you/i-dont-believe-you_192.m4a"
+    },
+    {
+      "kind": "product",
+      "slug": "turnt-me-2-dis",
+      "completedAt": "2026-05-31T21:25:32.617Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/singles/turnt-me-2-dis/turnt-me-2-dis_192.m4a"
+    },
+    {
+      "kind": "product",
+      "slug": "w2d",
+      "completedAt": "2026-05-31T21:26:06.574Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/singles/w2d/w2d_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "ad",
+      "slug": "01-2mrrws-ntro",
+      "completedAt": "2026-05-31T21:28:00.715Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/ad/01-2mrrws-ntro/01-2mrrws-ntro_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "tbh",
+      "slug": "01-glass-full",
+      "completedAt": "2026-05-31T21:34:45.097Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/tbh/01-glass-full/01-glass-full_192.m4a"
+    }
+  ],
+  "failed": [
+    {
+      "kind": "catalog_track",
+      "album_slug": "love-hz-vol-1",
+      "slug": "01-roll-call",
+      "failedAt": "2026-05-31T21:28:02.015Z",
+      "error": "master_not_found"
+    }
+  ]
+}

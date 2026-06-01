@@ -1,0 +1,79 @@
+# Phase 5.3 — Hybrid Streaming Canary Deliverables Manifest
+
+**Run date:** 2026-05-31  
+**Output directory:** `.tmp-phase53-hybrid-streaming-canary-20260530/`  
+**Zip:** `/Users/recharge/Downloads/phase53-hybrid-streaming-canary-20260530.zip`
+
+---
+
+## Deliverables
+
+| # | File | Description |
+|---|------|-------------|
+| 1 | report.md | Executive summary, overall CONDITIONAL PASS, deployment readiness |
+| 2 | activation-summary.md | Flag inventory, staging activation sequence |
+| 3 | latency-comparison.md | Entitled before/after timing, R2 probes |
+| 4 | fallback-analysis.md | 21-scenario fallback matrix |
+| 5 | collector-validation.md | Downloads, vault, ownership, master protection |
+| 6 | entitlement-validation.md | Guest→Preview, Entitled→Stream/Master |
+| 7 | rollback-validation.md | Env toggle proof |
+| 8 | error-analysis.md | Miss rates, failure paths |
+| 9 | playback-surface-audit.md | All playback surfaces |
+| 10 | bottleneck-ranking.md | Post-hybrid TOP 3 entitled |
+| 11 | manifest.txt | This file |
+
+---
+
+## Validation artifacts referenced
+
+| Source | Used for |
+|--------|----------|
+| `.tmp-phase5214-unified-playback-entitlement-20260530/` | Entitlement matrix, queue, hybrid compatibility |
+| `.tmp-phase5215-direct-preview-canary-20260530/` | Guest latency baseline, bottleneck prior |
+| `.tmp-phase5210-media-acquisition-20260530/` | curl probes, entitled path analysis |
+| `.tmp-phase52-stage7-e2e-validation-20260530/` | Latency projections, rollback |
+| `.tmp-phase53a-feature-flag-audit-20260530/` | Activation readiness baseline |
+
+---
+
+## Commands executed (2026-05-31)
+
+```
+npm run build                                          → PASS
+npm run test:playback-resolver-fallback                → PASS 21/21 (flags OFF)
+HYBRID_STREAMING_ENABLED=1 STREAM_PLAYBACK_PREFERRED=1 \
+  npm run test:playback-resolver-fallback              → PASS 21/21 (flags ON)
+npm run test:foundation                                → 2 FAIL pre-existing
+HYBRID_STREAMING_ENABLED=1 AUTO_GENERATE_STREAM_ASSETS=1 \
+  npm run backfill:stream-assets -- --dry-run --limit 3 → PASS (36 candidates)
+Supabase column probe (stream_path, stream_key)         → PASS (applied, all null)
+R2 HEAD streaming/singles/hour-glass/*.m4a              → 404 (no assets)
+```
+
+---
+
+## Key source files audited
+
+- src/lib/feature-flags/hybrid-streaming.js
+- src/lib/playback/resolve-playback-key.js
+- src/lib/playback/resolve-stream-playback.js
+- src/app/api/library/stream/route.js
+- src/lib/music-access.js
+- src/lib/playback/stream-client.js
+- src/lib/media/stream-registration.js
+- scripts/backfill-stream-assets.mjs
+- supabase/migrations/20260530160000_stream_asset_registration.sql
+
+---
+
+## Overall result
+
+**CONDITIONAL PASS**
+
+- Code + tests: PASS
+- Migration: APPLIED
+- Stream assets: NOT READY (blocker for latency benefit)
+- Production global: NO
+- Staging canary: OK after backfill
+
+**STOP — Phase 5.3 complete.**

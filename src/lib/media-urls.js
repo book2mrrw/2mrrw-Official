@@ -9,6 +9,12 @@ import {
   previewDiscoveryUrl,
 } from "@/lib/media/canonical-paths";
 import { getCanonicalReleaseBySlug, resolveEntityPreviewFolder } from "@/lib/media/canonical-catalog";
+import { isDirectPreviewCdnEnabled } from "@/lib/feature-flags/direct-preview";
+import {
+  isEligibleDirectPreviewR2Key,
+  resolveCanonicalSlugFromFlatPreviewKey,
+  resolveConcretePreviewR2Key,
+} from "@/lib/media/resolve-concrete-preview-key";
 import { getPublicR2Url } from "@/lib/storage/r2";
 import { getPublicCdnBase, R2_PUBLIC_CDN_FALLBACK } from "@/lib/storage/r2-public-cdn";
 
@@ -83,6 +89,22 @@ function slugFromFlatPreviewPath(previewPath) {
   return extractSlugFromFlatPreviewKey(flatLegacy);
 }
 
+/** Direct public CDN when flag on and a concrete nested preview key exists; else discovery API. */
+function resolvePreviewPlaybackUrl(entityFolder, legacyKey, slug) {
+  if (isDirectPreviewCdnEnabled()) {
+    const key = resolveConcretePreviewR2Key({
+      entityFolder,
+      legacyKey,
+      slug,
+    });
+    if (key) {
+      const url = getPublicR2Url(key);
+      if (url && !isSiteApiMediaPath(url)) return url;
+    }
+  }
+  return previewDiscoveryUrl(entityFolder, legacyKey);
+}
+
 /** Preview audio: folder discovery API, public R2, or legacy /audio/previews/. */
 export function catalogPreviewAudioUrl(previewPath) {
   if (!previewPath) return "";
@@ -98,24 +120,30 @@ export function catalogPreviewAudioUrl(previewPath) {
     return ensureRelativeSiteApiPath(normalized);
   }
   if (isEntityPreviewFolderPath(normalized)) {
-    const canonical = getCanonicalReleaseBySlug(
-      normalized.match(/\/(singles|features|albums|mixtapes-and-eps)\/([^/]+)\/?$/)?.[2] || ""
-    );
-    return previewDiscoveryUrl(normalized, canonical?.preview_legacy || null);
+    const slug =
+      normalized.match(/\/(singles|features|albums|mixtapes-and-eps)\/([^/]+)\/?$/)?.[2] || "";
+    const canonical = getCanonicalReleaseBySlug(slug);
+    return resolvePreviewPlaybackUrl(normalized, canonical?.preview_legacy || null, slug);
   }
   const flatLegacy = flatPreviewLegacyKey(normalized);
-  const slug = slugFromFlatPreviewPath(normalized);
+  const stemSlug = slugFromFlatPreviewPath(normalized);
+  const slug =
+    (stemSlug && getCanonicalReleaseBySlug(stemSlug) ? stemSlug : null) ||
+    resolveCanonicalSlugFromFlatPreviewKey(flatLegacy || normalized) ||
+    stemSlug;
   const canonical = slug ? getCanonicalReleaseBySlug(slug) : null;
   const entityFolder =
     resolveEntityPreviewFolder(normalized, slug) || canonical?.preview_path || null;
   if (entityFolder || flatLegacy) {
-    return previewDiscoveryUrl(
-      entityFolder,
-      canonical?.preview_legacy || flatLegacy || null
-    );
+    const legacyForDiscovery = canonical?.preview_legacy || flatLegacy || null;
+    return resolvePreviewPlaybackUrl(entityFolder, legacyForDiscovery, slug);
   }
   if (FLAT_PREVIEW_FILE_RE.test(normalized)) {
-    return previewDiscoveryUrl(null, `previews/${normalized}`);
+    return resolvePreviewPlaybackUrl(null, `previews/${normalized}`, slug);
+  }
+  if (isDirectPreviewCdnEnabled() && isEligibleDirectPreviewR2Key(normalized)) {
+    const url = getPublicR2Url(normalized);
+    if (url && !isSiteApiMediaPath(url)) return url;
   }
   return catalogPublicMediaUrl(normalized);
 }

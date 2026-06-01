@@ -1,10 +1,9 @@
 
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { verifyEmailOtp, sendEmailOtp, formatOtpSendError } from "@/auth/authService";
 import { writePendingPhone, clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
 import { validateEmail, validatePhone, formatResendCountdown } from "@/lib/auth/validation";
-import { sendEmailOtp, formatOtpSendError } from "@/lib/auth/email-otp";
 import { useAuth } from "@/context/AuthContext";
 const DISMISS_DRAG_PX = 80;
 const OTP_LENGTH = 8;
@@ -100,6 +99,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
   const otpSendInFlightRef = useRef(false);
   const verifyInFlightRef = useRef(false);
   const completeProfileFetchedRef = useRef(false);
+  const otpRequestIdRef = useRef(null);
   const code = useMemo(() => digits.join(""), [digits]);
   const screen = mode === "otp" ? "otp" : mode === "signin" ? "signin" : "signup";
   const resetForm = useCallback(() => {
@@ -148,12 +148,18 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     setOtpSending(true);
     setOtpError("");
     try {
-      const supabase = createClient();
-      const { error: otpErr } = await sendEmailOtp(supabase, {
+      if (!otpRequestIdRef.current) {
+        otpRequestIdRef.current =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      }
+      const { error: otpErr, deduplicated } = await sendEmailOtp({
         email: targetEmail,
         shouldCreateUser,
+        requestId: otpRequestIdRef.current,
       });
-      if (otpErr) throw otpErr;
+      if (otpErr && !deduplicated) throw otpErr;
       setOtpEmail(targetEmail);
       setOtpCreateUser(shouldCreateUser);
       setDigits(EMPTY_DIGITS());
@@ -162,6 +168,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
       otpAutoSubmittedRef.current = false;
       setMode("otp");
     } finally {
+      otpRequestIdRef.current = null;
       otpSendInFlightRef.current = false;
       setOtpSending(false);
     }
@@ -254,8 +261,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
       setOtpLoading(true);
       setOtpError("");
       try {
-        const supabase = createClient();
-        const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        const { data, error: verifyError } = await verifyEmailOtp({
           email: otpEmail,
           token: code,
           type: "email",

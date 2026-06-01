@@ -1,0 +1,40 @@
+Phase 5.3.3A — Master Lookup Failure Audit
+Generated: 2026-05-31
+Mode: READ-ONLY (no code, R2, backfill, transcode changes)
+
+Deliverables:
+  report.md              Executive summary and root cause patterns
+  per-track-audit.md     All 10 failed tracks — detailed traces
+  lookup-trace.md        Code path documentation
+  mismatch-matrix.md     Expected vs actual R2 keys
+  recommended-fixes.md   Fix categories for implementation phase
+  manifest.txt           This file
+
+Inputs:
+  .tmp-phase533-backfill-run.log
+  .backfill-stream-phase533.json
+  scripts/backfill-stream-assets.mjs
+  src/lib/media/stream-upload-pipeline.js
+  src/lib/media/entity-resolver.js
+  src/lib/storage/r2.js
+  src/lib/sync/normalize-storage-path.js
+  supabase/migrations/20260529150000_canonical_metadata_normalization.sql
+
+Live evidence:
+  R2 ListObjectsV2 probe 2026-05-31T22:27Z (credentials from .env.local)
+  Full album audio inventory under digital-assets/mixtapes-and-eps/{ad,love-hz-vol-1,tbh}/
+
+Failed tracks (10):
+  ad/03-said-n-done
+  ad/04-a-d-d
+  ad/08-life-changes-ft-gwendolyn
+  love-hz-vol-1/01-roll-call
+  love-hz-vol-1/02-w-2-d
+  love-hz-vol-1/07-stayed-2-long
+  love-hz-vol-1/08-knock-on-wood
+  love-hz-vol-1/09-hour-glass
+  tbh/03-unxpcted
+  tbh/08-2late
+
+Zip output:
+  /Users/recharge/Downloads/phase533a-master-lookup-failure-audit-20260530.zip

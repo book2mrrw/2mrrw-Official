@@ -1,0 +1,29 @@
+Phase 5.2.8 — Decode Path Isolation
+Date: 2026-05-31
+Repository: /Users/recharge/artist-platform
+
+DELIVERABLES
+------------
+report.md
+scenario-waterfalls.md
+waitaudiosrcready-breakdown.md
+readystate-analysis.md
+platform-comparison.md
+instrumentation-changes.md
+manifest.txt
+
+CODE CHANGES (instrumentation only)
+-----------------------------------
+src/lib/dev/performanceMarks.js
+src/context/AudioContext.js
+
+ZIP OUTPUT
+----------
+/Users/recharge/Downloads/phase528-decode-path-isolation-20260530.zip
+
+VALIDATION
+----------
+npm run build — PASS
+
+HYBRID STREAMING — NOT ACTIVATED
+COMMIT / PUSH / DEPLOY — NOT PERFORMED

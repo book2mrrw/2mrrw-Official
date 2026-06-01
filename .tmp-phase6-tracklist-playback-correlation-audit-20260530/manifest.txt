@@ -1,0 +1,36 @@
+Phase 6 — Tracklist Playback Correlation Audit
+Run date: 2026-05-31
+Repository: /Users/recharge/artist-platform
+Mode: Read-only audit
+
+Deliverables:
+  report.md
+  catalog-surface-audit.md
+  tracklist-validation-ad.md
+  tracklist-validation-love-hz-vol-1.md
+  tracklist-validation-tbh.md
+  correlation-analysis.md
+  resolution-matrix.md
+  remaining-issues.md
+  manifest.txt
+  live-validation.json (full catalog validation output)
+  post-remediation-validation.json (533B snapshot copy)
+
+External references:
+  .tmp-phase533a-master-lookup-failure-audit-20260530/per-track-audit.md
+  .tmp-phase533b-remediation-targeted-backfill-20260530/remediated-paths.md
+  .tmp-phase533b-remediation-targeted-backfill-20260530/master-resolution-validation.json
+  .tmp-phase523-metadata-remediation-20260530/report.md
+
+Commands executed:
+  npm run build — PASS
+  npm run test:playback-resolver-fallback — PASS (21/21)
+  node scripts/phase533-full-catalog-validation.mjs — 35/36 registered
+  resolvePlaybackKey live probe — 15 sample tracklist tracks
+  mapAlbumTracksForPlayback static trace — ad, love-hz-vol-1, tbh
+
+Overall: CONDITIONAL PASS
+Correlation: PARTIAL (related primary; 01-roll-call unrelated)
+Zip: /Users/recharge/Downloads/phase6-tracklist-playback-correlation-audit-20260530.zip
+
+STOP — no implementation

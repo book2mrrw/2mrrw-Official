@@ -1,8 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { bootstrapSession, signOut as authSignOut, subscribeAuthState } from "@/auth/authService";
 import { isAdminUser } from "@/lib/auth/constants";
-import { SUPABASE_AUTH_STORAGE_KEY } from "@/lib/supabase/auth-storage-key";
 
 const EMPTY_ACCOUNT_STATE = {
   library: [],
@@ -222,7 +222,6 @@ export function AuthProvider({ children }) {
     sessionBootstrappedRef.current = true;
 
     let mounted = true;
-    let authSubscription = null;
 
     const clearAuthenticatedState = () => {
       signedInUserIdRef.current = null;
@@ -233,40 +232,13 @@ export function AuthProvider({ children }) {
       setAccountState(EMPTY_ACCOUNT_STATE);
     };
 
+    // authService.bootstrapSession is module-singleton — safe under Strict Mode double mount.
     (async () => {
       try {
-        const { createClient } = await import("@/lib/supabase/client");
-        const supabase = createClient();
-
-        const { data: sessionData } = await supabase.auth.getSession();
-
-        // Safari ITP can drop Supabase cookies; fall back to localStorage session.
-        let resolvedSession = sessionData?.session || null;
-        if (!resolvedSession && typeof window !== "undefined") {
-          try {
-            const raw = window.localStorage.getItem(SUPABASE_AUTH_STORAGE_KEY);
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              const candidate =
-                parsed?.access_token && parsed?.refresh_token
-                  ? parsed
-                  : parsed?.currentSession && parsed.currentSession.access_token
-                    ? parsed.currentSession
-                    : null;
-              if (candidate?.access_token && candidate?.refresh_token) {
-                const refreshed = await supabase.auth.setSession({
-                  access_token: candidate.access_token,
-                  refresh_token: candidate.refresh_token,
-                });
-                if (refreshed?.data?.session) resolvedSession = refreshed.data.session;
-              }
-            }
-          } catch {
-            /* ignore localStorage parse/setSession errors */
-          }
-        }
+        const { session: resolvedSession } = await bootstrapSession();
         if (!mounted) return;
 
+        // SAFETY: user state only from Supabase session (authService) — never device-trust localStorage.
         const resolved = resolveUserFromSession(resolvedSession);
         if (resolved) {
           signedInUserIdRef.current = resolved.user.id;
@@ -278,24 +250,6 @@ export function AuthProvider({ children }) {
           signedInUserIdRef.current = null;
           await refreshGuestRef.current?.();
         }
-
-        const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-          if (!mounted) return;
-          if (event === "SIGNED_OUT") {
-            clearAuthenticatedState();
-            return;
-          }
-          if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
-            return;
-          }
-          if (event === "SIGNED_IN" && session) {
-            const nextResolved = resolveUserFromSession(session);
-            if (!nextResolved) return;
-            if (signedInUserIdRef.current === nextResolved.user.id) return;
-            await applySessionUserRef.current?.(session);
-          }
-        });
-        authSubscription = authListener?.subscription;
       } catch {
         /* session restore optional */
       }
@@ -303,9 +257,27 @@ export function AuthProvider({ children }) {
       if (mounted) setLoading(false);
     });
 
+    const unsubscribe = subscribeAuthState(async (event, session) => {
+      if (!mounted) return;
+      if (event === "SIGNED_OUT") {
+        clearAuthenticatedState();
+        return;
+      }
+      // Silent reauth: background token refresh must not flash login or re-fetch entitlements.
+      if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+        return;
+      }
+      if (event === "SIGNED_IN" && session) {
+        const nextResolved = resolveUserFromSession(session);
+        if (!nextResolved) return;
+        if (signedInUserIdRef.current === nextResolved.user.id) return;
+        await applySessionUserRef.current?.(session);
+      }
+    });
+
     return () => {
       mounted = false;
-      authSubscription?.unsubscribe();
+      unsubscribe();
     };
   }, []);
 
@@ -334,9 +306,7 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(async () => {
     try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      await supabase.auth.signOut();
+      await authSignOut();
     } catch {
       /* ignore */
     }

@@ -1,0 +1,43 @@
+# Phase 5.2.11 — Preview Path Elimination Feasibility Study
+# Generated: 2026-05-31
+# Repository: /Users/recharge/artist-platform
+# Scope: Investigation only — no src changes
+
+report.md
+current-preview-flow.md
+direct-path-feasibility.md
+playback-flow-inventory.md
+protection-analysis.md
+analytics-impact.md
+latency-model.md
+risk-analysis.md
+manifest.txt
+
+# Source files read (read-only audit)
+src/app/api/media/preview/route.js
+src/lib/music-access.js
+src/lib/playback/resolve-playback-key.js
+src/lib/playback/stream-client.js
+src/lib/media-urls.js
+src/lib/media/canonical-paths.js
+src/lib/media/canonical-catalog.js
+src/lib/media/entity-resolver.js
+src/lib/playback/preview-resolution-cache.js
+src/lib/playback/playback-prewarm-cache.js
+src/lib/playback/play-path-domains.js
+src/lib/music-playback.js
+src/context/AudioContext.js
+src/app/page.js
+src/components/preview/ImmersivePreviewModal.js
+src/components/home/LatestSinglesStyleRow.js
+src/components/home/CatalogGrid.js
+src/components/music/ReleaseCardPlayButton.js
+src/lib/feature-flags/hybrid-streaming.js
+
+# Prior phase data
+.tmp-phase5210-media-acquisition-20260530/curl-measurements.txt
+.tmp-phase5210-media-acquisition-20260530/preview-path-analysis.md
+.tmp-phase5210-media-acquisition-20260530/report.md
+
+# Zip output
+/Users/recharge/Downloads/phase5211-preview-elimination-20260530.zip

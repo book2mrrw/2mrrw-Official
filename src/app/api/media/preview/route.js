@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
 import { getPublicR2Url } from "@/lib/storage/r2";
 import {
-  isConcreteMediaKey,
   resolveArtwork,
   resolvePreviewFile,
   resolveVideo,
@@ -10,6 +9,7 @@ import {
 } from "@/lib/media/entity-resolver";
 import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
 import { extractSlugFromFlatPreviewKey, normalizeToEntityFolder } from "@/lib/media/canonical-paths";
+import { resolveConcretePreviewR2Key } from "@/lib/media/resolve-concrete-preview-key";
 import { createServerTiming } from "@/lib/server/server-timing";
 import {
   getOrResolvePreviewMedia,
@@ -35,25 +35,13 @@ function previewLegacyCandidates(entityFolder, legacy) {
   return [...new Set(candidates.filter(Boolean))];
 }
 
-function slugFromPreviewFolder(entityFolder) {
-  return String(entityFolder || "").match(
-    /\/(singles|features|albums|mixtapes-and-eps)\/([^/]+)\/?$/
-  )?.[2];
-}
-
 function tryCanonicalPreviewFastPath(entityFolder, legacyCandidates) {
-  const slug = slugFromPreviewFolder(entityFolder);
-  const canonical = slug ? getCanonicalReleaseBySlug(slug) : null;
-  const fastKeys = [];
-  if (canonical?.preview_legacy) fastKeys.push(String(canonical.preview_legacy).replace(/^\//, ""));
-  for (const candidate of legacyCandidates) {
-    if (candidate && isConcreteMediaKey(candidate)) fastKeys.push(String(candidate).replace(/^\//, ""));
+  for (const legacy of legacyCandidates) {
+    const key = resolveConcretePreviewR2Key({ entityFolder, legacyKey: legacy });
+    if (key) return { key, source: "canonical_fast" };
   }
-  for (const key of [...new Set(fastKeys)]) {
-    if (isConcreteMediaKey(key)) {
-      return { key, source: "canonical_fast" };
-    }
-  }
+  const key = resolveConcretePreviewR2Key({ entityFolder });
+  if (key) return { key, source: "canonical_fast" };
   return null;
 }
 

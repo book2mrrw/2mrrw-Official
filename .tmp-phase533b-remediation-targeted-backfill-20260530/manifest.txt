@@ -1,0 +1,36 @@
+Phase 5.3.3B — Canonical Path Remediation + Targeted Backfill
+Run date: 2026-05-31
+Project: artist-platform (2MRRW)
+
+Deliverables:
+  report.md
+  remediated-paths.md
+  generated-streams.md
+  registrations.md
+  coverage-delta.md
+  resolver-validation.md
+  love-hz-roll-call-audit.md
+  manifest.txt
+
+Supporting artifacts:
+  remediation-log.json
+  master-resolution-validation.json
+  validation-output.json
+
+Scripts used:
+  scripts/phase533b-remediate-r2-paths.mjs
+  scripts/phase533b-validate-masters.mjs
+  scripts/phase533-full-catalog-validation.mjs
+  scripts/backfill-stream-assets.mjs
+
+Checkpoints:
+  .backfill-stream-phase533b.json
+
+Input audit:
+  .tmp-phase533a-master-lookup-failure-audit-20260530/
+
+Overall: CONDITIONAL PASS
+Coverage: 26/36 (72.2%) → 35/36 (97.2%)
+Zip: /Users/recharge/Downloads/phase533b-remediation-targeted-backfill-20260530.zip
+
+STOP

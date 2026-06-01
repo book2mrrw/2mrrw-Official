@@ -1,0 +1,28 @@
+Phase 5.2.9 — Source Acquisition Root-Cause Analysis
+Date: 2026-05-31
+Repository: /Users/recharge/artist-platform
+Zip: /Users/recharge/Downloads/phase529-source-acquisition-20260530.zip
+
+Deliverables:
+  report.md
+  waterfall-breakdown.md
+  connection-reuse-analysis.md
+  cdn-analysis.md
+  media-file-analysis.md
+  prewarm-effectiveness.md
+  platform-comparison.md
+  curl-probes-raw.txt
+  manifest.txt
+
+Code touched (dev instrumentation only):
+  src/lib/dev/performanceMarks.js — collectPlaybackResourceTiming(), dumpPlaybackTiming attribution
+
+Validation:
+  npm run build — PASS
+
+No commit / push / deploy / hybrid streaming / playback logic changes.
+
+TOP 3 (src → loadedmetadata):
+  1. CDN/R2 TTFB — 131–195 ms (curl 2026-05-31)
+  2. Cold DNS+TCP+TLS without preconnect — +40–150 ms
+  3. MP3 ID3 parse + loadedmetadata dispatch — ~15–55 ms

@@ -1,0 +1,28 @@
+Phase 5.2.10 — Media Acquisition & CDN Latency Root-Cause Analysis
+Date: 2026-05-31
+Repository: /Users/recharge/artist-platform
+Forensic only — no source changes
+
+Deliverables:
+  report.md
+  preview-path-analysis.md
+  entitled-path-analysis.md
+  cdn-cache-analysis.md
+  connection-reuse-analysis.md
+  r2-analysis.md
+  signed-url-analysis.md
+  media-header-analysis.md
+  platform-comparison.md
+  curl-measurements.txt
+  manifest.txt
+
+Reference (not in zip):
+  phase529-ref/ — extracted Phase 5.2.9 bundle for baseline comparison
+
+Zip output:
+  /Users/recharge/Downloads/phase5210-media-acquisition-20260530.zip
+
+Top 3 contributors (ms):
+  1. Preview API 302: 141–391 TTFB (+ ~198 ms redirect phase in chain)
+  2. CDN/R2 first byte: 115–210 (Phase 5.2.9: 131–195)
+  3. Cold DNS/TCP/TLS to CDN: +40–150 documented; +~220 ms connect cold probe

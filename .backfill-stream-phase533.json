@@ -1,0 +1,240 @@
+{
+  "version": 1,
+  "updatedAt": "2026-05-31T22:16:00.393Z",
+  "completed": [
+    {
+      "kind": "catalog_track",
+      "album_slug": "ad",
+      "slug": "02-here-i-come",
+      "completedAt": "2026-05-31T21:48:21.608Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/ad/02-here-i-come/02-here-i-come_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "ad",
+      "slug": "05-perspective",
+      "completedAt": "2026-05-31T21:49:20.504Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/ad/05-perspective/05-perspective_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "ad",
+      "slug": "06-grand-scheme",
+      "completedAt": "2026-05-31T21:51:18.857Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/ad/06-grand-scheme/06-grand-scheme_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "ad",
+      "slug": "07-a2b",
+      "completedAt": "2026-05-31T21:53:11.526Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/ad/07-a2b/07-a2b_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "ad",
+      "slug": "09-itself",
+      "completedAt": "2026-05-31T21:54:56.458Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/ad/09-itself/09-itself_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "ad",
+      "slug": "10-wastin-time",
+      "completedAt": "2026-05-31T21:55:28.039Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/ad/10-wastin-time/10-wastin-time_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "ad",
+      "slug": "11-like-me-or-not",
+      "completedAt": "2026-05-31T21:56:28.108Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/ad/11-like-me-or-not/11-like-me-or-not_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "love-hz-vol-1",
+      "slug": "03-guarded-heart",
+      "completedAt": "2026-05-31T21:58:00.889Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/love-hz-vol-1/03-guarded-heart/03-guarded-heart_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "love-hz-vol-1",
+      "slug": "04-all-love-it",
+      "completedAt": "2026-05-31T21:58:26.107Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/love-hz-vol-1/04-all-love-it/04-all-love-it_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "love-hz-vol-1",
+      "slug": "05-like-u-do",
+      "completedAt": "2026-05-31T22:00:12.210Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/love-hz-vol-1/05-like-u-do/05-like-u-do_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "love-hz-vol-1",
+      "slug": "06-tell-me",
+      "completedAt": "2026-05-31T22:01:42.563Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/love-hz-vol-1/06-tell-me/06-tell-me_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "love-hz-vol-1",
+      "slug": "10-turnt-me-2-dis",
+      "completedAt": "2026-05-31T22:02:47.926Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/love-hz-vol-1/10-turnt-me-2-dis/10-turnt-me-2-dis_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "tbh",
+      "slug": "02-up-2-me",
+      "completedAt": "2026-05-31T22:06:13.450Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/tbh/02-up-2-me/02-up-2-me_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "tbh",
+      "slug": "04-all-yours",
+      "completedAt": "2026-05-31T22:07:33.284Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/tbh/04-all-yours/04-all-yours_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "tbh",
+      "slug": "05-locomotive",
+      "completedAt": "2026-05-31T22:11:30.131Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/tbh/05-locomotive/05-locomotive_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "tbh",
+      "slug": "06-left",
+      "completedAt": "2026-05-31T22:13:16.696Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/tbh/06-left/06-left_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "tbh",
+      "slug": "07-was-wrong",
+      "completedAt": "2026-05-31T22:15:31.819Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/tbh/07-was-wrong/07-was-wrong_192.m4a"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "tbh",
+      "slug": "09-artificial",
+      "completedAt": "2026-05-31T22:16:00.393Z",
+      "skipped": false,
+      "reason": null,
+      "stream_key": "streaming/mixtapes-and-eps/tbh/09-artificial/09-artificial_192.m4a"
+    }
+  ],
+  "failed": [
+    {
+      "kind": "catalog_track",
+      "album_slug": "ad",
+      "slug": "03-said-n-done",
+      "failedAt": "2026-05-31T21:48:21.930Z",
+      "error": "master_not_found"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "ad",
+      "slug": "04-a-d-d",
+      "failedAt": "2026-05-31T21:48:22.159Z",
+      "error": "master_not_found"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "ad",
+      "slug": "08-life-changes-ft-gwendolyn",
+      "failedAt": "2026-05-31T21:53:11.837Z",
+      "error": "master_not_found"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "love-hz-vol-1",
+      "slug": "01-roll-call",
+      "failedAt": "2026-05-31T21:56:28.334Z",
+      "error": "master_not_found"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "love-hz-vol-1",
+      "slug": "02-w-2-d",
+      "failedAt": "2026-05-31T21:56:28.615Z",
+      "error": "master_not_found"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "love-hz-vol-1",
+      "slug": "07-stayed-2-long",
+      "failedAt": "2026-05-31T22:01:42.795Z",
+      "error": "master_not_found"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "love-hz-vol-1",
+      "slug": "08-knock-on-wood",
+      "failedAt": "2026-05-31T22:01:43.045Z",
+      "error": "master_not_found"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "love-hz-vol-1",
+      "slug": "09-hour-glass",
+      "failedAt": "2026-05-31T22:01:43.282Z",
+      "error": "master_not_found"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "tbh",
+      "slug": "03-unxpcted",
+      "failedAt": "2026-05-31T22:06:13.674Z",
+      "error": "master_not_found"
+    },
+    {
+      "kind": "catalog_track",
+      "album_slug": "tbh",
+      "slug": "08-2late",
+      "failedAt": "2026-05-31T22:15:32.057Z",
+      "error": "master_not_found"
+    }
+  ]
+}

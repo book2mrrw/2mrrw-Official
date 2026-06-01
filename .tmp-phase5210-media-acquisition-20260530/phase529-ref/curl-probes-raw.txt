@@ -1,0 +1,5 @@
+=== Phase 5.2.9 live probes 2026-05-31 ===
+See report.md for interpretation.
+Canonical MP3 HEAD ttfb=132.6ms Range1k ttfb=194.7ms Range64k ttfb=130.9ms
+API preview redirect total=1.21s stream guest 401
+Flat hourglass/w2d 404 nested 200

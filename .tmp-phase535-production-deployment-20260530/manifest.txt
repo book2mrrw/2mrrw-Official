@@ -1,0 +1,19 @@
+Phase 5.3.5 — Production Deployment + Post-Deploy Validation
+Run date: 2026-05-31
+Result: CONDITIONAL PASS
+
+report.md
+pre-deploy-check.md
+production-config.md
+deployment-record.md
+post-deploy-validation.md
+entitlement-validation.md
+production-metrics.md
+rollback-instructions.md
+manifest.txt
+
+Deployment: dpl_6qi3Y5iG8csx4vrjws2wdRdh7r83
+Commit: 250e2bbc5fce7f650e12977c2dcdf499670fd33f
+URL: https://www.2mrrw.com
+Stream hit rate: 97.2%
+Fallback rate: 2.8%

@@ -1,0 +1,32 @@
+Phase 5.2.6 — Playback Prewarming & Network Preparation
+Date: 2026-05-31
+Repository: /Users/recharge/artist-platform
+Deploy baseline: 82aeeb0 (Phase 5.2.3–5.2.5 prod)
+
+ARTIFACTS
+---------
+report.md                    Executive summary, score, rollback, validation
+network-preparation.md         Domain audit + preconnect strategy + savings estimate
+prewarm-strategy.md            IntersectionObserver prewarm design + cache contract
+page-init-findings.md          page.js mount audit (ranked, no risky refactors)
+
+SOURCE MODIFIED (9)
+-------------------
+src/app/layout.js
+src/components/home/LatestSinglesStyleRow.js
+src/components/home/CatalogGrid.js
+src/components/music/ReleaseCardPlayButton.js
+src/components/music/PlaybackPrewarmCardShell.js          [NEW]
+src/components/system/PlaybackNetworkHints.js             [NEW]
+src/hooks/usePlaybackCardPrewarm.js                       [NEW]
+src/lib/playback/play-path-domains.js                     [NEW]
+src/lib/playback/playback-prewarm-cache.js                [NEW]
+
+VALIDATION
+----------
+npm run build                                              PASS
+npm run test:playback-resolver-fallback                    PASS (21/21)
+npm run test:foundation                                    2 FAIL (pre-existing anchor doc vs HEAD 82aeeb0)
+
+HYBRID FLAGS: OFF (unchanged)
+COMMIT/PUSH/DEPLOY: none

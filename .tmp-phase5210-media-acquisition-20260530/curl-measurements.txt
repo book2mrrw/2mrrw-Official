@@ -1,0 +1,181 @@
+=== PHASE 5.2.10 MEDIA ACQUISITION CURL PROBES ===
+Date: 2026-05-31T17:31:44Z
+Host: www.2mrrw.com + pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev
+
+--- 1a PREVIEW API (no follow) run1 ---
+HTTP/2 302 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified, Server-Timing, X-Playback-Timing
+age: 750
+cache-control: public, max-age=300
+date: Sun, 31 May 2026 17:19:14 GMT
+location: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev/previews/singles/hour-glass/hourglass-preview.mp3
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/media/preview
+x-vercel-cache: STALE
+x-vercel-id: cle1::iad1::wf8v8-1780248704760-b36d084f3e79
+content-length: 0
+
+time_namelookup:0.226841 time_connect:0.234449 time_appconnect:0.303820 time_pretransfer:0.303912 time_redirect:0.000000 time_starttransfer:0.390726 time_total:0.390775 http_code:302 num_redirects:0 size_download:0
+--- 1b PREVIEW API (no follow) run2 warm ---
+HTTP/2 302 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified, Server-Timing, X-Playback-Timing
+age: 0
+cache-control: public, max-age=300
+date: Sun, 31 May 2026 17:31:44 GMT
+location: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev/previews/singles/hour-glass/hourglass-preview.mp3
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/media/preview
+x-vercel-cache: HIT
+x-vercel-id: cle1::iad1::dqcjx-1780248704931-41092a953f57
+content-length: 0
+
+time_namelookup:0.002079 time_connect:0.009825 time_appconnect:0.074501 time_pretransfer:0.074559 time_redirect:0.000000 time_starttransfer:0.141434 time_total:0.141511 http_code:302 num_redirects:0 size_download:0
+--- 1c PREVIEW API (-L full chain) run1 ---
+time_namelookup:0.041369 time_connect:0.061266 time_appconnect:0.167489 time_pretransfer:0.167656 time_redirect:0.200739 time_starttransfer:0.376357 time_total:3.485486 http_code:200 num_redirects:1 size_download:831656
+--- 1d PREVIEW API (-L) run2 ---
+time_namelookup:0.004410 time_connect:0.022999 time_appconnect:0.110119 time_pretransfer:0.110314 time_redirect:0.139249 time_starttransfer:0.266323 time_total:3.807528 http_code:200 num_redirects:1 size_download:831656
+--- 2a STREAM API guest redirect=1 ---
+HTTP/2 401 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified, Server-Timing, X-Playback-Timing
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Sun, 31 May 2026 17:31:52 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::nv2vz-1780248712415-692eb7ddb949
+
+time_namelookup:0.002348 time_connect:0.009782 time_appconnect:0.089253 time_pretransfer:0.089315 time_redirect:0.000000 time_starttransfer:0.265361 time_total:0.265576 http_code:401 num_redirects:0 size_download:24
+--- 2b STREAM API guest no redirect ---
+HTTP/2 401 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified, Server-Timing, X-Playback-Timing
+age: 0
+cache-control: public, max-age=0, must-revalidate
+content-type: application/json
+date: Sun, 31 May 2026 17:31:52 GMT
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/library/stream
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::5kml2-1780248712681-cfea1be350f4
+
+time_namelookup:0.002464 time_connect:0.011343 time_appconnect:0.078541 time_pretransfer:0.078641 time_redirect:0.000000 time_starttransfer:0.182509 time_total:0.182758 http_code:401 num_redirects:0 size_download:24
+--- 3a CDN HEAD MP3 cold (fresh conn) ---
+time_namelookup:0.001391 time_connect:0.009291 time_appconnect:0.028977 time_pretransfer:0.029016 time_redirect:0.000000 time_starttransfer:0.109831 time_total:0.109950 http_code:200 num_redirects:0 size_download:0
+--- 3b CDN HEAD MP3 warm (conn reuse same handle) ---
+time_namelookup:0.001528 time_connect:0.010170 time_appconnect:0.037426 time_pretransfer:0.037449 time_redirect:0.000000 time_starttransfer:0.145017 time_total:0.145152 http_code:200 num_redirects:0 size_download:0
+reuse2 time_namelookup:0.001461 time_connect:0.010063 time_appconnect:0.027471 time_pretransfer:0.027495 time_redirect:0.000000 time_starttransfer:0.130052 time_total:0.130168 http_code:200 num_redirects:0 size_download:0
+--- 3c CDN Range bytes=0-1023 run1 ---
+time_namelookup:0.001379 time_connect:0.011707 time_appconnect:0.032635 time_pretransfer:0.032665 time_redirect:0.000000 time_starttransfer:0.131601 time_total:0.131749 http_code:206 num_redirects:0 size_download:1024
+--- 3d CDN Range bytes=0-1023 run2 ---
+time_namelookup:0.001519 time_connect:0.008612 time_appconnect:0.030859 time_pretransfer:0.030883 time_redirect:0.000000 time_starttransfer:0.120587 time_total:0.120701 http_code:206 num_redirects:0 size_download:1024
+--- 3e CDN Range bytes=0-65535 ---
+time_namelookup:0.001410 time_connect:0.101176 time_appconnect:0.123135 time_pretransfer:0.123163 time_redirect:0.000000 time_starttransfer:0.227239 time_total:0.288127 http_code:206 num_redirects:0 size_download:65536
+--- 3f CDN GET full (first 64k only) ---
+HTTP/1.1 206 Partial Content
+Date: Sun, 31 May 2026 17:31:53 GMT
+Content-Type: audio/mpeg
+Content-Length: 65536
+Connection: keep-alive
+Content-Range: bytes 0-65535/831656
+Accept-Ranges: bytes
+ETag: "d69eafd8c7b91fd732ef4b1caed614fb"
+Last-Modified: Fri, 29 May 2026 18:06:24 GMT
+Server: cloudflare
+CF-RAY: a047b6fd4ef8accd-DFW
+
+time_namelookup:0.001449 time_connect:0.009565 time_appconnect:0.024052 time_pretransfer:0.024078 time_redirect:0.000000 time_starttransfer:0.119438 time_total:0.172452 http_code:206 num_redirects:0 size_download:65536
+--- 4a MASTER HEAD entitled asset ---
+time_namelookup:0.001405 time_connect:0.010186 time_appconnect:0.024483 time_pretransfer:0.024505 time_redirect:0.000000 time_starttransfer:0.141098 time_total:0.141169 http_code:200 num_redirects:0 size_download:0
+--- 4b MASTER Range 0-1023 ---
+time_namelookup:0.001445 time_connect:0.008886 time_appconnect:0.037206 time_pretransfer:0.037236 time_redirect:0.000000 time_starttransfer:0.186647 time_total:0.186758 http_code:206 num_redirects:0 size_download:1024
+--- 5 FLAT legacy 404 ---
+time_namelookup:0.001551 time_connect:0.012747 time_appconnect:0.032146 time_pretransfer:0.032169 time_redirect:0.000000 time_starttransfer:0.120633 time_total:0.120741 http_code:404 num_redirects:0 size_download:0
+--- 6 CDN cold TLS verbose timing (first line only) ---
+time_namelookup:0.001480 time_connect:0.228477 time_appconnect:0.249986 time_pretransfer:0.250016 time_redirect:0.000000 time_starttransfer:0.331726 time_total:0.331857 http_code:200 num_redirects:0 size_download:0
+--- 7 WAV preview Range 0-1023 ---
+HTTP/1.1 404 Not Found
+Date: Sun, 31 May 2026 17:31:54 GMT
+Content-Type: text/html
+Content-Length: 27150
+Connection: keep-alive
+Server: cloudflare
+CF-RAY: a047b7039de16c0e-DFW
+
+time_namelookup:0.001371 time_connect:0.009292 time_appconnect:0.028098 time_pretransfer:0.028137 time_redirect:0.000000 time_starttransfer:0.179023 time_total:0.218670 http_code:404 num_redirects:0 size_download:27150
+--- 8 Media header first 32 bytes MP3 ---
+00000000: 4944 3302 0000 0000 1f76 5453 5300 0011  ID3......vTSS...
+00000010: 004c 6f67 6963 2050 726f 2031 312e 312e  .Logic Pro 11.1.
+--- 9 Media header first 32 bytes WAV ---
+00000000: 3c21 444f 4354 5950 4520 6874 6d6c 3e0a  <!DOCTYPE html>.
+00000010: 3c68 746d 6c20 6c61 6e67 3d22 656e 223e  <html lang="en">
+00000020: 0a20 203c 6865 6164 3e0a 2020 2020 3c6d  .  <head>.    <m
+00000030: 6574 6120 6368 6172 7365 743d 2255 5446  eta charset="UTF
+00000040: 2d38 2220 2f3e 0a20 2020 203c 6d65 7461  -8" />.    <meta
+WAV path may 404
+--- 10 Preview legacy param ---
+HTTP/2 302 
+access-control-allow-headers: Range, Content-Type, Authorization, Origin, Accept
+access-control-allow-methods: GET, HEAD, OPTIONS
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified, Server-Timing, X-Playback-Timing
+age: 0
+cache-control: public, max-age=300
+date: Sun, 31 May 2026 17:31:55 GMT
+location: https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev/previews/hourglass-preview.mp3
+server: Vercel
+strict-transport-security: max-age=63072000
+x-matched-path: /api/media/preview
+x-vercel-cache: MISS
+x-vercel-id: cle1::iad1::f7mxx-1780248715689-dcaa42be5d3a
+content-length: 0
+
+time_namelookup:0.002249 time_connect:0.011075 time_appconnect:0.163279 time_pretransfer:0.163391 time_redirect:0.000000 time_starttransfer:0.260539 time_total:0.260656 http_code:302 num_redirects:0 size_download:0
+
+=== APPEND: Server-Timing + cold connection ===
+--- ST Server-Timing preview API ---
+(eval):11: command not found: rg
+
+=== APPEND 2: Server-Timing + multi-run (grep) ===
+--- ST preview API headers ---
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified, Server-Timing, X-Playback-Timing
+age: 61
+x-vercel-cache: HIT
+--- ST stream 401 ---
+access-control-expose-headers: Accept-Ranges, Content-Length, Content-Range, Content-Type, ETag, Last-Modified, Server-Timing, X-Playback-Timing
+x-vercel-cache: MISS
+--- CDN cache headers ---
+Accept-Ranges: bytes
+ETag: "d69eafd8c7b91fd732ef4b1caed614fb"
+Server: cloudflare
+CF-RAY: a047b845fdac806e-DFW
+--- API only 5 runs ---
+run1 ttfb_ms:0.139298 total_ms:0.139401
+run2 ttfb_ms:0.139069 total_ms:0.139208
+run3 ttfb_ms:0.208065 total_ms:0.208139
+run4 ttfb_ms:0.138478 total_ms:0.138739
+run5 ttfb_ms:0.146868 total_ms:0.146969
+--- CDN Range 1k 5 runs ---
+run1 ttfb_ms:0.206126 total_ms:0.206237
+run2 ttfb_ms:0.115509 total_ms:0.115640
+run3 ttfb_ms:0.152030 total_ms:0.152160
+run4 ttfb_ms:0.115014 total_ms:0.115157
+run5 ttfb_ms:0.210077 total_ms:0.210174
+--- cold no-keepalive ---
+cold1 ttfb:0.118287 connect:0.010726 tls:0.026180
+cold2 ttfb:0.128312 connect:0.009244 tls:0.025399
+--- -L range chain ---
+range_chain ttfb:0.313397 redirect:0.198483 total:0.314573
+--- ID3 header ---
+ID3v2 tag_size=4086 total_skip=4096

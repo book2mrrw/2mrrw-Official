@@ -1,0 +1,30 @@
+phase531-stream-backfill-canary-20260530/
+├── report.md
+├── stream-inventory.md
+├── registration-audit.md
+├── resolver-hit-analysis.md
+├── latency-comparison.md
+├── collector-protection-audit.md
+├── rollback-validation.md
+├── error-analysis.md
+├── playback-surface-audit.md
+├── bottleneck-ranking.md
+└── manifest.txt
+
+Generated: 2026-05-31
+Phase: 5.3.1 — Stream Asset Backfill Canary
+Overall: CONDITIONAL PASS
+Stream hits: 8/8 canary (100%)
+Catalog registered: 8/36 (22%)
+Zip: /Users/recharge/Downloads/phase531-stream-backfill-canary-20260530.zip
+
+Artifacts (repo):
+├── .backfill-stream-canary-phase531.json
+├── scripts/phase531-canary-validation.mjs
+├── scripts/phase531-latency-probe.mjs
+└── src/lib/media/stream-registration-validation.js (hyphen fix)
+
+Validation:
+  npm run build — PASS
+  npm run test:playback-resolver-fallback — PASS 21/21
+  npm run test:foundation — 2 FAIL pre-existing

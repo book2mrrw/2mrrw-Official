@@ -1,0 +1,45 @@
+# Phase 5.2.14 — Unified Playback Entitlement Validation
+# Generated: 2026-05-31
+# Repository: /Users/recharge/artist-platform
+# Mode: READ-ONLY AUDIT — NO IMPLEMENTATION
+
+report.md
+entitlement-matrix.md
+playback-flow-diagrams.md
+queue-validation.md
+media-session-validation.md
+direct-preview-validation.md
+hybrid-streaming-compatibility.md
+architecture-forks.md
+manifest.txt
+
+# Prior phases referenced
+.tmp-phase5212-direct-preview-readiness-20260530/report.md
+.tmp-phase5212-direct-preview-readiness-20260530/queue-validation.md
+.tmp-phase5212-direct-preview-readiness-20260530/media-session-validation.md
+.tmp-phase5213-direct-preview-implementation-20260530/report.md
+
+# Key source files audited
+src/context/AudioContext.js
+src/context/AuthContext.js
+src/lib/music-access.js
+src/lib/media-urls.js
+src/lib/playback/resolve-playback-key.js
+src/lib/music-playback.js
+src/lib/feature-flags/direct-preview.js
+src/lib/feature-flags/hybrid-streaming.js
+src/app/api/library/stream/route.js
+src/app/api/media/preview/route.js
+src/lib/entitlements.js
+src/lib/commerce/entitlements.js
+src/components/home/LatestSinglesStyleRow.js
+src/components/home/CatalogGrid.js
+src/components/music/AlbumTracklistSheet.js
+src/components/music/ReleaseCardPlayButton.js
+src/lib/playback/playback-prewarm-cache.js
+src/hooks/usePlaybackCardPrewarm.js
+src/components/audio/GlobalAudioPlayerBar.js
+
+# Overall: PASS
+# Fork count: 7 (1 P2 advisory, 6 expected preview/stream semantics)
+# Zip: /Users/recharge/Downloads/phase5214-unified-playback-entitlement-20260530.zip

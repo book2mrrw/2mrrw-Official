@@ -3,9 +3,8 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { getAuthenticatedUser, sendEmailOtp, formatOtpSendError } from "@/auth/authService";
 import { validateEmail } from "@/lib/auth/validation";
-import { sendEmailOtp, formatOtpSendError } from "@/lib/auth/email-otp";
 
 const inputStyle = {
   padding: "12px 14px",
@@ -29,14 +28,15 @@ function LoginForm() {
   const [emailError, setEmailError] = useState("");
   const [giftPreview, setGiftPreview] = useState(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const otpSendInFlightRef = useRef(false);
+  const submitRequestIdRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const supabase = createClient();
-        const { data } = await supabase.auth.getUser();
-        if (mounted && data?.user?.email && !data.user.email.endsWith("@guest.2mrrw.local")) {
+        const user = await getAuthenticatedUser();
+        if (mounted && user?.email) {
           router.replace("/");
           return;
         }
@@ -76,17 +76,24 @@ function LoginForm() {
 
     if (loading || otpSendInFlightRef.current) return;
 
+    if (!submitRequestIdRef.current) {
+      submitRequestIdRef.current =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+
     setLoading(true);
     otpSendInFlightRef.current = true;
 
     try {
-      const supabase = createClient();
-      const { error: otpError } = await sendEmailOtp(supabase, {
+      const { error: otpError, deduplicated } = await sendEmailOtp({
         email: emailCheck.value,
         shouldCreateUser: false,
+        requestId: submitRequestIdRef.current,
       });
 
-      if (otpError) {
+      if (otpError && !deduplicated) {
         if (/not found|no user|signups not allowed/i.test(otpError.message)) {
           setError("No account found. Create one here.");
         } else {
@@ -100,6 +107,7 @@ function LoginForm() {
     } catch (err) {
       setError(formatOtpSendError(err));
     } finally {
+      submitRequestIdRef.current = null;
       otpSendInFlightRef.current = false;
       setLoading(false);
     }

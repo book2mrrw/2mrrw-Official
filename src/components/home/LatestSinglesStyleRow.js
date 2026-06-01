@@ -4,6 +4,7 @@ import { forwardRef } from "react";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
+import PlaybackPrewarmCardShell from "@/components/music/PlaybackPrewarmCardShell";
 import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
 import { albumCardPlaybackItem } from "@/lib/music-playback";
 import { withR2CatalogMedia, catalogCoverDisplay } from "@/components/home/catalogMedia";
@@ -62,8 +63,16 @@ export default forwardRef(function LatestSinglesStyleRow(
         const coverDisplay = catalogCoverDisplay(item);
 
         return (
-          <div
+          <PlaybackPrewarmCardShell
             key={item.slug || item.id || `row-card-${i}`}
+            releaseItem={item}
+            playItem={playItem}
+            catalogPlaybackLookup={catalogPlaybackLookup}
+            accountState={accountState}
+            userId={userId}
+            source={source}
+            isAlbumCard={cardMedia === "cover"}
+            enabled={showPlayActions}
             data-single-card={cardMedia === "video" ? true : undefined}
             onClick={() => onCardClick?.(item)}
             style={{
@@ -176,7 +185,7 @@ export default forwardRef(function LatestSinglesStyleRow(
                 </div>
               ) : null}
             </div>
-          </div>
+          </PlaybackPrewarmCardShell>
         );
       })}
     </div>

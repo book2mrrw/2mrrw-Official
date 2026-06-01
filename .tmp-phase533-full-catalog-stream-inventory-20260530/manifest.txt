@@ -1,0 +1,54 @@
+Phase 5.3.3 — Full Catalog Stream Inventory Backfill
+Project: artist-platform (2MRRW)
+Run date: 2026-05-31
+Overall: CONDITIONAL PASS
+
+Deliverables:
+  report.md
+  catalog-coverage.md
+  generation-coverage.md
+  registration-coverage.md
+  resolver-readiness.md
+  failure-analysis.md
+  rollback-verification.md
+  r2-validation.md
+  manifest.txt
+
+Artifacts (repo root, not in ZIP):
+  .backfill-stream-phase533.json       — checkpoint (18 completed, 10 failed)
+  .backfill-stream-canary-phase531.json — canary checkpoint (8 completed, 1 failed)
+  .tmp-phase533-backfill-run.log       — full CLI transcript
+  .tmp-phase533-validation.json        — resolver + R2 audit JSON
+  scripts/phase533-full-catalog-validation.mjs — audit script
+
+Commands executed:
+  npm run backfill:stream-assets -- --yes --dry-run --checkpoint .backfill-stream-phase533.json
+  FFMPEG_PATH=node_modules/ffmpeg-static/ffmpeg npm run backfill:stream-assets -- --yes --checkpoint .backfill-stream-phase533.json
+  node --import ./scripts/register-alias.mjs scripts/phase533-full-catalog-validation.mjs
+  npm run build                                          → PASS
+  npm run test:playback-resolver-fallback                → PASS (21/21)
+  npm run test:foundation                                → 2 FAIL (pre-existing anchor drift)
+
+Key metrics:
+  Total playable assets:     36
+  Stream registered:         26 (72.2%)
+  Stream generated (new):    18 (this run) + 8 (canary) = 26 total
+  R2 HEAD validated:         26/26 registered (100%)
+  Resolver hit rate:           26/36 (72.2%)
+  Failures:                    10 (all master_not_found)
+  Skipped at run start:        8 (already registered)
+  Global production flags:     NOT ENABLED
+
+Failure list:
+  track:ad/03-said-n-done
+  track:ad/04-a-d-d
+  track:ad/08-life-changes-ft-gwendolyn
+  track:love-hz-vol-1/01-roll-call
+  track:love-hz-vol-1/02-w-2-d
+  track:love-hz-vol-1/07-stayed-2-long
+  track:love-hz-vol-1/08-knock-on-wood
+  track:love-hz-vol-1/09-hour-glass
+  track:tbh/03-unxpcted
+  track:tbh/08-2late
+
+STOP — Phase 5.3.3 complete. No global production flags enabled.

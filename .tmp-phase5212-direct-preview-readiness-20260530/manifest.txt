@@ -1,0 +1,50 @@
+Phase 5.2.12 — Direct Preview Activation Readiness Validation
+Generated: 2026-05-31
+Repository: /Users/recharge/artist-platform
+Scope: Read-only validation (no src changes)
+
+Builds on:
+  .tmp-phase5211-preview-elimination-20260530/
+
+Authorization: DIRECT PREVIEW ACTIVATION AUTHORIZED (partial, with B1–B3)
+Blockers before prod flag: 3
+Hard regression blockers: 0
+
+Deliverables:
+  report.md
+  playback-surface-audit.md
+  queue-validation.md
+  media-session-validation.md
+  analytics-validation.md
+  audio-continuity-validation.md
+  prewarm-validation.md
+  fallback-validation.md
+  rollback-validation.md
+  risk-review.md
+  manifest.txt
+
+Key source files reviewed:
+  src/lib/music-access.js
+  src/lib/media-urls.js
+  src/lib/media/canonical-paths.js
+  src/lib/media/canonical-catalog.js
+  src/lib/music-playback.js
+  src/lib/playback/stream-client.js
+  src/lib/playback/playback-prewarm-cache.js
+  src/lib/playback/play-path-domains.js
+  src/hooks/usePlaybackCardPrewarm.js
+  src/context/AudioContext.js
+  src/app/api/media/preview/route.js
+  src/app/page.js
+  src/components/home/LatestSinglesStyleRow.js
+  src/components/home/CatalogGrid.js
+  src/components/music/AlbumTracklistSheet.js
+  src/components/music/ReleaseCardPlayButton.js
+  src/components/music/PlaybackPrewarmCardShell.js
+  src/components/system/PlaybackNetworkHints.js
+  src/lib/control-system/playback.js
+
+Zip output:
+  /Users/recharge/Downloads/phase5212-direct-preview-readiness-20260530.zip
+
+STOP — validation phase complete.

@@ -1,0 +1,13 @@
+.tmp-auth-refactor-production-20260530/report.md
+.tmp-auth-refactor-production-20260530/architecture.md
+.tmp-auth-refactor-production-20260530/duplicate-triggers-removed.md
+.tmp-auth-refactor-production-20260530/session-fixes.md
+.tmp-auth-refactor-production-20260530/validation-results.md
+.tmp-auth-refactor-production-20260530/manifest.txt
+src/auth/authService.js
+src/context/AuthContext.js
+src/lib/auth/email-otp.js
+src/app/login/page.js
+src/app/join/page.js
+src/app/verify-otp/page.js
+src/components/auth/AuthGate.js

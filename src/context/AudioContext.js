@@ -45,7 +45,17 @@ import {
 } from "@/media/mediaEngineBridge";
 import { preloadCoverImage } from "@/lib/media/preload";
 import { logPlayback } from "@/lib/observability/client-log";
-import { MARKS, perfMark, perfMeasure, dumpPlaybackTiming } from "@/lib/dev/performanceMarks";
+import {
+  MARKS,
+  perfMark,
+  perfMeasure,
+  dumpPlaybackTiming,
+  attachPlaybackElementDevTelemetry,
+  recordAudioContextState,
+  resetPlaybackTimingCapture,
+  setPlaybackScenario,
+  PLAYBACK_SCENARIOS,
+} from "@/lib/dev/performanceMarks";
 import AudioPhase10Bridge from "@/components/system/AudioPhase10Bridge";
 import { isFirstListen, markListened } from "@/lib/first-listen";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
@@ -114,15 +124,68 @@ function clampRestorePosition(positionSeconds, durationSeconds) {
   return positionSeconds;
 }
 
+/** Set dev scenario label before tap marks (Phase 5.2.8). */
+function inferPlaybackScenario(audio, track, options = {}, commandContext = {}) {
+  if (options.playbackScenario) {
+    return { label: options.playbackScenario, meta: { source: "explicit-option" } };
+  }
+
+  const { commandType, queueLength = 0 } = commandContext;
+  const hasStarted = Boolean(options._hasStarted);
+  const isPlaying = Boolean(options._isPlaying);
+  const currentTrack = options._currentTrack ?? null;
+  const trackSrc = track?.src || "";
+
+  if (commandType === PLAYBACK_COMMANDS.COMPLETE) {
+    return { label: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE, meta: { commandType } };
+  }
+  if (commandType === PLAYBACK_COMMANDS.NEXT_TRACK) {
+    return { label: PLAYBACK_SCENARIOS.TRACK_SKIP, meta: { commandType, manualSkip: true } };
+  }
+  if (commandType === PLAYBACK_COMMANDS.PLAY_QUEUE && queueLength > 1) {
+    return { label: PLAYBACK_SCENARIOS.ALBUM_TRACKLIST, meta: { queueLength } };
+  }
+
+  const normalizedSrc = trackSrc ? normalizePlaybackSrc(trackSrc) : "";
+  const currentSrc = audio ? normalizePlaybackSrc(audio.src) : "";
+  const sameSrc = normalizedSrc && normalizedSrc === currentSrc;
+
+  if (sameSrc && audio?.readyState >= 2) {
+    return { label: PLAYBACK_SCENARIOS.CACHED_PLAYBACK, meta: { sameSrc: true, readyState: audio.readyState } };
+  }
+  if (!hasStarted) {
+    return { label: PLAYBACK_SCENARIOS.COLD_START, meta: {} };
+  }
+
+  if (currentTrack && track && isPlaying) {
+    const sameTrack =
+      (currentTrack.slug && currentTrack.slug === track.slug) ||
+      (currentTrack.id && currentTrack.id === track.id);
+    if (!sameTrack) {
+      return { label: PLAYBACK_SCENARIOS.TRACK_SKIP, meta: { sameSrc, manualSkip: false } };
+    }
+  }
+
+  if (hasStarted && sameSrc) {
+    return { label: PLAYBACK_SCENARIOS.WARM_START, meta: { sameSrc: true } };
+  }
+
+  return { label: PLAYBACK_SCENARIOS.WARM_START, meta: { sameSrc: false } };
+}
+
 /** Set src, wait for loadeddata/canplay/error/timeout with abort support, then load(). */
 async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_READY_TIMEOUT_MS } = {}) {
+  perfMark(MARKS.PLAYBACK_WAIT_SRC_START);
   if (!audio || typeof audio.load !== "function") {
+    perfMark(MARKS.PLAYBACK_WAIT_SRC_END);
     throw createPlaybackError("AUDIO_SRC_INVALID", "Audio element is unavailable");
   }
   if (!src || typeof src !== "string") {
+    perfMark(MARKS.PLAYBACK_WAIT_SRC_END);
     throw createPlaybackError("AUDIO_SRC_INVALID", "Playback source is invalid", { src });
   }
   if (signal?.aborted) {
+    perfMark(MARKS.PLAYBACK_WAIT_SRC_END);
     throw createPlaybackError("AUDIO_SRC_ABORTED", "Playback source readiness was aborted");
   }
 
@@ -131,8 +194,10 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
   const sameSrc = normalizedSrc === currentSrc;
 
   if (sameSrc && audio.readyState >= 2) {
+    perfMark(MARKS.PLAYBACK_WAIT_SRC_GUARD_SAME_SRC);
     perfMark(MARKS.PLAYBACK_SRC_ASSIGN);
     perfMark(MARKS.PLAYBACK_CANPLAY);
+    perfMark(MARKS.PLAYBACK_WAIT_SRC_END);
     return;
   }
 
@@ -153,6 +218,7 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
       audio.removeEventListener("loadeddata", onDataReady);
       audio.removeEventListener("error", onError);
       signal?.removeEventListener("abort", onAbort);
+      perfMark(MARKS.PLAYBACK_WAIT_SRC_END);
       resolver(value);
     };
     const onReady = () => {
@@ -160,10 +226,12 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
       settle(resolve);
     };
     const onDataReady = () => {
+      perfMark(MARKS.PLAYBACK_LOADEDDATA);
       perfMark(MARKS.PLAYBACK_FIRST_BYTE);
       if (audio.readyState >= 2) onReady();
     };
     const onMetadataReady = () => {
+      perfMark(MARKS.PLAYBACK_LOADEDMETADATA);
       if (audio.readyState >= 2) onReady();
     };
     const onError = (event) => {
@@ -179,6 +247,7 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
       settle(reject, createPlaybackError("AUDIO_SRC_ABORTED", "Playback source readiness was aborted"));
     };
     if (audio.readyState >= 2) {
+      perfMark(MARKS.PLAYBACK_WAIT_SRC_GUARD_EARLY_READY);
       settle(resolve);
       return;
     }
@@ -197,6 +266,7 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
     audio.addEventListener("error", onError);
     signal?.addEventListener("abort", onAbort, { once: true });
     if (!sameSrc || audio.readyState < 2) {
+      perfMark(MARKS.PLAYBACK_WAIT_SRC_LOAD_CALL);
       audio.load();
     }
   });
@@ -205,7 +275,9 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
 async function loadAudioSrcAndPlay(audio, src, { signal, command, requestId, state, context } = {}) {
   await waitAudioSrcReady(audio, src, { signal });
   try {
+    perfMark(MARKS.PLAYBACK_AUDIO_PLAY_CALL);
     await audio.play();
+    perfMark(MARKS.PLAYBACK_PLAY_PROMISE_RESOLVED);
   } catch (e) {
     reportPlaybackDiagnostic({
       level: e?.name === "AbortError" ? "warn" : "error",
@@ -223,7 +295,9 @@ async function playAudioIfNotPaused(audio, isPlaying, { command, requestId, stat
   if (!isPlaying) return;
   if (!audio.paused) return;
   try {
+    perfMark(MARKS.PLAYBACK_AUDIO_PLAY_CALL);
     await audio.play();
+    perfMark(MARKS.PLAYBACK_PLAY_PROMISE_RESOLVED);
   } catch (e) {
     reportPlaybackDiagnostic({
       level: e?.name === "AbortError" ? "warn" : "error",
@@ -736,6 +810,7 @@ export function AudioProvider({ children }) {
       bassFilterRef.current = bassFilter;
       webAudioInitializedRef.current = true;
       webAudioAvailableRef.current = true;
+      recordAudioContextState(ctx, "initWebAudio");
     } catch (err) {
       console.warn("[AUDIO] Web Audio graph init failed, routing direct:", err?.message || err);
       try {
@@ -776,6 +851,7 @@ export function AudioProvider({ children }) {
 
       initWebAudio();
       await resumeWebAudioContextIfSuspended(audioCtxRef);
+      recordAudioContextState(audioCtxRef.current, "gesture-unlock");
 
       try {
         const Ctx = window.AudioContext || window.webkitAudioContext;
@@ -784,6 +860,7 @@ export function AudioProvider({ children }) {
           if (ephemeral.state === "suspended") {
             await ephemeral.resume();
           }
+          recordAudioContextState(ephemeral, "ephemeral-unlock");
           await ephemeral.close();
         }
       } catch {
@@ -932,7 +1009,10 @@ export function AudioProvider({ children }) {
       perfMeasure("audio-start-latency", MARKS.AUDIO_START_LATENCY_START, MARKS.AUDIO_START_LATENCY_END);
       dumpPlaybackTiming();
     };
-    const onCanPlayThrough = () => patchState({ isBuffering: false });
+    const onCanPlayThrough = () => {
+      perfMark(MARKS.PLAYBACK_CANPLAYTHROUGH);
+      patchState({ isBuffering: false });
+    };
 
     const onPlay = () => {
       userPausedRef.current = false;
@@ -1140,7 +1220,10 @@ export function AudioProvider({ children }) {
           if (nextTrack) {
             queueIndexRef.current = nextIndex;
             patchState({ queueIndex: nextIndex, playbackState: "playing" });
-            void playTrackRef.current?.(nextTrack, { resumeAt: 0 }).then((ok) => {
+            resetPlaybackTimingCapture();
+            setPlaybackScenario(PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE, { source: "ended-handler" });
+            perfMark(MARKS.PLAYBACK_TAP);
+            void playTrackRef.current?.(nextTrack, { resumeAt: 0, playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE }).then((ok) => {
               if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
             });
             return;
@@ -1331,6 +1414,8 @@ export function AudioProvider({ children }) {
       patchState({ duration: 0 });
     };
 
+    const detachPlaybackDevTelemetry = attachPlaybackElementDevTelemetry(audio);
+
     audio.addEventListener("play", onPlay);
     audio.addEventListener("pause", onPause);
     audio.addEventListener("timeupdate", onTime);
@@ -1366,6 +1451,7 @@ export function AudioProvider({ children }) {
     }
 
     return () => {
+      detachPlaybackDevTelemetry();
       window.removeEventListener("online", onOnline);
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
@@ -1476,6 +1562,7 @@ export function AudioProvider({ children }) {
 
     initWebAudio();
     await resumeWebAudioContextIfSuspended(audioCtxRef);
+    recordAudioContextState(audioCtxRef.current, "playTrack-resume");
     setPreviewEnded(false);
     if (!track || (typeof track !== "object")) {
       console.error("[AudioContext] playTrack: invalid track", track);
@@ -2535,6 +2622,7 @@ export function AudioProvider({ children }) {
     const isEmergencyBypass = type === PLAYBACK_COMMANDS.STOP || type === PLAYBACK_COMMANDS.PAUSE;
 
     const run = async () => {
+      perfMark(MARKS.PLAYBACK_QUEUE_RESOLVED);
       if (
         activeCommandRef.current &&
         Date.now() - (activeCommandRef.current.issuedAt || 0) > ACTIVE_COMMAND_STALE_MS
@@ -2626,6 +2714,14 @@ export function AudioProvider({ children }) {
   }, [executePlaybackCommand]);
 
   const playTrack = useCallback((track, options = {}) => {
+    resetPlaybackTimingCapture();
+    const scenario = inferPlaybackScenario(audioRef.current, track, {
+      ...options,
+      _hasStarted: stateRef.current.hasStarted,
+      _isPlaying: stateRef.current.isPlaying,
+      _currentTrack: stateRef.current.currentTrack,
+    }, { commandType: PLAYBACK_COMMANDS.PLAY_TRACK });
+    setPlaybackScenario(scenario.label, scenario.meta);
     perfMark(MARKS.PLAYBACK_TAP);
     return dispatchPlaybackCommand(
       PLAYBACK_COMMANDS.PLAY_TRACK,
@@ -2635,6 +2731,15 @@ export function AudioProvider({ children }) {
   }, [dispatchPlaybackCommand]);
 
   const playQueue = useCallback((tracks = [], startIndex = 0, options = {}) => {
+    resetPlaybackTimingCapture();
+    const startTrack = tracks[Math.max(0, Math.min(startIndex, tracks.length - 1))];
+    const scenario = inferPlaybackScenario(audioRef.current, startTrack, {
+      ...options,
+      _hasStarted: stateRef.current.hasStarted,
+      _isPlaying: stateRef.current.isPlaying,
+      _currentTrack: stateRef.current.currentTrack,
+    }, { commandType: PLAYBACK_COMMANDS.PLAY_QUEUE, queueLength: tracks.length });
+    setPlaybackScenario(scenario.label, scenario.meta);
     perfMark(MARKS.PLAYBACK_TAP);
     return dispatchPlaybackCommand(
       PLAYBACK_COMMANDS.PLAY_QUEUE,
@@ -2643,10 +2748,15 @@ export function AudioProvider({ children }) {
     );
   }, [dispatchPlaybackCommand]);
 
+  const playNext = useCallback(() => {
+    resetPlaybackTimingCapture();
+    setPlaybackScenario(PLAYBACK_SCENARIOS.TRACK_SKIP, { manualSkip: true, commandType: PLAYBACK_COMMANDS.NEXT_TRACK });
+    perfMark(MARKS.PLAYBACK_TAP);
+    return dispatchPlaybackCommand(PLAYBACK_COMMANDS.NEXT_TRACK);
+  }, [dispatchPlaybackCommand]);
   const pause = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PAUSE), [dispatchPlaybackCommand]);
   const resume = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.RESUME), [dispatchPlaybackCommand]);
   const seek = useCallback((time) => dispatchPlaybackCommand(PLAYBACK_COMMANDS.SEEK, { time }, { serial: false }), [dispatchPlaybackCommand]);
-  const playNext = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.NEXT_TRACK), [dispatchPlaybackCommand]);
   const playPrevious = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PREV_TRACK), [dispatchPlaybackCommand]);
   const stop = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.STOP, {}, { cancelActiveStream: true }), [dispatchPlaybackCommand]);
   const toggle = useCallback(() => {

@@ -1,0 +1,30 @@
+# Phase 5.2.15 Direct Preview Canary — Manifest
+# Generated: 2026-05-31
+
+report.md
+before-after-latency.md
+regression-audit.md
+fallback-audit.md
+analytics-audit.md
+queue-validation.md
+media-session-validation.md
+error-analysis.md
+rollback-verification.md
+bottleneck-ranking.md
+manifest.txt
+
+# Validation commands executed
+npm run build                          PASS
+npm run test:direct-preview-cdn        PASS (10/10)
+npm run test:playback-resolver-fallback PASS (21/21)
+npm run test:foundation                2 FAIL pre-existing
+
+# Canary env (local/staging only — NOT prod global)
+DIRECT_PREVIEW_ENABLED=1
+NEXT_PUBLIC_DIRECT_PREVIEW_CDN=1
+
+# Zip output
+/Users/recharge/Downloads/phase5215-direct-preview-canary-20260530.zip
+
+# Overall
+PASS

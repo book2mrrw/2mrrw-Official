@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { toPlaybackTrack } from "@/lib/music-playback";
 import { resolveTrackAccess } from "@/lib/music-access";
+import { getPlaybackPrewarmEntry, playbackPrewarmKey } from "@/lib/playback/playback-prewarm-cache";
 import { preloadTrack } from "@/media/preloader/MediaPreloader";
 import { catalogPreviewAudioUrl } from "@/lib/media-urls";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
@@ -45,7 +46,14 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         onPlayClick(e, item);
         return;
       }
-      const track = toPlaybackTrack(item, { ...accountState, userId }, source);
+      const prewarmKey = playbackPrewarmKey({
+        releaseSlug: item?.albumSlug || item?.slug,
+        trackSlug: item?.trackSlug || item?.track_slug,
+        trackIndex: item?.trackIndex ?? 0,
+      });
+      const prewarmed = getPlaybackPrewarmEntry(prewarmKey);
+      const playbackItem = prewarmed?.normalizedFirst || item;
+      const track = toPlaybackTrack(playbackItem, { ...accountState, userId }, source);
       if (!track.src) return;
       const sameTrack =
         hasStarted &&

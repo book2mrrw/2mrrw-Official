@@ -28,7 +28,7 @@ const STREAM_ENTITY_FOLDER_RE = new RegExp(
 );
 
 const STREAM_KEY_RE = new RegExp(
-  `^${STREAM_ROOT}/(?:singles|features|albums|mixtapes-and-eps)/(?:[a-z0-9-]+/)+[a-z0-9]+(?:_192)?\\.${DEFAULT_STREAM_EXT}$`
+  `^${STREAM_ROOT}/(?:singles|features|albums|mixtapes-and-eps)/(?:[a-z0-9-]+/)+[a-z0-9-]+(?:_192)?\\.${DEFAULT_STREAM_EXT}$`
 );
 
 /**

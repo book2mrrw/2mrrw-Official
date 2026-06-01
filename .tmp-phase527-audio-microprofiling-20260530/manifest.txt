@@ -1,0 +1,26 @@
+Phase 5.2.7 — Audio Decode Micro-Profiling (Instrumentation Only)
+Date: 2026-05-31
+Repository: /Users/recharge/artist-platform
+Deploy baseline: 82aeeb0 (+ unstaged dev instrumentation)
+Hybrid flags: OFF (unchanged)
+
+ARTIFACTS
+---------
+report.md                    Executive summary + validation
+instrumentation-map.md         Full tap→audible mark map + hook sites
+methodology.md                 Desktop Chrome procedure + device-run requirements
+timing-waterfall.md            Ordered pipeline stages + dev measures
+bottleneck-ranking.md          TOP 5 bottlenecks with ms estimates
+
+SOURCE MODIFIED (instrumentation only — dev-gated, no prod behavior change)
+-----------------------------------------------------------------------------
+src/lib/dev/performanceMarks.js       Extended marks, waterfall, element telemetry, dumpPlaybackTiming
+src/context/AudioContext.js         Dev hooks: element telemetry, AudioContext state, play() marks, reset on tap
+src/lib/playback/stream-client.js     Resolver marks (PLAYBACK_RESOLVER_*, PLAYBACK_SIGNED_URL) — pre-existing
+
+VALIDATION
+----------
+npm run build                                              PASS
+
+COMMIT/PUSH/DEPLOY: none
+FIXES/OPTIMIZATIONS: none (STOP)

@@ -5,6 +5,7 @@ import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
+import PlaybackPrewarmCardShell from "@/components/music/PlaybackPrewarmCardShell";
 import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
 import { albumCardPlaybackItem } from "@/lib/music-playback";
 import { withR2CatalogMedia, isUpcomingReleaseDate } from "@/components/home/catalogMedia";
@@ -82,7 +83,20 @@ export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut,
         }
 
         return (
-        <div key={item.slug} style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}} onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"} onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}>
+        <PlaybackPrewarmCardShell
+          key={item.slug}
+          releaseItem={item}
+          playItem={playItem}
+          catalogPlaybackLookup={catalogPlaybackLookup}
+          accountState={accountState}
+          userId={userId}
+          source={type === "albums" ? "home_album_card" : "home_card"}
+          isAlbumCard={type === "albums"}
+          enabled={showPlayActions}
+          style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"}
+          onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}
+        >
           {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(item)} /> : null}
           <div onMouseEnter={hoverIn} onMouseLeave={hoverOut} onClick={() => onCardClick?.(item)} style={{ cursor: "pointer" }}>
             <CoverArt
@@ -156,7 +170,7 @@ export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut,
               ) : null}
             </div>
           </div>
-        </div>
+        </PlaybackPrewarmCardShell>
       );})}
     </div>
   );

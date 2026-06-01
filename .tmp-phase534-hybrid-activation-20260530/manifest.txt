@@ -1,0 +1,51 @@
+Phase 5.3.4 — Hybrid Streaming Activation + Deployment Validation
+Run date: 2026-05-31
+Result: CONDITIONAL PASS
+
+DELIVERABLES
+============
+report.md
+pre-activation-audit.md
+activation-config.md
+validation-results.md
+entitlement-validation.md
+tracklist-validation.md
+performance-measurements.md
+rollback-instructions.md
+manifest.txt
+catalog-validation-output.json
+tracklist-validation-output.json
+
+COMMANDS RUN
+============
+npm run build                                          PASS
+npm run test:playback-resolver-fallback                PASS (21/21)
+npm run test:direct-preview-cdn                        PASS
+npm run test:foundation                                2 FAIL (pre-existing drift)
+node scripts/phase533-full-catalog-validation.mjs      PASS (35/36)
+node scripts/phase534-tracklist-validation.mjs         PASS (17/17)
+
+FLAGS (local validation)
+========================
+HYBRID_STREAMING_ENABLED=1
+STREAM_PLAYBACK_PREFERRED=1
+AUTO_GENERATE_STREAM_ASSETS=0
+DIRECT_PREVIEW_ENABLED=0
+NEXT_PUBLIC_DIRECT_PREVIEW_CDN=0
+
+METRICS
+=======
+Stream hit rate:  97.2% (35/36)
+Fallback rate:    2.8%  (1/36 — love-hz-vol-1/01-roll-call)
+
+COMMIT
+======
+Message: Phase 5.3.4 Hybrid Streaming Activation
+Hash:    250e2bbc5fce7f650e12977c2dcdf499670fd33f
+Files:   .env.example
+Push:    NO
+Merge:   NO
+
+ZIP
+===
+/Users/recharge/Downloads/phase534-hybrid-activation-20260530.zip

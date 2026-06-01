@@ -3,10 +3,9 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { sendEmailOtp, formatOtpSendError } from "@/auth/authService";
 import { writePendingPhone } from "@/lib/auth/otp-pending";
 import { validateEmail, validatePhone } from "@/lib/auth/validation";
-import { sendEmailOtp, formatOtpSendError } from "@/lib/auth/email-otp";
 
 const inputStyle = {
   padding: "12px 14px",
@@ -34,6 +33,7 @@ function JoinForm() {
   const [existsHint, setExistsHint] = useState(false);
   const [giftPreview, setGiftPreview] = useState(null);
   const otpSendInFlightRef = useRef(false);
+  const submitRequestIdRef = useRef(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -83,6 +83,13 @@ function JoinForm() {
     if (!emailCheck.ok || !phoneCheck.ok) return;
     if (loading || otpSendInFlightRef.current) return;
 
+    if (!submitRequestIdRef.current) {
+      submitRequestIdRef.current =
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+
     setLoading(true);
     otpSendInFlightRef.current = true;
 
@@ -91,13 +98,13 @@ function JoinForm() {
       if (name.trim()) {
         sessionStorage.setItem("pendingProfileName", name.trim());
       }
-      const supabase = createClient();
-      const { error: otpError } = await sendEmailOtp(supabase, {
+      const { error: otpError, deduplicated } = await sendEmailOtp({
         email: emailCheck.value,
         shouldCreateUser: true,
+        requestId: submitRequestIdRef.current,
       });
 
-      if (otpError) {
+      if (otpError && !deduplicated) {
         if (/already|exists|registered/i.test(otpError.message)) {
           setExistsHint(true);
           setError("You already have an account. Sign in instead.");
@@ -115,6 +122,7 @@ function JoinForm() {
     } catch (err) {
       setError(formatOtpSendError(err));
     } finally {
+      submitRequestIdRef.current = null;
       otpSendInFlightRef.current = false;
       setLoading(false);
     }

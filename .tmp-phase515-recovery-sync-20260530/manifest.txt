@@ -1,0 +1,18 @@
+Phase 5.1.5 — Recovery Baseline Synchronization Deliverables
+Generated: 2026-05-30
+
+01-recovery-anchor-report.md
+02-baseline-synchronization-report.md
+03-foundation-validation-report.md
+04-new-checkpoint-identifier.md
+05-recovery-callback-validation.md
+report.md
+manifest.txt
+
+Anchor commit: bac9eb71f93dcbc0bee4099bf6d80ddaac29e049
+Checkpoint tag: frontend-checkpoint-20260530-1423
+Sacred tag: foundation-stable-v3
+Drift before: 153 commits (0866f99 → e8402d8)
+Drift after: 0
+test:foundation: PASS
+verify:foundation --quick: PASS

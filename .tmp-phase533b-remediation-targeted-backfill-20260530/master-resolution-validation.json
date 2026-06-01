@@ -1,0 +1,62 @@
+[
+  {
+    "track": "ad/03-said-n-done",
+    "expected_prefix": "digital-assets/mixtapes-and-eps/ad/03-said-n-done/",
+    "resolved_master_key": "digital-assets/mixtapes-and-eps/ad/03-said-n-done/Said N' Done (A.D).wav",
+    "pass": true
+  },
+  {
+    "track": "ad/04-a-d-d",
+    "expected_prefix": "digital-assets/mixtapes-and-eps/ad/04-a-d-d/",
+    "resolved_master_key": "digital-assets/mixtapes-and-eps/ad/04-a-d-d/A.D.D.wav",
+    "pass": true
+  },
+  {
+    "track": "ad/08-life-changes-ft-gwendolyn",
+    "expected_prefix": "digital-assets/mixtapes-and-eps/ad/08-life-changes-ft-gwendolyn/",
+    "resolved_master_key": "digital-assets/mixtapes-and-eps/ad/08-life-changes-ft-gwendolyn/Life Changes ft. Gwendolyn.mp3",
+    "pass": true
+  },
+  {
+    "track": "love-hz-vol-1/01-roll-call",
+    "expected_prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/01-roll-call/",
+    "resolved_master_key": null,
+    "pass": false
+  },
+  {
+    "track": "love-hz-vol-1/02-w-2-d",
+    "expected_prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/02-w-2-d/",
+    "resolved_master_key": "digital-assets/mixtapes-and-eps/love-hz-vol-1/02-w-2-d/W.2.D x 3.wav",
+    "pass": true
+  },
+  {
+    "track": "love-hz-vol-1/07-stayed-2-long",
+    "expected_prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/07-stayed-2-long/",
+    "resolved_master_key": "digital-assets/mixtapes-and-eps/love-hz-vol-1/07-stayed-2-long/Stayed 2 Long x 2mrrw (Rough Final).wav",
+    "pass": true
+  },
+  {
+    "track": "love-hz-vol-1/08-knock-on-wood",
+    "expected_prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/08-knock-on-wood/",
+    "resolved_master_key": "digital-assets/mixtapes-and-eps/love-hz-vol-1/08-knock-on-wood/Knock On Wood (EXP) .wav",
+    "pass": true
+  },
+  {
+    "track": "love-hz-vol-1/09-hour-glass",
+    "expected_prefix": "digital-assets/mixtapes-and-eps/love-hz-vol-1/09-hour-glass/",
+    "resolved_master_key": "digital-assets/mixtapes-and-eps/love-hz-vol-1/09-hour-glass/Hour Glass (EVEN).wav",
+    "pass": true
+  },
+  {
+    "track": "tbh/03-unxpcted",
+    "expected_prefix": "digital-assets/mixtapes-and-eps/tbh/03-unxpcted/",
+    "resolved_master_key": "digital-assets/mixtapes-and-eps/tbh/03-unxpcted/Unxpected.wav",
+    "pass": true
+  },
+  {
+    "track": "tbh/08-2late",
+    "expected_prefix": "digital-assets/mixtapes-and-eps/tbh/08-2late/",
+    "resolved_master_key": "digital-assets/mixtapes-and-eps/tbh/08-2late/2Late?(T.B.H).wav",
+    "pass": true
+  }
+]

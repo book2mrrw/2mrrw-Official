@@ -6,6 +6,7 @@ import { AudioProvider } from "@/context/AudioContext";
 import GlobalAudioPlayerBar from "@/components/audio/GlobalAudioPlayerBar";
 import SessionRecoveryRoot from "@/components/system/SessionRecoveryRoot";
 import PostHogInit from "@/components/system/PostHogInit";
+import PlaybackNetworkHints from "@/components/system/PlaybackNetworkHints";
 import { MediaErrorBoundary } from "@/system/errors";
 
 export const metadata = {
@@ -29,6 +30,9 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
+      <head>
+        <PlaybackNetworkHints />
+      </head>
       <body style={{ margin: 0, background: "#0a0a0a", color: "white" }}>
         <script
           dangerouslySetInnerHTML={{

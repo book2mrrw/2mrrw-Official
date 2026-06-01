@@ -1,0 +1,83 @@
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+
+> artist-platform@0.1.0 backfill:stream-assets
+> node --import ./scripts/register-alias.mjs scripts/backfill-stream-assets.mjs --yes --checkpoint .backfill-stream-phase533.json
+
+[backfill] Phase 5.2 Stage 6 — catalog stream backfill
+[backfill] flags: {
+  hybridStreamingEnabled: true,
+  autoGenerateStreamAssets: true,
+  dryRun: false,
+  force: false,
+  checkpoint: '/Users/recharge/artist-platform/.backfill-stream-phase533.json'
+}
+(node:82501) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/recharge/artist-platform/src/lib/media/utils/normalize-release-type.js is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/recharge/artist-platform/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[backfill] candidates: 0 products, 28 catalog_tracks (28 total)
+[track] ad/02-here-i-come storage=mixtapes-and-eps/ad/02-here-i-come/ release_type=mixtapes-and-eps
+  ok
+[track] ad/03-said-n-done storage=mixtapes-and-eps/ad/03-said-n-done/ release_type=mixtapes-and-eps
+  failed: master_not_found
+[track] ad/04-a-d-d storage=mixtapes-and-eps/ad/04-a-d-d/ release_type=mixtapes-and-eps
+  failed: master_not_found
+[track] ad/05-perspective storage=mixtapes-and-eps/ad/05-perspective/ release_type=mixtapes-and-eps
+  ok
+[track] ad/06-grand-scheme storage=mixtapes-and-eps/ad/06-grand-scheme/ release_type=mixtapes-and-eps
+  ok
+[track] ad/07-a2b storage=mixtapes-and-eps/ad/07-a2b/ release_type=mixtapes-and-eps
+  ok
+[track] ad/08-life-changes-ft-gwendolyn storage=mixtapes-and-eps/ad/08-life-changes-ft-gwendolyn/ release_type=mixtapes-and-eps
+  failed: master_not_found
+[track] ad/09-itself storage=mixtapes-and-eps/ad/09-itself/ release_type=mixtapes-and-eps
+  ok
+[track] ad/10-wastin-time storage=mixtapes-and-eps/ad/10-wastin-time/ release_type=mixtapes-and-eps
+  ok
+[track] ad/11-like-me-or-not storage=mixtapes-and-eps/ad/11-like-me-or-not/ release_type=mixtapes-and-eps
+  ok
+[track] love-hz-vol-1/01-roll-call storage=mixtapes-and-eps/love-hz-vol-1/01-roll-call/ release_type=mixtapes-and-eps
+  failed: master_not_found
+[track] love-hz-vol-1/02-w-2-d storage=mixtapes-and-eps/love-hz-vol-1/02-w-2-d/ release_type=mixtapes-and-eps
+  failed: master_not_found
+[track] love-hz-vol-1/03-guarded-heart storage=mixtapes-and-eps/love-hz-vol-1/03-guarded-heart/ release_type=mixtapes-and-eps
+  ok
+[track] love-hz-vol-1/04-all-love-it storage=mixtapes-and-eps/love-hz-vol-1/04-all-love-it/ release_type=mixtapes-and-eps
+  ok
+[track] love-hz-vol-1/05-like-u-do storage=mixtapes-and-eps/love-hz-vol-1/05-like-u-do/ release_type=mixtapes-and-eps
+  ok
+[track] love-hz-vol-1/06-tell-me storage=mixtapes-and-eps/love-hz-vol-1/06-tell-me/ release_type=mixtapes-and-eps
+  ok
+[track] love-hz-vol-1/07-stayed-2-long storage=mixtapes-and-eps/love-hz-vol-1/07-stayed-2-long/ release_type=mixtapes-and-eps
+  failed: master_not_found
+[track] love-hz-vol-1/08-knock-on-wood storage=mixtapes-and-eps/love-hz-vol-1/08-knock-on-wood/ release_type=mixtapes-and-eps
+  failed: master_not_found
+[track] love-hz-vol-1/09-hour-glass storage=mixtapes-and-eps/love-hz-vol-1/09-hour-glass/ release_type=mixtapes-and-eps
+  failed: master_not_found
+[track] love-hz-vol-1/10-turnt-me-2-dis storage=mixtapes-and-eps/love-hz-vol-1/10-turnt-me-2-dis/ release_type=mixtapes-and-eps
+  ok
+[track] tbh/02-up-2-me storage=mixtapes-and-eps/tbh/02-up-2-me/ release_type=mixtapes-and-eps
+  ok
+[track] tbh/03-unxpcted storage=mixtapes-and-eps/tbh/03-unxpcted/ release_type=mixtapes-and-eps
+  failed: master_not_found
+[track] tbh/04-all-yours storage=mixtapes-and-eps/tbh/04-all-yours/ release_type=mixtapes-and-eps
+  ok
+[track] tbh/05-locomotive storage=mixtapes-and-eps/tbh/05-locomotive/ release_type=mixtapes-and-eps
+  ok
+[track] tbh/06-left storage=mixtapes-and-eps/tbh/06-left/ release_type=mixtapes-and-eps
+  ok
+[track] tbh/07-was-wrong storage=mixtapes-and-eps/tbh/07-was-wrong/ release_type=mixtapes-and-eps
+  ok
+[track] tbh/08-2late storage=mixtapes-and-eps/tbh/08-2late/ release_type=mixtapes-and-eps
+  failed: master_not_found
+[track] tbh/09-artificial storage=mixtapes-and-eps/tbh/09-artificial/ release_type=mixtapes-and-eps
+  ok
+[backfill] summary: {
+  processed: 28,
+  success: 18,
+  skipped: 0,
+  skipped_checkpoint: 0,
+  failed: 10,
+  dry_run: 0
+}
+[backfill] checkpoint: 18 completed, 10 failed entries

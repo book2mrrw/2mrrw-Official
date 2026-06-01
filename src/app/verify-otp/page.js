@@ -3,10 +3,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { verifyEmailOtp, sendEmailOtp, formatOtpSendError } from "@/auth/authService";
 import { clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
 import { formatResendCountdown } from "@/lib/auth/validation";
-import { sendEmailOtp, formatOtpSendError } from "@/lib/auth/email-otp";
 import { useAuth } from "@/context/AuthContext";
 
 const OTP_LENGTH = 8;
@@ -30,6 +29,7 @@ function VerifyOtpForm() {
   const otpSendInFlightRef = useRef(false);
   const verifyInFlightRef = useRef(false);
   const completeProfileFetchedRef = useRef(false);
+  const resendRequestIdRef = useRef(null);
 
   const code = useMemo(() => digits.join(""), [digits]);
 
@@ -78,8 +78,7 @@ function VerifyOtpForm() {
       setOtpLoading(true);
       setOtpError("");
       try {
-        const supabase = createClient();
-        const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        const { data, error: verifyError } = await verifyEmailOtp({
           email,
           token: code,
           type: "email",
@@ -143,14 +142,24 @@ function VerifyOtpForm() {
     otpSendInFlightRef.current = true;
     setOtpSending(true);
     try {
-      const supabase = createClient();
-      const { error: otpErr } = await sendEmailOtp(supabase, { email, shouldCreateUser });
-      if (otpErr) throw otpErr;
+      if (!resendRequestIdRef.current) {
+        resendRequestIdRef.current =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      }
+      const { error: otpErr, deduplicated } = await sendEmailOtp({
+        email,
+        shouldCreateUser,
+        requestId: resendRequestIdRef.current,
+      });
+      if (otpErr && !deduplicated) throw otpErr;
       setDigits(EMPTY_DIGITS());
       setResendIn(30);
     } catch (err) {
       setOtpError(formatOtpSendError(err));
     } finally {
+      resendRequestIdRef.current = null;
       otpSendInFlightRef.current = false;
       setOtpSending(false);
     }

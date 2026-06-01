@@ -1,0 +1,9 @@
+.tmp-auth-safety-audit-20260530/report.md
+.tmp-auth-safety-audit-20260530/device-trust-review.md
+.tmp-auth-safety-audit-20260530/cooldown-validation.md
+.tmp-auth-safety-audit-20260530/guarantee-checklist.md
+.tmp-auth-safety-audit-20260530/manifest.txt
+
+Modified source (audit fixes):
+src/auth/authService.js
+src/context/AuthContext.js

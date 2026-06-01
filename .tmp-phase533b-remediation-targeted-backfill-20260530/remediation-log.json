@@ -1,0 +1,320 @@
+{
+  "dryRun": false,
+  "report": [
+    {
+      "track": "ad/03-said-n-done",
+      "from": "digital-assets/mixtapes-and-eps/ad/03-said-n-done ",
+      "to": "digital-assets/mixtapes-and-eps/ad/03-said-n-done",
+      "category": "A",
+      "reason": "R2_SLUG_TRAILING_SPACE",
+      "result": {
+        "ok": true,
+        "moves": [
+          {
+            "fromKey": "digital-assets/mixtapes-and-eps/ad/03-said-n-done /Said N' Done (A.D).wav",
+            "toKey": "digital-assets/mixtapes-and-eps/ad/03-said-n-done/Said N' Done (A.D).wav",
+            "bytes": 42303546
+          }
+        ]
+      }
+    },
+    {
+      "track": "ad/04-a-d-d",
+      "from": "digital-assets/mixtapes-and-eps/ad/04-a.d.d",
+      "to": "digital-assets/mixtapes-and-eps/ad/04-a-d-d",
+      "category": "A",
+      "reason": "R2_SLUG_PUNCTUATION",
+      "result": {
+        "ok": true,
+        "moves": [
+          {
+            "fromKey": "digital-assets/mixtapes-and-eps/ad/04-a.d.d/A.D.D.wav",
+            "toKey": "digital-assets/mixtapes-and-eps/ad/04-a-d-d/A.D.D.wav",
+            "bytes": 27353576
+          }
+        ]
+      }
+    },
+    {
+      "track": "ad/08-life-changes-ft-gwendolyn",
+      "from": "digital-assets/mixtapes-and-eps/ad/08-life-changes ft. gwendolyn",
+      "to": "digital-assets/mixtapes-and-eps/ad/08-life-changes-ft-gwendolyn",
+      "category": "A",
+      "reason": "R2_SLUG_SPACES_NOT_HYPHENS",
+      "result": {
+        "ok": true,
+        "moves": [
+          {
+            "fromKey": "digital-assets/mixtapes-and-eps/ad/08-life-changes ft. gwendolyn/Life Changes ft. Gwendolyn.mp3",
+            "toKey": "digital-assets/mixtapes-and-eps/ad/08-life-changes-ft-gwendolyn/Life Changes ft. Gwendolyn.mp3",
+            "bytes": 8801092
+          }
+        ]
+      }
+    },
+    {
+      "track": "love-hz-vol-1/02-w-2-d",
+      "from": "digital-assets/mixtapes-and-eps/love-hz-vol-1/02-w2d",
+      "to": "digital-assets/mixtapes-and-eps/love-hz-vol-1/02-w-2-d",
+      "category": "A",
+      "reason": "R2_SLUG_COMPACT",
+      "result": {
+        "ok": true,
+        "moves": [
+          {
+            "fromKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/02-w2d/W.2.D x 3.wav",
+            "toKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/02-w-2-d/W.2.D x 3.wav",
+            "bytes": 52943316
+          }
+        ]
+      }
+    },
+    {
+      "track": "tbh/03-unxpcted",
+      "from": "digital-assets/mixtapes-and-eps/tbh/03-unxpected",
+      "to": "digital-assets/mixtapes-and-eps/tbh/03-unxpcted",
+      "category": "A",
+      "reason": "R2_SLUG_SPELLING",
+      "result": {
+        "ok": true,
+        "moves": [
+          {
+            "fromKey": "digital-assets/mixtapes-and-eps/tbh/03-unxpected/Unxpected.wav",
+            "toKey": "digital-assets/mixtapes-and-eps/tbh/03-unxpcted/Unxpected.wav",
+            "bytes": 34535538
+          }
+        ]
+      }
+    },
+    {
+      "track": "tbh/08-2late",
+      "from": "digital-assets/mixtapes-and-eps/tbh/08-2late?",
+      "to": "digital-assets/mixtapes-and-eps/tbh/08-2late",
+      "category": "A",
+      "reason": "R2_SLUG_PUNCTUATION",
+      "result": {
+        "ok": true,
+        "moves": [
+          {
+            "fromKey": "digital-assets/mixtapes-and-eps/tbh/08-2late?/2Late? (T.B.H).mp3",
+            "toKey": "digital-assets/mixtapes-and-eps/tbh/08-2late/2Late? (T.B.H).mp3",
+            "bytes": 8739526
+          },
+          {
+            "fromKey": "digital-assets/mixtapes-and-eps/tbh/08-2late?/2Late?(T.B.H).wav",
+            "toKey": "digital-assets/mixtapes-and-eps/tbh/08-2late/2Late?(T.B.H).wav",
+            "bytes": 57800754
+          },
+          {
+            "fromKey": "digital-assets/mixtapes-and-eps/tbh/08-2late?/2Late?.mp3.mp3",
+            "toKey": "digital-assets/mixtapes-and-eps/tbh/08-2late/2Late?.mp3.mp3",
+            "bytes": 8669435
+          }
+        ]
+      }
+    },
+    {
+      "track": "love-hz-vol-1/07-stayed-2-long",
+      "category": "C",
+      "phase": "stage",
+      "from": "digital-assets/mixtapes-and-eps/love-hz-vol-1/09-stayed-2-long",
+      "to": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--07-stayed-2-long",
+      "result": {
+        "ok": true,
+        "moves": [
+          {
+            "fromKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/09-stayed-2-long/Stayed 2 Long x 2mrrw (Rough Final).wav",
+            "toKey": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--07-stayed-2-long/Stayed 2 Long x 2mrrw (Rough Final).wav",
+            "bytes": 29523812
+          }
+        ]
+      }
+    },
+    {
+      "track": "love-hz-vol-1/08-knock-on-wood",
+      "category": "C",
+      "phase": "stage",
+      "from": "digital-assets/mixtapes-and-eps/love-hz-vol-1/07-knock-on-wood",
+      "to": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--08-knock-on-wood",
+      "result": {
+        "ok": true,
+        "moves": [
+          {
+            "fromKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/07-knock-on-wood/Knock On Wood (EXP) .wav",
+            "toKey": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--08-knock-on-wood/Knock On Wood (EXP) .wav",
+            "bytes": 55979238
+          }
+        ]
+      }
+    },
+    {
+      "track": "love-hz-vol-1/09-hour-glass",
+      "category": "C",
+      "phase": "stage",
+      "from": "digital-assets/mixtapes-and-eps/love-hz-vol-1/08-hour-glass",
+      "to": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--09-hour-glass",
+      "result": {
+        "ok": true,
+        "moves": [
+          {
+            "fromKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/08-hour-glass/Hour Glass (EVEN).wav",
+            "toKey": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--09-hour-glass/Hour Glass (EVEN).wav",
+            "bytes": 31638788
+          }
+        ]
+      }
+    },
+    {
+      "track": "love-hz-vol-1/07-stayed-2-long",
+      "category": "C",
+      "phase": "finalize",
+      "from": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--07-stayed-2-long",
+      "to": "digital-assets/mixtapes-and-eps/love-hz-vol-1/07-stayed-2-long",
+      "result": {
+        "ok": true,
+        "moves": [
+          {
+            "fromKey": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--07-stayed-2-long/Stayed 2 Long x 2mrrw (Rough Final).wav",
+            "toKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/07-stayed-2-long/Stayed 2 Long x 2mrrw (Rough Final).wav",
+            "bytes": 29523812
+          }
+        ]
+      }
+    },
+    {
+      "track": "love-hz-vol-1/08-knock-on-wood",
+      "category": "C",
+      "phase": "finalize",
+      "from": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--08-knock-on-wood",
+      "to": "digital-assets/mixtapes-and-eps/love-hz-vol-1/08-knock-on-wood",
+      "result": {
+        "ok": true,
+        "moves": [
+          {
+            "fromKey": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--08-knock-on-wood/Knock On Wood (EXP) .wav",
+            "toKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/08-knock-on-wood/Knock On Wood (EXP) .wav",
+            "bytes": 55979238
+          }
+        ]
+      }
+    },
+    {
+      "track": "love-hz-vol-1/09-hour-glass",
+      "category": "C",
+      "phase": "finalize",
+      "from": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--09-hour-glass",
+      "to": "digital-assets/mixtapes-and-eps/love-hz-vol-1/09-hour-glass",
+      "result": {
+        "ok": true,
+        "moves": [
+          {
+            "fromKey": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--09-hour-glass/Hour Glass (EVEN).wav",
+            "toKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/09-hour-glass/Hour Glass (EVEN).wav",
+            "bytes": 31638788
+          }
+        ]
+      }
+    }
+  ],
+  "categoryC": {
+    "ok": true,
+    "log": [
+      {
+        "track": "love-hz-vol-1/07-stayed-2-long",
+        "phase": "stage",
+        "from": "digital-assets/mixtapes-and-eps/love-hz-vol-1/09-stayed-2-long",
+        "to": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--07-stayed-2-long",
+        "result": {
+          "ok": true,
+          "moves": [
+            {
+              "fromKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/09-stayed-2-long/Stayed 2 Long x 2mrrw (Rough Final).wav",
+              "toKey": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--07-stayed-2-long/Stayed 2 Long x 2mrrw (Rough Final).wav",
+              "bytes": 29523812
+            }
+          ]
+        }
+      },
+      {
+        "track": "love-hz-vol-1/08-knock-on-wood",
+        "phase": "stage",
+        "from": "digital-assets/mixtapes-and-eps/love-hz-vol-1/07-knock-on-wood",
+        "to": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--08-knock-on-wood",
+        "result": {
+          "ok": true,
+          "moves": [
+            {
+              "fromKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/07-knock-on-wood/Knock On Wood (EXP) .wav",
+              "toKey": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--08-knock-on-wood/Knock On Wood (EXP) .wav",
+              "bytes": 55979238
+            }
+          ]
+        }
+      },
+      {
+        "track": "love-hz-vol-1/09-hour-glass",
+        "phase": "stage",
+        "from": "digital-assets/mixtapes-and-eps/love-hz-vol-1/08-hour-glass",
+        "to": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--09-hour-glass",
+        "result": {
+          "ok": true,
+          "moves": [
+            {
+              "fromKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/08-hour-glass/Hour Glass (EVEN).wav",
+              "toKey": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--09-hour-glass/Hour Glass (EVEN).wav",
+              "bytes": 31638788
+            }
+          ]
+        }
+      },
+      {
+        "track": "love-hz-vol-1/07-stayed-2-long",
+        "phase": "finalize",
+        "from": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--07-stayed-2-long",
+        "to": "digital-assets/mixtapes-and-eps/love-hz-vol-1/07-stayed-2-long",
+        "result": {
+          "ok": true,
+          "moves": [
+            {
+              "fromKey": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--07-stayed-2-long/Stayed 2 Long x 2mrrw (Rough Final).wav",
+              "toKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/07-stayed-2-long/Stayed 2 Long x 2mrrw (Rough Final).wav",
+              "bytes": 29523812
+            }
+          ]
+        }
+      },
+      {
+        "track": "love-hz-vol-1/08-knock-on-wood",
+        "phase": "finalize",
+        "from": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--08-knock-on-wood",
+        "to": "digital-assets/mixtapes-and-eps/love-hz-vol-1/08-knock-on-wood",
+        "result": {
+          "ok": true,
+          "moves": [
+            {
+              "fromKey": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--08-knock-on-wood/Knock On Wood (EXP) .wav",
+              "toKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/08-knock-on-wood/Knock On Wood (EXP) .wav",
+              "bytes": 55979238
+            }
+          ]
+        }
+      },
+      {
+        "track": "love-hz-vol-1/09-hour-glass",
+        "phase": "finalize",
+        "from": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--09-hour-glass",
+        "to": "digital-assets/mixtapes-and-eps/love-hz-vol-1/09-hour-glass",
+        "result": {
+          "ok": true,
+          "moves": [
+            {
+              "fromKey": "digital-assets/.tmp-phase533b-staging/love-hz-vol-1--09-hour-glass/Hour Glass (EVEN).wav",
+              "toKey": "digital-assets/mixtapes-and-eps/love-hz-vol-1/09-hour-glass/Hour Glass (EVEN).wav",
+              "bytes": 31638788
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
