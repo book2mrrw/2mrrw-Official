@@ -58,7 +58,9 @@ import {
   logStreamLifecycle,
   recordPlaybackTraceContext,
   getPlaybackTraceContext,
+  correlateBlackscreenPlayback,
 } from "@/lib/diagnostics/playback-trace";
+import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
 import {
   ensureDetachedAudioElement,
   getAudioEngineRefs,
@@ -571,6 +573,7 @@ function preloadCsAssets(track, refs) {
 }
 
 export function AudioProvider({ children }) {
+  useBlackscreenMountTrace("AudioProvider");
   const { user, loading: authLoading } = useAuth();
   const entitlementAccountState = useEntitlementAccountState();
   const authLoadingRef = useRef(authLoading);
@@ -3176,6 +3179,12 @@ export function AudioProvider({ children }) {
         if (activeCommandRef.current?.requestId === requestId) {
           activeCommandRef.current = null;
         }
+        const track = stateRef.current?.currentTrack;
+        correlateBlackscreenPlayback(resolvedType, {
+          requestId,
+          trackId: track?.id ?? track?.trackId ?? track?.slug ?? null,
+          isPlaying: Boolean(stateRef.current?.isPlaying),
+        });
       }
     };
 

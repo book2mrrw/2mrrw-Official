@@ -6,6 +6,7 @@ import { AudioProvider } from "@/context/AudioContext";
 import GlobalAudioPlayerBar from "@/components/audio/GlobalAudioPlayerBar";
 import SessionRecoveryRoot from "@/components/system/SessionRecoveryRoot";
 import PostHogInit from "@/components/system/PostHogInit";
+import BlackscreenTraceBootstrap from "@/components/system/BlackscreenTraceBootstrap";
 import PlaybackNetworkHints from "@/components/system/PlaybackNetworkHints";
 import { MediaErrorBoundary } from "@/system/errors";
 
@@ -41,6 +42,7 @@ export default function RootLayout({ children }) {
         />
         <PostHogInit />
         <AuthProvider>
+          <BlackscreenTraceBootstrap />
           <AudioProvider>
             <AppAuthRoot>
               <AuthGateProvider>

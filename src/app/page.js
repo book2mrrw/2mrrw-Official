@@ -73,6 +73,7 @@ import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { ModalErrorBoundary } from "@/system/errors";
 import { useAbortController } from "@/system/guards/useAbortController";
 import { TrackCardSkeleton } from "@/ui/skeletons";
+import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
 
 const MOBILE_NAV_TABS = [
   { id: "home", label: "Home" },
@@ -677,6 +678,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
+  useBlackscreenMountTrace("Page");
   const {
     currentUser,
     library,
@@ -2027,6 +2029,7 @@ export default function Page() {
         <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
           <div
             ref={mainScrollRef}
+            data-main-scroll
             style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:0,WebkitOverflowScrolling:"touch"}}
           >
             <motion.div style={{padding:isMobile?`0 0 ${mobileScrollPadding} 0`:"0 30px 30px"}}>

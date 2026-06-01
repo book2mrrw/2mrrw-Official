@@ -20,6 +20,30 @@ const RING_SIZE = 10;
 /** @type {Array<Record<string, unknown>>} */
 const playbackEventRing = [];
 
+/** @type {((payload: Record<string, unknown>) => void) | null} */
+let blackscreenPlaybackCorrelation = null;
+
+/**
+ * Phase 13 — optional black-screen playback correlation (diagnostics only).
+ * @param {((payload: Record<string, unknown>) => void) | null} listener
+ */
+export function registerBlackscreenPlaybackCorrelation(listener) {
+  blackscreenPlaybackCorrelation = listener;
+}
+
+/**
+ * @param {string} commandType
+ * @param {Record<string, unknown>} [meta]
+ */
+export function correlateBlackscreenPlayback(commandType, meta = {}) {
+  if (!blackscreenPlaybackCorrelation) return;
+  try {
+    blackscreenPlaybackCorrelation({ commandType, ...meta, timestamp: Date.now() });
+  } catch {
+    /* diagnostics must not throw */
+  }
+}
+
 /** @type {{
  *   lastScrollAt: number;
  *   lastEntitlementUpdateAt: number;

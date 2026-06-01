@@ -7,6 +7,7 @@ import { useMediaEngine } from "@/media/useMediaEngine";
 import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import { useRenderTracker } from "@/lib/dev/useRenderTracker";
+import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
 import { useEntitlementAccountState } from "@/context/AuthContext";
 import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 import {
@@ -304,6 +305,7 @@ function MiniPlayerDock({
 }
 
 function GlobalAudioPlayerBar() {
+  useBlackscreenMountTrace("GlobalAudioPlayerBar");
   useRenderTracker("GlobalAudioPlayerBar");
   const playback = useImmersivePlayback();
   const {
