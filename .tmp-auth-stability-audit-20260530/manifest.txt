@@ -1,0 +1,57 @@
+Auth Stability Audit Manifest
+=============================
+Generated: 2026-05-30
+Project: artist-platform (/Users/recharge/artist-platform)
+
+AUDIT OUTPUT FILES
+------------------
+report.md              Executive summary, fixes, advisories, verification
+audit-findings.md      Detailed file-by-file findings and grep sweep
+manifest.txt           This file
+
+SOURCE FILES AUDITED (read-only review)
+---------------------------------------
+src/auth/authService.js
+src/context/AuthContext.js
+src/app/login/page.js
+src/app/join/page.js
+src/app/verify-otp/page.js
+src/components/auth/AuthGate.js
+src/lib/auth/email-otp.js
+src/lib/supabase/client.js
+src/lib/supabase/auth-storage-key.js
+src/lib/supabase/middleware.js
+src/lib/auth/session-user.js
+
+SOURCE FILES MODIFIED (safe fixes)
+----------------------------------
+src/context/AuthContext.js   Strict Mode auth listener re-subscription
+src/app/login/page.js        createUser=0 param on verify-otp navigation
+
+GREP PATTERNS EXECUTED
+----------------------
+supabase.auth
+onAuthStateChange
+getSession
+signInWithOtp / sendEmailOtp
+verifyOtp / verifyEmailOtp
+subscribeAuthState / bootstrapSession
+createUser / shouldCreateUser
+sessionBootstrappedRef
+
+BUILD VERIFICATION
+------------------
+Command: npm run build
+Result:  PASS (exit 0)
+Next.js: 16.2.4 (Turbopack)
+
+COUNTS
+------
+Safe fixes applied:     2
+Advisory items:         8
+Architectural changes:  0
+UI/UX changes:          0
+
+ZIP OUTPUT
+----------
+/Users/recharge/Downloads/auth-stability-audit-20260530.zip

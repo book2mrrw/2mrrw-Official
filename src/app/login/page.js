@@ -102,7 +102,11 @@ function LoginForm() {
         return;
       }
 
-      const params = new URLSearchParams({ email: emailCheck.value, next: nextPath });
+      const params = new URLSearchParams({
+        email: emailCheck.value,
+        next: nextPath,
+        createUser: "0",
+      });
       router.push(`/verify-otp?${params.toString()}`);
     } catch (err) {
       setError(formatOtpSendError(err));

@@ -218,9 +218,6 @@ export function AuthProvider({ children }) {
   refreshGuestRef.current = refreshGuest;
 
   useEffect(() => {
-    if (sessionBootstrappedRef.current) return;
-    sessionBootstrappedRef.current = true;
-
     let mounted = true;
 
     const clearAuthenticatedState = () => {
@@ -232,31 +229,38 @@ export function AuthProvider({ children }) {
       setAccountState(EMPTY_ACCOUNT_STATE);
     };
 
-    // authService.bootstrapSession is module-singleton — safe under Strict Mode double mount.
-    (async () => {
-      try {
-        const { session: resolvedSession } = await bootstrapSession();
-        if (!mounted) return;
+    // Bootstrap once per provider lifetime; authService.bootstrapSession is module-singleton.
+    if (!sessionBootstrappedRef.current) {
+      sessionBootstrappedRef.current = true;
+      (async () => {
+        try {
+          const { session: resolvedSession } = await bootstrapSession();
+          if (!mounted) return;
 
-        // SAFETY: user state only from Supabase session (authService) — never device-trust localStorage.
-        const resolved = resolveUserFromSession(resolvedSession);
-        if (resolved) {
-          signedInUserIdRef.current = resolved.user.id;
-          setUser(resolved.user);
-          setIsAdmin(resolved.isAdmin);
-          await clearGuestSessionCookie();
-          await refreshAccountStateRef.current?.();
-        } else {
-          signedInUserIdRef.current = null;
-          await refreshGuestRef.current?.();
+          // SAFETY: user state only from Supabase session (authService) — never device-trust localStorage.
+          const resolved = resolveUserFromSession(resolvedSession);
+          if (resolved) {
+            signedInUserIdRef.current = resolved.user.id;
+            setUser(resolved.user);
+            setIsAdmin(resolved.isAdmin);
+            await clearGuestSessionCookie();
+            await refreshAccountStateRef.current?.();
+          } else {
+            signedInUserIdRef.current = null;
+            await refreshGuestRef.current?.();
+          }
+        } catch {
+          /* session restore optional */
         }
-      } catch {
-        /* session restore optional */
-      }
-    })().finally(() => {
-      if (mounted) setLoading(false);
-    });
+      })().finally(() => {
+        if (mounted) setLoading(false);
+      });
+    } else if (mounted) {
+      // Strict Mode remount: bootstrap already ran; restore loading gate without re-fetch storm.
+      setLoading(false);
+    }
 
+    // Always subscribe — Strict Mode cleanup must not leave the app without auth listeners.
     const unsubscribe = subscribeAuthState(async (event, session) => {
       if (!mounted) return;
       if (event === "SIGNED_OUT") {
