@@ -391,6 +391,9 @@ export default function Page() {
   const prevActiveTabRef   = useRef("home");
   const prevBrowseSinglesLenRef = useRef(0);
   const homeScrollSectionRef = useRef(null);
+  const homeScrollSavedRef = useRef({ scrollTop: 0, singlesScrollLeft: 0 });
+  const homeStorefrontMountCountRef = useRef(0);
+  const prevActiveTabForHomeScrollRef = useRef("home");
   const syncSinglesCarouselVideos = useCallback(() => {
     const row = singlesRowRef.current;
     if (!row) return;
@@ -506,6 +509,7 @@ export default function Page() {
             const nextSection = match.section;
             if (nextSection === homeScrollSectionRef.current) return;
             homeScrollSectionRef.current = nextSection;
+            setHomeNavSyncEpoch((epoch) => epoch + 1);
           }
         }
       },
@@ -520,6 +524,61 @@ export default function Page() {
       homeScrollSectionRef.current = null;
     }
     setHomeNavSyncEpoch((epoch) => epoch + 1);
+  }, [activeTab]);
+
+  useEffect(() => {
+    homeStorefrontMountCountRef.current += 1;
+    if (isPlaybackTraceEnabled()) {
+      logUiChurn("HOME_STOREFRONT_MOUNT", {
+        mountCount: homeStorefrontMountCountRef.current,
+      });
+    }
+    return () => {
+      if (isPlaybackTraceEnabled()) {
+        logUiChurn("HOME_STOREFRONT_UNMOUNT", {
+          mountCount: homeStorefrontMountCountRef.current,
+        });
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const prev = prevActiveTabForHomeScrollRef.current;
+    const next = activeTab;
+    if (prev === "home" && next !== "home") {
+      const el = mainScrollRef.current;
+      const row = singlesRowRef.current;
+      homeScrollSavedRef.current = {
+        scrollTop: el?.scrollTop ?? 0,
+        singlesScrollLeft: row?.scrollLeft ?? 0,
+      };
+      if (isPlaybackTraceEnabled()) {
+        logUiChurn("HOME_TAB_HIDDEN", {
+          to: next,
+          scrollTop: homeScrollSavedRef.current.scrollTop,
+          singlesScrollLeft: homeScrollSavedRef.current.singlesScrollLeft,
+        });
+      }
+    }
+    if (prev !== "home" && next === "home") {
+      if (isPlaybackTraceEnabled()) {
+        logUiChurn("HOME_TAB_VISIBLE", { from: prev });
+      }
+      const { scrollTop, singlesScrollLeft } = homeScrollSavedRef.current;
+      requestAnimationFrame(() => {
+        const el = mainScrollRef.current;
+        const row = singlesRowRef.current;
+        if (el) el.scrollTop = scrollTop;
+        if (row) row.scrollLeft = singlesScrollLeft;
+        if (isPlaybackTraceEnabled()) {
+          logUiChurn("HOME_SCROLL_RESTORED", {
+            scrollTop,
+            singlesScrollLeft,
+          });
+        }
+      });
+    }
+    prevActiveTabForHomeScrollRef.current = next;
   }, [activeTab]);
 
   useEffect(() => {
@@ -1223,7 +1282,6 @@ export default function Page() {
     }
     // phase11: startTransition — non-urgent UI update
     startTransition(() => {
-    setHomeScrollSection(null);
     setActiveTab(tabId);
     const navGroupByTab = {
       singles: "g-music",
@@ -1591,8 +1649,12 @@ export default function Page() {
 
             <div data-tab-panel>
 
-              {/* ══ HOME ══ */}
-              {activeTab==="home" && (
+              {/* ══ HOME (Phase 17A: persist mount across tabs) ══ */}
+              <div
+                data-home-storefront
+                style={{ display: activeTab === "home" ? undefined : "none" }}
+                aria-hidden={activeTab !== "home"}
+              >
                 <HomeStorefront
                   isMobile={isMobile}
                   showSubscribeCta={showSubscribeCta}
@@ -1639,7 +1701,7 @@ export default function Page() {
                   onSelectEvent={setSelectedEvent}
                   onOpenCollection={openCollection}
                 />
-              )}
+              </div>
 
               {/* ══ MUSIC TAB ══ */}
               {(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic") && (
