@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/commerce/stripe";
-import { getGuestUser } from "@/lib/guest-session";
+import { getFanSessionUser } from "@/lib/auth/session-user";
 import { getOrCreateStripeCustomerForUser } from "@/lib/commerce/stripe-customers";
 
 const INNER_CIRCLE_PRICE_CENTS = 799;
@@ -45,10 +45,10 @@ async function membershipLineItem(stripe) {
 
 export async function POST() {
   try {
-    const user = await getGuestUser();
+    const user = await getFanSessionUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Enter email and phone before subscribing" }, { status: 401 });
+      return NextResponse.json({ error: "Account session unavailable" }, { status: 401 });
     }
 
     const stripe = getStripe();

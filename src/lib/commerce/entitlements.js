@@ -259,6 +259,16 @@ export function membershipHasPremiumAccess(membership) {
   return status === "active" || status === "trialing";
 }
 
+/** Client entitlement gate for Subscribe CTAs — mirrors subscribe page logic. */
+export function resolveSubscriptionEntitlements(accountState = {}, membership = null) {
+  const resolvedMembership = membership ?? accountState?.membership ?? null;
+  const isSubscriber =
+    Boolean(accountState?.subscriberActive) || membershipHasPremiumAccess(resolvedMembership);
+  const isLifetimeOwner = Boolean(accountState?.collectorCard);
+  const showSubscribe = !isSubscriber && !isLifetimeOwner;
+  return { isSubscriber, isLifetimeOwner, showSubscribe, isEligible: showSubscribe };
+}
+
 export function vaultTierFor({ hasVaultPass = false, hasInnerCircleAccess = false } = {}) {
   if (hasVaultPass) return "vault_pass";
   if (hasInnerCircleAccess) return "inner_circle";

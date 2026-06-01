@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, ExpressCheckoutElement, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { useAuth } from "@/context/AuthContext";
+import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
@@ -39,16 +40,15 @@ const faqs = [
 ];
 
 export default function SubscribePage() {
-  const { currentUser, membership, refreshAccountState, enterGuest, loading: authLoading } = useAuth();
+  const { accountState, membership, refreshAccountState, loading: accountLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [identityLoading, setIdentityLoading] = useState(false);
-  const [identityError, setIdentityError] = useState("");
-  const [identityName, setIdentityName] = useState("");
-  const [identityEmail, setIdentityEmail] = useState("");
-  const [identityPhone, setIdentityPhone] = useState("");
   const [subscriptionUnlocked, setSubscriptionUnlocked] = useState(false);
   const [subscriptionClientSecret, setSubscriptionClientSecret] = useState(null);
+  const checkoutStartedRef = useRef(false);
+
+  const { isSubscriber, isLifetimeOwner, isEligible, showSubscribe: showSubscribeButtons } =
+    resolveSubscriptionEntitlements(accountState, membership);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -66,39 +66,7 @@ export default function SubscribePage() {
     return () => window.clearInterval(interval);
   }, [refreshAccountState]);
 
-  const ensureSubscriptionIdentity = async () => {
-    if (currentUser) return true;
-    if (!identityEmail.trim() || !identityPhone.trim()) {
-      setIdentityError("Enter email and phone so Stripe can attach this membership to your account.");
-      return false;
-    }
-
-    setIdentityLoading(true);
-    setIdentityError("");
-    try {
-      const user = await enterGuest({
-        email: identityEmail.trim(),
-        phone: identityPhone.trim(),
-        name: identityName.trim(),
-        remember: true,
-      });
-      if (user?.needsLocation) {
-        setIdentityError("Open the main site once to finish your city and state before subscribing.");
-        return false;
-      }
-      await refreshAccountState?.();
-      return true;
-    } catch (err) {
-      setIdentityError(err.message || "Could not attach this membership to your account.");
-      return false;
-    } finally {
-      setIdentityLoading(false);
-    }
-  };
-
-  const startSubscription = async () => {
-    const hasIdentity = await ensureSubscriptionIdentity();
-    if (!hasIdentity) return;
+  const startSubscription = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
@@ -112,17 +80,28 @@ export default function SubscribePage() {
       setSubscriptionClientSecret(data.clientSecret);
     } catch (err) {
       setError(err.message);
+      checkoutStartedRef.current = false;
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (accountLoading || !isEligible) return;
+    if (subscriptionClientSecret || checkoutStartedRef.current) return;
+    checkoutStartedRef.current = true;
+    void startSubscription();
+  }, [accountLoading, isEligible, subscriptionClientSecret, startSubscription]);
+
   const closeSubscriptionModal = () => {
     setSubscriptionClientSecret(null);
     setError("");
+    checkoutStartedRef.current = false;
   };
   const handleSubscriptionSuccess = async () => {
     setSubscriptionClientSecret(null);
     setSubscriptionUnlocked(true);
+    checkoutStartedRef.current = false;
     let attempts = 0;
     const sync = () => {
       attempts += 1;
@@ -133,9 +112,7 @@ export default function SubscribePage() {
     const interval = window.setInterval(sync, 2500);
   };
   const experienceUnlocked =
-    subscriptionUnlocked ||
-    (!authLoading && membership && ["active", "trialing"].includes(membership.status));
-
+    subscriptionUnlocked || (!accountLoading && (isSubscriber || isLifetimeOwner));
   return (
     <main style={{minHeight:"100vh",background:"#050505",color:"#fff",fontFamily:"Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",overflow:"hidden"}}>
       <div style={{position:"fixed",inset:0,pointerEvents:"none",background:"radial-gradient(circle at 50% 12%,rgba(162,89,255,0.16),transparent 38%),radial-gradient(circle at 78% 72%,rgba(0,255,255,0.08),transparent 36%)"}}/>
@@ -151,21 +128,11 @@ export default function SubscribePage() {
             <h1 style={{fontSize:"clamp(44px,8vw,104px)",lineHeight:0.9,letterSpacing:"-0.07em",margin:"0 0 24px",fontWeight:950}}>Unlock the 2MRRW experience</h1>
             <p style={{fontSize:"clamp(16px,2.3vw,22px)",lineHeight:1.6,color:"#aaa",maxWidth:620,margin:"0 0 30px"}}>One membership unlocks the full digital experience, including music, visuals, live streams, demos, archives, exclusive interviews, behind-the-scenes content, and subscriber-only releases.</p>
             <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
-              <button className="subscribe-shimmer-button" onClick={startSubscription} disabled={loading||identityLoading}>{loading || identityLoading ? "Preparing..." : "Subscribe"}</button>
+              {showSubscribeButtons && (
+                <button className="subscribe-shimmer-button" onClick={startSubscription} disabled={loading}>{loading ? "Preparing..." : "Subscribe"}</button>
+              )}
               <div style={{fontSize:12,color:"#666",letterSpacing:1}}>$7.99/month · full digital ecosystem access</div>
             </div>
-            {!currentUser && (
-              <div style={{marginTop:18,padding:16,border:"1px solid rgba(162,89,255,0.18)",borderRadius:18,background:"rgba(162,89,255,0.045)",maxWidth:520}}>
-                <div style={{fontSize:11,color:"#a259ff",letterSpacing:3,textTransform:"uppercase",fontWeight:800,marginBottom:12}}>Attach Your Membership</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10}}>
-                  <input placeholder="Full Name (optional)" value={identityName} onChange={e=>setIdentityName(e.target.value)} style={{width:"100%",boxSizing:"border-box",padding:"11px 13px",background:"#080808",border:"1px solid #222",color:"#fff",borderRadius:10,fontSize:13}}/>
-                  <input placeholder="Email Address" value={identityEmail} onChange={e=>setIdentityEmail(e.target.value)} inputMode="email" style={{width:"100%",boxSizing:"border-box",padding:"11px 13px",background:"#080808",border:"1px solid #222",color:"#fff",borderRadius:10,fontSize:13}}/>
-                  <input placeholder="Phone Number" value={identityPhone} onChange={e=>setIdentityPhone(e.target.value)} inputMode="tel" style={{width:"100%",boxSizing:"border-box",padding:"11px 13px",background:"#080808",border:"1px solid #222",color:"#fff",borderRadius:10,fontSize:13}}/>
-                </div>
-                <p style={{fontSize:12,color:"#777",lineHeight:1.7,margin:"12px 0 0"}}>This uses the same passwordless account as the main site, then opens Stripe in place.</p>
-                {identityError && <p style={{fontSize:12,color:"#ff8a8a",lineHeight:1.7,margin:"10px 0 0"}}>{identityError}</p>}
-              </div>
-            )}
             {experienceUnlocked && <p style={{fontSize:12,color:"#a259ff",lineHeight:1.7,marginTop:18}}>The 2MRRW experience is now unlocked.</p>}
             {error && <p style={{fontSize:12,color:"#ff8a8a",lineHeight:1.7,marginTop:18}}>{error}</p>}
           </div>
@@ -231,7 +198,9 @@ export default function SubscribePage() {
             <div style={{fontSize:24,fontWeight:900,letterSpacing:"-0.04em",marginBottom:6}}>Everything. One membership.</div>
             <div style={{fontSize:13,color:"#888"}}>$7.99/month for music, visuals, archives, exclusives, premium livestreams, creative process content, and future digital features.</div>
           </div>
-          <button className="subscribe-shimmer-button purple" onClick={startSubscription} disabled={loading||identityLoading}>{loading || identityLoading ? "Preparing..." : "Subscribe"}</button>
+          {showSubscribeButtons && (
+            <button className="subscribe-shimmer-button purple" onClick={startSubscription} disabled={loading}>{loading ? "Preparing..." : "Subscribe"}</button>
+          )}
         </section>
       </div>
 

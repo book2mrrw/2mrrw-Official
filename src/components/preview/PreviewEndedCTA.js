@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { memo, useCallback } from "react";
+import { memo, useCallback, useMemo } from "react";
+import { useEntitlementAccountState } from "@/context/AuthContext";
+import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 
 const WRAP_STYLE = {
   marginTop: 8,
@@ -25,6 +27,12 @@ const BTN_BASE = {
 };
 
 function PreviewEndedCTA({ priceLabel, showPurchase, onContinueListening, onUnlock }) {
+  const entitlementAccountState = useEntitlementAccountState();
+  const showSubscribeCta = useMemo(
+    () => resolveSubscriptionEntitlements(entitlementAccountState).showSubscribe,
+    [entitlementAccountState]
+  );
+
   const handleUnlock = useCallback(() => {
     onUnlock?.();
   }, [onUnlock]);
@@ -49,19 +57,21 @@ function PreviewEndedCTA({ priceLabel, showPurchase, onContinueListening, onUnlo
         >
           {priceLabel ? `Unlock · ${priceLabel}` : "Unlock full track"}
         </button>
-        <Link
-          href="/subscribe"
-          style={{
-            ...BTN_BASE,
-            background: "#a259ff",
-            color: "#fff",
-            border: "none",
-            textAlign: "center",
-            textDecoration: "none",
-          }}
-        >
-          Subscribe
-        </Link>
+        {showSubscribeCta ? (
+          <Link
+            href="/subscribe"
+            style={{
+              ...BTN_BASE,
+              background: "#a259ff",
+              color: "#fff",
+              border: "none",
+              textAlign: "center",
+              textDecoration: "none",
+            }}
+          >
+            Subscribe
+          </Link>
+        ) : null}
         <button
           type="button"
           onClick={onContinueListening}

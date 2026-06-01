@@ -8,6 +8,8 @@ import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview/releaseMetadata";
 import { usePlayerBodyState } from "@/lib/player/usePlayerBodyState";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
+import { useEntitlementAccountState } from "@/context/AuthContext";
+import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 
 const PREVIEW_CAP_SEC = 30;
 
@@ -555,6 +557,11 @@ export function SingleModal({
 
   const isVisible = mounted && !closing;
   const priceLabel = track?.price || track?.priceLabel || "";
+  const entitlementAccountState = useEntitlementAccountState();
+  const showSubscribeCta = useMemo(
+    () => resolveSubscriptionEntitlements(entitlementAccountState).showSubscribe,
+    [entitlementAccountState]
+  );
 
   return (
     <div
@@ -702,9 +709,11 @@ export function SingleModal({
                 >
                   <I.Cart s={34} />
                 </button>
-                <Link href="/subscribe" className="icon-btn" style={{ color: t.accent, filter: `drop-shadow(0 0 6px ${t.glow})` }}>
-                  <I.Sub s={28} />
-                </Link>
+                {showSubscribeCta ? (
+                  <Link href="/subscribe" className="icon-btn" style={{ color: t.accent, filter: `drop-shadow(0 0 6px ${t.glow})` }}>
+                    <I.Sub s={28} />
+                  </Link>
+                ) : null}
                 <button type="button" className="icon-btn" style={{ color: "rgba(255,255,255,.38)" }} onClick={() => (onGift ? onGift() : setSheet("share"))}>
                   <I.Plus s={26} />
                 </button>

@@ -7,6 +7,8 @@ import { useMediaEngine } from "@/media/useMediaEngine";
 import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import { useRenderTracker } from "@/lib/dev/useRenderTracker";
+import { useEntitlementAccountState } from "@/context/AuthContext";
+import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 import {
   DOUBLE_TAP_MS,
   HOLD_FADE_MS,
@@ -564,13 +566,23 @@ function GlobalAudioPlayerBar() {
   const csOpacity = csMode ? 1 : csHoldOpacity;
   const baseCoverUrl = resolveAbsoluteArtworkUrl(baseCover);
   const csCoverUrl = csCover ? resolveAbsoluteArtworkUrl(csCover) : null;
+  const entitlementAccountState = useEntitlementAccountState();
+  const showSubscribeCta = useMemo(
+    () => resolveSubscriptionEntitlements(entitlementAccountState).showSubscribe,
+    [entitlementAccountState]
+  );
 
   const errorMessage = accessDenied ? (
     <span>
-      Access unavailable —{" "}
-      <a href={storeLinkHref || "/subscribe"} className="player-immersive-access-link">
-        get access
-      </a>
+      Access unavailable
+      {showSubscribeCta ? (
+        <>
+          {" — "}
+          <a href={storeLinkHref || "/subscribe"} className="player-immersive-access-link">
+            get access
+          </a>
+        </>
+      ) : null}
     </span>
   ) : (
     error

@@ -30,6 +30,7 @@ import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/lib/deep-links";
 import { consumeGiftHighlightSlug } from "@/lib/gifts/session-keys";
+import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess, isAdminAccount } from "@/lib/music-access";
 import {
   albumTracksForPlayback,
@@ -629,8 +630,12 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ isMobile, onAudi
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
-  const { currentUser, library, owns, accountState, isAdmin, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
+  const { currentUser, library, owns, accountState, membership, isAdmin, signOut, refreshLibrary, refreshAccountState, loading: authLoading } = useAuth();
   const entitlementAccountState = useEntitlementAccountState();
+  const showSubscribeCta = useMemo(
+    () => resolveSubscriptionEntitlements(entitlementAccountState, membership).showSubscribe,
+    [entitlementAccountState, membership]
+  );
   const {
     playTrack,
     playQueue,
@@ -1433,7 +1438,7 @@ export default function Page() {
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("entitlements:updated"));
     }
-    setMembershipUpsellOpen(true);
+    if (showSubscribeCta) setMembershipUpsellOpen(true);
     if (isMobile) setMobileCartOpen(false);
   };
 
@@ -1930,7 +1935,9 @@ export default function Page() {
             {activeTab==="home" && (
               <div style={{padding:"18px 0 8px",display:"flex",justifyContent:"flex-start",gap:10,flexWrap:"wrap",alignItems:"center"}}>
                 <button type="button" className="donate-glow-button" onClick={()=>setDonateOpen(true)}>♥ Donate</button>
-                <button type="button" className="subscribe-shimmer-button" onClick={()=>{window.location.href="/subscribe";}}>Subscribe</button>
+                {showSubscribeCta && (
+                  <button type="button" className="subscribe-shimmer-button" onClick={()=>{window.location.href="/subscribe";}}>Subscribe</button>
+                )}
               </div>
             )}
 
@@ -2804,7 +2811,7 @@ export default function Page() {
 
       {/* ── POST-PURCHASE MEMBERSHIP UPSELL ── */}
       <AnimatePresence>
-        {membershipUpsellOpen && (
+        {membershipUpsellOpen && showSubscribeCta && (
           <motion.div key="membership-upsell" {...OVERLAY_FADE} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
             <motion.div {...(isMobile ? SHEET_UP : MODAL_CENTER)} style={{background:"#0a0a0a",padding:isMobile?22:30,borderRadius:isMobile?"20px 20px 0 0":20,width:isMobile?"100%":420,border:"1px solid #222",alignSelf:isMobile?"flex-end":"center",boxShadow:"0 0 40px rgba(0,255,255,0.12)"}}>
               <div style={{fontSize:11,color:"#00ffff",letterSpacing:3,marginBottom:12,textTransform:"uppercase"}}>Thanks for supporting</div>
