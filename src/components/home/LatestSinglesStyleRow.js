@@ -76,13 +76,13 @@ export default forwardRef(function LatestSinglesStyleRow(
             enabled={showPlayActions}
             data-single-card={cardMedia === "video" ? true : undefined}
             onClick={() => onCardClick?.(item)}
+            className="catalog-card-enter"
             style={{
               flex: "0 0 auto",
               width: isMobile ? 160 : 200,
               cursor: "pointer",
               scrollSnapAlign: "start",
-              opacity: 0,
-              animation: `fadeInUp 0.5s ease ${i * 0.09}s forwards`,
+              animationDelay: `${i * 0.09}s`,
               background: "#0a0a0a",
               borderRadius: 14,
               border: "1px solid #1a1a1a",

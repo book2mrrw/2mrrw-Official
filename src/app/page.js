@@ -55,7 +55,13 @@ import { VaultNavLockIcon } from "@/components/nav/VaultNavLockIcon";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
 import { catalogCoverUrl, catalogMotionVideoUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
 import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
-import LivePanel from "@/components/home/LivePanel";
+import { LiveCountdownProvider } from "@/components/home/LiveCountdownContext";
+import {
+  LiveCountdownDesktopPanel,
+  LiveCountdownHomeSection,
+  LiveCountdownLiveTab,
+  LiveCountdownMobileHomeStrip,
+} from "@/components/home/LiveCountdownDisplays";
 import FlowState from "@/components/home/FlowState";
 import RadioCarousel from "@/components/home/RadioCarousel";
 import AmbientPlaybackBackground from "@/components/home/AmbientPlaybackBackground";
@@ -757,8 +763,6 @@ export default function Page() {
   const [giftSheetRelease, setGiftSheetRelease] = useState(null);
   const [giftHighlightSlug, setGiftHighlightSlug] = useState(null);
   const [albumTracklistRelease, setAlbumTracklistRelease] = useState(null);
-  const [liveCountdown, setLiveCountdown]         = useState({ days:0, hours:0, minutes:0, seconds:0 });
-  const [liveIsLive, setLiveIsLive]               = useState(false);
   const [innerCirclePost, setInnerCirclePost]     = useState(null);
   const [expandedGroup, setExpandedGroup]         = useState(null);
   const [mobileNavExpandedGroups, setMobileNavExpandedGroups] = useState(() => new Set());
@@ -797,6 +801,8 @@ export default function Page() {
   const uiScrollLogRef     = useRef(0);
   const prevActiveTabRef   = useRef("home");
   const prevBrowseSinglesLenRef = useRef(0);
+  const homeScrollSectionRef = useRef(null);
+  const homeScrollIoTimerRef = useRef(null);
   const syncSinglesCarouselVideos = useCallback(() => {
     const row = singlesRowRef.current;
     if (!row) return;
@@ -839,38 +845,12 @@ export default function Page() {
     return () => window.removeEventListener("resize", check);
   }, []);
 
-  const applyHeroParallax = useCallback((scrollY) => {
-    if (!isMobileRef.current) return;
-    const y = scrollY;
-    const container = heroContainerRef.current;
-    const video = heroVideoRef.current;
-    const text = heroTextRef.current;
-    const socials = heroSocialsRef.current;
-    if (container) {
-      container.style.height = `${Math.max(108, 200 - y * 0.46)}px`;
-    }
-    if (video) {
-      const brightness = Math.max(0.08, 0.35 - y * 0.0025);
-      video.style.opacity = String(brightness);
-      video.style.filter = `brightness(${brightness / 0.35}) blur(${Math.min(2, y * 0.01)}px)`;
-      video.style.transform = `scale(${1 + y * 0.0008})`;
-    }
-    if (text) {
-      const opacity = Math.max(0, 1 - y / 70);
-      const scale = Math.max(0.72, 1 - y / 350);
-      text.style.opacity = String(opacity);
-      text.style.transform = `scale(${scale})`;
-    }
-    if (socials) {
-      socials.style.opacity = String(Math.max(0, 1 - y / 60));
-    }
-  }, []);
+  // Phase 14C: applyHeroParallax disabled — height/opacity mutations caused layout thrash on scroll.
 
   useEffect(() => {
     const el = mainScrollRef.current;
     if (!el) return;
     const onScroll = () => {
-      applyHeroParallax(el.scrollTop);
       if (isPlaybackTraceEnabled()) {
         const now = Date.now();
         if (now - uiScrollLogRef.current >= 300) {
@@ -880,10 +860,9 @@ export default function Page() {
         }
       }
     };
-    applyHeroParallax(el.scrollTop);
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
-  }, [applyHeroParallax, activeTab]);
+  }, [activeTab]);
 
   useEffect(() => {
     if (!isPlaybackTraceEnabled()) return;
@@ -936,14 +915,23 @@ export default function Page() {
               });
               recordPlaybackTraceContext({ lastUiSection: match.section });
             }
-            setHomeScrollSection(match.section);
+            const nextSection = match.section;
+            if (nextSection === homeScrollSectionRef.current) return;
+            homeScrollSectionRef.current = nextSection;
+            window.clearTimeout(homeScrollIoTimerRef.current);
+            homeScrollIoTimerRef.current = window.setTimeout(() => {
+              setHomeScrollSection(nextSection);
+            }, 220);
           }
         }
       },
       { root, threshold: [0.2, 0.45, 0.65], rootMargin: "-12% 0px -55% 0px" }
     );
     nodes.forEach(n => obs.observe(n.el));
-    return () => obs.disconnect();
+    return () => {
+      window.clearTimeout(homeScrollIoTimerRef.current);
+      obs.disconnect();
+    };
   }, [isMobile, activeTab]);
 
   useEffect(() => {
@@ -1182,23 +1170,6 @@ export default function Page() {
   useEffect(() => {
     localStorage.setItem("2mrrw_cart", JSON.stringify(cart));
   }, [cart]);
-
-  useEffect(() => {
-    const tick = () => {
-      const diff = nextLiveDateTime - new Date();
-      if (diff <= 0) { setLiveIsLive(true); setLiveCountdown({days:0,hours:0,minutes:0,seconds:0}); return; }
-      setLiveIsLive(false);
-      setLiveCountdown({
-        days:    Math.floor(diff / (1000*60*60*24)),
-        hours:   Math.floor((diff % (1000*60*60*24)) / (1000*60*60)),
-        minutes: Math.floor((diff % (1000*60*60)) / (1000*60)),
-        seconds: Math.floor((diff % (1000*60)) / 1000),
-      });
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
 
   useEffect(() => {
     const move = e => {
@@ -1835,6 +1806,7 @@ export default function Page() {
 
   // ═══════════════════════════════════════════════════════════════════════════
   return (
+    <LiveCountdownProvider targetDate={nextLiveDateTime}>
     <>
       <div ref={cursorRef} style={{position:"fixed",width:28,height:28,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.22) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99999,mixBlendMode:"screen",transition:"left 0.045s linear,top 0.045s linear",display:isMobile?"none":undefined}}/>
       <div ref={cursorTrailRef} style={{position:"fixed",width:16,height:16,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.10) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99998,mixBlendMode:"screen",transition:"left 0.18s ease,top 0.18s ease",display:isMobile?"none":undefined}}/>
@@ -2122,35 +2094,14 @@ export default function Page() {
                       </div>
 
                       {!isMobile && (
-                        <LivePanel
-                          liveIsLive={liveIsLive}
+                        <LiveCountdownDesktopPanel
                           liveStreamDate={liveStreamDate}
                           liveStreamTime={liveStreamTime}
-                          liveCountdown={liveCountdown}
                         />
                       )}
                     </div>
 
-                    {isMobile && (
-                      <div style={{marginTop:14,background:"linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",border:"1px solid rgba(0,255,255,0.15)",borderRadius:16,padding:"20px 18px",backdropFilter:"blur(12px)"}}>
-                        <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:10,textTransform:"uppercase",fontWeight:700}}>2MRRW LIVE</div>
-                        {liveIsLive ? (
-                          <div style={{display:"flex",alignItems:"center",gap:8}}>
-                            <div style={{width:10,height:10,borderRadius:"50%",background:"#00ffff",animation:"pulse 1.2s infinite"}}/>
-                            <div style={{fontSize:20,fontWeight:900,color:"#00ffff",letterSpacing:3}}>LIVE NOW</div>
-                          </div>
-                        ) : (
-                          <div style={{display:"flex",gap:8}}>
-                            {[{v:liveCountdown.days,l:"D"},{v:liveCountdown.hours,l:"H"},{v:liveCountdown.minutes,l:"M"},{v:liveCountdown.seconds,l:"S"}].map(u=>(
-                              <div key={u.l} style={{flex:1,background:"rgba(0,0,0,0.5)",border:"1px solid #1a1a1a",borderRadius:10,padding:"10px 4px",textAlign:"center"}}>
-                                <div style={{fontSize:22,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(u.v).padStart(2,"0")}</div>
-                                <div style={{fontSize:9,color:"#444",letterSpacing:1.5,marginTop:3}}>{u.l}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
+                    {isMobile ? <LiveCountdownMobileHomeStrip /> : null}
                   </motion.div>
 
                   {/* Features */}
@@ -2292,17 +2243,11 @@ export default function Page() {
 
                   <div style={{margin:"32px 0 24px",height:1,background:"#1a1a1a"}}/>
 
-                  {/* Live */}
-                  <div id="home-live">
-                    <h2 className="section-heading" style={{marginBottom:16}}>2MRRW LIVE</h2>
-                    <div style={{background:"linear-gradient(135deg,#080808,#0d0d0d)",border:"1px solid rgba(0,255,255,0.1)",borderRadius:20,padding:isMobile?"20px 16px":"32px",textAlign:"center"}}>
-                      <div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:8}}>NEXT LIVE STREAM</div>
-                      <div style={{fontSize:isMobile?16:20,fontWeight:800,marginBottom:4}}>2MRRW LIVE – Dallas</div>
-                      <div style={{fontSize:13,color:"#aaa",marginBottom:24}}>{liveStreamDate} · {liveStreamTime}</div>
-                      {liveIsLive ? <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,fontSize:22,fontWeight:900,color:"#00ffff"}}><div style={{width:10,height:10,borderRadius:"50%",background:"#00ffff",animation:"pulse 1.2s infinite"}}/>LIVE NOW</div>
-                        : <div style={{display:"flex",justifyContent:"center",gap:isMobile?8:14,flexWrap:"wrap"}}>{[{v:liveCountdown.days,l:"Days"},{v:liveCountdown.hours,l:"Hours"},{v:liveCountdown.minutes,l:"Min"},{v:liveCountdown.seconds,l:"Sec"}].map(u=><div key={u.l} style={{background:"#0a0a0a",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?"12px 10px":"16px 20px",minWidth:isMobile?52:68,textAlign:"center"}}><div style={{fontSize:isMobile?24:32,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(u.v).padStart(2,"0")}</div><div style={{fontSize:9,color:"#444",letterSpacing:2,marginTop:5,textTransform:"uppercase"}}>{u.l}</div></div>)}</div>}
-                    </div>
-                  </div>
+                  <LiveCountdownHomeSection
+                    isMobile={isMobile}
+                    liveStreamDate={liveStreamDate}
+                    liveStreamTime={liveStreamTime}
+                  />
                   <div style={{height:40}}/>
                 </>
               )}
@@ -2435,23 +2380,11 @@ export default function Page() {
               {activeTab==="live" && (
                 <>
                   <h2 className="section-heading">2MRRW LIVE</h2>
-                  <div style={{background:"linear-gradient(135deg,#080808,#0d0d0d)",border:"1px solid rgba(0,255,255,0.12)",borderRadius:20,padding:isMobile?"20px 16px":"36px 32px",marginBottom:28,textAlign:"center"}}>
-                    <div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:6,textTransform:"uppercase"}}>Next Live Stream</div>
-                    <div style={{fontSize:isMobile?17:22,fontWeight:800,marginBottom:4}}>2MRRW LIVE – Dallas</div>
-                    <div style={{fontSize:13,color:"#aaa",marginBottom:28}}>{liveStreamDate} · {liveStreamTime}</div>
-                    {liveIsLive ? <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:20}}><div style={{width:12,height:12,borderRadius:"50%",background:"#00ffff",boxShadow:"0 0 14px rgba(0,255,255,0.9)",animation:"pulse 1.2s infinite"}}/><div style={{fontSize:28,fontWeight:900,color:"#00ffff",letterSpacing:4}}>LIVE NOW</div></div>
-                      : <div style={{display:"flex",justifyContent:"center",gap:isMobile?8:16,flexWrap:"wrap"}}>{[{v:liveCountdown.days,l:"Days"},{v:liveCountdown.hours,l:"Hours"},{v:liveCountdown.minutes,l:"Min"},{v:liveCountdown.seconds,l:"Sec"}].map(u=><div key={u.l} style={{background:"#0a0a0a",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?"12px 10px":"18px 22px",minWidth:isMobile?52:74,textAlign:"center"}}><div style={{fontSize:isMobile?26:36,fontWeight:900,color:"#00ffff",fontVariantNumeric:"tabular-nums",lineHeight:1}}>{String(u.v).padStart(2,"0")}</div><div style={{fontSize:9,color:"#444",letterSpacing:2,marginTop:6,textTransform:"uppercase"}}>{u.l}</div></div>)}</div>}
-                  </div>
-                  <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,overflow:"hidden",marginBottom:28}}>
-                    <div style={{position:"relative",paddingBottom:"56.25%",background:"#050505"}}>
-                      <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}>
-                        <div style={{width:70,height:70,borderRadius:"50%",border:"1px solid #222",display:"flex",alignItems:"center",justifyContent:"center"}}><svg viewBox="0 0 24 24" fill="#333" width="32" height="32"><circle cx="12" cy="12" r="4"/><path d="M20.188 10.934a8.999 8.999 0 0 0-16.376 0M23.472 9.16a13.5 13.5 0 0 0-22.944 0M16.905 12.7a4.5 4.5 0 0 0-9.81 0M12 17v-1m0 5v-2" stroke="#333" strokeWidth="1.5" fill="none"/></svg></div>
-                        <div style={{fontSize:14,color:"#333",fontWeight:700,letterSpacing:2}}>{liveIsLive?"STREAM STARTING…":"OFFLINE"}</div>
-                        <div style={{fontSize:12,color:"#2a2a2a"}}>Live streams announced via Circle + socials</div>
-                      </div>
-                    </div>
-                    <div style={{padding:"16px 20px",borderTop:"1px solid #111"}}><div style={{fontSize:13,color:"#444"}}>Live streams broadcast here and on Twitch. Follow to get notified.</div></div>
-                  </div>
+                  <LiveCountdownLiveTab
+                    isMobile={isMobile}
+                    liveStreamDate={liveStreamDate}
+                    liveStreamTime={liveStreamTime}
+                  />
                 </>
               )}
 
@@ -3012,6 +2945,7 @@ export default function Page() {
       </AnimatePresence>
 
     </>
+    </LiveCountdownProvider>
   );
 }
 
