@@ -2110,6 +2110,36 @@ export default function Page() {
                     <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
                   </div>
 
+                  <div style={{margin:"0 0 24px",height:1,background:"#1a1a1a"}}/>
+
+                  {/* Albums */}
+                  <div id="home-albums">
+                    <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
+                    <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
+                  </div>
+
+                  {/* Mixtapes & EPs — same row chrome as Latest Singles on mobile */}
+                  <div id="home-mixtapes-eps" style={{marginTop:28}}>
+                    <h2 className="section-heading" style={{marginBottom:14}}>Mixtapes &amp; EPs</h2>
+                    <div style={{flex:1,width:"100%",minWidth:0}}>
+                      <LatestSinglesStyleRow
+                        items={mixtapesAndEps}
+                        isMobile={isMobile}
+                        isAdmin={isAdmin}
+                        onGift={openGiftSheet}
+                        onCardClick={openAlbumModal}
+                        onPlayClick={playMixtapeEpCard}
+                        addToCart={addToCart}
+                        accountState={entitlementAccountState}
+                        userId={currentUser?.id}
+                        onLibraryChange={handleLibraryChange}
+                        source="home_mixtape_ep_card"
+                        cardMedia="cover"
+                        catalogPlaybackLookup={catalogPlaybackLookup}
+                      />
+                    </div>
+                  </div>
+
                   {/* Radio */}
                   <div style={{marginTop:28,marginBottom:28}}>
                     <h2 className="section-heading" style={{marginBottom:14}}>2MRRW RADIO</h2>
@@ -2155,36 +2185,6 @@ export default function Page() {
                         />
                       </div>
                     )}
-                  </div>
-
-                  <div style={{margin:"0 0 24px",height:1,background:"#1a1a1a"}}/>
-
-                  {/* Albums */}
-                  <div id="home-albums">
-                    <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                    <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={entitlementAccountState} userId={currentUser?.id} isAdmin={isAdmin} onGift={openGiftSheet} onLibraryChange={handleLibraryChange}/>
-                  </div>
-
-                  {/* Mixtapes & EPs — same row chrome as Latest Singles on mobile */}
-                  <div id="home-mixtapes-eps" style={{marginTop:28}}>
-                    <h2 className="section-heading" style={{marginBottom:14}}>Mixtapes &amp; EPs</h2>
-                    <div style={{flex:1,width:"100%",minWidth:0}}>
-                      <LatestSinglesStyleRow
-                        items={mixtapesAndEps}
-                        isMobile={isMobile}
-                        isAdmin={isAdmin}
-                        onGift={openGiftSheet}
-                        onCardClick={openAlbumModal}
-                        onPlayClick={playMixtapeEpCard}
-                        addToCart={addToCart}
-                        accountState={entitlementAccountState}
-                        userId={currentUser?.id}
-                        onLibraryChange={handleLibraryChange}
-                        source="home_mixtape_ep_card"
-                        cardMedia="cover"
-                        catalogPlaybackLookup={catalogPlaybackLookup}
-                      />
-                    </div>
                   </div>
 
                   {/* Audio Visuals */}
