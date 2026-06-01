@@ -762,7 +762,6 @@ export default function Page() {
   const [innerCirclePost, setInnerCirclePost]     = useState(null);
   const [expandedGroup, setExpandedGroup]         = useState(null);
   const [mobileNavExpandedGroups, setMobileNavExpandedGroups] = useState(() => new Set());
-  const [tabKey, setTabKey]                       = useState(0);
   const [nowPlaying, setNowPlaying]               = useState(null);
   const [radioIndex, setRadioIndex]               = useState(0);
   const [flowConversionActive, setFlowConversionActive] = useState(false);
@@ -945,7 +944,7 @@ export default function Page() {
     );
     nodes.forEach(n => obs.observe(n.el));
     return () => obs.disconnect();
-  }, [isMobile, activeTab, tabKey]);
+  }, [isMobile, activeTab]);
 
   useEffect(() => {
     setInventory(loadInventory());
@@ -1115,7 +1114,7 @@ export default function Page() {
       window.removeEventListener("resize", onScroll);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [activeTab, tabKey, syncSinglesCarouselVideos]);
+  }, [activeTab, syncSinglesCarouselVideos]);
 
   useEffect(() => {
     if (activeTab !== "vault" && activeTab !== "innercircle") return;
@@ -1679,7 +1678,6 @@ export default function Page() {
     // phase11: startTransition — non-urgent UI update
     startTransition(() => {
     setHomeScrollSection(null);
-    setTabKey(p => p + 1);
     setActiveTab(tabId);
     const navGroupByTab = {
       singles: "g-music",
@@ -1753,7 +1751,6 @@ export default function Page() {
     // phase11: startTransition — browse sub-tab switch
     startTransition(() => {
       setMusicSubTab(sub);
-      setTabKey((p) => p + 1);
     });
   };
 
@@ -2071,7 +2068,7 @@ export default function Page() {
               </div>
             )}
 
-            <div key={tabKey} style={{animation:"fadeInTab 0.22s ease forwards"}}>
+            <div data-tab-panel>
 
               {/* ══ HOME ══ */}
               {activeTab==="home" && (
@@ -2652,7 +2649,7 @@ export default function Page() {
                 </>
               )}
 
-            </div>{/* end tabKey */}
+            </div>{/* end tab panel */}
             </motion.div>
             </motion.div>
           </div>{/* end scroll area */}
@@ -2922,7 +2919,6 @@ export default function Page() {
         @keyframes pulse{0%{transform:scale(1);opacity:1}50%{transform:scale(1.05);opacity:.85}100%{transform:scale(1);opacity:1}}
         @keyframes fadeInUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
         @keyframes fadeInCover{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
-        @keyframes fadeInTab{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
         @keyframes expandDown{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
         @keyframes flowIdlePulse{0%{opacity:.4}50%{opacity:.9}100%{opacity:.4}}
         @keyframes flowIdleDot{0%{opacity:.15;transform:scale(.8)}50%{opacity:.7;transform:scale(1.2)}100%{opacity:.15;transform:scale(.8)}}
