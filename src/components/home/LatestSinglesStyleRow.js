@@ -20,6 +20,7 @@ export default forwardRef(function LatestSinglesStyleRow(
     isAdmin = false,
     onGift,
     onCardClick,
+    onPlayClick,
     addToCart,
     accountState,
     userId,
@@ -169,6 +170,7 @@ export default forwardRef(function LatestSinglesStyleRow(
                     accountState={accountState}
                     userId={userId}
                     source={source}
+                    onPlayClick={onPlayClick}
                     showCart={Boolean(access?.showCart)}
                     onLibraryChange={onLibraryChange}
                     onAddToCart={(e) => {

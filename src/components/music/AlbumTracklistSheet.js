@@ -68,9 +68,7 @@ export default function AlbumTracklistSheet({
 
   const playAndClose = useCallback(
     (releaseTrackIndex, shuffle = false) => {
-      const playable = playableReleaseQueue(tracks, { ...accountState, userId }).filter(
-        (t) => t.playbackStatus !== "unavailable"
-      );
+      const playable = playableReleaseQueue(tracks, { ...accountState, userId });
       if (!playable.length) return;
       if (shuffle) {
         setShuffle(true);

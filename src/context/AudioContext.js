@@ -1216,8 +1216,27 @@ export function AudioProvider({ children }) {
               return;
             }
           }
-          const nextTrack = queue[nextIndex];
-          if (nextTrack) {
+          let attempts = 0;
+          while (attempts < queue.length) {
+            const nextTrack = queue[nextIndex];
+            if (!nextTrack?.src) {
+              nextIndex += 1;
+              if (nextIndex >= queue.length) {
+                if (repeatMode === "all") nextIndex = 0;
+                else {
+                  patchState({ isPlaying: false, playbackState: "idle" });
+                  syncProgressTime(0);
+                  setPreviewEnded(false);
+                  if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
+                    navigator.mediaSession.playbackState = "none";
+                  }
+                  if (track) void updateMediaSession(track, { playing: false });
+                  return;
+                }
+              }
+              attempts += 1;
+              continue;
+            }
             queueIndexRef.current = nextIndex;
             patchState({ queueIndex: nextIndex, playbackState: "playing" });
             resetPlaybackTimingCapture();
@@ -2341,15 +2360,28 @@ export function AudioProvider({ children }) {
     if (shuffleRef.current && queue.length > 1) {
       nextIndex = Math.floor(Math.random() * queue.length);
     } else if (nextIndex >= queue.length) {
-      nextIndex = repeatModeRef.current === "all" ? 0 : queueIndexRef.current;
-      if (nextIndex === queueIndexRef.current) return false;
+      if (repeatModeRef.current === "all") nextIndex = 0;
+      else return false;
     }
-    queueIndexRef.current = nextIndex;
-    patchState({ queueIndex: nextIndex });
-    const track = queue[nextIndex];
-    const ok = await playTrackInternal(track, { resumeAt: 0 });
-    if (ok && csModeRef.current) await applyCSModeToTrack(track);
-    return ok;
+    let attempts = 0;
+    while (attempts < queue.length) {
+      const track = queue[nextIndex];
+      if (!track?.src) {
+        nextIndex += 1;
+        if (nextIndex >= queue.length) {
+          if (repeatModeRef.current === "all") nextIndex = 0;
+          else return false;
+        }
+        attempts += 1;
+        continue;
+      }
+      queueIndexRef.current = nextIndex;
+      patchState({ queueIndex: nextIndex });
+      const ok = await playTrackInternal(track, { resumeAt: 0 });
+      if (ok && csModeRef.current) await applyCSModeToTrack(track);
+      return ok;
+    }
+    return false;
   }, [playTrackInternal, patchState, applyCSModeToTrack]);
 
   const playPreviousInternal = useCallback(async () => {
@@ -2364,12 +2396,25 @@ export function AudioProvider({ children }) {
     if (!queue.length) return false;
     let prevIndex = queueIndexRef.current - 1;
     if (prevIndex < 0) prevIndex = repeatModeRef.current === "all" ? queue.length - 1 : 0;
-    queueIndexRef.current = prevIndex;
-    patchState({ queueIndex: prevIndex });
-    const track = queue[prevIndex];
-    const ok = await playTrackInternal(track, { resumeAt: 0 });
-    if (ok && csModeRef.current) await applyCSModeToTrack(track);
-    return ok;
+    let attempts = 0;
+    while (attempts < queue.length) {
+      const track = queue[prevIndex];
+      if (!track?.src) {
+        prevIndex -= 1;
+        if (prevIndex < 0) {
+          if (repeatModeRef.current === "all") prevIndex = queue.length - 1;
+          else return false;
+        }
+        attempts += 1;
+        continue;
+      }
+      queueIndexRef.current = prevIndex;
+      patchState({ queueIndex: prevIndex });
+      const ok = await playTrackInternal(track, { resumeAt: 0 });
+      if (ok && csModeRef.current) await applyCSModeToTrack(track);
+      return ok;
+    }
+    return false;
   }, [playTrackInternal, patchState, syncPositionState, applyCSModeToTrack]);
 
   const setRepeatMode = useCallback((mode) => {

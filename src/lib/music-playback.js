@@ -379,8 +379,14 @@ export function resolveReleaseQueueStartIndex(playableTracks, releaseTrackIndex)
   if (!Array.isArray(playableTracks) || !playableTracks.length) return 0;
   const idx = Number(releaseTrackIndex);
   if (!Number.isFinite(idx) || idx < 0) return 0;
-  const found = playableTracks.findIndex((t) => t.metadata?.trackIndex === idx);
-  return found >= 0 ? found : 0;
+  const exact = playableTracks.findIndex((t) => t.metadata?.trackIndex === idx);
+  if (exact >= 0) return exact;
+  const nextAtOrAfter = playableTracks.findIndex((t) => {
+    const trackIdx = t.metadata?.trackIndex;
+    return Number.isFinite(trackIdx) && trackIdx > idx;
+  });
+  if (nextAtOrAfter >= 0) return nextAtOrAfter;
+  return 0;
 }
 
 export function albumTracksForPlayback(album, accountState, source = "album", catalogLookup) {

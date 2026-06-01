@@ -35,6 +35,7 @@ import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess, isAdminAccount } from "@/lib/music-access";
 import {
   albumTracksForPlayback,
+  playableReleaseQueue,
   resolveReleaseQueueStartIndex,
   buildCatalogPlaybackLookup,
   normalizeTrackForPlayback,
@@ -1161,13 +1162,14 @@ export default function Page() {
   const playAlbumTracks = useCallback(
     (album, startIndex = 0) => {
       const albumItem = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
+      const account = { ...entitlementAccountState, userId: currentUser?.id };
       const tracks = albumTracksForPlayback(
         albumItem,
-        { ...entitlementAccountState, userId: currentUser?.id },
+        account,
         "album_modal",
         catalogPlaybackLookup
       );
-      const playable = tracks.filter((t) => Boolean(t.src));
+      const playable = playableReleaseQueue(tracks, account);
       if (playable.length) {
         const queueIndex = resolveReleaseQueueStartIndex(playable, startIndex);
         void playQueue(playable, queueIndex);
@@ -1175,11 +1177,18 @@ export default function Page() {
       }
       const access = resolveContentAccess(albumItem, entitlementAccountState);
       if (!access.canStream) return;
-      void playTrack(
-        normalizeTrackForPlayback(albumItem, { ...entitlementAccountState, userId: currentUser?.id }, "album_modal")
-      );
+      void playTrack(normalizeTrackForPlayback(albumItem, account, "album_modal"));
     },
     [entitlementAccountState, catalogPlaybackLookup, currentUser?.id, playQueue, playTrack]
+  );
+
+  const playMixtapeEpCard = useCallback(
+    (e, item) => {
+      e.stopPropagation();
+      const albumItem = resolveCatalogPlaybackItem(item, catalogPlaybackLookup);
+      playAlbumTracks(albumItem, 0);
+    },
+    [playAlbumTracks, catalogPlaybackLookup]
   );
 
   const playCanonicalCatalogItem = useCallback((item, source) => {
@@ -2101,6 +2110,7 @@ export default function Page() {
                         isAdmin={isAdmin}
                         onGift={openGiftSheet}
                         onCardClick={openAlbumModal}
+                        onPlayClick={playMixtapeEpCard}
                         addToCart={addToCart}
                         accountState={entitlementAccountState}
                         userId={currentUser?.id}
