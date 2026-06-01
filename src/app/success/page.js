@@ -5,6 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import CoverArt from "@/components/ui/CoverArt";
 import { catalogCoverUrl } from "@/lib/media-urls";
+import { notifyEntitlementsUpdated } from "@/lib/diagnostics/state-churn-log";
+
+const SUCCESS_POLL_DELAYS_MS = [1000, 2000, 4000];
+const SUCCESS_POLL_MAX_ATTEMPTS = 3;
 
 function slugsFromPurchaseItems(items) {
   const list = Array.isArray(items) ? items : [];
@@ -106,16 +110,28 @@ function SuccessContent() {
       try {
         let expectedSlugs = resolveExpectedSlugs(searchParams);
 
-        await Promise.all([refreshAccountState(), refreshLibrary()]);
-        if (typeof window !== "undefined") {
-          window.dispatchEvent(new CustomEvent("entitlements:updated"));
-        }
+        let prevOwnedKey = "";
 
-        for (let attempt = 0; attempt <= 6; attempt += 1) {
+        for (let attempt = 0; attempt < SUCCESS_POLL_MAX_ATTEMPTS; attempt += 1) {
           if (cancelled) return;
+          if (attempt > 0) await sleep(SUCCESS_POLL_DELAYS_MS[attempt - 1]);
 
-          const account = await refreshAccountState();
-          await refreshLibrary();
+          const account = await refreshAccountState({
+            source: "success/page",
+            reason: attempt === 0 ? "initial" : `poll-${attempt}`,
+          });
+          await refreshLibrary({
+            source: "success/page",
+            reason: attempt === 0 ? "initial" : `poll-${attempt}`,
+          });
+
+          if (attempt === 0) {
+            notifyEntitlementsUpdated({
+              source: "success/page",
+              reason: "purchase-confirmed",
+            });
+          }
+
           const owned = new Set(account?.ownedSlugs || []);
 
           if (!expectedSlugs.length) {
@@ -134,7 +150,10 @@ function SuccessContent() {
             expectedSlugs.some((slug) => !owned.has(slug));
 
           if (!pending) break;
-          if (attempt < 6) await sleep(2000);
+
+          const ownedKey = [...owned].sort().join(",");
+          if (attempt > 0 && ownedKey === prevOwnedKey) break;
+          prevOwnedKey = ownedKey;
         }
 
         const orderHistory = await loadPurchases();

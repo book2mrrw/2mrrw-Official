@@ -32,6 +32,7 @@ import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/lib/deep-links";
 import { consumeGiftHighlightSlug } from "@/lib/gifts/session-keys";
 import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
+import { notifyEntitlementsUpdated } from "@/lib/diagnostics/state-churn-log";
 import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess, isAdminAccount } from "@/lib/music-access";
 import {
   albumTracksForPlayback,
@@ -1171,7 +1172,8 @@ export default function Page() {
       );
       const playable = playableReleaseQueue(tracks, account);
       if (playable.length) {
-        const queueIndex = resolveReleaseQueueStartIndex(playable, startIndex);
+        const sourceTrack = tracks[startIndex];
+        const queueIndex = resolveReleaseQueueStartIndex(playable, startIndex, sourceTrack);
         void playQueue(playable, queueIndex);
         return;
       }
@@ -1444,10 +1446,11 @@ export default function Page() {
     });
     setInventory(inv);
     setClientSecret(null); setCheckingOut(false); clearCart();
-    await Promise.all([refreshAccountState(), refreshLibrary()]);
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("entitlements:updated"));
-    }
+    await Promise.all([
+      refreshAccountState({ source: "page.js", reason: "checkout-success" }),
+      refreshLibrary({ source: "page.js", reason: "checkout-success" }),
+    ]);
+    notifyEntitlementsUpdated({ source: "page.js", reason: "checkout-success" });
     if (showSubscribeCta) setMembershipUpsellOpen(true);
     if (isMobile) setMobileCartOpen(false);
   };

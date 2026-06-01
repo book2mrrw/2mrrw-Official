@@ -1,0 +1,13 @@
+.tmp-phase2-playback-stability-20260531/report.md
+.tmp-phase2-playback-stability-20260531/manifest.txt
+src/lib/diagnostics/state-churn-log.js
+src/lib/auth/state-equality.js
+src/context/AuthContext.js
+src/context/AudioContext.js
+src/app/success/page.js
+src/app/subscribe/page.js
+src/app/page.js
+src/app/verify-otp/page.js
+src/components/auth/AuthGate.js
+src/components/auth/AppAuthRoot.js
+src/components/system/AudioPhase10Bridge.js

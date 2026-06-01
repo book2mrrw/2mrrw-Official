@@ -19,7 +19,7 @@ const EMPTY_DIGITS = () => Array(OTP_LENGTH).fill("");
 function VerifyOtpForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { applySessionUser, refreshAccountState } = useAuth();
+  const { applySessionUser } = useAuth();
   const email = (searchParams.get("email") || "").trim();
   const nextPath = searchParams.get("next") || "/?tab=mymusic";
   const shouldCreateUser = searchParams.get("createUser") !== "0";
@@ -120,7 +120,6 @@ function VerifyOtpForm() {
         } else if (data?.user) {
           await applySessionUser({ user: data.user });
         }
-        await refreshAccountState();
         router.push(nextPath);
         router.refresh();
       } catch {
@@ -130,7 +129,7 @@ function VerifyOtpForm() {
         setOtpLoading(false);
       }
     },
-    [code, email, applySessionUser, refreshAccountState, router, nextPath, otpLoading]
+    [code, email, applySessionUser, router, nextPath, otpLoading]
   );
 
   useEffect(() => {

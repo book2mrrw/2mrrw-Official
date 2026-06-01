@@ -81,7 +81,7 @@ const GLOW_KEYFRAMES = `
 `;
 export default function AuthGate({ open, onClose, onVerified, variant = "sheet" }) {
   const isRoot = variant === "root";
-  const { applySessionUser, refreshAccountState } = useAuth();
+  const { applySessionUser } = useAuth();
   const [mode, setMode] = useState("signup");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -325,7 +325,6 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
         } else if (data?.user) {
           await applySessionUser({ user: data.user });
         }
-        await refreshAccountState();
         await onVerified?.();
       } catch {
         setOtpError("Invalid or expired code. Try again or tap Resend code.");
@@ -334,7 +333,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
         setOtpLoading(false);
       }
     },
-    [code, otpEmail, name, applySessionUser, refreshAccountState, onVerified, otpLoading]
+    [code, otpEmail, name, applySessionUser, onVerified, otpLoading]
   );
   useEffect(() => {
     if (

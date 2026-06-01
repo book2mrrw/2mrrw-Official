@@ -17,7 +17,7 @@ import {
 } from "@/lib/player/constants";
 
 const PREVIEW_SCRUB_CAP_RATIO = 0.3;
-const PREVIEW_MAX_SEC = 30;
+const PREVIEW_MAX_SEC = 15;
 
 function Skip15Icon({ direction }) {
   const back = direction === "back";

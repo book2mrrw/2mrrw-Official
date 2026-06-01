@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import AuthGate from "@/components/auth/AuthGate";
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
@@ -22,7 +22,7 @@ const BOOT_PLACEHOLDER = (
  * OTP gate overlays the shell when authStatus is unauthenticated.
  */
 export default function AppAuthRoot({ children }) {
-  const { authStatus, refreshAccountState } = useAuth();
+  const { authStatus } = useAuth();
   const [hydrated, setHydrated] = useState(false);
   const showAuthGate = authStatus === "unauthenticated";
 
@@ -35,10 +35,6 @@ export default function AppAuthRoot({ children }) {
     if (hydrated) perfMark(MARKS.HYDRATION_END);
   }, [hydrated]);
 
-  const handleVerified = useCallback(async () => {
-    await refreshAccountState();
-  }, [refreshAccountState]);
-
   if (!hydrated) {
     return BOOT_PLACEHOLDER;
   }
@@ -47,7 +43,7 @@ export default function AppAuthRoot({ children }) {
     <>
       {children}
       {showAuthGate ? (
-        <AuthGate variant="root" open onVerified={handleVerified} />
+        <AuthGate variant="root" open />
       ) : null}
     </>
   );

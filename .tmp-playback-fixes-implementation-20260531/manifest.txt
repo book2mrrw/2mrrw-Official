@@ -1,0 +1,17 @@
+playback-fixes-implementation-20260531
+Generated: 2026-05-31
+
+Modified source files:
+  src/lib/music-playback.js
+  src/components/music/AlbumTracklistSheet.js
+  src/context/AudioContext.js
+  src/components/audio/GlobalAudioPlayerBar.js
+  src/app/page.js
+
+Deliverables:
+  report.md
+  manifest.txt
+
+Audit references:
+  .tmp-playback-stability-churn-audit-20260531/
+  .tmp-entitlement-playback-audit-20260531/

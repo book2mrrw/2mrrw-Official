@@ -8,6 +8,27 @@ import { useAuth } from "@/context/AuthContext";
 import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 import { stripePaymentOverlayStyle, stripePaymentPanelStyle, stripePaymentFormStyle } from "@/components/payments/stripePaymentShell";
 
+const SUBSCRIBE_SYNC_DELAYS_MS = [0, 2500, 5000];
+const SUBSCRIBE_SYNC_MAX_ATTEMPTS = 3;
+
+async function pollSubscriptionAccountState(refreshAccountState, source) {
+  for (let attempt = 0; attempt < SUBSCRIBE_SYNC_MAX_ATTEMPTS; attempt += 1) {
+    if (attempt > 0) {
+      await new Promise((resolve) => {
+        window.setTimeout(resolve, SUBSCRIBE_SYNC_DELAYS_MS[attempt] - SUBSCRIBE_SYNC_DELAYS_MS[attempt - 1]);
+      });
+    }
+    const data = await refreshAccountState?.({
+      source,
+      reason: attempt === 0 ? "initial" : `poll-${attempt}`,
+    });
+    if (!data) continue;
+    const { isSubscriber, isLifetimeOwner } = resolveSubscriptionEntitlements(data, data.membership);
+    if (isSubscriber || isLifetimeOwner) return true;
+  }
+  return false;
+}
+
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
 const fadeUp = {
@@ -63,15 +84,14 @@ export default function SubscribePage() {
     if (!params.get("subscribed")) return;
     setSubscriptionUnlocked(true);
 
-    let attempts = 0;
-    const sync = () => {
-      attempts += 1;
-      refreshAccountState?.().catch(() => {});
-      if (attempts >= 5) window.clearInterval(interval);
+    let cancelled = false;
+    void (async () => {
+      await pollSubscriptionAccountState(refreshAccountState, "subscribe/page?subscribed=1");
+      if (!cancelled) setSubscriptionUnlocked(true);
+    })();
+    return () => {
+      cancelled = true;
     };
-    sync();
-    const interval = window.setInterval(sync, 2500);
-    return () => window.clearInterval(interval);
   }, [refreshAccountState]);
 
   const startSubscription = async () => {
@@ -100,14 +120,7 @@ export default function SubscribePage() {
   const handleSubscriptionSuccess = async () => {
     setSubscriptionClientSecret(null);
     setSubscriptionUnlocked(true);
-    let attempts = 0;
-    const sync = () => {
-      attempts += 1;
-      refreshAccountState?.().catch(() => {});
-      if (attempts >= 5) window.clearInterval(interval);
-    };
-    sync();
-    const interval = window.setInterval(sync, 2500);
+    await pollSubscriptionAccountState(refreshAccountState, "subscribe/page:modal-success");
   };
   const experienceUnlocked =
     subscriptionUnlocked || (!accountLoading && (isSubscriber || isLifetimeOwner));

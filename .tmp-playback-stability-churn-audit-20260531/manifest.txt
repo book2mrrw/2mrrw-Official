@@ -1,0 +1,34 @@
+Playback Stability & State Churn Audit — 2026-05-31
+=================================================
+
+Folder: .tmp-playback-stability-churn-audit-20260531/
+
+Files:
+  1.  report.md                              Executive summary + sections A–J
+  2.  refresh-account-state-call-map.md      Complete refreshAccountState call map
+  3.  auth-context-dependency-map.md         AuthContext consumers & churn
+  4.  audio-context-dependency-map.md        AudioContext ↔ auth/entitlement deps
+  5.  entitlement-event-map.md               entitlements:updated dispatch/listen
+  6.  polling-inventory.md                   setInterval / poll loops
+  7.  route-refresh-inventory.md             router.refresh / navigation
+  8.  recovery-system-findings.md            useSessionRecovery, bridge, events
+  9.  mobile-playback-findings.md            visibility, Media Session, iOS
+ 10.  ranked-root-causes.md                  Severity / confidence / evidence
+ 11.  recommended-fixes.md                   Impact-ordered fixes (report only)
+ 12.  lowest-risk-implementation-plan.md     Phased plan preserving all tiers
+ 13.  manifest.txt                          This file
+
+Zip target:
+  /Users/recharge/Downloads/playback-stability-churn-audit-20260531.zip
+
+Key metrics:
+  refreshAccountState src/ grep matches: 58
+  setInterval registrations in src/: 12
+  Account polling patterns: 3
+  entitlements:updated dispatches: 2
+
+Method: ripgrep + read of AuthContext.js, AudioContext.js, page.js,
+        success/page.js, subscribe/page.js, verify-otp, AuthGate,
+        AppAuthRoot, recovery modules, layout.js
+
+Mode: READ-ONLY — no repository code modified

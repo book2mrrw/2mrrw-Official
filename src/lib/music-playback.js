@@ -372,11 +372,34 @@ export function playableReleaseQueue(tracks = [], accountState) {
 }
 
 /**
- * Resolve queue start index from a release tracklist tap (0-based release position).
- * Album tracks share the release stream slug; trackIndex is the stable discriminator.
+ * Stable playback identity — album tracks share release slug; id or album+index wins.
  */
-export function resolveReleaseQueueStartIndex(playableTracks, releaseTrackIndex) {
+export function isSamePlaybackTrack(a, b) {
+  if (!a || !b) return false;
+  if (a.id && b.id && a.id === b.id) return true;
+  const aAlbum = a.metadata?.albumSlug ?? a.albumSlug;
+  const bAlbum = b.metadata?.albumSlug ?? b.albumSlug;
+  const aIdx = a.metadata?.trackIndex ?? a.trackIndex;
+  const bIdx = b.metadata?.trackIndex ?? b.trackIndex;
+  if (aAlbum && bAlbum && aAlbum === bAlbum && Number.isFinite(aIdx) && Number.isFinite(bIdx)) {
+    return aIdx === bIdx;
+  }
+  if (a.slug && b.slug && a.slug === b.slug) return true;
+  return false;
+}
+
+/**
+ * Resolve queue start index from a release tracklist tap (0-based release position).
+ * Prefer unique track id; album tracks share release stream slug — trackIndex is fallback.
+ */
+export function resolveReleaseQueueStartIndex(playableTracks, releaseTrackIndex, sourceTrack = null) {
   if (!Array.isArray(playableTracks) || !playableTracks.length) return 0;
+
+  if (sourceTrack?.id) {
+    const byId = playableTracks.findIndex((t) => t.id === sourceTrack.id);
+    if (byId >= 0) return byId;
+  }
+
   const idx = Number(releaseTrackIndex);
   if (!Number.isFinite(idx) || idx < 0) return 0;
   const exact = playableTracks.findIndex((t) => t.metadata?.trackIndex === idx);

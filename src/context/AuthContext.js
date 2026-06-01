@@ -3,6 +3,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { bootstrapSession, signOut as authSignOut, subscribeAuthState } from "@/auth/authService";
 import { isAdminUser } from "@/lib/auth/constants";
+import {
+  accountStateShallowEqual,
+  libraryItemsShallowEqual,
+  ownedSlugsArraysEqual,
+  slugSetsEqual,
+} from "@/lib/auth/state-equality";
+import { logStateChurn } from "@/lib/diagnostics/state-churn-log";
 
 const EMPTY_ACCOUNT_STATE = {
   library: [],
@@ -78,8 +85,11 @@ export function AuthProvider({ children }) {
   const applyAccountPayload = useCallback((data = {}) => {
     const items = data.library || data.items || [];
     const slugs = data.ownedSlugs || items.map((i) => i.slug).filter(Boolean);
-    setLibrary(items);
-    setOwnedSlugs(new Set(slugs));
+    const nextOwned = new Set(slugs);
+
+    setLibrary((prev) => (libraryItemsShallowEqual(prev, items) ? prev : items));
+    setOwnedSlugs((prev) => (slugSetsEqual(prev, nextOwned) ? prev : nextOwned));
+
     const vaultDetail =
       data.vaultAccessDetail ||
       (typeof data.vaultAccess === "object" && data.vaultAccess !== null ? data.vaultAccess : null);
@@ -93,7 +103,7 @@ export function AuthProvider({ children }) {
       const permissions = { ...(data.permissions || {}) };
       if (isAdminFlag) permissions.admin = true;
 
-      return {
+      const next = {
         library: items,
         ownedSlugs: slugs,
         subscriberActive: Boolean(data.subscriberActive),
@@ -111,28 +121,43 @@ export function AuthProvider({ children }) {
         isAdmin: isAdminFlag,
         syncedAt: data.syncedAt || null,
       };
+      return accountStateShallowEqual(prev, next) ? prev : next;
     });
   }, []);
 
-  const refreshLibrary = useCallback(async () => {
+  const refreshLibrary = useCallback(async (meta = {}) => {
+    logStateChurn("refreshLibrary", {
+      source: meta.source || "AuthContext",
+      reason: meta.reason || "invoke",
+    });
     const res = await fetch("/api/library", { credentials: "include" });
     if (!res.ok) {
-      setLibrary([]);
-      setOwnedSlugs(new Set());
+      setLibrary((prev) => (prev.length === 0 ? prev : []));
+      setOwnedSlugs((prev) => (prev.size === 0 ? prev : new Set()));
       return;
     }
     const data = await res.json();
     const items = data.items || [];
-    setLibrary(items);
-    setOwnedSlugs(new Set(data.ownedSlugs || []));
-    setAccountState((prev) => ({
-      ...prev,
-      library: items,
-      ownedSlugs: data.ownedSlugs || [],
-    }));
+    const nextSlugs = data.ownedSlugs || [];
+    const nextOwned = new Set(nextSlugs);
+
+    setLibrary((prev) => (libraryItemsShallowEqual(prev, items) ? prev : items));
+    setOwnedSlugs((prev) => (slugSetsEqual(prev, nextOwned) ? prev : nextOwned));
+    setAccountState((prev) => {
+      const next = {
+        ...prev,
+        library: items,
+        ownedSlugs: nextSlugs,
+      };
+      return accountStateShallowEqual(prev, next) ? prev : next;
+    });
   }, []);
 
-  const refreshAccountState = useCallback(async () => {
+  const refreshAccountState = useCallback(async (meta = {}) => {
+    logStateChurn("refreshAccountState", {
+      source: meta.source || "AuthContext",
+      reason: meta.reason || "invoke",
+    });
     if (accountStateFetchingRef.current) return null;
     accountStateFetchingRef.current = true;
 
@@ -159,10 +184,10 @@ export function AuthProvider({ children }) {
 
         if (serverIsGuest) {
           setUser((prev) => (prev && !prev.isGuest ? prev : data.user));
-          setIsAdmin((prev) => (prev && !adminFromServer ? prev : adminFromServer));
+          setIsAdmin((prev) => (prev === adminFromServer ? prev : adminFromServer));
         } else {
           setUser((prev) => (prev?.id === data.user.id ? prev : data.user));
-          setIsAdmin(adminFromServer);
+          setIsAdmin((prev) => (prev === adminFromServer ? prev : adminFromServer));
         }
       }
       applyAccountPayload(data);

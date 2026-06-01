@@ -5,6 +5,7 @@ import { motion, useMotionValue, useTransform, animate } from "framer-motion";
 import {
   albumTracksForPlayback,
   getPlayButtonState,
+  isSamePlaybackTrack,
   playableReleaseQueue,
   resolveReleaseQueueStartIndex,
 } from "@/lib/music-playback";
@@ -76,7 +77,8 @@ export default function AlbumTracklistSheet({
         void playQueue(order, 0);
       } else {
         setShuffle(false);
-        const queueIndex = resolveReleaseQueueStartIndex(playable, releaseTrackIndex);
+        const sourceTrack = tracks[releaseTrackIndex];
+        const queueIndex = resolveReleaseQueueStartIndex(playable, releaseTrackIndex, sourceTrack);
         void playQueue(playable, queueIndex);
       }
       onClose?.();
@@ -85,15 +87,11 @@ export default function AlbumTracklistSheet({
   );
 
   const isTrackActive = useCallback(
-    (track, index) => {
+    (track) => {
       if (!hasStarted || !currentTrack) return false;
-      const sameId =
-        currentTrack.id === track.id ||
-        currentTrack.slug === track.slug ||
-        (currentTrack.metadata?.trackIndex === index && currentTrack.metadata?.albumSlug === album?.slug);
-      return sameId;
+      return isSamePlaybackTrack(currentTrack, track);
     },
-    [album?.slug, currentTrack, hasStarted]
+    [currentTrack, hasStarted]
   );
 
   const handleDragEnd = useCallback(
@@ -271,7 +269,7 @@ export default function AlbumTracklistSheet({
               title: typeof t === "string" ? t : t?.title || `Track ${i + 1}`,
               metadata: { durationSeconds: null },
             }))).map((track, index) => {
-              const active = isTrackActive(track, index);
+              const active = isTrackActive(track);
               const duration =
                 track.metadata?.durationSeconds ||
                 track.durationSeconds ||
