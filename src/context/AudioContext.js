@@ -86,9 +86,11 @@ import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import {
   createAudibilitySample,
   isAudioActuallyAudible,
+  PLAYBACK_TRUTH_VIOLATION,
   resetAudibilitySample,
   teardownWebAudioGraph,
   updateAudibilitySample,
+  validatePlaybackTruthIntegrity,
 } from "@/lib/playback/audibility";
 
 const AudioContext = createContext(null);
@@ -109,7 +111,9 @@ const AUDIO_CONTENT_TYPE_RE = /^(audio\/|application\/octet-stream)/i;
 const AUDIO_SRC_READY_TIMEOUT_MS = 12000;
 const STALL_RECOVERY_MS = 12000;
 const PLAYBACK_COMMAND_TIMEOUT_MS = 15000;
-const SILENT_DESYNC_WATCHDOG_MS = 1250;
+const AUDIBILITY_WATCHDOG_MS = 1250;
+const RECOVERY_COOLDOWN_MS = 6000;
+const MRRW_MEDIA_SOURCE_BOUND = Symbol.for("2mrrw.mediaElementSourceBound");
 const ACTIVE_COMMAND_STALE_MS = 20000;
 const PLAYBACK_COMMANDS = {
   PLAY_TRACK: "PLAY_TRACK",
@@ -659,8 +663,9 @@ export function AudioProvider({ children }) {
   const webAudioAvailableRef = useRef(true);
   const audibilitySampleRef = useRef(createAudibilitySample());
   const recoverAudioHardRef = useRef(null);
-  const recoverInFlightRef = useRef(false);
-  const pendingInvariantRecoverRef = useRef(false);
+  const isRecoveringRef = useRef(false);
+  const recoveryCooldownUntilRef = useRef(0);
+  const mediaElementSourceElementRef = useRef(null);
   const retryStreamPlaybackRef = useRef(null);
   const positionSaveTimerRef = useRef(null);
   const lastPlayedSlugRef = useRef(null);
@@ -676,6 +681,21 @@ export function AudioProvider({ children }) {
   const renderCountRef = useRef(0);
   const prevRenderDepsRef = useRef({});
   const [state, setState] = useState(EMPTY_STATE);
+
+  const getAudibilityParams = useCallback(() => {
+    const audio = audioRef.current;
+    return {
+      audio,
+      webAudioContext: audioCtxRef.current,
+      sampleRef: audibilitySampleRef,
+    };
+  }, []);
+
+  const readIsAudiblyPlaying = useCallback(() => {
+    const params = getAudibilityParams();
+    if (!params.audio) return false;
+    return isAudioActuallyAudible(params);
+  }, [getAudibilityParams]);
 
   const tracePlayback = useCallback((type, source, extra = {}) => {
     const t = stateRef.current.currentTrack;
@@ -892,8 +912,7 @@ export function AudioProvider({ children }) {
       if (
         next.isPlaying &&
         next.playbackState === "playing" &&
-        !recoverInFlightRef.current &&
-        next.playbackState !== "recovering"
+        !isRecoveringRef.current
       ) {
         const audio = audioRef.current;
         const ctx = audioCtxRef.current;
@@ -905,18 +924,19 @@ export function AudioProvider({ children }) {
             sampleRef: audibilitySampleRef,
           })
         ) {
-          if (!pendingInvariantRecoverRef.current) {
-            pendingInvariantRecoverRef.current = true;
-            queueMicrotask(() => {
-              pendingInvariantRecoverRef.current = false;
-              logPlaybackResilience("audio-invariant-violation", {
-                source: "AudioContext",
-                code: "AUDIO_INVARIANT_VIOLATION",
-                slug: next.currentTrack?.slug ?? null,
-              });
-              void recoverAudioHardRef.current?.("audio_invariant_violation", { resumeAfter: true });
-            });
-          }
+          reportPlaybackDiagnostic({
+            level: "warn",
+            code: "FATAL_AUDIO_DESYNC",
+            command: activeCommandRef.current?.type || "STATE_PATCH",
+            requestId: activeCommandRef.current?.requestId || null,
+            state: next,
+            context: { invariant: "invariant_break", playing_state_not_audible: true },
+          });
+          logPlaybackResilience("audio-invariant-break", {
+            source: "AudioContext",
+            code: "FATAL_AUDIO_DESYNC",
+            slug: next.currentTrack?.slug ?? null,
+          });
           next = {
             ...next,
             isPlaying: false,
@@ -1047,57 +1067,90 @@ export function AudioProvider({ children }) {
     syncPositionState(true);
   }, [updateMediaSession, syncPositionState]);
 
+  const connectWebAudioDownstream = useCallback((ctx, source) => {
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.8;
+    const stereoPanner = ctx.createStereoPanner();
+    stereoPanner.pan.value = 0;
+    const bassFilter = ctx.createBiquadFilter();
+    bassFilter.type = "lowshelf";
+    bassFilter.frequency.value = 200;
+    bassFilter.gain.value = 0;
+    source.connect(analyser);
+    analyser.connect(stereoPanner);
+    stereoPanner.connect(bassFilter);
+    bassFilter.connect(ctx.destination);
+    analyserRef.current = analyser;
+    stereoPannerRef.current = stereoPanner;
+    bassFilterRef.current = bassFilter;
+    webAudioInitializedRef.current = true;
+    webAudioAvailableRef.current = true;
+  }, []);
+
   const initWebAudio = useCallback(() => {
     if (webAudioInitializedRef.current || typeof window === "undefined") return;
     const audio = audioRef.current;
     if (!audio) return;
+    mediaElementSourceElementRef.current = audio;
+
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
-      const ctx = new Ctx();
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.8;
-      const source = ctx.createMediaElementSource(audio);
-      const stereoPanner = ctx.createStereoPanner();
-      stereoPanner.pan.value = 0;
-      const bassFilter = ctx.createBiquadFilter();
-      bassFilter.type = "lowshelf";
-      bassFilter.frequency.value = 200;
-      bassFilter.gain.value = 0;
-      source.connect(analyser);
-      analyser.connect(stereoPanner);
-      stereoPanner.connect(bassFilter);
-      bassFilter.connect(ctx.destination);
-      audioCtxRef.current = ctx;
-      analyserRef.current = analyser;
-      sourceRef.current = source;
-      stereoPannerRef.current = stereoPanner;
-      bassFilterRef.current = bassFilter;
-      webAudioInitializedRef.current = true;
-      webAudioAvailableRef.current = true;
+
+      let ctx = audioCtxRef.current;
+      let source = sourceRef.current;
+
+      if (ctx && ctx.state !== "closed" && source && mediaElementSourceElementRef.current === audio) {
+        connectWebAudioDownstream(ctx, source);
+        recordAudioContextState(ctx, "initWebAudio:reconnect");
+        return;
+      }
+
+      if (!ctx || ctx.state === "closed") {
+        ctx = new Ctx();
+        audioCtxRef.current = ctx;
+      }
+
+      if (!source || mediaElementSourceElementRef.current !== audio) {
+        if (!audio[MRRW_MEDIA_SOURCE_BOUND]) {
+          source = ctx.createMediaElementSource(audio);
+          audio[MRRW_MEDIA_SOURCE_BOUND] = true;
+          sourceRef.current = source;
+          mediaElementSourceElementRef.current = audio;
+        } else if (!sourceRef.current) {
+          webAudioAvailableRef.current = false;
+          webAudioInitializedRef.current = false;
+          return;
+        }
+      }
+
+      connectWebAudioDownstream(ctx, source);
       recordAudioContextState(ctx, "initWebAudio");
     } catch (err) {
       console.warn("[AUDIO] Web Audio graph init failed, routing direct:", err?.message || err);
-      try {
-        sourceRef.current?.disconnect();
-      } catch {
-        /* partial graph */
-      }
       try {
         analyserRef.current?.disconnect();
       } catch {
         /* partial graph */
       }
-      audioCtxRef.current = null;
+      try {
+        stereoPannerRef.current?.disconnect();
+      } catch {
+        /* partial graph */
+      }
+      try {
+        bassFilterRef.current?.disconnect();
+      } catch {
+        /* partial graph */
+      }
       analyserRef.current = null;
-      sourceRef.current = null;
       stereoPannerRef.current = null;
       bassFilterRef.current = null;
       webAudioInitializedRef.current = false;
       webAudioAvailableRef.current = false;
     }
-  }, []);
+  }, [connectWebAudioDownstream]);
 
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
@@ -1197,9 +1250,16 @@ export function AudioProvider({ children }) {
         const s = stateRef.current;
         const el = audioRef.current;
         const volume = el && typeof el.volume === "number" ? el.volume : 1;
+        const audiblyPlaying =
+          el &&
+          isAudioActuallyAudible({
+            audio: el,
+            webAudioContext: audioCtxRef.current,
+            sampleRef: audibilitySampleRef,
+          });
         return {
           currentTrack: mapContextTrackToMediaTrack(s.currentTrack),
-          isPlaying: Boolean(el && !el.paused && !el.ended),
+          isPlaying: Boolean(audiblyPlaying),
           currentTime: s.currentTime ?? 0,
           duration: s.duration ?? 0,
           volume,
@@ -2675,14 +2735,18 @@ export function AudioProvider({ children }) {
 
   const recoverAudioHard = useCallback(
     async (reason, { resumeAfter = false } = {}) => {
-      if (recoverInFlightRef.current) return false;
-      recoverInFlightRef.current = true;
+      if (isRecoveringRef.current) return false;
+      if (Date.now() < recoveryCooldownUntilRef.current && reason !== "truth_violation") {
+        return false;
+      }
+      isRecoveringRef.current = true;
       internalPlaybackAuthorityRef.current = true;
       const track = stateRef.current.currentTrack;
       const audio = audioRef.current;
       const resumeAt = audio?.currentTime || stateRef.current.currentTime || 0;
       const shouldResume =
         Boolean(resumeAfter) &&
+        !userPausedRef.current &&
         Boolean(track) &&
         (isEntitledFullPlaybackTrack(track) || !track?.metadata?.access?.previewOnly);
 
@@ -2720,6 +2784,7 @@ export function AudioProvider({ children }) {
           bassFilterRef,
           webAudioInitializedRef,
           webAudioAvailableRef,
+          preserveMediaElementSource: true,
         });
         resetAudibilitySample(audibilitySampleRef);
 
@@ -2791,6 +2856,27 @@ export function AudioProvider({ children }) {
             state: stateRef.current,
             context: { reason, hard: true },
           });
+          updateAudibilitySample(audio, audibilitySampleRef);
+          const audibleAfterResume = isAudioActuallyAudible({
+            audio,
+            webAudioContext: audioCtxRef.current,
+            sampleRef: audibilitySampleRef,
+          });
+          if (!audibleAfterResume) {
+            patchState({
+              isPlaying: false,
+              playbackState: "ready",
+              isBuffering: false,
+              playbackNetworkState: "idle",
+            });
+            return false;
+          }
+          patchState({
+            isPlaying: true,
+            playbackState: "playing",
+            isBuffering: false,
+            playbackNetworkState: "idle",
+          });
         }
         return true;
       } catch (error) {
@@ -2812,7 +2898,8 @@ export function AudioProvider({ children }) {
         });
         return false;
       } finally {
-        recoverInFlightRef.current = false;
+        recoveryCooldownUntilRef.current = Date.now() + RECOVERY_COOLDOWN_MS;
+        isRecoveringRef.current = false;
         internalPlaybackAuthorityRef.current = false;
       }
     },
@@ -2878,22 +2965,42 @@ export function AudioProvider({ children }) {
   }, [initWebAudio, patchState, recoverAudioHard, resolveLibraryStreamForTrack]);
 
   useEffect(() => {
-    if (!state.hasStarted || !state.isPlaying) return undefined;
+    if (!state.hasStarted) return undefined;
     const intervalId = setInterval(() => {
-      if (!stateRef.current.hasStarted || !stateRef.current.isPlaying) return;
-      if (recoverInFlightRef.current) return;
-      const audio = audioRef.current;
+      if (!stateRef.current.hasStarted) return;
+      if (isRecoveringRef.current) return;
+      if (Date.now() < recoveryCooldownUntilRef.current) return;
+
+      const audibilityParams = getAudibilityParams();
+      const { audio } = audibilityParams;
       if (!audio) return;
+
       updateAudibilitySample(audio, audibilitySampleRef);
-      if (
-        isAudioActuallyAudible({
-          audio,
-          webAudioContext: audioCtxRef.current,
-          sampleRef: audibilitySampleRef,
-        })
-      ) {
+
+      const truth = validatePlaybackTruthIntegrity({
+        ...audibilityParams,
+        uiPlaying: stateRef.current.isPlaying,
+      });
+      if (truth.violation === PLAYBACK_TRUTH_VIOLATION) {
+        logPlaybackResilience("truth-violation", {
+          source: "AudioContext",
+          code: PLAYBACK_TRUTH_VIOLATION,
+          reason: truth.reason,
+          slug: stateRef.current.currentTrack?.slug ?? null,
+        });
+        void recoverAudioHard("truth_violation", {
+          resumeAfter:
+            stateRef.current.isPlaying &&
+            !userPausedRef.current &&
+            Boolean(stateRef.current.currentTrack),
+        });
         return;
       }
+
+      if (!stateRef.current.isPlaying) return;
+
+      if (isAudioActuallyAudible(audibilityParams)) return;
+
       logPlaybackResilience("silent-desync", {
         source: "AudioContext",
         code: "AUDIO_SILENT_DESYNC",
@@ -2902,10 +3009,12 @@ export function AudioProvider({ children }) {
         readyState: audio.readyState,
         ctxState: audioCtxRef.current?.state ?? null,
       });
-      void recoverAudioHard("silent_desync_detected", { resumeAfter: true });
-    }, SILENT_DESYNC_WATCHDOG_MS);
+      void recoverAudioHard("silent_desync_detected", {
+        resumeAfter: !userPausedRef.current,
+      });
+    }, AUDIBILITY_WATCHDOG_MS);
     return () => clearInterval(intervalId);
-  }, [recoverAudioHard, state.hasStarted, state.isPlaying]);
+  }, [getAudibilityParams, recoverAudioHard, state.hasStarted]);
 
   const applyCSModeToTrack = useCallback(
     async (track) => {
@@ -3192,7 +3301,15 @@ export function AudioProvider({ children }) {
       track.slug ||
       null;
     const position = audio?.currentTime ?? s.currentTime ?? 0;
-    const isPlayingNow = Boolean(s.isPlaying && audio && !audio.paused);
+    const isPlayingNow = Boolean(
+      s.isPlaying &&
+        audio &&
+        isAudioActuallyAudible({
+          audio,
+          webAudioContext: audioCtxRef.current,
+          sampleRef: audibilitySampleRef,
+        })
+    );
     return { trackId, releaseSlug, position, isPlaying: isPlayingNow };
   }, []);
 
@@ -3754,28 +3871,28 @@ export function AudioProvider({ children }) {
         return "none";
       }
 
-      if (!audio.paused) {
-        updateAudibilitySample(audio, audibilitySampleRef);
-        const audible = isAudioActuallyAudible({
-          audio,
-          webAudioContext: audioCtxRef.current,
-          sampleRef: audibilitySampleRef,
-        });
-        if (audible) {
-          if (!stateRef.current.isPlaying || stateRef.current.playbackState !== "playing") {
-            patchState({
-              isPlaying: true,
-              playbackState: "playing",
-              isBuffering: false,
-            });
-          }
-          startKeepAlivePing();
-          startProgressRaf();
-          startPositionSaveTimer();
-          void updateMediaSession(track, { playing: true });
-          syncPositionState(true);
-          return "synced-playing";
+      updateAudibilitySample(audio, audibilitySampleRef);
+      const audible = isAudioActuallyAudible({
+        audio,
+        webAudioContext: audioCtxRef.current,
+        sampleRef: audibilitySampleRef,
+      });
+      if (audible) {
+        if (!stateRef.current.isPlaying || stateRef.current.playbackState !== "playing") {
+          patchState({
+            isPlaying: true,
+            playbackState: "playing",
+            isBuffering: false,
+          });
         }
+        startKeepAlivePing();
+        startProgressRaf();
+        startPositionSaveTimer();
+        void updateMediaSession(track, { playing: true });
+        syncPositionState(true);
+        return "synced-playing";
+      }
+      if (!audio.paused) {
         return "recover";
       }
 
@@ -4175,6 +4292,7 @@ export function AudioProvider({ children }) {
       cycleAtmosphere,
       getAnalyser: () => (webAudioAvailableRef.current ? analyserRef.current : null),
       getCurrentTime: () => stateRef.current.currentTime ?? 0,
+      getIsAudiblyPlaying: readIsAudiblyPlaying,
       subscribeProgress,
       getProgressSnapshot,
     };
@@ -4217,6 +4335,7 @@ export function AudioProvider({ children }) {
     toggleSpaceMode,
     toggleBassBoost,
     cycleAtmosphere,
+    readIsAudiblyPlaying,
     subscribeProgress,
     getProgressSnapshot,
   ]);

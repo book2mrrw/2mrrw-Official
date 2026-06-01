@@ -124,11 +124,14 @@ function getMediaEngineSnapshot() {
 export function mapAudioContextToMediaEngine(audio) {
   const currentTrack = mapContextTrackToMediaTrack(audio.currentTrack);
   const bridge = getMediaEngineBridge();
+  const audiblyPlaying = audio.getIsAudiblyPlaying?.();
   const bridgePlaying = bridge?.getState?.()?.isPlaying;
   const isPlaying =
-    typeof bridgePlaying === "boolean"
-      ? bridgePlaying
-      : readElementPlaying(audio.audioRef);
+    typeof audiblyPlaying === "boolean"
+      ? audiblyPlaying
+      : typeof bridgePlaying === "boolean"
+        ? bridgePlaying
+        : readElementPlaying(audio.audioRef);
 
   return {
     state: {

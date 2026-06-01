@@ -49,6 +49,46 @@ export function resetAudibilitySample(sampleRef) {
  *   sampleRef: { current: ReturnType<typeof createAudibilitySample> };
  * }} params
  */
+export const PLAYBACK_TRUTH_VIOLATION = "DOUBLE_TRUTH_DETECTED";
+
+/**
+ * Detects React/element audibility drift (UI or !paused vs actual sound).
+ * @param {{
+ *   audio: HTMLMediaElement | null | undefined;
+ *   webAudioContext?: AudioContext | null;
+ *   sampleRef: { current: ReturnType<typeof createAudibilitySample> };
+ *   uiPlaying?: boolean;
+ * }} params
+ */
+export function validatePlaybackTruthIntegrity({
+  audio,
+  webAudioContext = null,
+  sampleRef,
+  uiPlaying = false,
+}) {
+  if (!audio) return { ok: true, violation: null, reason: null };
+
+  const audible = isAudioActuallyAudible({ audio, webAudioContext, sampleRef });
+  const elementActive = !audio.paused && !audio.ended;
+
+  if (uiPlaying && !audible) {
+    return {
+      ok: false,
+      violation: PLAYBACK_TRUTH_VIOLATION,
+      reason: "ui_playing_not_audible",
+    };
+  }
+  if (elementActive && !audible) {
+    return {
+      ok: false,
+      violation: PLAYBACK_TRUTH_VIOLATION,
+      reason: "element_active_not_audible",
+    };
+  }
+
+  return { ok: true, violation: null, reason: null };
+}
+
 export function isAudioActuallyAudible({ audio, webAudioContext = null, sampleRef }) {
   if (!audio || audio.paused || audio.ended) return false;
   if (audio.readyState < 2) return false;
@@ -86,6 +126,8 @@ export function teardownWebAudioGraph({
   bassFilterRef,
   webAudioInitializedRef,
   webAudioAvailableRef,
+  /** When true, disconnect downstream nodes but keep AudioContext + MediaElementSource for reuse. */
+  preserveMediaElementSource = false,
 }) {
   const disconnectSafe = (node) => {
     try {
@@ -94,10 +136,20 @@ export function teardownWebAudioGraph({
       /* partial graph */
     }
   };
-  disconnectSafe(sourceRef?.current);
   disconnectSafe(analyserRef?.current);
   disconnectSafe(stereoPannerRef?.current);
   disconnectSafe(bassFilterRef?.current);
+  if (!preserveMediaElementSource) {
+    disconnectSafe(sourceRef?.current);
+  }
+
+  if (preserveMediaElementSource) {
+    if (analyserRef) analyserRef.current = null;
+    if (stereoPannerRef) stereoPannerRef.current = null;
+    if (bassFilterRef) bassFilterRef.current = null;
+    if (webAudioInitializedRef) webAudioInitializedRef.current = false;
+    return;
+  }
 
   const ctx = audioCtxRef?.current;
   if (ctx) {

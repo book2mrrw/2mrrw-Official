@@ -340,6 +340,7 @@ function GlobalAudioPlayerBar() {
     dismissStreamConflict,
     storeLinkHref,
     playbackState,
+    getIsAudiblyPlaying,
   } = playback;
 
   const [isMobile, setIsMobile] = useState(false);
@@ -530,7 +531,9 @@ function GlobalAudioPlayerBar() {
 
   const dockCurrentTime = engineCurrentTime ?? currentTime;
   const dockDuration = engineDuration ?? duration;
-  const dockIsPlaying = engineIsPlaying ?? isPlaying;
+  const dockAudible =
+    hasStarted && typeof getIsAudiblyPlaying === "function" ? getIsAudiblyPlaying() : null;
+  const dockIsPlaying = dockAudible ?? engineIsPlaying ?? isPlaying;
 
   const maxPreviewSeek = useMemo(() => {
     if (!previewOnly || !dockDuration) return dockDuration || 0;
