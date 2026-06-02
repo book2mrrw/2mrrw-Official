@@ -43,7 +43,6 @@ import {
   albumTracksForPlayback,
   playableReleaseQueue,
   resolveReleaseQueueStartIndex,
-  buildCatalogPlaybackLookup,
   normalizeTrackForPlayback,
   resolveCatalogPlaybackItem,
 } from "@/lib/music-playback";
@@ -60,12 +59,16 @@ import { LiveCountdownLiveTab } from "@/components/home/LiveCountdownDisplays";
 import CarouselUI from "@/components/home/CarouselUI";
 import FeaturesRail from "@/components/home/FeaturesRail";
 import CatalogGrid from "@/components/home/CatalogGrid";
-import HeroSection from "@/components/home/HeroSection";
+import HeroIsland from "@/components/home/HeroIsland";
 import AudioVisualsSection from "@/components/home/AudioVisualsSection";
 import PlaybackChromeIsland from "@/components/storefront/PlaybackChromeIsland";
 import AuthSurfaceIsland from "@/components/storefront/AuthSurfaceIsland";
 import EntitlementSurfaceIsland from "@/components/storefront/EntitlementSurfaceIsland";
 import HomeStorefrontFlowMode from "@/components/storefront/HomeStorefrontFlowMode";
+import {
+  CatalogSurfaceProvider,
+  useCatalogSurface,
+} from "@/components/storefront/catalog-surface-context";
 import MobileCartFab from "@/components/storefront/MobileCartFab";
 import ScrollPaddingShell from "@/components/storefront/ScrollPaddingShell";
 import { withR2CatalogMedia, catalogCoverDisplay } from "@/components/home/catalogMedia";
@@ -76,7 +79,6 @@ import {
 import { imagePipeline } from "@/media/imagePipeline";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { ModalErrorBoundary } from "@/system/errors";
-import { useAbortController } from "@/system/guards/useAbortController";
 import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
 
 const MOBILE_NAV_TABS = [
@@ -272,7 +274,29 @@ function decrementInventory(inv, slug) {
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
+  return (
+    <CatalogSurfaceProvider
+      initialSingles={singles}
+      inlineSingles={INLINE_SINGLES}
+      inlineFeatures={INLINE_FEATURES}
+      inlineAlbums={INLINE_ALBUMS}
+      inlineMixtapesAndEps={INLINE_MIXTAPES_AND_EPS}
+    >
+      <PageStorefront />
+    </CatalogSurfaceProvider>
+  );
+}
+
+function PageStorefront() {
   useBlackscreenMountTrace("Page");
+  const {
+    displaySingles,
+    displayFeatures,
+    catalogLoading,
+    catalogHasMore,
+    loadMoreCatalog,
+    catalogPlaybackLookup,
+  } = useCatalogSurface();
   const {
     currentUser,
     library,
@@ -358,11 +382,6 @@ export default function Page() {
   const [mobileNavOpen, setMobileNavOpen]         = useState(false);
   const [mobileNavClosing, setMobileNavClosing]   = useState(false);
   const [homeNavSyncEpoch, setHomeNavSyncEpoch] = useState(0);
-  const [browseSingles, setBrowseSingles]         = useState(singles);
-  const [catalogPage, setCatalogPage]             = useState(1);
-  const [catalogHasMore, setCatalogHasMore]       = useState(false);
-  const [catalogLoading, setCatalogLoading]       = useState(false);
-  const catalogFetchAbort = useAbortController([catalogPage]);
 
   // ── REFS ──────────────────────────────────────────────────────────────────
   const cursorRef          = useRef(null);
@@ -379,7 +398,6 @@ export default function Page() {
   const isMobileRef        = useRef(false);
   const uiScrollLogRef     = useRef(0);
   const prevActiveTabRef   = useRef("home");
-  const prevBrowseSinglesLenRef = useRef(0);
   const homeScrollSectionRef = useRef(null);
   const homeScrollSavedRef = useRef({ scrollTop: 0, singlesScrollLeft: 0 });
   const homeStorefrontMountCountRef = useRef(0);
@@ -452,20 +470,6 @@ export default function Page() {
       prevActiveTabRef.current = activeTab;
     }
   }, [activeTab]);
-
-  useEffect(() => {
-    if (!isPlaybackTraceEnabled()) return;
-    const len = browseSingles?.length ?? 0;
-    if (len !== prevBrowseSinglesLenRef.current || catalogLoading) {
-      prevBrowseSinglesLenRef.current = len;
-      recordPlaybackTraceContext({ lastCatalogRenderAt: Date.now() });
-      logUiChurn("catalog-rerender", {
-        catalogPage,
-        singlesCount: len,
-        catalogLoading,
-      });
-    }
-  }, [browseSingles, catalogPage, catalogLoading]);
 
   useEffect(() => {
     if (!isMobile || activeTab !== "home") return;
@@ -574,105 +578,6 @@ export default function Page() {
   useEffect(() => {
     setInventory(loadInventory());
   }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setCatalogLoading(true);
-      try {
-        const res = await fetch(`/api/catalog/releases?page=${catalogPage}&limit=20`, {
-          cache: "no-store",
-          signal: catalogFetchAbort.signal,
-        });
-        let data = {};
-        try {
-          data = await res.json();
-        } catch {
-          data = {};
-        }
-        if (cancelled) return;
-
-        if (!res.ok) {
-          if (catalogPage === 1) {
-            setBrowseSingles(INLINE_SINGLES.map((s) => withR2CatalogMedia(s)));
-          }
-          setCatalogHasMore(false);
-          return;
-        }
-
-        const tracks = Array.isArray(data.tracks) ? data.tracks : [];
-        const useInline = data?.fallback === true || (catalogPage === 1 && tracks.length === 0);
-
-        if (useInline) {
-          if (catalogPage === 1) {
-            setBrowseSingles(INLINE_SINGLES.map((s) => withR2CatalogMedia(s)));
-          }
-          setCatalogHasMore(false);
-          return;
-        }
-
-        const staticBySlug = new Map(INLINE_SINGLES.map((s) => [s.slug, s]));
-        const incoming = tracks.map((t) => {
-          const fb = staticBySlug.get(t?.slug);
-          const merged = fb
-            ? {
-                ...fb,
-                ...t,
-                preview: t.preview || fb.preview,
-                video: t.video || fb.video,
-                cover: t.cover || fb.cover,
-              }
-            : t;
-          return withR2CatalogMedia(merged);
-        });
-        setBrowseSingles((prev) => {
-          const merged = catalogPage === 1 ? [...INLINE_SINGLES.map((s) => withR2CatalogMedia(s))] : [...prev];
-          const seen = new Set(merged.map((s) => s.slug));
-          incoming.forEach((t) => {
-            if (t?.slug && !seen.has(t.slug)) {
-              seen.add(t.slug);
-              merged.push(t);
-            }
-          });
-          return merged;
-        });
-        setCatalogHasMore(Boolean(data.hasMore));
-      } catch {
-        if (!cancelled && catalogPage === 1) {
-          setBrowseSingles(INLINE_SINGLES.map((s) => withR2CatalogMedia(s)));
-          setCatalogHasMore(false);
-        }
-      } finally {
-        if (!cancelled) setCatalogLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [catalogPage, catalogFetchAbort.signal]);
-
-  const loadMoreCatalog = useCallback(() => {
-    if (!catalogHasMore || catalogLoading) return;
-    setCatalogPage((p) => p + 1);
-  }, [catalogHasMore, catalogLoading]);
-
-  const displaySingles = browseSingles.length ? browseSingles : INLINE_SINGLES;
-  const displayFeatures = useMemo(
-    () => INLINE_FEATURES.map((feat) => withR2CatalogMedia(feat)),
-    []
-  );
-
-  const catalogPlaybackLookup = useMemo(
-    () =>
-      buildCatalogPlaybackLookup([
-        ...INLINE_SINGLES,
-        ...displaySingles,
-        ...displayFeatures,
-        ...INLINE_ALBUMS,
-        ...INLINE_MIXTAPES_AND_EPS,
-      ]),
-    [displaySingles, displayFeatures]
-  );
 
   const catalogPlaybackBySlug = catalogPlaybackLookup.bySlug;
 
@@ -1367,11 +1272,8 @@ export default function Page() {
     return `${item.stock} remaining`;
   };
 
-  const mobileHeroHeight = isMobile ? 200 : 380;
-
   // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <LiveCountdownProvider targetDate={nextLiveDateTime}>
     <>
       <div ref={cursorRef} style={{position:"fixed",width:28,height:28,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.22) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99999,mixBlendMode:"screen",transition:"left 0.045s linear,top 0.045s linear",display:isMobile?"none":undefined}}/>
       <div ref={cursorTrailRef} style={{position:"fixed",width:16,height:16,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.10) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99998,mixBlendMode:"screen",transition:"left 0.18s ease,top 0.18s ease",display:isMobile?"none":undefined}}/>
@@ -1583,9 +1485,8 @@ export default function Page() {
             data-main-scroll
             style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:0,WebkitOverflowScrolling:"touch"}}
           >
-            <HeroSection
+            <HeroIsland
               isMobile={isMobile}
-              mobileHeroHeight={mobileHeroHeight}
               heroContainerRef={heroContainerRef}
               heroVideoRef={heroVideoRef}
               heroTextRef={heroTextRef}
@@ -1605,6 +1506,7 @@ export default function Page() {
                     <AuthSurfaceIsland islandId="home-storefront" onGiftRequest={setGiftSheetRelease}>
                       {(auth) => (
                         <HomeStorefrontFlowMode
+                          liveCountdownTarget={nextLiveDateTime}
                           isMobile={isMobile}
                           showSubscribeCta={ent.showSubscribeCta}
                           onDonateOpen={handleDonateOpen}
@@ -1792,11 +1694,13 @@ export default function Page() {
               {activeTab==="live" && (
                 <>
                   <h2 className="section-heading">2MRRW LIVE</h2>
-                  <LiveCountdownLiveTab
-                    isMobile={isMobile}
-                    liveStreamDate={liveStreamDate}
-                    liveStreamTime={liveStreamTime}
-                  />
+                  <LiveCountdownProvider targetDate={nextLiveDateTime}>
+                    <LiveCountdownLiveTab
+                      isMobile={isMobile}
+                      liveStreamDate={liveStreamDate}
+                      liveStreamTime={liveStreamTime}
+                    />
+                  </LiveCountdownProvider>
                 </>
               )}
 
@@ -2336,7 +2240,6 @@ export default function Page() {
       </AnimatePresence>
 
     </>
-    </LiveCountdownProvider>
   );
 }
 

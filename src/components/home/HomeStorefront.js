@@ -14,9 +14,11 @@ import {
   LiveCountdownHomeSection,
   LiveCountdownMobileHomeStrip,
 } from "@/components/home/LiveCountdownDisplays";
+import { LiveCountdownProvider } from "@/components/home/LiveCountdownContext";
 import { TrackCardSkeleton } from "@/ui/skeletons";
 
 const HomeStorefront = memo(function HomeStorefront({
+  liveCountdownTarget,
   isMobile,
   showSubscribeCta,
   onDonateOpen,
@@ -62,7 +64,7 @@ const HomeStorefront = memo(function HomeStorefront({
   onSelectEvent,
   onOpenCollection,
 }) {
-  return (
+  const storefront = (
     <>
       <div style={{ padding: "18px 0 8px", display: "flex", justifyContent: "flex-start", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <button type="button" className="donate-glow-button" onClick={onDonateOpen}>
@@ -344,6 +346,12 @@ const HomeStorefront = memo(function HomeStorefront({
       <LiveCountdownHomeSection isMobile={isMobile} liveStreamDate={liveStreamDate} liveStreamTime={liveStreamTime} />
       <div style={{ height: 40 }} />
     </>
+  );
+
+  if (!liveCountdownTarget) return storefront;
+
+  return (
+    <LiveCountdownProvider targetDate={liveCountdownTarget}>{storefront}</LiveCountdownProvider>
   );
 });
 

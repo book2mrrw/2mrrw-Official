@@ -10,6 +10,7 @@ import { usePlaybackChrome } from "@/components/storefront/playback-chrome-conte
 const HomeStorefrontFlowMode = memo(function HomeStorefrontFlowMode({
   flowConversionActive,
   onFlowConversionActive,
+  liveCountdownTarget,
   ...homeProps
 }) {
   const { nowPlaying } = usePlaybackChrome();
@@ -21,6 +22,7 @@ const HomeStorefrontFlowMode = memo(function HomeStorefrontFlowMode({
   return (
     <HomeStorefront
       {...homeProps}
+      liveCountdownTarget={liveCountdownTarget}
       activeFlowMode={activeFlowMode}
       onFlowConversionActive={onFlowConversionActive}
     />
