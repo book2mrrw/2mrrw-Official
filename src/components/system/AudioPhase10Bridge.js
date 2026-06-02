@@ -5,6 +5,8 @@ import { useAudioPlayer } from "@/context/AudioContext";
 import { useQueuePreloader } from "@/media/preloader";
 import { usePlaybackRecovery } from "@/system/recovery";
 import { logStateChurn } from "@/lib/diagnostics/state-churn-log";
+import { logRestoredTitleSource } from "@/lib/diagnostics/playback-trace";
+import { RECOVERY_PLACEHOLDER_TITLE } from "@/lib/playback/resolve-player-display-title";
 
 /**
  * Wires queue preloading + playback persistence without bloating AudioContext.
@@ -61,12 +63,32 @@ export default function AudioPhase10Bridge() {
       const tracks =
         Array.isArray(detail.tracks) && detail.tracks.length
           ? detail.tracks
-          : detail.queueIds.map((id) => ({
-              id,
-              slug: id,
-              title: "Restored",
-              src: `/api/library/stream?slug=${encodeURIComponent(id)}`,
-            }));
+          : detail.queueIds.map((id) => {
+              logRestoredTitleSource({
+                source: "AudioPhase10Bridge",
+                slug: id,
+                trackId: id,
+                title: RECOVERY_PLACEHOLDER_TITLE,
+                extra: { path: "recovery-event-fallback" },
+              });
+              return {
+                id,
+                slug: id,
+                title: RECOVERY_PLACEHOLDER_TITLE,
+                src: `/api/library/stream?slug=${encodeURIComponent(id)}`,
+              };
+            });
+      tracks.forEach((t) => {
+        if (t?.title === RECOVERY_PLACEHOLDER_TITLE) {
+          logRestoredTitleSource({
+            source: "AudioPhase10Bridge",
+            slug: t.slug ?? null,
+            trackId: t.id ?? null,
+            title: t.title,
+            extra: { path: "recovery-event-tracks" },
+          });
+        }
+      });
       logStateChurn("recovery-setQueue", {
         source: "AudioPhase10Bridge",
         reason: "restore-abandoned-session",

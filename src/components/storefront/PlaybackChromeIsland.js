@@ -11,6 +11,7 @@ import {
   setDismissNowPlayingBridge,
   setPagePlaybackActionsBridge,
 } from "@/lib/playback/page-playback-actions-bridge";
+import { resolvePlayerDisplayTitle } from "@/lib/playback/resolve-player-display-title";
 import AmbientPlaybackBackground from "@/components/home/AmbientPlaybackBackground";
 import StorefrontMiniPlayerBar from "@/components/home/StorefrontMiniPlayerBar";
 import { PlaybackChromeContext } from "@/components/storefront/playback-chrome-context";
@@ -94,7 +95,12 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
           playbackState === "preview_fallback")
     );
     if (shouldShowNowPlaying) {
-      setNowPlaying(currentTrack);
+      const title = resolvePlayerDisplayTitle(currentTrack);
+      setNowPlaying(
+        title && title !== currentTrack.title
+          ? { ...currentTrack, title }
+          : currentTrack
+      );
       return;
     }
     if (!currentTrack || !hasStarted) {

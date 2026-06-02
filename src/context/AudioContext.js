@@ -667,6 +667,8 @@ export function AudioProvider({ children }) {
   const onPreviewEndedRef = useRef(null);
   const [previewEnded, setPreviewEnded] = useState(false);
   const wasPlayingBeforeHideRef = useRef(false);
+  /** OS/lifecycle pause before React isPlaying clears — drives hide/resume intent (Phase 18A). */
+  const playbackIntentBeforeHideRef = useRef(false);
   const keepAliveIntervalRef = useRef(null);
   const sessionUnlockedRef = useRef(false);
   const webAudioInitializedRef = useRef(false);
@@ -733,7 +735,14 @@ export function AudioProvider({ children }) {
     }
 
     if (!resumeAfter) {
+      if (playbackIntentBeforeHideRef.current && audio.paused) {
+        return { healthy: false, reason: "paused_after_lifecycle_interrupt" };
+      }
       return { healthy: true, reason: "transport_ok_paused" };
+    }
+
+    if (playbackIntentBeforeHideRef.current && audio.paused) {
+      return { healthy: false, reason: "paused_after_lifecycle_interrupt" };
     }
 
     updateAudibilitySample(audio, audibilitySampleRef);
@@ -1452,6 +1461,12 @@ export function AudioProvider({ children }) {
       }
 
       tracePlayback("pause", "onPause", { userInitiated, wasViewportPause });
+      if (!userInitiated && !wasViewportPause && readIsAudiblyPlaying()) {
+        playbackIntentBeforeHideRef.current = true;
+      }
+      if (userInitiated) {
+        playbackIntentBeforeHideRef.current = false;
+      }
       if (!userInitiated && !wasViewportPause) {
         const s = stateRef.current;
         const snap = capturePlaybackSnapshotOnPause({
@@ -1990,6 +2005,7 @@ export function AudioProvider({ children }) {
     startStallRecovery,
     stopStallRecovery,
     tracePlayback,
+    readIsAudiblyPlaying,
   ]);
 
   const applyCsToElement = useCallback((audio, presentation, resumeAt = null) => {
@@ -4037,6 +4053,27 @@ export function AudioProvider({ children }) {
   );
 
   const playTrack = useCallback((track, options = {}) => {
+    const traceCtx = getPlaybackTraceContext();
+    const msSinceVisibility =
+      traceCtx.lastVisibilityChangeAt > 0
+        ? Date.now() - traceCtx.lastVisibilityChangeAt
+        : null;
+    const afterLifecycleReturn =
+      traceCtx.lastVisibilityState === "visible" &&
+      msSinceVisibility != null &&
+      msSinceVisibility < 8000;
+    if (afterLifecycleReturn && isPlaybackTraceEnabled()) {
+      logPlaybackEvent({
+        type: "TRACK_SWITCH_AFTER_RETURN",
+        source: "playTrack",
+        trackId: track?.id ?? track?.trackId ?? track?.slug ?? null,
+        extra: {
+          slug: track?.slug ?? null,
+          msSinceVisibility,
+          scenario: options?.playbackScenario ?? null,
+        },
+      });
+    }
     resetPlaybackTimingCapture();
     const scenario = inferPlaybackScenario(audioRef.current, track, {
       ...options,
@@ -4178,7 +4215,8 @@ export function AudioProvider({ children }) {
       if (document.visibilityState === "hidden") {
         if (!track || !stateRef.current.hasStarted || !audio) return;
         wasPlayingBeforeHideRef.current = Boolean(
-          stateRef.current.isPlaying && stateRef.current.hasStarted
+          playbackIntentBeforeHideRef.current ||
+            (!audio.paused && readIsAudiblyPlaying())
         );
         const position = audio.currentTime || 0;
         const userId = listeningUserIdRef.current;
@@ -4218,8 +4256,10 @@ export function AudioProvider({ children }) {
       }
 
       if (document.visibilityState === "visible") {
-        const wasPlayingBeforeHide = wasPlayingBeforeHideRef.current;
+        const wasPlayingBeforeHide =
+          wasPlayingBeforeHideRef.current || playbackIntentBeforeHideRef.current;
         wasPlayingBeforeHideRef.current = false;
+        playbackIntentBeforeHideRef.current = false;
 
         const syncMediaAfterLifecycle = () => {
           if (stateRef.current.currentTrack) {
@@ -4303,8 +4343,10 @@ export function AudioProvider({ children }) {
         if (!track || !s.hasStarted) return;
         const wasPlaying =
           wasPlayingBeforeHideRef.current ||
+          playbackIntentBeforeHideRef.current ||
           (s.isPlaying && !userPausedRef.current);
         wasPlayingBeforeHideRef.current = false;
+        playbackIntentBeforeHideRef.current = false;
         const resumeAfter = wasPlaying && isEntitledFullPlaybackTrack(track);
         const health = evaluateLifecyclePlaybackHealth({ resumeAfter });
         if (health.healthy) {
@@ -4386,10 +4428,12 @@ export function AudioProvider({ children }) {
     };
   }, [
     evaluateLifecyclePlaybackHealth,
+    readIsAudiblyPlaying,
     rehydrateMediaSession,
     runCoalescedLifecycleRecovery,
-    updateMediaSession,
     syncPositionState,
+    tracePlayback,
+    updateMediaSession,
   ]);
 
   const beginCsHoldPreview = useCallback((csAudioUrl) => {

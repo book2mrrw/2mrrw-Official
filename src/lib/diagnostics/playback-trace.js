@@ -395,3 +395,24 @@ export function logStreamLifecycle(phase, meta = {}) {
     extra: meta,
   });
 }
+
+/**
+ * Phase 18A — trace when recovery hydration assigns placeholder "Restored" title.
+ * @param {{
+ *   source: string;
+ *   slug?: string | null;
+ *   trackId?: string | number | null;
+ *   title?: string | null;
+ *   extra?: Record<string, unknown>;
+ * }} meta
+ */
+export function logRestoredTitleSource(meta = {}) {
+  if (!isPlaybackTraceEnabled()) return;
+  const { source, slug = null, trackId = null, title = null, extra = {} } = meta;
+  logPlaybackEvent({
+    type: "RESTORED_TITLE_SOURCE",
+    source,
+    trackId: trackId ?? slug,
+    extra: { slug, title, ...extra },
+  });
+}

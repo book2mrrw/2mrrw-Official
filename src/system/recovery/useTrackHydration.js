@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useAbortController } from "@/system/guards/useAbortController";
+import { logRestoredTitleSource } from "@/lib/diagnostics/playback-trace";
+import { RECOVERY_PLACEHOLDER_TITLE } from "@/lib/playback/resolve-player-display-title";
 
 /**
  * Re-hydrates recovered queue track IDs into full playback metadata.
@@ -30,6 +32,17 @@ export function useTrackHydration(trackIds = []) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Hydration failed");
       const resolved = Array.isArray(data.tracks) ? data.tracks : [];
+      resolved.forEach((t) => {
+        if (t?.title === RECOVERY_PLACEHOLDER_TITLE) {
+          logRestoredTitleSource({
+            source: "useTrackHydration",
+            slug: t.slug ?? null,
+            trackId: t.id ?? null,
+            title: t.title,
+            extra: { path: "hydrate-response" },
+          });
+        }
+      });
       setTracks(resolved);
       setHydratedCount(data.hydratedCount ?? resolved.filter((t) => t.title && t.src).length);
       if (data.failedIds?.length) {
@@ -57,12 +70,21 @@ export function useTrackHydration(trackIds = []) {
       } catch {
         /* optional */
       }
-      const fallback = ids.map((id) => ({
-        id,
-        slug: id,
-        title: "Restored",
-        src: `/api/library/stream?slug=${encodeURIComponent(id)}`,
-      }));
+      const fallback = ids.map((id) => {
+        logRestoredTitleSource({
+          source: "useTrackHydration",
+          slug: id,
+          trackId: id,
+          title: RECOVERY_PLACEHOLDER_TITLE,
+          extra: { path: "hydrate-catch-fallback" },
+        });
+        return {
+          id,
+          slug: id,
+          title: RECOVERY_PLACEHOLDER_TITLE,
+          src: `/api/library/stream?slug=${encodeURIComponent(id)}`,
+        };
+      });
       setTracks(fallback);
       setHydratedCount(0);
       return fallback;

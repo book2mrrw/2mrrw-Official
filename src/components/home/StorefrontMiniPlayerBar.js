@@ -3,6 +3,7 @@
 import { memo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { usePlaybackProgress } from "@/context/AudioContext";
+import { resolvePlayerDisplayTitle } from "@/lib/playback/resolve-player-display-title";
 
 const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
 
@@ -23,6 +24,7 @@ const StorefrontMiniPlayerBar = memo(function StorefrontMiniPlayerBar({
   bottom,
 }) {
   const { currentTime, duration } = usePlaybackProgress();
+  const displayTitle = resolvePlayerDisplayTitle(nowPlaying);
 
   const handleSeek = useCallback(
     (e) => {
@@ -66,7 +68,7 @@ const StorefrontMiniPlayerBar = memo(function StorefrontMiniPlayerBar({
         <motion.div style={{ padding: "8px 12px", display: "flex", alignItems: "center", gap: 10 }}>
           <img src={nowPlaying.cover} alt="" style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} />
           <motion.div style={{ flex: 1, minWidth: 0 }}>
-            <motion.div style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nowPlaying.title}</motion.div>
+            <motion.div style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayTitle}</motion.div>
             <motion.div style={{ fontSize: 10, color: "#555", fontVariantNumeric: "tabular-nums" }}>{timeLabel}</motion.div>
           </motion.div>
           <button onClick={onToggle} style={{ width: 38, height: 38, borderRadius: "50%", background: "#00ffff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
@@ -88,7 +90,7 @@ const StorefrontMiniPlayerBar = memo(function StorefrontMiniPlayerBar({
       <div style={{ padding: "10px 20px", display: "flex", alignItems: "center", gap: 14, boxShadow: "0 -4px 30px rgba(0,0,0,0.5)" }}>
         <img src={nowPlaying.cover} style={{ width: 36, height: 36, borderRadius: 8, objectFit: "cover", flexShrink: 0 }} alt="" />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nowPlaying.title}</div>
+          <div style={{ fontSize: 12, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{displayTitle}</div>
           <div style={{ fontSize: 10, color: "#555", letterSpacing: 1, fontVariantNumeric: "tabular-nums" }}>{timeLabel}</div>
         </div>
         <button onClick={onToggle} style={{ width: 36, height: 36, borderRadius: "50%", background: "#00ffff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>

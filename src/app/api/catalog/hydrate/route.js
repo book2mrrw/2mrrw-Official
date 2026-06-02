@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { getLatestControlSystemSingles, getControlSystemAlbums } from "@/lib/control-system/releases";
+import { logRestoredTitleSource } from "@/lib/diagnostics/playback-trace";
+import { RECOVERY_PLACEHOLDER_TITLE } from "@/lib/playback/resolve-player-display-title";
 function toPlaybackShape(item) {
   if (!item?.slug) return null;
   const src =
@@ -47,7 +49,18 @@ export async function GET(request) {
     const failedIds = [];
     ids.forEach((id) => {
       const hit = bySlug.get(id);
-      const shaped = hit ? toPlaybackShape(hit) : toPlaybackShape({ slug: id, title: "Restored" });
+      const shaped = hit
+        ? toPlaybackShape(hit)
+        : (() => {
+            logRestoredTitleSource({
+              source: "catalog/hydrate",
+              slug: id,
+              trackId: id,
+              title: RECOVERY_PLACEHOLDER_TITLE,
+              extra: { path: "control-system-miss" },
+            });
+            return toPlaybackShape({ slug: id, title: RECOVERY_PLACEHOLDER_TITLE });
+          })();
       if (shaped?.title && shaped?.src && shaped.title !== id) {
         tracks.push(shaped);
       } else if (shaped) {
@@ -58,12 +71,23 @@ export async function GET(request) {
       }
     });
 
-    const hydratedCount = tracks.filter((t) => t.title && t.title !== "Restored" && t.cover).length;
+    const hydratedCount = tracks.filter(
+      (t) => t.title && t.title !== RECOVERY_PLACEHOLDER_TITLE && t.cover
+    ).length;
 
     return NextResponse.json({ tracks, hydratedCount, failedIds });
   } catch {
     const tracks = ids
-      .map((id) => toPlaybackShape({ slug: id, title: "Restored" }))
+      .map((id) => {
+        logRestoredTitleSource({
+          source: "catalog/hydrate",
+          slug: id,
+          trackId: id,
+          title: RECOVERY_PLACEHOLDER_TITLE,
+          extra: { path: "catch-fallback" },
+        });
+        return toPlaybackShape({ slug: id, title: RECOVERY_PLACEHOLDER_TITLE });
+      })
       .filter(Boolean);
     return NextResponse.json({
       tracks,

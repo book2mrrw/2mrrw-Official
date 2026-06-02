@@ -17,6 +17,7 @@ import {
   RELEASE_FADE_MS,
   MOVE_CANCEL_PX,
 } from "@/lib/player/constants";
+import { resolvePlayerDisplayTitle } from "@/lib/playback/resolve-player-display-title";
 
 const PREVIEW_SCRUB_CAP_RATIO = 0.3;
 const PREVIEW_MAX_SEC = 15;
@@ -255,13 +256,14 @@ function MiniPlayerDock({
     ) : null;
 
   const artistLine = error || accessDenied ? errorMessage : currentTrack.artist;
+  const displayTitle = resolvePlayerDisplayTitle(currentTrack);
 
   return (
     <div role="region" aria-label="Global audio player" className="player-bar-compact">
       <div className="player-bar-compact__pad">
         <div className="player-bar-compact__row">
           <MiniCoverHit
-            title={currentTrack.title}
+            title={displayTitle}
             baseCoverUrl={baseCoverUrl}
             csCoverUrl={csCoverUrl}
             csMode={csMode}
@@ -274,7 +276,7 @@ function MiniPlayerDock({
           />
           <div className="player-bar-compact-meta">
             <div className="player-bar-compact-title">
-              {currentTrack.title}
+              {displayTitle}
               {giftBadge}
             </div>
             <div
