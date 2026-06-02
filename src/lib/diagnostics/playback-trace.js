@@ -733,3 +733,27 @@ export function logRecoveryPathClassification({
     slug,
   });
 }
+
+/** Phase 21B — lifecycle truth class computed (NEXT_PUBLIC_PLAYBACK_TRACE=1). */
+/** @param {Record<string, unknown>} [meta] */
+export function logLifecycleTruthStateComputed(meta = {}) {
+  logBackgroundPlaybackTrace("LIFECYCLE_TRUTH_STATE_COMPUTED", meta);
+}
+
+/** Phase 21B — recovery/UI gated while OS_SUSPENDED. */
+/** @param {Record<string, unknown>} [meta] */
+export function logLifecycleStateCSuppressed(meta = {}) {
+  logBackgroundPlaybackTrace("LIFECYCLE_STATE_C_SUPPRESSED", meta);
+}
+
+/** Phase 21B — audibility watchdog skipped for class C. */
+/** @param {Record<string, unknown>} [meta] */
+export function logWatchdogSkippedOsSuspend(meta = {}) {
+  logBackgroundPlaybackTrace("WATCHDOG_SKIPPED_OS_SUSPEND", meta);
+}
+
+/** Phase 21B — hard recovery / machine transition blocked for class C. */
+/** @param {Record<string, unknown>} [meta] */
+export function logRecoveryBlockedLifecycleC(meta = {}) {
+  logBackgroundPlaybackTrace("RECOVERY_BLOCKED_LIFECYCLE_C", meta);
+}

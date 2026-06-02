@@ -40,6 +40,8 @@ class PlaybackStateMachine {
     this.listeners = new Set();
     /** @type {((reason: string, opts?: { resumeAfter?: boolean }) => Promise<boolean>) | null} */
     this.recoverExecutor = null;
+    /** @type {(() => boolean) | null} Phase 21B — block recovery when OS_SUSPENDED. */
+    this.lifecycleRecoveryGuard = null;
     /** @type {Promise<boolean> | null} */
     this.recoveryPromise = null;
   }
@@ -49,6 +51,13 @@ class PlaybackStateMachine {
    */
   setRecoverExecutor(fn) {
     this.recoverExecutor = typeof fn === "function" ? fn : null;
+  }
+
+  /**
+   * @param {(() => boolean) | null} fn — return true to block recovery transitions
+   */
+  setLifecycleRecoveryGuard(fn) {
+    this.lifecycleRecoveryGuard = typeof fn === "function" ? fn : null;
   }
 
   getState() {
@@ -151,6 +160,9 @@ class PlaybackStateMachine {
   _beginRecovery(event, payload) {
     if (!RECOVERY_EVENTS.has(event)) return Promise.resolve(false);
     if (this.recoveryPromise) return this.recoveryPromise;
+    if (this.lifecycleRecoveryGuard?.()) {
+      return Promise.resolve(false);
+    }
 
     const reason =
       payload.reason ||

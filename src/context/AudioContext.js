@@ -83,6 +83,10 @@ import {
   logAudioOutputSilenceReason,
   classifyAudioOutputSilence,
   logRecoveryPathClassification,
+  logLifecycleTruthStateComputed,
+  logLifecycleStateCSuppressed,
+  logWatchdogSkippedOsSuspend,
+  logRecoveryBlockedLifecycleC,
 } from "@/lib/diagnostics/playback-trace";
 import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
 import {
@@ -122,6 +126,7 @@ import {
 import {
   playbackStateMachine,
   PLAYBACK_ORCHESTRATION_EVENTS,
+  PLAYBACK_ORCHESTRATION_STATES,
 } from "@/media/PlaybackStateMachine";
 
 const AudioContext = createContext(null);
@@ -151,6 +156,14 @@ const LIFECYCLE_RECOVERY_SUPPRESSION_MS = 2500;
 const BFCACHE_RECOVERY_TIMEOUT_MS = 5000;
 const MRRW_MEDIA_SOURCE_BOUND = Symbol.for("2mrrw.mediaElementSourceBound");
 const ACTIVE_COMMAND_STALE_MS = 20000;
+/** Phase 21B — lifecycle audio truth model (A–D). */
+const LIFECYCLE_AUDIO_TRUTH_STATES = Object.freeze({
+  USER_PLAYING: "USER_PLAYING",
+  USER_PAUSED: "USER_PAUSED",
+  OS_SUSPENDED: "OS_SUSPENDED",
+  RECOVERING: "RECOVERING",
+});
+
 const PLAYBACK_COMMANDS = {
   PLAY_TRACK: "PLAY_TRACK",
   PLAY_QUEUE: "PLAY_QUEUE",
@@ -788,6 +801,10 @@ export function AudioProvider({ children }) {
   const lifecycleInBackgroundRef = useRef(false);
   /** After healthy lifecycle return — block false hard recovery (Phase 20C). */
   const lifecycleRecoverySuppressedUntilRef = useRef(0);
+  /** Phase 21B — last computed lifecycle truth class (A–D). */
+  const lifecycleAudioTruthStateRef = useRef(LIFECYCLE_AUDIO_TRUTH_STATES.USER_PAUSED);
+  /** Phase 21B — preserve MS playbackState during OS_SUSPENDED (class C). */
+  const lastMediaSessionPlaybackStateRef = useRef(null);
   const keepAliveIntervalRef = useRef(null);
   const sessionUnlockedRef = useRef(false);
   const webAudioInitializedRef = useRef(false);
@@ -866,9 +883,116 @@ export function AudioProvider({ children }) {
     [getPlaybackTransportHealth]
   );
 
+  /**
+   * Phase 21B — derive lifecycle truth class before recovery/watchdog/MS decisions.
+   * C = expected OS lock/background silence with transport intact.
+   */
+  const computeLifecycleAudioTruthState = useCallback(() => {
+    const audio = audioRef.current;
+    const track = stateRef.current.currentTrack;
+    const transport = evaluatePlaybackTransportHealth(audio, track, {
+      queueLength: queueRef.current.length,
+      queueIndex: queueIndexRef.current,
+    });
+    const ctx = audioCtxRef.current;
+    const documentHidden = isDocumentPlaybackHidden();
+    const lifecycleBackground =
+      lifecycleInBackgroundRef.current || documentHidden;
+    const playbackIntent = playbackIntentBeforeHideRef.current;
+    const userPaused = userPausedRef.current;
+    const machineRecovering =
+      playbackStateMachine.getState() === PLAYBACK_ORCHESTRATION_STATES.RECOVERING;
+
+    let next = LIFECYCLE_AUDIO_TRUTH_STATES.USER_PAUSED;
+
+    if (userPaused) {
+      next = LIFECYCLE_AUDIO_TRUTH_STATES.USER_PAUSED;
+    } else if (!transport.intact) {
+      next = LIFECYCLE_AUDIO_TRUTH_STATES.RECOVERING;
+    } else if (
+      isRecoveringRef.current ||
+      recoveryInFlightRef.current ||
+      machineRecovering
+    ) {
+      next = LIFECYCLE_AUDIO_TRUTH_STATES.RECOVERING;
+    } else if (
+      playbackIntent &&
+      transport.intact &&
+      (lifecycleBackground ||
+        (audio?.paused &&
+          (ctx?.state === "suspended" || lifecycleBackground || playbackIntent)))
+    ) {
+      next = LIFECYCLE_AUDIO_TRUTH_STATES.OS_SUSPENDED;
+    } else if (
+      audio &&
+      !audio.paused &&
+      !audio.ended &&
+      transport.intact &&
+      !lifecycleBackground
+    ) {
+      next = LIFECYCLE_AUDIO_TRUTH_STATES.USER_PLAYING;
+    } else if (stateRef.current.isPlaying && !lifecycleBackground && transport.intact) {
+      const params = getAudibilityParams();
+      if (params.audio && isAudioActuallyAudible(params)) {
+        next = LIFECYCLE_AUDIO_TRUTH_STATES.USER_PLAYING;
+      } else if (playbackIntent) {
+        next = LIFECYCLE_AUDIO_TRUTH_STATES.OS_SUSPENDED;
+      }
+    } else if (playbackIntent && transport.intact) {
+      next = LIFECYCLE_AUDIO_TRUTH_STATES.OS_SUSPENDED;
+    }
+
+    const prev = lifecycleAudioTruthStateRef.current;
+    if (prev !== next) {
+      logLifecycleTruthStateComputed({
+        prev,
+        next,
+        userPaused,
+        playbackIntent,
+        lifecycleBackground,
+        transportIntact: transport.intact,
+        elementPaused: audio?.paused ?? null,
+        ctxState: ctx?.state ?? null,
+        slug: track?.slug ?? null,
+      });
+    }
+    lifecycleAudioTruthStateRef.current = next;
+    return next;
+  }, [getAudibilityParams]);
+
+  const isLifecycleOsSuspended = useCallback(() => {
+    return (
+      computeLifecycleAudioTruthState() === LIFECYCLE_AUDIO_TRUTH_STATES.OS_SUSPENDED
+    );
+  }, [computeLifecycleAudioTruthState]);
+
+  const blockRecoveryForLifecycleOsSuspended = useCallback(
+    (source, reason) => {
+      if (!isLifecycleOsSuspended()) return false;
+      if (isGenuineTransportFailureReason(reason)) return false;
+      logRecoveryBlockedLifecycleC({
+        source,
+        reason: reason ?? null,
+        slug: stateRef.current.currentTrack?.slug ?? null,
+      });
+      logLifecycleStateCSuppressed({
+        source,
+        gate: "recovery",
+        reason: reason ?? null,
+        slug: stateRef.current.currentTrack?.slug ?? null,
+      });
+      return true;
+    },
+    [isLifecycleOsSuspended]
+  );
+
   /** Phase 15F / 20C — lifecycle health; transport failures trump OS pause/suspend. */
   const evaluateLifecyclePlaybackHealth = useCallback(
     ({ resumeAfter = false, lifecycleIntent = false } = {}) => {
+    if (isLifecycleOsSuspended()) {
+      return { healthy: false, reason: "os_suspended_ignored", osSuspended: true };
+    }
+
     const s = stateRef.current;
     const track = s.currentTrack;
     if (!track) return { healthy: false, reason: "no_track" };
@@ -946,7 +1070,7 @@ export function AudioProvider({ children }) {
 
     return { healthy: false, reason: "not_audible" };
   },
-    [getAudibilityParams]
+    [getAudibilityParams, isLifecycleOsSuspended]
   );
 
   const tracePlayback = useCallback((type, source, extra = {}) => {
@@ -1246,6 +1370,14 @@ export function AudioProvider({ children }) {
         ) {
           return reconcileIsPlayingWithElement(prev, next);
         }
+        if (isLifecycleOsSuspended()) {
+          logLifecycleStateCSuppressed({
+            source: "patchState",
+            gate: "fatal_audio_desync_invariant",
+            slug: next.currentTrack?.slug ?? null,
+          });
+          return reconcileIsPlayingWithElement(prev, next);
+        }
         if (
           audio &&
           !isAudioActuallyAudible({
@@ -1288,7 +1420,7 @@ export function AudioProvider({ children }) {
       }
       return reconcileIsPlayingWithElement(prev, next);
     });
-  }, [isLifecycleRecoverySuppressed, reconcileIsPlayingWithElement]);
+  }, [isLifecycleOsSuspended, isLifecycleRecoverySuppressed, reconcileIsPlayingWithElement]);
 
   const stopProgressRaf = useCallback(() => {
     if (progressRafRef.current != null) {
@@ -1386,7 +1518,24 @@ export function AudioProvider({ children }) {
         album: track.album || "2MRRW",
         artwork,
       });
-      ms.playbackState = playing ? "playing" : "paused";
+      const truthState = computeLifecycleAudioTruthState();
+      if (truthState === LIFECYCLE_AUDIO_TRUTH_STATES.OS_SUSPENDED) {
+        const preserved =
+          lastMediaSessionPlaybackStateRef.current ?? ms.playbackState ?? "playing";
+        if (preserved === "playing" || preserved === "paused") {
+          ms.playbackState = preserved;
+        }
+        logLifecycleStateCSuppressed({
+          source: "updateMediaSession",
+          gate: "media_session_playback_state",
+          requestedPlaying: playing,
+          preserved: ms.playbackState,
+          slug: track.slug ?? null,
+        });
+      } else {
+        ms.playbackState = playing ? "playing" : "paused";
+        lastMediaSessionPlaybackStateRef.current = ms.playbackState;
+      }
     } catch {
       /* MediaMetadata unsupported */
     }
@@ -1398,7 +1547,7 @@ export function AudioProvider({ children }) {
       duration: isFinite(audio?.duration) ? audio.duration : stateRef.current.duration,
     });
     syncPositionState(true);
-  }, [syncPositionState]);
+  }, [computeLifecycleAudioTruthState, syncPositionState]);
 
   const rehydrateMediaSession = useCallback(() => {
     const s = stateRef.current;
@@ -1775,6 +1924,8 @@ export function AudioProvider({ children }) {
         ctxState: audioCtxRef.current?.state ?? null,
         slug: track?.slug ?? null,
       });
+      lifecycleAudioTruthStateRef.current = LIFECYCLE_AUDIO_TRUTH_STATES.USER_PLAYING;
+      lastMediaSessionPlaybackStateRef.current = "playing";
       emitPhase21AudibleSnapshot("onPlay");
     };
 
@@ -1903,6 +2054,7 @@ export function AudioProvider({ children }) {
           playing: preserveLockScreenPlaying,
         });
         if (preserveLockScreenPlaying) {
+          lastMediaSessionPlaybackStateRef.current = "playing";
           logLockscreenMediaSessionActive({
             source: "onPause_preserve",
             slug: track.slug ?? null,
@@ -3272,6 +3424,9 @@ export function AudioProvider({ children }) {
       if (Date.now() < recoveryCooldownUntilRef.current && reason !== "truth_violation") {
         return false;
       }
+      if (blockRecoveryForLifecycleOsSuspended("recoverAudioHard", reason)) {
+        return false;
+      }
 
       const audioPre = audioRef.current;
       const trackPre = stateRef.current.currentTrack;
@@ -3532,6 +3687,7 @@ export function AudioProvider({ children }) {
       tracePlayback,
       attemptLightweightPlaybackResume,
       armLifecycleRecoverySuppression,
+      blockRecoveryForLifecycleOsSuspended,
       isLifecycleRecoverySuppressed,
     ]
   );
@@ -3546,6 +3702,13 @@ export function AudioProvider({ children }) {
     );
     return () => playbackStateMachine.setRecoverExecutor(null);
   }, [recoverAudioHard]);
+
+  useEffect(() => {
+    playbackStateMachine.setLifecycleRecoveryGuard(() =>
+      blockRecoveryForLifecycleOsSuspended("PlaybackStateMachine", null)
+    );
+    return () => playbackStateMachine.setLifecycleRecoveryGuard(null);
+  }, [blockRecoveryForLifecycleOsSuspended]);
 
   const releaseLifecycleRecoveryLock = useCallback((lockId) => {
     if (lifecycleRecoveryLockTimerRef.current) {
@@ -3579,6 +3742,24 @@ export function AudioProvider({ children }) {
       const isHardOrchestration =
         event === PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED ||
         event === PLAYBACK_ORCHESTRATION_EVENTS.AUDIO_DESYNC_DETECTED;
+
+      computeLifecycleAudioTruthState();
+      if (
+        isHardOrchestration &&
+        blockRecoveryForLifecycleOsSuspended("requestPlaybackRecovery", reason)
+      ) {
+        logRecoveryPathClassification({
+          path: "no_op",
+          reason: "os_suspended_ignored",
+          transportIntact: getPlaybackTransportHealth().intact,
+          lifecycleIntent: playbackIntentBeforeHideRef.current,
+          userPaused: userPausedRef.current,
+          resumeAfter: Boolean(payload?.resumeAfter),
+          source: "requestPlaybackRecovery",
+          slug: stateRef.current.currentTrack?.slug ?? null,
+        });
+        return Promise.resolve(false);
+      }
 
       if (recoveryInFlightRef.current) {
         if (isPlaybackTraceEnabled()) {
@@ -3644,12 +3825,33 @@ export function AudioProvider({ children }) {
     [
       armLifecycleRecoverySuppression,
       attemptLightweightPlaybackResume,
+      blockRecoveryForLifecycleOsSuspended,
+      computeLifecycleAudioTruthState,
+      getPlaybackTransportHealth,
       isLifecycleRecoverySuppressed,
     ]
   );
 
   const runCoalescedLifecycleRecovery = useCallback(
     ({ reason, resumeAfter, trigger }) => {
+      computeLifecycleAudioTruthState();
+      if (
+        blockRecoveryForLifecycleOsSuspended(trigger, reason) &&
+        !isGenuineTransportFailureReason(reason)
+      ) {
+        logRecoveryPathClassification({
+          path: "no_op",
+          reason: "os_suspended_ignored",
+          transportIntact: getPlaybackTransportHealth().intact,
+          lifecycleIntent: playbackIntentBeforeHideRef.current,
+          userPaused: userPausedRef.current,
+          resumeAfter,
+          source: trigger,
+          slug: stateRef.current.currentTrack?.slug ?? null,
+        });
+        return Promise.resolve(true);
+      }
+
       if (lifecycleRecoveryLockRef.current) {
         if (isPlaybackTraceEnabled()) {
           logPlaybackEvent({
@@ -3848,7 +4050,9 @@ export function AudioProvider({ children }) {
       armLifecycleRecoverySuppression,
       attemptLightweightPlaybackResume,
       beginBfcacheRecoveryInProgress,
+      blockRecoveryForLifecycleOsSuspended,
       clearBfcacheRecoveryInProgress,
+      computeLifecycleAudioTruthState,
       evaluateLifecyclePlaybackHealth,
       getPlaybackTransportHealth,
       releaseLifecycleRecoveryLock,
@@ -3911,6 +4115,15 @@ export function AudioProvider({ children }) {
       if (!stateRef.current.hasStarted) return;
       if (isRecoveringRef.current) return;
       if (Date.now() < recoveryCooldownUntilRef.current) return;
+
+      const lifecycleTruth = computeLifecycleAudioTruthState();
+      if (lifecycleTruth === LIFECYCLE_AUDIO_TRUTH_STATES.OS_SUSPENDED) {
+        logWatchdogSkippedOsSuspend({
+          source: "audibility_watchdog",
+          slug: stateRef.current.currentTrack?.slug ?? null,
+        });
+        return;
+      }
 
       const audibilityParams = getAudibilityParams();
       const { audio } = audibilityParams;
@@ -4012,6 +4225,7 @@ export function AudioProvider({ children }) {
     }, AUDIBILITY_WATCHDOG_MS);
     return () => clearInterval(intervalId);
   }, [
+    computeLifecycleAudioTruthState,
     getAudibilityParams,
     getPlaybackTransportHealth,
     isLifecycleRecoverySuppressed,
