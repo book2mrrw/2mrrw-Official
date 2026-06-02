@@ -105,4 +105,4 @@ Manual: iOS Safari + entitled track per Phase 18C/19 validation docs.
 
 ## Commit hash
 
-`2624840` — Phase 20C: lifecycle recovery elimination and transport continuity
+`bfef7cb` — Phase 20C: lifecycle recovery elimination and transport continuity
