@@ -61,6 +61,15 @@ import {
   correlateBlackscreenPlayback,
   logPlaybackIntentCaptured,
   logPlaybackIntentRetry,
+  logBackgroundPlaybackStopped,
+  logBackgroundAudioContextState,
+  logBackgroundMediaSessionState,
+  logBackgroundAudioElementState,
+  logBackgroundRecoveryTrigger,
+  logBackgroundRecoverySkipped,
+  logLockscreenMediaSessionActive,
+  logPlaybackContinuityLost,
+  logPlaybackIntentState,
 } from "@/lib/diagnostics/playback-trace";
 import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
 import {
@@ -398,6 +407,20 @@ async function playAudioIfNotPaused(audio, isPlaying, { command, requestId, stat
   }
 }
 
+function isDocumentPlaybackHidden() {
+  return (
+    typeof document !== "undefined" && document.visibilityState === "hidden"
+  );
+}
+
+/** Transport still bound — no hard recovery for lifecycle-only pause. */
+function hasIntactPlaybackTransport(audio, track) {
+  if (!audio || !track?.src) return false;
+  if (audio.ended) return false;
+  const elSrc = audio.currentSrc || audio.src || "";
+  return Boolean(elSrc && elSrc !== "about:blank");
+}
+
 /** Safari keeps AudioContext suspended until resumed inside a user gesture. */
 async function resumeWebAudioContextIfSuspended(ctxRef) {
   const ctx = ctxRef?.current;
@@ -671,6 +694,8 @@ export function AudioProvider({ children }) {
   const wasPlayingBeforeHideRef = useRef(false);
   /** OS/lifecycle pause before React isPlaying clears — drives hide/resume intent (Phase 18A). */
   const playbackIntentBeforeHideRef = useRef(false);
+  /** Tab hidden while playback intent active — suppress hard recovery (Phase 19). */
+  const lifecycleInBackgroundRef = useRef(false);
   const keepAliveIntervalRef = useRef(null);
   const sessionUnlockedRef = useRef(false);
   const webAudioInitializedRef = useRef(false);
@@ -776,6 +801,46 @@ export function AudioProvider({ children }) {
       source,
       trackId: t?.id ?? t?.trackId ?? t?.slug ?? null,
       extra,
+    });
+  }, []);
+
+  const emitBackgroundPlaybackDiagnostics = useCallback((source) => {
+    const audio = audioRef.current;
+    const track = stateRef.current.currentTrack;
+    const ctx = audioCtxRef.current;
+    logBackgroundAudioContextState({
+      source,
+      ctxState: ctx?.state ?? null,
+      slug: track?.slug ?? null,
+    });
+    logBackgroundAudioElementState({
+      source,
+      paused: audio?.paused ?? null,
+      ended: audio?.ended ?? null,
+      readyState: audio?.readyState ?? null,
+      hasSrc: hasIntactPlaybackTransport(audio, track),
+      slug: track?.slug ?? null,
+    });
+    if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
+      const ms = navigator.mediaSession;
+      logBackgroundMediaSessionState({
+        source,
+        playbackState: ms.playbackState ?? null,
+        slug: track?.slug ?? null,
+      });
+      if (ms.playbackState === "playing" && audio?.paused) {
+        logLockscreenMediaSessionActive({
+          source,
+          slug: track?.slug ?? null,
+        });
+      }
+    }
+    logPlaybackIntentState({
+      source,
+      intent: playbackIntentBeforeHideRef.current,
+      lifecycleBackground: lifecycleInBackgroundRef.current,
+      userPaused: userPausedRef.current,
+      slug: track?.slug ?? null,
     });
   }, []);
 
@@ -1234,6 +1299,45 @@ export function AudioProvider({ children }) {
     }
   }, [connectWebAudioDownstream]);
 
+  const attemptLightweightPlaybackResume = useCallback(
+    async (source) => {
+      const audio = audioRef.current;
+      const track = stateRef.current.currentTrack;
+      if (!audio || !track || userPausedRef.current) return false;
+      if (!hasIntactPlaybackTransport(audio, track)) return false;
+
+      internalPlaybackAuthorityRef.current = true;
+      try {
+        initWebAudio();
+        await resumeWebAudioContextIfSuspended(audioCtxRef);
+        recordAudioContextState(audioCtxRef.current, `lightweightResume:${source}`);
+        if (!(await ensureWebAudioRunning(audioCtxRef))) {
+          return false;
+        }
+
+        if (audio.paused) {
+          skipPauseInterruptionRef.current = true;
+          await playAudioIfNotPaused(audio, true, {
+            command: PLAYBACK_COMMANDS.RECOVER,
+            requestId: activeCommandRef.current?.requestId || null,
+            state: stateRef.current,
+            context: { source, lightweight: true },
+          });
+        }
+
+        updateAudibilitySample(audio, audibilitySampleRef);
+        const params = getAudibilityParams();
+        if (isAudioActuallyAudible(params)) return true;
+        return !audio.paused && !audio.ended && audio.readyState >= 2;
+      } catch {
+        return false;
+      } finally {
+        internalPlaybackAuthorityRef.current = false;
+      }
+    },
+    [getAudibilityParams, initWebAudio]
+  );
+
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
@@ -1484,6 +1588,25 @@ export function AudioProvider({ children }) {
           slug: sBeforePause.currentTrack?.slug ?? null,
           wasPlayingBeforePause: true,
         });
+        logPlaybackIntentState({
+          source: "onPause_capture",
+          intent: true,
+          hidden: isDocumentPlaybackHidden(),
+          slug: sBeforePause.currentTrack?.slug ?? null,
+        });
+        logBackgroundPlaybackStopped({
+          source: "onPause",
+          userInitiated,
+          wasViewportPause,
+          hidden: isDocumentPlaybackHidden(),
+          slug: sBeforePause.currentTrack?.slug ?? null,
+        });
+        emitBackgroundPlaybackDiagnostics("onPause_interrupt");
+        if (audio.paused) {
+          void audio.play().catch(() => {
+            /* OS may reject; canplay / visibility resume handles */
+          });
+        }
       }
       if (userInitiated) {
         playbackIntentBeforeHideRef.current = false;
@@ -1516,10 +1639,22 @@ export function AudioProvider({ children }) {
       persistPlayback("pause");
 
       const track = stateRef.current.currentTrack;
+      const preserveLockScreenPlaying =
+        wasPlayingBeforePause && playbackIntentBeforeHideRef.current;
       if (track) {
-        void updateMediaSession(track, { playing: false });
+        void updateMediaSession(track, {
+          playing: preserveLockScreenPlaying,
+        });
+        if (preserveLockScreenPlaying) {
+          logLockscreenMediaSessionActive({
+            source: "onPause_preserve",
+            slug: track.slug ?? null,
+          });
+        }
       } else if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
-        navigator.mediaSession.playbackState = "paused";
+        navigator.mediaSession.playbackState = preserveLockScreenPlaying
+          ? "playing"
+          : "paused";
       }
 
       if (viewportPauseRef.current || isInAudioVisualViewportRef.current) {
@@ -2039,6 +2174,7 @@ export function AudioProvider({ children }) {
     stopStallRecovery,
     tracePlayback,
     readIsAudiblyPlaying,
+    emitBackgroundPlaybackDiagnostics,
   ]);
 
   const applyCsToElement = useCallback((audio, presentation, resumeAt = null) => {
@@ -2856,6 +2992,30 @@ export function AudioProvider({ children }) {
       if (Date.now() < recoveryCooldownUntilRef.current && reason !== "truth_violation") {
         return false;
       }
+
+      const audioPre = audioRef.current;
+      const trackPre = stateRef.current.currentTrack;
+      const lifecycleOnlyPause =
+        playbackIntentBeforeHideRef.current &&
+        !userPausedRef.current &&
+        hasIntactPlaybackTransport(audioPre, trackPre) &&
+        audioPre?.paused;
+      if (
+        lifecycleOnlyPause &&
+        reason !== "truth_violation" &&
+        (isDocumentPlaybackHidden() || lifecycleInBackgroundRef.current)
+      ) {
+        logBackgroundRecoverySkipped({
+          source: "recoverAudioHard",
+          reason,
+          resumeAfter,
+          slug: trackPre?.slug ?? null,
+        });
+        const lightOk = await attemptLightweightPlaybackResume(`recoverAudioHard_blocked:${reason}`);
+        if (lightOk) return true;
+        return false;
+      }
+
       isRecoveringRef.current = true;
       internalPlaybackAuthorityRef.current = true;
       const track = stateRef.current.currentTrack;
@@ -3054,6 +3214,7 @@ export function AudioProvider({ children }) {
       stopProgressRaf,
       stopStallRecovery,
       tracePlayback,
+      attemptLightweightPlaybackResume,
     ]
   );
 
@@ -3155,10 +3316,45 @@ export function AudioProvider({ children }) {
         });
       }
 
-      const recoveryPromise = requestPlaybackRecovery(
-        PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
-        { reason, resumeAfter }
-      );
+      const runHardRecovery = () =>
+        requestPlaybackRecovery(PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED, {
+          reason,
+          resumeAfter,
+        });
+
+      const recoveryPromise = (async () => {
+        if (resumeAfter && !userPausedRef.current) {
+          logBackgroundRecoveryTrigger({
+            source: trigger,
+            reason,
+            slug: stateRef.current.currentTrack?.slug ?? null,
+          });
+          const lightOk = await attemptLightweightPlaybackResume(trigger);
+          if (lightOk) {
+            const health = evaluateLifecyclePlaybackHealth({
+              resumeAfter: true,
+              lifecycleIntent: false,
+            });
+            if (health.healthy) {
+              logBackgroundRecoverySkipped({
+                source: trigger,
+                reason: health.reason,
+                path: "lightweight",
+                slug: stateRef.current.currentTrack?.slug ?? null,
+              });
+              playbackIntentBeforeHideRef.current = false;
+              return true;
+            }
+          } else {
+            logPlaybackContinuityLost({
+              source: trigger,
+              reason,
+              slug: stateRef.current.currentTrack?.slug ?? null,
+            });
+          }
+        }
+        return runHardRecovery();
+      })();
 
       return Promise.resolve(recoveryPromise).finally(() => {
         releaseLifecycleRecoveryLock(lockId);
@@ -3168,8 +3364,10 @@ export function AudioProvider({ children }) {
       });
     },
     [
+      attemptLightweightPlaybackResume,
       beginBfcacheRecoveryInProgress,
       clearBfcacheRecoveryInProgress,
+      evaluateLifecyclePlaybackHealth,
       releaseLifecycleRecoveryLock,
       requestPlaybackRecovery,
     ]
@@ -3240,6 +3438,14 @@ export function AudioProvider({ children }) {
         ...audibilityParams,
         uiPlaying: stateRef.current.isPlaying,
       });
+      if (
+        isDocumentPlaybackHidden() ||
+        lifecycleInBackgroundRef.current ||
+        (playbackIntentBeforeHideRef.current && !userPausedRef.current)
+      ) {
+        return;
+      }
+
       if (truth.violation === PLAYBACK_TRUTH_VIOLATION) {
         logPlaybackResilience("truth-violation", {
           source: "AudioContext",
@@ -3261,6 +3467,14 @@ export function AudioProvider({ children }) {
       }
 
       if (!stateRef.current.isPlaying) return;
+
+      if (
+        isDocumentPlaybackHidden() ||
+        lifecycleInBackgroundRef.current ||
+        (playbackIntentBeforeHideRef.current && !userPausedRef.current)
+      ) {
+        return;
+      }
 
       if (isAudioActuallyAudible(audibilityParams)) return;
 
@@ -4247,10 +4461,14 @@ export function AudioProvider({ children }) {
 
       if (document.visibilityState === "hidden") {
         if (!track || !stateRef.current.hasStarted || !audio) return;
+        lifecycleInBackgroundRef.current = true;
         wasPlayingBeforeHideRef.current = Boolean(
           playbackIntentBeforeHideRef.current ||
             (!audio.paused && readIsAudiblyPlaying())
         );
+        emitBackgroundPlaybackDiagnostics("visibility_hidden");
+        void resumeWebAudioContextIfSuspended(audioCtxRef);
+        recordAudioContextState(audioCtxRef.current, "visibility_hidden");
         const position = audio.currentTime || 0;
         const userId = listeningUserIdRef.current;
         if (userId && track.slug) {
@@ -4289,9 +4507,11 @@ export function AudioProvider({ children }) {
       }
 
       if (document.visibilityState === "visible") {
+        lifecycleInBackgroundRef.current = false;
         const wasPlayingBeforeHide =
           wasPlayingBeforeHideRef.current || playbackIntentBeforeHideRef.current;
         wasPlayingBeforeHideRef.current = false;
+        emitBackgroundPlaybackDiagnostics("visibility_visible");
 
         const syncMediaAfterLifecycle = () => {
           if (stateRef.current.currentTrack) {
@@ -4467,6 +4687,7 @@ export function AudioProvider({ children }) {
       bfcacheRecoveryInProgressRef.current = false;
     };
   }, [
+    emitBackgroundPlaybackDiagnostics,
     evaluateLifecyclePlaybackHealth,
     readIsAudiblyPlaying,
     rehydrateMediaSession,

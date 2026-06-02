@@ -444,3 +444,63 @@ export function logPlaybackIntentRetry(meta = {}) {
     extra: meta,
   });
 }
+
+/**
+ * Phase 19 — background / lock-screen continuity trace (NEXT_PUBLIC_PLAYBACK_TRACE gated).
+ * @param {string} type
+ * @param {Record<string, unknown>} [meta]
+ */
+export function logBackgroundPlaybackTrace(type, meta = {}) {
+  if (!isPlaybackTraceEnabled()) return;
+  logPlaybackEvent({
+    type,
+    source: meta.source || "background",
+    trackId: meta.trackId ?? meta.slug ?? null,
+    extra: meta,
+  });
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logBackgroundPlaybackStopped(meta = {}) {
+  logBackgroundPlaybackTrace("BACKGROUND_PLAYBACK_STOPPED", meta);
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logBackgroundAudioContextState(meta = {}) {
+  logBackgroundPlaybackTrace("BACKGROUND_AUDIOCONTEXT_STATE", meta);
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logBackgroundMediaSessionState(meta = {}) {
+  logBackgroundPlaybackTrace("BACKGROUND_MEDIA_SESSION_STATE", meta);
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logBackgroundAudioElementState(meta = {}) {
+  logBackgroundPlaybackTrace("BACKGROUND_AUDIO_ELEMENT_STATE", meta);
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logBackgroundRecoveryTrigger(meta = {}) {
+  logBackgroundPlaybackTrace("BACKGROUND_RECOVERY_TRIGGER", meta);
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logBackgroundRecoverySkipped(meta = {}) {
+  logBackgroundPlaybackTrace("BACKGROUND_RECOVERY_SKIPPED", meta);
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logLockscreenMediaSessionActive(meta = {}) {
+  logBackgroundPlaybackTrace("LOCKSCREEN_MEDIA_SESSION_ACTIVE", meta);
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logPlaybackContinuityLost(meta = {}) {
+  logBackgroundPlaybackTrace("PLAYBACK_CONTINUITY_LOST", meta);
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logPlaybackIntentState(meta = {}) {
+  logBackgroundPlaybackTrace("PLAYBACK_INTENT_STATE", meta);
+}
