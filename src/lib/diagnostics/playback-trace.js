@@ -635,3 +635,101 @@ export function captureAudibleOutputSnapshot({
     });
   }
 }
+
+/**
+ * Phase 21A — lifecycle truth model trace (NEXT_PUBLIC_PLAYBACK_TRACE=1).
+ * Observation-only; does not mutate playback state.
+ */
+
+/** @param {Record<string, unknown>} [meta] */
+export function logLifecycleAudioStateTransition(meta = {}) {
+  logBackgroundPlaybackTrace("LIFECYCLE_AUDIO_STATE_TRANSITION", meta);
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logAudioContextStateChange(meta = {}) {
+  logBackgroundPlaybackTrace("AUDIO_CONTEXT_STATE_CHANGE", meta);
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logOsSuspendDetected(meta = {}) {
+  logBackgroundPlaybackTrace("OS_SUSPEND_DETECTED", meta);
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logAudioOutputSilenceReason(meta = {}) {
+  logBackgroundPlaybackTrace("AUDIO_OUTPUT_SILENCE_REASON", meta);
+}
+
+/** @param {Record<string, unknown>} [meta] */
+export function logRecoveryClassificationReason(meta = {}) {
+  logBackgroundPlaybackTrace("RECOVERY_CLASSIFICATION_REASON", meta);
+}
+
+/**
+ * Classify why output is silent (Phase 21A truth model).
+ * @param {{
+ *   audio?: HTMLMediaElement | null;
+ *   webAudioContext?: AudioContext | null;
+ *   userPaused?: boolean;
+ *   playbackIntent?: boolean;
+ * }} params
+ */
+export function classifyAudioOutputSilence({
+  audio = null,
+  webAudioContext = null,
+  userPaused = false,
+  playbackIntent = false,
+} = {}) {
+  if (userPaused) return "user_paused";
+  if (!audio) return "no_audio_element";
+  const elementPaused = audio.paused;
+  const ctxState = webAudioContext?.state ?? null;
+  const ctxSuspended = ctxState === "suspended";
+  const ctxNotRunning = Boolean(webAudioContext && ctxState !== "running");
+  if (playbackIntent && elementPaused && ctxSuspended) {
+    return "os_suspend_element_and_ctx";
+  }
+  if (elementPaused && ctxSuspended) return "element_paused_and_ctx_suspended";
+  if (elementPaused) return "element_paused";
+  if (ctxSuspended) return "audio_context_suspended";
+  if (ctxNotRunning) return "audio_context_not_running";
+  if (audio.readyState < 2) return "not_ready";
+  if (audio.ended) return "ended";
+  return "unknown_silent";
+}
+
+/**
+ * Classify recovery path decision (Phase 21A — log-only).
+ * @param {{
+ *   path: "no_op" | "lightweight" | "hard" | "deferred";
+ *   reason: string;
+ *   transportIntact?: boolean;
+ *   lifecycleIntent?: boolean;
+ *   userPaused?: boolean;
+ *   resumeAfter?: boolean;
+ *   source?: string;
+ *   slug?: string | null;
+ * }} params
+ */
+export function logRecoveryPathClassification({
+  path,
+  reason,
+  transportIntact = null,
+  lifecycleIntent = false,
+  userPaused = false,
+  resumeAfter = false,
+  source = "unknown",
+  slug = null,
+} = {}) {
+  logRecoveryClassificationReason({
+    path,
+    reason,
+    transportIntact,
+    lifecycleIntent,
+    userPaused,
+    resumeAfter,
+    source,
+    slug,
+  });
+}
