@@ -504,3 +504,33 @@ export function logPlaybackContinuityLost(meta = {}) {
 export function logPlaybackIntentState(meta = {}) {
   logBackgroundPlaybackTrace("PLAYBACK_INTENT_STATE", meta);
 }
+
+/** Phase 20C — transport healthy after lifecycle return; recovery suppressed. */
+export function logLifecycleTransportHealthy(meta = {}) {
+  logBackgroundPlaybackTrace("LIFECYCLE_TRANSPORT_HEALTHY", meta);
+}
+
+/** Phase 20C — transport failed; recovery allowed. */
+export function logLifecycleTransportFailed(meta = {}) {
+  logBackgroundPlaybackTrace("LIFECYCLE_TRANSPORT_FAILED", meta);
+}
+
+/** Phase 20C — hard recovery / desync blocked during grace window. */
+export function logLifecycleRecoverySuppressed(meta = {}) {
+  logBackgroundPlaybackTrace("LIFECYCLE_RECOVERY_SUPPRESSED", meta);
+}
+
+/** Phase 20C — recovery not suppressed (genuine failure or grace expired). */
+export function logLifecycleRecoveryAllowed(meta = {}) {
+  logBackgroundPlaybackTrace("LIFECYCLE_RECOVERY_ALLOWED", meta);
+}
+
+/** Phase 20C — user track switch while lifecycle recovery in flight. */
+export function logTrackSwitchDuringRecovery(meta = {}) {
+  logBackgroundPlaybackTrace("TRACK_SWITCH_DURING_RECOVERY", meta);
+}
+
+/** Phase 20C — user track switch shortly after visibility unlock. */
+export function logTrackSwitchAfterUnlock(meta = {}) {
+  logBackgroundPlaybackTrace("TRACK_SWITCH_AFTER_UNLOCK", meta);
+}
