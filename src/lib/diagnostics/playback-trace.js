@@ -416,3 +416,31 @@ export function logRestoredTitleSource(meta = {}) {
     extra: { slug, title, ...extra },
   });
 }
+
+/**
+ * Phase 18C — lifecycle interrupt intent captured before React isPlaying clears.
+ * @param {Record<string, unknown>} [meta]
+ */
+export function logPlaybackIntentCaptured(meta = {}) {
+  if (!isPlaybackTraceEnabled()) return;
+  logPlaybackEvent({
+    type: "PLAYBACK_INTENT_CAPTURED",
+    source: meta.source || "onPause",
+    trackId: meta.trackId ?? meta.slug ?? null,
+    extra: meta,
+  });
+}
+
+/**
+ * Phase 18C — canplay / lifecycle retry armed from captured intent.
+ * @param {Record<string, unknown>} [meta]
+ */
+export function logPlaybackIntentRetry(meta = {}) {
+  if (!isPlaybackTraceEnabled()) return;
+  logPlaybackEvent({
+    type: "PLAYBACK_INTENT_RETRY",
+    source: meta.source || "canplay",
+    trackId: meta.trackId ?? meta.slug ?? null,
+    extra: meta,
+  });
+}

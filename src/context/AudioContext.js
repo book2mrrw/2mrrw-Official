@@ -59,6 +59,8 @@ import {
   recordPlaybackTraceContext,
   getPlaybackTraceContext,
   correlateBlackscreenPlayback,
+  logPlaybackIntentCaptured,
+  logPlaybackIntentRetry,
 } from "@/lib/diagnostics/playback-trace";
 import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
 import {
@@ -716,7 +718,8 @@ export function AudioProvider({ children }) {
   }, [getAudibilityParams]);
 
   /** Phase 15F — skip lifecycle recovery when transport is already healthy. */
-  const evaluateLifecyclePlaybackHealth = useCallback(({ resumeAfter = false } = {}) => {
+  const evaluateLifecyclePlaybackHealth = useCallback(
+    ({ resumeAfter = false, lifecycleIntent = false } = {}) => {
     const s = stateRef.current;
     const track = s.currentTrack;
     if (!track) return { healthy: false, reason: "no_track" };
@@ -734,14 +737,17 @@ export function AudioProvider({ children }) {
       return { healthy: false, reason: "audio_context_not_running" };
     }
 
+    const hasInterruptIntent =
+      playbackIntentBeforeHideRef.current || Boolean(lifecycleIntent);
+
     if (!resumeAfter) {
-      if (playbackIntentBeforeHideRef.current && audio.paused) {
+      if (hasInterruptIntent && audio.paused) {
         return { healthy: false, reason: "paused_after_lifecycle_interrupt" };
       }
       return { healthy: true, reason: "transport_ok_paused" };
     }
 
-    if (playbackIntentBeforeHideRef.current && audio.paused) {
+    if (hasInterruptIntent && audio.paused) {
       return { healthy: false, reason: "paused_after_lifecycle_interrupt" };
     }
 
@@ -759,7 +765,9 @@ export function AudioProvider({ children }) {
     }
 
     return { healthy: false, reason: "not_audible" };
-  }, [getAudibilityParams]);
+  },
+    [getAudibilityParams]
+  );
 
   const tracePlayback = useCallback((type, source, extra = {}) => {
     const t = stateRef.current.currentTrack;
@@ -1461,8 +1469,21 @@ export function AudioProvider({ children }) {
       }
 
       tracePlayback("pause", "onPause", { userInitiated, wasViewportPause });
-      if (!userInitiated && !wasViewportPause && readIsAudiblyPlaying()) {
+      const sBeforePause = stateRef.current;
+      const wasPlayingBeforePause =
+        sBeforePause.isPlaying &&
+        sBeforePause.hasStarted &&
+        !userInitiated &&
+        !wasViewportPause;
+      if (wasPlayingBeforePause) {
         playbackIntentBeforeHideRef.current = true;
+        logPlaybackIntentCaptured({
+          source: "onPause",
+          trackId:
+            sBeforePause.currentTrack?.id ?? sBeforePause.currentTrack?.slug ?? null,
+          slug: sBeforePause.currentTrack?.slug ?? null,
+          wasPlayingBeforePause: true,
+        });
       }
       if (userInitiated) {
         playbackIntentBeforeHideRef.current = false;
@@ -1504,22 +1525,34 @@ export function AudioProvider({ children }) {
       if (viewportPauseRef.current || isInAudioVisualViewportRef.current) {
         viewportPauseRef.current = false;
       } else if (!userInitiated && track && audio.paused) {
-        const resumeAfterInterrupt = () => {
-          if (stateRef.current.isPlaying && audio.paused) {
-            audio.play().catch((error) => {
-              reportPlaybackDiagnostic({
-                level: "warn",
-                code: "INTERRUPTION_RESUME_FAILED",
-                command: PLAYBACK_COMMANDS.RECOVER,
-                requestId: activeCommandRef.current?.requestId || null,
-                state: stateRef.current,
-                error,
+        const shouldResumeAfterInterrupt =
+          wasPlayingBeforePause || playbackIntentBeforeHideRef.current;
+        if (shouldResumeAfterInterrupt) {
+          const resumeAfterInterrupt = () => {
+            if (
+              (wasPlayingBeforePause || playbackIntentBeforeHideRef.current) &&
+              audio.paused
+            ) {
+              logPlaybackIntentRetry({
+                source: "onPause_canplay",
+                trackId: track?.id ?? track?.slug ?? null,
+                slug: track?.slug ?? null,
               });
-            });
-          }
-          audio.removeEventListener("canplay", resumeAfterInterrupt);
-        };
-        audio.addEventListener("canplay", resumeAfterInterrupt);
+              audio.play().catch((error) => {
+                reportPlaybackDiagnostic({
+                  level: "warn",
+                  code: "INTERRUPTION_RESUME_FAILED",
+                  command: PLAYBACK_COMMANDS.RECOVER,
+                  requestId: activeCommandRef.current?.requestId || null,
+                  state: stateRef.current,
+                  error,
+                });
+              });
+            }
+            audio.removeEventListener("canplay", resumeAfterInterrupt);
+          };
+          audio.addEventListener("canplay", resumeAfterInterrupt);
+        }
       }
     };
 
@@ -4259,7 +4292,6 @@ export function AudioProvider({ children }) {
         const wasPlayingBeforeHide =
           wasPlayingBeforeHideRef.current || playbackIntentBeforeHideRef.current;
         wasPlayingBeforeHideRef.current = false;
-        playbackIntentBeforeHideRef.current = false;
 
         const syncMediaAfterLifecycle = () => {
           if (stateRef.current.currentTrack) {
@@ -4301,7 +4333,11 @@ export function AudioProvider({ children }) {
               }
             }
 
-            const health = evaluateLifecyclePlaybackHealth({ resumeAfter });
+            const health = evaluateLifecyclePlaybackHealth({
+              resumeAfter,
+              lifecycleIntent: wasPlayingBeforeHide,
+            });
+            playbackIntentBeforeHideRef.current = false;
             if (health.healthy) {
               if (isPlaybackTraceEnabled()) {
                 logPlaybackEvent({
@@ -4346,9 +4382,13 @@ export function AudioProvider({ children }) {
           playbackIntentBeforeHideRef.current ||
           (s.isPlaying && !userPausedRef.current);
         wasPlayingBeforeHideRef.current = false;
+        const resumeAfter =
+          wasPlaying && !userPausedRef.current && isEntitledFullPlaybackTrack(track);
+        const health = evaluateLifecyclePlaybackHealth({
+          resumeAfter,
+          lifecycleIntent: wasPlaying,
+        });
         playbackIntentBeforeHideRef.current = false;
-        const resumeAfter = wasPlaying && isEntitledFullPlaybackTrack(track);
-        const health = evaluateLifecyclePlaybackHealth({ resumeAfter });
         if (health.healthy) {
           if (isPlaybackTraceEnabled()) {
             logPlaybackEvent({
