@@ -1,13 +1,13 @@
 "use client";
 
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { usePlaybackCardPrewarm } from "@/hooks/usePlaybackCardPrewarm";
 
 /**
  * Wraps a release card shell with viewport-triggered playback descriptor prewarm.
  * Forwards all props to the outer div; does not alter layout or interaction.
  */
-export default function PlaybackPrewarmCardShell({
+function PlaybackPrewarmCardShell({
   releaseItem,
   playItem = null,
   catalogPlaybackLookup = null,
@@ -37,3 +37,5 @@ export default function PlaybackPrewarmCardShell({
     </div>
   );
 }
+
+export default memo(PlaybackPrewarmCardShell);

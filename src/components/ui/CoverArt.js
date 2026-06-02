@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { memo, useEffect } from "react";
 import { imagePipeline } from "@/media/imagePipeline";
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
 import ArtworkSkeleton from "@/ui/skeletons/ArtworkSkeleton";
@@ -12,7 +12,7 @@ export function resolveCoverMediaType(src, type = "image") {
   return "image";
 }
 
-export default function CoverArt({
+function CoverArt({
   src,
   type = "image",
   alt = "",
@@ -105,3 +105,5 @@ export default function CoverArt({
     />
   );
 }
+
+export default memo(CoverArt);

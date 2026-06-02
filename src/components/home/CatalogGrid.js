@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
@@ -20,14 +21,15 @@ function LockIcon() {
   );
 }
 
-export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, onOpenAlbumTracklist, catalogPlaybackLookup, isMobile, accountState, userId, isAdmin, onGift, onLibraryChange }) {
+function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, onOpenAlbumTracklist, catalogPlaybackLookup, isMobile, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   if (!items || items.length === 0) return null;
   const containerStyle = isMobile
     ? { display:"flex", flexWrap:"nowrap", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollSnapType:"x mandatory", overscrollBehaviorX:"contain", gap:12, paddingBottom:10 }
     : { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:22 };
   return (
     <div className={isMobile?`${type}-row`:""} style={containerStyle}>
-      {items.map(item=>{
+      {items.map((item) => {
+        if (!item?.slug) return null;
         const access = resolveContentAccess(item, accountState);
         const showPlayActions = itemHasPlayableAudio(item, access);
         const playItem =
@@ -171,7 +173,10 @@ export default function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut,
             </div>
           </div>
         </PlaybackPrewarmCardShell>
-      );})}
+      );
+      })}
     </div>
   );
 }
+
+export default memo(CatalogGrid);

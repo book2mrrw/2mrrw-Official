@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
@@ -8,7 +8,7 @@ import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import { resolveContentAccess } from "@/lib/music-access";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
-export default function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singleIndex, singles, prevSingle, nextSingle, goToSingle, onSingleClick, addToCart, addVinylToCart, buttonHoverIn, buttonHoverOut, accountState, userId, isAdmin, onGift, onLibraryChange }) {
+function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singleIndex, singles, prevSingle, nextSingle, goToSingle, onSingleClick, addToCart, addVinylToCart, buttonHoverIn, buttonHoverOut, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   const [previewHover, setPreviewHover] = useState(false);
   const access = currentSingleAccess || (currentSingle ? resolveContentAccess(currentSingle, accountState) : null);
   const overlayPlayLabel = access?.canStream ? "Listen" : "Preview";
@@ -28,7 +28,6 @@ export default function CarouselUI({ large, isMobile, currentSingle, currentSing
           <button onClick={prevSingle} style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.06)",border:"1px solid #2a2a2a",color:"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>‹</button>
           <div style={{flex:1,position:"relative",aspectRatio:"1/1"}} onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
             <CoverArt
-              key={currentSingle.slug}
               src={coverDisplay.src}
               type={coverDisplay.type || "image"}
               alt=""
@@ -55,7 +54,6 @@ export default function CarouselUI({ large, isMobile, currentSingle, currentSing
       {!isMobile && (
         <div style={{flexShrink:0,width:large?340:300,height:large?340:300,position:"relative"}} onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
           <CoverArt
-            key={currentSingle.slug}
             src={coverDisplay.src}
             type={coverDisplay.type || "image"}
             alt=""
@@ -116,3 +114,5 @@ export default function CarouselUI({ large, isMobile, currentSingle, currentSing
     </div>
   );
 }
+
+export default memo(CarouselUI);

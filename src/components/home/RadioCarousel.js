@@ -52,7 +52,6 @@ function RadioCarousel({
       <div style={{ display: "flex", alignItems: "stretch", minHeight: isMobile ? 180 : 320, position: "relative", zIndex: 1 }}>
         <div style={{ flexShrink: 0, width: coverW, position: "relative", overflow: "hidden" }}>
           <img
-            key={currentSlide.slug}
             src={currentSlide.cover}
             alt={currentSlide.title}
             style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}

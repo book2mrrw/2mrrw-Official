@@ -49,8 +49,11 @@ import {
 import { usePagePlaybackActions } from "@/hooks/usePagePlaybackActions";
 import { dismissNowPlayingFromBridge } from "@/lib/playback/page-playback-actions-bridge";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
-import { MobileNavAnimatedIcon } from "@/components/nav/MobileNavAnimatedIcon";
-import { VaultNavLockIcon } from "@/components/nav/VaultNavLockIcon";
+import MobileHomeBottomNav from "@/components/nav/MobileHomeBottomNav";
+import {
+  getHomeScrollSection,
+  setHomeScrollSection,
+} from "@/lib/home-scroll-section-store";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
 import { catalogCoverUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
 import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
@@ -103,14 +106,6 @@ const MOBILE_NAV_SHEET_SLIDE = {
   transition: { duration: MOBILE_NAV_SHEET_MS / 1000, ease: [0.4, 0, 0.2, 1] },
 };
 const MODAL_CENTER = { initial: { opacity: 0, scale: 0.96 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.96 }, transition: SPRING_SOFT };
-const MOBILE_NAV_MORE_SVG = (
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="22" height="22">
-    <line x1="4" y1="6" x2="20" y2="6" />
-    <line x1="4" y1="12" x2="20" y2="12" />
-    <line x1="4" y1="18" x2="20" y2="18" />
-  </svg>
-);
-
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 const formatTime = (s) => {
   if (!s || isNaN(s) || !isFinite(s)) return "0:00";
@@ -381,7 +376,6 @@ function PageStorefront() {
   const [mobileCartOpen, setMobileCartOpen]       = useState(false);
   const [mobileNavOpen, setMobileNavOpen]         = useState(false);
   const [mobileNavClosing, setMobileNavClosing]   = useState(false);
-  const [homeNavSyncEpoch, setHomeNavSyncEpoch] = useState(0);
 
   // ── REFS ──────────────────────────────────────────────────────────────────
   const cursorRef          = useRef(null);
@@ -398,7 +392,6 @@ function PageStorefront() {
   const isMobileRef        = useRef(false);
   const uiScrollLogRef     = useRef(0);
   const prevActiveTabRef   = useRef("home");
-  const homeScrollSectionRef = useRef(null);
   const homeScrollSavedRef = useRef({ scrollTop: 0, singlesScrollLeft: 0 });
   const homeStorefrontMountCountRef = useRef(0);
   const prevActiveTabForHomeScrollRef = useRef("home");
@@ -501,9 +494,8 @@ function PageStorefront() {
               recordPlaybackTraceContext({ lastUiSection: match.section });
             }
             const nextSection = match.section;
-            if (nextSection === homeScrollSectionRef.current) return;
-            homeScrollSectionRef.current = nextSection;
-            setHomeNavSyncEpoch((epoch) => epoch + 1);
+            if (nextSection === getHomeScrollSection()) return;
+            setHomeScrollSection(nextSection);
           }
         }
       },
@@ -515,9 +507,8 @@ function PageStorefront() {
 
   useEffect(() => {
     if (activeTab !== "home") {
-      homeScrollSectionRef.current = null;
+      setHomeScrollSection(null);
     }
-    setHomeNavSyncEpoch((epoch) => epoch + 1);
   }, [activeTab]);
 
   useEffect(() => {
@@ -1181,17 +1172,6 @@ function PageStorefront() {
       }, 0);
     }
   }, []);
-
-  const isMobileNavTabActive = tabId => {
-    void homeNavSyncEpoch;
-    const homeSection = homeScrollSectionRef.current;
-    if (tabId === "cards") return activeTab === "cards" || (activeTab === "home" && homeSection === "cards");
-    if (tabId === "vault") return activeTab === "vault" || (activeTab === "home" && homeSection === "vault");
-    if (tabId === "shows") return activeTab === "shows" || (activeTab === "home" && homeSection === "shows");
-    if (tabId === "singles") return activeTab === "singles" || activeTab === "albums";
-    if (tabId === "mymusic") return activeTab === "mymusic";
-    return activeTab === tabId;
-  };
 
   const switchMusicSubTab = sub => {
     // phase11: startTransition — browse sub-tab switch
@@ -1937,60 +1917,13 @@ function PageStorefront() {
         <>
           <MobileCartFab cartCount={cart.length} onOpen={() => setMobileCartOpen(true)} />
 
-          <motion.div style={{
-            position:"fixed",bottom:0,left:0,right:0,zIndex:6700,
-            background:"rgba(6,6,6,0.94)",backdropFilter:"blur(24px)",WebkitBackdropFilter:"blur(24px)",
-            borderTop:"1px solid rgba(255,255,255,0.06)",
-            display:"flex",alignItems:"center",justifyContent:"space-evenly",
-            paddingTop:6,paddingBottom:"max(14px, env(safe-area-inset-bottom))",
-            minHeight:62,overflow:"visible",isolation:"auto",
-          }}>
-            {(() => {
-              const activeIdx = MOBILE_NAV_TABS.findIndex(tab => (tab.more ? mobileNavOpen : isMobileNavTabActive(tab.id)));
-              const idx = activeIdx >= 0 ? activeIdx : 0;
-              const tabWidth = 100 / MOBILE_NAV_TABS.length;
-              return (
-                <div
-                  aria-hidden
-                  style={{
-                    position:"fixed",
-                    left:`calc(${idx * tabWidth}% + ${tabWidth / 2}% - 12px)`,
-                    bottom:"max(10px, env(safe-area-inset-bottom, 0px))",
-                    width:24,
-                    height:3,
-                    borderRadius:2,
-                    background:"#00ffff",
-                    boxShadow:"0 0 10px rgba(0,255,255,0.55)",
-                    transition:"left 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
-                    pointerEvents:"none",
-                    zIndex:6701,
-                  }}
-                />
-              );
-            })()}
-            {MOBILE_NAV_TABS.map(tab=>{
-              const active = tab.more ? mobileNavOpen : isMobileNavTabActive(tab.id);
-              return (
-                <button
-                  key={tab.id}
-                  onClick={()=> tab.more ? openMobileNav() : switchTab(tab.id)}
-                  style={{
-                    display:"flex",flexDirection:"column",alignItems:"center",gap:2,
-                    background:"none",border:"none",cursor:"pointer",
-                    color:active?"#00ffff":"#555",fontSize:9,fontWeight:700,letterSpacing:0.5,
-                    padding:"4px 4px 10px",borderRadius:10,flex:1,minWidth:0,maxWidth:56,minHeight:44,justifyContent:"center",
-                    textShadow:active?"0 0 12px rgba(0,255,255,0.5)":"none",
-                    transition:"color 0.2s",
-                    position:"relative",
-                    zIndex:1,
-                  }}
-                >
-                  {tab.vault ? <VaultNavLockIcon /> : tab.more ? MOBILE_NAV_MORE_SVG : <MobileNavAnimatedIcon tabId={tab.id} />}
-                  <span>{tab.label}</span>
-                </button>
-              );
-            })}
-          </motion.div>
+          <MobileHomeBottomNav
+            tabs={MOBILE_NAV_TABS}
+            activeTab={activeTab}
+            mobileNavOpen={mobileNavOpen}
+            onSwitchTab={switchTab}
+            onOpenMore={openMobileNav}
+          />
 
           <AnimatePresence>
             {mobileNavSheetOpen && (

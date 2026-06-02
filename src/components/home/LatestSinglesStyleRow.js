@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, memo, useMemo } from "react";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
@@ -9,11 +9,170 @@ import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
 import { albumCardPlaybackItem } from "@/lib/music-playback";
 import { withR2CatalogMedia, catalogCoverDisplay } from "@/components/home/catalogMedia";
 
+const SinglesStyleCard = memo(function SinglesStyleCard({
+  item,
+  index,
+  isMobile,
+  isAdmin,
+  onGift,
+  onCardClick,
+  onPlayClick,
+  addToCart,
+  accountState,
+  userId,
+  onLibraryChange,
+  source,
+  cardMedia,
+  catalogPlaybackLookup,
+  titleClassName,
+}) {
+  const mediaItem = useMemo(() => withR2CatalogMedia(item), [item]);
+  const access = useMemo(
+    () => resolveContentAccess(mediaItem, accountState),
+    [mediaItem, accountState]
+  );
+  const showPlayActions = itemHasPlayableAudio(mediaItem, access);
+  const playItem = useMemo(() => {
+    if (cardMedia === "cover" && catalogPlaybackLookup) {
+      return albumCardPlaybackItem(mediaItem, catalogPlaybackLookup);
+    }
+    return mediaItem;
+  }, [cardMedia, catalogPlaybackLookup, mediaItem]);
+  const coverDisplay = useMemo(() => catalogCoverDisplay(mediaItem), [mediaItem]);
+  const playItemResolved = useMemo(() => withR2CatalogMedia(playItem), [playItem]);
+
+  return (
+    <PlaybackPrewarmCardShell
+      releaseItem={mediaItem}
+      playItem={playItem}
+      catalogPlaybackLookup={catalogPlaybackLookup}
+      accountState={accountState}
+      userId={userId}
+      source={source}
+      isAlbumCard={cardMedia === "cover"}
+      enabled={showPlayActions}
+      data-single-card={cardMedia === "video" ? true : undefined}
+      onClick={() => onCardClick?.(mediaItem)}
+      className="catalog-card-enter"
+      style={{
+        flex: "0 0 auto",
+        width: isMobile ? 160 : 200,
+        cursor: "pointer",
+        scrollSnapAlign: "start",
+        animationDelay: `${index * 0.09}s`,
+        background: "#0a0a0a",
+        borderRadius: 14,
+        border: "1px solid #1a1a1a",
+        transition: "border-color 0.25s, box-shadow 0.25s",
+        position: "relative",
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = "#00ffff33";
+        e.currentTarget.style.boxShadow = "0 0 18px rgba(0,255,255,0.35)";
+        const vid = e.currentTarget.querySelector("video");
+        if (vid) {
+          vid.style.transform = "scale(1.05)";
+          vid.style.filter = "brightness(1.12)";
+        }
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "#1a1a1a";
+        e.currentTarget.style.boxShadow = "none";
+        const vid = e.currentTarget.querySelector("video");
+        if (vid) {
+          vid.style.transform = "scale(1)";
+          vid.style.filter = "brightness(1)";
+        }
+      }}
+    >
+      {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(mediaItem)} /> : null}
+      {cardMedia === "video" ? (
+        <video
+          data-single-carousel
+          src={mediaItem.video || undefined}
+          poster={mediaItem.cover || undefined}
+          muted
+          loop
+          playsInline
+          preload="metadata"
+          webkit-playsinline="true"
+          style={{
+            width: "100%",
+            aspectRatio: "1/1",
+            objectFit: "cover",
+            display: "block",
+            borderRadius: "13px 13px 0 0",
+            transition: "transform 0.3s, filter 0.3s",
+            pointerEvents: "none",
+          }}
+        />
+      ) : (
+        <CoverArt
+          src={coverDisplay.src}
+          type={coverDisplay.type || "image"}
+          alt=""
+          width="100%"
+          height="auto"
+          borderRadius="13px 13px 0 0"
+          style={{
+            aspectRatio: "1/1",
+            display: "block",
+            pointerEvents: "none",
+          }}
+        />
+      )}
+      <div style={{ padding: isMobile ? "10px 12px 14px" : "12px 14px 16px" }}>
+        <div
+          className={titleClassName}
+          style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, marginBottom: 4 }}
+        >
+          {mediaItem.title}
+        </div>
+        {access?.showPrice && mediaItem.price != null && Number.isFinite(Number(mediaItem.price)) ? (
+          <div
+            style={{
+              fontSize: 12,
+              color: "#00ffff",
+              fontWeight: 700,
+              marginBottom: isMobile ? 8 : 10,
+            }}
+          >
+            ${Number(mediaItem.price).toFixed(2)}
+          </div>
+        ) : null}
+        {showPlayActions ? (
+          <div onClick={(e) => e.stopPropagation()}>
+            <ReleaseCardActions
+              item={playItemResolved}
+              accountState={accountState}
+              userId={userId}
+              source={source}
+              onPlayClick={onPlayClick}
+              showCart={Boolean(access?.showCart)}
+              onLibraryChange={onLibraryChange}
+              onAddToCart={(e) => {
+                e.stopPropagation();
+                addToCart?.(mediaItem);
+              }}
+              cartButtonStyle={{
+                background: "#1a1a1a",
+                color: "white",
+                border: "1px solid #2a2a2a",
+              }}
+              cartLabel="+ Cart"
+            />
+          </div>
+        ) : null}
+      </div>
+    </PlaybackPrewarmCardShell>
+  );
+});
+
 /**
  * Shared horizontal scroll row — cloned from Home "Latest Singles" card chrome.
  * Supports video cards (singles) and cover cards (mixtapes/EPs, features-style media).
  */
-export default forwardRef(function LatestSinglesStyleRow(
+const LatestSinglesStyleRow = forwardRef(function LatestSinglesStyleRow(
   {
     items = [],
     isMobile,
@@ -54,142 +213,31 @@ export default forwardRef(function LatestSinglesStyleRow(
       }}
     >
       {items.map((rawItem, i) => {
-        const item = withR2CatalogMedia(rawItem);
-        const access = resolveContentAccess(item, accountState);
-        const showPlayActions = itemHasPlayableAudio(item, access);
-        const playItem =
-          cardMedia === "cover" && catalogPlaybackLookup
-            ? albumCardPlaybackItem(item, catalogPlaybackLookup)
-            : item;
-        const coverDisplay = catalogCoverDisplay(item);
-
+        const stableKey = rawItem.slug || rawItem.id;
+        if (!stableKey) return null;
         return (
-          <PlaybackPrewarmCardShell
-            key={item.slug || item.id || `row-card-${i}`}
-            releaseItem={item}
-            playItem={playItem}
-            catalogPlaybackLookup={catalogPlaybackLookup}
+          <SinglesStyleCard
+            key={stableKey}
+            item={rawItem}
+            index={i}
+            isMobile={isMobile}
+            isAdmin={isAdmin}
+            onGift={onGift}
+            onCardClick={onCardClick}
+            onPlayClick={onPlayClick}
+            addToCart={addToCart}
             accountState={accountState}
             userId={userId}
+            onLibraryChange={onLibraryChange}
             source={source}
-            isAlbumCard={cardMedia === "cover"}
-            enabled={showPlayActions}
-            data-single-card={cardMedia === "video" ? true : undefined}
-            onClick={() => onCardClick?.(item)}
-            className="catalog-card-enter"
-            style={{
-              flex: "0 0 auto",
-              width: isMobile ? 160 : 200,
-              cursor: "pointer",
-              scrollSnapAlign: "start",
-              animationDelay: `${i * 0.09}s`,
-              background: "#0a0a0a",
-              borderRadius: 14,
-              border: "1px solid #1a1a1a",
-              transition: "border-color 0.25s, box-shadow 0.25s",
-              position: "relative",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = "#00ffff33";
-              e.currentTarget.style.boxShadow = "0 0 18px rgba(0,255,255,0.35)";
-              const vid = e.currentTarget.querySelector("video");
-              if (vid) {
-                vid.style.transform = "scale(1.05)";
-                vid.style.filter = "brightness(1.12)";
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = "#1a1a1a";
-              e.currentTarget.style.boxShadow = "none";
-              const vid = e.currentTarget.querySelector("video");
-              if (vid) {
-                vid.style.transform = "scale(1)";
-                vid.style.filter = "brightness(1)";
-              }
-            }}
-          >
-            {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(item)} /> : null}
-            {cardMedia === "video" ? (
-              <video
-                data-single-carousel
-                src={item.video || undefined}
-                poster={item.cover || undefined}
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                webkit-playsinline="true"
-                style={{
-                  width: "100%",
-                  aspectRatio: "1/1",
-                  objectFit: "cover",
-                  display: "block",
-                  borderRadius: "13px 13px 0 0",
-                  transition: "transform 0.3s, filter 0.3s",
-                  pointerEvents: "none",
-                }}
-              />
-            ) : (
-              <CoverArt
-                src={coverDisplay.src}
-                type={coverDisplay.type || "image"}
-                alt=""
-                width="100%"
-                height="auto"
-                borderRadius="13px 13px 0 0"
-                style={{
-                  aspectRatio: "1/1",
-                  display: "block",
-                  pointerEvents: "none",
-                }}
-              />
-            )}
-            <div style={{ padding: isMobile ? "10px 12px 14px" : "12px 14px 16px" }}>
-              <div
-                className={titleClassName}
-                style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, marginBottom: 4 }}
-              >
-                {item.title}
-              </div>
-              {access?.showPrice && item.price != null && Number.isFinite(Number(item.price)) ? (
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "#00ffff",
-                    fontWeight: 700,
-                    marginBottom: isMobile ? 8 : 10,
-                  }}
-                >
-                  ${Number(item.price).toFixed(2)}
-                </div>
-              ) : null}
-              {showPlayActions ? (
-                <div onClick={(e) => e.stopPropagation()}>
-                  <ReleaseCardActions
-                    item={withR2CatalogMedia(playItem)}
-                    accountState={accountState}
-                    userId={userId}
-                    source={source}
-                    onPlayClick={onPlayClick}
-                    showCart={Boolean(access?.showCart)}
-                    onLibraryChange={onLibraryChange}
-                    onAddToCart={(e) => {
-                      e.stopPropagation();
-                      addToCart?.(item);
-                    }}
-                    cartButtonStyle={{
-                      background: "#1a1a1a",
-                      color: "white",
-                      border: "1px solid #2a2a2a",
-                    }}
-                    cartLabel="+ Cart"
-                  />
-                </div>
-              ) : null}
-            </div>
-          </PlaybackPrewarmCardShell>
+            cardMedia={cardMedia}
+            catalogPlaybackLookup={catalogPlaybackLookup}
+            titleClassName={titleClassName}
+          />
         );
       })}
     </div>
   );
 });
+
+export default memo(LatestSinglesStyleRow);
