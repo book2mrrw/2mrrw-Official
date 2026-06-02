@@ -10,11 +10,12 @@ import {
   useState,
 } from "react";
 import {
-  catalogSinglesMediaEqual,
-  mergeCatalogTrackWithInline,
-  stabilizeCatalogMediaList,
-  withR2CatalogMedia,
-} from "@/lib/media/r2-catalog-media";
+  assertSsrClientParity,
+  commitCatalogSinglesDeterministic,
+  mergeCatalogTrackDeterministic,
+  resolveMedia,
+  stabilizeCatalogMediaDeterministic,
+} from "@/lib/media/media-determinism";
 import { buildCatalogPlaybackLookup } from "@/lib/music-playback";
 import {
   isPlaybackTraceEnabled,
@@ -26,14 +27,13 @@ import { useAbortController } from "@/system/guards/useAbortController";
 const CatalogSurfaceContext = createContext(null);
 
 function commitBrowseSinglesIfChanged(setBrowseSingles, nextSingles) {
-  setBrowseSingles((prev) =>
-    catalogSinglesMediaEqual(prev, nextSingles) ? prev : nextSingles
-  );
+  setBrowseSingles((prev) => commitCatalogSinglesDeterministic(prev, nextSingles));
 }
 
 /**
  * Phase 17C — catalog fetch + derived playback lookup isolated from Page shell.
  * Phase 20G — stable media URLs on first paint; skip redundant page-1 rewrites.
+ * Phase 20H — media determinism lock; freeze resolved URLs when identity unchanged.
  */
 export function CatalogSurfaceProvider({
   initialSingles,
@@ -45,19 +45,33 @@ export function CatalogSurfaceProvider({
 }) {
   const inlineSinglesStableRef = useRef(null);
   if (!inlineSinglesStableRef.current) {
-    inlineSinglesStableRef.current = stabilizeCatalogMediaList(inlineSingles);
+    inlineSinglesStableRef.current = stabilizeCatalogMediaDeterministic(inlineSingles);
   }
   const stabilizedInlineSingles = inlineSinglesStableRef.current;
 
   const [browseSingles, setBrowseSingles] = useState(() => {
     const seed = initialSingles?.length ? initialSingles : inlineSingles;
-    return stabilizeCatalogMediaList(seed);
+    return stabilizeCatalogMediaDeterministic(seed);
   });
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogHasMore, setCatalogHasMore] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const catalogFetchAbort = useAbortController([catalogPage]);
   const prevBrowseSinglesLenRef = useRef(0);
+  const browseSinglesRef = useRef(browseSingles);
+  browseSinglesRef.current = browseSingles;
+
+  useEffect(() => {
+    if (!initialSingles?.length || !inlineSingles?.length) return;
+    initialSingles.forEach((init) => {
+      const inline = inlineSingles.find((s) => s.slug === init.slug);
+      if (inline) {
+        assertSsrClientParity(resolveMedia(init), resolveMedia(inline), {
+          phase: "provider-init",
+        });
+      }
+    });
+  }, [initialSingles, inlineSingles]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,10 +110,13 @@ export function CatalogSurfaceProvider({
         }
 
         const staticBySlug = new Map(inlineSingles.map((s) => [s.slug, s]));
+        const prevBySlug = new Map(
+          (browseSinglesRef.current || []).map((s) => [s.slug, s])
+        );
         const incoming = tracks.map((t) => {
           const fb = staticBySlug.get(t?.slug);
-          const merged = fb ? mergeCatalogTrackWithInline(fb, t) : t;
-          return withR2CatalogMedia(merged);
+          const prev = prevBySlug.get(t?.slug);
+          return mergeCatalogTrackDeterministic(prev, t, fb);
         });
         setBrowseSingles((prev) => {
           const merged =
@@ -113,7 +130,7 @@ export function CatalogSurfaceProvider({
               merged.push(t);
             }
           });
-          return catalogSinglesMediaEqual(prev, merged) ? prev : merged;
+          return commitCatalogSinglesDeterministic(prev, merged);
         });
         setCatalogHasMore(Boolean(data.hasMore));
       } catch {
@@ -152,7 +169,7 @@ export function CatalogSurfaceProvider({
   const displaySingles = browseSingles.length ? browseSingles : stabilizedInlineSingles;
 
   const displayFeatures = useMemo(
-    () => stabilizeCatalogMediaList(inlineFeatures),
+    () => stabilizeCatalogMediaDeterministic(inlineFeatures),
     [inlineFeatures]
   );
 
