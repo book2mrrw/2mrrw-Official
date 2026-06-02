@@ -9,7 +9,12 @@ import {
   useRef,
   useState,
 } from "react";
-import { withR2CatalogMedia } from "@/components/home/catalogMedia";
+import {
+  catalogSinglesMediaEqual,
+  mergeCatalogTrackWithInline,
+  stabilizeCatalogMediaList,
+  withR2CatalogMedia,
+} from "@/lib/media/r2-catalog-media";
 import { buildCatalogPlaybackLookup } from "@/lib/music-playback";
 import {
   isPlaybackTraceEnabled,
@@ -20,9 +25,15 @@ import { useAbortController } from "@/system/guards/useAbortController";
 
 const CatalogSurfaceContext = createContext(null);
 
+function commitBrowseSinglesIfChanged(setBrowseSingles, nextSingles) {
+  setBrowseSingles((prev) =>
+    catalogSinglesMediaEqual(prev, nextSingles) ? prev : nextSingles
+  );
+}
+
 /**
  * Phase 17C — catalog fetch + derived playback lookup isolated from Page shell.
- * Updates here do not require Page to own catalogLoading/browseSingles useState.
+ * Phase 20G — stable media URLs on first paint; skip redundant page-1 rewrites.
  */
 export function CatalogSurfaceProvider({
   initialSingles,
@@ -32,7 +43,16 @@ export function CatalogSurfaceProvider({
   inlineMixtapesAndEps = [],
   children,
 }) {
-  const [browseSingles, setBrowseSingles] = useState(initialSingles);
+  const inlineSinglesStableRef = useRef(null);
+  if (!inlineSinglesStableRef.current) {
+    inlineSinglesStableRef.current = stabilizeCatalogMediaList(inlineSingles);
+  }
+  const stabilizedInlineSingles = inlineSinglesStableRef.current;
+
+  const [browseSingles, setBrowseSingles] = useState(() => {
+    const seed = initialSingles?.length ? initialSingles : inlineSingles;
+    return stabilizeCatalogMediaList(seed);
+  });
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogHasMore, setCatalogHasMore] = useState(false);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -58,7 +78,7 @@ export function CatalogSurfaceProvider({
 
         if (!res.ok) {
           if (catalogPage === 1) {
-            setBrowseSingles(inlineSingles.map((s) => withR2CatalogMedia(s)));
+            commitBrowseSinglesIfChanged(setBrowseSingles, stabilizedInlineSingles);
           }
           setCatalogHasMore(false);
           return;
@@ -69,7 +89,7 @@ export function CatalogSurfaceProvider({
 
         if (useInline) {
           if (catalogPage === 1) {
-            setBrowseSingles(inlineSingles.map((s) => withR2CatalogMedia(s)));
+            commitBrowseSinglesIfChanged(setBrowseSingles, stabilizedInlineSingles);
           }
           setCatalogHasMore(false);
           return;
@@ -78,20 +98,14 @@ export function CatalogSurfaceProvider({
         const staticBySlug = new Map(inlineSingles.map((s) => [s.slug, s]));
         const incoming = tracks.map((t) => {
           const fb = staticBySlug.get(t?.slug);
-          const merged = fb
-            ? {
-                ...fb,
-                ...t,
-                preview: t.preview || fb.preview,
-                video: t.video || fb.video,
-                cover: t.cover || fb.cover,
-              }
-            : t;
+          const merged = fb ? mergeCatalogTrackWithInline(fb, t) : t;
           return withR2CatalogMedia(merged);
         });
         setBrowseSingles((prev) => {
           const merged =
-            catalogPage === 1 ? [...inlineSingles.map((s) => withR2CatalogMedia(s))] : [...prev];
+            catalogPage === 1
+              ? [...stabilizedInlineSingles]
+              : [...prev];
           const seen = new Set(merged.map((s) => s.slug));
           incoming.forEach((t) => {
             if (t?.slug && !seen.has(t.slug)) {
@@ -99,12 +113,12 @@ export function CatalogSurfaceProvider({
               merged.push(t);
             }
           });
-          return merged;
+          return catalogSinglesMediaEqual(prev, merged) ? prev : merged;
         });
         setCatalogHasMore(Boolean(data.hasMore));
       } catch {
         if (!cancelled && catalogPage === 1) {
-          setBrowseSingles(inlineSingles.map((s) => withR2CatalogMedia(s)));
+          commitBrowseSinglesIfChanged(setBrowseSingles, stabilizedInlineSingles);
           setCatalogHasMore(false);
         }
       } finally {
@@ -114,7 +128,7 @@ export function CatalogSurfaceProvider({
     return () => {
       cancelled = true;
     };
-  }, [catalogPage, catalogFetchAbort.signal, inlineSingles]);
+  }, [catalogPage, catalogFetchAbort.signal, inlineSingles, stabilizedInlineSingles]);
 
   useEffect(() => {
     if (!isPlaybackTraceEnabled()) return;
@@ -135,10 +149,10 @@ export function CatalogSurfaceProvider({
     setCatalogPage((p) => p + 1);
   }, [catalogHasMore, catalogLoading]);
 
-  const displaySingles = browseSingles.length ? browseSingles : inlineSingles;
+  const displaySingles = browseSingles.length ? browseSingles : stabilizedInlineSingles;
 
   const displayFeatures = useMemo(
-    () => inlineFeatures.map((feat) => withR2CatalogMedia(feat)),
+    () => stabilizeCatalogMediaList(inlineFeatures),
     [inlineFeatures]
   );
 
