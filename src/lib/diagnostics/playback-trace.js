@@ -534,3 +534,104 @@ export function logTrackSwitchDuringRecovery(meta = {}) {
 export function logTrackSwitchAfterUnlock(meta = {}) {
   logBackgroundPlaybackTrace("TRACK_SWITCH_AFTER_UNLOCK", meta);
 }
+
+/**
+ * Phase 21 — audible output divergence forensic snapshots (NEXT_PUBLIC_PLAYBACK_TRACE=1).
+ * Observation-only; does not mutate playback state.
+ *
+ * @param {{
+ *   source?: string;
+ *   audio?: HTMLMediaElement | null;
+ *   webAudioContext?: AudioContext | null;
+ *   track?: { slug?: string; src?: string } | null;
+ *   hasIntactTransport?: boolean | null;
+ *   mediaSessionPlaybackState?: string | null;
+ *   playbackIntent?: boolean;
+ *   lifecycleBackground?: boolean;
+ *   isAudible?: boolean | null;
+ *   slug?: string | null;
+ * }} params
+ */
+export function captureAudibleOutputSnapshot({
+  source = "unknown",
+  audio = null,
+  webAudioContext = null,
+  track = null,
+  hasIntactTransport = null,
+  mediaSessionPlaybackState = null,
+  playbackIntent = false,
+  lifecycleBackground = false,
+  isAudible = null,
+  slug = null,
+} = {}) {
+  if (!isPlaybackTraceEnabled()) return;
+
+  const resolvedSlug = slug ?? track?.slug ?? null;
+  const elementPayload = audio
+    ? {
+        paused: audio.paused,
+        ended: audio.ended,
+        muted: audio.muted,
+        volume: audio.volume,
+        readyState: audio.readyState,
+        networkState: audio.networkState,
+        currentTime: audio.currentTime,
+        duration: isFinite(audio.duration) ? audio.duration : null,
+        srcLen: (audio.currentSrc || audio.src || "").length,
+      }
+    : { audio: null };
+
+  logBackgroundPlaybackTrace("AUDIO_ELEMENT_STATE", {
+    source,
+    slug: resolvedSlug,
+    ...elementPayload,
+  });
+
+  logBackgroundPlaybackTrace("AUDIO_CONTEXT_STATE", {
+    source,
+    slug: resolvedSlug,
+    ctxState: webAudioContext?.state ?? null,
+    sampleRate: webAudioContext?.sampleRate ?? null,
+  });
+
+  logBackgroundPlaybackTrace("MEDIA_SESSION_STATE", {
+    source,
+    slug: resolvedSlug,
+    playbackState: mediaSessionPlaybackState,
+  });
+
+  logBackgroundPlaybackTrace("TRANSPORT_STATE", {
+    source,
+    slug: resolvedSlug,
+    hasTrack: Boolean(track),
+    hasIntactTransport,
+  });
+
+  logBackgroundPlaybackTrace("AUDIBLE_STATE", {
+    source,
+    slug: resolvedSlug,
+    isAudible,
+    playbackIntent,
+    lifecycleBackground,
+    elementPaused: audio?.paused ?? null,
+    ctxState: webAudioContext?.state ?? null,
+  });
+
+  const msPlaying = mediaSessionPlaybackState === "playing";
+  const divergence =
+    (playbackIntent || msPlaying) &&
+    isAudible === false &&
+    Boolean(lifecycleBackground || (audio?.paused && msPlaying));
+
+  if (divergence) {
+    logBackgroundPlaybackTrace("BACKGROUND_AUDIO_SILENCE_DETECTED", {
+      source,
+      slug: resolvedSlug,
+      playbackIntent,
+      msPlaying,
+      elementPaused: audio?.paused ?? null,
+      ctxState: webAudioContext?.state ?? null,
+      hasIntactTransport,
+    });
+  }
+}

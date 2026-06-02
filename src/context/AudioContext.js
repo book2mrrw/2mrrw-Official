@@ -76,6 +76,7 @@ import {
   logLifecycleRecoveryAllowed,
   logTrackSwitchDuringRecovery,
   logTrackSwitchAfterUnlock,
+  captureAudibleOutputSnapshot,
 } from "@/lib/diagnostics/playback-trace";
 import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
 import {
@@ -974,6 +975,35 @@ export function AudioProvider({ children }) {
     });
   }, []);
 
+  /** Phase 21 — observation-only audible vs transport divergence snapshots. */
+  const emitPhase21AudibleSnapshot = useCallback(
+    (source) => {
+      const audio = audioRef.current;
+      const track = stateRef.current.currentTrack;
+      const ctx = audioCtxRef.current;
+      const msPlaybackState =
+        typeof navigator !== "undefined" && "mediaSession" in navigator
+          ? navigator.mediaSession.playbackState ?? null
+          : null;
+      const params = getAudibilityParams();
+      const isAudible = params.audio ? isAudioActuallyAudible(params) : false;
+      captureAudibleOutputSnapshot({
+        source,
+        audio,
+        webAudioContext: ctx,
+        track,
+        hasIntactTransport: hasIntactPlaybackTransport(audio, track),
+        mediaSessionPlaybackState: msPlaybackState,
+        playbackIntent: playbackIntentBeforeHideRef.current,
+        lifecycleBackground:
+          lifecycleInBackgroundRef.current || isDocumentPlaybackHidden(),
+        isAudible,
+        slug: track?.slug ?? null,
+      });
+    },
+    [getAudibilityParams]
+  );
+
   const logDirectInternalCallViolation = useCallback((fnName) => {
     if (commandExecutionDepthRef.current > 0) return;
     if (internalPlaybackAuthorityRef.current) return;
@@ -1713,6 +1743,7 @@ export function AudioProvider({ children }) {
         });
         void updateMediaSession(track, { playing: true });
       }
+      emitPhase21AudibleSnapshot("onPlay");
     };
 
     const onPause = () => {
@@ -1844,6 +1875,7 @@ export function AudioProvider({ children }) {
           audio.addEventListener("canplay", resumeAfterInterrupt);
         }
       }
+      emitPhase21AudibleSnapshot("onPause");
     };
 
     const onTime = () => {
@@ -2330,6 +2362,7 @@ export function AudioProvider({ children }) {
     tracePlayback,
     readIsAudiblyPlaying,
     emitBackgroundPlaybackDiagnostics,
+    emitPhase21AudibleSnapshot,
   ]);
 
   const applyCsToElement = useCallback((audio, presentation, resumeAt = null) => {
@@ -4818,6 +4851,7 @@ export function AudioProvider({ children }) {
             (!audio.paused && readIsAudiblyPlaying())
         );
         emitBackgroundPlaybackDiagnostics("visibility_hidden");
+        emitPhase21AudibleSnapshot("visibility_hidden");
         void resumeWebAudioContextIfSuspended(audioCtxRef);
         recordAudioContextState(audioCtxRef.current, "visibility_hidden");
         const position = audio.currentTime || 0;
@@ -4863,6 +4897,7 @@ export function AudioProvider({ children }) {
           wasPlayingBeforeHideRef.current || playbackIntentBeforeHideRef.current;
         wasPlayingBeforeHideRef.current = false;
         emitBackgroundPlaybackDiagnostics("visibility_visible");
+        emitPhase21AudibleSnapshot("visibility_visible");
 
         if (track && stateRef.current.hasStarted) {
           const resumeAfter =
@@ -5073,6 +5108,7 @@ export function AudioProvider({ children }) {
     armLifecycleRecoverySuppression,
     attemptLightweightPlaybackResume,
     emitBackgroundPlaybackDiagnostics,
+    emitPhase21AudibleSnapshot,
     evaluateLifecyclePlaybackHealth,
     readIsAudiblyPlaying,
     rehydrateMediaSession,
