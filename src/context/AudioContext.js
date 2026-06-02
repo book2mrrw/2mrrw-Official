@@ -87,6 +87,10 @@ import {
   logLifecycleStateCSuppressed,
   logWatchdogSkippedOsSuspend,
   logRecoveryBlockedLifecycleC,
+  logPlaybackContinuitySnapshotCaptured,
+  logPlaybackContinuityRestored,
+  logUiContinuityFreezeEntered,
+  logUiContinuityReconciled,
 } from "@/lib/diagnostics/playback-trace";
 import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
 import {
@@ -803,6 +807,11 @@ export function AudioProvider({ children }) {
   const lifecycleRecoverySuppressedUntilRef = useRef(0);
   /** Phase 21B — last computed lifecycle truth class (A–D). */
   const lifecycleAudioTruthStateRef = useRef(LIFECYCLE_AUDIO_TRUTH_STATES.USER_PAUSED);
+
+  /** Phase 21C — continuity UI freeze snapshot across OS_SUSPENDED (class C). */
+  const continuitySnapshotRef = useRef(null);
+  const continuityFrozenRef = useRef(false);
+  const [continuityFrozen, setContinuityFrozen] = useState(false);
   /** Phase 21B — preserve MS playbackState during OS_SUSPENDED (class C). */
   const lastMediaSessionPlaybackStateRef = useRef(null);
   const keepAliveIntervalRef = useRef(null);
@@ -956,6 +965,112 @@ export function AudioProvider({ children }) {
         slug: track?.slug ?? null,
       });
     }
+
+    // Phase 21C — UI continuity freeze snapshot across OS_SUSPENDED.
+    const prevWasC = prev === LIFECYCLE_AUDIO_TRUTH_STATES.OS_SUSPENDED;
+    const nextIsC = next === LIFECYCLE_AUDIO_TRUTH_STATES.OS_SUSPENDED;
+    const snap = continuitySnapshotRef.current;
+
+    // Capture snapshot once on entering class C.
+    if (!prevWasC && nextIsC && !snap && stateRef.current.currentTrack) {
+      const t = stateRef.current.currentTrack;
+      const el = audioRef.current;
+      const playbackPosition = el && Number.isFinite(el.currentTime) ? el.currentTime : (stateRef.current.currentTime ?? 0);
+      const duration = el && Number.isFinite(el.duration) ? el.duration : (stateRef.current.duration ?? 0);
+
+      const cover = {
+        base:
+          t?.cover ||
+          t?.coverArt ||
+          t?.coverUrl ||
+          t?.baseCover ||
+          "",
+        baseArtType: t?.coverArtType ?? null,
+        cs: t?.csCover || t?.cs_cover || null,
+        csArtType: t?.csCoverType ?? null,
+      };
+
+      const snapshot = {
+        trackId: t?.id ?? t?.trackId ?? t?.slug ?? null,
+        slug: t?.slug ?? null,
+        playbackPosition,
+        queueIndex: queueIndexRef.current,
+        isPlaying: Boolean(playbackIntentBeforeHideRef.current),
+        duration,
+        cover,
+        title: t?.title ?? null,
+        artist: t?.artist ?? null,
+        album: t?.album ?? null,
+        timestamp: Date.now(),
+      };
+
+      continuitySnapshotRef.current = snapshot;
+      setContinuityFrozenUi(true);
+
+      // Freeze progress display immediately.
+      progressSnapshotRef.current = {
+        currentTime: snapshot.playbackPosition,
+        duration: snapshot.duration,
+      };
+      notifyProgressListeners({ force: true });
+
+      logPlaybackContinuitySnapshotCaptured({
+        source: "computeLifecycleAudioTruthState",
+        trackId: snapshot.trackId,
+        slug: snapshot.slug,
+        playbackPosition: snapshot.playbackPosition,
+        queueIndex: snapshot.queueIndex,
+        isPlaying: snapshot.isPlaying,
+      });
+      logUiContinuityFreezeEntered({
+        source: "computeLifecycleAudioTruthState",
+        trackId: snapshot.trackId,
+        slug: snapshot.slug,
+        isPlaying: snapshot.isPlaying,
+      });
+    }
+
+    // Release freeze when audio + UI intent match snapshot.
+    if (continuityFrozenRef.current && continuitySnapshotRef.current) {
+      const currentSnap = continuitySnapshotRef.current;
+      const el = audioRef.current;
+      const stateIntentIsPlaying = stateRef.current.isPlaying;
+      const shouldRelease =
+        Boolean(el) &&
+        transport.intact &&
+        !el.paused &&
+        !el.ended &&
+        stateIntentIsPlaying === currentSnap.isPlaying;
+
+      if (shouldRelease) {
+        setContinuityFrozenUi(false);
+        continuitySnapshotRef.current = null;
+
+        progressSnapshotRef.current = {
+          currentTime: stateRef.current.currentTime ?? el.currentTime ?? 0,
+          duration:
+            stateRef.current.duration ??
+            (Number.isFinite(el.duration) ? el.duration : 0) ??
+            0,
+        };
+        notifyProgressListeners({ force: true });
+
+        logPlaybackContinuityRestored({
+          source: "computeLifecycleAudioTruthState",
+          trackId: currentSnap.trackId,
+          slug: currentSnap.slug,
+          playbackPosition: progressSnapshotRef.current.currentTime,
+          isPlaying: currentSnap.isPlaying,
+        });
+        logUiContinuityReconciled({
+          source: "computeLifecycleAudioTruthState",
+          trackId: currentSnap.trackId,
+          slug: currentSnap.slug,
+          isPlaying: currentSnap.isPlaying,
+        });
+      }
+    }
+
     lifecycleAudioTruthStateRef.current = next;
     return next;
   }, [getAudibilityParams]);
@@ -1180,13 +1295,21 @@ export function AudioProvider({ children }) {
   }, []);
 
   const getProgressSnapshot = useCallback(() => progressSnapshotRef.current, []);
+  const getContinuitySnapshot = useCallback(() => continuitySnapshotRef.current, []);
+
+  const setContinuityFrozenUi = useCallback((next) => {
+    if (continuityFrozenRef.current === next) return;
+    continuityFrozenRef.current = next;
+    setContinuityFrozen(next);
+  }, []);
 
   const subscribeProgress = useCallback((listener) => {
     progressListenersRef.current.add(listener);
     return () => progressListenersRef.current.delete(listener);
   }, []);
 
-  const notifyProgressListeners = useCallback(() => {
+  const notifyProgressListeners = useCallback(({ force = false } = {}) => {
+    if (!force && continuityFrozenRef.current) return;
     const s = stateRef.current;
     const next = { currentTime: s.currentTime ?? 0, duration: s.duration ?? 0 };
     const prev = progressSnapshotRef.current;
@@ -1777,7 +1900,10 @@ export function AudioProvider({ children }) {
     repeatModeRef.current = state.repeatMode || "off";
     shuffleRef.current = Boolean(state.shuffle);
     csModeRef.current = Boolean(state.csMode);
-    if (state.duration !== progressSnapshotRef.current.duration) {
+    if (continuityFrozenRef.current) {
+      // Keep progress display frozen across OS_SUSPENDED; audio can reconcile silently.
+      notifyMediaEngineBridge();
+    } else if (state.duration !== progressSnapshotRef.current.duration) {
       progressSnapshotRef.current = {
         currentTime: progressSnapshotRef.current.currentTime,
         duration: state.duration ?? 0,
@@ -5683,6 +5809,8 @@ export function AudioProvider({ children }) {
       getAnalyser: () => (webAudioAvailableRef.current ? analyserRef.current : null),
       getCurrentTime: () => stateRef.current.currentTime ?? 0,
       getIsAudiblyPlaying: readIsAudiblyPlaying,
+      continuityFrozen,
+      getContinuitySnapshot,
       subscribeProgress,
       getProgressSnapshot,
     };
@@ -5729,6 +5857,7 @@ export function AudioProvider({ children }) {
     readIsAudiblyPlaying,
     subscribeProgress,
     getProgressSnapshot,
+    getContinuitySnapshot,
   ]);
 
   useEffect(() => () => {

@@ -32,6 +32,8 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
     playbackState,
     csMode,
     isPlaying,
+    continuityFrozen,
+    getContinuitySnapshot,
     enterAudioVisualViewport,
     exitAudioVisualViewport,
     toggle,
@@ -83,6 +85,25 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
   }, [dismissNowPlaying]);
 
   useEffect(() => {
+    if (!continuityFrozen) return;
+    const snap = getContinuitySnapshot?.();
+    if (!snap) return;
+    setNowPlaying((prev) => {
+      const frozen = {
+        id: snap.trackId,
+        slug: snap.slug,
+        title: snap.title ?? null,
+        artist: snap.artist ?? null,
+        album: snap.album ?? null,
+        cover: snap.cover?.base ?? "",
+      };
+      if (prev && prev.slug === frozen.slug && prev.cover === frozen.cover) return prev;
+      return frozen;
+    });
+  }, [continuityFrozen, getContinuitySnapshot]);
+
+  useEffect(() => {
+    if (continuityFrozen) return;
     const shouldShowNowPlaying = Boolean(
       currentTrack &&
         !previewModalOpen &&
@@ -107,6 +128,7 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
       setNowPlaying(null);
     }
   }, [
+    continuityFrozen,
     hasStarted,
     currentTrack,
     playbackState,
@@ -132,9 +154,12 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
     });
   }, [nowPlaying?.slug, isPlaying, playbackState, isMobile]);
 
+  const continuitySnap = continuityFrozen ? getContinuitySnapshot?.() : null;
   const nowPlayingMatchesTrack =
     nowPlaying && currentTrack?.slug === nowPlaying.slug;
-  const miniPlayerPlaying = Boolean(nowPlayingMatchesTrack && isPlaying);
+  const miniPlayerPlaying = continuityFrozen
+    ? Boolean(continuitySnap?.isPlaying)
+    : Boolean(nowPlayingMatchesTrack && isPlaying);
 
   const seekToRatio = useCallback(
     (time) => {
@@ -143,13 +168,26 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
     [seek]
   );
 
+  const ambientTrack = useMemo(() => {
+    if (!continuityFrozen || !continuitySnap) return currentTrack;
+    return {
+      ...(currentTrack || {}),
+      cover: continuitySnap.cover?.base ?? currentTrack?.cover,
+      coverArtType:
+        continuitySnap.cover?.baseArtType ?? currentTrack?.coverArtType,
+      csCover: continuitySnap.cover?.cs ?? currentTrack?.csCover,
+      csCoverType:
+        continuitySnap.cover?.csArtType ?? currentTrack?.csCoverType,
+    };
+  }, [continuityFrozen, continuitySnap, currentTrack]);
+
   const showAmbient =
     (hasStarted ||
       playbackState === "loading" ||
       playbackState === "ready" ||
       playbackState === "playing" ||
       playbackState === "preview_fallback") &&
-    currentTrack?.cover;
+    ambientTrack?.cover;
 
   const chromeValue = useMemo(() => {
     const mobileScrollPadding = isMobile ? (nowPlaying ? "178px" : "110px") : "30px";
@@ -170,7 +208,7 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
       {children}
       {showAmbient ? (
         <AmbientPlaybackBackground
-          currentTrack={currentTrack}
+          currentTrack={ambientTrack}
           csMode={csMode}
           isMobile={isMobile}
         />

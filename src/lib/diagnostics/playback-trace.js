@@ -757,3 +757,27 @@ export function logWatchdogSkippedOsSuspend(meta = {}) {
 export function logRecoveryBlockedLifecycleC(meta = {}) {
   logBackgroundPlaybackTrace("RECOVERY_BLOCKED_LIFECYCLE_C", meta);
 }
+
+/** Phase 21C — continuity UI freeze snapshot captured for OS_SUSPENDED. */
+/** @param {Record<string, unknown>} [meta] */
+export function logPlaybackContinuitySnapshotCaptured(meta = {}) {
+  logBackgroundPlaybackTrace("PLAYBACK_CONTINUITY_SNAPSHOT_CAPTURED", meta);
+}
+
+/** Phase 21C — continuity UI restored after unlock resume. */
+/** @param {Record<string, unknown>} [meta] */
+export function logPlaybackContinuityRestored(meta = {}) {
+  logBackgroundPlaybackTrace("PLAYBACK_CONTINUITY_RESTORED", meta);
+}
+
+/** Phase 21C — UI entered frozen display mode (snapshot used). */
+/** @param {Record<string, unknown>} [meta] */
+export function logUiContinuityFreezeEntered(meta = {}) {
+  logBackgroundPlaybackTrace("UI_CONTINUITY_FREEZE_ENTERED", meta);
+}
+
+/** Phase 21C — UI reconciled back to live playback state. */
+/** @param {Record<string, unknown>} [meta] */
+export function logUiContinuityReconciled(meta = {}) {
+  logBackgroundPlaybackTrace("UI_CONTINUITY_RECONCILED", meta);
+}

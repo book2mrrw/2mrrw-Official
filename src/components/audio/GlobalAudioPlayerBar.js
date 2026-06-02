@@ -5,6 +5,7 @@ import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 import { SignaturePlayRing, useImmersivePlayback, usePlayerBodyState } from "@/components/player/ImmersivePlayerEngine";
 import { useMediaEngine } from "@/media/useMediaEngine";
 import { usePlaybackStateMachine } from "@/media/PlaybackStateMachine";
+import { useAudioPlayer } from "@/context/AudioContext";
 import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import { useRenderTracker } from "@/lib/dev/useRenderTracker";
@@ -312,6 +313,7 @@ function GlobalAudioPlayerBar() {
   useRenderTracker("GlobalAudioPlayerBar");
   const playbackOrchestrationState = usePlaybackStateMachine();
   const playback = useImmersivePlayback();
+  const { continuityFrozen, getContinuitySnapshot } = useAudioPlayer();
   const {
     state: {
       currentTime: engineCurrentTime,
@@ -358,12 +360,35 @@ function GlobalAudioPlayerBar() {
   const lastTapTimeRef = useRef(0);
   const csModeRef = useRef(csMode);
 
-  const baseCover = currentTrack?.baseCover || currentTrack?.cover;
-  const csCover = currentTrack?.csCover || null;
-  const csAudio = currentTrack?.csAudio || null;
+  const continuitySnap = continuityFrozen ? getContinuitySnapshot?.() : null;
+
+  const dockCurrentTrack = useMemo(() => {
+    if (!continuityFrozen || !continuitySnap || !currentTrack) return currentTrack;
+    return {
+      ...currentTrack,
+      id: continuitySnap.trackId,
+      slug: continuitySnap.slug ?? currentTrack.slug,
+      title: continuitySnap.title ?? currentTrack.title,
+      artist: continuitySnap.artist ?? currentTrack.artist,
+      album: continuitySnap.album ?? currentTrack.album,
+      cover: continuitySnap.cover?.base ?? currentTrack.cover,
+      coverArtType: continuitySnap.cover?.baseArtType ?? currentTrack.coverArtType,
+      baseCover: continuitySnap.cover?.base ?? currentTrack.baseCover,
+      csCover: continuitySnap.cover?.cs ?? currentTrack.csCover,
+      csCoverType: continuitySnap.cover?.csArtType ?? currentTrack.csCoverType,
+    };
+  }, [continuityFrozen, continuitySnap, currentTrack]);
+
+  const baseCover = dockCurrentTrack?.baseCover || dockCurrentTrack?.cover;
+  const csCover = dockCurrentTrack?.csCover || null;
+  const csAudio = dockCurrentTrack?.csAudio || null;
   const hasCs = Boolean(csCover || csAudio);
 
-  usePlayerBodyState({ playing: isPlaying && hasStarted, expanded: false });
+  const frozenIsPlaying = continuityFrozen
+    ? Boolean(continuitySnap?.isPlaying)
+    : isPlaying;
+
+  usePlayerBodyState({ playing: frozenIsPlaying && hasStarted, expanded: false });
 
   useEffect(() => {
     csModeRef.current = csMode;
@@ -533,11 +558,19 @@ function GlobalAudioPlayerBar() {
     engineCurrentTrack?.metadata?.access?.previewOnly ?? currentTrack?.metadata?.access?.previewOnly
   );
 
-  const dockCurrentTime = engineCurrentTime ?? currentTime;
-  const dockDuration = engineDuration ?? duration;
+  const dockCurrentTime =
+    continuityFrozen && continuitySnap
+      ? continuitySnap.playbackPosition
+      : engineCurrentTime ?? currentTime;
+  const dockDuration =
+    continuityFrozen && continuitySnap
+      ? continuitySnap.duration ?? (engineDuration ?? duration)
+      : engineDuration ?? duration;
   const dockAudible =
     hasStarted && typeof getIsAudiblyPlaying === "function" ? getIsAudiblyPlaying() : null;
-  const dockIsPlaying = dockAudible ?? engineIsPlaying ?? isPlaying;
+  const dockIsPlaying = continuityFrozen
+    ? Boolean(continuitySnap?.isPlaying)
+    : dockAudible ?? engineIsPlaying ?? isPlaying;
 
   const maxPreviewSeek = useMemo(() => {
     if (!previewOnly || !dockDuration) return dockDuration || 0;
@@ -566,7 +599,7 @@ function GlobalAudioPlayerBar() {
     return Math.max(0, Math.min(100, (dockCurrentTime / dockDuration) * 100));
   }, [dockCurrentTime, dockDuration]);
 
-  const showCs = Boolean(currentTrack?.hasCs || currentTrack?.csAudio);
+  const showCs = Boolean(dockCurrentTrack?.hasCs || dockCurrentTrack?.csAudio);
   const dockCsMode = engineCsMode ?? csMode;
   const handleToggleCs = useCallback(() => {
     void (engineToggleCSMode ?? toggleCSMode)?.();
@@ -604,7 +637,7 @@ function GlobalAudioPlayerBar() {
     playbackState === "ready" ||
     playbackState === "playing" ||
     playbackState === "preview_fallback";
-  if (!isLifecycleVisibleState || !currentTrack) return null;
+  if (!isLifecycleVisibleState || !dockCurrentTrack) return null;
 
   const conflictDialog = streamConflict ? (
     <div role="alertdialog" aria-label="Concurrent stream" className="player-immersive-conflict">
@@ -635,16 +668,16 @@ function GlobalAudioPlayerBar() {
           data-playback-orchestration={playbackOrchestrationState}
         />
       )}
-      {playbackState === "ended_preview" && currentTrack ? (
+      {playbackState === "ended_preview" && dockCurrentTrack ? (
         <div className="player-preview-ended-cta" data-mobile={isMobile ? "1" : undefined}>
           <span className="player-preview-ended-label">PREVIEW ENDED</span>
-          <a href={`/?track=${encodeURIComponent(currentTrack.slug)}&buy=1`} className="player-preview-ended-buy">
+          <a href={`/?track=${encodeURIComponent(dockCurrentTrack.slug)}&buy=1`} className="player-preview-ended-buy">
             OWN IT
           </a>
         </div>
       ) : null}
       <MiniPlayerDock
-        currentTrack={currentTrack}
+        currentTrack={dockCurrentTrack}
         currentTime={dockCurrentTime}
         duration={dockDuration}
         isPlaying={dockIsPlaying}
