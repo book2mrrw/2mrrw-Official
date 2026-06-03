@@ -9,7 +9,7 @@
 | Role | SHA | Notes |
 |------|-----|-------|
 | Restore point (checkpoint) | `594c970` | Empty checkpoint before edits |
-| Fix commit | `dc55af0` | Fix 1 only |
+| Fix commit | `9768269` | Fix 1 only |
 
 ## Phase 0 — Failure 1 branch selection
 
