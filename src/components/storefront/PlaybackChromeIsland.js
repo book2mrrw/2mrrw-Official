@@ -102,35 +102,56 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
     });
   }, [continuityFrozen, getContinuitySnapshot]);
 
+  const currentTrackKey =
+    currentTrack?.slug ?? currentTrack?.id ?? currentTrack?.trackId ?? null;
+
   useEffect(() => {
     if (continuityFrozen) return;
+    const chromeActive =
+      playbackState === "loading" ||
+      playbackState === "ready" ||
+      playbackState === "playing" ||
+      playbackState === "preview_fallback";
     const shouldShowNowPlaying = Boolean(
       currentTrack &&
         !previewModalOpen &&
         !featureModalOpen &&
         !albumModalOpen &&
-        (hasStarted ||
-          playbackState === "loading" ||
-          playbackState === "ready" ||
-          playbackState === "playing" ||
-          playbackState === "preview_fallback")
+        (hasStarted || chromeActive)
     );
     if (shouldShowNowPlaying) {
       const title = resolvePlayerDisplayTitle(currentTrack);
-      setNowPlaying(
+      const next =
         title && title !== currentTrack.title
           ? { ...currentTrack, title }
-          : currentTrack
-      );
+          : currentTrack;
+      setNowPlaying((prev) => {
+        const prevKey = prev?.slug ?? prev?.id ?? null;
+        const nextKey = next?.slug ?? next?.id ?? null;
+        if (
+          prevKey &&
+          nextKey &&
+          prevKey === nextKey &&
+          prev.cover === next.cover &&
+          prev.title === next.title &&
+          prev.artist === next.artist
+        ) {
+          return prev;
+        }
+        return next;
+      });
       return;
     }
     if (!currentTrack || !hasStarted) {
-      setNowPlaying(null);
+      setNowPlaying((prev) => (prev == null ? prev : null));
     }
   }, [
     continuityFrozen,
     hasStarted,
-    currentTrack,
+    currentTrackKey,
+    currentTrack?.title,
+    currentTrack?.cover,
+    currentTrack?.artist,
     playbackState,
     previewModalOpen,
     featureModalOpen,

@@ -151,6 +151,14 @@ const AUDIO_CONTENT_TYPE_RE = /^(audio\/|application\/octet-stream)/i;
 const AUDIO_SRC_READY_TIMEOUT_MS = 12000;
 const STALL_RECOVERY_MS = 12000;
 const PLAYBACK_COMMAND_TIMEOUT_MS = 15000;
+/** Stream resolve / signed swap can exceed 15s without being stalled (Phase P1). */
+const PLAYBACK_STREAM_COMMAND_TIMEOUT_MS = 120000;
+const TRANSPORT_ONLY_STATE_KEYS = new Set([
+  "playbackNetworkState",
+  "isBuffering",
+  "currentTime",
+  "duration",
+]);
 const AUDIBILITY_WATCHDOG_MS = 1250;
 const RECOVERY_COOLDOWN_MS = 6000;
 /** Coalesce visibility_return + bfcache_restore (Phase 15D). */
@@ -606,6 +614,20 @@ function dispatchPreviewEnded(slug) {
   window.dispatchEvent(new CustomEvent("preview:ended", { detail: { slug } }));
 }
 
+function isTransportOnlyPatch(patch) {
+  const keys = Object.keys(patch);
+  if (!keys.length) return false;
+  return keys.every((k) => TRANSPORT_ONLY_STATE_KEYS.has(k));
+}
+
+function playbackQueuesMatch(normalized, current) {
+  return (
+    normalized.length > 0 &&
+    normalized.length === current.length &&
+    normalized.every((t, i) => isSamePlaybackTrack(t, current[i]))
+  );
+}
+
 const EMPTY_STATE = {
   currentTrackId: null,
   currentTrack: null,
@@ -841,6 +863,11 @@ export function AudioProvider({ children }) {
   const stallRecoveryTimerRef = useRef(null);
   const progressListenersRef = useRef(new Set());
   const progressSnapshotRef = useRef({ currentTime: 0, duration: 0 });
+  const transportListenersRef = useRef(new Set());
+  const transportSnapshotRef = useRef({
+    playbackNetworkState: EMPTY_STATE.playbackNetworkState,
+    isBuffering: EMPTY_STATE.isBuffering,
+  });
   const renderCountRef = useRef(0);
   const prevRenderDepsRef = useRef({});
   const [state, setState] = useState(EMPTY_STATE);
@@ -1325,6 +1352,24 @@ export function AudioProvider({ children }) {
     notifyMediaEngineBridge();
   }, []);
 
+  const getTransportSnapshot = useCallback(() => transportSnapshotRef.current, []);
+
+  const subscribeTransport = useCallback((listener) => {
+    transportListenersRef.current.add(listener);
+    return () => transportListenersRef.current.delete(listener);
+  }, []);
+
+  const notifyTransportListeners = useCallback(() => {
+    transportListenersRef.current.forEach((fn) => {
+      try {
+        fn();
+      } catch {
+        /* ignore listener errors */
+      }
+    });
+    notifyMediaEngineBridge();
+  }, []);
+
   const syncProgressTime = useCallback((time) => {
     if (!Number.isFinite(time)) return;
     stateRef.current = { ...stateRef.current, currentTime: time };
@@ -1458,9 +1503,56 @@ export function AudioProvider({ children }) {
     };
   }, [logPlaybackDesyncIfNeeded]);
 
-  const patchState = useCallback((patch) => {
-    setState((prev) => {
+  const patchTransport = useCallback(
+    (patch) => {
+      const prev = stateRef.current;
       let next = { ...prev, ...patch };
+      next = reconcileIsPlayingWithElement(prev, next);
+      stateRef.current = next;
+      const transportNext = {
+        playbackNetworkState: next.playbackNetworkState ?? "idle",
+        isBuffering: Boolean(next.isBuffering),
+      };
+      const snap = transportSnapshotRef.current;
+      if (
+        snap.playbackNetworkState === transportNext.playbackNetworkState &&
+        snap.isBuffering === transportNext.isBuffering &&
+        !("duration" in patch)
+      ) {
+        return;
+      }
+      transportSnapshotRef.current = transportNext;
+      if ("duration" in patch && patch.duration !== progressSnapshotRef.current.duration) {
+        progressSnapshotRef.current = {
+          currentTime: progressSnapshotRef.current.currentTime,
+          duration: patch.duration ?? 0,
+        };
+        notifyProgressListeners();
+      }
+      notifyTransportListeners();
+    },
+    [reconcileIsPlayingWithElement, notifyProgressListeners, notifyTransportListeners]
+  );
+
+  const patchState = useCallback((patch) => {
+    if (isTransportOnlyPatch(patch)) {
+      patchTransport(patch);
+      return;
+    }
+    const uiPatch = { ...patch };
+    const transportFields = {};
+    for (const key of TRANSPORT_ONLY_STATE_KEYS) {
+      if (key in uiPatch) {
+        transportFields[key] = uiPatch[key];
+        delete uiPatch[key];
+      }
+    }
+    if (Object.keys(transportFields).length) {
+      patchTransport(transportFields);
+    }
+    if (!Object.keys(uiPatch).length) return;
+    setState((prev) => {
+      let next = { ...prev, ...uiPatch };
       const shouldHaveStarted =
         next.hasStarted === false &&
         (next.isPlaying === true || next.playbackState === "ready" || next.playbackState === "playing");
@@ -1541,9 +1633,20 @@ export function AudioProvider({ children }) {
           });
         }
       }
-      return reconcileIsPlayingWithElement(prev, next);
+      const reconciled = reconcileIsPlayingWithElement(prev, next);
+      stateRef.current = reconciled;
+      transportSnapshotRef.current = {
+        playbackNetworkState: reconciled.playbackNetworkState ?? "idle",
+        isBuffering: Boolean(reconciled.isBuffering),
+      };
+      return reconciled;
     });
-  }, [isLifecycleOsSuspended, isLifecycleRecoverySuppressed, reconcileIsPlayingWithElement]);
+  }, [
+    isLifecycleOsSuspended,
+    isLifecycleRecoverySuppressed,
+    reconcileIsPlayingWithElement,
+    patchTransport,
+  ]);
 
   const stopProgressRaf = useCallback(() => {
     if (progressRafRef.current != null) {
@@ -2779,7 +2882,7 @@ export function AudioProvider({ children }) {
     perfMark(MARKS.PLAYBACK_REQUEST);
     const requestId = playRequestIdRef.current + 1;
     playRequestIdRef.current = requestId;
-    if (activeStreamAbortRef.current) {
+    if (!options.preserveActiveStream && activeStreamAbortRef.current) {
       logStreamLifecycle("abort", { source: "playTrackInternal", slug: track?.slug });
       activeStreamAbortRef.current.abort();
     }
@@ -3002,8 +3105,9 @@ export function AudioProvider({ children }) {
       const signedUrl = resolved.track?.src;
       if (!signedUrl || signedUrl === syncSrc) return;
       const resumeAt = audio.currentTime || 0;
+      const wasPlaying = stateRef.current.isPlaying && !audio.paused;
       skipPauseInterruptionRef.current = true;
-      patchState({ playbackNetworkState: "loading_stream" });
+      patchTransport({ playbackNetworkState: "loading_stream" });
       await waitAudioSrcReady(audio, signedUrl, { signal: streamAbortController.signal });
       const applySeek = () => {
         if (resumeAt > 0 && isFinite(audio.duration)) {
@@ -3013,32 +3117,39 @@ export function AudioProvider({ children }) {
       };
       audio.addEventListener("loadedmetadata", applySeek);
       if (isFinite(audio.duration) && audio.duration > 0) applySeek();
-      if (stateRef.current.isPlaying) {
-        await playAudioIfNotPaused(audio, stateRef.current.isPlaying, {
+      if (wasPlaying && audio.paused) {
+        await playAudioIfNotPaused(audio, true, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
           requestId,
           state: stateRef.current,
           context: { source: "signed_stream_swap" },
         });
       }
-      patchState({
+      const liveTrack = stateRef.current.currentTrack;
+      if (!liveTrack || !isSamePlaybackTrack(liveTrack, nextTrack)) return;
+      stateRef.current = {
+        ...stateRef.current,
         currentTrack: {
-          ...nextTrack,
+          ...liveTrack,
           src: signedUrl,
           metadata: {
-            ...nextTrack.metadata,
+            ...(liveTrack.metadata || {}),
             access: {
-              ...(nextTrack.metadata?.access || {}),
+              ...(liveTrack.metadata?.access || {}),
               previewOnly: false,
               canStream: true,
             },
           },
         },
+      };
+      patchTransport({
+        playbackNetworkState: wasPlaying && !audio.paused ? "playing" : "idle",
+        isBuffering: false,
       });
+      notifyMediaEngineBridge();
     };
 
     if (backgroundStreamResolve && streamSlug) {
-      patchState({ playbackNetworkState: "loading_stream" });
       void resolveLibraryStreamForTrack(nextTrack, {
         force: options.forceStream,
         signal: streamAbortController.signal,
@@ -3128,6 +3239,7 @@ export function AudioProvider({ children }) {
       listeningProgressRef.current = { slug: null, recorded30s: false };
     }
 
+    patchTransport({ playbackNetworkState: "loading_stream" });
     patchState({
       currentTrackId: nextTrack.id,
       currentTrack: { ...nextTrack, src: syncSrc },
@@ -3136,10 +3248,9 @@ export function AudioProvider({ children }) {
       accessDenied: false,
       streamRetryable: false,
       streamConflict: null,
-      hasStarted: false,
+      hasStarted: isSameTrack ? stateRef.current.hasStarted : false,
       csTrack: csModeRef.current ? normalized : null,
-      playbackState: "loading",
-      playbackNetworkState: "loading_stream",
+      playbackState: isSameTrack ? stateRef.current.playbackState : "loading",
     });
 
     preloadCsAssets(normalized, { csImgRef, csVidRef, csAudioRef });
@@ -4467,13 +4578,19 @@ export function AudioProvider({ children }) {
     logDirectInternalCallViolation("setQueueInternal");
     const normalized = (tracks || []).map(normalizeTrack).filter((t) => t.src);
     const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
+    const sameTracks = playbackQueuesMatch(normalized, queueRef.current);
     queueRef.current = normalized;
     queueIndexRef.current = normalized.length ? index : -1;
-    tracePlayback("queueReset", "setQueue", { length: normalized.length, index });
+    tracePlayback("queueReset", "setQueue", { length: normalized.length, index, sameTracks });
     perfMark(MARKS.QUEUE_UPDATE_START);
-    // perf: startTransition — queue update is non-urgent
     startTransition(() => {
-      patchState({ queue: normalized, queueIndex: queueIndexRef.current });
+      if (sameTracks) {
+        if (queueIndexRef.current !== stateRef.current.queueIndex) {
+          patchState({ queueIndex: queueIndexRef.current });
+        }
+      } else {
+        patchState({ queue: normalized, queueIndex: queueIndexRef.current });
+      }
       perfMark(MARKS.QUEUE_UPDATE_END);
       perfMeasure("queue-update", MARKS.QUEUE_UPDATE_START, MARKS.QUEUE_UPDATE_END);
     });
@@ -4576,7 +4693,11 @@ export function AudioProvider({ children }) {
     logDirectInternalCallViolation("playQueueInternal");
     const normalized = setQueueInternal(tracks, startIndex);
     if (!normalized.length) return false;
-    return playTrackInternal(normalized[Math.max(0, Math.min(startIndex, normalized.length - 1))], options);
+    const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
+    return playTrackInternal(normalized[index], {
+      ...options,
+      preserveActiveStream: Boolean(options.preserveActiveStream),
+    });
   }, [setQueueInternal, playTrackInternal, logDirectInternalCallViolation]);
 
   const pauseInternal = useCallback((opts = {}) => {
@@ -4921,6 +5042,12 @@ export function AudioProvider({ children }) {
     }
     streamMetaRef.current = null;
     setState(EMPTY_STATE);
+    stateRef.current = EMPTY_STATE;
+    transportSnapshotRef.current = {
+      playbackNetworkState: EMPTY_STATE.playbackNetworkState,
+      isBuffering: EMPTY_STATE.isBuffering,
+    };
+    notifyTransportListeners();
     queueRef.current = [];
     queueIndexRef.current = -1;
     clearPersistedMediaSessionTrack();
@@ -4928,7 +5055,15 @@ export function AudioProvider({ children }) {
       navigator.mediaSession.metadata = null;
       navigator.mediaSession.playbackState = "none";
     }
-  }, [clearViewportResume, finalizeStreamSession, stopPositionSaveTimer, stopProgressRaf, stopKeepAlivePing, tracePlayback]);
+  }, [
+    clearViewportResume,
+    finalizeStreamSession,
+    stopPositionSaveTimer,
+    stopProgressRaf,
+    stopKeepAlivePing,
+    tracePlayback,
+    notifyTransportListeners,
+  ]);
 
   const executePlaybackCommand = useCallback(async (command) => {
     if (command.requestId !== activeCommandRef.current?.requestId) return false;
@@ -5048,6 +5183,14 @@ export function AudioProvider({ children }) {
         activeStreamAbortRef.current.abort();
       }
       try {
+        const streamCommand =
+          resolvedType === PLAYBACK_COMMANDS.PLAY_TRACK ||
+          resolvedType === PLAYBACK_COMMANDS.PLAY_QUEUE ||
+          resolvedType === PLAYBACK_COMMANDS.UPGRADE_STREAM ||
+          resolvedType === PLAYBACK_COMMANDS.REPLACE_TRACK;
+        const commandTimeoutMs = streamCommand
+          ? PLAYBACK_STREAM_COMMAND_TIMEOUT_MS
+          : PLAYBACK_COMMAND_TIMEOUT_MS;
         const result = await Promise.race([
           executePlaybackCommand(command),
           new Promise((_, reject) => {
@@ -5056,9 +5199,10 @@ export function AudioProvider({ children }) {
                 createPlaybackError("PLAYBACK_COMMAND_TIMEOUT", "Playback command watchdog timeout", {
                   command: resolvedType,
                   requestId,
+                  timeoutMs: commandTimeoutMs,
                 })
               );
-            }, PLAYBACK_COMMAND_TIMEOUT_MS);
+            }, commandTimeoutMs);
           }),
         ]);
         queueCircuitOpenRef.current = false;
@@ -5214,6 +5358,8 @@ export function AudioProvider({ children }) {
 
   const playQueue = useCallback((tracks = [], startIndex = 0, options = {}) => {
     resetPlaybackTimingCapture();
+    const normalized = (tracks || []).map(normalizeTrack).filter((t) => t.src);
+    const sameQueue = playbackQueuesMatch(normalized, queueRef.current);
     const startTrack = tracks[Math.max(0, Math.min(startIndex, tracks.length - 1))];
     const scenario = inferPlaybackScenario(audioRef.current, startTrack, {
       ...options,
@@ -5225,8 +5371,12 @@ export function AudioProvider({ children }) {
     perfMark(MARKS.PLAYBACK_TAP);
     return dispatchPlaybackCommand(
       PLAYBACK_COMMANDS.PLAY_QUEUE,
-      { tracks, startIndex, options },
-      { serial: true, cancelActiveStream: true }
+      {
+        tracks,
+        startIndex,
+        options: { ...options, preserveActiveStream: sameQueue },
+      },
+      { serial: true, cancelActiveStream: !sameQueue }
     );
   }, [dispatchPlaybackCommand]);
 
@@ -5761,9 +5911,17 @@ export function AudioProvider({ children }) {
   );
 
   const value = useMemo(() => {
-    const { currentTime: _progressTime, ...playbackState } = state;
+    const {
+      currentTime: _progressTime,
+      playbackNetworkState: _network,
+      isBuffering: _buffering,
+      ...playbackState
+    } = state;
+    const transport = transportSnapshotRef.current;
     return {
       ...playbackState,
+      playbackNetworkState: transport.playbackNetworkState,
+      isBuffering: transport.isBuffering,
       playbackOrchestrationState,
       subscribePlaybackOrchestration: playbackStateMachine.subscribe,
       playTrack,
@@ -5813,6 +5971,8 @@ export function AudioProvider({ children }) {
       getContinuitySnapshot,
       subscribeProgress,
       getProgressSnapshot,
+      subscribeTransport,
+      getTransportSnapshot,
     };
   }, [
     pause,
@@ -5858,6 +6018,8 @@ export function AudioProvider({ children }) {
     subscribeProgress,
     getProgressSnapshot,
     getContinuitySnapshot,
+    subscribeTransport,
+    getTransportSnapshot,
   ]);
 
   useEffect(() => () => {
@@ -5959,5 +6121,20 @@ export function usePlaybackProgress() {
     subscribeProgress,
     getProgressSnapshot,
     () => SERVER_PLAYBACK_PROGRESS_SNAPSHOT
+  );
+}
+
+const SERVER_PLAYBACK_TRANSPORT_SNAPSHOT = Object.freeze({
+  playbackNetworkState: "idle",
+  isBuffering: false,
+});
+
+/** Transport/network fields without AudioProvider reconcile (Phase P1). */
+export function usePlaybackTransport() {
+  const { subscribeTransport, getTransportSnapshot } = useAudioPlayer();
+  return useSyncExternalStore(
+    subscribeTransport,
+    getTransportSnapshot,
+    () => SERVER_PLAYBACK_TRANSPORT_SNAPSHOT
   );
 }

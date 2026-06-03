@@ -1,7 +1,11 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
-import { useAudioPlayer, usePlaybackProgress } from "@/context/AudioContext";
+import {
+  useAudioPlayer,
+  usePlaybackProgress,
+  usePlaybackTransport,
+} from "@/context/AudioContext";
 import { getMediaEngineBridge, subscribeMediaEngine } from "@/media/mediaEngineBridge";
 
 /**
@@ -171,6 +175,7 @@ export function mapAudioContextToMediaEngine(audio) {
 export function useMediaEngine() {
   const audio = useAudioPlayer();
   const progress = usePlaybackProgress();
+  const transport = usePlaybackTransport();
   useSyncExternalStore(subscribeMediaEngine, getMediaEngineSnapshot, () => null);
   return useMemo(() => {
     const mapped = mapAudioContextToMediaEngine(audio);
@@ -180,7 +185,15 @@ export function useMediaEngine() {
         ...mapped.state,
         currentTime: progress.currentTime,
         duration: progress.duration || mapped.state.duration,
+        playbackNetworkState: transport.playbackNetworkState,
+        isBuffering: transport.isBuffering,
       },
     };
-  }, [audio, progress.currentTime, progress.duration]);
+  }, [
+    audio,
+    progress.currentTime,
+    progress.duration,
+    transport.playbackNetworkState,
+    transport.isBuffering,
+  ]);
 }
