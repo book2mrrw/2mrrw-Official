@@ -20,6 +20,7 @@ const VaultUnlockedRoom = dynamic(
 );
 const AlbumTracklistSheet = dynamic(() => import("@/components/music/AlbumTracklistSheet"), { ssr: false });
 import { getPageAuthRef } from "@/lib/storefront/page-auth-ref";
+import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import {
   ensureStorefrontCarouselVideosPlaying,
   pauseStorefrontCarouselVideosWhenDocumentHidden,
@@ -44,7 +45,6 @@ import GiftIcon from "@/components/gifts/GiftIcon";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftsSentSection from "@/components/gifts/GiftsSentSection";
 import HelpSupportSection from "@/components/support/HelpSupportSection";
-import MyMusicTab from "@/components/music/MyMusicTab";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { consumeGiftHighlightSlug } from "@/lib/gifts/session-keys";
@@ -76,18 +76,15 @@ import { catalogCoverUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "
 import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
 import { LiveCountdownProvider } from "@/components/home/LiveCountdownContext";
 import { LiveCountdownLiveTab } from "@/components/home/LiveCountdownDisplays";
-import CarouselUI from "@/components/home/CarouselUI";
-import FeaturesRail from "@/components/home/FeaturesRail";
 import CatalogGrid from "@/components/home/CatalogGrid";
 import HeroIsland from "@/components/home/HeroIsland";
-import AudioVisualsSection from "@/components/home/AudioVisualsSection";
 import PlaybackChromeIsland from "@/components/storefront/PlaybackChromeIsland";
 import AuthSurfaceIsland from "@/components/storefront/AuthSurfaceIsland";
 import EntitlementSurfaceIsland from "@/components/storefront/EntitlementSurfaceIsland";
-import HomeStorefrontFlowMode from "@/components/storefront/HomeStorefrontFlowMode";
+import HomeStorefrontIsland from "@/components/storefront/HomeStorefrontIsland";
+import MusicTabCatalogPanels from "@/components/storefront/MusicTabCatalogPanels";
 import {
   CatalogSurfaceProvider,
-  useCatalogSurface,
 } from "@/components/storefront/catalog-surface-context";
 import MobileCartFab from "@/components/storefront/MobileCartFab";
 import ScrollPaddingShell from "@/components/storefront/ScrollPaddingShell";
@@ -301,13 +298,6 @@ export default function Page() {
 
 function PageStorefront() {
   useBlackscreenMountTrace("Page");
-  const {
-    displaySingles,
-    displayFeatures,
-    catalogHasMore,
-    loadMoreCatalog,
-    catalogPlaybackLookup,
-  } = useCatalogSurface();
   const {
     playTrack,
     playQueue,
@@ -563,12 +553,11 @@ function PageStorefront() {
     setInventory(loadInventory());
   }, []);
 
-  const catalogPlaybackBySlug = catalogPlaybackLookup.bySlug;
 
   const enrichRadioSlide = useCallback(
     (slide) => {
       if (!slide) return slide;
-      const match = catalogPlaybackBySlug.get(slide.slug);
+      const match = getCatalogSurfaceRef().catalogPlaybackLookup.bySlug.get(slide.slug);
       const merged = match
         ? {
             ...match,
@@ -580,7 +569,7 @@ function PageStorefront() {
         : slide;
       return withR2CatalogMedia(merged);
     },
-    [catalogPlaybackBySlug]
+    []
   );
 
   const enrichedRadioSlides = useMemo(
@@ -591,7 +580,7 @@ function PageStorefront() {
   useEffect(() => {
     if (activeTab !== "home") return undefined;
     const preloadItems = [
-      ...displaySingles.slice(0, 8),
+      ...getCatalogSurfaceRef().displaySingles.slice(0, 8),
       ...features.slice(0, 4),
       ...albums.slice(0, 6),
       ...enrichedRadioSlides.slice(0, 4),
@@ -601,7 +590,7 @@ function PageStorefront() {
       if (src) imagePipeline.preload(src, "high", { coverArtType: type });
     });
     return undefined;
-  }, [activeTab, displaySingles, enrichedRadioSlides]);
+  }, [activeTab, enrichedRadioSlides]);
 
   useEffect(() => {
     if (activeTab !== "home") return undefined;
@@ -729,6 +718,7 @@ function PageStorefront() {
   const playAlbumTracks = useCallback(
     async (album, startIndex = 0) => {
       const auth = getPageAuthRef();
+      const catalogPlaybackLookup = getCatalogSurfaceRef().catalogPlaybackLookup;
       const albumItem = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
       const account = { ...auth.accountState, userId: auth.currentUser?.id };
       const tracks = albumTracksForPlayback(
@@ -759,16 +749,16 @@ function PageStorefront() {
         return false;
       }
     },
-    [catalogPlaybackLookup, playQueue, playTrack]
+    [playQueue, playTrack]
   );
 
   const playMixtapeEpCard = useCallback(
     (e, item) => {
       e.stopPropagation();
-      const albumItem = resolveCatalogPlaybackItem(item, catalogPlaybackLookup);
+      const albumItem = resolveCatalogPlaybackItem(item, getCatalogSurfaceRef().catalogPlaybackLookup);
       playAlbumTracks(albumItem, 0);
     },
-    [playAlbumTracks, catalogPlaybackLookup]
+    [playAlbumTracks]
   );
 
   const playCanonicalCatalogItem = useCallback((item, source) => {
@@ -830,9 +820,6 @@ function PageStorefront() {
       return true;
     });
   }, []);
-  const prevSingle    = useCallback(() => goToSingle(singleIndex === 0 ? displaySingles.length-1 : singleIndex-1, "left"),  [goToSingle, singleIndex, displaySingles.length]);
-  const nextSingle    = useCallback(() => goToSingle(singleIndex === displaySingles.length-1 ? 0 : singleIndex+1, "right"), [goToSingle, singleIndex, displaySingles.length]);
-  const currentSingle = useMemo(() => withR2CatalogMedia(displaySingles[singleIndex]), [singleIndex, displaySingles]);
   const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
 
   const dismissPreviewAndFeatureModals = useCallback(() => {
@@ -854,7 +841,7 @@ function PageStorefront() {
       setAlbumModalOpen(false);
       setSelectedAlbum(null);
     }
-    const singleItem = resolveCatalogPlaybackItem(single, catalogPlaybackLookup);
+    const singleItem = resolveCatalogPlaybackItem(single, getCatalogSurfaceRef().catalogPlaybackLookup);
     setSelectedSingle(singleItem);
     setPreviewModalOpen(true);
     setSelectedReleaseDetail(null);
@@ -866,7 +853,6 @@ function PageStorefront() {
   }, [
     featureModalOpen,
     albumModalOpen,
-    catalogPlaybackLookup,
     playCanonicalCatalogItem,
   ]);
 
@@ -882,7 +868,7 @@ function PageStorefront() {
         setAlbumModalOpen(false);
         setSelectedAlbum(null);
       }
-      const featItem = resolveCatalogPlaybackItem(feat, catalogPlaybackLookup);
+      const featItem = resolveCatalogPlaybackItem(feat, getCatalogSurfaceRef().catalogPlaybackLookup);
       setFeatureModalItem(featItem);
       setFeatureModalOpen(true);
       setFeatureReleaseDetail(null);
@@ -895,7 +881,6 @@ function PageStorefront() {
     [
       previewModalOpen,
       albumModalOpen,
-      catalogPlaybackLookup,
       playCanonicalCatalogItem,
     ]
   );
@@ -910,13 +895,13 @@ function PageStorefront() {
   const openAlbumModal = useCallback(
     (album) => {
       dismissPreviewAndFeatureModals();
-      const albumItem = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
+      const albumItem = resolveCatalogPlaybackItem(album, getCatalogSurfaceRef().catalogPlaybackLookup);
       setSelectedAlbum(albumItem);
       setAlbumModalOpen(true);
       if (!albumItem) return;
       playAlbumTracks(albumItem, 0);
     },
-    [playAlbumTracks, dismissPreviewAndFeatureModals, catalogPlaybackLookup]
+    [playAlbumTracks, dismissPreviewAndFeatureModals]
   );
 
   const playAlbumModalTrackAtIndex = useCallback(
@@ -1206,7 +1191,7 @@ function PageStorefront() {
       <PageAuthDeepLinkHandler
         singles={singles}
         albums={albums}
-        displayFeatures={displayFeatures}
+        displayFeatures={getCatalogSurfaceRef().displayFeatures}
         switchTab={switchTab}
         openSingleModal={openSingleModal}
         openAlbumModal={openAlbumModal}
@@ -1442,60 +1427,41 @@ function PageStorefront() {
                 style={{ display: activeTab === "home" ? undefined : "none" }}
                 aria-hidden={activeTab !== "home"}
               >
-                <EntitlementSurfaceIsland islandId="home-storefront">
-                  {(ent) => (
-                    <AuthSurfaceIsland islandId="home-storefront" onGiftRequest={setGiftSheetRelease}>
-                      {(auth) => (
-                        <HomeStorefrontFlowMode
-                          liveCountdownTarget={nextLiveDateTime}
-                          isMobile={isMobile}
-                          showSubscribeCta={ent.showSubscribeCta}
-                          onDonateOpen={handleDonateOpen}
-                          singlesRowRef={singlesRowRef}
-                          displaySingles={displaySingles}
-                          isAdminStable={auth.isAdminStable}
-                          onGift={auth.openGiftSheet}
-                          onCardClick={openSingleModal}
-                          addToCart={addToCart}
-                          accountState={ent.entitlementAccountState}
-                          userId={auth.userId}
-                          onLibraryChange={auth.handleLibraryChange}
-                          catalogHasMore={catalogHasMore}
-                          onLoadMoreCatalog={loadMoreCatalog}
-                          liveStreamDate={liveStreamDate}
-                          liveStreamTime={liveStreamTime}
-                          displayFeatures={displayFeatures}
-                          onOpenFeature={openFeatureModal}
-                          albums={albums}
-                          hoverIn={hoverIn}
-                          hoverOut={hoverOut}
-                          buttonHoverIn={buttonHoverIn}
-                          buttonHoverOut={buttonHoverOut}
-                          onAlbumClick={openAlbumModal}
-                          onOpenAlbumTracklist={setAlbumTracklistRelease}
-                          catalogPlaybackLookup={catalogPlaybackLookup}
-                          mixtapesAndEps={mixtapesAndEps}
-                          onPlayMixtapeEp={playMixtapeEpCard}
-                          currentSlide={currentSlide}
-                          enrichedRadioSlides={enrichedRadioSlides}
-                          radioIndex={radioIndex}
-                          onGoRadio={goRadio}
-                          flowConversionActive={flowConversionActive}
-                          onFlowConversionActive={setFlowConversionActive}
-                          showOwnTrackConversion={ent.showOwnTrackConversion}
-                          onAudioVisualsFocused={handleAudioVisualsFocused}
-                          onAudioVisualsExit={handleAudioVisualsExit}
-                          shopItems={shopItems}
-                          printfulLoading={printfulLoading}
-                          shopIsFallback={shopIsFallback}
-                          events={events}
-                          onSelectEvent={setSelectedEvent}
-                          onOpenCollection={openCollection}
-                        />
-                      )}
-                    </AuthSurfaceIsland>
-                  )}
-                </EntitlementSurfaceIsland>
+                <HomeStorefrontIsland
+                  onGiftRequest={setGiftSheetRelease}
+                  liveCountdownTarget={nextLiveDateTime}
+                  isMobile={isMobile}
+                  onDonateOpen={handleDonateOpen}
+                  singlesRowRef={singlesRowRef}
+                  onCardClick={openSingleModal}
+                  addToCart={addToCart}
+                  liveStreamDate={liveStreamDate}
+                  liveStreamTime={liveStreamTime}
+                  onOpenFeature={openFeatureModal}
+                  albums={albums}
+                  hoverIn={hoverIn}
+                  hoverOut={hoverOut}
+                  buttonHoverIn={buttonHoverIn}
+                  buttonHoverOut={buttonHoverOut}
+                  onAlbumClick={openAlbumModal}
+                  onOpenAlbumTracklist={setAlbumTracklistRelease}
+                  mixtapesAndEps={mixtapesAndEps}
+                  onPlayMixtapeEp={playMixtapeEpCard}
+                  currentSlide={currentSlide}
+                  enrichedRadioSlides={enrichedRadioSlides}
+                  radioIndex={radioIndex}
+                  onGoRadio={goRadio}
+                  flowConversionActive={flowConversionActive}
+                  onFlowConversionActive={setFlowConversionActive}
+                  onAudioVisualsFocused={handleAudioVisualsFocused}
+                  onAudioVisualsExit={handleAudioVisualsExit}
+                  shopItems={shopItems}
+                  printfulLoading={printfulLoading}
+                  shopIsFallback={shopIsFallback}
+                  events={events}
+                  onSelectEvent={setSelectedEvent}
+                  onOpenCollection={openCollection}
+                />
               </div>
 
               {/* ══ MUSIC TAB ══ */}
@@ -1515,57 +1481,34 @@ function PageStorefront() {
                     </div>
                   </div>
 
-                  {/* ── SINGLES sub-tab ── */}
-                  {activeTab==="singles" && (
-                    <>
-                      <div style={{marginBottom:20}}>
-                        <div style={{position:"relative"}}>
-                          <input placeholder="Search singles…" style={{width:"100%",padding:"11px 14px 11px 38px",background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:10,color:"white",fontSize:13,outline:"none",boxSizing:"border-box",transition:"border-color 0.2s"}} onFocus={e=>e.currentTarget.style.borderColor="#00ffff33"} onBlur={e=>e.currentTarget.style.borderColor="#1e1e1e"}/>
-                          <svg style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)",opacity:0.3}} viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                        </div>
-                      </div>
-                      <h2 className="section-heading" style={{marginBottom:14}}>Singles</h2>
-                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingle ? resolveContentAccess(currentSingle, ent.entitlementAccountState) : null} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} onSingleClick={handleSingleClick} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={ent.entitlementAccountState} userId={auth.userId} isAdmin={auth.isAdminStable} onGift={auth.openGiftSheet} onLibraryChange={auth.handleLibraryChange}/>
-                      <div style={{marginTop:32,marginBottom:4}}>
-                        <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
-                        <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={ent.entitlementAccountState} userId={auth.userId} isAdmin={auth.isAdminStable} onGift={auth.openGiftSheet} onLibraryChange={auth.handleLibraryChange}/>
-                      </div>
-                      <AudioVisualsSection
+                  <MusicTabCatalogPanels
+                    activeTab={activeTab}
                     isMobile={isMobile}
-                    onAudioVisualsFocused={handleAudioVisualsFocused}
-                    onAudioVisualsExit={handleAudioVisualsExit}
+                    singleIndex={singleIndex}
+                    goToSingle={goToSingle}
+                    handleSingleClick={handleSingleClick}
+                    addToCart={addToCart}
+                    addVinylToCart={addVinylToCart}
+                    buttonHoverIn={buttonHoverIn}
+                    buttonHoverOut={buttonHoverOut}
+                    openFeatureModal={openFeatureModal}
+                    openAlbumModal={openAlbumModal}
+                    setAlbumTracklistRelease={setAlbumTracklistRelease}
+                    albums={albums}
+                    mixtapesAndEps={mixtapesAndEps}
+                    hoverIn={hoverIn}
+                    hoverOut={hoverOut}
+                    giftHighlightSlug={giftHighlightSlug}
+                    switchTab={switchTab}
+                    openSingleModal={openSingleModal}
+                    handleAudioVisualsFocused={handleAudioVisualsFocused}
+                    handleAudioVisualsExit={handleAudioVisualsExit}
+                    entitlementAccountState={ent.entitlementAccountState}
+                    userId={auth.userId}
+                    isAdminStable={auth.isAdminStable}
+                    openGiftSheet={auth.openGiftSheet}
+                    handleLibraryChange={auth.handleLibraryChange}
                   />
-                    </>
-                  )}
-
-                  {/* ── ALBUMS sub-tab ── */}
-                  {activeTab==="albums" && (
-                    <>
-                      <h2 className="section-heading" style={{marginBottom:16}}>Albums</h2>
-                      <CatalogGrid items={albums} type="albums" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} onCardClick={openAlbumModal} onOpenAlbumTracklist={setAlbumTracklistRelease} catalogPlaybackLookup={catalogPlaybackLookup} isMobile={isMobile} accountState={ent.entitlementAccountState} userId={auth.userId} isAdmin={auth.isAdminStable} onGift={auth.openGiftSheet} onLibraryChange={auth.handleLibraryChange}/>
-                    </>
-                  )}
-
-                  {/* ── MY MUSIC sub-tab ── */}
-                  {activeTab==="mymusic" && (
-                    <>
-                      <MyMusicTab
-                        singles={displaySingles}
-                        albums={albums}
-                        mixtapesAndEps={mixtapesAndEps}
-                        isMobile={isMobile}
-                        isAdmin={auth.isAdminStable}
-                        highlightSlug={giftHighlightSlug}
-                        onSwitchTab={switchTab}
-                        onOpenSingle={openSingleModal}
-                        onOpenAlbum={openAlbumModal}
-                        onOpenAlbumTracklist={(album) => {
-                          const resolved = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
-                          setAlbumTracklistRelease(resolved || album);
-                        }}
-                      />
-                    </>
-                  )}
                 </>
                       )}
                     </AuthSurfaceIsland>
@@ -2110,7 +2053,7 @@ function PageStorefront() {
               <AlbumTracklistSheet
                 open={Boolean(albumTracklistRelease)}
                 album={albumTracklistRelease}
-                catalogPlaybackLookup={catalogPlaybackLookup}
+                catalogPlaybackLookup={getCatalogSurfaceRef().catalogPlaybackLookup}
                 accountState={ent.entitlementAccountState}
                 userId={auth.userId}
                 isMobile={isMobile}

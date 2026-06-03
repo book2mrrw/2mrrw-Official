@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, memo, useMemo, useEffect } from "react";
+import { forwardRef, memo, useMemo, useEffect, useRef } from "react";
 import { useMountEnterAnimation } from "@/hooks/useMountEnterAnimation";
 import {
   isUiHydrationTraceEnabled,
@@ -46,6 +46,15 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
   const coverDisplay = useMemo(() => catalogCoverDisplay(mediaItem), [mediaItem]);
   const playItemResolved = useMemo(() => withR2CatalogMedia(playItem), [playItem]);
   const { shouldAnimate } = useMountEnterAnimation();
+
+  useEffect(() => {
+    if (!isUiHydrationTraceEnabled()) return;
+    logUiHydrationTrace("MEDIA_CARD_REINITIALIZED", {
+      slug: item?.slug ?? null,
+      cardMedia,
+      source,
+    });
+  }, [item?.slug, cardMedia, source]);
 
   return (
     <PlaybackPrewarmCardShell
@@ -200,12 +209,35 @@ const LatestSinglesStyleRow = forwardRef(function LatestSinglesStyleRow(
   },
   ref
 ) {
+  const prevItemsLenRef = useRef(items?.length ?? 0);
+  const stickyItemsRef = useRef(items);
+
+  if (items?.length) {
+    stickyItemsRef.current = items;
+  }
+
+  const renderItems = items?.length ? items : stickyItemsRef.current;
+
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
-    logUiHydrationTrace("LATEST_SINGLES_RENDER", { count: items?.length ?? 0 });
-  });
+    const count = items?.length ?? 0;
+    logUiHydrationTrace("LATEST_SINGLES_RENDER", { count });
+    const prev = prevItemsLenRef.current;
+    if (count === 0 && prev > 0) {
+      logUiHydrationTrace("LATEST_SINGLES_REMOVED", { prevCount: prev });
+      if (stickyItemsRef.current?.length) {
+        logUiHydrationTrace("LATEST_SINGLES_STICKY_RENDER", {
+          stickyCount: stickyItemsRef.current.length,
+        });
+      }
+    }
+    if (count > 0 && prev === 0) {
+      logUiHydrationTrace("LATEST_SINGLES_RESTORED", { count });
+    }
+    prevItemsLenRef.current = count;
+  }, [items?.length]);
 
-  if (!items?.length) return null;
+  if (!renderItems?.length) return null;
 
   return (
     <div
@@ -225,7 +257,7 @@ const LatestSinglesStyleRow = forwardRef(function LatestSinglesStyleRow(
         minWidth: 0,
       }}
     >
-      {items.map((rawItem, i) => {
+      {renderItems.map((rawItem, i) => {
         const stableKey = rawItem.slug || rawItem.id;
         if (!stableKey) return null;
         return (

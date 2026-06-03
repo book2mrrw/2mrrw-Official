@@ -8,7 +8,15 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
+  useLayoutEffect,
 } from "react";
+import {
+  getCatalogLoading,
+  setCatalogLoading,
+  subscribeCatalogLoading,
+} from "@/lib/storefront/catalog-loading-store";
+import { setCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import {
   assertSsrClientParity,
   commitCatalogSinglesDeterministic,
@@ -29,10 +37,15 @@ import {
 import { useAbortController } from "@/system/guards/useAbortController";
 
 const CatalogSurfaceContext = createContext(null);
-const CatalogLoadingContext = createContext(false);
 
-function commitBrowseSinglesIfChanged(setBrowseSingles, nextSingles) {
-  setBrowseSingles((prev) => commitCatalogSinglesDeterministic(prev, nextSingles));
+function commitBrowseSinglesIfChanged(setBrowseSingles, nextSingles, inlineSeed = []) {
+  setBrowseSingles((prev) => {
+    const committed = commitCatalogSinglesDeterministic(prev, nextSingles);
+    if (!committed?.length && inlineSeed.length > 0) {
+      return commitCatalogSinglesDeterministic(prev, inlineSeed);
+    }
+    return committed;
+  });
 }
 
 /**
@@ -60,11 +73,30 @@ export function CatalogSurfaceProvider({
   });
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogHasMore, setCatalogHasMore] = useState(false);
-  const [catalogLoading, setCatalogLoading] = useState(false);
   const catalogFetchAbort = useAbortController([catalogPage]);
+  const inlineSeedRef = useRef(stabilizedInlineSingles);
+  inlineSeedRef.current = stabilizedInlineSingles;
   const prevBrowseSinglesLenRef = useRef(0);
+  const prevBrowseSinglesRef = useRef(browseSingles);
   const browseSinglesRef = useRef(browseSingles);
   browseSinglesRef.current = browseSingles;
+
+  useEffect(() => {
+    if (!isUiHydrationTraceEnabled()) return;
+    logUiHydrationTrace("PROVIDER_RECONSTRUCTED", { provider: "CatalogSurfaceProvider" });
+  }, []);
+
+  useEffect(() => {
+    if (!isUiHydrationTraceEnabled()) return;
+    if (prevBrowseSinglesRef.current !== browseSingles) {
+      logUiHydrationTrace("CATALOG_DATA_REPLACED", {
+        count: browseSingles?.length ?? 0,
+        catalogPage,
+        catalogLoading: getCatalogLoading(),
+      });
+      prevBrowseSinglesRef.current = browseSingles;
+    }
+  }, [browseSingles, catalogPage]);
 
   useEffect(() => {
     if (!initialSingles?.length || !inlineSingles?.length) return;
@@ -81,6 +113,9 @@ export function CatalogSurfaceProvider({
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (isUiHydrationTraceEnabled()) {
+        logUiHydrationTrace("CATALOG_SURFACE_REFRESH", { catalogPage });
+      }
       setCatalogLoading(true);
       try {
         const res = await fetch(`/api/catalog/releases?page=${catalogPage}&limit=20`, {
@@ -97,7 +132,11 @@ export function CatalogSurfaceProvider({
 
         if (!res.ok) {
           if (catalogPage === 1) {
-            commitBrowseSinglesIfChanged(setBrowseSingles, stabilizedInlineSingles);
+            commitBrowseSinglesIfChanged(
+              setBrowseSingles,
+              stabilizedInlineSingles,
+              inlineSeedRef.current
+            );
           }
           setCatalogHasMore(false);
           return;
@@ -108,7 +147,11 @@ export function CatalogSurfaceProvider({
 
         if (useInline) {
           if (catalogPage === 1) {
-            commitBrowseSinglesIfChanged(setBrowseSingles, stabilizedInlineSingles);
+            commitBrowseSinglesIfChanged(
+              setBrowseSingles,
+              stabilizedInlineSingles,
+              inlineSeedRef.current
+            );
           }
           setCatalogHasMore(false);
           return;
@@ -135,12 +178,20 @@ export function CatalogSurfaceProvider({
               merged.push(t);
             }
           });
-          return commitCatalogSinglesDeterministic(prev, merged);
+          const committed = commitCatalogSinglesDeterministic(prev, merged);
+          if (!committed?.length && inlineSeedRef.current.length > 0) {
+            return commitCatalogSinglesDeterministic(prev, inlineSeedRef.current);
+          }
+          return committed;
         });
         setCatalogHasMore(Boolean(data.hasMore));
       } catch {
         if (!cancelled && catalogPage === 1) {
-          commitBrowseSinglesIfChanged(setBrowseSingles, stabilizedInlineSingles);
+          commitBrowseSinglesIfChanged(
+            setBrowseSingles,
+            stabilizedInlineSingles,
+            inlineSeedRef.current
+          );
           setCatalogHasMore(false);
         }
       } finally {
@@ -160,21 +211,22 @@ export function CatalogSurfaceProvider({
   useEffect(() => {
     if (!isPlaybackTraceEnabled()) return;
     const len = browseSingles?.length ?? 0;
-    if (len !== prevBrowseSinglesLenRef.current || catalogLoading) {
+    const loading = getCatalogLoading();
+    if (len !== prevBrowseSinglesLenRef.current || loading) {
       prevBrowseSinglesLenRef.current = len;
       recordPlaybackTraceContext({ lastCatalogRenderAt: Date.now() });
       logUiChurn("catalog-rerender", {
         catalogPage,
         singlesCount: len,
-        catalogLoading,
+        catalogLoading: loading,
       });
     }
-  }, [browseSingles, catalogPage, catalogLoading]);
+  }, [browseSingles, catalogPage]);
 
   const loadMoreCatalog = useCallback(() => {
-    if (!catalogHasMore || catalogLoading) return;
+    if (!catalogHasMore || getCatalogLoading()) return;
     setCatalogPage((p) => p + 1);
-  }, [catalogHasMore, catalogLoading]);
+  }, [catalogHasMore]);
 
   const displaySingles = browseSingles.length ? browseSingles : stabilizedInlineSingles;
 
@@ -216,11 +268,13 @@ export function CatalogSurfaceProvider({
     ]
   );
 
+  useLayoutEffect(() => {
+    setCatalogSurfaceRef(value);
+  });
+
   return (
     <CatalogSurfaceContext.Provider value={value}>
-      <CatalogLoadingContext.Provider value={catalogLoading}>
-        {children}
-      </CatalogLoadingContext.Provider>
+      {children}
     </CatalogSurfaceContext.Provider>
   );
 }
@@ -233,7 +287,7 @@ export function useCatalogSurface() {
   return ctx;
 }
 
-/** Phase R1 — skeleton/load-more only; cards must not subscribe to this. */
+/** Phase R1/P7 — skeleton/load-more only; cards must not subscribe to this. */
 export function useCatalogLoading() {
-  return useContext(CatalogLoadingContext);
+  return useSyncExternalStore(subscribeCatalogLoading, getCatalogLoading, getCatalogLoading);
 }

@@ -4,59 +4,16 @@ import { memo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
 import AudioVisualsSection from "@/components/home/AudioVisualsSection";
-import LatestSinglesStyleRow from "@/components/home/LatestSinglesStyleRow";
-import FeaturesRail from "@/components/home/FeaturesRail";
-import CatalogGrid from "@/components/home/CatalogGrid";
+import HomeStorefrontCatalogMedia from "@/components/storefront/HomeStorefrontCatalogMedia";
 import RadioCarousel from "@/components/home/RadioCarousel";
 import FlowState from "@/components/home/FlowState";
-import {
-  LiveCountdownDesktopPanel,
-  LiveCountdownHomeSection,
-  LiveCountdownMobileHomeStrip,
-} from "@/components/home/LiveCountdownDisplays";
+import CatalogGrid from "@/components/home/CatalogGrid";
+import { LiveCountdownHomeSection } from "@/components/home/LiveCountdownDisplays";
 import { LiveCountdownProvider } from "@/components/home/LiveCountdownContext";
-import { TrackCardSkeleton } from "@/ui/skeletons";
-import { useCatalogLoading } from "@/components/storefront/catalog-surface-context";
 import {
   isUiHydrationTraceEnabled,
   logUiHydrationTrace,
 } from "@/lib/diagnostics/ui-hydration-trace";
-const CatalogLatestSinglesLoadingExtras = memo(function CatalogLatestSinglesLoadingExtras({
-  catalogHasMore,
-  onLoadMoreCatalog,
-}) {
-  const catalogLoading = useCatalogLoading();
-  return (
-    <>
-      {catalogLoading ? (
-        <>
-          <TrackCardSkeleton />
-          <TrackCardSkeleton />
-        </>
-      ) : null}
-      {catalogHasMore ? (
-        <button
-          type="button"
-          onClick={onLoadMoreCatalog}
-          disabled={catalogLoading}
-          style={{
-            marginTop: 12,
-            padding: "10px 18px",
-            background: "transparent",
-            border: "1px solid #333",
-            color: "#888",
-            borderRadius: 8,
-            cursor: catalogLoading ? "default" : "pointer",
-            fontSize: 12,
-            letterSpacing: 1.5,
-          }}
-        >
-          {catalogLoading ? "Loading…" : "Load more"}
-        </button>
-      ) : null}
-    </>
-  );
-});
 
 const HomeStorefront = memo(function HomeStorefront({
   liveCountdownTarget,
@@ -64,7 +21,6 @@ const HomeStorefront = memo(function HomeStorefront({
   showSubscribeCta,
   onDonateOpen,
   singlesRowRef,
-  displaySingles,
   isAdminStable,
   onGift,
   onCardClick,
@@ -72,11 +28,8 @@ const HomeStorefront = memo(function HomeStorefront({
   accountState,
   userId,
   onLibraryChange,
-  catalogHasMore,
-  onLoadMoreCatalog,
   liveStreamDate,
   liveStreamTime,
-  displayFeatures,
   onOpenFeature,
   albums,
   hoverIn,
@@ -85,7 +38,6 @@ const HomeStorefront = memo(function HomeStorefront({
   buttonHoverOut,
   onAlbumClick,
   onOpenAlbumTracklist,
-  catalogPlaybackLookup,
   mixtapesAndEps,
   onPlayMixtapeEp,
   currentSlide,
@@ -106,6 +58,7 @@ const HomeStorefront = memo(function HomeStorefront({
 }) {
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
+    logUiHydrationTrace("STORE_FRONT_RENDER", {});
     logUiHydrationTrace("HOME_STOREFRONT_RENDER", {});
   });
 
@@ -130,95 +83,30 @@ const HomeStorefront = memo(function HomeStorefront({
           </button>
         </motion.div>
 
-        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 18, alignItems: "flex-start" }}>
-          <div style={{ flex: 1, width: "100%", minWidth: 0 }}>
-            <LatestSinglesStyleRow
-              ref={singlesRowRef}
-              items={displaySingles}
-              isMobile={isMobile}
-              isAdmin={isAdminStable}
-              onGift={onGift}
-              onCardClick={onCardClick}
-              addToCart={addToCart}
-              accountState={accountState}
-              userId={userId}
-              onLibraryChange={onLibraryChange}
-              source="home_single_card"
-              cardMedia="video"
-            />
-            <CatalogLatestSinglesLoadingExtras
-              catalogHasMore={catalogHasMore}
-              onLoadMoreCatalog={onLoadMoreCatalog}
-            />
-          </div>
-
-          {!isMobile && (
-            <LiveCountdownDesktopPanel liveStreamDate={liveStreamDate} liveStreamTime={liveStreamTime} />
-          )}
-        </div>
-
-        {isMobile ? <LiveCountdownMobileHomeStrip /> : null}
-      </motion.div>
-
-      <div style={{ marginTop: 28, marginBottom: 4 }}>
-        <h2 className="section-heading" style={{ marginBottom: 14 }}>Features</h2>
-        <FeaturesRail
-          features={displayFeatures}
+        <HomeStorefrontCatalogMedia
           isMobile={isMobile}
+          singlesRowRef={singlesRowRef}
+          isAdminStable={isAdminStable}
+          onGift={onGift}
+          onCardClick={onCardClick}
           addToCart={addToCart}
-          onOpenFeature={onOpenFeature}
           accountState={accountState}
           userId={userId}
-          isAdmin={isAdminStable}
-          onGift={onGift}
           onLibraryChange={onLibraryChange}
-        />
-      </div>
-
-      <div style={{ margin: "0 0 24px", height: 1, background: "#1a1a1a" }} />
-
-      <div id="home-albums">
-        <h2 className="section-heading" style={{ marginBottom: 16 }}>Albums</h2>
-        <CatalogGrid
-          items={albums}
-          type="albums"
-          addToCart={addToCart}
+          onOpenFeature={onOpenFeature}
+          albums={albums}
           hoverIn={hoverIn}
           hoverOut={hoverOut}
           buttonHoverIn={buttonHoverIn}
           buttonHoverOut={buttonHoverOut}
-          onCardClick={onAlbumClick}
+          onAlbumClick={onAlbumClick}
           onOpenAlbumTracklist={onOpenAlbumTracklist}
-          catalogPlaybackLookup={catalogPlaybackLookup}
-          isMobile={isMobile}
-          accountState={accountState}
-          userId={userId}
-          isAdmin={isAdminStable}
-          onGift={onGift}
-          onLibraryChange={onLibraryChange}
+          mixtapesAndEps={mixtapesAndEps}
+          onPlayMixtapeEp={onPlayMixtapeEp}
+          liveStreamDate={liveStreamDate}
+          liveStreamTime={liveStreamTime}
         />
-      </div>
-
-      <div id="home-mixtapes-eps" style={{ marginTop: 28 }}>
-        <h2 className="section-heading" style={{ marginBottom: 14 }}>Mixtapes &amp; EPs</h2>
-        <div style={{ flex: 1, width: "100%", minWidth: 0 }}>
-          <LatestSinglesStyleRow
-            items={mixtapesAndEps}
-            isMobile={isMobile}
-            isAdmin={isAdminStable}
-            onGift={onGift}
-            onCardClick={onAlbumClick}
-            onPlayClick={onPlayMixtapeEp}
-            addToCart={addToCart}
-            accountState={accountState}
-            userId={userId}
-            onLibraryChange={onLibraryChange}
-            source="home_mixtape_ep_card"
-            cardMedia="cover"
-            catalogPlaybackLookup={catalogPlaybackLookup}
-          />
-        </div>
-      </div>
+      </motion.div>
 
       <div style={{ marginTop: 28, marginBottom: 28 }}>
         <h2 className="section-heading" style={{ marginBottom: 14 }}>2MRRW RADIO</h2>

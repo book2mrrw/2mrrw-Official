@@ -49,6 +49,10 @@ export default function PageAuthRefSync() {
       logUiHydrationTrace("AUTH_BOOTSTRAP_COMPLETE", {
         userId: currentUser?.id ?? null,
       });
+      logUiHydrationTrace("PROVIDER_RECONSTRUCTED", {
+        provider: "AuthContext",
+        phase: "bootstrap-complete",
+      });
     }
   }, [sessionHydrated, loading, currentUser?.id]);
 
