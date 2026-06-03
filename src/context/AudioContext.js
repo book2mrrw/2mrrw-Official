@@ -681,7 +681,12 @@ function withSlowedSuffix(title) {
 
 const normalizeTrack = (track = {}) => {
   const src = track.src || track.preview || track.audio || track.url || "";
-  const id = track.id || track.trackId || track.slug || src;
+  const slug =
+    track.slug ||
+    track.trackSlug ||
+    track.metadata?.trackSlug ||
+    null;
+  const id = track.id || track.trackId || slug || null;
   const baseTitle = stripSlowedSuffix(track.title || "Untitled");
   const baseCover = track.baseCover || track.cover || track.coverArt || track.image || null;
   const csAudio = track.csAudio || track.cs_audio || null;
@@ -689,8 +694,8 @@ const normalizeTrack = (track = {}) => {
   const coverArtType = track.coverArtType || track.cover_art_type || (track.video ? "video" : "image");
   const csCoverType = track.csCoverType || track.cs_cover_type || "image";
   return {
-    id,
-    slug: track.slug || id,
+    id: id || slug || src,
+    slug: slug || id,
     title: baseTitle,
     artist: track.artist || "2MRRW",
     cover: baseCover,
@@ -1367,6 +1372,37 @@ export function AudioProvider({ children }) {
     });
     notifyMediaEngineBridge();
   }, []);
+
+  /** Phase P4 — user-initiated track change must not leave 21C UI frozen on stale snapshot. */
+  const clearContinuityFreeze = useCallback((source = "track_change") => {
+    if (!continuityFrozenRef.current && !continuitySnapshotRef.current) return;
+    const snap = continuitySnapshotRef.current;
+    continuitySnapshotRef.current = null;
+    setContinuityFrozenUi(false);
+    progressSnapshotRef.current = {
+      currentTime: stateRef.current.currentTime ?? audioRef.current?.currentTime ?? 0,
+      duration:
+        stateRef.current.duration ??
+        (Number.isFinite(audioRef.current?.duration) ? audioRef.current.duration : 0) ??
+        0,
+    };
+    notifyProgressListeners({ force: true });
+    if (snap) {
+      logPlaybackContinuityRestored({
+        source,
+        trackId: snap.trackId,
+        slug: snap.slug,
+        playbackPosition: progressSnapshotRef.current.currentTime,
+        isPlaying: snap.isPlaying,
+      });
+      logUiContinuityReconciled({
+        source,
+        trackId: snap.trackId,
+        slug: snap.slug,
+        isPlaying: snap.isPlaying,
+      });
+    }
+  }, [notifyProgressListeners, setContinuityFrozenUi]);
 
   const getTransportSnapshot = useCallback(() => transportSnapshotRef.current, []);
 
@@ -3266,6 +3302,10 @@ export function AudioProvider({ children }) {
     const isReplay = isSameTrack && audio.ended;
     const previousTrack = stateRef.current.currentTrack;
 
+    if (!sameIdentity) {
+      clearContinuityFreeze("playTrackInternal");
+    }
+
     if (isReplay) {
       audio.currentTime = 0;
       pendingSeekRef.current = null;
@@ -3550,6 +3590,7 @@ export function AudioProvider({ children }) {
     attemptLightweightPlaybackResume,
     getPlaybackTransportHealth,
     isLifecycleRecoverySuppressed,
+    clearContinuityFreeze,
   ]);
 
   const upgradeToFullStream = useCallback(async () => {

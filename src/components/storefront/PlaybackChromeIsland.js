@@ -149,6 +149,7 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
     continuityFrozen,
     hasStarted,
     currentTrackKey,
+    currentTrack?.slug,
     currentTrack?.title,
     currentTrack?.cover,
     currentTrack?.artist,

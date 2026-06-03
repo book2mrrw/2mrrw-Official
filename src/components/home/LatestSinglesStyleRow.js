@@ -100,9 +100,10 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
           muted
           loop
           playsInline
-          preload="metadata"
+          preload="auto"
           webkit-playsinline="true"
           style={{
+            backgroundColor: "#0a0a0a",
             width: "100%",
             aspectRatio: "1/1",
             objectFit: "cover",

@@ -17,6 +17,23 @@ export function playbackPrewarmKey({ releaseSlug, trackSlug, trackIndex = 0 } = 
   return `${release}:${track}`;
 }
 
+/** Shared key for card prewarm + play tap — must match `buildReleasePrewarmBundle`. */
+export function playbackPrewarmKeyForItem(item, { isAlbumCard = false } = {}) {
+  if (!item) return null;
+  const releaseSlug = item.albumSlug || item.slug || null;
+  const trackSlug =
+    item.trackSlug ||
+    item.track_slug ||
+    item.metadata?.trackSlug ||
+    (!isAlbumCard ? item.slug : null) ||
+    null;
+  return playbackPrewarmKey({
+    releaseSlug,
+    trackSlug,
+    trackIndex: item.trackIndex ?? item.metadata?.trackIndex ?? 0,
+  });
+}
+
 export function getPlaybackPrewarmEntry(key) {
   if (!key) return null;
   const hit = cache.get(key);

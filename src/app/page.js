@@ -397,21 +397,35 @@ function PageStorefront() {
     const row = singlesRowRef.current;
     if (!row) return;
     const vw = window.innerWidth;
+    const vh = window.innerHeight;
     const inViewVideos = [];
     row.querySelectorAll("video[data-single-carousel]").forEach((video) => {
       const card = video.closest("[data-single-card]");
       const rect = (card || video).getBoundingClientRect();
-      const inView = rect.left >= 0 && rect.right <= vw;
-      if (inView) inViewVideos.push(video);
+      const visibleWidth = Math.min(rect.right, vw) - Math.max(rect.left, 0);
+      const minVisible = Math.max(48, Math.min(rect.width, vw) * 0.35);
+      const verticallyVisible = rect.bottom > 0 && rect.top < vh;
+      const inView = verticallyVisible && visibleWidth >= minVisible;
+      if (inView) inViewVideos.push({ video, visibleWidth });
       else video.pause();
     });
+    inViewVideos.sort((a, b) => b.visibleWidth - a.visibleWidth);
     const heroVideo = heroVideoRef.current;
     if (heroVideo && isMobileRef.current) {
       if (inViewVideos.length > 0) heroVideo.pause();
       else heroVideo.play().catch(() => {});
     }
-    inViewVideos.slice(0, 2).forEach((video) => video.play().catch(() => {}));
-    inViewVideos.slice(2).forEach((video) => video.pause());
+    inViewVideos.slice(0, 2).forEach(({ video }) => {
+      if (video.readyState < 2) {
+        try {
+          video.load();
+        } catch {
+          /* non-fatal */
+        }
+      }
+      video.play().catch(() => {});
+    });
+    inViewVideos.slice(2).forEach(({ video }) => video.pause());
   }, []);
 
   // ── AUDIO VISUALS VIEWPORT (music pause/resume via AudioContext) ───────────
@@ -616,7 +630,9 @@ function PageStorefront() {
       debounceTimer = window.setTimeout(syncSinglesCarouselVideos, 100);
     };
     const row = singlesRowRef.current;
+    const mainScroll = mainScrollRef.current;
     row?.addEventListener("scroll", onScroll, { passive: true });
+    mainScroll?.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", onScroll);
     syncSinglesCarouselVideos();
     const onVisibility = () => {
@@ -630,6 +646,7 @@ function PageStorefront() {
     return () => {
       window.clearTimeout(debounceTimer);
       row?.removeEventListener("scroll", onScroll);
+      mainScroll?.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", onScroll);
       document.removeEventListener("visibilitychange", onVisibility);
     };
