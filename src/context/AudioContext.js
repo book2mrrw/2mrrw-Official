@@ -3121,7 +3121,7 @@ export function AudioProvider({ children }) {
         }
         reportPlaybackDiagnostic({
           level: "warn",
-          code: "WEB_AUDIO_SUSPENDED_BLOCKED_PLAY",
+          code: "WEB_AUDIO_SUSPENDED_CONTINUE_PLAY",
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
           requestId,
           state: stateRef.current,
@@ -3131,13 +3131,6 @@ export function AudioProvider({ children }) {
             lightResumeOk: lightOk,
           },
         });
-        patchState({
-          isPlaying: false,
-          playbackState: "paused",
-          isBuffering: false,
-          error: "Tap play to continue.",
-        });
-        return false;
       }
     }
     setPreviewEnded(false);
@@ -5067,13 +5060,13 @@ export function AudioProvider({ children }) {
       initWebAudio();
       await resumeWebAudioContextIfSuspended(audioCtxRef);
       if (!(await ensureWebAudioRunning(audioCtxRef))) {
-        patchState({
-          isPlaying: false,
-          playbackState: "paused",
-          isBuffering: false,
-          error: "Tap play to continue.",
+        reportPlaybackDiagnostic({
+          level: "warn",
+          code: "WEB_AUDIO_SUSPENDED_CONTINUE_RESUME",
+          command: PLAYBACK_COMMANDS.RESUME,
+          requestId: activeCommandRef.current?.requestId || null,
+          state: stateRef.current,
         });
-        return false;
       }
       await audio.play();
       if (audio.paused) {
@@ -5654,6 +5647,8 @@ export function AudioProvider({ children }) {
     }, { commandType: PLAYBACK_COMMANDS.PLAY_QUEUE, queueLength: tracks.length });
     setPlaybackScenario(scenario.label, scenario.meta);
     perfMark(MARKS.PLAYBACK_TAP);
+    initWebAudio();
+    resumeWebAudioContextFromUserGesture(audioCtxRef, "playQueue:gesture");
     return dispatchPlaybackCommand(
       PLAYBACK_COMMANDS.PLAY_QUEUE,
       {
@@ -5663,14 +5658,16 @@ export function AudioProvider({ children }) {
       },
       { serial: true, cancelActiveStream: !sameQueue }
     );
-  }, [dispatchPlaybackCommand]);
+  }, [dispatchPlaybackCommand, initWebAudio]);
 
   const playNext = useCallback(() => {
     resetPlaybackTimingCapture();
     setPlaybackScenario(PLAYBACK_SCENARIOS.TRACK_SKIP, { manualSkip: true, commandType: PLAYBACK_COMMANDS.NEXT_TRACK });
     perfMark(MARKS.PLAYBACK_TAP);
+    initWebAudio();
+    resumeWebAudioContextFromUserGesture(audioCtxRef, "playNext:gesture");
     return dispatchPlaybackCommand(PLAYBACK_COMMANDS.NEXT_TRACK);
-  }, [dispatchPlaybackCommand]);
+  }, [dispatchPlaybackCommand, initWebAudio]);
   const pause = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PAUSE), [dispatchPlaybackCommand]);
   const resume = useCallback(() => {
     initWebAudio();
