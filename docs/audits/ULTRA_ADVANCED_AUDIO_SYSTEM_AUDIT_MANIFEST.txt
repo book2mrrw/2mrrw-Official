@@ -1,0 +1,35 @@
+ULTRA_ADVANCED_AUDIO_SYSTEM_AUDIT.zip — contents
+==========================================
+
+Primary
+-------
+ULTRA_ADVANCED_AUDIO_SYSTEM_AUDIT.md   Full Phases 1–5 report (mobile-first, read-only)
+MANIFEST.txt                           This file
+
+Cross-references (included or repo paths)
+-----------------------------------------
+MOBILE_REMOUNT_AUDIO_AUDIT.md          iOS remount / dead-audio / reload illusion
+PHASE_P12_PLAYBACK_TRIGGERED_RECONCILIATION_ELIMINATION.md
+PHASE_P2_PLAYBACK_INTERACTION_FREEZE_RCA.md
+PHASE19_TRUE_BACKGROUND_AUDIO_CONTINUITY.md
+PHASE21A_LIFECYCLE_AUDIO_TRUTH_MODEL_AUDIT.md
+
+Audit metadata
+--------------
+Repository: /Users/recharge/artist-platform
+Baseline: main @ 0e75f7c (P12 + P11/P11B + wake fixes A–D; without 9768269/ebaf979)
+Files audited: 112 audio/playback-related source files
+Date: 2026-06-03
+Mode: read-only (no src changes in audit pass)
+
+Executive one-liner
+-------------------
+iOS suspends Web Audio on idle/background while AudioContext queues play through async
+stream resolution and non-gesture lifecycle recovery — silent second plays, album-slug
+metadata bleed, and 2–3s hybrid streaming stalls.
+
+Top 3 CRITICAL (summary)
+------------------------
+1. WEB_AUDIO_SUSPENDED_CONTINUE_PLAY — play proceeds when ctx not running
+2. Post-wake gesture dead zone — one-shot unlock; visibility_return without durable re-arm
+3. backgroundStreamResolve + swapToSignedStream mid-session audio.src reload
