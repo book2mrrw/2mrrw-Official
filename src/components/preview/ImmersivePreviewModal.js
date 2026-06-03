@@ -13,7 +13,9 @@ import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 import {
   albumTracksForPlayback,
   describeAlbumQueuePlaybackFailure,
+  isSamePlaybackTrack,
 } from "@/lib/music-playback";
+import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 
 const PREVIEW_CAP_SEC = 30;
 
@@ -847,7 +849,11 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const [addTarget, setAddTarget] = useState(null);
   const [playbackNotice, setPlaybackNotice] = useState(null);
 
-  const { state: { isPlaying, currentTime, duration: engineDuration }, toggle, seek } = useMediaEngine();
+  const {
+    state: { isPlaying, currentTime, duration: engineDuration, currentTrack: engineTrack },
+    toggle,
+    seek,
+  } = useMediaEngine();
   const beat = useBeat(isPlaying);
 
   usePlayerBodyState({ modalOpen: true });
@@ -901,21 +907,42 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
         showPlaybackNotice("Subscribe to play full tracks from this release.");
         return;
       }
+      const idx = tracks.findIndex((t) => t && tr && String(t.id) === String(tr.id));
+      const albumSlug = album?.slug || "";
+      const trackSlug = tr?.slug || tr?.id || "";
+      const queueId = albumSlug && trackSlug ? `${albumSlug}:${trackSlug}` : tr?.id || trackSlug;
+      const modalPlaybackItem = {
+        id: queueId,
+        slug: albumSlug || trackSlug,
+        metadata: {
+          albumSlug,
+          trackSlug,
+          trackIndex: idx >= 0 ? idx : undefined,
+        },
+      };
+      const engineItem = engineTrack
+        ? {
+            id: engineTrack.id,
+            slug: engineTrack.slug,
+            metadata: engineTrack.metadata,
+          }
+        : getPagePlaybackActionsBridge()?.currentTrack;
       const sameTrack =
-        activeTrack != null &&
-        tr != null &&
-        String(activeTrack.id) === String(tr.id);
+        (activeTrack != null &&
+          tr != null &&
+          (String(activeTrack.id) === String(queueId) || String(activeTrack.id) === String(tr.id))) ||
+        (engineItem && isSamePlaybackTrack(engineItem, modalPlaybackItem));
       if (sameTrack) {
         toggle();
         return;
       }
       setActiveTrack(tr);
-      const idx = tracks.findIndex((t) => t && tr && String(t.id) === String(tr.id));
       if (idx >= 0) {
         const ok = await onPlayTrackAtIndex?.(idx);
         if (ok === false) {
           const queueTracks = albumTracksForPlayback(album, entitlementAccountState, "album_modal");
           const blocked =
+            getPagePlaybackActionsBridge()?.error ||
             describeAlbumQueuePlaybackFailure(queueTracks, album, entitlementAccountState) ||
             "Couldn't start playback. Try again.";
           showPlaybackNotice(blocked);
@@ -928,6 +955,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     [
       activeTrack,
       album,
+      engineTrack,
       entitlementAccountState,
       onPlayTrackAtIndex,
       seek,

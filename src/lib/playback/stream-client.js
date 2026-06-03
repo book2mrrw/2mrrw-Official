@@ -7,6 +7,13 @@ import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
 export const LIBRARY_STREAM_PATH = "/api/library/stream";
 export const STREAM_REFRESH_BEFORE_EXPIRY_MS = 5 * 60 * 1000;
 const AUDIO_CONTENT_TYPE_RE = /^(audio\/|application\/octet-stream)/i;
+const HEAD_VALIDATION_TTL_MS = 5 * 60 * 1000;
+/** @type {Map<string, { contentType: string, validatedAt: number }>} */
+const signedUrlHeadValidationCache = new Map();
+
+function headValidationCacheKey(slug, url, sessionId = null) {
+  return `${slug || ""}:${sessionId || ""}:${url}`;
+}
 
 function createStreamClientError(message, details = {}) {
   const err = new Error(message);
@@ -26,7 +33,13 @@ function assertJsonContentType(res, slug) {
   }
 }
 
-async function assertSignedAudioUrl(url, { slug, signal } = {}) {
+async function assertSignedAudioUrl(url, { slug, signal, sessionId = null } = {}) {
+  const cacheKey = headValidationCacheKey(slug, url, sessionId);
+  const cached = signedUrlHeadValidationCache.get(cacheKey);
+  if (cached && Date.now() - cached.validatedAt < HEAD_VALIDATION_TTL_MS) {
+    return cached.contentType;
+  }
+
   const res = await fetch(url, {
     method: "HEAD",
     credentials: isLibraryStreamSrc(url) ? "include" : "omit",
@@ -47,6 +60,12 @@ async function assertSignedAudioUrl(url, { slug, signal } = {}) {
       status: res.status,
       contentType: type || null,
     });
+  }
+  signedUrlHeadValidationCache.set(cacheKey, { contentType: type, validatedAt: Date.now() });
+  while (signedUrlHeadValidationCache.size > 128) {
+    const oldest = signedUrlHeadValidationCache.keys().next().value;
+    if (oldest) signedUrlHeadValidationCache.delete(oldest);
+    else break;
   }
   return type;
 }
@@ -238,7 +257,11 @@ export async function fetchLibraryStream(
     });
   }
   perfMark(MARKS.PLAYBACK_RESOLVER_END);
-  const contentType = await assertSignedAudioUrl(body.url, { slug, signal });
+  const contentType = await assertSignedAudioUrl(body.url, {
+    slug,
+    signal,
+    sessionId: body.sessionId || sessionId || null,
+  });
   perfMark(MARKS.PLAYBACK_SIGNED_URL);
   logStreamLifecycle("ready", {
     source: "stream-client",

@@ -20,7 +20,7 @@ function PlaybackPrewarmCardShell({
   ...divProps
 }) {
   const cardRef = useRef(null);
-  usePlaybackCardPrewarm(cardRef, {
+  const { warmOnInteraction } = usePlaybackCardPrewarm(cardRef, {
     releaseItem,
     playItem,
     catalogLookup: catalogPlaybackLookup,
@@ -32,7 +32,12 @@ function PlaybackPrewarmCardShell({
   });
 
   return (
-    <div ref={cardRef} data-playback-prewarm-card {...divProps}>
+    <div
+      ref={cardRef}
+      data-playback-prewarm-card
+      onPointerDown={enabled ? warmOnInteraction : undefined}
+      {...divProps}
+    >
       {children}
     </div>
   );

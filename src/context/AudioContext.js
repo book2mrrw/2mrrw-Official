@@ -27,6 +27,7 @@ import {
   isLibraryStreamRedirectSrc,
   isLibraryStreamSrc,
   parseStreamSlugFromSrc,
+  parseStreamTrackSlugFromSrc,
   streamUrlNeedsRefresh,
 } from "@/lib/playback/stream-client";
 import { writeAvailabilityCache } from "@/lib/media/availability-cache";
@@ -2105,8 +2106,10 @@ export function AudioProvider({ children }) {
     if (typeof window === "undefined") return undefined;
 
     const unlockFromGesture = async () => {
-      if (sessionUnlockedRef.current) return;
-      sessionUnlockedRef.current = true;
+      const ctx = audioCtxRef.current;
+      const needsUnlock =
+        !sessionUnlockedRef.current || ctx?.state === "suspended" || ctx?.state === "interrupted";
+      if (!needsUnlock) return;
 
       const audio = audioRef.current;
       if (audio) {
@@ -2135,9 +2138,12 @@ export function AudioProvider({ children }) {
         /* iOS unlock best-effort */
       }
 
-      GESTURE_UNLOCK_EVENTS.forEach((evt) => {
-        document.removeEventListener(evt, unlockFromGesture, true);
-      });
+      if (audioCtxRef.current?.state === "running") {
+        sessionUnlockedRef.current = true;
+        GESTURE_UNLOCK_EVENTS.forEach((evt) => {
+          document.removeEventListener(evt, unlockFromGesture, true);
+        });
+      }
     };
 
     GESTURE_UNLOCK_EVENTS.forEach((evt) => {
@@ -3017,10 +3023,16 @@ export function AudioProvider({ children }) {
 
   const resolveLibraryStreamForTrack = useCallback(async (track, { force = false, signal } = {}) => {
     const slug = parseStreamSlugFromSrc(track.src) || track.slug;
+    const trackSlug =
+      track.trackSlug ||
+      track.metadata?.trackSlug ||
+      track.metadata?.track_slug ||
+      parseStreamTrackSlugFromSrc(track.src) ||
+      null;
     if (!slug || !isLibraryStreamSrc(track.src)) return { track, meta: null };
 
     patchState({ playbackNetworkState: "loading_stream" });
-    const data = await fetchLibraryStream(slug, { force, signal });
+    const data = await fetchLibraryStream(slug, { force, signal, trackSlug });
     if (data?.contentType && !AUDIO_CONTENT_TYPE_RE.test(data.contentType)) {
       const err = new Error("stream_invalid_content_type");
       err.code = "INVALID_STREAM_CONTENT_TYPE";
@@ -3085,11 +3097,10 @@ export function AudioProvider({ children }) {
             PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
             { reason: "audio_context_suspended", resumeAfter: true }
           );
-          return false;
         }
         reportPlaybackDiagnostic({
           level: "warn",
-          code: "WEB_AUDIO_SUSPENDED_CONTINUE_PLAY",
+          code: "WEB_AUDIO_SUSPENDED_BLOCKED_PLAY",
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
           requestId,
           state: stateRef.current,
@@ -3097,8 +3108,16 @@ export function AudioProvider({ children }) {
             lifecycleRecoveryLock: lifecycleRecoveryLockRef.current,
             lifecycleSuppressed: isLifecycleRecoverySuppressed("audio_context_suspended"),
             lightResumeOk: lightOk,
+            transportIntact,
           },
         });
+        patchState({
+          isPlaying: false,
+          error: "Tap play to continue.",
+          playbackState: "paused",
+          playbackNetworkState: transportIntact ? "idle" : "recovering",
+        });
+        return false;
       }
     }
     setPreviewEnded(false);
@@ -3185,17 +3204,6 @@ export function AudioProvider({ children }) {
     let syncSrc = nextTrack.src;
     let backgroundStreamResolve = false;
 
-    if (usesLibraryStream && streamSlug) {
-      const entitledFullStream = Boolean(nextTrack.metadata?.access?.canStream);
-      if (previewSrc && !entitledFullStream) {
-        syncSrc = previewSrc;
-      } else if (redirectFastPath) {
-        syncSrc = nextTrack.src;
-      } else if (entitledFullStream) {
-        backgroundStreamResolve = true;
-      }
-    }
-
     const applyStreamResolveError = (err) => {
       if (requestId !== playRequestIdRef.current) return;
       if (err?.name === "AbortError") return;
@@ -3279,6 +3287,40 @@ export function AudioProvider({ children }) {
         currentTrackId: nextTrack.id,
       });
     };
+
+    if (usesLibraryStream && streamSlug) {
+      const entitledFullStream = Boolean(nextTrack.metadata?.access?.canStream);
+      if (previewSrc && !entitledFullStream) {
+        syncSrc = previewSrc;
+      } else if (entitledFullStream) {
+        try {
+          const resolved = await resolveLibraryStreamForTrack(nextTrack, {
+            force: options.forceStream,
+            signal: streamAbortController.signal,
+          });
+          const signedUrl = resolved?.track?.src;
+          if (signedUrl) {
+            syncSrc = signedUrl;
+            backgroundStreamResolve = false;
+          } else if (redirectFastPath || isLibraryStreamRedirectSrc(nextTrack.src)) {
+            syncSrc = nextTrack.src;
+            backgroundStreamResolve = true;
+          }
+        } catch (err) {
+          if (requestId !== playRequestIdRef.current) return false;
+          if (err?.name === "AbortError") return false;
+          if (redirectFastPath || isLibraryStreamRedirectSrc(nextTrack.src)) {
+            syncSrc = nextTrack.src;
+            backgroundStreamResolve = true;
+          } else {
+            applyStreamResolveError(err);
+            return false;
+          }
+        }
+      } else if (redirectFastPath) {
+        syncSrc = nextTrack.src;
+      }
+    }
 
     const swapToSignedStream = async (resolved) => {
       if (requestId !== playRequestIdRef.current) return;
@@ -3942,10 +3984,22 @@ export function AudioProvider({ children }) {
         }
         if (
           transportPre.intact &&
-          (isDocumentPlaybackHidden() ||
+          (isLifecycleOsSuspended() ||
+            audioCtxRef.current?.state === "suspended" ||
+            isDocumentPlaybackHidden() ||
             lifecycleInBackgroundRef.current ||
             isLifecycleRecoverySuppressed(reason))
         ) {
+          logRecoveryPathClassification({
+            path: "no_op",
+            reason: "lifecycle_preserve_transport",
+            transportIntact: transportPre.intact,
+            lifecycleIntent: playbackIntentBeforeHideRef.current,
+            userPaused: userPausedRef.current,
+            resumeAfter,
+            source: "recoverAudioHard_blocked",
+            slug: trackPre?.slug ?? null,
+          });
           return false;
         }
       }
@@ -5018,13 +5072,24 @@ export function AudioProvider({ children }) {
       initWebAudio();
       await resumeWebAudioContextIfSuspended(audioCtxRef);
       if (!(await ensureWebAudioRunning(audioCtxRef))) {
-        reportPlaybackDiagnostic({
-          level: "warn",
-          code: "WEB_AUDIO_SUSPENDED_CONTINUE_RESUME",
-          command: PLAYBACK_COMMANDS.RESUME,
-          requestId: activeCommandRef.current?.requestId || null,
-          state: stateRef.current,
-        });
+        const lightOk = await attemptLightweightPlaybackResume("resume_ctx_suspended");
+        await resumeWebAudioContextIfSuspended(audioCtxRef, "resume-after-light");
+        if (!(await ensureWebAudioRunning(audioCtxRef))) {
+          reportPlaybackDiagnostic({
+            level: "warn",
+            code: "WEB_AUDIO_SUSPENDED_BLOCKED_RESUME",
+            command: PLAYBACK_COMMANDS.RESUME,
+            requestId: activeCommandRef.current?.requestId || null,
+            state: stateRef.current,
+            context: { lightResumeOk: lightOk },
+          });
+          patchState({
+            isPlaying: false,
+            error: "Tap play to continue.",
+            playbackState: "paused",
+          });
+          return false;
+        }
       }
       await audio.play();
       if (audio.paused) {
@@ -5873,6 +5938,13 @@ export function AudioProvider({ children }) {
                     extra: { ctxState: audioCtxRef.current?.state ?? null },
                   });
                 }
+                if (transport.intact) {
+                  patchState({
+                    error: "Tap play to continue.",
+                    isPlaying: false,
+                    playbackState: "paused",
+                  });
+                }
                 armLifecycleRecoverySuppression(
                   "visibility_return",
                   "gesture_unlock_required"
@@ -6235,6 +6307,7 @@ export function AudioProvider({ children }) {
       getIsAudiblyPlaying: readIsAudiblyPlaying,
       continuityFrozen,
       getContinuitySnapshot,
+      clearContinuityFreeze,
       subscribeProgress,
       getProgressSnapshot,
       subscribeTransport,
@@ -6284,6 +6357,7 @@ export function AudioProvider({ children }) {
     subscribeProgress,
     getProgressSnapshot,
     getContinuitySnapshot,
+    clearContinuityFreeze,
     subscribeTransport,
     getTransportSnapshot,
   ]);

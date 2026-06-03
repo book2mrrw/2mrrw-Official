@@ -392,11 +392,17 @@ function PageStorefront() {
   const homeScrollSavedRef = useRef({ scrollTop: 0, singlesScrollLeft: 0 });
   const homeStorefrontMountCountRef = useRef(0);
   const prevActiveTabForHomeScrollRef = useRef("home");
+  const carouselMediaHealthyRef = useRef(false);
   const ensureStorefrontCarouselMedia = useCallback(() => {
     const row = singlesRowRef.current;
     if (!row) return;
-    if (isStorefrontCarouselMediaHealthy(row)) return;
+    if (getPagePlaybackActionsBridge()?.isPlaying) return;
+    if (isStorefrontCarouselMediaHealthy(row)) {
+      carouselMediaHealthyRef.current = true;
+      return;
+    }
     const anyCarouselInView = ensureStorefrontCarouselVideosPlaying(row);
+    carouselMediaHealthyRef.current = isStorefrontCarouselMediaHealthy(row);
     syncMobileHeroWithStorefrontCarousel(
       heroVideoRef.current,
       anyCarouselInView,
@@ -614,7 +620,8 @@ function PageStorefront() {
         pauseStorefrontCarouselVideosWhenDocumentHidden(singlesRowRef.current);
         releaseRetainedOfflineBlobUrls();
       } else if (!getPagePlaybackActionsBridge()?.isPlaying) {
-        ensureStorefrontCarouselMedia();
+        window.clearTimeout(debounceTimer);
+        debounceTimer = window.setTimeout(ensureStorefrontCarouselMedia, 150);
       }
     };
     document.addEventListener("visibilitychange", onVisibility);

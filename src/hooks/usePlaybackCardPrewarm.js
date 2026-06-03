@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import {
   buildReleasePrewarmBundle,
   warmReleasePrewarmBundle,
@@ -70,4 +70,22 @@ export function usePlaybackCardPrewarm(
     observer.observe(el);
     return () => observer.disconnect();
   }, [containerRef, enabled, releaseItem]);
+
+  const warmOnInteraction = useCallback(() => {
+    if (!enabled || warmedRef.current) return;
+    const cfg = configRef.current;
+    if (!cfg?.releaseItem) return;
+    warmedRef.current = true;
+    const bundle = buildReleasePrewarmBundle(cfg.releaseItem, {
+      catalogLookup: cfg.catalogLookup,
+      accountState: cfg.accountState || {},
+      userId: cfg.userId,
+      source: cfg.source,
+      playItem: cfg.playItem,
+      isAlbumCard: cfg.isAlbumCard,
+    });
+    if (bundle) warmReleasePrewarmBundle(bundle);
+  }, [enabled]);
+
+  return { warmOnInteraction };
 }

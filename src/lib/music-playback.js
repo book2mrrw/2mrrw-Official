@@ -157,12 +157,14 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
   }
 
   const trackSlug = track.slug || track.id;
+  const queueId = albumSlug && trackSlug ? `${albumSlug}:${trackSlug}` : streamSlug || trackSlug;
   const canonicalTrack = getCanonicalTrack(albumSlug, trackSlug);
   const catalogItem = trackSlug ? catalogLookup?.bySlug?.get(trackSlug) : null;
   const canonicalRelease = getCanonicalReleaseBySlug(trackSlug);
   return normalizeCatalogItemForPlayback({
     ...(catalogItem || {}),
     ...track,
+    id: queueId,
     slug: streamSlug,
     trackSlug,
     title: canonicalTrack?.title || canonicalRelease?.title || track.title,

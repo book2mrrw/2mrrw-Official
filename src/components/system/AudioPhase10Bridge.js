@@ -8,6 +8,16 @@ import { logStateChurn } from "@/lib/diagnostics/state-churn-log";
 import { logRestoredTitleSource } from "@/lib/diagnostics/playback-trace";
 import { RECOVERY_PLACEHOLDER_TITLE } from "@/lib/playback/resolve-player-display-title";
 
+function recoveryDisplayTitleFromSlug(id) {
+  if (!id || typeof id !== "string") return "Continuing playback";
+  const segment = id.includes(":") ? id.split(":").pop() : id;
+  const human = String(segment || "")
+    .replace(/[-_]+/g, " ")
+    .trim();
+  if (!human) return "Continuing playback";
+  return human.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 /**
  * Wires queue preloading + playback persistence without bloating AudioContext.
  */
@@ -64,17 +74,18 @@ export default function AudioPhase10Bridge() {
         Array.isArray(detail.tracks) && detail.tracks.length
           ? detail.tracks
           : detail.queueIds.map((id) => {
+              const title = recoveryDisplayTitleFromSlug(id);
               logRestoredTitleSource({
                 source: "AudioPhase10Bridge",
                 slug: id,
                 trackId: id,
-                title: RECOVERY_PLACEHOLDER_TITLE,
+                title,
                 extra: { path: "recovery-event-fallback" },
               });
               return {
                 id,
                 slug: id,
-                title: RECOVERY_PLACEHOLDER_TITLE,
+                title,
                 src: `/api/library/stream?slug=${encodeURIComponent(id)}`,
               };
             });

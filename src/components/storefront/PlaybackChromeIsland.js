@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence } from "framer-motion";
 import { useAudioPlayer } from "@/context/AudioContext";
 import {
@@ -32,8 +32,10 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
     playbackState,
     csMode,
     isPlaying,
+    error: playbackError,
     continuityFrozen,
     getContinuitySnapshot,
+    clearContinuityFreeze,
     enterAudioVisualViewport,
     exitAudioVisualViewport,
     toggle,
@@ -57,6 +59,7 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
       playbackState,
       csMode,
       isPlaying,
+      error: playbackError,
     });
     return () => setPagePlaybackActionsBridge(null);
   }, [
@@ -72,7 +75,18 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
     playbackState,
     csMode,
     isPlaying,
+    playbackError,
   ]);
+
+  const prevTrackKeyRef = useRef(null);
+  useEffect(() => {
+    const nextKey =
+      currentTrack?.slug ?? currentTrack?.id ?? currentTrack?.trackId ?? null;
+    if (prevTrackKeyRef.current != null && nextKey !== prevTrackKeyRef.current) {
+      clearContinuityFreeze?.("playback_chrome_track_change");
+    }
+    prevTrackKeyRef.current = nextKey;
+  }, [currentTrack?.slug, currentTrack?.id, currentTrack?.trackId, clearContinuityFreeze]);
 
   const dismissNowPlaying = useCallback(() => {
     setNowPlaying(null);
