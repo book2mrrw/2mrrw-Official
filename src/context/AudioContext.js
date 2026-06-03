@@ -1999,14 +1999,9 @@ export function AudioProvider({ children }) {
   }, []);
 
   const initWebAudio = useCallback(() => {
-    if (typeof window === "undefined") return;
+    if (webAudioInitializedRef.current || typeof window === "undefined") return;
     const audio = audioRef.current;
     if (!audio) return;
-    const needsDownstreamReconnect =
-      sourceRef.current &&
-      audioCtxRef.current?.state !== "closed" &&
-      !webAudioInitializedRef.current;
-    if (webAudioInitializedRef.current && !needsDownstreamReconnect) return;
     mediaElementSourceElementRef.current = audio;
 
     try {
@@ -2015,11 +2010,6 @@ export function AudioProvider({ children }) {
 
       let ctx = audioCtxRef.current;
       let source = sourceRef.current;
-
-      if (ctx?.state === "closed") {
-        sourceRef.current = null;
-        source = null;
-      }
 
       if (ctx && ctx.state !== "closed" && source && mediaElementSourceElementRef.current === audio) {
         connectWebAudioDownstream(ctx, source);
@@ -2039,22 +2029,9 @@ export function AudioProvider({ children }) {
           sourceRef.current = source;
           mediaElementSourceElementRef.current = audio;
         } else if (!sourceRef.current) {
-          try {
-            delete audio[MRRW_MEDIA_SOURCE_BOUND];
-          } catch {
-            audio[MRRW_MEDIA_SOURCE_BOUND] = false;
-          }
-          mediaElementSourceElementRef.current = null;
-          try {
-            source = ctx.createMediaElementSource(audio);
-            audio[MRRW_MEDIA_SOURCE_BOUND] = true;
-            sourceRef.current = source;
-            mediaElementSourceElementRef.current = audio;
-          } catch {
-            webAudioAvailableRef.current = false;
-            webAudioInitializedRef.current = false;
-            return;
-          }
+          webAudioAvailableRef.current = false;
+          webAudioInitializedRef.current = false;
+          return;
         }
       }
 
@@ -4045,14 +4022,6 @@ export function AudioProvider({ children }) {
         resumeWebAudioContextFromUserGesture(audioCtxRef, `recoverAudioHard:${reason}:sync`);
         await resumeWebAudioContextIfSuspended(audioCtxRef);
         recordAudioContextState(audioCtxRef.current, `recoverAudioHard:${reason}`);
-        if (
-          sourceRef.current &&
-          audioCtxRef.current?.state !== "closed" &&
-          !webAudioInitializedRef.current
-        ) {
-          connectWebAudioDownstream(audioCtxRef.current, sourceRef.current);
-          recordAudioContextState(audioCtxRef.current, "recoverAudioHard:graph-reconnect");
-        }
 
         let src = track.src;
         const streamSlug = parseStreamSlugFromSrc(src) || track.slug;
