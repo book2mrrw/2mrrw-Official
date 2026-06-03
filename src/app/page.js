@@ -606,7 +606,6 @@ function PageStorefront() {
     const mainScroll = mainScrollRef.current;
     row?.addEventListener("scroll", onLayoutChange, { passive: true });
     mainScroll?.addEventListener("scroll", onLayoutChange, { passive: true });
-    window.addEventListener("resize", onLayoutChange);
     ensureStorefrontCarouselMedia();
     const onVisibility = () => {
       if (document.hidden) {
@@ -620,7 +619,6 @@ function PageStorefront() {
       window.clearTimeout(debounceTimer);
       row?.removeEventListener("scroll", onLayoutChange);
       mainScroll?.removeEventListener("scroll", onLayoutChange);
-      window.removeEventListener("resize", onLayoutChange);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [activeTab, ensureStorefrontCarouselMedia]);
