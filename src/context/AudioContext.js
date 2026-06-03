@@ -5957,6 +5957,28 @@ export function AudioProvider({ children }) {
               return;
             }
 
+            if (transport.intact) {
+              logLifecycleTransportHealthy({
+                source: "visibility_return",
+                reason: health.reason,
+                resumeAfter,
+                slug: track.slug ?? null,
+              });
+              logRecoveryPathClassification({
+                path: "no_op",
+                reason: "visibility_transport_intact_skip_hard",
+                transportIntact: true,
+                lifecycleIntent: wasPlayingBeforeHide,
+                userPaused: userPausedRef.current,
+                resumeAfter,
+                source: "visibility_return",
+                slug: track.slug ?? null,
+              });
+              armLifecycleRecoverySuppression("visibility_return", health.reason);
+              await syncMediaSessionAfterLifecycle(resumeAfter);
+              return;
+            }
+
             await runCoalescedLifecycleRecovery({
               reason: "visibility_return",
               resumeAfter,

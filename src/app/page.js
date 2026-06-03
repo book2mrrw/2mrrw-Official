@@ -23,9 +23,11 @@ import { getPageAuthRef } from "@/lib/storefront/page-auth-ref";
 import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import {
   ensureStorefrontCarouselVideosPlaying,
+  isStorefrontCarouselMediaHealthy,
   pauseStorefrontCarouselVideosWhenDocumentHidden,
   syncMobileHeroWithStorefrontCarousel,
 } from "@/lib/storefront/storefront-persistent-media";
+import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 import PageAuthRefSync from "@/components/storefront/PageAuthRefSync";
 import {
   PageAuthSidebarBadge,
@@ -391,6 +393,7 @@ function PageStorefront() {
   const ensureStorefrontCarouselMedia = useCallback(() => {
     const row = singlesRowRef.current;
     if (!row) return;
+    if (isStorefrontCarouselMediaHealthy(row)) return;
     const anyCarouselInView = ensureStorefrontCarouselVideosPlaying(row);
     syncMobileHeroWithStorefrontCarousel(
       heroVideoRef.current,
@@ -608,7 +611,7 @@ function PageStorefront() {
     const onVisibility = () => {
       if (document.hidden) {
         pauseStorefrontCarouselVideosWhenDocumentHidden(singlesRowRef.current);
-      } else {
+      } else if (!getPagePlaybackActionsBridge()?.isPlaying) {
         ensureStorefrontCarouselMedia();
       }
     };

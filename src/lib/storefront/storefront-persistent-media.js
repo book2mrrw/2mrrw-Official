@@ -54,6 +54,22 @@ export function pauseStorefrontCarouselVideosWhenDocumentHidden(row) {
 }
 
 /**
+ * In-view carousel loops are already mounted and playing — skip redundant ensure on wake/resize.
+ */
+export function isStorefrontCarouselMediaHealthy(row) {
+  if (!row || document.hidden) return false;
+  const videos = row.querySelectorAll(CAROUSEL_VIDEO_SELECTOR);
+  if (!videos.length) return false;
+  let hasInView = false;
+  for (const video of videos) {
+    if (!isStorefrontCarouselCardInView(video)) continue;
+    hasInView = true;
+    if (video.paused || video.readyState < 2) return false;
+  }
+  return hasInView;
+}
+
+/**
  * Mobile hero: pause ambient hero when singles row has in-view carousel decoders.
  * Does not pause or load() carousel videos.
  */
