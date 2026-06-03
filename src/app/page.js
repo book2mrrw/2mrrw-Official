@@ -52,6 +52,7 @@ import {
 import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess } from "@/lib/music-access";
 import {
   albumTracksForPlayback,
+  describeAlbumQueuePlaybackFailure,
   playableReleaseQueue,
   resolveReleaseQueueStartIndex,
   normalizeTrackForPlayback,
@@ -728,7 +729,7 @@ function PageStorefront() {
   }, [activeTab]);
 
   const playAlbumTracks = useCallback(
-    (album, startIndex = 0) => {
+    async (album, startIndex = 0) => {
       const auth = getPageAuthRef();
       const albumItem = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
       const account = { ...auth.accountState, userId: auth.currentUser?.id };
@@ -742,12 +743,23 @@ function PageStorefront() {
       if (playable.length) {
         const sourceTrack = tracks[startIndex];
         const queueIndex = resolveReleaseQueueStartIndex(playable, startIndex, sourceTrack);
-        void playQueue(playable, queueIndex);
-        return;
+        try {
+          const result = await playQueue(playable, queueIndex);
+          return result !== false;
+        } catch {
+          return false;
+        }
       }
+      const blockedMessage = describeAlbumQueuePlaybackFailure(tracks, albumItem, auth.accountState);
+      if (blockedMessage) return false;
       const access = resolveContentAccess(albumItem, auth.accountState);
-      if (!access.canStream) return;
-      void playTrack(normalizeTrackForPlayback(albumItem, account, "album_modal"));
+      if (!access.canStream) return false;
+      try {
+        const result = await playTrack(normalizeTrackForPlayback(albumItem, account, "album_modal"));
+        return result !== false;
+      } catch {
+        return false;
+      }
     },
     [catalogPlaybackLookup, playQueue, playTrack]
   );
@@ -910,9 +922,9 @@ function PageStorefront() {
   );
 
   const playAlbumModalTrackAtIndex = useCallback(
-    (index) => {
-      if (!selectedAlbum) return;
-      playAlbumTracks(selectedAlbum, index);
+    async (index) => {
+      if (!selectedAlbum) return false;
+      return playAlbumTracks(selectedAlbum, index);
     },
     [selectedAlbum, playAlbumTracks]
   );

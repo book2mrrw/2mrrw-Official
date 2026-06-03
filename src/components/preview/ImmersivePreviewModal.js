@@ -10,6 +10,10 @@ import { usePlayerBodyState } from "@/lib/player/usePlayerBodyState";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { useEntitlementAccountState } from "@/context/AuthContext";
 import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
+import {
+  albumTracksForPlayback,
+  describeAlbumQueuePlaybackFailure,
+} from "@/lib/music-playback";
 
 const PREVIEW_CAP_SEC = 30;
 
@@ -834,12 +838,14 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const palette = useCoverPalette(coverSrc, album?.coverArtType || album?.coverType || "image");
   const t = useMemo(() => buildTheme(palette), [palette]);
   const vars = useMemo(() => themeVars(t), [t]);
+  const entitlementAccountState = useEntitlementAccountState();
 
   const tracks = Array.isArray(album?.tracks) ? album.tracks.filter(Boolean) : [];
   const { mounted, closing, setClosing } = useModalAnim();
   const [activeTrack, setActiveTrack] = useState(() => tracks[0] || null);
   const [sheet, setSheet] = useState(null);
   const [addTarget, setAddTarget] = useState(null);
+  const [playbackNotice, setPlaybackNotice] = useState(null);
 
   const { state: { isPlaying, currentTime, duration: engineDuration }, toggle, seek } = useMediaEngine();
   const beat = useBeat(isPlaying);
@@ -863,7 +869,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   }, [tracks]);
 
   const isPreview = access !== "full";
-  const trackLocked = (tr) => isPreview && !tr?.free;
+  const trackLocked = useCallback((tr) => isPreview && !tr?.free, [isPreview]);
   const trackDur = (tr) => (isPreview && !tr?.free ? PREVIEW_CAP_SEC : parseDurSec(tr) || 180);
   const activeDur = activeTrack ? trackDur(activeTrack) : PREVIEW_CAP_SEC;
   const engineDur = engineDuration > 0 ? engineDuration : activeDur;
@@ -878,21 +884,59 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     setTimeout(onClose, 340);
   }, [onClose, setClosing]);
 
-  const handleTrack = (tr) => {
-    if (trackLocked(tr)) return;
-    const sameTrack =
-      activeTrack != null &&
-      tr != null &&
-      String(activeTrack.id) === String(tr.id);
-    if (sameTrack) {
-      toggle();
-      return;
-    }
-    setActiveTrack(tr);
-    const idx = tracks.findIndex((t) => t && tr && String(t.id) === String(tr.id));
-    if (idx >= 0) onPlayTrackAtIndex?.(idx);
-    else seek(0);
-  };
+  const showPlaybackNotice = useCallback((message) => {
+    if (!message) return;
+    setPlaybackNotice(message);
+  }, []);
+
+  useEffect(() => {
+    if (!playbackNotice) return undefined;
+    const timer = setTimeout(() => setPlaybackNotice(null), 3200);
+    return () => clearTimeout(timer);
+  }, [playbackNotice]);
+
+  const handleTrack = useCallback(
+    async (tr) => {
+      if (trackLocked(tr)) {
+        showPlaybackNotice("Subscribe to play full tracks from this release.");
+        return;
+      }
+      const sameTrack =
+        activeTrack != null &&
+        tr != null &&
+        String(activeTrack.id) === String(tr.id);
+      if (sameTrack) {
+        toggle();
+        return;
+      }
+      setActiveTrack(tr);
+      const idx = tracks.findIndex((t) => t && tr && String(t.id) === String(tr.id));
+      if (idx >= 0) {
+        const ok = await onPlayTrackAtIndex?.(idx);
+        if (ok === false) {
+          const queueTracks = albumTracksForPlayback(album, entitlementAccountState, "album_modal");
+          const blocked =
+            describeAlbumQueuePlaybackFailure(queueTracks, album, entitlementAccountState) ||
+            "Couldn't start playback. Try again.";
+          showPlaybackNotice(blocked);
+        }
+        return;
+      }
+      showPlaybackNotice("This track isn't in the playback queue yet.");
+      seek(0);
+    },
+    [
+      activeTrack,
+      album,
+      entitlementAccountState,
+      onPlayTrackAtIndex,
+      seek,
+      showPlaybackNotice,
+      toggle,
+      trackLocked,
+      tracks,
+    ]
+  );
 
   const isVisible = mounted && !closing;
 
@@ -1068,6 +1112,24 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
             })}
             <div style={{ height: 4 }} />
           </div>
+
+          {playbackNotice ? (
+            <div
+              role="status"
+              style={{
+                flexShrink: 0,
+                padding: "8px 18px",
+                fontSize: 11,
+                lineHeight: 1.35,
+                color: t.accent,
+                textAlign: "center",
+                borderTop: "1px solid rgba(255,255,255,.06)",
+                background: "rgba(0,0,0,.25)",
+              }}
+            >
+              {playbackNotice}
+            </div>
+          ) : null}
 
           <div style={{ flexShrink: 0, padding: "10px 18px 14px", borderTop: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
             <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2 }}>

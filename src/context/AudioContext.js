@@ -330,6 +330,10 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
     audio.src = src;
   }
 
+  return waitForAudioElementReady(audio, { signal, timeoutMs, src });
+}
+
+async function waitForAudioElementReady(audio, { signal, timeoutMs = AUDIO_SRC_READY_TIMEOUT_MS, src } = {}) {
   await new Promise((resolve, reject) => {
     let settled = false;
     let timeoutId = null;
@@ -393,11 +397,22 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
     audio.addEventListener("loadeddata", onDataReady);
     audio.addEventListener("error", onError);
     signal?.addEventListener("abort", onAbort, { once: true });
-    if (!sameSrc || audio.readyState < 2) {
+    if (audio.readyState < 2) {
       perfMark(MARKS.PLAYBACK_WAIT_SRC_LOAD_CALL);
       audio.load();
     }
   });
+}
+
+/** Warm signed URL on a hidden element so the main transport swap hits cache (Phase P3). */
+async function warmupSignedStreamPreload(preloadAudio, src, { signal, timeoutMs } = {}) {
+  if (!preloadAudio || !src) return false;
+  try {
+    await waitAudioSrcReady(preloadAudio, src, { signal, timeoutMs });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isAudioElementPlaying(audio) {
@@ -817,6 +832,7 @@ export function AudioProvider({ children }) {
   const listeningUserIdRef = useRef(null);
   const listeningProgressRef = useRef({ slug: null, recorded30s: false });
   const streamMetaRef = useRef(null);
+  const streamSwapPreloadRef = useRef(null);
   const streamErrorRetriedRef = useRef(false);
   const onPreviewEndedRef = useRef(null);
   const [previewEnded, setPreviewEnded] = useState(false);
@@ -1391,6 +1407,11 @@ export function AudioProvider({ children }) {
     perfMark(MARKS.PLAYBACK_PROVIDER_MOUNT);
     const el = ensureDetachedAudioElement();
     if (el) perfMark(MARKS.PLAYBACK_AUDIO_ELEMENT_READY);
+    if (!streamSwapPreloadRef.current) {
+      const preload = new Audio();
+      preload.preload = "auto";
+      streamSwapPreloadRef.current = preload;
+    }
     return () => {
       noteAudioProviderUnmount();
     };
@@ -2894,31 +2915,32 @@ export function AudioProvider({ children }) {
     }
 
     initWebAudio();
-    await resumeWebAudioContextIfSuspended(audioCtxRef);
+    await resumeWebAudioContextIfSuspended(audioCtxRef, "playTrack-entry");
     recordAudioContextState(audioCtxRef.current, "playTrack-resume");
     if (!(await ensureWebAudioRunning(audioCtxRef))) {
-      if (
-        lifecycleRecoveryLockRef.current ||
-        isLifecycleRecoverySuppressed("audio_context_suspended")
-      ) {
-        const lightOk = await attemptLightweightPlaybackResume("playTrack_ctx_suspended");
-        if (lightOk && (await ensureWebAudioRunning(audioCtxRef))) {
-          /* continue playTrack */
-        } else if (getPlaybackTransportHealth().intact) {
-          return false;
-        } else {
+      const lightOk = await attemptLightweightPlaybackResume("playTrack_ctx_suspended");
+      await resumeWebAudioContextIfSuspended(audioCtxRef, "playTrack-after-light");
+      if (!(await ensureWebAudioRunning(audioCtxRef))) {
+        const transportIntact = getPlaybackTransportHealth().intact;
+        if (!transportIntact) {
           await playbackStateMachine.transition(
             PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
             { reason: "audio_context_suspended", resumeAfter: true }
           );
           return false;
         }
-      } else {
-        await playbackStateMachine.transition(
-          PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
-          { reason: "audio_context_suspended", resumeAfter: true }
-        );
-        return false;
+        reportPlaybackDiagnostic({
+          level: "warn",
+          code: "WEB_AUDIO_SUSPENDED_CONTINUE_PLAY",
+          command: PLAYBACK_COMMANDS.PLAY_TRACK,
+          requestId,
+          state: stateRef.current,
+          context: {
+            lifecycleRecoveryLock: lifecycleRecoveryLockRef.current,
+            lifecycleSuppressed: isLifecycleRecoverySuppressed("audio_context_suspended"),
+            lightResumeOk: lightOk,
+          },
+        });
       }
     }
     setPreviewEnded(false);
@@ -3107,7 +3129,25 @@ export function AudioProvider({ children }) {
       const resumeAt = audio.currentTime || 0;
       const wasPlaying = stateRef.current.isPlaying && !audio.paused;
       skipPauseInterruptionRef.current = true;
-      patchTransport({ playbackNetworkState: "loading_stream" });
+      if (isPlaybackTraceEnabled()) {
+        logStreamLifecycle("signed-swap-start", {
+          source: "swapToSignedStream",
+          slug: streamSlug,
+          resumeAt,
+          wasPlaying,
+        });
+      }
+      const preloadEl = streamSwapPreloadRef.current;
+      if (preloadEl) {
+        await warmupSignedStreamPreload(preloadEl, signedUrl, {
+          signal: streamAbortController.signal,
+        });
+      }
+      if (wasPlaying) {
+        patchTransport({ isBuffering: true });
+      } else {
+        patchTransport({ playbackNetworkState: "loading_stream" });
+      }
       await waitAudioSrcReady(audio, signedUrl, { signal: streamAbortController.signal });
       const applySeek = () => {
         if (resumeAt > 0 && isFinite(audio.duration)) {
@@ -3147,6 +3187,13 @@ export function AudioProvider({ children }) {
         isBuffering: false,
       });
       notifyMediaEngineBridge();
+      if (isPlaybackTraceEnabled()) {
+        logStreamLifecycle("signed-swap-end", {
+          source: "swapToSignedStream",
+          slug: streamSlug,
+          paused: audio.paused,
+        });
+      }
     };
 
     if (backgroundStreamResolve && streamSlug) {
@@ -3154,7 +3201,15 @@ export function AudioProvider({ children }) {
         force: options.forceStream,
         signal: streamAbortController.signal,
       })
-        .then((resolved) => swapToSignedStream(resolved))
+        .then(async (resolved) => {
+          const signedUrl = resolved?.track?.src;
+          if (signedUrl && signedUrl !== syncSrc && streamSwapPreloadRef.current) {
+            await warmupSignedStreamPreload(streamSwapPreloadRef.current, signedUrl, {
+              signal: streamAbortController.signal,
+            });
+          }
+          return swapToSignedStream(resolved);
+        })
         .catch(applyStreamResolveError);
     }
 

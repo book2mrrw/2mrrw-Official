@@ -1,5 +1,5 @@
 import { withR2CatalogMedia } from "@/lib/media/r2-catalog-media";
-import { resolvePlaybackSrc, resolveTrackAccess } from "@/lib/music-access";
+import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess } from "@/lib/music-access";
 import {
   getCanonicalReleaseBySlug,
   getCanonicalTrack,
@@ -369,6 +369,26 @@ export function mapAlbumTracksForPlayback(album, accountState, source = "album",
 /** Playable subset for AudioContext queue — preserves release order and trackIndex metadata. */
 export function playableReleaseQueue(tracks = [], accountState) {
   return filterPlayableQueueItems(tracks, accountState).filter((t) => Boolean(t.src));
+}
+
+/** User-visible reason when album queue play cannot start (Phase P3). */
+export function describeAlbumQueuePlaybackFailure(tracks = [], albumItem, accountState) {
+  const playable = playableReleaseQueue(tracks, accountState);
+  if (playable.length > 0) return null;
+  const access = resolveContentAccess(albumItem, accountState);
+  if (!access?.canStream) {
+    return "Subscribe to play full tracks from this release.";
+  }
+  const list = Array.isArray(tracks) ? tracks : [];
+  const hasPreviewCandidate = list.some((t) => {
+    const trackAccess = resolveTrackAccess(t, accountState);
+    const previewPath = t?.preview || t?.preview_path || t?.previewPath || t?.metadata?.previewSrc;
+    return Boolean(previewPath) || trackAccess?.previewOnly;
+  });
+  if (hasPreviewCandidate) {
+    return "Preview isn't ready for this track yet.";
+  }
+  return "No playable tracks are available right now.";
 }
 
 /**
