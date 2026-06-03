@@ -1,5 +1,7 @@
 # Phase P11B — Storefront-Wide MP4 Source Integrity Coverage
 
+> **2026-06-03:** Verified intact on P12 baseline (`d1617e2`). See [PHASE_P11_RESTORE_ON_P12.md](./PHASE_P11_RESTORE_ON_P12.md).
+
 **Date:** 2026-06-03  
 **Repository:** `/Users/recharge/artist-platform`  
 **Builds on:** Phase P11 (`c9aa914`) — `resolve-concrete-video-key.js` + `catalogMotionVideoUrl()`  

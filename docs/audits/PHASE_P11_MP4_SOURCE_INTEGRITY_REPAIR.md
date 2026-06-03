@@ -1,6 +1,6 @@
 # Phase P11 — MP4 Source Integrity Repair
 
-**Date:** 2026-06-03  
+> **2026-06-03:** Verified intact on P12 baseline (`d1617e2`). See [PHASE_P11_RESTORE_ON_P12.md](./PHASE_P11_RESTORE_ON_P12.md).  
 **Repository:** `/Users/recharge/artist-platform`  
 **Scope:** Storefront MP4 cover/loop source integrity only — no auth, reconciliation, hydration retries, or reload hardening  
 **P10B input:** React remount falsified; `MEDIA_ELEMENT_ERROR` code 4 on mounted carousel `<video>` nodes; wrong flat R2 paths 404 while entity-folder paths 200  
