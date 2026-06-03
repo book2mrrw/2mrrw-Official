@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useSyncExternalStore } from "react";
 import LatestSinglesStyleRow from "@/components/home/LatestSinglesStyleRow";
 import FeaturesRail from "@/components/home/FeaturesRail";
 import CatalogGrid from "@/components/home/CatalogGrid";
@@ -9,20 +9,30 @@ import {
   LiveCountdownMobileHomeStrip,
 } from "@/components/home/LiveCountdownDisplays";
 import { TrackCardSkeleton } from "@/ui/skeletons";
+import { useCatalogLoading } from "@/components/storefront/catalog-surface-context";
+import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import {
-  useCatalogLoading,
-  useCatalogSurface,
-} from "@/components/storefront/catalog-surface-context";
+  getStorefrontDisplaySingles,
+  subscribeStorefrontDisplaySingles,
+} from "@/lib/storefront/storefront-display-singles-store";
+import {
+  getCatalogHasMore,
+  subscribeCatalogHasMore,
+} from "@/lib/storefront/catalog-has-more-store";
 import {
   isUiHydrationTraceEnabled,
   logUiHydrationTrace,
 } from "@/lib/diagnostics/ui-hydration-trace";
 
 const CatalogLatestSinglesLoadingExtras = memo(function CatalogLatestSinglesLoadingExtras({
-  catalogHasMore,
   onLoadMoreCatalog,
 }) {
   const catalogLoading = useCatalogLoading();
+  const catalogHasMore = useSyncExternalStore(
+    subscribeCatalogHasMore,
+    getCatalogHasMore,
+    getCatalogHasMore
+  );
   return (
     <>
       {catalogLoading ? (
@@ -55,19 +65,51 @@ const CatalogLatestSinglesLoadingExtras = memo(function CatalogLatestSinglesLoad
   );
 });
 
+function useStorefrontDisplaySingles() {
+  return useSyncExternalStore(
+    subscribeStorefrontDisplaySingles,
+    getStorefrontDisplaySingles,
+    getStorefrontDisplaySingles
+  );
+}
+
+function homeCatalogMediaPropsEqual(prev, next) {
+  const keys = [
+    "isMobile",
+    "singlesRowRef",
+    "onGift",
+    "onCardClick",
+    "addToCart",
+    "onLibraryChange",
+    "onOpenFeature",
+    "albums",
+    "hoverIn",
+    "hoverOut",
+    "buttonHoverIn",
+    "buttonHoverOut",
+    "onAlbumClick",
+    "onOpenAlbumTracklist",
+    "mixtapesAndEps",
+    "onPlayMixtapeEp",
+    "liveStreamDate",
+    "liveStreamTime",
+  ];
+  for (const key of keys) {
+    if (prev[key] !== next[key]) return false;
+  }
+  return true;
+}
+
 /**
- * Phase P7 — catalog-subscribed media sections isolated from PageStorefront reconcile.
- * Auth props may update chrome; MP4/cover rows stay mounted via stable catalog refs.
+ * Phase P7/P9 — catalog media isolated from Page shell and post-load auth/catalog waves.
+ * Singles pinned by media signature; entitlement chrome via storefront-card-chrome-store.
  */
 const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
   isMobile,
   singlesRowRef,
-  isAdminStable,
   onGift,
   onCardClick,
   addToCart,
-  accountState,
-  userId,
   onLibraryChange,
   onOpenFeature,
   albums,
@@ -82,14 +124,15 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
   liveStreamDate,
   liveStreamTime,
 }) {
-  const {
-    displaySingles,
-    displayFeatures,
-    catalogHasMore,
-    loadMoreCatalog,
-    catalogPlaybackLookup,
-  } = useCatalogSurface();
+  const pinnedSingles = useStorefrontDisplaySingles();
+  const surface = getCatalogSurfaceRef();
+  const displaySingles = pinnedSingles.length
+    ? pinnedSingles
+    : surface.displaySingles;
   const prevDisplaySinglesRef = useRef(displaySingles);
+  const displayFeatures = surface.displayFeatures;
+  const loadMoreCatalog = surface.loadMoreCatalog;
+  const catalogPlaybackLookup = surface.catalogPlaybackLookup;
 
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
@@ -98,6 +141,7 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
       logUiHydrationTrace("STORE_FRONT_REBUILD", {
         prevCount: prev?.length ?? 0,
         nextCount: displaySingles?.length ?? 0,
+        phase: "p9-pinned-singles",
       });
       prevDisplaySinglesRef.current = displaySingles;
     }
@@ -111,20 +155,14 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
             ref={singlesRowRef}
             items={displaySingles}
             isMobile={isMobile}
-            isAdmin={isAdminStable}
             onGift={onGift}
             onCardClick={onCardClick}
             addToCart={addToCart}
-            accountState={accountState}
-            userId={userId}
             onLibraryChange={onLibraryChange}
             source="home_single_card"
             cardMedia="video"
           />
-          <CatalogLatestSinglesLoadingExtras
-            catalogHasMore={catalogHasMore}
-            onLoadMoreCatalog={loadMoreCatalog}
-          />
+          <CatalogLatestSinglesLoadingExtras onLoadMoreCatalog={loadMoreCatalog} />
         </div>
 
         {!isMobile ? (
@@ -141,9 +179,6 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
           isMobile={isMobile}
           addToCart={addToCart}
           onOpenFeature={onOpenFeature}
-          accountState={accountState}
-          userId={userId}
-          isAdmin={isAdminStable}
           onGift={onGift}
           onLibraryChange={onLibraryChange}
         />
@@ -165,9 +200,6 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
           onOpenAlbumTracklist={onOpenAlbumTracklist}
           catalogPlaybackLookup={catalogPlaybackLookup}
           isMobile={isMobile}
-          accountState={accountState}
-          userId={userId}
-          isAdmin={isAdminStable}
           onGift={onGift}
           onLibraryChange={onLibraryChange}
         />
@@ -179,22 +211,18 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
           <LatestSinglesStyleRow
             items={mixtapesAndEps}
             isMobile={isMobile}
-            isAdmin={isAdminStable}
             onGift={onGift}
             onCardClick={onAlbumClick}
             onPlayClick={onPlayMixtapeEp}
             addToCart={addToCart}
-            accountState={accountState}
-            userId={userId}
             onLibraryChange={onLibraryChange}
             source="home_mixtape_ep_card"
             cardMedia="cover"
-            catalogPlaybackLookup={catalogPlaybackLookup}
           />
         </div>
       </div>
     </>
   );
-});
+}, homeCatalogMediaPropsEqual);
 
 export default HomeStorefrontCatalogMedia;

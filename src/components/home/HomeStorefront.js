@@ -86,12 +86,9 @@ const HomeStorefront = memo(function HomeStorefront({
         <HomeStorefrontCatalogMedia
           isMobile={isMobile}
           singlesRowRef={singlesRowRef}
-          isAdminStable={isAdminStable}
           onGift={onGift}
           onCardClick={onCardClick}
           addToCart={addToCart}
-          accountState={accountState}
-          userId={userId}
           onLibraryChange={onLibraryChange}
           onOpenFeature={onOpenFeature}
           albums={albums}

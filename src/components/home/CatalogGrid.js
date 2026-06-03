@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
@@ -21,7 +22,24 @@ function LockIcon() {
   );
 }
 
-function CatalogGrid({ items, type, addToCart, hoverIn, hoverOut, buttonHoverIn, buttonHoverOut, onCardClick, onOpenAlbumTracklist, catalogPlaybackLookup, isMobile, accountState, userId, isAdmin, onGift, onLibraryChange }) {
+function CatalogGrid({
+  items,
+  type,
+  addToCart,
+  hoverIn,
+  hoverOut,
+  buttonHoverIn,
+  buttonHoverOut,
+  onCardClick,
+  onOpenAlbumTracklist,
+  catalogPlaybackLookup,
+  isMobile,
+  onGift,
+  onLibraryChange,
+}) {
+  const { entitlementAccountState, userId, isAdminStable } = useStorefrontCardChrome();
+  const accountState = entitlementAccountState;
+  const isAdmin = isAdminStable;
   if (!items || items.length === 0) return null;
   const containerStyle = isMobile
     ? { display:"flex", flexWrap:"nowrap", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollSnapType:"x mandatory", overscrollBehaviorX:"contain", gap:12, paddingBottom:10 }

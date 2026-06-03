@@ -17,6 +17,8 @@ import {
   subscribeCatalogLoading,
 } from "@/lib/storefront/catalog-loading-store";
 import { setCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
+import { setCatalogHasMoreFlag } from "@/lib/storefront/catalog-has-more-store";
+import { commitStorefrontDisplaySingles } from "@/lib/storefront/storefront-display-singles-store";
 import {
   assertSsrClientParity,
   commitCatalogSinglesDeterministic,
@@ -139,6 +141,7 @@ export function CatalogSurfaceProvider({
             );
           }
           setCatalogHasMore(false);
+          setCatalogHasMoreFlag(false);
           return;
         }
 
@@ -154,6 +157,7 @@ export function CatalogSurfaceProvider({
             );
           }
           setCatalogHasMore(false);
+          setCatalogHasMoreFlag(false);
           return;
         }
 
@@ -184,7 +188,9 @@ export function CatalogSurfaceProvider({
           }
           return committed;
         });
-        setCatalogHasMore(Boolean(data.hasMore));
+        const nextHasMore = Boolean(data.hasMore);
+        setCatalogHasMore(nextHasMore);
+        setCatalogHasMoreFlag(nextHasMore);
       } catch {
         if (!cancelled && catalogPage === 1) {
           commitBrowseSinglesIfChanged(
@@ -193,6 +199,7 @@ export function CatalogSurfaceProvider({
             inlineSeedRef.current
           );
           setCatalogHasMore(false);
+          setCatalogHasMoreFlag(false);
         }
       } finally {
         if (!cancelled) {
@@ -270,6 +277,10 @@ export function CatalogSurfaceProvider({
 
   useLayoutEffect(() => {
     setCatalogSurfaceRef(value);
+    if (displaySingles?.length) {
+      commitStorefrontDisplaySingles(displaySingles);
+    }
+    setCatalogHasMoreFlag(catalogHasMore);
   });
 
   return (

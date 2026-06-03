@@ -11,23 +11,22 @@ import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
 import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
 import { catalogCoverDisplay, withR2CatalogMedia } from "@/components/home/catalogMedia";
+import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
 
 const FeatureCard = memo(function FeatureCard({
   item,
   index,
   isMobile,
-  isAdmin,
   onGift,
   onOpenFeature,
   addToCart,
-  accountState,
-  userId,
   onLibraryChange,
 }) {
+  const { entitlementAccountState, userId, isAdminStable } = useStorefrontCardChrome();
   const mediaItem = useMemo(() => withR2CatalogMedia(item), [item]);
   const access = useMemo(
-    () => resolveContentAccess(mediaItem, accountState),
-    [mediaItem, accountState]
+    () => resolveContentAccess(mediaItem, entitlementAccountState),
+    [mediaItem, entitlementAccountState]
   );
   const showPlayActions = itemHasPlayableAudio(mediaItem, access);
   const coverDisplay = useMemo(() => catalogCoverDisplay(mediaItem), [mediaItem]);
@@ -54,7 +53,7 @@ const FeatureCard = memo(function FeatureCard({
         e.currentTarget.style.borderColor = "#1a1a1a";
       }}
     >
-      {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(mediaItem)} /> : null}
+      {isAdminStable ? <GiftOverlayButton onClick={() => onGift?.(mediaItem)} /> : null}
       <div
         role="button"
         tabIndex={0}
@@ -97,7 +96,7 @@ const FeatureCard = memo(function FeatureCard({
             <div style={{ flex: 1, minWidth: 0 }}>
               <ReleaseCardActions
                 item={mediaItem}
-                accountState={accountState}
+                accountState={entitlementAccountState}
                 userId={userId}
                 source="home_feature_card"
                 showCart={Boolean(access?.showCart)}
@@ -126,9 +125,6 @@ function FeaturesRail({
   isMobile,
   addToCart,
   onOpenFeature,
-  accountState,
-  userId,
-  isAdmin,
   onGift,
   onLibraryChange,
 }) {
@@ -160,12 +156,9 @@ function FeaturesRail({
             item={feat}
             index={i}
             isMobile={isMobile}
-            isAdmin={isAdmin}
             onGift={onGift}
             onOpenFeature={onOpenFeature}
             addToCart={addToCart}
-            accountState={accountState}
-            userId={userId}
             onLibraryChange={onLibraryChange}
           />
         );

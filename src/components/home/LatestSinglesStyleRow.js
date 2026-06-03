@@ -13,28 +13,87 @@ import PlaybackPrewarmCardShell from "@/components/music/PlaybackPrewarmCardShel
 import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
 import { albumCardPlaybackItem } from "@/lib/music-playback";
 import { withR2CatalogMedia, catalogCoverDisplay } from "@/components/home/catalogMedia";
+import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
+import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
+import { getMediaSignature } from "@/lib/media/media-determinism";
 
-const SinglesStyleCard = memo(function SinglesStyleCard({
+/** Phase P9 — MP4/cover surface; skips reconcile when only entitlement chrome changes. */
+const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface({
+  mediaItem,
+  cardMedia,
+  coverDisplay,
+}) {
+  useEffect(() => {
+    if (!isUiHydrationTraceEnabled()) return;
+    logUiHydrationTrace("MEDIA_CARD_REINITIALIZED", {
+      slug: mediaItem?.slug ?? null,
+      cardMedia,
+      phase: "media-surface-mount",
+    });
+  }, [mediaItem?.slug, cardMedia]);
+
+  if (cardMedia === "video") {
+    return (
+      <video
+        data-single-carousel
+        src={mediaItem.video || undefined}
+        poster={mediaItem.cover || undefined}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        webkit-playsinline="true"
+        style={{
+          backgroundColor: "#0a0a0a",
+          width: "100%",
+          aspectRatio: "1/1",
+          objectFit: "cover",
+          display: "block",
+          borderRadius: "13px 13px 0 0",
+          transition: "transform 0.3s, filter 0.3s",
+          pointerEvents: "none",
+        }}
+      />
+    );
+  }
+
+  return (
+    <CoverArt
+      src={coverDisplay.src}
+      type={coverDisplay.type || "image"}
+      alt=""
+      width="100%"
+      height="auto"
+      borderRadius="13px 13px 0 0"
+      style={{
+        aspectRatio: "1/1",
+        display: "block",
+        pointerEvents: "none",
+      }}
+    />
+  );
+}, (prev, next) => getMediaSignature(prev.mediaItem) === getMediaSignature(next.mediaItem));
+
+function SinglesStyleCard({
   item,
   index,
   isMobile,
-  isAdmin,
   onGift,
   onCardClick,
   onPlayClick,
   addToCart,
-  accountState,
-  userId,
   onLibraryChange,
   source,
   cardMedia,
-  catalogPlaybackLookup,
   titleClassName,
 }) {
+  const { entitlementAccountState, userId, isAdminStable } = useStorefrontCardChrome();
+  const catalogPlaybackLookup = getCatalogSurfaceRef().catalogPlaybackLookup;
   const mediaItem = useMemo(() => withR2CatalogMedia(item), [item]);
   const access = useMemo(
-    () => resolveContentAccess(mediaItem, accountState),
-    [mediaItem, accountState]
+    () => resolveContentAccess(mediaItem, entitlementAccountState),
+    [mediaItem, entitlementAccountState]
   );
   const showPlayActions = itemHasPlayableAudio(mediaItem, access);
   const playItem = useMemo(() => {
@@ -47,21 +106,12 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
   const playItemResolved = useMemo(() => withR2CatalogMedia(playItem), [playItem]);
   const { shouldAnimate } = useMountEnterAnimation();
 
-  useEffect(() => {
-    if (!isUiHydrationTraceEnabled()) return;
-    logUiHydrationTrace("MEDIA_CARD_REINITIALIZED", {
-      slug: item?.slug ?? null,
-      cardMedia,
-      source,
-    });
-  }, [item?.slug, cardMedia, source]);
-
   return (
     <PlaybackPrewarmCardShell
       releaseItem={mediaItem}
       playItem={playItem}
       catalogPlaybackLookup={catalogPlaybackLookup}
-      accountState={accountState}
+      accountState={entitlementAccountState}
       userId={userId}
       source={source}
       isAlbumCard={cardMedia === "cover"}
@@ -100,44 +150,12 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
         }
       }}
     >
-      {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(mediaItem)} /> : null}
-      {cardMedia === "video" ? (
-        <video
-          data-single-carousel
-          src={mediaItem.video || undefined}
-          poster={mediaItem.cover || undefined}
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          webkit-playsinline="true"
-          style={{
-            backgroundColor: "#0a0a0a",
-            width: "100%",
-            aspectRatio: "1/1",
-            objectFit: "cover",
-            display: "block",
-            borderRadius: "13px 13px 0 0",
-            transition: "transform 0.3s, filter 0.3s",
-            pointerEvents: "none",
-          }}
-        />
-      ) : (
-        <CoverArt
-          src={coverDisplay.src}
-          type={coverDisplay.type || "image"}
-          alt=""
-          width="100%"
-          height="auto"
-          borderRadius="13px 13px 0 0"
-          style={{
-            aspectRatio: "1/1",
-            display: "block",
-            pointerEvents: "none",
-          }}
-        />
-      )}
+      {isAdminStable ? <GiftOverlayButton onClick={() => onGift?.(mediaItem)} /> : null}
+      <SinglesStyleCardMediaSurface
+        mediaItem={mediaItem}
+        cardMedia={cardMedia}
+        coverDisplay={coverDisplay}
+      />
       <div style={{ padding: isMobile ? "10px 12px 14px" : "12px 14px 16px" }}>
         <div
           className={titleClassName}
@@ -161,7 +179,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
           <div onClick={(e) => e.stopPropagation()}>
             <ReleaseCardActions
               item={playItemResolved}
-              accountState={accountState}
+              accountState={entitlementAccountState}
               userId={userId}
               source={source}
               onPlayClick={onPlayClick}
@@ -183,7 +201,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
       </div>
     </PlaybackPrewarmCardShell>
   );
-});
+}
 
 /**
  * Shared horizontal scroll row — cloned from Home "Latest Singles" card chrome.
@@ -193,17 +211,13 @@ const LatestSinglesStyleRow = forwardRef(function LatestSinglesStyleRow(
   {
     items = [],
     isMobile,
-    isAdmin = false,
     onGift,
     onCardClick,
     onPlayClick,
     addToCart,
-    accountState,
-    userId,
     onLibraryChange,
     source = "home_card",
     cardMedia = "video",
-    catalogPlaybackLookup = null,
     titleClassName = "song-title-turquoise-glow",
     rowClassName = "singles-row",
   },
@@ -266,17 +280,13 @@ const LatestSinglesStyleRow = forwardRef(function LatestSinglesStyleRow(
             item={rawItem}
             index={i}
             isMobile={isMobile}
-            isAdmin={isAdmin}
             onGift={onGift}
             onCardClick={onCardClick}
             onPlayClick={onPlayClick}
             addToCart={addToCart}
-            accountState={accountState}
-            userId={userId}
             onLibraryChange={onLibraryChange}
             source={source}
             cardMedia={cardMedia}
-            catalogPlaybackLookup={catalogPlaybackLookup}
             titleClassName={titleClassName}
           />
         );

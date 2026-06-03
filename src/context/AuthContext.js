@@ -160,9 +160,22 @@ export function AuthProvider({ children }) {
   }, []);
 
   const commitEntitlementSnapshot = useCallback((data, userId) => {
-    const prevVersion = entitlementSnapshotRef.current?.version ?? 0;
-    entitlementSnapshotRef.current = buildEntitlementSnapshot(data, userId, prevVersion);
-    setEntitlementSnapshotVersion(entitlementSnapshotRef.current.version);
+    const prev = entitlementSnapshotRef.current;
+    const prevVersion = prev?.version ?? 0;
+    const next = buildEntitlementSnapshot(data, userId, prevVersion);
+    if (
+      prev &&
+      prev.userId === next.userId &&
+      prev.subscriberActive === next.subscriberActive &&
+      prev.collectorCard === next.collectorCard &&
+      prev.vaultAccess === next.vaultAccess &&
+      ownedSlugsArraysEqual(prev.ownedSlugs, next.ownedSlugs) &&
+      JSON.stringify(prev.permissions || {}) === JSON.stringify(next.permissions || {})
+    ) {
+      return;
+    }
+    entitlementSnapshotRef.current = next;
+    setEntitlementSnapshotVersion(next.version);
   }, []);
 
   const getEntitlementSnapshot = useCallback(() => {

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useLayoutEffect } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, useEntitlementAccountState } from "@/context/AuthContext";
 import { setPageAuthRef } from "@/lib/storefront/page-auth-ref";
+import { commitStorefrontCardChrome } from "@/lib/storefront/storefront-card-chrome-store";
 import {
   isUiHydrationTraceEnabled,
   logUiHydrationTrace,
@@ -25,7 +26,9 @@ export default function PageAuthRefSync() {
     refreshAccountState,
     invalidateEntitlementSnapshot,
     loading,
+    isAdmin,
   } = auth;
+  const entitlementAccountState = useEntitlementAccountState();
 
   useLayoutEffect(() => {
     setPageAuthRef({
@@ -40,6 +43,14 @@ export default function PageAuthRefSync() {
       refreshAccountState,
       invalidateEntitlementSnapshot,
       loading,
+    });
+    const isAdminStable = Boolean(
+      sessionHydrated && (isAdmin || accountState?.permissions?.admin)
+    );
+    commitStorefrontCardChrome({
+      entitlementAccountState,
+      userId: currentUser?.id ?? null,
+      isAdminStable,
     });
   });
 
