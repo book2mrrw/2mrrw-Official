@@ -196,11 +196,18 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
     normalized?.coverArt ||
     null;
   const videoRaw = motionRaw || visualRaw;
+  const motionPath = videoRaw ? String(videoRaw).replace(/^\//, "") : "";
   const cover =
     visualRaw
       ? catalogVisualMediaUrl(String(visualRaw).replace(/^\//, ""))
       : coverArtType === "video" && videoRaw
-        ? catalogMotionVideoUrl(String(videoRaw).replace(/^\//, ""))
+        ? catalogMotionVideoUrl(motionPath, {
+            slug: normalized?.slug || null,
+            legacyKey:
+              normalized?.video_legacy ||
+              normalized?.videoLegacy ||
+              null,
+          })
         : coverRaw
           ? catalogCoverUrl(String(coverRaw).replace(/^\//, ""))
           : null;
