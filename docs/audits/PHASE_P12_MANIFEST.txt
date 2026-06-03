@@ -1,0 +1,14 @@
+PHASE_P12_PLAYBACK_TRIGGERED_RECONCILIATION_ELIMINATION.zip
+
+docs/audits/PHASE_P12_PLAYBACK_TRIGGERED_RECONCILIATION_ELIMINATION.md
+docs/audits/PHASE_P12_MANIFEST.txt
+src/context/AudioContext.js
+src/lib/storefront/playback-chrome-layout-store.js
+src/hooks/usePlaybackChromeLayout.js
+src/components/storefront/PlaybackChromeIsland.js
+src/components/storefront/ScrollPaddingShell.js
+src/components/storefront/HomeStorefrontFlowMode.js
+src/components/storefront/MobileCartFab.js
+src/components/storefront/PageAuthRefSync.js
+src/components/storefront/playback-chrome-context.js
+src/components/home/LatestSinglesStyleRow.js

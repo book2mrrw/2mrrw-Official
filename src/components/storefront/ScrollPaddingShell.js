@@ -2,11 +2,11 @@
 
 import { memo } from "react";
 import { motion } from "framer-motion";
-import { usePlaybackChrome } from "@/components/storefront/playback-chrome-context";
+import { usePlaybackChromeLayout } from "@/hooks/usePlaybackChromeLayout";
 
 /** Applies playback-driven bottom inset below hero without re-rendering Hero. */
 const ScrollPaddingShell = memo(function ScrollPaddingShell({ isMobile, children }) {
-  const { mobileScrollPadding } = usePlaybackChrome();
+  const { mobileScrollPadding } = usePlaybackChromeLayout();
 
   return (
     <motion.div style={{ padding: isMobile ? `0 0 ${mobileScrollPadding} 0` : "0 30px 30px" }}>

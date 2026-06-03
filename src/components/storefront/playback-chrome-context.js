@@ -1,20 +1,17 @@
 "use client";
 
-import { createContext, useContext } from "react";
+import { usePlaybackChromeLayout } from "@/hooks/usePlaybackChromeLayout";
 
-/** @type {import("react").Context<{
- *   nowPlaying: object | null;
- *   mobileScrollPadding: string;
- *   mobileCartFabBottom: string;
- *   mobileMiniPlayerBottom: string;
- * }>} */
-export const PlaybackChromeContext = createContext({
-  nowPlaying: null,
-  mobileScrollPadding: "110px",
-  mobileCartFabBottom: "calc(62px + env(safe-area-inset-bottom, 0px) + 12px)",
-  mobileMiniPlayerBottom: "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)",
-});
-
+/**
+ * @deprecated Prefer usePlaybackChromeLayout (Phase P12 external store).
+ * Kept for callers that still import usePlaybackChrome — maps layout store fields.
+ */
 export function usePlaybackChrome() {
-  return useContext(PlaybackChromeContext);
+  const layout = usePlaybackChromeLayout();
+  return {
+    nowPlaying: layout.nowPlayingKey ? { slug: layout.nowPlayingKey } : null,
+    mobileScrollPadding: layout.mobileScrollPadding,
+    mobileCartFabBottom: layout.mobileCartFabBottom,
+    mobileMiniPlayerBottom: layout.mobileMiniPlayerBottom,
+  };
 }

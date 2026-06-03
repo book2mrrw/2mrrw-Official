@@ -2,12 +2,12 @@
 
 import { memo } from "react";
 import { motion } from "framer-motion";
-import { usePlaybackChrome } from "@/components/storefront/playback-chrome-context";
+import { usePlaybackChromeLayout } from "@/hooks/usePlaybackChromeLayout";
 
 const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
 
 const MobileCartFab = memo(function MobileCartFab({ cartCount, onOpen }) {
-  const { mobileCartFabBottom } = usePlaybackChrome();
+  const { mobileCartFabBottom } = usePlaybackChromeLayout();
 
   return (
     <motion.button

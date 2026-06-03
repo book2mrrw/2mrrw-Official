@@ -14,7 +14,7 @@ import {
 import { resolvePlayerDisplayTitle } from "@/lib/playback/resolve-player-display-title";
 import AmbientPlaybackBackground from "@/components/home/AmbientPlaybackBackground";
 import StorefrontMiniPlayerBar from "@/components/home/StorefrontMiniPlayerBar";
-import { PlaybackChromeContext } from "@/components/storefront/playback-chrome-context";
+import { commitPlaybackChromeLayout } from "@/lib/storefront/playback-chrome-layout-store";
 
 const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
   isMobile,
@@ -211,22 +211,23 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
       playbackState === "preview_fallback") &&
     ambientTrack?.cover;
 
-  const chromeValue = useMemo(() => {
-    const mobileScrollPadding = isMobile ? (nowPlaying ? "178px" : "110px") : "30px";
-    const mobileCartFabBottom = nowPlaying
-      ? "calc(62px + env(safe-area-inset-bottom, 0px) + 72px)"
-      : "calc(62px + env(safe-area-inset-bottom, 0px) + 12px)";
-    const mobileMiniPlayerBottom = "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)";
-    return {
+  const mobileScrollPadding = isMobile ? (nowPlaying ? "178px" : "110px") : "30px";
+  const mobileCartFabBottom = nowPlaying
+    ? "calc(62px + env(safe-area-inset-bottom, 0px) + 72px)"
+    : "calc(62px + env(safe-area-inset-bottom, 0px) + 12px)";
+  const mobileMiniPlayerBottom = "calc(62px + env(safe-area-inset-bottom, 0px) + 8px)";
+
+  useEffect(() => {
+    commitPlaybackChromeLayout({
       nowPlaying,
       mobileScrollPadding,
       mobileCartFabBottom,
       mobileMiniPlayerBottom,
-    };
-  }, [isMobile, nowPlaying]);
+    });
+  }, [nowPlaying, mobileScrollPadding, mobileCartFabBottom, mobileMiniPlayerBottom]);
 
   return (
-    <PlaybackChromeContext.Provider value={chromeValue}>
+    <>
       {children}
       {showAmbient ? (
         <AmbientPlaybackBackground
@@ -259,12 +260,12 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
               }}
               onDismiss={dismissNowPlaying}
               isMobile
-              bottom={chromeValue.mobileMiniPlayerBottom}
+              bottom={mobileMiniPlayerBottom}
             />
           ) : null}
         </AnimatePresence>
       ) : null}
-    </PlaybackChromeContext.Provider>
+    </>
   );
 });
 

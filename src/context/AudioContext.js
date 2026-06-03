@@ -10,6 +10,7 @@ import {
   useState,
   useSyncExternalStore,
   startTransition,
+  memo,
 } from "react";
 import { useAuth, useEntitlementAccountState } from "@/context/AuthContext";
 import { resetPlaybackTelemetry, sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
@@ -94,6 +95,10 @@ import {
 } from "@/lib/diagnostics/playback-trace";
 import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
 import {
+  isUiHydrationTraceEnabled,
+  logUiHydrationTrace,
+} from "@/lib/diagnostics/ui-hydration-trace";
+import {
   ensureDetachedAudioElement,
   getAudioEngineRefs,
   isBrowserPlaybackEnvironment,
@@ -159,6 +164,67 @@ const TRANSPORT_ONLY_STATE_KEYS = new Set([
   "currentTime",
   "duration",
 ]);
+
+/** Phase P12 — skip AudioProvider setState when storefront-visible playback fields are unchanged. */
+function playbackTrackPresentationEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return !a && !b;
+  return (
+    (a.id ?? null) === (b.id ?? null) &&
+    (a.slug ?? null) === (b.slug ?? null) &&
+    (a.title ?? null) === (b.title ?? null) &&
+    (a.cover ?? null) === (b.cover ?? null) &&
+    (a.src ?? null) === (b.src ?? null) &&
+    (a.source ?? null) === (b.source ?? null)
+  );
+}
+
+function playbackUiStateEqual(prev, next) {
+  if (prev === next) return true;
+  const uiKeys = [
+    "currentTrackId",
+    "currentTrack",
+    "source",
+    "isPlaying",
+    "error",
+    "hasStarted",
+    "accessDenied",
+    "streamRetryable",
+    "streamConflict",
+    "queue",
+    "queueIndex",
+    "repeatMode",
+    "shuffle",
+    "csMode",
+    "csTrack",
+    "playbackState",
+    "spaceMode",
+    "bassMode",
+    "atmosphereLevel",
+  ];
+  for (const key of uiKeys) {
+    if (key === "currentTrack") {
+      if (!playbackTrackPresentationEqual(prev.currentTrack, next.currentTrack)) return false;
+      continue;
+    }
+    if (key === "queue") {
+      const pq = prev.queue;
+      const nq = next.queue;
+      if (pq === nq) continue;
+      if (!Array.isArray(pq) || !Array.isArray(nq) || pq.length !== nq.length) return false;
+      for (let i = 0; i < pq.length; i += 1) {
+        if (!playbackTrackPresentationEqual(pq[i], nq[i])) return false;
+      }
+      continue;
+    }
+    if (prev[key] !== next[key]) return false;
+  }
+  return true;
+}
+
+const AudioProviderSubtree = memo(function AudioProviderSubtree({ children }) {
+  return children;
+});
 const AUDIBILITY_WATCHDOG_MS = 1250;
 const RECOVERY_COOLDOWN_MS = 6000;
 /** Coalesce visibility_return + bfcache_restore (Phase 15D). */
@@ -1696,6 +1762,16 @@ export function AudioProvider({ children }) {
         playbackNetworkState: reconciled.playbackNetworkState ?? "idle",
         isBuffering: Boolean(reconciled.isBuffering),
       };
+      if (playbackUiStateEqual(prev, reconciled)) {
+        if (isUiHydrationTraceEnabled()) {
+          logUiHydrationTrace("PLAYBACK_UI_PATCH_SKIPPED", {
+            slug: reconciled.currentTrack?.slug ?? null,
+            playbackState: reconciled.playbackState ?? null,
+            phase: "p12-ui-equal",
+          });
+        }
+        return prev;
+      }
       return reconciled;
     });
   }, [
@@ -3335,6 +3411,14 @@ export function AudioProvider({ children }) {
     }
 
     patchTransport({ playbackNetworkState: "loading_stream" });
+    if (isUiHydrationTraceEnabled()) {
+      logUiHydrationTrace("PLAYBACK_FIRST_MUTATION", {
+        slug: nextTrack.slug ?? null,
+        trackId: nextTrack.id ?? null,
+        source: "playTrackInternal",
+        phase: "p12-track-load",
+      });
+    }
     patchState({
       currentTrackId: nextTrack.id,
       currentTrack: { ...nextTrack, src: syncSrc },
@@ -6192,7 +6276,7 @@ export function AudioProvider({ children }) {
   return (
     <AudioContext.Provider value={value}>
       <AudioPhase10Bridge />
-      {children}
+      <AudioProviderSubtree>{children}</AudioProviderSubtree>
     </AudioContext.Provider>
   );
 }

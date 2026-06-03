@@ -103,7 +103,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
   );
 }, (prev, next) => getMediaSignature(prev.mediaItem) === getMediaSignature(next.mediaItem));
 
-function SinglesStyleCard({
+const SinglesStyleCard = memo(function SinglesStyleCard({
   item,
   index,
   isMobile,
@@ -229,7 +229,7 @@ function SinglesStyleCard({
       </div>
     </PlaybackPrewarmCardShell>
   );
-}
+});
 
 /**
  * Shared horizontal scroll row — cloned from Home "Latest Singles" card chrome.

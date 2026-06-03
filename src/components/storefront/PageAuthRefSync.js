@@ -52,7 +52,21 @@ export default function PageAuthRefSync() {
       userId: currentUser?.id ?? null,
       isAdminStable,
     });
-  });
+  }, [
+    currentUser,
+    library,
+    accountState,
+    membership,
+    sessionHydrated,
+    owns,
+    signOut,
+    refreshLibrary,
+    refreshAccountState,
+    invalidateEntitlementSnapshot,
+    loading,
+    isAdmin,
+    entitlementAccountState,
+  ]);
 
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
