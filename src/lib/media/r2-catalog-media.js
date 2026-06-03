@@ -93,7 +93,15 @@ export function withR2CatalogMedia(item) {
       : resolveCatalogMediaField(next.cover, catalogCoverUrl);
   }
   if (next.video) {
-    next.video = resolveCatalogMediaField(next.video, catalogMotionVideoUrl);
+    const videoRaw = String(next.video || "").trim();
+    if (isResolvedCatalogMediaUrl(videoRaw)) {
+      next.video = videoRaw;
+    } else {
+      next.video = catalogMotionVideoUrl(videoRaw.replace(/^\//, ""), {
+        slug: next.slug,
+        legacyKey: next.video_legacy,
+      });
+    }
   }
   if (next.preview) {
     next.preview = resolveCatalogMediaField(next.preview, catalogPreviewAudioUrl);

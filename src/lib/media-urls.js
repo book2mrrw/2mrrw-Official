@@ -15,6 +15,7 @@ import {
   resolveCanonicalSlugFromFlatPreviewKey,
   resolveConcretePreviewR2Key,
 } from "@/lib/media/resolve-concrete-preview-key";
+import { resolveConcreteVideoR2Key } from "@/lib/media/resolve-concrete-video-key";
 import { getPublicR2Url } from "@/lib/storage/r2";
 import { getPublicCdnBase, R2_PUBLIC_CDN_FALLBACK } from "@/lib/storage/r2-public-cdn";
 
@@ -149,18 +150,24 @@ export function catalogPreviewAudioUrl(previewPath) {
 }
 
 /** Motion loop video — folder discovery API or public R2. */
-export function catalogMotionVideoUrl(videoPath) {
+export function catalogMotionVideoUrl(videoPath, options = {}) {
   if (!videoPath) return "";
   const normalized = String(videoPath).replace(/^\//, "");
   if (/^https?:\/\//i.test(normalized)) return normalized;
   if (isSiteApiMediaPath(normalized)) {
     return ensureRelativeSiteApiPath(normalized);
   }
-  if (normalized.startsWith("videos/")) {
-    const r2 = getPublicR2Url(normalized);
+  const concrete = resolveConcreteVideoR2Key({
+    videoPath: normalized,
+    slug: options.slug || null,
+    legacyKey: options.legacyKey || null,
+  });
+  const pathToUse = concrete || normalized;
+  if (pathToUse.startsWith("videos/")) {
+    const r2 = getPublicR2Url(pathToUse);
     if (r2) return r2;
   }
-  return catalogPublicMediaUrl(normalized);
+  return catalogPublicMediaUrl(pathToUse);
 }
 
 /** Unified visual (video → image fallback) discovery API. */

@@ -16,7 +16,10 @@ export function catalogCoverDisplay(item) {
   const visualSrc = resolved.visual || resolved.cover;
   const src =
     type === "video" && (resolved.video || resolved.visual)
-      ? catalogMotionVideoUrl(String(resolved.video || resolved.visual).replace(/^\//, ""))
+      ? catalogMotionVideoUrl(String(resolved.video || resolved.visual).replace(/^\//, ""), {
+          slug: resolved.slug,
+          legacyKey: resolved.video_legacy,
+        })
       : catalogVisualMediaUrl(String(visualSrc || "").replace(/^\//, "")) ||
         catalogCoverUrl(String(resolved.cover || "").replace(/^\//, ""));
   if (!src) {

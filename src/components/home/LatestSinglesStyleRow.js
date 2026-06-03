@@ -23,6 +23,9 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
   cardMedia,
   coverDisplay,
 }) {
+  const videoRef = useRef(null);
+  const assignedSrc = cardMedia === "video" ? mediaItem?.video || null : null;
+
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
     logUiHydrationTrace("MEDIA_CARD_REINITIALIZED", {
@@ -32,11 +35,36 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
     });
   }, [mediaItem?.slug, cardMedia]);
 
+  useEffect(() => {
+    if (!isUiHydrationTraceEnabled() || cardMedia !== "video") return;
+    logUiHydrationTrace("MEDIA_SRC_ASSIGNED", {
+      slug: mediaItem?.slug ?? null,
+      url: assignedSrc,
+    });
+  }, [mediaItem?.slug, assignedSrc, cardMedia]);
+
+  useEffect(() => {
+    if (!isUiHydrationTraceEnabled() || cardMedia !== "video") return;
+    const el = videoRef.current;
+    if (!el) return;
+    const onError = () => {
+      logUiHydrationTrace("MEDIA_ELEMENT_ERROR", {
+        slug: mediaItem?.slug ?? null,
+        src: el.getAttribute("src"),
+        currentSrc: el.currentSrc || null,
+        error: el.error ? { code: el.error.code, message: el.error.message } : null,
+      });
+    };
+    el.addEventListener("error", onError);
+    return () => el.removeEventListener("error", onError);
+  }, [mediaItem?.slug, assignedSrc, cardMedia]);
+
   if (cardMedia === "video") {
     return (
       <video
+        ref={videoRef}
         data-single-carousel
-        src={mediaItem.video || undefined}
+        src={assignedSrc || undefined}
         poster={mediaItem.cover || undefined}
         autoPlay
         muted
