@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
 import AudioVisualsSection from "@/components/home/AudioVisualsSection";
@@ -16,6 +16,47 @@ import {
 } from "@/components/home/LiveCountdownDisplays";
 import { LiveCountdownProvider } from "@/components/home/LiveCountdownContext";
 import { TrackCardSkeleton } from "@/ui/skeletons";
+import { useCatalogLoading } from "@/components/storefront/catalog-surface-context";
+import {
+  isUiHydrationTraceEnabled,
+  logUiHydrationTrace,
+} from "@/lib/diagnostics/ui-hydration-trace";
+const CatalogLatestSinglesLoadingExtras = memo(function CatalogLatestSinglesLoadingExtras({
+  catalogHasMore,
+  onLoadMoreCatalog,
+}) {
+  const catalogLoading = useCatalogLoading();
+  return (
+    <>
+      {catalogLoading ? (
+        <>
+          <TrackCardSkeleton />
+          <TrackCardSkeleton />
+        </>
+      ) : null}
+      {catalogHasMore ? (
+        <button
+          type="button"
+          onClick={onLoadMoreCatalog}
+          disabled={catalogLoading}
+          style={{
+            marginTop: 12,
+            padding: "10px 18px",
+            background: "transparent",
+            border: "1px solid #333",
+            color: "#888",
+            borderRadius: 8,
+            cursor: catalogLoading ? "default" : "pointer",
+            fontSize: 12,
+            letterSpacing: 1.5,
+          }}
+        >
+          {catalogLoading ? "Loading…" : "Load more"}
+        </button>
+      ) : null}
+    </>
+  );
+});
 
 const HomeStorefront = memo(function HomeStorefront({
   liveCountdownTarget,
@@ -31,7 +72,6 @@ const HomeStorefront = memo(function HomeStorefront({
   accountState,
   userId,
   onLibraryChange,
-  catalogLoading,
   catalogHasMore,
   onLoadMoreCatalog,
   liveStreamDate,
@@ -64,6 +104,11 @@ const HomeStorefront = memo(function HomeStorefront({
   onSelectEvent,
   onOpenCollection,
 }) {
+  useEffect(() => {
+    if (!isUiHydrationTraceEnabled()) return;
+    logUiHydrationTrace("HOME_STOREFRONT_RENDER", {});
+  });
+
   const storefront = (
     <>
       <div style={{ padding: "18px 0 8px", display: "flex", justifyContent: "flex-start", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -101,22 +146,10 @@ const HomeStorefront = memo(function HomeStorefront({
               source="home_single_card"
               cardMedia="video"
             />
-            {catalogLoading ? (
-              <>
-                <TrackCardSkeleton />
-                <TrackCardSkeleton />
-              </>
-            ) : null}
-            {catalogHasMore ? (
-              <button
-                type="button"
-                onClick={onLoadMoreCatalog}
-                disabled={catalogLoading}
-                style={{ marginTop: 12, padding: "10px 18px", background: "transparent", border: "1px solid #333", color: "#888", borderRadius: 8, cursor: catalogLoading ? "default" : "pointer", fontSize: 12, letterSpacing: 1.5 }}
-              >
-                {catalogLoading ? "Loading…" : "Load more"}
-              </button>
-            ) : null}
+            <CatalogLatestSinglesLoadingExtras
+              catalogHasMore={catalogHasMore}
+              onLoadMoreCatalog={onLoadMoreCatalog}
+            />
           </div>
 
           {!isMobile && (

@@ -19,7 +19,20 @@ const VaultUnlockedRoom = dynamic(
   { ssr: false }
 );
 const AlbumTracklistSheet = dynamic(() => import("@/components/music/AlbumTracklistSheet"), { ssr: false });
-import { useAuth } from "@/context/AuthContext";
+import { getPageAuthRef } from "@/lib/storefront/page-auth-ref";
+import PageAuthRefSync from "@/components/storefront/PageAuthRefSync";
+import {
+  PageAuthSidebarBadge,
+  PageAuthMobileNavBadge,
+  PageAuthDeepLinkHandler,
+  PageAuthCheckoutPendingEffect,
+  PageAuthSessionBridge,
+  PageAuthHelpSupport,
+} from "@/components/storefront/PageAuthRegions";
+import {
+  isUiHydrationTraceEnabled,
+  logUiHydrationTrace,
+} from "@/lib/diagnostics/ui-hydration-trace";
 import { getControlSystemReleaseDetail } from "@/lib/control-system/releases";
 import GiftButton from "@/components/gifts/GiftButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
@@ -29,9 +42,7 @@ import HelpSupportSection from "@/components/support/HelpSupportSection";
 import MyMusicTab from "@/components/music/MyMusicTab";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
-import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/lib/deep-links";
 import { consumeGiftHighlightSlug } from "@/lib/gifts/session-keys";
-import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 import { notifyEntitlementsUpdated } from "@/lib/diagnostics/state-churn-log";
 import {
   isPlaybackTraceEnabled,
@@ -287,24 +298,10 @@ function PageStorefront() {
   const {
     displaySingles,
     displayFeatures,
-    catalogLoading,
     catalogHasMore,
     loadMoreCatalog,
     catalogPlaybackLookup,
   } = useCatalogSurface();
-  const {
-    currentUser,
-    library,
-    owns,
-    accountState,
-    membership,
-    sessionHydrated,
-    signOut,
-    refreshLibrary,
-    refreshAccountState,
-    invalidateEntitlementSnapshot,
-    loading: authLoading,
-  } = useAuth();
   const {
     playTrack,
     playQueue,
@@ -312,10 +309,11 @@ function PageStorefront() {
     enterAudioVisualViewport,
     exitAudioVisualViewport,
   } = usePagePlaybackActions();
-  const showSubscribeCta = useMemo(
-    () => resolveSubscriptionEntitlements(accountState, membership).showSubscribe,
-    [accountState, membership]
-  );
+  useEffect(() => {
+    if (!isUiHydrationTraceEnabled()) return;
+    logUiHydrationTrace("PAGESTOREFRONT_RENDER", { activeTab });
+  });
+
   // ── STATE ─────────────────────────────────────────────────────────────────
   const [cart, setCart]                           = useState(() => {
     if (typeof window === "undefined") return [];
@@ -356,7 +354,6 @@ function PageStorefront() {
   const [circleCategory, setCircleCategory]       = useState("question");
   const [circleSubmissions, setCircleSubmissions] = useState([]);
   const [circleSubmitted, setCircleSubmitted]     = useState(false);
-  const myPurchases = useMemo(() => library || [], [library]);
   const [membershipUpsellOpen, setMembershipUpsellOpen] = useState(false);
   const [donateOpen, setDonateOpen] = useState(false);
   const [giftSheetRelease, setGiftSheetRelease] = useState(null);
@@ -732,8 +729,9 @@ function PageStorefront() {
 
   const playAlbumTracks = useCallback(
     (album, startIndex = 0) => {
+      const auth = getPageAuthRef();
       const albumItem = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
-      const account = { ...accountState, userId: currentUser?.id };
+      const account = { ...auth.accountState, userId: auth.currentUser?.id };
       const tracks = albumTracksForPlayback(
         albumItem,
         account,
@@ -747,11 +745,11 @@ function PageStorefront() {
         void playQueue(playable, queueIndex);
         return;
       }
-      const access = resolveContentAccess(albumItem, accountState);
+      const access = resolveContentAccess(albumItem, auth.accountState);
       if (!access.canStream) return;
       void playTrack(normalizeTrackForPlayback(albumItem, account, "album_modal"));
     },
-    [accountState, catalogPlaybackLookup, currentUser?.id, playQueue, playTrack]
+    [catalogPlaybackLookup, playQueue, playTrack]
   );
 
   const playMixtapeEpCard = useCallback(
@@ -764,15 +762,16 @@ function PageStorefront() {
   );
 
   const playCanonicalCatalogItem = useCallback((item, source) => {
+    const auth = getPageAuthRef();
     const playbackTrack = normalizeTrackForPlayback(
       item,
-      { ...accountState, userId: currentUser?.id },
+      { ...auth.accountState, userId: auth.currentUser?.id },
       source
     );
     if (playbackTrack?.src) {
       void playTrack(playbackTrack);
     }
-  }, [accountState, currentUser?.id, playTrack]);
+  }, [playTrack]);
 
   const goRadio = useCallback((i) => {
     // phase11: startTransition — carousel index is non-urgent
@@ -781,11 +780,11 @@ function PageStorefront() {
 
   // ── HELPERS ───────────────────────────────────────────────────────────────
   const addToCartRaw   = useCallback(item => {
-    if (item.slug && owns(item.slug)) return;
+    if (item.slug && getPageAuthRef().owns?.(item.slug)) return;
     setCart(p => [...p, item]);
     setAddedFlash(item.slug);
     setTimeout(() => setAddedFlash(null), 400);
-  }, [owns]);
+  }, []);
   const addToCart      = useCallback(item => {
     addToCartRaw(item);
   }, [addToCartRaw]);
@@ -824,10 +823,6 @@ function PageStorefront() {
   const prevSingle    = useCallback(() => goToSingle(singleIndex === 0 ? displaySingles.length-1 : singleIndex-1, "left"),  [goToSingle, singleIndex, displaySingles.length]);
   const nextSingle    = useCallback(() => goToSingle(singleIndex === displaySingles.length-1 ? 0 : singleIndex+1, "right"), [goToSingle, singleIndex, displaySingles.length]);
   const currentSingle = useMemo(() => withR2CatalogMedia(displaySingles[singleIndex]), [singleIndex, displaySingles]);
-  const currentSingleAccess = useMemo(
-    () => (currentSingle ? resolveContentAccess(currentSingle, accountState) : null),
-    [currentSingle, accountState]
-  );
   const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
 
   const dismissPreviewAndFeatureModals = useCallback(() => {
@@ -861,9 +856,7 @@ function PageStorefront() {
   }, [
     featureModalOpen,
     albumModalOpen,
-    accountState,
     catalogPlaybackLookup,
-    currentUser?.id,
     playCanonicalCatalogItem,
   ]);
 
@@ -892,9 +885,7 @@ function PageStorefront() {
     [
       previewModalOpen,
       albumModalOpen,
-      accountState,
       catalogPlaybackLookup,
-      currentUser?.id,
       playCanonicalCatalogItem,
     ]
   );
@@ -951,9 +942,10 @@ function PageStorefront() {
   }, [selectedAlbum]);
 
   const handleLibraryChange = useCallback(() => {
-    void refreshAccountState({ reason: "library:change", source: "page.js" });
-    void refreshLibrary({ reason: "library:change", source: "page.js" });
-  }, [refreshAccountState, refreshLibrary]);
+    const auth = getPageAuthRef();
+    void auth.refreshAccountState?.({ reason: "library:change", source: "page.js" });
+    void auth.refreshLibrary?.({ reason: "library:change", source: "page.js" });
+  }, []);
 
   const makePreviewGiftHandler = useCallback(
     (openGiftSheet, release) => () => {
@@ -992,31 +984,23 @@ function PageStorefront() {
     });
     setInventory(inv);
     setClientSecret(null); setCheckingOut(false); clearCart();
-    invalidateEntitlementSnapshot("purchase:completed");
+    const auth = getPageAuthRef();
+    auth.invalidateEntitlementSnapshot?.("purchase:completed");
     await Promise.all([
-      refreshAccountState({
+      auth.refreshAccountState?.({
         source: "page.js",
         reason: "purchase:completed",
         force: true,
       }),
-      refreshLibrary({ source: "page.js", reason: "purchase:completed" }),
+      auth.refreshLibrary?.({ source: "page.js", reason: "purchase:completed" }),
     ]);
     notifyEntitlementsUpdated({ source: "page.js", reason: "checkout-success" });
-    if (showSubscribeCta) setMembershipUpsellOpen(true);
+    setMembershipUpsellOpen(true);
     if (isMobile) setMobileCartOpen(false);
   };
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("checkout") !== "pending") return;
-    if (cart.length === 0) return;
-    window.history.replaceState({}, "", window.location.pathname);
-    void handleCheckout();
-  }, [currentUser, cart]);
-
   const handleSignOut = async () => {
-    await signOut();
+    await getPageAuthRef().signOut?.();
   };
 
   const getDaysInMonth     = (m, y) => new Date(y, m+1, 0).getDate();
@@ -1026,36 +1010,27 @@ function PageStorefront() {
   const prevMonth = () => { if (calMonth===0) { setCalMonth(11); setCalYear(calYear-1); } else setCalMonth(calMonth-1); };
   const nextMonth = () => { if (calMonth===11) { setCalMonth(0); setCalYear(calYear+1); } else setCalMonth(calMonth+1); };
 
-  const accountDisplayName = currentUser?.name?.trim() || currentUser?.email?.split("@")[0] || "Member";
-  const accountDisplayInitial = ((accountDisplayName || "?")[0] || "?").toUpperCase();
-  const accountCircleByline = (currentUser?.name?.trim() || currentUser?.email || "Anonymous").trim();
+  const readAccountCircleByline = () => {
+    const u = getPageAuthRef().currentUser;
+    return (u?.name?.trim() || u?.email || "Anonymous").trim();
+  };
 
   const handleAddComment = postId => {
     if (!blogComment.trim()) return;
-    const name = currentUser ? accountCircleByline : "Anonymous";
+    const u = getPageAuthRef().currentUser;
+    const name = u ? readAccountCircleByline() : "Anonymous";
     setBlogComments(p => ({ ...p, [postId]: [...(p[postId]||[]), { name, text:blogComment, time:new Date().toLocaleString() }] }));
     setBlogComment("");
   };
   const handleCircleSubmit = () => {
     if (!circleQuestion.trim()) return;
-    const name = currentUser ? accountCircleByline : "Anonymous";
+    const u = getPageAuthRef().currentUser;
+    const name = u ? readAccountCircleByline() : "Anonymous";
     const sub  = { id:`sub-${Date.now()}`, text:circleQuestion, category:circleCategory, by:name, time:new Date().toLocaleString() };
     const upd  = [sub, ...circleSubmissions];
     setCircleSubmissions(upd); localStorage.setItem("2mrrw_circle", JSON.stringify(upd));
     setCircleQuestion(""); setCircleSubmitted(true); setTimeout(() => setCircleSubmitted(false), 3500);
   };
-
-  const getUserStatus = () => {
-    if (!currentUser) return null;
-    const hasCollector = myPurchases.some(p => p.slug?.startsWith("exc-card"));
-    const hasBundle    = myPurchases.some(p => p.slug?.startsWith("exc-bundle"));
-    const subs         = circleSubmissions.filter(s => s.by === accountCircleByline || s.by === currentUser?.name).length;
-    if ((hasCollector||hasBundle) && subs >= 1) return { label:"INNER CIRCLE",   color:"#a259ff", glow:"rgba(162,89,255,0.5)" };
-    if  (hasCollector||hasBundle)               return { label:"COLLECTOR",       color:"#ff6b35", glow:"rgba(255,107,53,0.5)" };
-    if  (subs >= 3)                             return { label:"VISIONARY",       color:"#00ffff", glow:"rgba(0,255,255,0.5)" };
-    return { label:"EARLY SUPPORTER", color:"#aaa", glow:"rgba(170,170,170,0.3)" };
-  };
-  const userStatus = getUserStatus();
 
   const closeMobileNav = useCallback(() => {
     if (!mobileNavOpen || mobileNavClosing) return;
@@ -1180,50 +1155,12 @@ function PageStorefront() {
     });
   };
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const raw = params.get("deepLink") || consumePendingDeepLink();
-    if (!raw) return;
-    const parsed = parseDeepLink(raw);
-    if (!parsed) return;
-    if (params.has("deepLink")) {
-      const next = new URL(window.location.href);
-      next.searchParams.delete("deepLink");
-      window.history.replaceState({}, "", next.pathname + (next.search || ""));
-    }
-    if (!currentUser) {
-      setPostAuthRedirect(window.location.pathname + window.location.search || `/?deepLink=${raw}`);
-    }
-    if (parsed.type === "song") {
-      const single = singles.find((s) => s.slug === parsed.slug);
-      if (single) {
-        switchTab("singles");
-        openSingleModal(single);
-      }
-    } else if (parsed.type === "album") {
-      const album = albums.find((a) => a.slug === parsed.slug);
-      if (album) {
-        switchTab("albums");
-        openAlbumModal(album);
-      }
-    } else if (parsed.type === "feature") {
-      const feat = displayFeatures.find((f) => f.slug === parsed.slug);
-      if (feat) {
-        switchTab("singles");
-        openFeatureModal(feat);
-      }
-    }
-  }, [authLoading, currentUser, displayFeatures, openSingleModal, openAlbumModal, openFeatureModal]);
-
   const shopItems      = printfulProducts.length > 0 ? printfulProducts : fallbackMerch;
   const shopIsFallback = !printfulLoading && printfulProducts.length === 0;
 
   const liveStreamDate = nextLiveDateTime.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
   const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
   const currentSlide   = useMemo(() => enrichedRadioSlides[radioIndex], [enrichedRadioSlides, radioIndex]);
-  const accountStateReady = !authLoading;
-
   const handleDonateOpen = useCallback(() => setDonateOpen(true), []);
 
   const exclusiveItems = exclusiveCatalog.map(item => ({
@@ -1255,6 +1192,17 @@ function PageStorefront() {
   // ═══════════════════════════════════════════════════════════════════════════
   return (
     <>
+      <PageAuthRefSync />
+      <PageAuthDeepLinkHandler
+        singles={singles}
+        albums={albums}
+        displayFeatures={displayFeatures}
+        switchTab={switchTab}
+        openSingleModal={openSingleModal}
+        openAlbumModal={openAlbumModal}
+        openFeatureModal={openFeatureModal}
+      />
+      <PageAuthCheckoutPendingEffect cart={cart} onCheckout={handleCheckout} />
       <div ref={cursorRef} style={{position:"fixed",width:28,height:28,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.22) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99999,mixBlendMode:"screen",transition:"left 0.045s linear,top 0.045s linear",display:isMobile?"none":undefined}}/>
       <div ref={cursorTrailRef} style={{position:"fixed",width:16,height:16,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.10) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99998,mixBlendMode:"screen",transition:"left 0.18s ease,top 0.18s ease",display:isMobile?"none":undefined}}/>
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(circle at 18% 18%,rgba(0,255,255,0.026) 0%,transparent 55%),radial-gradient(circle at 82% 80%,rgba(162,89,255,0.018) 0%,transparent 52%)"}}/>
@@ -1425,7 +1373,10 @@ function PageStorefront() {
           <div style={{width:220,flexShrink:0,borderRight:"1px solid #141414",background:"rgba(4,4,4,0.9)",backdropFilter:"blur(20px)",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto",boxShadow:"2px 0 32px rgba(0,0,0,0.5)"}}>
             <div style={{padding:"22px 18px 18px",borderBottom:"1px solid #111",flexShrink:0}}>
               <div style={{fontSize:20,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 24px rgba(0,255,255,0.45)",marginBottom:4}}>2MRRW</div>
-              {currentUser && userStatus && <div style={{fontSize:9,color:userStatus.color,letterSpacing:2.5,fontWeight:700,opacity:0.85}}>{userStatus.label}</div>}
+              <PageAuthSidebarBadge
+                circleSubmissions={circleSubmissions}
+                accountCircleByline={readAccountCircleByline()}
+              />
             </div>
             <nav style={{flex:1,padding:"12px 0",overflowY:"auto"}}>
               {sidebarNav.map(group => {
@@ -1499,7 +1450,6 @@ function PageStorefront() {
                           accountState={ent.entitlementAccountState}
                           userId={auth.userId}
                           onLibraryChange={auth.handleLibraryChange}
-                          catalogLoading={catalogLoading}
                           catalogHasMore={catalogHasMore}
                           onLoadMoreCatalog={loadMoreCatalog}
                           liveStreamDate={liveStreamDate}
@@ -1565,7 +1515,7 @@ function PageStorefront() {
                         </div>
                       </div>
                       <h2 className="section-heading" style={{marginBottom:14}}>Singles</h2>
-                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingleAccess} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} onSingleClick={handleSingleClick} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={ent.entitlementAccountState} userId={auth.userId} isAdmin={auth.isAdminStable} onGift={auth.openGiftSheet} onLibraryChange={auth.handleLibraryChange}/>
+                      <CarouselUI large={!isMobile} isMobile={isMobile} currentSingle={currentSingle} currentSingleAccess={currentSingle ? resolveContentAccess(currentSingle, ent.entitlementAccountState) : null} singleIndex={singleIndex} singles={displaySingles} prevSingle={prevSingle} nextSingle={nextSingle} goToSingle={goToSingle} onSingleClick={handleSingleClick} addToCart={addToCart} addVinylToCart={addVinylToCart} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} accountState={ent.entitlementAccountState} userId={auth.userId} isAdmin={auth.isAdminStable} onGift={auth.openGiftSheet} onLibraryChange={auth.handleLibraryChange}/>
                       <div style={{marginTop:32,marginBottom:4}}>
                         <h2 className="section-heading" style={{marginBottom:14}}>Features</h2>
                         <FeaturesRail features={displayFeatures} isMobile={isMobile} addToCart={addToCart} onOpenFeature={openFeatureModal} accountState={ent.entitlementAccountState} userId={auth.userId} isAdmin={auth.isAdminStable} onGift={auth.openGiftSheet} onLibraryChange={auth.handleLibraryChange}/>
@@ -1686,7 +1636,7 @@ function PageStorefront() {
 
               {/* ══ HELP & SUPPORT ══ */}
               {activeTab==="help" && (
-                <HelpSupportSection userId={currentUser?.id} />
+                <PageAuthHelpSupport />
               )}
 
               {/* ══ BLOG ══ */}
@@ -1752,10 +1702,12 @@ function PageStorefront() {
 
               {/* ══ CIRCLE ══ */}
               {activeTab==="circle" && (
+                <PageAuthSessionBridge circleSubmissions={circleSubmissions} accountCircleByline={readAccountCircleByline()}>
+                {(pa) => (
                 <>
                   <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:6,flexWrap:"wrap"}}>
                     <h2 className="section-heading" style={{margin:0}}>The Circle</h2>
-                    {userStatus && <div style={{fontSize:10,fontWeight:900,letterSpacing:2,padding:"3px 10px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`,boxShadow:`0 0 10px ${userStatus.glow}`}}>{userStatus.label}</div>}
+                    {pa.userStatus && <div style={{fontSize:10,fontWeight:900,letterSpacing:2,padding:"3px 10px",borderRadius:20,background:pa.userStatus.glow+"22",color:pa.userStatus.color,border:`1px solid ${pa.userStatus.color}44`,boxShadow:`0 0 10px ${pa.userStatus.glow}`}}>{pa.userStatus.label}</div>}
                   </div>
                   <p style={{fontSize:13,color:"#444",marginBottom:28,lineHeight:1.8}}>This is not a comment section. It's a direct line. Ask 2MRRW anything. Share what the music means to you. Selected submissions receive an official response.</p>
                   <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:28,marginBottom:32}}>
@@ -1763,7 +1715,7 @@ function PageStorefront() {
                     <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>{["question","thought","feedback","message"].map(cat=><button key={cat} onClick={()=>setCircleCategory(cat)} style={{padding:"6px 12px",fontSize:11,fontWeight:700,letterSpacing:1,cursor:"pointer",border:circleCategory===cat?"1px solid #00ffff":"1px solid #2a2a2a",borderRadius:20,background:circleCategory===cat?"rgba(0,255,255,0.1)":"transparent",color:circleCategory===cat?"#00ffff":"#555",textTransform:"uppercase",transition:"0.2s"}}>{cat}</button>)}</div>
                     <textarea placeholder="Write your question or message…" value={circleQuestion} onChange={e=>setCircleQuestion(e.target.value)} rows={4} style={{width:"100%",padding:"12px 14px",background:"#0a0a0a",border:"1px solid #2a2a2a",color:"white",borderRadius:12,fontSize:14,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",lineHeight:1.7}}/>
                     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:12,flexWrap:"wrap",gap:8}}>
-                      <div style={{fontSize:12,color:"#444"}}>{currentUser?`Posting as ${currentUser.name}`:"Posting anonymously"}</div>
+                      <div style={{fontSize:12,color:"#444"}}>{pa.currentUser?`Posting as ${pa.currentUser.name}`:"Posting anonymously"}</div>
                       <button onClick={handleCircleSubmit} style={{padding:"10px 24px",background:circleSubmitted?"#1a3a1a":"#00ffff",color:circleSubmitted?"#00ff88":"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:13,transition:"0.3s",letterSpacing:1}}>{circleSubmitted?"✓ Submitted":"Submit"}</button>
                     </div>
                     {circleSubmitted && <div style={{marginTop:12,fontSize:12,color:"#00ff88"}}>Your message was received. If selected, 2MRRW will respond here in the archive.</div>}
@@ -1782,15 +1734,19 @@ function PageStorefront() {
                     <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
                       {[{label:"EARLY SUPPORTER",color:"#aaa",desc:"Joined the ecosystem early."},{label:"COLLECTOR",color:"#ff6b35",desc:"Purchased a collector card or bundle."},{label:"VISIONARY",color:"#00ffff",desc:"3+ Circle submissions."},{label:"INNER CIRCLE",color:"#a259ff",desc:"Collector + Circle member."}].map(s=><div key={s.label} style={{padding:"14px",background:"#080808",borderRadius:14,border:`1px solid ${s.color}22`}}><div style={{fontSize:9,fontWeight:900,letterSpacing:2,color:s.color,marginBottom:6}}>{s.label}</div><div style={{fontSize:11,color:"#555",lineHeight:1.6}}>{s.desc}</div></div>)}
                     </div>
-                    {userStatus && <div style={{marginTop:20,padding:"14px 18px",background:userStatus.glow+"10",borderRadius:12,border:`1px solid ${userStatus.color}33`,display:"flex",alignItems:"center",gap:12}}><div style={{fontSize:10,color:"#555"}}>Your status:</div><div style={{fontSize:11,fontWeight:900,letterSpacing:2,color:userStatus.color}}>{userStatus.label}</div></div>}
+                    {pa.userStatus && <div style={{marginTop:20,padding:"14px 18px",background:pa.userStatus.glow+"10",borderRadius:12,border:`1px solid ${pa.userStatus.color}33`,display:"flex",alignItems:"center",gap:12}}><div style={{fontSize:10,color:"#555"}}>Your status:</div><div style={{fontSize:11,fontWeight:900,letterSpacing:2,color:pa.userStatus.color}}>{pa.userStatus.label}</div></div>}
                   </div>
                 </>
+                )}
+                </PageAuthSessionBridge>
               )}
 
               {/* ══ INNER CIRCLE ══ */}
               {activeTab==="innercircle" && (
+                <PageAuthSessionBridge circleSubmissions={circleSubmissions} accountCircleByline={readAccountCircleByline()}>
+                {(pa) => (
                 <>
-                  {userStatus?.label !== "INNER CIRCLE" ? (
+                  {pa.userStatus?.label !== "INNER CIRCLE" ? (
                     <div style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",padding:isMobile?"40px 16px":"60px 20px"}}>
                       <div style={{fontSize:56,lineHeight:1,marginBottom:24,filter:"drop-shadow(0 0 24px rgba(162,89,255,0.5))",animation:"pulse 3s infinite"}}>🔒</div>
                       <div style={{fontSize:11,color:"#a259ff",letterSpacing:4,marginBottom:12,fontWeight:700}}>RESTRICTED ACCESS</div>
@@ -1798,7 +1754,7 @@ function PageStorefront() {
                       <div style={{fontSize:14,color:"#555",maxWidth:400,lineHeight:1.9,marginBottom:36}}>This section is reserved for verified Inner Circle members — those who own a piece of the music and are active in the conversation.</div>
                       <div style={{width:"100%",maxWidth:460,display:"flex",flexDirection:"column",gap:12,marginBottom:32}}>
                         <div style={{fontSize:11,color:"#a259ff",letterSpacing:3,marginBottom:4,fontWeight:700}}>HOW TO UNLOCK</div>
-                        {[{label:"Own a Collector Card or Bundle",done:myPurchases.some(p=>p.slug?.startsWith("exc-card")||p.slug?.startsWith("exc-bundle")),link:"cards",linkLabel:"Collector's Cards →"},{label:"Submit to The Circle",done:circleSubmissions.filter(s=>s.by===currentUser?.name).length>=1,link:"circle",linkLabel:"Go to Circle →"}].map((step,i)=>(
+                        {[{label:"Own a Collector Card or Bundle",done:pa.myPurchases.some(p=>p.slug?.startsWith("exc-card")||p.slug?.startsWith("exc-bundle")),link:"cards",linkLabel:"Collector's Cards →"},{label:"Submit to The Circle",done:circleSubmissions.filter(s=>s.by===pa.currentUser?.name).length>=1,link:"circle",linkLabel:"Go to Circle →"}].map((step,i)=>(
                           <div key={i} style={{padding:"16px 20px",background:step.done?"rgba(162,89,255,0.06)":"#0d0d0d",border:`1px solid ${step.done?"rgba(162,89,255,0.3)":"#1e1e1e"}`,borderRadius:14,display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
                             <div style={{width:28,height:28,borderRadius:"50%",background:step.done?"rgba(162,89,255,0.2)":"#111",border:`1px solid ${step.done?"#a259ff":"#222"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:step.done?"#a259ff":"#333",flexShrink:0}}>{step.done?"✓":i+1}</div>
                             <div style={{flex:1,fontSize:13,color:step.done?"#a259ff":"#666",fontWeight:step.done?700:400}}>{step.label}</div>
@@ -1806,7 +1762,7 @@ function PageStorefront() {
                           </div>
                         ))}
                       </div>
-                      {userStatus && <div style={{fontSize:12,color:"#444"}}>Current status: <span style={{color:userStatus.color,fontWeight:700}}>{userStatus.label}</span></div>}
+                      {pa.userStatus && <div style={{fontSize:12,color:"#444"}}>Current status: <span style={{color:pa.userStatus.color,fontWeight:700}}>{pa.userStatus.label}</span></div>}
                     </div>
                   ) : (
                     <>
@@ -1820,7 +1776,7 @@ function PageStorefront() {
                         </div>
                       ) : (
                         <>
-                          <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:6,flexWrap:"wrap"}}><h2 className="section-heading" style={{margin:0}}>Inner Circle</h2>{userStatus&&<div style={{fontSize:10,fontWeight:900,letterSpacing:2,padding:"3px 10px",borderRadius:20,background:"rgba(162,89,255,0.12)",color:"#a259ff",border:"1px solid rgba(162,89,255,0.3)"}}>{userStatus.label}</div>}</div>
+                          <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:6,flexWrap:"wrap"}}><h2 className="section-heading" style={{margin:0}}>Inner Circle</h2>{pa.userStatus&&<div style={{fontSize:10,fontWeight:900,letterSpacing:2,padding:"3px 10px",borderRadius:20,background:"rgba(162,89,255,0.12)",color:"#a259ff",border:"1px solid rgba(162,89,255,0.3)"}}>{pa.userStatus.label}</div>}</div>
                           <p style={{fontSize:13,color:"#444",marginBottom:32,lineHeight:1.8}}>Exclusive posts for believers. This is where the real conversation lives.</p>
                           <div style={{background:"linear-gradient(135deg,#0d0814,#0d0d0d)",border:"1px solid rgba(162,89,255,0.2)",borderRadius:20,padding:isMobile?"20px":"28px 30px",marginBottom:28,position:"relative",overflow:"hidden"}}>
                             <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at top left,rgba(162,89,255,0.06) 0%,transparent 60%)",pointerEvents:"none"}}/>
@@ -1853,24 +1809,28 @@ function PageStorefront() {
                     </>
                   )}
                 </>
+                )}
+                </PageAuthSessionBridge>
               )}
 
               {/* ══ ACCOUNT ══ */}
               {activeTab==="account" && (
+                <PageAuthSessionBridge circleSubmissions={circleSubmissions} accountCircleByline={readAccountCircleByline()}>
+                {(pa) => (
                 <>
                   <h2 className="section-heading">Account</h2>
-                  {currentUser ? (
+                  {pa.currentUser ? (
                     <div style={{display:"flex",flexDirection:"column",gap:20}}>
                       <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:28}}>
-                        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{accountDisplayInitial}</div><div><div style={{fontSize:18,fontWeight:800}}>{accountDisplayName}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{currentUser?.email || "—"}</div></div>{userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:userStatus.glow+"22",color:userStatus.color,border:`1px solid ${userStatus.color}44`}}>{userStatus.label}</div>}</div>
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===accountCircleByline||s.by===currentUser?.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{pa.accountDisplayInitial}</div><div><div style={{fontSize:18,fontWeight:800}}>{pa.accountDisplayName}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{pa.currentUser?.email || "—"}</div></div>{pa.userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:pa.userStatus.glow+"22",color:pa.userStatus.color,border:`1px solid ${pa.userStatus.color}44`}}>{pa.userStatus.label}</div>}</div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:pa.myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===pa.accountCircleByline||s.by===pa.currentUser?.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Collection",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
                       <AuthSurfaceIsland islandId="account-admin">
                         {(auth) => (
                           <>
                             {auth.isAdminStable ? <GiftsSentSection /> : null}
-                            {accountStateReady && auth.isAdminStable ? (
+                            {auth.isAdminStable ? (
                               <CollectorCardAdminPanel accountState={auth.accountState} />
                             ) : null}
                           </>
@@ -1884,6 +1844,8 @@ function PageStorefront() {
                     </div>
                   )}
                 </>
+                )}
+                </PageAuthSessionBridge>
               )}
 
             </div>{/* end tab panel */}
@@ -1907,7 +1869,14 @@ function PageStorefront() {
             <button onClick={clearCart} style={{marginTop:15,width:"100%",padding:12,background:"rgba(255,30,30,0.15)",color:"#ff4d4d",fontWeight:"bold",border:"1px solid #ff4d4d33",borderRadius:8,cursor:"pointer",fontSize:12,transition:"0.2s"}} onMouseEnter={e=>e.currentTarget.style.background="rgba(255,30,30,0.25)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(255,30,30,0.15)"}>CLEAR CART</button>
             <button onClick={handleCheckout} disabled={checkingOut||cart.length===0} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{marginTop:10,width:"100%",padding:12,background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",transition:"0.25s",fontSize:13,fontWeight:700}}>{checkingOut?"Loading…":"Checkout"}</button>
             {checkoutError && <div style={{marginTop:8}}><p style={{color:"#ff4d4d",fontSize:12}}>{checkoutError}</p></div>}
-            {currentUser && <div><p style={{fontSize:11,color:"#555",marginTop:12,textAlign:"center"}}>Signed in as {currentUser.name}</p>{userStatus&&<div style={{marginTop:6,textAlign:"center",fontSize:10,fontWeight:900,letterSpacing:1,color:userStatus.color}}>{userStatus.label}</div>}</div>}
+            <PageAuthSessionBridge circleSubmissions={circleSubmissions} accountCircleByline={readAccountCircleByline()}>
+              {(pa) => pa.currentUser ? (
+                <div>
+                  <p style={{fontSize:11,color:"#555",marginTop:12,textAlign:"center"}}>Signed in as {pa.currentUser.name}</p>
+                  {pa.userStatus && <div style={{marginTop:6,textAlign:"center",fontSize:10,fontWeight:900,letterSpacing:1,color:pa.userStatus.color}}>{pa.userStatus.label}</div>}
+                </div>
+              ) : null}
+            </PageAuthSessionBridge>
           </div>
         )}
       </div>
@@ -1955,7 +1924,10 @@ function PageStorefront() {
                       cursor: "pointer",
                     }}
                   />
-                  {currentUser&&userStatus&&<motion.div style={{padding:"10px 24px",marginBottom:4,display:"flex",alignItems:"center",gap:10}}><motion.div style={{width:32,height:32,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:900,color:"#00ffff"}}>{accountDisplayInitial}</motion.div><motion.div><motion.div style={{fontSize:13,fontWeight:700,color:"white"}}>{accountDisplayName}</motion.div><motion.div style={{fontSize:9,color:userStatus.color,fontWeight:700,letterSpacing:1}}>{userStatus.label}</motion.div></motion.div></motion.div>}
+                  <PageAuthMobileNavBadge
+                    circleSubmissions={circleSubmissions}
+                    accountCircleByline={readAccountCircleByline()}
+                  />
                   {sidebarNav.map(group=>{
                     const hasSubs = group.subTabs.length > 0;
                     const isSheetExpanded = mobileNavExpandedGroups.has(group.groupId);
@@ -2089,7 +2061,9 @@ function PageStorefront() {
 
       {/* ── POST-PURCHASE MEMBERSHIP UPSELL ── */}
       <AnimatePresence>
-        {membershipUpsellOpen && showSubscribeCta && (
+        <EntitlementSurfaceIsland islandId="membership-upsell">
+          {(ent) =>
+            membershipUpsellOpen && ent.showSubscribeCta ? (
           <motion.div key="membership-upsell" {...OVERLAY_FADE} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
             <motion.div {...(isMobile ? SHEET_UP : MODAL_CENTER)} style={{background:"#0a0a0a",padding:isMobile?22:30,borderRadius:isMobile?"20px 20px 0 0":20,width:isMobile?"100%":420,border:"1px solid #222",alignSelf:isMobile?"flex-end":"center",boxShadow:"0 0 40px rgba(0,255,255,0.12)"}}>
               <div style={{fontSize:11,color:"#00ffff",letterSpacing:3,marginBottom:12,textTransform:"uppercase"}}>Thanks for supporting</div>
@@ -2099,7 +2073,9 @@ function PageStorefront() {
               <button onClick={()=>setMembershipUpsellOpen(false)} style={{width:"100%",padding:"12px 0",background:"transparent",color:"#777",border:"1px solid #333",borderRadius:10,cursor:"pointer",fontSize:13}}>Maybe later</button>
             </motion.div>
           </motion.div>
-        )}
+            ) : null
+          }
+        </EntitlementSurfaceIsland>
       </AnimatePresence>
 
       <Suspense fallback={null}>

@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import AuthGate from "@/components/auth/AuthGate";
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
+
+const AUTH_ROUTE_PREFIXES = ["/login", "/join", "/verify-otp"];
 
 const BOOT_PLACEHOLDER = (
   <div
@@ -23,8 +26,13 @@ const BOOT_PLACEHOLDER = (
  */
 export default function AppAuthRoot({ children }) {
   const { authStatus, sessionHydrated } = useAuth();
+  const pathname = usePathname();
   const [hydrated, setHydrated] = useState(false);
-  const showAuthGate = sessionHydrated && authStatus === "unauthenticated";
+  const isAuthRoute = AUTH_ROUTE_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname?.startsWith(`${prefix}/`)
+  );
+  const showAuthGate =
+    sessionHydrated && authStatus === "unauthenticated" && !isAuthRoute;
 
   useEffect(() => {
     perfMark(MARKS.HYDRATION_START);
@@ -35,13 +43,22 @@ export default function AppAuthRoot({ children }) {
     if (hydrated) perfMark(MARKS.HYDRATION_END);
   }, [hydrated]);
 
-  if (!hydrated) {
-    return BOOT_PLACEHOLDER;
-  }
-
   return (
     <>
       {children}
+      {!hydrated ? (
+        <div
+          aria-hidden
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 8999,
+            pointerEvents: "none",
+          }}
+        >
+          {BOOT_PLACEHOLDER}
+        </div>
+      ) : null}
       {showAuthGate ? (
         <AuthGate variant="root" open />
       ) : null}

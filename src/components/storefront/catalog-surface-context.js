@@ -22,9 +22,14 @@ import {
   logUiChurn,
   recordPlaybackTraceContext,
 } from "@/lib/diagnostics/playback-trace";
+import {
+  isUiHydrationTraceEnabled,
+  logUiHydrationTrace,
+} from "@/lib/diagnostics/ui-hydration-trace";
 import { useAbortController } from "@/system/guards/useAbortController";
 
 const CatalogSurfaceContext = createContext(null);
+const CatalogLoadingContext = createContext(false);
 
 function commitBrowseSinglesIfChanged(setBrowseSingles, nextSingles) {
   setBrowseSingles((prev) => commitCatalogSinglesDeterministic(prev, nextSingles));
@@ -139,7 +144,12 @@ export function CatalogSurfaceProvider({
           setCatalogHasMore(false);
         }
       } finally {
-        if (!cancelled) setCatalogLoading(false);
+        if (!cancelled) {
+          setCatalogLoading(false);
+          if (isUiHydrationTraceEnabled() && catalogPage === 1) {
+            logUiHydrationTrace("CATALOG_LOADING_COMPLETE", { catalogPage });
+          }
+        }
       }
     })();
     return () => {
@@ -190,7 +200,6 @@ export function CatalogSurfaceProvider({
       browseSingles,
       displaySingles,
       displayFeatures,
-      catalogLoading,
       catalogHasMore,
       catalogPage,
       loadMoreCatalog,
@@ -200,7 +209,6 @@ export function CatalogSurfaceProvider({
       browseSingles,
       displaySingles,
       displayFeatures,
-      catalogLoading,
       catalogHasMore,
       catalogPage,
       loadMoreCatalog,
@@ -209,7 +217,11 @@ export function CatalogSurfaceProvider({
   );
 
   return (
-    <CatalogSurfaceContext.Provider value={value}>{children}</CatalogSurfaceContext.Provider>
+    <CatalogSurfaceContext.Provider value={value}>
+      <CatalogLoadingContext.Provider value={catalogLoading}>
+        {children}
+      </CatalogLoadingContext.Provider>
+    </CatalogSurfaceContext.Provider>
   );
 }
 
@@ -219,4 +231,9 @@ export function useCatalogSurface() {
     throw new Error("useCatalogSurface must be used within CatalogSurfaceProvider");
   }
   return ctx;
+}
+
+/** Phase R1 — skeleton/load-more only; cards must not subscribe to this. */
+export function useCatalogLoading() {
+  return useContext(CatalogLoadingContext);
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useState } from "react";
+import { useMountEnterAnimation, useSlugEnterAnimation } from "@/hooks/useMountEnterAnimation";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
@@ -10,6 +11,8 @@ import { resolveContentAccess } from "@/lib/music-access";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singleIndex, singles, prevSingle, nextSingle, goToSingle, onSingleClick, addToCart, addVinylToCart, buttonHoverIn, buttonHoverOut, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   const [previewHover, setPreviewHover] = useState(false);
+  const { shouldAnimate: shouldAnimateCover } = useMountEnterAnimation();
+  const shouldAnimateTitle = useSlugEnterAnimation(currentSingle?.slug);
   const access = currentSingleAccess || (currentSingle ? resolveContentAccess(currentSingle, accountState) : null);
   const overlayPlayLabel = access?.canStream ? "Listen" : "Preview";
   const coverDisplay = catalogCoverDisplay(currentSingle);
@@ -38,7 +41,7 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
                 boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
                 transition: "filter 0.3s",
                 filter: previewHover ? "brightness(0.55)" : "brightness(1)",
-                animation: "fadeInCover 0.4s ease forwards",
+                animation: shouldAnimateCover ? "fadeInCover 0.4s ease forwards" : undefined,
               }}
             />
             <div onClick={()=>onSingleClick?.(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,borderRadius:14,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
@@ -64,7 +67,7 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
               boxShadow: large ? "0 10px 50px rgba(0,0,0,0.7)" : "0 8px 40px rgba(0,0,0,0.6)",
               transition: "filter 0.3s",
               filter: previewHover ? "brightness(0.55)" : "brightness(1)",
-              animation: "fadeInCover 0.4s ease forwards",
+              animation: shouldAnimateCover ? "fadeInCover 0.4s ease forwards" : undefined,
             }}
           />
           <div onClick={()=>onSingleClick?.(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,borderRadius:large?18:16,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
@@ -74,7 +77,7 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
         </div>
       )}
       <div style={{flex:1,display:"flex",flexDirection:"column",gap:isMobile?10:large?14:12}}>
-        <div key={`title-${currentSingle.slug}`} className={isMobile?"song-title-turquoise-glow":"hero-title-glow"} style={{fontSize:isMobile?22:large?30:26,fontWeight:900,letterSpacing:2,animation:"fadeInUp 0.35s ease forwards"}}>{currentSingle.title}</div>
+        <div className={isMobile?"song-title-turquoise-glow":"hero-title-glow"} style={{fontSize:isMobile?22:large?30:26,fontWeight:900,letterSpacing:2,animation:shouldAnimateTitle?"fadeInUp 0.35s ease forwards":undefined}}>{currentSingle.title}</div>
         <div style={{fontSize:13,color:"#555",letterSpacing:1,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <span>SINGLE{large&&!isMobile?` · ${singleIndex+1} of ${singles.length}`:""}</span>
           <MusicAccessBadge access={access} label={access?.badge} compact />

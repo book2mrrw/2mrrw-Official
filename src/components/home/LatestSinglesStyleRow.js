@@ -1,6 +1,11 @@
 "use client";
 
-import { forwardRef, memo, useMemo } from "react";
+import { forwardRef, memo, useMemo, useEffect } from "react";
+import { useMountEnterAnimation } from "@/hooks/useMountEnterAnimation";
+import {
+  isUiHydrationTraceEnabled,
+  logUiHydrationTrace,
+} from "@/lib/diagnostics/ui-hydration-trace";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
@@ -40,6 +45,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
   }, [cardMedia, catalogPlaybackLookup, mediaItem]);
   const coverDisplay = useMemo(() => catalogCoverDisplay(mediaItem), [mediaItem]);
   const playItemResolved = useMemo(() => withR2CatalogMedia(playItem), [playItem]);
+  const { shouldAnimate } = useMountEnterAnimation();
 
   return (
     <PlaybackPrewarmCardShell
@@ -53,7 +59,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
       enabled={showPlayActions}
       data-single-card={cardMedia === "video" ? true : undefined}
       onClick={() => onCardClick?.(mediaItem)}
-      className="catalog-card-enter"
+      className={shouldAnimate ? "catalog-card-enter" : undefined}
       style={{
         flex: "0 0 auto",
         width: isMobile ? 160 : 200,
@@ -192,6 +198,11 @@ const LatestSinglesStyleRow = forwardRef(function LatestSinglesStyleRow(
   },
   ref
 ) {
+  useEffect(() => {
+    if (!isUiHydrationTraceEnabled()) return;
+    logUiHydrationTrace("LATEST_SINGLES_RENDER", { count: items?.length ?? 0 });
+  });
+
   if (!items?.length) return null;
 
   return (

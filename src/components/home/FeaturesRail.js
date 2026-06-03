@@ -1,6 +1,11 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, useEffect } from "react";
+import { useMountEnterAnimation } from "@/hooks/useMountEnterAnimation";
+import {
+  isUiHydrationTraceEnabled,
+  logUiHydrationTrace,
+} from "@/lib/diagnostics/ui-hydration-trace";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
@@ -26,6 +31,7 @@ const FeatureCard = memo(function FeatureCard({
   );
   const showPlayActions = itemHasPlayableAudio(mediaItem, access);
   const coverDisplay = useMemo(() => catalogCoverDisplay(mediaItem), [mediaItem]);
+  const { shouldAnimate } = useMountEnterAnimation();
 
   return (
     <div
@@ -36,8 +42,8 @@ const FeatureCard = memo(function FeatureCard({
         background: "#0a0a0a",
         borderRadius: 14,
         border: "1px solid #1a1a1a",
-        opacity: 0,
-        animation: `fadeInUp 0.5s ease ${index * 0.09}s forwards`,
+        opacity: shouldAnimate ? 0 : 1,
+        animation: shouldAnimate ? `fadeInUp 0.5s ease ${index * 0.09}s forwards` : undefined,
         transition: "border-color 0.25s",
         position: "relative",
       }}
@@ -126,6 +132,11 @@ function FeaturesRail({
   onGift,
   onLibraryChange,
 }) {
+  useEffect(() => {
+    if (!isUiHydrationTraceEnabled()) return;
+    logUiHydrationTrace("FEATURES_RAIL_RENDER", { count: features?.length ?? 0 });
+  });
+
   return (
     <div
       className="features-row"
