@@ -23,9 +23,13 @@ import { getPageAuthRef } from "@/lib/storefront/page-auth-ref";
 import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import {
   ensureStorefrontCarouselVideosPlaying,
+  isStorefrontCarouselMediaHealthy,
+  pauseStorefrontCarouselVideos,
   pauseStorefrontCarouselVideosWhenDocumentHidden,
   syncMobileHeroWithStorefrontCarousel,
 } from "@/lib/storefront/storefront-persistent-media";
+import { releaseRetainedOfflineBlobUrls } from "@/lib/offline-cache";
+import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 import PageAuthRefSync from "@/components/storefront/PageAuthRefSync";
 import {
   PageAuthSidebarBadge,
@@ -391,6 +395,7 @@ function PageStorefront() {
   const ensureStorefrontCarouselMedia = useCallback(() => {
     const row = singlesRowRef.current;
     if (!row) return;
+    if (isStorefrontCarouselMediaHealthy(row)) return;
     const anyCarouselInView = ensureStorefrontCarouselVideosPlaying(row);
     syncMobileHeroWithStorefrontCarousel(
       heroVideoRef.current,
@@ -603,12 +608,12 @@ function PageStorefront() {
     const mainScroll = mainScrollRef.current;
     row?.addEventListener("scroll", onLayoutChange, { passive: true });
     mainScroll?.addEventListener("scroll", onLayoutChange, { passive: true });
-    window.addEventListener("resize", onLayoutChange);
     ensureStorefrontCarouselMedia();
     const onVisibility = () => {
       if (document.hidden) {
         pauseStorefrontCarouselVideosWhenDocumentHidden(singlesRowRef.current);
-      } else {
+        releaseRetainedOfflineBlobUrls();
+      } else if (!getPagePlaybackActionsBridge()?.isPlaying) {
         ensureStorefrontCarouselMedia();
       }
     };
@@ -617,7 +622,6 @@ function PageStorefront() {
       window.clearTimeout(debounceTimer);
       row?.removeEventListener("scroll", onLayoutChange);
       mainScroll?.removeEventListener("scroll", onLayoutChange);
-      window.removeEventListener("resize", onLayoutChange);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [activeTab, ensureStorefrontCarouselMedia]);
@@ -700,14 +704,58 @@ function PageStorefront() {
 
   useEffect(() => {
     const paths = { shop:"shop", blog:"community", vision:"community", circle:"community", innercircle:"community", shows:"shows", live:"live", vault:"exclusive" };
-    Object.values(ambientRefs.current).forEach(a => { try { a.pause(); } catch {} });
-    if (soundOn && paths[activeTab]) {
+    const pauseAmbient = () => {
+      Object.values(ambientRefs.current).forEach((a) => {
+        try {
+          a.pause();
+        } catch {
+          /* non-fatal */
+        }
+      });
+    };
+    pauseAmbient();
+    const globalPlaybackActive = Boolean(getPagePlaybackActionsBridge()?.isPlaying);
+    if (
+      soundOn &&
+      paths[activeTab] &&
+      !document.hidden &&
+      !globalPlaybackActive
+    ) {
       const src = catalogPublicMediaUrl(`audio/ambient/${paths[activeTab]}.mp3`);
-      if (!ambientRefs.current[src]) { try { const a=new Audio(src); a.loop=true; a.volume=0.07; ambientRefs.current[src]=a; } catch {} }
-      if (ambientRefs.current[src]) ambientRefs.current[src].play().catch(()=>{});
+      if (!ambientRefs.current[src]) {
+        try {
+          const a = new Audio(src);
+          a.loop = true;
+          a.volume = 0.07;
+          ambientRefs.current[src] = a;
+        } catch {
+          /* non-fatal */
+        }
+      }
+      if (ambientRefs.current[src]) ambientRefs.current[src].play().catch(() => {});
     }
-    return () => { Object.values(ambientRefs.current).forEach(a => { try { a.pause(); } catch {} }); };
+    return pauseAmbient;
   }, [activeTab, soundOn]);
+
+  useEffect(() => {
+    if (activeTab !== "home") return undefined;
+    const trimHeavyHomeMedia = () => {
+      const globalPlaybackActive = Boolean(getPagePlaybackActionsBridge()?.isPlaying);
+      if (document.hidden || globalPlaybackActive) {
+        Object.values(ambientRefs.current).forEach((a) => {
+          try {
+            a.pause();
+          } catch {
+            /* non-fatal */
+          }
+        });
+        pauseStorefrontCarouselVideos(singlesRowRef.current);
+      }
+    };
+    trimHeavyHomeMedia();
+    const id = window.setInterval(trimHeavyHomeMedia, 2000);
+    return () => window.clearInterval(id);
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "live") {
