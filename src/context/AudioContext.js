@@ -599,6 +599,52 @@ function isLifecycleInterruptReason(reason) {
   );
 }
 
+/** Commands that must resume Web Audio synchronously inside the activating gesture (before queue microtask). */
+const USER_GESTURE_PLAYBACK_COMMANDS = new Set([
+  PLAYBACK_COMMANDS.PLAY_TRACK,
+  PLAYBACK_COMMANDS.RESUME,
+  PLAYBACK_COMMANDS.PLAY_QUEUE,
+  PLAYBACK_COMMANDS.NEXT_TRACK,
+  PLAYBACK_COMMANDS.PREV_TRACK,
+  PLAYBACK_COMMANDS.REPLACE_TRACK,
+]);
+
+/**
+ * Invoke AudioContext.resume() synchronously inside a user gesture (no await before call).
+ * iOS rejects or defers resume when resume() is first reached after queue/stream awaits.
+ */
+function resumeWebAudioContextFromUserGesture(ctxRef, source = "resumeWebAudioContextFromUserGesture") {
+  const ctx = ctxRef?.current;
+  if (!ctx || ctx.state !== "suspended") return false;
+  const prevState = ctx.state;
+  try {
+    void ctx.resume();
+    if (isPlaybackTraceEnabled()) {
+      logAudioContextStateChange({
+        source,
+        prevState,
+        nextState: ctx.state,
+        resumed: ctx.state === "running",
+        syncGesture: true,
+      });
+    }
+    return true;
+  } catch (e) {
+    if (isPlaybackTraceEnabled()) {
+      logAudioContextStateChange({
+        source,
+        prevState,
+        nextState: ctx.state,
+        resumed: false,
+        syncGesture: true,
+        error: e?.message ?? String(e),
+      });
+    }
+    console.warn("[WebAudio] sync gesture resume failed:", e);
+    return false;
+  }
+}
+
 /** Safari keeps AudioContext suspended until resumed inside a user gesture. */
 async function resumeWebAudioContextIfSuspended(ctxRef, source = "resumeWebAudioContextIfSuspended") {
   const ctx = ctxRef?.current;
@@ -1953,9 +1999,14 @@ export function AudioProvider({ children }) {
   }, []);
 
   const initWebAudio = useCallback(() => {
-    if (webAudioInitializedRef.current || typeof window === "undefined") return;
+    if (typeof window === "undefined") return;
     const audio = audioRef.current;
     if (!audio) return;
+    const needsDownstreamReconnect =
+      sourceRef.current &&
+      audioCtxRef.current?.state !== "closed" &&
+      !webAudioInitializedRef.current;
+    if (webAudioInitializedRef.current && !needsDownstreamReconnect) return;
     mediaElementSourceElementRef.current = audio;
 
     try {
@@ -1964,6 +2015,11 @@ export function AudioProvider({ children }) {
 
       let ctx = audioCtxRef.current;
       let source = sourceRef.current;
+
+      if (ctx?.state === "closed") {
+        sourceRef.current = null;
+        source = null;
+      }
 
       if (ctx && ctx.state !== "closed" && source && mediaElementSourceElementRef.current === audio) {
         connectWebAudioDownstream(ctx, source);
@@ -1983,9 +2039,22 @@ export function AudioProvider({ children }) {
           sourceRef.current = source;
           mediaElementSourceElementRef.current = audio;
         } else if (!sourceRef.current) {
-          webAudioAvailableRef.current = false;
-          webAudioInitializedRef.current = false;
-          return;
+          try {
+            delete audio[MRRW_MEDIA_SOURCE_BOUND];
+          } catch {
+            audio[MRRW_MEDIA_SOURCE_BOUND] = false;
+          }
+          mediaElementSourceElementRef.current = null;
+          try {
+            source = ctx.createMediaElementSource(audio);
+            audio[MRRW_MEDIA_SOURCE_BOUND] = true;
+            sourceRef.current = source;
+            mediaElementSourceElementRef.current = audio;
+          } catch {
+            webAudioAvailableRef.current = false;
+            webAudioInitializedRef.current = false;
+            return;
+          }
         }
       }
 
@@ -2059,39 +2128,48 @@ export function AudioProvider({ children }) {
     if (typeof window === "undefined") return undefined;
 
     const unlockFromGesture = async () => {
-      if (sessionUnlockedRef.current) return;
-      sessionUnlockedRef.current = true;
+      const ctxSuspended = audioCtxRef.current?.state === "suspended";
+      if (sessionUnlockedRef.current && !ctxSuspended) return;
 
-      const audio = audioRef.current;
-      if (audio) {
-        try {
-          audio.load();
-        } catch {
-          /* Android session priming */
+      const firstSessionUnlock = !sessionUnlockedRef.current;
+      if (firstSessionUnlock) {
+        sessionUnlockedRef.current = true;
+        const audio = audioRef.current;
+        if (audio) {
+          try {
+            audio.load();
+          } catch {
+            /* Android session priming */
+          }
         }
       }
 
       initWebAudio();
-      await resumeWebAudioContextIfSuspended(audioCtxRef);
+      resumeWebAudioContextFromUserGesture(audioCtxRef, "gesture-unlock-sync");
+      await resumeWebAudioContextIfSuspended(audioCtxRef, "gesture-unlock");
       recordAudioContextState(audioCtxRef.current, "gesture-unlock");
 
-      try {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        if (Ctx && !audioCtxRef.current) {
-          const ephemeral = new Ctx();
-          if (ephemeral.state === "suspended") {
-            await ephemeral.resume();
+      if (firstSessionUnlock) {
+        try {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (Ctx && !audioCtxRef.current) {
+            const ephemeral = new Ctx();
+            if (ephemeral.state === "suspended") {
+              await ephemeral.resume();
+            }
+            recordAudioContextState(ephemeral, "ephemeral-unlock");
+            await ephemeral.close();
           }
-          recordAudioContextState(ephemeral, "ephemeral-unlock");
-          await ephemeral.close();
+        } catch {
+          /* iOS unlock best-effort */
         }
-      } catch {
-        /* iOS unlock best-effort */
       }
 
-      GESTURE_UNLOCK_EVENTS.forEach((evt) => {
-        document.removeEventListener(evt, unlockFromGesture, true);
-      });
+      if (audioCtxRef.current?.state === "running") {
+        GESTURE_UNLOCK_EVENTS.forEach((evt) => {
+          document.removeEventListener(evt, unlockFromGesture, true);
+        });
+      }
     };
 
     GESTURE_UNLOCK_EVENTS.forEach((evt) => {
@@ -3043,7 +3121,7 @@ export function AudioProvider({ children }) {
         }
         reportPlaybackDiagnostic({
           level: "warn",
-          code: "WEB_AUDIO_SUSPENDED_CONTINUE_PLAY",
+          code: "WEB_AUDIO_SUSPENDED_BLOCKED_PLAY",
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
           requestId,
           state: stateRef.current,
@@ -3053,6 +3131,13 @@ export function AudioProvider({ children }) {
             lightResumeOk: lightOk,
           },
         });
+        patchState({
+          isPlaying: false,
+          playbackState: "paused",
+          isBuffering: false,
+          error: "Tap play to continue.",
+        });
+        return false;
       }
     }
     setPreviewEnded(false);
@@ -3964,8 +4049,17 @@ export function AudioProvider({ children }) {
         if (!audio || !track?.src) return false;
 
         initWebAudio();
+        resumeWebAudioContextFromUserGesture(audioCtxRef, `recoverAudioHard:${reason}:sync`);
         await resumeWebAudioContextIfSuspended(audioCtxRef);
         recordAudioContextState(audioCtxRef.current, `recoverAudioHard:${reason}`);
+        if (
+          sourceRef.current &&
+          audioCtxRef.current?.state !== "closed" &&
+          !webAudioInitializedRef.current
+        ) {
+          connectWebAudioDownstream(audioCtxRef.current, sourceRef.current);
+          recordAudioContextState(audioCtxRef.current, "recoverAudioHard:graph-reconnect");
+        }
 
         let src = track.src;
         const streamSlug = parseStreamSlugFromSrc(src) || track.slug;
@@ -4094,6 +4188,7 @@ export function AudioProvider({ children }) {
       }
     },
     [
+      connectWebAudioDownstream,
       initWebAudio,
       patchState,
       resolveLibraryStreamForTrack,
@@ -4972,10 +5067,13 @@ export function AudioProvider({ children }) {
       initWebAudio();
       await resumeWebAudioContextIfSuspended(audioCtxRef);
       if (!(await ensureWebAudioRunning(audioCtxRef))) {
-        return requestPlaybackRecovery(
-          PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
-          { reason: "audio_context_suspended", resumeAfter: true }
-        );
+        patchState({
+          isPlaying: false,
+          playbackState: "paused",
+          isBuffering: false,
+          error: "Tap play to continue.",
+        });
+        return false;
       }
       await audio.play();
       if (audio.paused) {
@@ -5338,6 +5436,11 @@ export function AudioProvider({ children }) {
     const isEmergencyBypass =
       resolvedType === PLAYBACK_COMMANDS.STOP || resolvedType === PLAYBACK_COMMANDS.PAUSE;
 
+    if (USER_GESTURE_PLAYBACK_COMMANDS.has(resolvedType)) {
+      initWebAudio();
+      resumeWebAudioContextFromUserGesture(audioCtxRef, `dispatch:${resolvedType}`);
+    }
+
     const run = async () => {
       commandExecutionDepthRef.current += 1;
       perfMark(MARKS.PLAYBACK_QUEUE_RESOLVED);
@@ -5445,7 +5548,7 @@ export function AudioProvider({ children }) {
     }
     commandQueueRef.current = commandQueueRef.current.catch(() => undefined).then(run);
     return commandQueueRef.current;
-  }, [executePlaybackCommand]);
+  }, [executePlaybackCommand, initWebAudio]);
 
   useEffect(() => {
     dispatchPlaybackCommandRef.current = dispatchPlaybackCommand;
@@ -5529,12 +5632,14 @@ export function AudioProvider({ children }) {
     }, { commandType: PLAYBACK_COMMANDS.PLAY_TRACK });
     setPlaybackScenario(scenario.label, scenario.meta);
     perfMark(MARKS.PLAYBACK_TAP);
+    initWebAudio();
+    resumeWebAudioContextFromUserGesture(audioCtxRef, "playTrack:gesture");
     return dispatchPlaybackCommand(
       PLAYBACK_COMMANDS.PLAY_TRACK,
       { track, options },
       { serial: true, cancelActiveStream: true }
     );
-  }, [dispatchPlaybackCommand]);
+  }, [dispatchPlaybackCommand, initWebAudio]);
 
   const playQueue = useCallback((tracks = [], startIndex = 0, options = {}) => {
     resetPlaybackTimingCapture();
@@ -5567,7 +5672,11 @@ export function AudioProvider({ children }) {
     return dispatchPlaybackCommand(PLAYBACK_COMMANDS.NEXT_TRACK);
   }, [dispatchPlaybackCommand]);
   const pause = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PAUSE), [dispatchPlaybackCommand]);
-  const resume = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.RESUME), [dispatchPlaybackCommand]);
+  const resume = useCallback(() => {
+    initWebAudio();
+    resumeWebAudioContextFromUserGesture(audioCtxRef, "resume:gesture");
+    return dispatchPlaybackCommand(PLAYBACK_COMMANDS.RESUME);
+  }, [dispatchPlaybackCommand, initWebAudio]);
   const seek = useCallback((time) => dispatchPlaybackCommand(PLAYBACK_COMMANDS.SEEK, { time }, { serial: false }), [dispatchPlaybackCommand]);
   const playPrevious = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PREV_TRACK), [dispatchPlaybackCommand]);
   const stop = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.STOP, {}, { cancelActiveStream: true }), [dispatchPlaybackCommand]);
