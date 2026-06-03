@@ -97,6 +97,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
           data-single-carousel
           src={mediaItem.video || undefined}
           poster={mediaItem.cover || undefined}
+          autoPlay
           muted
           loop
           playsInline

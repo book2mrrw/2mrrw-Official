@@ -18,7 +18,7 @@ const SOCIALS = [
  * - Re-renders when `isMobile` or `mobileHeroHeight` change (resize / breakpoint).
  * - Does NOT receive playback, auth, or entitlement props (islands own those subscriptions).
  * - Parent `Page` tab/catalog/modal state can still reconcile Hero if Page re-renders with stable hero props (memo bails).
- * - Carousel video pause/play is DOM-only via `syncSinglesCarouselVideos` in page.js (not a React prop).
+ * - Mobile hero pause when singles carousel is in view is DOM-only via P5 persistent media helpers in page.js.
  */
 const HeroSection = memo(function HeroSection({
   isMobile,

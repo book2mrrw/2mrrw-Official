@@ -20,6 +20,11 @@ const VaultUnlockedRoom = dynamic(
 );
 const AlbumTracklistSheet = dynamic(() => import("@/components/music/AlbumTracklistSheet"), { ssr: false });
 import { getPageAuthRef } from "@/lib/storefront/page-auth-ref";
+import {
+  ensureStorefrontCarouselVideosPlaying,
+  pauseStorefrontCarouselVideosWhenDocumentHidden,
+  syncMobileHeroWithStorefrontCarousel,
+} from "@/lib/storefront/storefront-persistent-media";
 import PageAuthRefSync from "@/components/storefront/PageAuthRefSync";
 import {
   PageAuthSidebarBadge,
@@ -393,39 +398,15 @@ function PageStorefront() {
   const homeScrollSavedRef = useRef({ scrollTop: 0, singlesScrollLeft: 0 });
   const homeStorefrontMountCountRef = useRef(0);
   const prevActiveTabForHomeScrollRef = useRef("home");
-  const syncSinglesCarouselVideos = useCallback(() => {
+  const ensureStorefrontCarouselMedia = useCallback(() => {
     const row = singlesRowRef.current;
     if (!row) return;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const inViewVideos = [];
-    row.querySelectorAll("video[data-single-carousel]").forEach((video) => {
-      const card = video.closest("[data-single-card]");
-      const rect = (card || video).getBoundingClientRect();
-      const visibleWidth = Math.min(rect.right, vw) - Math.max(rect.left, 0);
-      const minVisible = Math.max(48, Math.min(rect.width, vw) * 0.35);
-      const verticallyVisible = rect.bottom > 0 && rect.top < vh;
-      const inView = verticallyVisible && visibleWidth >= minVisible;
-      if (inView) inViewVideos.push({ video, visibleWidth });
-      else video.pause();
-    });
-    inViewVideos.sort((a, b) => b.visibleWidth - a.visibleWidth);
-    const heroVideo = heroVideoRef.current;
-    if (heroVideo && isMobileRef.current) {
-      if (inViewVideos.length > 0) heroVideo.pause();
-      else heroVideo.play().catch(() => {});
-    }
-    inViewVideos.slice(0, 2).forEach(({ video }) => {
-      if (video.readyState < 2) {
-        try {
-          video.load();
-        } catch {
-          /* non-fatal */
-        }
-      }
-      video.play().catch(() => {});
-    });
-    inViewVideos.slice(2).forEach(({ video }) => video.pause());
+    const anyCarouselInView = ensureStorefrontCarouselVideosPlaying(row);
+    syncMobileHeroWithStorefrontCarousel(
+      heroVideoRef.current,
+      anyCarouselInView,
+      isMobileRef.current
+    );
   }, []);
 
   // ── AUDIO VISUALS VIEWPORT (music pause/resume via AudioContext) ───────────
@@ -625,32 +606,32 @@ function PageStorefront() {
   useEffect(() => {
     if (activeTab !== "home") return undefined;
     let debounceTimer;
-    const onScroll = () => {
+    const onLayoutChange = () => {
       window.clearTimeout(debounceTimer);
-      debounceTimer = window.setTimeout(syncSinglesCarouselVideos, 100);
+      debounceTimer = window.setTimeout(ensureStorefrontCarouselMedia, 100);
     };
     const row = singlesRowRef.current;
     const mainScroll = mainScrollRef.current;
-    row?.addEventListener("scroll", onScroll, { passive: true });
-    mainScroll?.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll);
-    syncSinglesCarouselVideos();
+    row?.addEventListener("scroll", onLayoutChange, { passive: true });
+    mainScroll?.addEventListener("scroll", onLayoutChange, { passive: true });
+    window.addEventListener("resize", onLayoutChange);
+    ensureStorefrontCarouselMedia();
     const onVisibility = () => {
       if (document.hidden) {
-        singlesRowRef.current?.querySelectorAll("video[data-single-carousel]").forEach((v) => v.pause());
+        pauseStorefrontCarouselVideosWhenDocumentHidden(singlesRowRef.current);
       } else {
-        syncSinglesCarouselVideos();
+        ensureStorefrontCarouselMedia();
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.clearTimeout(debounceTimer);
-      row?.removeEventListener("scroll", onScroll);
-      mainScroll?.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
+      row?.removeEventListener("scroll", onLayoutChange);
+      mainScroll?.removeEventListener("scroll", onLayoutChange);
+      window.removeEventListener("resize", onLayoutChange);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [activeTab, syncSinglesCarouselVideos]);
+  }, [activeTab, ensureStorefrontCarouselMedia]);
 
   useEffect(() => {
     if (activeTab !== "vault" && activeTab !== "innercircle") return;
