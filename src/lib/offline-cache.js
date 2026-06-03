@@ -94,3 +94,31 @@ export function getOfflinePlaybackUrl(userId, slug) {
   if (!meta) return null;
   return meta.blobUrl || meta.streamUrl || null;
 }
+
+/** Revoke retained object URLs while tab hidden to reduce iOS memory pressure. */
+export function releaseRetainedOfflineBlobUrls() {
+  if (typeof window === "undefined") return;
+  const prefix = `${OFFLINE_PREFIX}:`;
+  for (let i = 0; i < window.localStorage.length; i += 1) {
+    const key = window.localStorage.key(i);
+    if (!key || !key.startsWith(prefix)) continue;
+    const rest = key.slice(prefix.length);
+    const sep = rest.indexOf(":");
+    if (sep < 0) continue;
+    const userId = rest.slice(0, sep);
+    const slug = rest.slice(sep + 1);
+    const meta = getOfflineCacheMeta(userId, slug);
+    if (!meta?.blobUrl) continue;
+    try {
+      URL.revokeObjectURL(meta.blobUrl);
+    } catch {
+      /* non-fatal */
+    }
+    const next = {
+      ...meta,
+      blobUrl: null,
+      status: meta.streamUrl ? "queued" : "queued",
+    };
+    window.localStorage.setItem(key, JSON.stringify(next));
+  }
+}

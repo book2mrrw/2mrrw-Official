@@ -44,6 +44,12 @@ export function ensureStorefrontCarouselVideosPlaying(row) {
 /** Document hidden only — OS/tab background, not scroll offscreen. */
 export function pauseStorefrontCarouselVideosWhenDocumentHidden(row) {
   if (!row || !document.hidden) return;
+  pauseStorefrontCarouselVideos(row);
+}
+
+/** Pause carousel decoders (playback contention / memory trim — not scroll offscreen). */
+export function pauseStorefrontCarouselVideos(row) {
+  if (!row) return;
   row.querySelectorAll(CAROUSEL_VIDEO_SELECTOR).forEach((video) => {
     try {
       video.pause();
