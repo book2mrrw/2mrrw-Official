@@ -2685,7 +2685,7 @@ export function AudioProvider({ children }) {
               continue;
             }
             queueIndexRef.current = nextIndex;
-            patchState({ queueIndex: nextIndex, playbackState: "playing" });
+            patchState({ queueIndex: nextIndex });
             resetPlaybackTimingCapture();
             setPlaybackScenario(PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE, { source: "ended-handler" });
             perfMark(MARKS.PLAYBACK_TAP);
@@ -2705,7 +2705,7 @@ export function AudioProvider({ children }) {
         if (track) void updateMediaSession(track, { playing: false });
       };
 
-      setTimeout(finishEnded, 2000);
+      setTimeout(finishEnded, 300);
     };
     const onError = async () => {
       stopStallRecovery();
@@ -3293,28 +3293,36 @@ export function AudioProvider({ children }) {
       if (previewSrc && !entitledFullStream) {
         syncSrc = previewSrc;
       } else if (entitledFullStream) {
-        try {
-          const resolved = await resolveLibraryStreamForTrack(nextTrack, {
-            force: options.forceStream,
-            signal: streamAbortController.signal,
-          });
-          const signedUrl = resolved?.track?.src;
-          if (signedUrl) {
-            syncSrc = signedUrl;
-            backgroundStreamResolve = false;
-          } else if (redirectFastPath || isLibraryStreamRedirectSrc(nextTrack.src)) {
-            syncSrc = nextTrack.src;
-            backgroundStreamResolve = true;
-          }
-        } catch (err) {
-          if (requestId !== playRequestIdRef.current) return false;
-          if (err?.name === "AbortError") return false;
-          if (redirectFastPath || isLibraryStreamRedirectSrc(nextTrack.src)) {
-            syncSrc = nextTrack.src;
-            backgroundStreamResolve = true;
-          } else {
-            applyStreamResolveError(err);
-            return false;
+        if (redirectFastPath) {
+          // The redirect URL is the playable proxy — auth and entitlement are
+          // re-validated server-side per request. Start audio immediately; session
+          // creation resolves in the background.
+          syncSrc = nextTrack.src;
+          backgroundStreamResolve = true;
+        } else {
+          try {
+            const resolved = await resolveLibraryStreamForTrack(nextTrack, {
+              force: options.forceStream,
+              signal: streamAbortController.signal,
+            });
+            const signedUrl = resolved?.track?.src;
+            if (signedUrl) {
+              syncSrc = signedUrl;
+              backgroundStreamResolve = false;
+            } else if (isLibraryStreamRedirectSrc(nextTrack.src)) {
+              syncSrc = nextTrack.src;
+              backgroundStreamResolve = true;
+            }
+          } catch (err) {
+            if (requestId !== playRequestIdRef.current) return false;
+            if (err?.name === "AbortError") return false;
+            if (isLibraryStreamRedirectSrc(nextTrack.src)) {
+              syncSrc = nextTrack.src;
+              backgroundStreamResolve = true;
+            } else {
+              applyStreamResolveError(err);
+              return false;
+            }
           }
         }
       } else if (redirectFastPath) {
@@ -3410,7 +3418,7 @@ export function AudioProvider({ children }) {
           }
           return swapToSignedStream(resolved);
         })
-        .catch(applyStreamResolveError);
+        .catch(redirectFastPath ? () => {} : applyStreamResolveError);
     }
 
     const userId = listeningUserIdRef.current;
