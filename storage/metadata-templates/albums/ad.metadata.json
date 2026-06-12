@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "type": "album",
+  "slug": "ad",
+  "title": "(A.D)",
+  "artist": "2MRRW",
+  "artistSlug": "2mrrw",
+  "releaseDate": "2024-03-24",
+  "priceCents": 999,
+  "genres": [],
+  "explicit": false,
+  "assets": {
+    "cover": "albums/ad/album-cover.jpg"
+  },
+  "tracks": [
+    { "number": 1, "slug": "2mrrws-ntro", "title": "2mrrw's Ntro", "path": "albums/ad/01-2mrrws-ntro/metadata.json" },
+    { "number": 2, "slug": "said-n-done", "title": "Said N' Done", "path": "albums/ad/02-said-n-done/metadata.json" },
+    { "number": 3, "slug": "add", "title": "A.D.D", "path": "albums/ad/03-add/metadata.json" },
+    { "number": 4, "slug": "perspective-2018", "title": "Perspective (2018)", "path": "albums/ad/04-perspective-2018/metadata.json" },
+    { "number": 5, "slug": "grand-scheme", "title": "Grand Scheme", "path": "albums/ad/05-grand-scheme/metadata.json" },
+    { "number": 6, "slug": "a2b", "title": "A2B", "path": "albums/ad/06-a2b/metadata.json" },
+    { "number": 7, "slug": "life-changes-2018", "title": "Life Changes (2018)", "path": "albums/ad/07-life-changes-2018/metadata.json" },
+    { "number": 8, "slug": "itself-2018", "title": "Itself (2018)", "path": "albums/ad/08-itself-2018/metadata.json" },
+    { "number": 9, "slug": "wastin-time", "title": "Wastin Time", "path": "albums/ad/09-wastin-time/metadata.json" },
+    { "number": 10, "slug": "like-me-or-not", "title": "Like Me Or Not", "path": "albums/ad/10-like-me-or-not/metadata.json" }
+  ]
+}

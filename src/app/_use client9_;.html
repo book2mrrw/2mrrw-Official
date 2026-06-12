@@ -1,0 +1,94 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+
+const singles = [
+  { title: "Hour Glass", slug: "hour-glass", cover: "/images/hourglass.jpg" },
+  { title: "W.2.D", slug: "w2d", cover: "/images/w2d.jpg" },
+  { title: "Artificial", slug: "artificial", cover: "/images/artificial.jpg" },
+  { title: "Turnt Me 2 Dis", slug: "turnt-me-2-dis", cover: "/images/turnt.jpg" }
+];
+
+const albums = [
+  { title: "T.B.H.", slug: "tbh", cover: "/images/tbh.jpg" },
+  { title: "A.D.", slug: "ad", cover: "/images/ad.jpg" },
+  { title: "Love Hz Vol.1", slug: "love-hz", cover: "/images/lovehz.jpg" }
+];
+
+export default function Page() {
+  const router = useRouter();
+
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", background: "#000", color: "#fff" }}>
+
+      <div style={{ flex: 3 }}>
+
+        <div style={{ height: "45vh", position: "relative" }}>
+          <video
+            src="/media/promo.mp4"
+            autoPlay
+            muted
+            loop
+            playsInline
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              filter: "brightness(0.5)"
+            }}
+          />
+          <div style={{ position: "absolute", bottom: 20, left: 20 }}>
+            <h1 style={{ fontSize: 48, margin: 0 }}>2mrrw</h1>
+            <p style={{ opacity: 0.7 }}>Music. Vision. Future.</p>
+          </div>
+        </div>
+
+        <div style={{ padding: 30 }}>
+          <h2>Latest Singles</h2>
+          <div style={{ display: "flex", gap: 20, overflowX: "auto" }}>
+            {singles.map((s) => (
+              <div
+                key={s.slug}
+                onClick={() => router.push("/single/" + s.slug)}
+                style={{ minWidth: 200, cursor: "pointer" }}
+              >
+                <img src={s.cover} style={{ width: "100%", borderRadius: 10 }} />
+                <p>{s.title}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ padding: 30 }}>
+          <h2>Albums</h2>
+          <div style={{ display: "flex", gap: 20, overflowX: "auto" }}>
+            {albums.map((a) => (
+              <div
+                key={a.slug}
+                onClick={() => router.push("/album/" + a.slug)}
+                style={{ minWidth: 200, cursor: "pointer" }}
+              >
+                <img src={a.cover} style={{ width: "100%", borderRadius: 10 }} />
+                <p>{a.title}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      <div style={{
+        flex: 1,
+        borderLeft: "1px solid #111",
+        padding: 20,
+        background: "#050505"
+      }}>
+        <h2>Shop</h2>
+        <p>Hoodies</p>
+        <p>Shirts</p>
+        <p>Beanies</p>
+      </div>
+
+    </div>
+  );
+}

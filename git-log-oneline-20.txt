@@ -1,0 +1,20 @@
+61b25c2 fix(audio): wait for canplay before play at all load sites — prevents AbortError
+a73bf93 fix(stream): pass Range header through redirect — fixes 416 audio error
+45ce0ad fix(cors): prevent absolute URL construction for internal API calls in stream-client and MusicPlusButton
+70af96f fix(audio): remove safety timer causing AbortError race condition
+0bcc142 fix(auth): admin canStream override, account/state relative URL, ownedSlugs for admin, music-access admin bypass
+5f35495 feat(modal): V9 layout on ImmersivePreviewModal — cover palette, preserved props
+2144712 fix(modal): use cover art palette instead of hardcoded themes — colors derived from actual cover art
+b78e39a feat(plus-btn): unified share/library/playlist button on all music surfaces — tier-gated options based on canStream
+49d7f0a fix(modal): resolve undefined track prop — accept both single and track prop names
+e1f8b90 fix(audio): resolve AbortError — wait for canplay before calling play()
+7d11c03 feat(modal): replace ImmersivePreviewModal with V9 SingleModal design
+df1f56b fix(auth): Safari ITP token refresh — localStorage fallback, PKCE flow, preview audio fallback on 401
+002dc4f feat(modal): apply V9 immersive visual layout while preserving playback/business logic
+6428c49 fix(player): rebuild mini player compact layout — cover art fallback, correct button positions, scrub bar
+fd305e7 fix(page): avoid empty string on single video src
+91c8411 docs: complete CORS ship report with deploy SHAs
+3fd35d1 docs: CORS fix ship report 2026-05-26
+ccd0fd3 fix: cache getSnapshot in useMediaEngine, fix error.js useEffect deps
+52a2ef0 fix: pass fallback props to MediaErrorBoundary in layout, guard componentDidCatch against setState
+a636c18 fix(critical): guard account/state fetch against CORS retry loops

@@ -1,0 +1,6 @@
+git-log-oneline-20 export
+generated: 2026-05-26
+repository: /Users/recharge/artist-platform
+command: git log --oneline -20
+files:
+  git-log-oneline-20.txt

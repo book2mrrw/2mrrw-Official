@@ -1,0 +1,25 @@
+production-api-probe-20260526
+generated: 2026-05-26
+target: https://www.2mrrw.com
+
+files:
+  docs/reports/production-api-probe-20260526.md
+  docs/reports/production-api-probe-20260526-manifest.txt
+
+transcript_source:
+  agent-transcripts/22ed5f23-e4b1-454c-aaaa-196208826de1/subagents/b313168c-ebdc-4432-ba0d-540142eafffc.jsonl
+
+endpoints_probed:
+  GET  /api
+  GET  /api/
+  GET  /api/health
+  GET  /api/account/state
+  HEAD /api/account/state
+  GET  / (homepage status only)
+
+summary:
+  site: up (homepage 200)
+  /api: 404 html
+  /api/: 308 to /api then 404
+  /api/health: 404 html
+  /api/account/state: 200 json (GET and HEAD)

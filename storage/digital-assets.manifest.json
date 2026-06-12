@@ -1,0 +1,346 @@
+{
+  "version": 1,
+  "bucket": "2mrrw-media",
+  "namingConvention": "lower-kebab-case folders; canonical filenames: audio.mp3, preview.mp3, cover.jpg, visual.mp4, lyrics.lrc, metadata.json",
+  "generatedFrom": [
+    "src/app/page.js",
+    "src/lib/commerce/catalog.js"
+  ],
+  "notes": [
+    "This manifest is non-destructive. It does not move, rename, or delete existing files.",
+    "No physical media files were found in the repository during generation; existing app references are listed as localSourcePath suggestions.",
+    "Upload files to Supabase Storage using storagePath values.",
+    "Upload files to R2 using keys: digital-assets/{storagePath}"
+  ],
+  "artists": [
+    {
+      "artistSlug": "2mrrw",
+      "displayName": "2MRRW",
+      "storagePrefix": "artists/2mrrw/",
+      "assets": [
+        {
+          "kind": "metadata",
+          "storagePath": "artists/2mrrw/metadata.json",
+          "required": true,
+          "templatePath": "storage/metadata-templates/artists/2mrrw/metadata.json"
+        },
+        {
+          "kind": "artist-image",
+          "storagePath": "artists/2mrrw/avatar.jpg",
+          "required": false
+        },
+        {
+          "kind": "hero-image",
+          "storagePath": "artists/2mrrw/hero.jpg",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "singles": [
+    {
+      "slug": "hour-glass",
+      "displayTitle": "Hour Glass",
+      "storagePrefix": "singles/hour-glass/",
+      "priceCents": 299,
+      "assets": [
+        {
+          "kind": "audio",
+          "storagePath": "singles/hour-glass/audio.mp3",
+          "required": true
+        },
+        {
+          "kind": "preview",
+          "storagePath": "singles/hour-glass/preview.mp3",
+          "required": true,
+          "localSourcePath": "audio/previews/hourglass-preview.mp3"
+        },
+        {
+          "kind": "cover",
+          "storagePath": "singles/hour-glass/cover.jpg",
+          "required": true,
+          "localSourcePath": "images/singles/hourglass.jpg",
+          "recommendedDimensions": {
+            "width": 3000,
+            "height": 3000
+          }
+        },
+        {
+          "kind": "visual",
+          "storagePath": "singles/hour-glass/visual.mp4",
+          "required": false,
+          "localSourcePath": "videos/singles/hourglass.mp4",
+          "recommendedAspectRatio": "9:16"
+        },
+        {
+          "kind": "lyrics",
+          "storagePath": "singles/hour-glass/lyrics.lrc",
+          "required": false
+        },
+        {
+          "kind": "metadata",
+          "storagePath": "singles/hour-glass/metadata.json",
+          "required": true,
+          "templatePath": "storage/metadata-templates/singles/hour-glass.metadata.json"
+        }
+      ]
+    },
+    {
+      "slug": "w2d",
+      "displayTitle": "W.2.D",
+      "storagePrefix": "singles/w2d/",
+      "priceCents": 299,
+      "assets": [
+        {
+          "kind": "audio",
+          "storagePath": "singles/w2d/audio.mp3",
+          "required": true
+        },
+        {
+          "kind": "preview",
+          "storagePath": "singles/w2d/preview.mp3",
+          "required": true,
+          "localSourcePath": "audio/previews/w2d-preview.mp3"
+        },
+        {
+          "kind": "cover",
+          "storagePath": "singles/w2d/cover.jpg",
+          "required": true,
+          "localSourcePath": "images/singles/w2d.jpg",
+          "recommendedDimensions": {
+            "width": 3000,
+            "height": 3000
+          }
+        },
+        {
+          "kind": "visual",
+          "storagePath": "singles/w2d/visual.mp4",
+          "required": false,
+          "localSourcePath": "videos/singles/w2d.mp4",
+          "recommendedAspectRatio": "9:16"
+        },
+        {
+          "kind": "lyrics",
+          "storagePath": "singles/w2d/lyrics.lrc",
+          "required": false
+        },
+        {
+          "kind": "metadata",
+          "storagePath": "singles/w2d/metadata.json",
+          "required": true,
+          "templatePath": "storage/metadata-templates/singles/w2d.metadata.json"
+        }
+      ]
+    },
+    {
+      "slug": "artificial",
+      "displayTitle": "Artificial",
+      "storagePrefix": "singles/artificial/",
+      "priceCents": 299,
+      "assets": [
+        {
+          "kind": "audio",
+          "storagePath": "singles/artificial/audio.mp3",
+          "required": true
+        },
+        {
+          "kind": "preview",
+          "storagePath": "singles/artificial/preview.mp3",
+          "required": true,
+          "localSourcePath": "audio/previews/artificial-preview.mp3"
+        },
+        {
+          "kind": "cover",
+          "storagePath": "singles/artificial/cover.jpg",
+          "required": true,
+          "localSourcePath": "images/singles/artificial.jpg",
+          "recommendedDimensions": {
+            "width": 3000,
+            "height": 3000
+          }
+        },
+        {
+          "kind": "visual",
+          "storagePath": "singles/artificial/visual.mp4",
+          "required": false,
+          "localSourcePath": "videos/singles/artificial.mp4",
+          "recommendedAspectRatio": "9:16"
+        },
+        {
+          "kind": "lyrics",
+          "storagePath": "singles/artificial/lyrics.lrc",
+          "required": false
+        },
+        {
+          "kind": "metadata",
+          "storagePath": "singles/artificial/metadata.json",
+          "required": true,
+          "templatePath": "storage/metadata-templates/singles/artificial.metadata.json"
+        }
+      ]
+    },
+    {
+      "slug": "turnt-me-2-dis",
+      "displayTitle": "Turnt Me 2 Dis",
+      "storagePrefix": "singles/turnt-me-2-dis/",
+      "priceCents": 299,
+      "assets": [
+        {
+          "kind": "audio",
+          "storagePath": "singles/turnt-me-2-dis/audio.mp3",
+          "required": true
+        },
+        {
+          "kind": "preview",
+          "storagePath": "singles/turnt-me-2-dis/preview.mp3",
+          "required": true,
+          "localSourcePath": "audio/previews/turntme2dis-preview.mp3"
+        },
+        {
+          "kind": "cover",
+          "storagePath": "singles/turnt-me-2-dis/cover.jpg",
+          "required": true,
+          "localSourcePath": "images/singles/turnt.jpg",
+          "recommendedDimensions": {
+            "width": 3000,
+            "height": 3000
+          }
+        },
+        {
+          "kind": "visual",
+          "storagePath": "singles/turnt-me-2-dis/visual.mp4",
+          "required": false,
+          "localSourcePath": "videos/singles/turntme2dis.mp4",
+          "recommendedAspectRatio": "9:16"
+        },
+        {
+          "kind": "lyrics",
+          "storagePath": "singles/turnt-me-2-dis/lyrics.lrc",
+          "required": false
+        },
+        {
+          "kind": "metadata",
+          "storagePath": "singles/turnt-me-2-dis/metadata.json",
+          "required": true,
+          "templatePath": "storage/metadata-templates/singles/turnt-me-2-dis.metadata.json"
+        }
+      ]
+    }
+  ],
+  "albums": [
+    {
+      "slug": "tbh",
+      "displayTitle": "T.B.H.",
+      "storagePrefix": "albums/tbh/",
+      "priceCents": 999,
+      "releaseDate": "2022-07-07",
+      "assets": [
+        {
+          "kind": "album-cover",
+          "storagePath": "albums/tbh/album-cover.jpg",
+          "required": true,
+          "localSourcePath": "images/albums/tbh.jpg",
+          "recommendedDimensions": {
+            "width": 3000,
+            "height": 3000
+          }
+        },
+        {
+          "kind": "metadata",
+          "storagePath": "albums/tbh/metadata.json",
+          "required": true,
+          "templatePath": "storage/metadata-templates/albums/tbh.metadata.json"
+        }
+      ],
+      "tracks": [
+        "01-glass-full",
+        "02-up-2-me",
+        "03-unexpcted",
+        "04-all-yours",
+        "05-locomotive",
+        "06-left",
+        "07-was-wrong",
+        "08-artificial"
+      ]
+    },
+    {
+      "slug": "ad",
+      "displayTitle": "(A.D)",
+      "storagePrefix": "albums/ad/",
+      "priceCents": 999,
+      "releaseDate": "2024-03-24",
+      "assets": [
+        {
+          "kind": "album-cover",
+          "storagePath": "albums/ad/album-cover.jpg",
+          "required": true,
+          "localSourcePath": "images/albums/ad.jpg",
+          "recommendedDimensions": {
+            "width": 3000,
+            "height": 3000
+          }
+        },
+        {
+          "kind": "metadata",
+          "storagePath": "albums/ad/metadata.json",
+          "required": true,
+          "templatePath": "storage/metadata-templates/albums/ad.metadata.json"
+        }
+      ],
+      "tracks": [
+        "01-2mrrws-ntro",
+        "02-said-n-done",
+        "03-add",
+        "04-perspective-2018",
+        "05-grand-scheme",
+        "06-a2b",
+        "07-life-changes-2018",
+        "08-itself-2018",
+        "09-wastin-time",
+        "10-like-me-or-not"
+      ]
+    },
+    {
+      "slug": "love-hz",
+      "displayTitle": "Love Hz Vol.1",
+      "storagePrefix": "albums/love-hz/",
+      "priceCents": 1299,
+      "releaseDate": "2026-08-01",
+      "assets": [
+        {
+          "kind": "album-cover",
+          "storagePath": "albums/love-hz/album-cover.jpg",
+          "required": true,
+          "localSourcePath": "images/albums/lovehz.jpg",
+          "recommendedDimensions": {
+            "width": 3000,
+            "height": 3000
+          }
+        },
+        {
+          "kind": "metadata",
+          "storagePath": "albums/love-hz/metadata.json",
+          "required": true,
+          "templatePath": "storage/metadata-templates/albums/love-hz.metadata.json"
+        }
+      ],
+      "tracks": [
+        "01-roll-call",
+        "02-w2d",
+        "03-all-of-it",
+        "04-knock-on-wood",
+        "05-stayed-2-long",
+        "06-hour-glass"
+      ]
+    }
+  ],
+  "albumTrackAssetPattern": {
+    "audio": "albums/{albumSlug}/{trackNumber}-{trackSlug}/audio.mp3",
+    "preview": "albums/{albumSlug}/{trackNumber}-{trackSlug}/preview.mp3",
+    "cover": "albums/{albumSlug}/{trackNumber}-{trackSlug}/cover.jpg",
+    "visual": "albums/{albumSlug}/{trackNumber}-{trackSlug}/visual.mp4",
+    "lyrics": "albums/{albumSlug}/{trackNumber}-{trackSlug}/lyrics.lrc",
+    "metadata": "albums/{albumSlug}/{trackNumber}-{trackSlug}/metadata.json"
+  },
+  "r2Prefix": "digital-assets"
+}

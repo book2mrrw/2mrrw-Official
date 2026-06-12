@@ -1,0 +1,168 @@
+Gift Follow-up Report (after commit 0fc712c)
+Generated: 2026-05-24
+Workspace: /Users/recharge/artist-platform
+
+================================================================================
+TASK 1 — PRODUCT SEED AUDIT
+================================================================================
+
+Canonical source: src/lib/commerce/catalog.js → PRODUCT_CATALOG (20 slugs)
+
+Seed endpoints/scripts:
+  • POST /api/admin/seed-products — maps PRODUCT_CATALOG directly, active: true, upsert on slug
+  • scripts/seed-products.mjs — standalone CLI upsert (must stay in sync with catalog.js)
+
+SEED COVERAGE TABLE
+slug                  product_type  API route  CLI script (before)  CLI script (after)
+--------------------  ------------  ---------  -------------------  ------------------
+hour-glass            single        YES        YES                  YES
+w2d                   single        YES        YES                  YES
+artificial            single        YES        YES                  YES
+turnt-me-2-dis        single        YES        YES                  YES
+i-dont-believe-you    feature       YES        YES                  YES
+2-heavy               feature       YES        YES                  YES
+tbh                   album         YES        YES                  YES
+ad                    album         YES        YES                  YES
+love-hz               album         YES        YES                  YES
+tbh-vinyl             vinyl         YES        YES                  YES
+ad-vinyl              vinyl         YES        YES                  YES
+love-hz-vinyl         vinyl         YES        YES                  YES
+exc-card-tbh          vault         YES        YES                  YES
+exc-card-ad           vault         YES        YES                  YES
+exc-card-lovehz       vault         YES        NO                   YES (added this follow-up)
+exc-bundle-lovehz     bundle        YES        YES                  YES
+exc-signed-vinyl      vault         YES        YES                  YES
+hoodie                merch         YES        YES                  YES
+shirt                 merch         YES        YES                  YES
+hat                   merch         YES        YES                  YES
+
+Summary:
+  • API route: 20/20 slugs — complete (no changes required)
+  • CLI script before: 19/20 — missing exc-card-lovehz only
+  • CLI script after:  20/20 — exc-card-lovehz added; sync comment added at top of script
+
+Each seeded row: slug exact match, product_type from catalog, active: true.
+
+Note: cover_url differs slightly (catalog.js uses "images/..." without leading slash;
+seed script uses "/images/..."). Both upsert same slug; normalize in a future migration if needed.
+
+================================================================================
+TASK 2 — GIFT SEND + CLAIM TRACE
+================================================================================
+
+SEND PATH
+  POST /api/gifts/send (src/app/api/gifts/send/route.js)
+    → sendStorefrontGift (src/lib/gifts/send-gift.js)
+      → resolveGiftProduct → resolveStorefrontProduct (src/lib/commerce/resolve-storefront-product.js)
+    Logs: [api/gifts/send] request|error, [gift-send] product resolution|product not found|gift created|...
+
+CLAIM PATH
+  claimGiftForUser (src/lib/gifts/helpers.js)
+    → resolveProductForGift
+      → products lookup by gift.item_id (primary)
+      → OR resolveGiftProduct (legacy release id fallback)
+    Same resolver as send path for slug/type resolution.
+
+VERIFIED RELEASE CASES (static trace via resolver logic)
+
+1) hour-glass (single)
+   candidates: ["hour-glass", "hour-glass-digital"]
+   expected product_type: single
+   gift item_type: single
+   Match: canonical slug first; no exclusive -digital lookup.
+
+2) i-dont-believe-you (feature)
+   candidates: ["i-dont-believe-you", "i-dont-believe-you-digital"]
+   expected product_type: feature
+   gift item_type: single (DB CHECK constraint — see Task 4)
+   Match: canonical slug + type filter.
+
+3) tbh (album)
+   candidates: ["tbh", "tbh-digital"]
+   expected product_type: album
+   gift item_type: album
+
+4) Tomorrow Radio (2MRRW RADIO / Flow State — radioSlides, default hour-glass)
+   slug: hour-glass, type: single (added in 0fc712c)
+   Same resolver path as case 1; GiftBottomSheet passes release.type from UI.
+
+GiftSendError codes (send-gift.js + route.js):
+  ADMIN_REQUIRED, RECIPIENT_EMAIL_REQUIRED, PRODUCT_NOT_FOUND,
+  GIFT_SEND_FAILED (default), plus route-level: AUTH_REQUIRED, INVALID_BODY,
+  INVALID_EMAIL, INVALID_PHONE, RELEASE_REQUIRED.
+
+No old {slug}-digital-only lookup: resolver tries canonical slug FIRST;
+-digital is legacy fallback candidate only (resolve-storefront-product.js).
+
+src/ grep for -digital:
+  • src/lib/commerce/resolve-storefront-product.js — intentional legacy fallback (documented)
+  • src/lib/music-access.js — type === "digital" entitlement check (unrelated to product slug)
+  No inappropriate {slug}-digital resolver usage elsewhere in src/.
+
+================================================================================
+TASK 3 — ADMIN PRICING FLASH (Flow State "OWN THIS TRACK")
+================================================================================
+
+Problem: isAdmin from AuthContext can lag behind session restore; admin users briefly
+saw the "OWN THIS TRACK" conversion panel before account state confirmed admin entitlements.
+
+Fix (src/app/page.js):
+  • accountStateReady = !authLoading
+  • showOwnTrackConversion = accountStateReady && !isAdminAccount(accountState)
+  • Conversion panel renders only when showOwnTrackConversion is true
+  • No skeleton — panel suppressed entirely until auth loading completes
+
+Uses isAdminAccount(accountState) from music-access (permissions.admin + accountState.isAdmin)
+instead of context isAdmin alone.
+
+================================================================================
+TASK 4 — FEATURE item_type DOCUMENTATION
+================================================================================
+
+Added inline comment in src/lib/gifts/send-gift.js before releaseTypeToGiftItemType call:
+  Features resolve to products.product_type "feature", but gifts.item_type CHECK only allows
+  single|ep|album|deluxe|collector_card (migration 20260522140000_gifting_system.sql).
+  releaseTypeToGiftItemType maps feature → "single" intentionally.
+  To store "feature" later: extend CHECK + releaseTypeToGiftItemType.
+  No behavior change in this follow-up.
+
+================================================================================
+CHANGES IN THIS FOLLOW-UP
+================================================================================
+
+1. scripts/seed-products.mjs
+   - Added exc-card-lovehz vault row
+   - Added comment: keep in sync with PRODUCT_CATALOG
+
+2. src/app/page.js
+   - Import isAdminAccount
+   - Guard Flow State conversion panel until accountStateReady + non-admin accountState
+
+3. src/lib/gifts/send-gift.js
+   - Inline comment documenting feature → item_type "single" mapping
+
+4. docs/reports/gift-followup-0fc712c-report.txt (this file)
+
+Build: npm run build — PASSED (Next.js 16.2.4)
+
+================================================================================
+OPEN QUESTIONS
+================================================================================
+
+1. Should scripts/seed-products.mjs import PRODUCT_CATALOG automatically?
+   Node cannot resolve @/ alias when importing catalog.js today; options: shared JSON,
+   catalog-data.mjs without re-exports, or npm script that hits POST /api/admin/seed-products.
+
+2. cover_url path normalization: catalog.js vs seed script leading-slash mismatch —
+   cosmetic for upsert; worth aligning in a dedicated migration?
+
+3. gifts.item_type CHECK: add "feature" (and possibly "merch", "bundle", "vinyl") when
+   gift analytics need distinct feature rows, or keep mapping to "single" permanently?
+
+4. Legacy -digital slug rows: are any still active in production products, or can fallback
+   candidate generation be removed after confirming all products use canonical slugs?
+
+5. Production seed verification: this audit verified code paths only; run
+   POST /api/admin/seed-products (or node scripts/seed-products.mjs) against live Supabase
+   to confirm 20 active rows in products table?
+)

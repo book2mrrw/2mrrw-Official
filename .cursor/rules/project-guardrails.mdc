@@ -1,0 +1,34 @@
+---
+description: AI workflow — scoped changes, feature isolation, recovery integration
+alwaysApply: true
+---
+
+# Project Guardrails (AI Workflow)
+
+Full reference: [`PROJECT_GUARDRAILS.md`](../../PROJECT_GUARDRAILS.md). Recovery systems already exist under `docs/foundation/` and `scripts/recovery/` — **integrate, do not recreate**.
+
+## Scope
+
+- Modify **only** systems named in the user request.
+- One feature module per task when possible — see `docs/workflow/FEATURE_ISOLATION.md`.
+- `mobile-only` tasks: touch mobile branches only — `docs/workflow/MOBILE_FIRST_DEVELOPMENT.md`.
+
+## Protected (do not change without explicit scope)
+
+Hero/cinematic shell (`src/app/page.js`), 2MRRW branding, navigation, subscribe page, cart/checkout flows, `AuthContext`, playback (`AudioContext`, `GlobalAudioPlayerBar`), modals/animations (`framer-motion`, `useReducedMotion`, `data-cinematic-video`), `VaultUnlockedRoom`, recovery docs/scripts/anchor, mobile shell when not scoped.
+
+## Recovery before rebuild
+
+- Dry-run: `npm run recover:foundation -- --dry-run`
+- Full local restore: `npm run recover:foundation`
+- Verify: `npm run verify:foundation`
+- Prefer selective file restore over full rollback — `docs/workflow/SELECTIVE_RESTORATION_WORKFLOW.md`
+
+## Constraints
+
+- No UI redesign unless explicitly requested.
+- No dependency bumps (`next`, `react`, `framer-motion`, `@supabase/*`, `@stripe/*`) without approval.
+- Entitlements: webhook → Supabase → `/api/account/state` → UI — never client-side permission overrides.
+- Do not commit or deploy unless the user asks.
+
+Also apply: `build-frame-of-mind.mdc`, `frontend-foundation.mdc`, `platform-architecture.mdc`.

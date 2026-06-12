@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "type": "album",
+  "slug": "tbh",
+  "title": "T.B.H.",
+  "artist": "2MRRW",
+  "artistSlug": "2mrrw",
+  "releaseDate": "2022-07-07",
+  "priceCents": 999,
+  "genres": [],
+  "explicit": false,
+  "assets": {
+    "cover": "albums/tbh/album-cover.jpg"
+  },
+  "tracks": [
+    { "number": 1, "slug": "glass-full", "title": "Glass Full", "path": "albums/tbh/01-glass-full/metadata.json" },
+    { "number": 2, "slug": "up-2-me", "title": "Up 2 Me", "path": "albums/tbh/02-up-2-me/metadata.json" },
+    { "number": 3, "slug": "unexpcted", "title": "Unexpcted", "path": "albums/tbh/03-unexpcted/metadata.json" },
+    { "number": 4, "slug": "all-yours", "title": "All Yours", "path": "albums/tbh/04-all-yours/metadata.json" },
+    { "number": 5, "slug": "locomotive", "title": "Locomotive", "path": "albums/tbh/05-locomotive/metadata.json" },
+    { "number": 6, "slug": "left", "title": "LEFT", "path": "albums/tbh/06-left/metadata.json" },
+    { "number": 7, "slug": "was-wrong", "title": "Was Wrong", "path": "albums/tbh/07-was-wrong/metadata.json" },
+    { "number": 8, "slug": "artificial", "title": "ArTiFICiaL", "path": "albums/tbh/08-artificial/metadata.json" }
+  ]
+}

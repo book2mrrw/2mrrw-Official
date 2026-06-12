@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "type": "single",
+  "slug": "w2d",
+  "title": "W.2.D",
+  "artist": "2MRRW",
+  "artistSlug": "2mrrw",
+  "releaseDate": null,
+  "priceCents": 299,
+  "genres": [],
+  "explicit": false,
+  "durationSeconds": null,
+  "isrc": null,
+  "assets": {
+    "audio": "singles/w2d/audio.mp3",
+    "preview": "singles/w2d/preview.mp3",
+    "cover": "singles/w2d/cover.jpg",
+    "visual": "singles/w2d/visual.mp4",
+    "lyrics": "singles/w2d/lyrics.lrc"
+  }
+}

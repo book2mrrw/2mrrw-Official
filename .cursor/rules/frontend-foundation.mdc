@@ -1,0 +1,33 @@
+---
+description: Official frontend foundation baseline — sacred recovery anchor
+alwaysApply: true
+---
+
+# Frontend Foundation Protection
+
+The current deployed cinematic frontend is the **official foundation baseline** and **primary recovery anchor**. Treat it as sacred unless the user explicitly requests UI changes.
+
+## Non-negotiable constraints
+
+- Do **not** redesign layout, spacing, navigation, modal behavior, MP4/cinematic video behavior, or framer-motion atmosphere.
+- Do **not** change `src/app/page.js` for refactors unless the user explicitly asks for UI work or a guardrail-only scan fix.
+- Do **not** use the UI as an authorization source. Entitlements flow: payment/webhook → Supabase → `/api/account/state` → `AuthContext`.
+- Do **not** bump `next`, `react`, `react-dom`, `framer-motion`, `@supabase/*`, or `@stripe/*` without explicit user approval and foundation doc updates.
+- Do **not** remove `useReducedMotion`, `data-cinematic-video`, or root providers (`AuthProvider`, `AudioProvider`, `StripeProvider`).
+- Prefer leaf extraction and backend hardening over page-level visual edits.
+
+## Recovery reference
+
+- Baseline commit: see `docs/foundation/FRONTEND_FOUNDATION_BASELINE.md`
+- Recovery workflow: `docs/foundation/FRONTEND_RECOVERY_PROTOCOL.md`
+- AI workflow + feature isolation: `PROJECT_GUARDRAILS.md`, `docs/workflow/`
+- Guardrails scan: `npm run check:frontend-guardrails`
+- Smoke tests: `npm run test:foundation`
+
+## Branch discipline
+
+- `frontend-stable-foundation` — recovery anchor; merge only verified fixes
+- `frontend-feature-dev` — controlled feature work
+- `frontend-animation-testing` — motion experiments (never force-push)
+- `frontend-audit-testing` — audits and guardrail validation
+- `frontend-experimental` — throwaway spikes; never deploy directly

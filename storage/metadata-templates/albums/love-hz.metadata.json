@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "type": "album",
+  "slug": "love-hz",
+  "title": "Love Hz Vol.1",
+  "artist": "2MRRW",
+  "artistSlug": "2mrrw",
+  "releaseDate": "2026-08-01",
+  "priceCents": 1299,
+  "genres": [],
+  "explicit": false,
+  "assets": {
+    "cover": "albums/love-hz/album-cover.jpg"
+  },
+  "tracks": [
+    { "number": 1, "slug": "roll-call", "title": "Roll Call", "path": "albums/love-hz/01-roll-call/metadata.json" },
+    { "number": 2, "slug": "w2d", "title": "W.2.D", "path": "albums/love-hz/02-w2d/metadata.json" },
+    { "number": 3, "slug": "all-of-it", "title": "All Of It", "path": "albums/love-hz/03-all-of-it/metadata.json" },
+    { "number": 4, "slug": "knock-on-wood", "title": "Knock On Wood", "path": "albums/love-hz/04-knock-on-wood/metadata.json" },
+    { "number": 5, "slug": "stayed-2-long", "title": "Stayed 2 Long", "path": "albums/love-hz/05-stayed-2-long/metadata.json" },
+    { "number": 6, "slug": "hour-glass", "title": "Hour Glass", "path": "albums/love-hz/06-hour-glass/metadata.json" }
+  ]
+}

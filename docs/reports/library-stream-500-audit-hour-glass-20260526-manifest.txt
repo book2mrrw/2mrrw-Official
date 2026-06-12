@@ -1,0 +1,29 @@
+library-stream-500-audit-hour-glass-20260526 — files read
+
+Source (repository)
+- src/lib/playback/resolve-playback-key.js
+- src/lib/playback/stream-pipeline.js
+- src/lib/playback/normalize-r2-key.js
+- src/lib/playback/stream-url-cache.js
+- src/lib/storage/r2.js
+- src/app/api/library/stream/route.js
+- src/lib/supabase/admin.js
+- src/lib/commerce/entitlements.js (userCanStreamProduct section)
+- src/lib/commerce/catalog.js (hour-glass catalog reference)
+- supabase/migrations/001_auth_commerce_library.sql
+- supabase/migrations/20260603000000_stream_sessions.sql
+- supabase/migrations/20260603000005_stream_events.sql
+
+Reference docs
+- docs/reports/r2-playback-fix-20260525.md
+
+Supabase MCP (plugin-supabase-supabase, project qvfbgkbgczyqrglvgyqr)
+- list_projects
+- list_tables (public, verbose)
+- execute_sql: information_schema columns for products, stream_sessions, stream_events
+- execute_sql: products row for slug hour-glass / hour-glass-digital
+- execute_sql: table existence for products, stream_sessions, stream_events, tracks, release_media, media_assets
+
+Generated
+- docs/reports/library-stream-500-audit-hour-glass-20260526.md
+- docs/reports/library-stream-500-audit-hour-glass-20260526-manifest.txt

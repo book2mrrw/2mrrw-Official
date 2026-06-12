@@ -1,0 +1,307 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+
+export default function Page() {
+  const [cart, setCart] = useState([]);
+  const [activeTab, setActiveTab] = useState("home");
+  const [addedFlash, setAddedFlash] = useState(null);
+
+  // MUSIC
+  const singles = [
+    { title: "Hour Glass", slug: "hour-glass", cover: "/images/hourglass.jpg", price: 2.99 },
+    { title: "W.2.D", slug: "w2d", cover: "/images/w2d.jpg", price: 2.99 },
+    { title: "Artificial", slug: "artificial", cover: "/images/artificial.jpg", price: 2.99 },
+    { title: "Turnt Me 2 Dis", slug: "turnt-me-2-dis", cover: "/images/turnt.jpg", price: 2.99 },
+  ];
+
+  const albums = [
+    { title: "T.B.H.", slug: "tbh", cover: "/images/tbh.jpg", price: 9.99 },
+    { title: "(A.D)", slug: "ad", cover: "/images/ad.jpg", price: 9.99 },
+    { title: "Love Hz Vol.1", slug: "love-hz", cover: "/images/lovehz.jpg", price: 12.99 },
+  ];
+
+  // MERCH
+  const merch = [
+    { title: "2MRRW Hoodie", slug: "hoodie", cover: "/images/hoodie.jpg", price: 59.99 },
+    { title: "2MRRW T-Shirt", slug: "shirt", cover: "/images/shirt.jpg", price: 29.99 },
+    { title: "2MRRW Hat", slug: "hat", cover: "/images/hat.jpg", price: 24.99 },
+  ];
+
+  const addToCart = (item) => {
+    setCart((prev) => [...prev, item]);
+    setAddedFlash(item.slug);
+    setTimeout(() => setAddedFlash(null), 400);
+  };
+
+  const clearCart = () => setCart([]);
+
+  const total = cart.reduce((sum, item) => sum + item.price, 0);
+
+  // ✅ HOVER (RESTORED + CLEAN)
+  const hoverIn = (e) => {
+    e.currentTarget.style.transform = "scale(1.05) translateY(-4px)";
+    e.currentTarget.style.boxShadow = "0 0 30px rgba(255,255,255,0.2)";
+  };
+
+  const hoverOut = (e) => {
+    e.currentTarget.style.transform = "scale(1)";
+    e.currentTarget.style.boxShadow = "none";
+  };
+
+  return (
+    <div style={{ display: "flex", minHeight: "100vh", background: "#050505", color: "white" }}>
+
+      {/* LEFT */}
+      <div style={{ flex: 3, padding: 30 }}>
+
+        {/* HERO */}
+        <div style={{
+          position: "relative",
+          height: 380,
+          marginBottom: 50,
+          borderRadius: 20,
+          overflow: "hidden",
+          background: "black"
+        }}>
+          <video autoPlay muted loop playsInline style={{
+            position: "absolute",
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            opacity: 0.35
+          }}>
+            <source src="/videos/hero.mp4" type="video/mp4" />
+          </video>
+
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            background: "linear-gradient(to top, black, transparent 60%)"
+          }} />
+
+          <div style={{
+            position: "absolute",
+            bottom: 25,
+            left: 25,
+            fontSize: 42,
+            fontWeight: 900,
+            letterSpacing: 8
+          }}>
+            2MRRW
+          </div>
+        </div>
+
+        {/* NAV */}
+        <div style={{
+          display: "flex",
+          gap: 25,
+          marginBottom: 35,
+          fontSize: 14,
+          letterSpacing: 2,
+          borderBottom: "1px solid #333",
+          paddingBottom: 10
+        }}>
+          {["home", "singles", "albums", "shop"].map((tab) => (
+            <div
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              style={{
+                cursor: "pointer",
+                opacity: activeTab === tab ? 1 : 0.4
+              }}
+            >
+              {tab.toUpperCase()}
+            </div>
+          ))}
+        </div>
+
+        {/* HOME */}
+        {activeTab === "home" && (
+          <>
+            <h2>Latest Singles</h2>
+            <Row items={singles} type="singles" addToCart={addToCart} flash={addedFlash} hoverIn={hoverIn} hoverOut={hoverOut} />
+
+            <div style={{ margin: "30px 0", height: 1, background: "#222" }} />
+
+            <h2>Albums</h2>
+            <Grid items={albums} type="albums" addToCart={addToCart} flash={addedFlash} hoverIn={hoverIn} hoverOut={hoverOut} />
+          </>
+        )}
+
+        {activeTab === "singles" && (
+          <Grid items={singles} type="singles" addToCart={addToCart} flash={addedFlash} hoverIn={hoverIn} hoverOut={hoverOut} />
+        )}
+
+        {activeTab === "albums" && (
+          <Grid items={albums} type="albums" addToCart={addToCart} flash={addedFlash} hoverIn={hoverIn} hoverOut={hoverOut} />
+        )}
+
+        {activeTab === "shop" && (
+          <Grid items={merch} type="products" addToCart={addToCart} flash={addedFlash} hoverIn={hoverIn} hoverOut={hoverOut} />
+        )}
+
+      </div>
+
+      {/* CART */}
+      <div style={{ flex: 1, borderLeft: "1px solid #222", padding: 25 }}>
+        <h3>Cart</h3>
+
+        {cart.length === 0 && <p style={{ opacity: 0.4 }}>Empty</p>}
+
+        {cart.map((item, i) => (
+          <div key={i} style={{ marginBottom: 10 }}>
+            {item.title} - ${item.price}
+          </div>
+        ))}
+
+        <div style={{ marginTop: 20 }}>
+          <strong>Total: ${total.toFixed(2)}</strong>
+        </div>
+
+        <button
+          onClick={clearCart}
+          style={{
+            marginTop: 15,
+            width: "100%",
+            padding: 14,
+            background: "red",
+            color: "white",
+            fontWeight: "bold",
+            border: "none",
+            cursor: "pointer"
+          }}
+        >
+          CLEAR CART
+        </button>
+
+        <button style={{
+          marginTop: 10,
+          width: "100%",
+          padding: 12,
+          background: "white",
+          color: "black",
+          border: "none"
+        }}>
+          Checkout
+        </button>
+      </div>
+
+    </div>
+  );
+}
+
+// ROW
+function Row({ items, type, addToCart, flash, hoverIn, hoverOut }) {
+  return (
+    <div style={{ display: "flex", overflowX: "auto", gap: 20 }}>
+      {items.map((item) => (
+        <div
+          key={item.slug}
+          style={{ position: "relative", transition: "0.3s" }}
+          onMouseEnter={hoverIn}
+          onMouseLeave={hoverOut}
+        >
+          <Link href={`/${type}/${item.slug}`}>
+            <img src={item.cover} style={{ width: 180, height: 180, borderRadius: 14, cursor: "pointer" }} />
+          </Link>
+
+          {flash === item.slug && (
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(255,255,255,0.2)",
+              borderRadius: 14
+            }} />
+          )}
+
+          <div>{item.title}</div>
+          <div style={{ fontSize: 12, opacity: 0.6 }}>${item.price}</div>
+
+          <button
+            onClick={() => addToCart(item)}
+            style={{
+              marginTop: 6,
+              padding: "8px 12px",
+              background: "white",
+              color: "black",
+              border: "none",
+              cursor: "pointer",
+              transition: "0.2s"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = "0 0 20px white";
+              e.currentTarget.style.transform = "scale(1.05)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = "none";
+              e.currentTarget.style.transform = "scale(1)";
+            }}
+          >
+            Add to Cart
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// GRID
+function Grid({ items, type, addToCart, flash, hoverIn, hoverOut }) {
+  return (
+    <div style={{
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))",
+      gap: 20
+    }}>
+      {items.map((item) => (
+        <div
+          key={item.slug}
+          style={{ position: "relative", transition: "0.3s" }}
+          onMouseEnter={hoverIn}
+          onMouseLeave={hoverOut}
+        >
+          <Link href={`/${type}/${item.slug}`}>
+            <img src={item.cover} style={{ width: "100%", height: 200, borderRadius: 14, cursor: "pointer" }} />
+          </Link>
+
+          {flash === item.slug && (
+            <div style={{
+              position: "absolute",
+              inset: 0,
+              background: "rgba(255,255,255,0.2)",
+              borderRadius: 14
+            }} />
+          )}
+
+          <div>{item.title}</div>
+          <div style={{ fontSize: 12, opacity: 0.6 }}>${item.price}</div>
+
+          <button
+            onClick={() => addToCart(item)}
+            style={{
+              marginTop: 6,
+              padding: "8px 12px",
+              background: "white",
+              color: "black",
+              border: "none",
+              cursor: "pointer",
+              transition: "0.2s"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.boxShadow = "0 0 20px white";
+              e.currentTarget.style.transform = "scale(1.05)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.boxShadow = "none";
+              e.currentTarget.style.transform = "scale(1)";
+            }}
+          >
+            Add to Cart
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}

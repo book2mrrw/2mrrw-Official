@@ -1,0 +1,16 @@
+---
+description: 2MRRW platform architecture constraints
+alwaysApply: true
+---
+
+# 2MRRW Platform Architecture
+
+- Treat the current visual system as final unless the user explicitly asks for UI changes. Preserve layout, spacing, animation, MP4 behavior, modal behavior, navigation, and cinematic atmosphere.
+- Model every visitor as one base `User` from first entry. "Guest" is only the passwordless entry method, not a separate long-term identity class.
+- Layer access through entitlements on that user: free/no entitlement, subscription, Vault, collector ownership, and library/purchase ownership.
+- Do not model identity as `Guest -> Subscriber -> Collector`. Model `User + permissions`.
+- Purchase, subscription, Vault, and collector updates must flow from backend confirmation into Supabase source tables, then into `/api/account/state`. Do not manually toggle access in UI as an authorization source.
+- Keep Printful fulfillment webhook-only after confirmed payment.
+- Launch notifications are in-app and email. SMS and push are later production milestones.
+- Production media should move toward Supabase Storage/CDN delivery with signed access for paid/Vault content. Do not introduce local/public media dependencies for new production-only media.
+- Optimize without changing UX: prefer backend hardening, account-state correctness, rate limiting, and safe leaf component extraction.

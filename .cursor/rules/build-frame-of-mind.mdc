@@ -1,0 +1,27 @@
+---
+description: 2MRRW build frame of mind — mobile-first, audio-native, artist world standard
+alwaysApply: true
+---
+
+# Build Frame of Mind
+
+Full reference: [`docs/foundation/BUILD_FRAME_OF_MIND.md`](../../docs/foundation/BUILD_FRAME_OF_MIND.md). Read before every build session.
+
+## Platform identity
+
+2MRRW is one artist's sovereign world — not a catalog app. Every interaction must honor fans who chose this destination.
+
+## Build decisions
+
+- **Mobile first** — iOS Safari, one thumb, in motion. Scale up to desktop/tablet/car; never compromise mobile.
+- **Cross-platform consistency** — same world: colors, motion, audio behavior, interaction logic.
+- **Audio is first-class** — lock screen, background, app switch, Dynamic Island, Bluetooth; no second `<audio>` element; never interrupt unless user or OS audio takeover.
+- **Respect the fan** — one tap when one is enough; feedback while waiting; no broken-web errors; no pricing when entitled; test real phone sizes.
+- **Aesthetic bar** — artist identity, intentional motion, 44×44 touch targets, safe areas, native scroll; cinematic shell is final unless explicitly scoped.
+
+## Never / always
+
+- **Never:** unrequested UI/state, client entitlement overrides, cinematic redesign, dependency bumps without approval, desktop-first shortcuts, double-tap workarounds.
+- **Always:** read files before editing, ask before unrequested additions, ask when audits offer options, exact paths in findings, selective recovery over full rebuilds.
+
+Also apply: `frontend-foundation.mdc`, `platform-architecture.mdc`, `project-guardrails.mdc`.

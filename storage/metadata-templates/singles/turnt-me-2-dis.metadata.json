@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "type": "single",
+  "slug": "turnt-me-2-dis",
+  "title": "Turnt Me 2 Dis",
+  "artist": "2MRRW",
+  "artistSlug": "2mrrw",
+  "releaseDate": null,
+  "priceCents": 299,
+  "genres": [],
+  "explicit": false,
+  "durationSeconds": null,
+  "isrc": null,
+  "assets": {
+    "audio": "singles/turnt-me-2-dis/audio.mp3",
+    "preview": "singles/turnt-me-2-dis/preview.mp3",
+    "cover": "singles/turnt-me-2-dis/cover.jpg",
+    "visual": "singles/turnt-me-2-dis/visual.mp4",
+    "lyrics": "singles/turnt-me-2-dis/lyrics.lrc"
+  }
+}

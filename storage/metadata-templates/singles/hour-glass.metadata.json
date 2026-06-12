@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "type": "single",
+  "slug": "hour-glass",
+  "title": "Hour Glass",
+  "artist": "2MRRW",
+  "artistSlug": "2mrrw",
+  "releaseDate": null,
+  "priceCents": 299,
+  "genres": [],
+  "explicit": false,
+  "durationSeconds": null,
+  "isrc": null,
+  "assets": {
+    "audio": "singles/hour-glass/audio.mp3",
+    "preview": "singles/hour-glass/preview.mp3",
+    "cover": "singles/hour-glass/cover.jpg",
+    "visual": "singles/hour-glass/visual.mp4",
+    "lyrics": "singles/hour-glass/lyrics.lrc"
+  }
+}

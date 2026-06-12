@@ -1,0 +1,14 @@
+{
+  "createdAt": "2026-05-21T02:06:59.845Z",
+  "anchorCommit": "f78d6ecd368ef82ca5929b3ab4269f31804ed131",
+  "archive": "storage/frontend-recovery-snapshots/foundation-snapshot-f78d6ecd-2026-05-21T02-06-59.tar.gz",
+  "paths": [
+    "package.json",
+    "package-lock.json",
+    "docs/foundation",
+    "scripts/recovery",
+    ".cursor/rules/frontend-foundation.mdc",
+    ".env.example"
+  ],
+  "restoreHint": "Extract to repo root; run npm run recover:foundation"
+}
