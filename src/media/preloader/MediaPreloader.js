@@ -17,6 +17,10 @@ function preloadAudioLink(url, trackId) {
   audioLink = link;
 
   if (!warmedPreviewUrls.has(url)) {
+    // Evict oldest when cap exceeded — Set preserves insertion order.
+    if (warmedPreviewUrls.size >= 50) {
+      warmedPreviewUrls.delete(warmedPreviewUrls.values().next().value);
+    }
     warmedPreviewUrls.add(url);
     try {
       const warm = new Audio();

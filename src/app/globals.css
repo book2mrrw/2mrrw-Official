@@ -2452,15 +2452,29 @@ body.is-player-modal-open::before {
 }
 
 .player-bar-compact__pad {
-  padding: 10px 14px 8px;
+  padding: 8px 12px 6px;
   min-width: 0;
 }
 
 .player-bar-compact__row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
+}
+
+/* Control cluster: Prev | Play | Next | Repeat */
+.player-bar-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Ensure all glass buttons in the compact bar have adequate touch targets */
+.player-bar-compact .player-glass-btn {
+  min-width: 40px;
+  min-height: 40px;
 }
 
 .player-bar-cover-hit {
@@ -2528,32 +2542,6 @@ body.is-player-modal-open::before {
   color: rgba(255, 160, 160, 0.95);
 }
 
-.player-bar-skip {
-  min-width: 32px;
-  min-height: 32px;
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.55);
-  cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease, transform 0.12s ease;
-}
-
-.player-bar-compact .player-bar-skip:hover {
-  color: rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.player-bar-compact .player-bar-skip:active {
-  transform: scale(0.96);
-}
 
 .player-bar-scrub {
   position: relative;
@@ -3474,6 +3462,11 @@ body.is-player-modal-open::before {
 
 .nav-sub-reveal {
   overflow: hidden;
+}
+
+@keyframes collectionBarBounce {
+  from { transform: scaleY(0.35); }
+  to   { transform: scaleY(1); }
 }
 
 @keyframes giftBadgePulse {

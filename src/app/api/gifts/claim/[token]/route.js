@@ -72,6 +72,9 @@ export async function POST(req, { params }) {
       cover_url: result.product.cover_url || null,
     });
   } catch (err) {
+    if (err?.code === "ALREADY_CLAIMED" || err?.status === 409) {
+      return NextResponse.json({ error: "claimed", message: "This gift has already been claimed" }, { status: 409 });
+    }
     console.error("gift claim error:", err);
     return NextResponse.json({ error: err.message || "Claim failed" }, { status: 500 });
   }

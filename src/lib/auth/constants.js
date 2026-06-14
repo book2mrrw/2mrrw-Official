@@ -1,5 +1,5 @@
-export const ADMIN_USER_ID = "545cd959-5cae-4009-8a91-1c46fe2f4d27";
-export const ADMIN_EMAIL = "book2mrrw@gmail.com";
+export const ADMIN_USER_ID = process.env.ADMIN_USER_ID ?? "";
+export const ADMIN_EMAIL = (process.env.ADMIN_EMAIL ?? "").toLowerCase();
 
 export function isAdminUser(user) {
   if (!user) return false;

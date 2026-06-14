@@ -80,6 +80,9 @@ function LibraryCarousel({
   listeningMap,
   onPlayAll,
   onShuffle,
+  activeSlug,
+  isPlaying,
+  onToggle,
 }) {
   if (!items?.length) return null;
   return (
@@ -120,8 +123,10 @@ function LibraryCarousel({
           const locked = access.subscriptionLocked && !access.owned;
           const highlighted = highlightSlug && item.slug === highlightSlug;
           const history = listeningMap?.get(item.slug);
-          const showBar = history && history.positionSeconds > 0 && history.durationSeconds > 0;
+          const showBar = history && history.positionSeconds > 0 && history.durationSeconds > 0 && !history.completed;
           const barPct = showBar ? Math.min(100, (history.positionSeconds / history.durationSeconds) * 100) : 0;
+          const isActive = activeSlug === item.slug;
+          const canPlay = access.canStream && !locked;
           return (
             <div
               key={item.slug}
@@ -131,9 +136,10 @@ function LibraryCarousel({
                 width: isMobile ? 148 : 168,
                 scrollSnapAlign: "start",
                 background: "#0a0a0a",
-                border: "1px solid #1a1a1a",
+                border: isActive ? "1px solid rgba(0,255,255,0.45)" : "1px solid #1a1a1a",
                 borderRadius: 14,
                 overflow: "hidden",
+                boxShadow: isActive ? "0 0 12px rgba(0,255,255,0.12)" : undefined,
               }}
             >
               <div
@@ -159,6 +165,36 @@ function LibraryCarousel({
                 <div style={{ position: "absolute", top: 8, left: 8 }}>
                   <MusicAccessBadge label={access.badge} compact />
                 </div>
+                {isActive && isPlaying ? (
+                  <div style={{
+                    position: "absolute",
+                    top: 8,
+                    right: 8,
+                    width: 20,
+                    height: 20,
+                    borderRadius: "50%",
+                    background: "rgba(0,0,0,0.65)",
+                    display: "flex",
+                    alignItems: "flex-end",
+                    justifyContent: "center",
+                    gap: 2,
+                    padding: "4px 4px 3px",
+                    boxSizing: "border-box",
+                  }}>
+                    {[1, 0.6, 0.85].map((h, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          width: 3,
+                          height: `${h * 10}px`,
+                          background: "#00ffff",
+                          borderRadius: 1,
+                          animation: `collectionBarBounce ${0.6 + i * 0.15}s ease-in-out infinite alternate`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                ) : null}
                 {showBar ? (
                   <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: "rgba(0,0,0,0.45)" }}>
                     <div style={{ width: `${barPct}%`, height: "100%", background: "#00ffff" }} />
@@ -199,21 +235,27 @@ function LibraryCarousel({
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                   <button
                     type="button"
-                    disabled={!access.canStream || locked}
-                    onClick={() => onPlay(item, access)}
+                    disabled={!canPlay}
+                    onClick={() => {
+                      if (isActive && onToggle) {
+                        onToggle();
+                      } else {
+                        onPlay(item, access);
+                      }
+                    }}
                     style={{
                       flex: 1,
                       padding: "8px 0",
-                      background: access.canStream && !locked ? "#00ffff" : "#222",
-                      color: access.canStream && !locked ? "#000" : "#666",
+                      background: canPlay ? "#00ffff" : "#222",
+                      color: canPlay ? "#000" : "#666",
                       border: "none",
                       borderRadius: 8,
-                      cursor: access.canStream && !locked ? "pointer" : "not-allowed",
+                      cursor: canPlay ? "pointer" : "not-allowed",
                       fontSize: 11,
                       fontWeight: 800,
                     }}
                   >
-                    {locked ? "Locked" : "Play"}
+                    {locked ? "Locked" : isActive && isPlaying ? "Pause" : isActive ? "Resume" : "Play"}
                   </button>
                   <button
                     type="button"
@@ -331,6 +373,10 @@ function OwnedReleaseList({
   onOpenAlbum,
   onOpenAlbumTracklist,
   onLibraryChange,
+  listeningMap,
+  activeSlug,
+  isPlaying,
+  onToggleAlbum,
 }) {
   if (!items?.length) {
     return (
@@ -370,6 +416,10 @@ function OwnedReleaseList({
         {items.map((album) => {
           const merged = { ...album, ...(catalog.find((a) => a.slug === album.slug) || {}) };
           const access = resolveContentAccess(merged, accountState);
+          const history = listeningMap?.get(merged.slug);
+          const showBar = history && history.positionSeconds > 0 && history.durationSeconds > 0 && !history.completed;
+          const barPct = showBar ? Math.min(100, (history.positionSeconds / history.durationSeconds) * 100) : 0;
+          const isActive = activeSlug === merged.slug;
           return (
             <div
               key={album.slug}
@@ -380,11 +430,12 @@ function OwnedReleaseList({
                 gap: isMobile ? 12 : 14,
                 padding: "14px 16px",
                 background: "#0a0a0a",
-                border: "1px solid #1a1a1a",
+                border: isActive ? "1px solid rgba(0,255,255,0.45)" : "1px solid #1a1a1a",
                 borderRadius: 14,
                 width: "100%",
                 minWidth: 0,
                 boxSizing: "border-box",
+                boxShadow: isActive ? "0 0 12px rgba(0,255,255,0.08)" : undefined,
               }}
             >
               <div
@@ -402,7 +453,7 @@ function OwnedReleaseList({
                     tabIndex={0}
                     onClick={() => (onOpenAlbumTracklist || onOpenAlbum)?.(merged)}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); (onOpenAlbumTracklist || onOpenAlbum)?.(merged); } }}
-                    style={{ flexShrink: 0, cursor: "pointer" }}
+                    style={{ flexShrink: 0, cursor: "pointer", position: "relative" }}
                   >
                     <CoverArt
                       src={merged.cover}
@@ -412,6 +463,11 @@ function OwnedReleaseList({
                       height={52}
                       style={{ borderRadius: 8 }}
                     />
+                    {showBar ? (
+                      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: "rgba(0,0,0,0.5)", borderRadius: "0 0 8px 8px", overflow: "hidden" }}>
+                        <div style={{ width: `${barPct}%`, height: "100%", background: "#00ffff" }} />
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -423,6 +479,7 @@ function OwnedReleaseList({
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
+                      color: isActive ? "#00ffff" : undefined,
                     }}
                   >
                     {merged.title || album.title}
@@ -443,7 +500,13 @@ function OwnedReleaseList({
                 <button
                   type="button"
                   disabled={!access.canStream}
-                  onClick={() => onPlayAlbum?.(merged)}
+                  onClick={() => {
+                    if (isActive && onToggleAlbum) {
+                      onToggleAlbum();
+                    } else {
+                      onPlayAlbum?.(merged);
+                    }
+                  }}
                   style={{
                     flex: isMobile ? "1 1 120px" : "0 0 auto",
                     minHeight: 44,
@@ -457,7 +520,7 @@ function OwnedReleaseList({
                     fontWeight: 800,
                   }}
                 >
-                  Play Album
+                  {isActive && isPlaying ? "Pause" : isActive ? "Resume" : "Play Album"}
                 </button>
                 <button
                   type="button"
@@ -534,7 +597,7 @@ function MyMusicTab({
   const activeContinue = continueListening || lastPlayed;
   const activeRecentlyPlayed = recentlyPlayedRail.length ? recentlyPlayedRail : recentlyPlayed;
 
-  const { playTrack, playQueue, resume, setShuffle } = useAudioPlayer();
+  const { playTrack, playQueue, resume, setShuffle, currentTrack, isPlaying, toggle } = useAudioPlayer();
   const membershipActive =
     Boolean(accountState?.subscriberActive) || membershipHasPremiumAccess(accountState?.membership);
   const subscriptionLocked = Boolean(accountState?.membership && !membershipActive);
@@ -598,14 +661,33 @@ function MyMusicTab({
     return [...map.values()].filter((t) => t.preview || t.audio || t.src);
   }, [ownedSingles, singles]);
 
+  // Must be defined before playItem so playItem's dep array can reference it without TDZ.
+  const listeningMap = useMemo(() => {
+    const map = new Map();
+    for (const row of activeRecentlyPlayed) {
+      if (row.slug && row.positionSeconds > 0 && row.durationSeconds > 0) {
+        map.set(row.slug, { positionSeconds: row.positionSeconds, durationSeconds: row.durationSeconds, completed: row.completed });
+      }
+    }
+    return map;
+  }, [activeRecentlyPlayed]);
+
   const playItem = useCallback(
-    (item, access, resumeAt = 0) => {
+    (item, access, resumeAt) => {
       const resolvedAccess = access || resolveTrackAccess(item, accountState);
       if (!resolvedAccess?.canStream) return;
       const track = toPlaybackTrack(item, { ...accountState, userId: user?.id }, "my_music");
-      void playTrack(track, { resumeAt });
+      // Resume from saved position when available — Spotify/Apple Music behavior.
+      // Caller can pass explicit resumeAt (e.g. 0 to restart), otherwise use listening history.
+      const savedPosition = resumeAt !== undefined
+        ? resumeAt
+        : (() => {
+            const h = listeningMap.get(item.slug);
+            return h && !h.completed && h.positionSeconds > 5 ? h.positionSeconds : 0;
+          })();
+      void playTrack(track, { resumeAt: savedPosition });
     },
-    [accountState, playTrack, user?.id]
+    [accountState, playTrack, user?.id, listeningMap]
   );
 
   const playAlbum = useCallback(
@@ -665,16 +747,6 @@ function MyMusicTab({
       void playQueue(playable, 0);
     }
   }, [mergedOwnedSingles, accountState, user?.id, playQueue, setShuffle]);
-
-  const listeningMap = useMemo(() => {
-    const map = new Map();
-    for (const row of activeRecentlyPlayed) {
-      if (row.slug && row.positionSeconds > 0 && row.durationSeconds > 0) {
-        map.set(row.slug, { positionSeconds: row.positionSeconds, durationSeconds: row.durationSeconds });
-      }
-    }
-    return map;
-  }, [activeRecentlyPlayed]);
 
   const sortLabel = SORT_OPTIONS.find((o) => o.id === sortPref)?.label || "Recently Added";
 
@@ -854,6 +926,10 @@ function MyMusicTab({
           onOpen={(item) => onOpenSingle?.(singles.find((s) => s.slug === item.slug) || item)}
           onLibraryChange={refresh}
           isMobile={isMobile}
+          listeningMap={listeningMap}
+          activeSlug={currentTrack?.slug}
+          isPlaying={isPlaying}
+          onToggle={toggle}
         />
       ) : (
         <CollectionRailPlaceholder label="Recently Played — tracks you stream will collect here." />
@@ -900,6 +976,10 @@ function MyMusicTab({
             onPlay={playItem}
             onLibraryChange={refresh}
             isMobile={isMobile}
+            listeningMap={listeningMap}
+            activeSlug={currentTrack?.slug}
+            isPlaying={isPlaying}
+            onToggle={toggle}
           />
         ) : null}
       </section>
@@ -925,6 +1005,9 @@ function MyMusicTab({
         listeningMap={listeningMap}
         onPlayAll={mergedOwnedSingles.length ? () => playAllSingles(false) : undefined}
         onShuffle={mergedOwnedSingles.length > 1 ? () => playAllSingles(true) : undefined}
+        activeSlug={currentTrack?.slug}
+        isPlaying={isPlaying}
+        onToggle={toggle}
       />
 
       <OwnedReleaseList
@@ -938,6 +1021,10 @@ function MyMusicTab({
         onOpenAlbum={onOpenAlbum}
         onOpenAlbumTracklist={onOpenAlbumTracklist}
         onLibraryChange={refresh}
+        listeningMap={listeningMap}
+        activeSlug={currentTrack?.slug}
+        isPlaying={isPlaying}
+        onToggleAlbum={toggle}
       />
 
       <OwnedReleaseList
@@ -951,6 +1038,10 @@ function MyMusicTab({
         onOpenAlbum={onOpenAlbum}
         onOpenAlbumTracklist={onOpenAlbumTracklist}
         onLibraryChange={refresh}
+        listeningMap={listeningMap}
+        activeSlug={currentTrack?.slug}
+        isPlaying={isPlaying}
+        onToggleAlbum={toggle}
       />
 
       <OwnedReleaseList
@@ -964,6 +1055,10 @@ function MyMusicTab({
         onOpenAlbum={onOpenAlbum}
         onOpenAlbumTracklist={onOpenAlbumTracklist}
         onLibraryChange={refresh}
+        listeningMap={listeningMap}
+        activeSlug={currentTrack?.slug}
+        isPlaying={isPlaying}
+        onToggleAlbum={toggle}
       />
       </section>
 

@@ -41,6 +41,8 @@ const HomeStorefront = memo(function HomeStorefront({
   onOpenAlbumTracklist,
   mixtapesAndEps,
   onPlayMixtapeEp,
+  onPlaySingle,
+  onPlayFeature,
   currentSlide,
   enrichedRadioSlides,
   radioIndex,
@@ -102,6 +104,8 @@ const HomeStorefront = memo(function HomeStorefront({
           onOpenAlbumTracklist={onOpenAlbumTracklist}
           mixtapesAndEps={mixtapesAndEps}
           onPlayMixtapeEp={onPlayMixtapeEp}
+          onPlaySingle={onPlaySingle}
+          onPlayFeature={onPlayFeature}
           liveStreamDate={liveStreamDate}
           liveStreamTime={liveStreamTime}
         />

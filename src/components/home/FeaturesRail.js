@@ -21,6 +21,7 @@ const FeatureCard = memo(function FeatureCard({
   onOpenFeature,
   addToCart,
   onLibraryChange,
+  onPlayClick,
 }) {
   const { entitlementAccountState, userId, isAdminStable } = useStorefrontCardChrome();
   const mediaItem = useMemo(() => withR2CatalogMedia(item), [item]);
@@ -101,6 +102,7 @@ const FeatureCard = memo(function FeatureCard({
                 source="home_feature_card"
                 showCart={Boolean(access?.showCart)}
                 onLibraryChange={onLibraryChange}
+                onPlayClick={onPlayClick}
                 onAddToCart={(e) => {
                   e.stopPropagation();
                   addToCart(mediaItem);
@@ -127,6 +129,7 @@ function FeaturesRail({
   onOpenFeature,
   onGift,
   onLibraryChange,
+  onPlayClick,
 }) {
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
@@ -160,6 +163,7 @@ function FeaturesRail({
             onOpenFeature={onOpenFeature}
             addToCart={addToCart}
             onLibraryChange={onLibraryChange}
+            onPlayClick={onPlayClick}
           />
         );
       })}

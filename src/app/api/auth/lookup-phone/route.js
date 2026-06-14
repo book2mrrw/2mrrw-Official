@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizePhoneDigits } from "@/lib/auth/validation";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export async function POST(request) {
   try {
+    const limit = await checkRateLimit(request, {
+      routeKey: "auth.lookup-phone",
+      limit: 10,
+      windowSeconds: 60,
+    });
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
+
     const body = await request.json().catch(() => ({}));
     const digits = normalizePhoneDigits(body.phone);
     if (digits.length < 10) {

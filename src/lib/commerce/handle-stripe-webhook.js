@@ -8,6 +8,11 @@ import {
   upsertMembershipFromSubscription,
 } from "@/lib/commerce/stripe-entitlements";
 import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  sendTransactionalEmail,
+  buildPurchaseConfirmationEmail,
+  buildMembershipWelcomeEmail,
+} from "@/lib/server/email";
 
 const LOG_PREFIX = "[stripe-webhook]";
 
@@ -155,6 +160,23 @@ export async function handleStripeWebhook(req) {
           purchaseId: result.purchaseId,
           slugs: result.slugs,
         });
+        // Send transactional email — non-fatal
+        try {
+          const to = pi.metadata?.email || pi.receipt_email;
+          if (to) {
+            const isSubscription = pi.metadata?.payment_kind === "subscription";
+            const { subject, html, text } = isSubscription
+              ? buildMembershipWelcomeEmail({ name: pi.metadata?.name || "" })
+              : buildPurchaseConfirmationEmail({
+                  name: pi.metadata?.name || "",
+                  items: result.items || [],
+                  amountCents: pi.amount_received ?? pi.amount,
+                });
+            await sendTransactionalEmail({ to, subject, html, text });
+          }
+        } catch (emailErr) {
+          console.warn(`${LOG_PREFIX} post-PI email failed`, pi.id, emailErr?.message);
+        }
         break;
       }
 
@@ -185,6 +207,22 @@ export async function handleStripeWebhook(req) {
             });
           } catch (entErr) {
             console.warn(`${LOG_PREFIX} checkout entitlements failed`, session.id, entErr.message);
+          }
+          // Send purchase confirmation email — non-fatal
+          try {
+            const to = session.customer_details?.email || session.customer_email || session.metadata?.email;
+            if (to) {
+              let items = [];
+              try { items = JSON.parse(session.metadata?.items || "[]"); } catch {}
+              const { subject, html, text } = buildPurchaseConfirmationEmail({
+                name: session.customer_details?.name || "",
+                items,
+                amountCents: session.amount_total,
+              });
+              await sendTransactionalEmail({ to, subject, html, text });
+            }
+          } catch (emailErr) {
+            console.warn(`${LOG_PREFIX} post-checkout email failed`, session.id, emailErr?.message);
           }
         }
 

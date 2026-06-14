@@ -3,6 +3,7 @@ import { getStripe } from "@/lib/commerce/stripe";
 import { resolveCartLines } from "@/lib/commerce/resolve-cart";
 import { getOwnedSlugs } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export async function POST(req) {
   try {
@@ -11,6 +12,14 @@ export async function POST(req) {
     if (!user) {
       return NextResponse.json({ error: "Enter email and phone to checkout" }, { status: 401 });
     }
+
+    const limit = await checkRateLimit(req, {
+      routeKey: "payment-intent.create",
+      limit: 10,
+      windowSeconds: 600,
+      identifier: user.id,
+    });
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
     const { cart } = await req.json();
     const lines = await resolveCartLines(cart);

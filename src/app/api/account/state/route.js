@@ -13,6 +13,7 @@ import {
 import { getUserEntitlements, hasEntitlement, hasVaultAccess } from "@/lib/entitlements";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import {
   clearGuestCookie,
   clearGuestCookieOnResponse,
@@ -54,7 +55,7 @@ function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest 
   };
 }
 
-export async function GET() {
+export async function GET(req) {
   try {
     const session = await getGuestSessionCookieState();
     if (session?.expired) {
@@ -62,6 +63,15 @@ export async function GET() {
     }
 
     const user = await getFanSessionUser();
+
+    const limit = await checkRateLimit(req, {
+      routeKey: "account.state",
+      limit: 120,
+      windowSeconds: 60,
+      identifier: user?.id,
+    });
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
+
     if (!user) {
       return NextResponse.json({
         user: null,

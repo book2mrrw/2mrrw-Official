@@ -76,8 +76,22 @@ export default function AlbumTracklistSheet({
     return () => unregisterModal("album-tracklist-sheet");
   }, [open]);
 
+  // Plays a specific track without closing the sheet — user can change tracks at will.
+  const playTrackInSheet = useCallback(
+    (releaseTrackIndex) => {
+      const playable = playableReleaseQueue(tracks, { ...accountState, userId });
+      if (!playable.length) return;
+      setShuffle(false);
+      const sourceTrack = tracks[releaseTrackIndex];
+      const queueIndex = resolveReleaseQueueStartIndex(playable, releaseTrackIndex, sourceTrack);
+      void dispatchPlaybackCommand("playQueue", { tracks: playable, startIndex: queueIndex });
+    },
+    [tracks, accountState, userId, dispatchPlaybackCommand, setShuffle]
+  );
+
+  // Play All / Shuffle close the sheet after queuing.
   const playAndClose = useCallback(
-    (releaseTrackIndex, shuffle = false) => {
+    (shuffle = false) => {
       const playable = playableReleaseQueue(tracks, { ...accountState, userId });
       if (!playable.length) return;
       if (shuffle) {
@@ -86,9 +100,7 @@ export default function AlbumTracklistSheet({
         void dispatchPlaybackCommand("playQueue", { tracks: order, startIndex: 0 });
       } else {
         setShuffle(false);
-        const sourceTrack = tracks[releaseTrackIndex];
-        const queueIndex = resolveReleaseQueueStartIndex(playable, releaseTrackIndex, sourceTrack);
-        void dispatchPlaybackCommand("playQueue", { tracks: playable, startIndex: queueIndex });
+        void dispatchPlaybackCommand("playQueue", { tracks: playable, startIndex: 0 });
       }
       onClose?.();
     },
@@ -224,7 +236,7 @@ export default function AlbumTracklistSheet({
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", flexShrink: 0 }}>
             <button
               type="button"
-              onClick={() => playAndClose(0, false)}
+              onClick={() => playAndClose(false)}
               disabled={!tracks.some((t) => t.src)}
               style={{
                 flex: 1,
@@ -243,7 +255,7 @@ export default function AlbumTracklistSheet({
             </button>
             <button
               type="button"
-              onClick={() => playAndClose(0, true)}
+              onClick={() => playAndClose(true)}
               disabled={!tracks.some((t) => t.src)}
               style={{
                 flex: 1,
@@ -421,17 +433,11 @@ export default function AlbumTracklistSheet({
                       }
                       disabled={rowPlayState.disabled}
                       onClick={() => {
-                        if (active && isPlaying) {
-                          void toggle();
-                          onClose?.();
-                          return;
-                        }
                         if (active) {
                           void toggle();
-                          onClose?.();
                           return;
                         }
-                        playAndClose(index, false);
+                        playTrackInSheet(index);
                       }}
                       style={{
                         width: isMobile ? 40 : 32,

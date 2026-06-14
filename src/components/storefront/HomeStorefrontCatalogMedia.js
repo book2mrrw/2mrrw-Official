@@ -92,6 +92,8 @@ function homeCatalogMediaPropsEqual(prev, next) {
     "onOpenAlbumTracklist",
     "mixtapesAndEps",
     "onPlayMixtapeEp",
+    "onPlaySingle",
+    "onPlayFeature",
     "liveStreamDate",
     "liveStreamTime",
   ];
@@ -123,6 +125,8 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
   onOpenAlbumTracklist,
   mixtapesAndEps,
   onPlayMixtapeEp,
+  onPlaySingle,
+  onPlayFeature,
   liveStreamDate,
   liveStreamTime,
 }) {
@@ -159,6 +163,7 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
             isMobile={isMobile}
             onGift={onGift}
             onCardClick={onCardClick}
+            onPlayClick={onPlaySingle}
             addToCart={addToCart}
             onLibraryChange={onLibraryChange}
             source="home_single_card"
@@ -183,6 +188,7 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
           onOpenFeature={onOpenFeature}
           onGift={onGift}
           onLibraryChange={onLibraryChange}
+          onPlayClick={onPlayFeature}
         />
       </div>
 

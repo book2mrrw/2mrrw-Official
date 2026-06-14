@@ -1,12 +1,16 @@
 "use client";
 
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
 import Link from "next/link";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 import { SignaturePlayRing, useImmersivePlayback, usePlayerBodyState } from "@/components/player/ImmersivePlayerEngine";
 import { usePlaybackStateMachine } from "@/media/PlaybackStateMachine";
 import { useAudioPlayer } from "@/context/AudioContext";
 import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
+import {
+  TrackTransportButton,
+  RepeatButton,
+} from "@/components/audio/PlayerControlButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import { useRenderTracker } from "@/lib/dev/useRenderTracker";
 import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
@@ -20,53 +24,9 @@ import {
 } from "@/lib/player/constants";
 import { resolvePlayerDisplayTitle } from "@/lib/playback/resolve-player-display-title";
 
-const PREVIEW_SCRUB_CAP_RATIO = 0.3;
 const PREVIEW_MAX_SEC = 15;
 
-function Skip15Icon({ direction }) {
-  const back = direction === "back";
-  return (
-    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden>
-      <g transform={back ? undefined : "scale(-1,1) translate(-32,0)"}>
-        <path
-          d="M22.5 11.5a7.2 7.2 0 1 0 0 9"
-          stroke="currentColor"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          fill="none"
-        />
-        <path
-          d="M21.5 8.5l3.5 3.5-3.5 2.8"
-          stroke="currentColor"
-          strokeWidth="1.75"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        />
-      </g>
-      <text
-        x="16"
-        y="18"
-        textAnchor="middle"
-        dominantBaseline="middle"
-        fill="currentColor"
-        fontSize="9"
-        fontWeight="600"
-        fontFamily="system-ui, -apple-system, sans-serif"
-      >
-        15
-      </text>
-    </svg>
-  );
-}
-
-function Skip15Button({ direction, onClick, ariaLabel }) {
-  return (
-    <button type="button" className="player-bar-skip" onClick={onClick} aria-label={ariaLabel}>
-      <Skip15Icon direction={direction} />
-    </button>
-  );
-}
+// ─── Scrub bar ───────────────────────────────────────────────────────────────
 
 const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onSeek }) {
   const scrubRef = useRef(null);
@@ -79,10 +39,10 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
   const maxSeek = useMemo(() => {
     if (!duration) return 0;
     if (!previewOnly) return duration;
-    return Math.min(PREVIEW_MAX_SEC, duration * PREVIEW_SCRUB_CAP_RATIO);
+    // Hard cap only — no 30% ratio that blocked most of the preview
+    return Math.min(PREVIEW_MAX_SEC, duration);
   }, [duration, previewOnly]);
 
-  // Keep durationRef in sync and trigger an immediate DOM update when duration changes.
   useLayoutEffect(() => {
     durationRef.current = duration;
     const { currentTime } = getProgressSnapshot();
@@ -92,7 +52,6 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
     if (scrubRef.current) scrubRef.current.setAttribute("aria-valuenow", String(currentTime));
   }, [duration, getProgressSnapshot]);
 
-  // Subscribe to high-frequency progress ticks and mutate DOM directly — no React re-render.
   useEffect(() => {
     function applyProgress() {
       const { currentTime } = getProgressSnapshot();
@@ -182,6 +141,8 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
   );
 });
 
+// ─── Cover art thumbnail with CS hold gesture ─────────────────────────────────
+
 function MiniCoverHit({
   title,
   baseCoverUrl,
@@ -208,8 +169,7 @@ function MiniCoverHit({
   const baseLayerUrl = baseCoverUrl || csCoverUrl || null;
   const overlayUrl = baseCoverUrl && csCoverUrl && hasCs ? csCoverUrl : null;
   const showBaseLayer = Boolean(baseLayerUrl) && !baseFailed;
-  const showOverlay =
-    Boolean(overlayUrl) && !overlayFailed && (csMode || isHoldAnimating);
+  const showOverlay = Boolean(overlayUrl) && !overlayFailed && (csMode || isHoldAnimating);
 
   return (
     <div
@@ -246,9 +206,12 @@ function MiniCoverHit({
   );
 }
 
+// ─── Compact dock layout ───────────────────────────────────────────────────────
+// Layout: [Cover] [Title/Artist ·flex·] [Prev] [Play] [Next] [Repeat] [CS?]
+// Scrub bar sits below on its own row.
+
 function MiniPlayerDock({
   currentTrack,
-  currentTime,
   duration,
   isPlaying,
   isBuffering,
@@ -264,16 +227,18 @@ function MiniPlayerDock({
   hasCs,
   handlePlayToggle,
   onSeek,
-  onSkipBack,
-  onSkipForward,
+  onPrevTrack,
+  onNextTrack,
+  repeatMode,
+  onToggleRepeat,
   showCs,
   csActive,
   onToggleCs,
   progress,
+  previewOnly,
   onCoverTouchStart,
   onCoverTouchMove,
   onCoverTouchEnd,
-  previewOnly,
 }) {
   const giftBadge =
     currentTrack?.source === "gift" || currentTrack?.gifted ? (
@@ -321,18 +286,25 @@ function MiniPlayerDock({
               {artistLine}
             </div>
           </div>
-          <Skip15Button direction="back" ariaLabel="Skip back 15 seconds" onClick={onSkipBack} />
-          <SignaturePlayRing
-            isPlaying={isPlaying}
-            hasError={Boolean(error)}
-            isBuffering={isBuffering}
-            progress={progress}
-            size={38}
-            onClick={handlePlayToggle}
-            className="player-bar-compact-play"
-          />
-          <Skip15Button direction="forward" ariaLabel="Skip forward 15 seconds" onClick={onSkipForward} />
-          {showCs ? <PlayerCsBarButton active={csActive} onClick={onToggleCs} /> : null}
+          <div className="player-bar-controls">
+            <TrackTransportButton direction="back" size={40} onClick={onPrevTrack} />
+            <SignaturePlayRing
+              isPlaying={isPlaying}
+              hasError={Boolean(error)}
+              isBuffering={isBuffering}
+              progress={progress}
+              size={40}
+              onClick={handlePlayToggle}
+              className="player-bar-compact-play"
+            />
+            <TrackTransportButton direction="forward" size={40} onClick={onNextTrack} />
+            <RepeatButton
+              repeatMode={repeatMode}
+              size={36}
+              onClick={onToggleRepeat}
+            />
+            {showCs ? <PlayerCsBarButton active={csActive} onClick={onToggleCs} /> : null}
+          </div>
         </div>
       </div>
       <div className="player-bar-compact-scrub">
@@ -341,6 +313,8 @@ function MiniPlayerDock({
     </div>
   );
 }
+
+// ─── Main bar component ────────────────────────────────────────────────────────
 
 function GlobalAudioPlayerBar() {
   useBlackscreenMountTrace("GlobalAudioPlayerBar");
@@ -371,6 +345,10 @@ function GlobalAudioPlayerBar() {
     storeLinkHref,
     playbackState,
     getIsAudiblyPlaying,
+    playNext,
+    playPrevious,
+    repeatMode,
+    toggleRepeat,
   } = playback;
 
   const [isHoldAnimating, setIsHoldAnimating] = useState(false);
@@ -408,9 +386,7 @@ function GlobalAudioPlayerBar() {
   const csAudio = dockCurrentTrack?.csAudio || null;
   const hasCs = Boolean(csCover || csAudio);
 
-  const frozenIsPlaying = continuityFrozen
-    ? Boolean(continuitySnap?.isPlaying)
-    : isPlaying;
+  const frozenIsPlaying = continuityFrozen ? Boolean(continuitySnap?.isPlaying) : isPlaying;
 
   usePlayerBodyState({ playing: frozenIsPlaying && hasStarted, expanded: false });
 
@@ -463,9 +439,7 @@ function GlobalAudioPlayerBar() {
         const p = Math.min(1, (now - start) / durationMs);
         const value = from + (to - from) * p;
         lastHoldOpacityRef.current = value;
-        if (csOverlayImgRef.current) {
-          csOverlayImgRef.current.style.opacity = String(value);
-        }
+        if (csOverlayImgRef.current) csOverlayImgRef.current.style.opacity = String(value);
         onFrame?.(value, p);
         if (p < 1) {
           holdRafRef.current = requestAnimationFrame(step);
@@ -513,9 +487,7 @@ function GlobalAudioPlayerBar() {
       holdActiveRef.current = true;
       lastHoldOpacityRef.current = 0;
       setIsHoldAnimating(true);
-      animateHoldOpacity(0, 1, HOLD_FADE_MS, (value, p) => {
-        applyHoldAudio(p);
-      });
+      animateHoldOpacity(0, 1, HOLD_FADE_MS, (value, p) => { applyHoldAudio(p); });
     },
     [animateHoldOpacity, applyHoldAudio, cancelHoldAnim, hasCs, revertHoldPreview, toggleCSMode]
   );
@@ -543,15 +515,8 @@ function GlobalAudioPlayerBar() {
       e.preventDefault();
       e.stopPropagation();
 
-      if (touchMovedRef.current) {
-        touchStartRef.current = null;
-        return;
-      }
-
-      if (csModeRef.current) {
-        touchStartRef.current = null;
-        return;
-      }
+      if (touchMovedRef.current) { touchStartRef.current = null; return; }
+      if (csModeRef.current) { touchStartRef.current = null; return; }
 
       if (holdActiveRef.current) {
         animateHoldOpacity(lastHoldOpacityRef.current, 0, RELEASE_FADE_MS, null, () => {
@@ -568,7 +533,6 @@ function GlobalAudioPlayerBar() {
           lastTapTimeRef.current = 0;
         }, DOUBLE_TAP_MS);
       }
-
       touchStartRef.current = null;
     },
     [animateHoldOpacity, revertHoldPreview]
@@ -576,23 +540,14 @@ function GlobalAudioPlayerBar() {
 
   const previewOnly = Boolean(currentTrack?.metadata?.access?.previewOnly);
 
-  const dockCurrentTime =
-    continuityFrozen && continuitySnap
-      ? continuitySnap.playbackPosition
-      : currentTime;
-  const dockDuration =
-    continuityFrozen && continuitySnap
-      ? continuitySnap.duration ?? duration
-      : duration;
-  const dockAudible =
-    hasStarted && typeof getIsAudiblyPlaying === "function" ? getIsAudiblyPlaying() : null;
-  const dockIsPlaying = continuityFrozen
-    ? Boolean(continuitySnap?.isPlaying)
-    : dockAudible ?? isPlaying;
+  const dockCurrentTime = continuityFrozen && continuitySnap ? continuitySnap.playbackPosition : currentTime;
+  const dockDuration = continuityFrozen && continuitySnap ? continuitySnap.duration ?? duration : duration;
+  const dockAudible = hasStarted && typeof getIsAudiblyPlaying === "function" ? getIsAudiblyPlaying() : null;
+  const dockIsPlaying = continuityFrozen ? Boolean(continuitySnap?.isPlaying) : dockAudible ?? isPlaying;
 
   const maxPreviewSeek = useMemo(() => {
     if (!previewOnly || !dockDuration) return dockDuration || 0;
-    return Math.min(PREVIEW_MAX_SEC, dockDuration * PREVIEW_SCRUB_CAP_RATIO);
+    return Math.min(PREVIEW_MAX_SEC, dockDuration);
   }, [dockDuration, previewOnly]);
 
   const handleEngineSeek = useCallback(
@@ -604,13 +559,12 @@ function GlobalAudioPlayerBar() {
     [dockDuration, seek, maxPreviewSeek, previewOnly]
   );
 
-  const handleSkipBack15 = useCallback(() => {
-    handleEngineSeek(Math.max(0, dockCurrentTime - 15));
-  }, [dockCurrentTime, handleEngineSeek]);
-
-  const handleSkipForward15 = useCallback(() => {
-    handleEngineSeek(dockCurrentTime + 15);
-  }, [dockCurrentTime, handleEngineSeek]);
+  const handlePrevTrack = useCallback(() => void playPrevious?.(), [playPrevious]);
+  const handleNextTrack = useCallback(() => void playNext?.(), [playNext]);
+  const handleToggleRepeat = useCallback(
+    (e) => { e?.stopPropagation(); toggleRepeat?.(); },
+    [toggleRepeat]
+  );
 
   const dockProgress = useMemo(() => {
     if (!dockDuration) return 0;
@@ -618,10 +572,7 @@ function GlobalAudioPlayerBar() {
   }, [dockCurrentTime, dockDuration]);
 
   const showCs = Boolean(dockCurrentTrack?.hasCs || dockCurrentTrack?.csAudio);
-  const dockCsMode = csMode;
-  const handleToggleCs = useCallback(() => {
-    void toggleCSMode?.();
-  }, [toggleCSMode]);
+  const handleToggleCs = useCallback(() => void toggleCSMode?.(), [toggleCSMode]);
 
   const csOpacity = csMode ? 1 : 0;
   const baseCoverUrl = resolveAbsoluteArtworkUrl(baseCover);
@@ -647,7 +598,6 @@ function GlobalAudioPlayerBar() {
   ) : (
     error
   );
-
 
   const isLifecycleVisibleState =
     hasStarted ||
@@ -695,7 +645,6 @@ function GlobalAudioPlayerBar() {
       ) : null}
       <MiniPlayerDock
         currentTrack={dockCurrentTrack}
-        currentTime={dockCurrentTime}
         duration={dockDuration}
         isPlaying={dockIsPlaying}
         isBuffering={isBuffering}
@@ -711,10 +660,12 @@ function GlobalAudioPlayerBar() {
         hasCs={hasCs}
         handlePlayToggle={handlePlayToggle}
         onSeek={handleEngineSeek}
-        onSkipBack={handleSkipBack15}
-        onSkipForward={handleSkipForward15}
+        onPrevTrack={handlePrevTrack}
+        onNextTrack={handleNextTrack}
+        repeatMode={repeatMode}
+        onToggleRepeat={handleToggleRepeat}
         showCs={showCs}
-        csActive={dockCsMode}
+        csActive={csMode}
         onToggleCs={handleToggleCs}
         progress={dockProgress}
         previewOnly={previewOnly}

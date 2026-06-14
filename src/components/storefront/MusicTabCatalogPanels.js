@@ -7,9 +7,10 @@ import CatalogGrid from "@/components/home/CatalogGrid";
 import AudioVisualsSection from "@/components/home/AudioVisualsSection";
 import MyMusicTab from "@/components/music/MyMusicTab";
 import { useCatalogSurface } from "@/components/storefront/catalog-surface-context";
-import { resolveContentAccess } from "@/lib/music-access";
-import { resolveCatalogPlaybackItem } from "@/lib/music-playback";
+import { resolveContentAccess, resolveTrackAccess } from "@/lib/music-access";
+import { resolveCatalogPlaybackItem, toPlaybackTrack } from "@/lib/music-playback";
 import { withR2CatalogMedia } from "@/components/home/catalogMedia";
+import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 
 /**
  * Phase P7 — music-tab catalog subscription isolated from PageStorefront reconcile.
@@ -41,8 +42,40 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
   isAdminStable,
   openGiftSheet,
   handleLibraryChange,
+  onPlayAlbum,
 }) {
   const { displaySingles, displayFeatures, catalogPlaybackLookup } = useCatalogSurface();
+
+  const handleFeaturePlay = useCallback((e, clickedItem) => {
+    e.stopPropagation();
+    const account = { ...entitlementAccountState, userId };
+    const bridge = getPagePlaybackActionsBridge();
+
+    const isSameTrack = bridge?.currentTrack?.slug === clickedItem.slug;
+    if (isSameTrack) {
+      if (bridge?.playbackState === "idle") {
+        const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "feature_card");
+        if (track.src) void bridge?.playQueue?.([track], 0, { autoAdvance: false });
+      } else {
+        void bridge?.toggle?.();
+      }
+      return;
+    }
+
+    const streamable = displayFeatures.filter(
+      (item) => resolveTrackAccess(item, account).canStream
+    );
+    if (!streamable.length) {
+      const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "feature_card");
+      if (track.src) void bridge?.playQueue?.([track], 0, { autoAdvance: false });
+      return;
+    }
+    const idx = Math.max(0, streamable.findIndex((s) => s.slug === clickedItem.slug));
+    const tracks = streamable
+      .map((item) => toPlaybackTrack(withR2CatalogMedia(item), account, "feature_card"))
+      .filter((t) => t.src);
+    if (tracks.length) void bridge?.playQueue?.(tracks, idx, { autoAdvance: false });
+  }, [displayFeatures, entitlementAccountState, userId]);
 
   const prevSingle = useCallback(
     () => goToSingle(singleIndex === 0 ? displaySingles.length - 1 : singleIndex - 1, "left"),
@@ -137,6 +170,7 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
             isAdmin={isAdminStable}
             onGift={openGiftSheet}
             onLibraryChange={handleLibraryChange}
+            onPlayClick={handleFeaturePlay}
           />
         </div>
         <AudioVisualsSection
@@ -163,6 +197,7 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           buttonHoverIn={buttonHoverIn}
           buttonHoverOut={buttonHoverOut}
           onCardClick={openAlbumModal}
+          onPlayAlbum={onPlayAlbum}
           onOpenAlbumTracklist={setAlbumTracklistRelease}
           catalogPlaybackLookup={catalogPlaybackLookup}
           isMobile={isMobile}

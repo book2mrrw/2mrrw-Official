@@ -30,6 +30,8 @@ const HomeStorefrontIsland = memo(function HomeStorefrontIsland({
   onOpenAlbumTracklist,
   mixtapesAndEps,
   onPlayMixtapeEp,
+  onPlaySingle,
+  onPlayFeature,
   currentSlide,
   enrichedRadioSlides,
   radioIndex,
@@ -76,6 +78,8 @@ const HomeStorefrontIsland = memo(function HomeStorefrontIsland({
               onOpenAlbumTracklist={onOpenAlbumTracklist}
               mixtapesAndEps={mixtapesAndEps}
               onPlayMixtapeEp={onPlayMixtapeEp}
+              onPlaySingle={onPlaySingle}
+              onPlayFeature={onPlayFeature}
               currentSlide={currentSlide}
               enrichedRadioSlides={enrichedRadioSlides}
               radioIndex={radioIndex}

@@ -146,7 +146,7 @@ import {
 
 const AudioContext = createContext(null);
 
-const REPEAT_MODES = ["off", "all", "one"];
+const REPEAT_MODES = ["off", "one", "all"];
 const POSITION_STATE_THROTTLE_MS = 1000;
 const SLOWED_SUFFIX = " · Slowed";
 const CS_PLAYBACK_RATE = 0.75;
@@ -958,6 +958,10 @@ export function AudioProvider({ children }) {
   const queueRef = useRef([]);
   const queueIndexRef = useRef(-1);
   const repeatModeRef = useRef("off");
+  const stopAfterEachTrackRef = useRef(false);
+  const sleepTimerRef = useRef({ endsAt: null, afterCurrentTrack: false });
+  const [sleepTimerEndsAt, setSleepTimerEndsAt] = useState(null);
+  const [sleepAfterCurrentTrack, setSleepAfterCurrentTrack] = useState(false);
   const shuffleRef = useRef(false);
   const csModeRef = useRef(false);
   const csUsingAlternateSrcRef = useRef(false);
@@ -972,6 +976,7 @@ export function AudioProvider({ children }) {
   const lastUserActionRef = useRef(null);
   const viewportResumeInFlightRef = useRef(false);
   const skipPauseInterruptionRef = useRef(false);
+  const pendingResumeAfterInterruptRef = useRef(null);
   const lastPositionStateAtRef = useRef(0);
   const progressRafRef = useRef(null);
   const listeningUserIdRef = useRef(null);
@@ -1682,7 +1687,10 @@ export function AudioProvider({ children }) {
       try {
         // Step back 0.1 s so the browser re-issues the Range request from a clean byte boundary.
         audio.currentTime = Math.max(0, audio.currentTime - 0.1);
-        audio.play().catch(() => {});
+        // Guard: only call play() if the element is actually paused — a concurrent play()
+        // promise may already be in flight (e.g. from waitAudioSrcReady), and a second
+        // play() call while one is pending triggers an AbortError on most browsers.
+        if (audio.paused) audio.play().catch(() => {});
       } catch {
         /* soft recovery is best-effort */
       }
@@ -2302,7 +2310,12 @@ export function AudioProvider({ children }) {
       const audio = audioRef.current;
       if (audio) {
         try {
-          audio.load();
+          // Only call audio.load() when the element has no src or hasn't started loading yet.
+          // Calling load() on an element with readyState >= HAVE_METADATA aborts the in-flight
+          // byte-range request, doubling buffering latency on gesture during active playback.
+          if (!audio.src || audio.networkState === /* NETWORK_EMPTY */ 0) {
+            audio.load();
+          }
         } catch {
           /* Android session priming */
         }
@@ -2736,7 +2749,15 @@ export function AudioProvider({ children }) {
         const shouldResumeAfterInterrupt =
           wasPlayingBeforePause || playbackIntentBeforeHideRef.current;
         if (shouldResumeAfterInterrupt) {
+          // Remove any previously-registered interrupt listener before adding a new one.
+          // Without this, rapid OS interrupts (e.g. phone call → AirPods swap → Siri)
+          // accumulate listeners that each fire on the next canplay, calling play() N times.
+          if (pendingResumeAfterInterruptRef.current) {
+            audio.removeEventListener("canplay", pendingResumeAfterInterruptRef.current);
+            pendingResumeAfterInterruptRef.current = null;
+          }
           const resumeAfterInterrupt = () => {
+            pendingResumeAfterInterruptRef.current = null;
             if (
               (wasPlayingBeforePause || playbackIntentBeforeHideRef.current) &&
               audio.paused
@@ -2753,9 +2774,9 @@ export function AudioProvider({ children }) {
                 context: { source: "onPause_canplay_interrupt" },
               });
             }
-            audio.removeEventListener("canplay", resumeAfterInterrupt);
           };
-          audio.addEventListener("canplay", resumeAfterInterrupt);
+          pendingResumeAfterInterruptRef.current = resumeAfterInterrupt;
+          audio.addEventListener("canplay", resumeAfterInterrupt, { once: true });
         }
       }
       emitPhase21AudibleSnapshot("onPause");
@@ -2780,7 +2801,8 @@ export function AudioProvider({ children }) {
         if (audio.currentTime >= PREVIEW_HARD_CAP_SEC) {
           skipPauseInterruptionRef.current = true;
           audio.pause();
-          audio.volume = 1;
+          // Do NOT restore audio.volume here — the next playTrackInternal call will set it
+          // correctly before play(). Restoring while audio is fading out causes a pop.
           audio.currentTime = PREVIEW_HARD_CAP_SEC;
           syncProgressTime(PREVIEW_HARD_CAP_SEC);
           patchState({
@@ -2792,10 +2814,6 @@ export function AudioProvider({ children }) {
           dispatchPreviewEnded(track.slug);
         }
         return;
-      }
-
-      if (previewOnly && audio.volume < 1 && audio.currentTime < PREVIEW_HARD_CAP_SEC - 2) {
-        audio.volume = 1;
       }
 
       if (track?.slug && audio.currentTime >= 30) {
@@ -2810,6 +2828,16 @@ export function AudioProvider({ children }) {
             completed: false,
           });
         }
+      }
+
+      // Sleep timer: pause when the scheduled end time is reached.
+      if (sleepTimerRef.current.endsAt && Date.now() >= sleepTimerRef.current.endsAt) {
+        sleepTimerRef.current = { endsAt: null, afterCurrentTrack: false };
+        setSleepTimerEndsAt(null);
+        setSleepAfterCurrentTrack(false);
+        audio.pause();
+        userPausedRef.current = true;
+        patchState({ isPlaying: false, playbackState: "paused" });
       }
 
       // Crossfade trigger: begin fading out current track and fading in pre-buffer.
@@ -2834,17 +2862,19 @@ export function AudioProvider({ children }) {
               const now = ctx.currentTime;
               const mGain = mainGainRef.current;
               const cfGain = crossfadeGainRef.current;
+              // Loudness-normalize the pre-buffered next track — same formula as onPlay.
+              const nextTrackGainLinear = Math.pow(10, (q[qi + 1].gainDb || 0) / 20);
               mGain.gain.cancelScheduledValues(now);
               mGain.gain.setValueAtTime(mGain.gain.value, now);
               mGain.gain.linearRampToValueAtTime(0, now + rem);
               cfGain.gain.cancelScheduledValues(now);
               cfGain.gain.setValueAtTime(0, now);
-              cfGain.gain.linearRampToValueAtTime(1, now + rem);
+              cfGain.gain.linearRampToValueAtTime(nextTrackGainLinear, now + rem);
               nextEl.currentTime = 0;
               nextEl.play().catch(() => {
-                // Pre-buffer play blocked — abort crossfade silently
+                // Pre-buffer play blocked — restore main gain and abort crossfade silently.
                 const t = audioCtxRef.current?.currentTime ?? 0;
-                try { mGain.gain.cancelScheduledValues(t); mGain.gain.setValueAtTime(1, t); } catch {}
+                try { mGain.gain.cancelScheduledValues(t); mGain.gain.setValueAtTime(trackGainRef.current, t); } catch {}
                 try { cfGain.gain.cancelScheduledValues(t); cfGain.gain.setValueAtTime(0, t); } catch {}
                 crossfadeStateRef.current = "idle";
               });
@@ -2912,8 +2942,13 @@ export function AudioProvider({ children }) {
       const repeatMode = repeatModeRef.current;
       const queue = queueRef.current;
       const queueIndex = queueIndexRef.current;
+      const endedTrackSlug = track?.slug;
 
       const finishEnded = () => {
+        // If the user tapped a new track between the `ended` event and this microtask,
+        // currentTrack will have changed — stale auto-advance must not proceed.
+        if (stateRef.current.currentTrack?.slug !== endedTrackSlug) return;
+
         if (repeatMode === "one" && stateRef.current.currentTrack) {
           audio.currentTime = 0;
           void playAudioIfNotPaused(audio, true, {
@@ -2922,6 +2957,33 @@ export function AudioProvider({ children }) {
             state: stateRef.current,
             context: { source: "finishEnded_repeat_one" },
           });
+          return;
+        }
+
+        // Singles/features mode: stop after this track unless repeat-all is on
+        if (stopAfterEachTrackRef.current && repeatMode !== "all") {
+          patchState({ isPlaying: false, playbackState: "idle" });
+          syncProgressTime(0);
+          setPreviewEnded(false);
+          if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
+            navigator.mediaSession.playbackState = "none";
+          }
+          if (track) void updateMediaSession(track, { playing: false });
+          return;
+        }
+
+        // Sleep after current track
+        if (sleepTimerRef.current.afterCurrentTrack) {
+          sleepTimerRef.current = { endsAt: null, afterCurrentTrack: false };
+          setSleepTimerEndsAt(null);
+          setSleepAfterCurrentTrack(false);
+          patchState({ isPlaying: false, playbackState: "idle" });
+          syncProgressTime(0);
+          setPreviewEnded(false);
+          if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
+            navigator.mediaSession.playbackState = "none";
+          }
+          if (track) void updateMediaSession(track, { playing: false });
           return;
         }
 
@@ -2968,7 +3030,36 @@ export function AudioProvider({ children }) {
             resetPlaybackTimingCapture();
             setPlaybackScenario(PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE, { source: "ended-handler" });
             perfMark(MARKS.PLAYBACK_TAP);
-            if (crossfadeStateRef.current === "fading") crossfadeStateRef.current = "bridging";
+            if (crossfadeStateRef.current === "fading") {
+              crossfadeStateRef.current = "bridging";
+            } else {
+              // Crossfade window missed — hard-cut from preload element to eliminate silence.
+              // If the preload element has any buffered data, route its audio to the output
+              // immediately so the gap is imperceptible while the main element loads.
+              const nextEl = nextTrackPreloadRef.current;
+              const ctx = audioCtxRef.current;
+              const mGain = mainGainRef.current;
+              const cfGain = crossfadeGainRef.current;
+              if (
+                nextEl && nextEl.src && nextEl.readyState >= 2 &&
+                mGain && cfGain && ctx?.state === "running"
+              ) {
+                crossfadeStateRef.current = "bridging"; // must be set before playTrackInternal runs
+                const t = ctx.currentTime;
+                mGain.gain.cancelScheduledValues(t);
+                mGain.gain.setValueAtTime(0, t);
+                cfGain.gain.cancelScheduledValues(t);
+                cfGain.gain.setValueAtTime(1, t);
+                nextEl.currentTime = 0;
+                nextEl.play().catch(() => {
+                  // Preload element blocked — roll back so main element plays normally.
+                  crossfadeStateRef.current = "idle";
+                  const now = audioCtxRef.current?.currentTime ?? 0;
+                  try { mGain.gain.cancelScheduledValues(now); mGain.gain.setValueAtTime(trackGainRef.current, now); } catch {}
+                  try { cfGain.gain.cancelScheduledValues(now); cfGain.gain.setValueAtTime(0, now); } catch {}
+                });
+              }
+            }
             void playTrackRef.current?.(nextTrack, { resumeAt: 0, playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE }).then((ok) => {
               if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
             });
@@ -3039,8 +3130,11 @@ export function AudioProvider({ children }) {
       if (slug && (streamMetaRef.current || onLibraryStreamSrc) && !streamErrorRetriedRef.current) {
         streamErrorRetriedRef.current = true;
         patchState({ playbackNetworkState: "retrying_stream", isBuffering: true });
+        const retryRequestId = activeCommandRef.current?.requestId;
         try {
           const data = await fetchLibraryStream(slug, { force: false });
+          // Bail if a new track command superseded this error-retry
+          if (activeCommandRef.current?.requestId !== retryRequestId) return;
           streamMetaRef.current = {
             slug,
             url: data.url,
@@ -3050,8 +3144,11 @@ export function AudioProvider({ children }) {
             sessionId: data.sessionId || meta?.sessionId || null,
           };
           skipPauseInterruptionRef.current = true;
-          await waitAudioSrcReady(audio, data.url);
+          await waitAudioSrcReady(audio, data.url, { signal: activeStreamAbortRef.current?.signal });
+          // Check again after the potentially long src-ready wait
+          if (activeCommandRef.current?.requestId !== retryRequestId) return;
           if (resumeAt > 0) {
+            let seekAfterLoadTimeout;
             const seekAfterLoad = () => {
               clearTimeout(seekAfterLoadTimeout);
               if (resumeAt > 0 && isFinite(audio.duration)) {
@@ -3062,7 +3159,7 @@ export function AudioProvider({ children }) {
               seekAfterLoad();
             } else {
               audio.addEventListener("loadedmetadata", seekAfterLoad, { once: true });
-              const seekAfterLoadTimeout = setTimeout(
+              seekAfterLoadTimeout = setTimeout(
                 () => audio.removeEventListener("loadedmetadata", seekAfterLoad),
                 5000
               );
@@ -3306,15 +3403,17 @@ export function AudioProvider({ children }) {
       audio.preservesPitch = true;
     }
     csUsingAlternateSrcRef.current = Boolean(presentation.useCsSrc);
-    const applySeek = () => {
-      if (resumeAt != null && resumeAt > 0 && isFinite(audio.duration)) {
-        audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
-      }
-      audio.removeEventListener("loadedmetadata", applySeek);
-    };
     if (resumeAt != null && resumeAt > 0) {
-      audio.addEventListener("loadedmetadata", applySeek);
-      if (isFinite(audio.duration) && audio.duration > 0) applySeek();
+      const applySeek = () => {
+        if (isFinite(audio.duration)) {
+          audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
+        }
+      };
+      if (isFinite(audio.duration) && audio.duration > 0) {
+        applySeek();
+      } else {
+        audio.addEventListener("loadedmetadata", applySeek, { once: true });
+      }
     }
   }, []);
 
@@ -3356,6 +3455,15 @@ export function AudioProvider({ children }) {
   // CDN tracks: load bytes directly into a hidden Audio element.
   // Library streams: pre-fetch the signed URL so the swap is instant.
   const scheduleNextTrackPreload = useCallback(async () => {
+    // Adaptive preload: skip on slow connections (2G/slow-2G) — bandwidth is too scarce
+    // to buffer the next track without starving the current one. Also skip while the
+    // current track is still buffering for the same reason.
+    if (typeof navigator !== "undefined") {
+      const effectiveType = navigator.connection?.effectiveType;
+      if (effectiveType === "slow-2g" || effectiveType === "2g") return;
+    }
+    if (stateRef.current.isBuffering) return;
+
     const queue = queueRef.current;
     const idx = queueIndexRef.current;
     const nextIdx = idx + 1;
@@ -3390,6 +3498,12 @@ export function AudioProvider({ children }) {
             url: data.url,
             fetchedAt: Date.now(),
           };
+          // Evict oldest when cache exceeds 20 entries to prevent unbounded growth.
+          const cacheEntries = Object.entries(nextTrackSignedUrlCacheRef.current);
+          if (cacheEntries.length > 20) {
+            const oldest = cacheEntries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt)[0];
+            if (oldest) delete nextTrackSignedUrlCacheRef.current[oldest[0]];
+          }
           const normalized = normalizePlaybackSrc(data.url);
           if (normalized && preloadEl.src !== normalized) {
             preloadEl.src = normalized;
@@ -3943,6 +4057,20 @@ export function AudioProvider({ children }) {
           skipPauseInterruptionRef.current = true;
           audio.pause();
         }
+        // Set volume while the element is paused — before waitAudioSrcReady and play().
+        // Setting audio.volume after play() causes a digital pop when the volume snaps
+        // from a preview-fade value. Volume = 0 for first-listen; swell starts AFTER play().
+        if (swellIntervalRef.current) {
+          cancelAnimationFrame(swellIntervalRef.current);
+          swellIntervalRef.current = null;
+        }
+        const isFirst = isFirstListen(nextTrack.slug);
+        if (isFirst) {
+          markListened(nextTrack.slug);
+          audio.volume = 0;
+        } else {
+          audio.volume = 1;
+        }
         spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
         await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal });
         patchState({ hasStarted: true, playbackState: "ready" });
@@ -3961,6 +4089,23 @@ export function AudioProvider({ children }) {
           });
           void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: false });
           return false;
+        }
+        // Start swell AFTER play() confirms audio is actually outputting.
+        // Using requestAnimationFrame for 60fps smoothness; time-based so frame drops
+        // don't stall the ramp (important for iOS which can drop frames on wake).
+        if (isFirst) {
+          const SWELL_DURATION_MS = 500;
+          const swellStart = performance.now();
+          const swellStep = () => {
+            const t = Math.min(1, (performance.now() - swellStart) / SWELL_DURATION_MS);
+            audio.volume = t;
+            if (t < 1) {
+              swellIntervalRef.current = requestAnimationFrame(swellStep);
+            } else {
+              swellIntervalRef.current = null;
+            }
+          };
+          swellIntervalRef.current = requestAnimationFrame(swellStep);
         }
         pendingSeekRef.current = resumeAt;
       } else {
@@ -4015,23 +4160,14 @@ export function AudioProvider({ children }) {
         );
       }
 
-      if (swellIntervalRef.current) {
-        clearInterval(swellIntervalRef.current);
-        swellIntervalRef.current = null;
+      // Same-track resume: ensure volume is 1 (a stale preview fade may have left it < 1).
+      // New-track path already applied volume/swell above before waitAudioSrcReady.
+      if (isSameTrack) {
+        if (swellIntervalRef.current) {
+          cancelAnimationFrame(swellIntervalRef.current);
+          swellIntervalRef.current = null;
+        }
         audio.volume = 1;
-      }
-      if (isFirstListen(nextTrack.slug)) {
-        markListened(nextTrack.slug);
-        audio.volume = 0;
-        let vol = 0;
-        swellIntervalRef.current = setInterval(() => {
-          vol = Math.min(1, vol + 0.1);
-          audio.volume = vol;
-          if (vol >= 1) {
-            clearInterval(swellIntervalRef.current);
-            swellIntervalRef.current = null;
-          }
-        }, 50);
       }
 
       if (isSameTrack) {
@@ -4140,6 +4276,10 @@ export function AudioProvider({ children }) {
           return false;
         }
       }
+      // Always cancel crossfade on failure — if we were in "bridging" state,
+      // mainGainRef.gain was set to 0 to hide the gap; leaving it there makes
+      // subsequent tracks inaudible until the user seeks or seeks manually.
+      cancelCrossfade();
       console.error("[AudioContext] playTrack failed", {
         message: err?.message || String(err),
         code: err?.code || null,
@@ -4163,6 +4303,7 @@ export function AudioProvider({ children }) {
     finalizeStreamSession,
     initWebAudio,
     unlockAudioFromGesture,
+    cancelCrossfade,
     tracePlayback,
     logDirectInternalCallViolation,
     attemptLightweightPlaybackResume,
@@ -4511,7 +4652,7 @@ export function AudioProvider({ children }) {
         }
 
         skipPauseInterruptionRef.current = true;
-        await waitAudioSrcReady(audio, src);
+        await waitAudioSrcReady(audio, src, { signal: activeStreamAbortRef.current?.signal });
         if (resumeAt > 0 && Number.isFinite(audio.duration) && audio.duration > 0) {
           const safe = clampRestorePosition(resumeAt, audio.duration);
           if (safe != null) audio.currentTime = safe;
@@ -5380,7 +5521,7 @@ export function AudioProvider({ children }) {
   }, [patchState]);
 
   const toggleRepeat = useCallback(() => {
-    const order = ["off", "all", "one"];
+    const order = ["off", "one", "all"];
     const current = repeatModeRef.current || "off";
     const next = order[(order.indexOf(current) + 1) % order.length];
     setRepeatMode(next);
@@ -5430,6 +5571,8 @@ export function AudioProvider({ children }) {
 
   const playQueueInternal = useCallback(async (tracks = [], startIndex = 0, options = {}) => {
     logDirectInternalCallViolation("playQueueInternal");
+    // autoAdvance defaults to true — singles/features pass false to stop after each track
+    stopAfterEachTrackRef.current = options.autoAdvance === false;
     const normalized = setQueueInternal(tracks, startIndex);
     if (!normalized.length) return false;
     const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
@@ -5527,8 +5670,21 @@ export function AudioProvider({ children }) {
     userPausedRef.current = false;
 
     try {
-      await unlockAudioFromGesture(audio);
+      // iOS gesture trust fix: initWebAudio + ctx.resume() MUST run synchronously in the
+      // gesture call stack — before any await. iOS Safari captures the "user activation"
+      // grant from synchronous AudioContext.resume() calls. Once the AudioContext has user
+      // activation, audio.play() succeeds after subsequent async awaits. Without this,
+      // the 3 awaits below break the gesture chain and play() throws NotAllowedError on iOS
+      // after lock-screen or phone-call interruptions.
       initWebAudio();
+      const iosGestureCtx = audioCtxRef.current;
+      if (iosGestureCtx && iosGestureCtx.state !== "running") {
+        iosGestureCtx.resume().catch(() => {}); // fire-and-forget: iOS gesture captured here
+      }
+      // Android + older iOS: play-then-pause to unlock the element itself.
+      // On iOS 14+, the ctx.resume() above already propagates to element play permission,
+      // so this becomes a no-op (audio.paused is checked inside unlockAudioFromGesture).
+      await unlockAudioFromGesture(audio);
       await resumeWebAudioContextIfSuspended(audioCtxRef);
       if (!(await ensureWebAudioRunning(audioCtxRef))) {
         const lightOk = await attemptLightweightPlaybackResume("resume_ctx_suspended");
@@ -5574,9 +5730,12 @@ export function AudioProvider({ children }) {
       const meta = streamMetaRef.current;
       const slug = meta?.slug || parseStreamSlugFromSrc(track.src) || track.slug;
       if (slug && meta && streamUrlNeedsRefresh(meta)) {
+        const refreshTrackSlug = track?.slug;
         void (async () => {
           try {
             const data = await fetchLibraryStream(slug, { force: false });
+            // Bail if the user skipped to a different track while the URL refresh was in flight.
+            if (stateRef.current.currentTrack?.slug !== refreshTrackSlug) return;
             streamMetaRef.current = {
               ...meta,
               url: data.url,
@@ -5588,15 +5747,19 @@ export function AudioProvider({ children }) {
             const resumeAt = audio.currentTime || 0;
             skipPauseInterruptionRef.current = true;
             await waitAudioSrcReady(audio, data.url);
+            // Check again after the async src-ready wait
+            if (stateRef.current.currentTrack?.slug !== refreshTrackSlug) return;
             if (resumeAt > 0) {
               const seekAfterLoad = () => {
                 if (resumeAt > 0 && isFinite(audio.duration)) {
                   audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
                 }
-                audio.removeEventListener("loadedmetadata", seekAfterLoad);
               };
-              audio.addEventListener("loadedmetadata", seekAfterLoad);
-              if (isFinite(audio.duration) && audio.duration > 0) seekAfterLoad();
+              if (isFinite(audio.duration) && audio.duration > 0) {
+                seekAfterLoad();
+              } else {
+                audio.addEventListener("loadedmetadata", seekAfterLoad, { once: true });
+              }
             }
             if (!audio.paused) await playAudioIfNotPaused(audio, stateRef.current.isPlaying);
           } catch (error) {
@@ -6191,6 +6354,26 @@ export function AudioProvider({ children }) {
   const seek = useCallback((time) => dispatchPlaybackCommand(PLAYBACK_COMMANDS.SEEK, { time }, { serial: false }), [dispatchPlaybackCommand]);
   const playPrevious = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PREV_TRACK), [dispatchPlaybackCommand]);
   const stop = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.STOP, {}, { cancelActiveStream: true }), [dispatchPlaybackCommand]);
+
+  const setSleepTimer = useCallback((minutes) => {
+    if (!minutes || minutes <= 0) {
+      sleepTimerRef.current = { endsAt: null, afterCurrentTrack: false };
+      setSleepTimerEndsAt(null);
+      setSleepAfterCurrentTrack(false);
+      return;
+    }
+    if (minutes === "end_of_track") {
+      sleepTimerRef.current = { endsAt: null, afterCurrentTrack: true };
+      setSleepTimerEndsAt(null);
+      setSleepAfterCurrentTrack(true);
+      return;
+    }
+    const endsAt = Date.now() + minutes * 60 * 1000;
+    sleepTimerRef.current = { endsAt, afterCurrentTrack: false };
+    setSleepTimerEndsAt(endsAt);
+    setSleepAfterCurrentTrack(false);
+  }, []);
+
   const toggle = useCallback(() => {
     if (audioRef.current?.paused) return resume();
     pause();
@@ -6679,6 +6862,54 @@ export function AudioProvider({ children }) {
     updateMediaSession,
   ]);
 
+  // Proactive offline detection: rather than waiting for a stream error (7–10s lag),
+  // listen for the browser's connectivity events and suppress stall recovery while offline.
+  // When connectivity is restored, attempt seamless resume from the last known position.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleOffline = () => {
+      const audio = audioRef.current;
+      const isCurrentlyPlaying = stateRef.current.isPlaying && audio && !audio.paused;
+      // Suppress stall recovery — retrying without a network connection is wasteful.
+      stopStallRecovery();
+      patchState({
+        isBuffering: isCurrentlyPlaying,
+        playbackNetworkState: isCurrentlyPlaying ? "retrying_stream" : stateRef.current.playbackNetworkState,
+        error: isCurrentlyPlaying ? "RECONNECTING" : stateRef.current.error,
+      });
+    };
+
+    const handleOnline = () => {
+      const audio = audioRef.current;
+      const track = stateRef.current.currentTrack;
+      // Only auto-resume if the user hadn't manually paused and we were playing.
+      if (
+        !userPausedRef.current &&
+        track &&
+        audio &&
+        (stateRef.current.isPlaying || stateRef.current.error === "RECONNECTING")
+      ) {
+        streamErrorRetriedRef.current = false;
+        patchState({ error: null, isBuffering: true });
+        void playTrackRef.current?.(track, {
+          resumeAt: audio.currentTime || 0,
+          forceStream: true,
+        });
+      } else if (stateRef.current.error === "RECONNECTING") {
+        // Was offline but user had paused — clear the reconnecting error.
+        patchState({ error: null, isBuffering: false });
+      }
+    };
+
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("online", handleOnline);
+    return () => {
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [patchState, stopStallRecovery]);
+
   const beginCsHoldPreview = useCallback((csAudioUrl) => {
     const audio = audioRef.current;
     if (!audio || !csAudioUrl || csModeRef.current || csHoldActiveRef.current) return;
@@ -6692,16 +6923,20 @@ export function AudioProvider({ children }) {
     skipPauseInterruptionRef.current = true;
     audio.pause();
     void (async () => {
-      await waitAudioSrcReady(audio, csAudioUrl);
+      await waitAudioSrcReady(audio, csAudioUrl, { signal: activeStreamAbortRef.current?.signal });
       const seekTo = csHoldSavedRef.current.currentTime;
-      const applySeek = () => {
-        if (seekTo > 0 && isFinite(audio.duration)) {
-          audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
+      if (seekTo > 0) {
+        const applySeek = () => {
+          if (isFinite(audio.duration)) {
+            audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
+          }
+        };
+        if (isFinite(audio.duration) && audio.duration > 0) {
+          applySeek();
+        } else {
+          audio.addEventListener("loadedmetadata", applySeek, { once: true });
         }
-        audio.removeEventListener("loadedmetadata", applySeek);
-      };
-      audio.addEventListener("loadedmetadata", applySeek);
-      if (isFinite(audio.duration) && audio.duration > 0) applySeek();
+      }
       audio.playbackRate = 1;
       if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
       if (csHoldSavedRef.current?.wasPlaying) {
@@ -6747,16 +6982,20 @@ export function AudioProvider({ children }) {
         if (needsSwap) {
           skipPauseInterruptionRef.current = true;
           audio.pause();
-          await waitAudioSrcReady(audio, saved.src);
+          await waitAudioSrcReady(audio, saved.src, { signal: activeStreamAbortRef.current?.signal });
           const seekTo = saved.currentTime;
-          const applySeek = () => {
-            if (seekTo > 0 && isFinite(audio.duration)) {
-              audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
+          if (seekTo > 0) {
+            const applySeek = () => {
+              if (isFinite(audio.duration)) {
+                audio.currentTime = Math.min(seekTo, Math.max(0, audio.duration - 0.25));
+              }
+            };
+            if (isFinite(audio.duration) && audio.duration > 0) {
+              applySeek();
+            } else {
+              audio.addEventListener("loadedmetadata", applySeek, { once: true });
             }
-            audio.removeEventListener("loadedmetadata", applySeek);
-          };
-          audio.addEventListener("loadedmetadata", applySeek);
-          if (isFinite(audio.duration) && audio.duration > 0) applySeek();
+          }
         } else if (saved.currentTime > 0) {
           audio.currentTime = saved.currentTime;
         }
@@ -6852,6 +7091,9 @@ export function AudioProvider({ children }) {
       getAnalyser: () => (webAudioAvailableRef.current ? analyserRef.current : null),
       getCurrentTime: () => stateRef.current.currentTime ?? 0,
       getIsAudiblyPlaying: readIsAudiblyPlaying,
+      setSleepTimer,
+      sleepTimerEndsAt,
+      sleepAfterCurrentTrack,
       continuityFrozen,
       getContinuitySnapshot,
       clearContinuityFreeze,
@@ -6903,6 +7145,9 @@ export function AudioProvider({ children }) {
     toggleBassBoost,
     cycleAtmosphere,
     readIsAudiblyPlaying,
+    setSleepTimer,
+    sleepTimerEndsAt,
+    sleepAfterCurrentTrack,
     subscribeProgress,
     getProgressSnapshot,
     getContinuitySnapshot,

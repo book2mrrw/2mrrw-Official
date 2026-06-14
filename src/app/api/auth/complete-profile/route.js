@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminUser } from "@/lib/auth/constants";
+import { sendTransactionalEmail, buildWelcomeEmail } from "@/lib/server/email";
 
 function isMissingColumnError(error) {
   const msg = String(error?.message || "");
@@ -70,6 +71,17 @@ export async function POST(request) {
     }
 
     if (error) throw error;
+
+    // Send welcome email only for brand-new profiles, not updates.
+    if (!existing && email) {
+      try {
+        const { subject, html, text } = buildWelcomeEmail({ name });
+        await sendTransactionalEmail({ to: email, subject, html, text });
+      } catch {
+        // Non-fatal — profile already created, email is best-effort
+      }
+    }
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("complete-profile error:", err?.message || err);

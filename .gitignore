@@ -43,3 +43,5 @@ next-env.d.ts
 # temporary audit/report folders
 .tmp-*
 .backfill-*
+
+.vercel

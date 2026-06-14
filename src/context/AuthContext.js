@@ -133,7 +133,7 @@ export function AuthProvider({ children }) {
       (data.user && !serverIsGuest ? isAdminUser(data.user) : false);
 
     setAccountState((prev) => {
-      const isAdminFlag = adminFromServer || (serverIsGuest && prev.isAdmin ? prev.isAdmin : false);
+      const isAdminFlag = serverIsGuest ? false : adminFromServer;
       const permissions = { ...(data.permissions || {}) };
       if (isAdminFlag) permissions.admin = true;
 
@@ -386,7 +386,7 @@ export function AuthProvider({ children }) {
     const data = await res.json();
     setUser(data.user || null);
     if (data.user) {
-      setIsAdmin(isAdminUser(data.user));
+      setIsAdmin(false);
       await refreshAccountState({ reason: "auth:bootstrap", source: "AuthContext:refreshGuest" });
     } else {
       setIsAdmin(false);

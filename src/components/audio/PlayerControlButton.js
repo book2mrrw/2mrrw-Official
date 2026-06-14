@@ -205,12 +205,18 @@ export const ShuffleButton = memo(function ShuffleButton({ active, size = 40, on
 export const RepeatButton = memo(function RepeatButton({ repeatMode, size = 40, onClick }) {
   const active = repeatMode !== "off";
   const Icon = repeatMode === "one" ? Repeat1 : Repeat;
+  const modeStyle = repeatMode === "one"
+    ? { color: "#00ffff", borderColor: "rgba(0,255,255,0.45)", boxShadow: "0 0 16px rgba(0,255,255,0.35), 0 0 28px rgba(0,255,255,0.15), inset 0 1px 0 rgba(255,255,255,0.1)" }
+    : repeatMode === "all"
+      ? { color: "#a259ff", borderColor: "rgba(162,89,255,0.45)", boxShadow: "0 0 16px rgba(162,89,255,0.35), 0 0 28px rgba(162,89,255,0.15), inset 0 1px 0 rgba(255,255,255,0.1)" }
+      : undefined;
   return (
     <PlayerControlButton
       ariaLabel="Repeat"
       size={size}
       active={active}
       onClick={onClick}
+      style={modeStyle}
     >
       <Icon size={Math.round(size * 0.38)} strokeWidth={2} aria-hidden />
     </PlayerControlButton>

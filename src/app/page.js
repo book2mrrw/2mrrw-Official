@@ -14,6 +14,7 @@ const AlbumModal = dynamic(
 );
 const GiftBottomSheet = dynamic(() => import("@/components/gifts/GiftBottomSheet"), { ssr: false });
 const CollectorCardAdminPanel = dynamic(() => import("@/components/admin/CollectorCardAdminPanel"), { ssr: false });
+const NotificationSettingsSection = dynamic(() => import("@/components/account/NotificationSettingsSection"), { ssr: false });
 const VaultUnlockedRoom = dynamic(
   () => import("@/components/vault/VaultUnlockedRoom").then((mod) => ({ default: mod.VaultUnlockedRoom })),
   { ssr: false }
@@ -66,6 +67,7 @@ import {
   resolveReleaseQueueStartIndex,
   normalizeTrackForPlayback,
   resolveCatalogPlaybackItem,
+  toPlaybackTrack,
 } from "@/lib/music-playback";
 import { usePagePlaybackActions } from "@/hooks/usePagePlaybackActions";
 import { dismissNowPlayingFromBridge } from "@/lib/playback/page-playback-actions-bridge";
@@ -824,6 +826,72 @@ function PageStorefront() {
     [playAlbumTracks]
   );
 
+  // Stable queue callbacks — read live refs at call time, safe to have [] deps.
+  // Singles/features: no auto-advance. Play button restarts same song if it ended; toggles if playing.
+  const playSinglesQueue = useCallback((e, clickedItem) => {
+    e.stopPropagation();
+    const auth = getPageAuthRef();
+    const account = { ...auth.accountState, userId: auth.currentUser?.id };
+    const surface = getCatalogSurfaceRef();
+    const bridge = getPagePlaybackActionsBridge();
+
+    const isSameTrack = bridge?.currentTrack?.slug === clickedItem.slug;
+    if (isSameTrack) {
+      if (bridge?.playbackState === "idle") {
+        const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_single_card");
+        if (track?.src) void bridge?.playQueue?.([track], 0, { autoAdvance: false });
+      } else {
+        void bridge?.toggle?.();
+      }
+      return;
+    }
+
+    const allSingles = surface.displaySingles || [];
+    const streamable = allSingles.filter((item) => resolveTrackAccess(item, account).canStream);
+    if (!streamable.length) {
+      const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_single_card");
+      if (track?.src) void bridge?.playQueue?.([track], 0, { autoAdvance: false });
+      return;
+    }
+    const idx = Math.max(0, streamable.findIndex((s) => s.slug === clickedItem.slug));
+    const tracks = streamable
+      .map((item) => toPlaybackTrack(withR2CatalogMedia(item), account, "home_single_card"))
+      .filter((t) => t?.src);
+    if (tracks.length) void bridge?.playQueue?.(tracks, idx, { autoAdvance: false });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const playFeaturesQueue = useCallback((e, clickedItem) => {
+    e.stopPropagation();
+    const auth = getPageAuthRef();
+    const account = { ...auth.accountState, userId: auth.currentUser?.id };
+    const surface = getCatalogSurfaceRef();
+    const bridge = getPagePlaybackActionsBridge();
+
+    const isSameTrack = bridge?.currentTrack?.slug === clickedItem.slug;
+    if (isSameTrack) {
+      if (bridge?.playbackState === "idle") {
+        const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_feature_card");
+        if (track?.src) void bridge?.playQueue?.([track], 0, { autoAdvance: false });
+      } else {
+        void bridge?.toggle?.();
+      }
+      return;
+    }
+
+    const allFeatures = surface.displayFeatures || [];
+    const streamable = allFeatures.filter((item) => resolveTrackAccess(item, account).canStream);
+    if (!streamable.length) {
+      const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_feature_card");
+      if (track?.src) void bridge?.playQueue?.([track], 0, { autoAdvance: false });
+      return;
+    }
+    const idx = Math.max(0, streamable.findIndex((s) => s.slug === clickedItem.slug));
+    const tracks = streamable
+      .map((item) => toPlaybackTrack(withR2CatalogMedia(item), account, "home_feature_card"))
+      .filter((t) => t?.src);
+    if (tracks.length) void bridge?.playQueue?.(tracks, idx, { autoAdvance: false });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const playCanonicalCatalogItem = useCallback((item, source) => {
     const auth = getPageAuthRef();
     const playbackTrack = normalizeTrackForPlayback(
@@ -1511,6 +1579,8 @@ function PageStorefront() {
                   onOpenAlbumTracklist={setAlbumTracklistRelease}
                   mixtapesAndEps={mixtapesAndEps}
                   onPlayMixtapeEp={playMixtapeEpCard}
+                  onPlaySingle={playSinglesQueue}
+                  onPlayFeature={playFeaturesQueue}
                   currentSlide={currentSlide}
                   enrichedRadioSlides={enrichedRadioSlides}
                   radioIndex={radioIndex}
@@ -1572,6 +1642,7 @@ function PageStorefront() {
                     isAdminStable={auth.isAdminStable}
                     openGiftSheet={auth.openGiftSheet}
                     handleLibraryChange={auth.handleLibraryChange}
+                    onPlayAlbum={playAlbumCard}
                   />
                 </>
                       )}
@@ -1843,6 +1914,7 @@ function PageStorefront() {
                         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:pa.myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===pa.accountCircleByline||s.by===pa.currentUser?.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Collection",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
+                      <NotificationSettingsSection isMobile={isMobile} />
                       <AuthSurfaceIsland islandId="account-admin">
                         {(auth) => (
                           <>

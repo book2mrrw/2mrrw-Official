@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { validateEmail } from "@/lib/auth/validation";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export async function POST(request) {
   try {
+    const limit = await checkRateLimit(request, {
+      routeKey: "auth.lookup-email",
+      limit: 10,
+      windowSeconds: 60,
+    });
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
+
     const body = await request.json().catch(() => ({}));
     const emailCheck = validateEmail(body.email);
     if (!emailCheck.ok) {

@@ -110,6 +110,34 @@ export async function claimGiftForUser(gift, user) {
     throw new Error("Gift item is not available in the catalog yet.");
   }
 
+  // Atomically mark the gift as claimed FIRST using a conditional UPDATE that only
+  // succeeds if the gift is still unclaimed. This is the DB-level mutex: two concurrent
+  // requests both passing the route-level state check can race here, but only one row
+  // update can win. The loser gets 0 rows back → throw 409 before any purchase is written.
+  const recipientEmail = normalizeEmail(user.email);
+  const { data: updatedGift, error: giftError } = await admin
+    .from("gifts")
+    .update({
+      claimed: true,
+      claimed_at: new Date().toISOString(),
+      status: "claimed",
+      recipient_id: user.id,
+      recipient_email: recipientEmail || gift.recipient_email,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", gift.id)
+    .neq("status", "claimed")
+    .eq("claimed", false)
+    .select("*")
+    .maybeSingle();
+  if (giftError) throw giftError;
+  if (!updatedGift) {
+    const conflict = new Error("Gift already claimed");
+    conflict.code = "ALREADY_CLAIMED";
+    conflict.status = 409;
+    throw conflict;
+  }
+
   const purchaseRow = {
     user_id: user.id,
     amount_cents: 0,
@@ -155,22 +183,6 @@ export async function claimGiftForUser(gift, user) {
     .update(libraryPatch)
     .eq("user_id", user.id)
     .eq("product_id", product.id);
-
-  const recipientEmail = normalizeEmail(user.email);
-  const { data: updatedGift, error: giftError } = await admin
-    .from("gifts")
-    .update({
-      claimed: true,
-      claimed_at: new Date().toISOString(),
-      status: "claimed",
-      recipient_id: user.id,
-      recipient_email: recipientEmail || gift.recipient_email,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", gift.id)
-    .select("*")
-    .single();
-  if (giftError) throw giftError;
 
   if (isVaultGiftProduct(product, gift)) {
     const admin = createAdminClient();
