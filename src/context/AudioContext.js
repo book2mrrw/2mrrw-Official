@@ -2096,6 +2096,9 @@ export function AudioProvider({ children }) {
     bassFilter.type = "lowshelf";
     bassFilter.frequency.value = 200;
     bassFilter.gain.value = 0;
+    try { analyserRef.current?.disconnect(); } catch {}
+    try { stereoPannerRef.current?.disconnect(); } catch {}
+    try { bassFilterRef.current?.disconnect(); } catch {}
     source.connect(analyser);
     analyser.connect(stereoPanner);
     stereoPanner.connect(bassFilter);
@@ -2537,12 +2540,16 @@ export function AudioProvider({ children }) {
           slug: sBeforePause.currentTrack?.slug ?? null,
         });
         if (audio.paused) {
-          void playAudioIfNotPaused(audio, true, {
-            command: PLAYBACK_COMMANDS.RECOVER,
-            requestId: activeCommandRef.current?.requestId || null,
-            state: stateRef.current,
-            context: { source: "onPause_os_suspend" },
-          });
+          setTimeout(() => {
+            if (!userPausedRef.current) {
+              void playAudioIfNotPaused(audio, true, {
+                command: PLAYBACK_COMMANDS.RECOVER,
+                requestId: activeCommandRef.current?.requestId || null,
+                state: stateRef.current,
+                context: { source: "onPause_os_suspend" },
+              });
+            }
+          }, 0);
         }
       }
       if (userInitiated) {

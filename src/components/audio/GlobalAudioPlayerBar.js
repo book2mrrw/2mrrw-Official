@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 import { SignaturePlayRing, useImmersivePlayback, usePlayerBodyState } from "@/components/player/ImmersivePlayerEngine";
@@ -68,15 +68,43 @@ function Skip15Button({ direction, onClick, ariaLabel }) {
   );
 }
 
-function PlayerBarScrub({ currentTime, duration, previewOnly, onSeek }) {
+const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onSeek }) {
   const scrubRef = useRef(null);
+  const fillRef = useRef(null);
+  const handleRef = useRef(null);
+  const durationRef = useRef(duration);
   const [dragging, setDragging] = useState(false);
+  const { subscribeProgress, getProgressSnapshot } = useAudioPlayer();
 
   const maxSeek = useMemo(() => {
     if (!duration) return 0;
     if (!previewOnly) return duration;
     return Math.min(PREVIEW_MAX_SEC, duration * PREVIEW_SCRUB_CAP_RATIO);
   }, [duration, previewOnly]);
+
+  // Keep durationRef in sync and trigger an immediate DOM update when duration changes.
+  useLayoutEffect(() => {
+    durationRef.current = duration;
+    const { currentTime } = getProgressSnapshot();
+    const pct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
+    if (fillRef.current) fillRef.current.style.width = `${pct}%`;
+    if (handleRef.current) handleRef.current.style.left = `${pct}%`;
+    if (scrubRef.current) scrubRef.current.setAttribute("aria-valuenow", String(currentTime));
+  }, [duration, getProgressSnapshot]);
+
+  // Subscribe to high-frequency progress ticks and mutate DOM directly — no React re-render.
+  useEffect(() => {
+    function applyProgress() {
+      const { currentTime } = getProgressSnapshot();
+      const dur = durationRef.current;
+      const pct = dur > 0 ? Math.min(100, (currentTime / dur) * 100) : 0;
+      if (fillRef.current) fillRef.current.style.width = `${pct}%`;
+      if (handleRef.current) handleRef.current.style.left = `${pct}%`;
+      if (scrubRef.current) scrubRef.current.setAttribute("aria-valuenow", String(currentTime));
+    }
+    applyProgress();
+    return subscribeProgress(applyProgress);
+  }, [subscribeProgress, getProgressSnapshot]);
 
   const ratioFromEvent = useCallback(
     (e) => {
@@ -128,7 +156,6 @@ function PlayerBarScrub({ currentTime, duration, previewOnly, onSeek }) {
     };
   }, [dragging, seekFromEvent]);
 
-  const progressPct = duration > 0 ? Math.min(100, (currentTime / duration) * 100) : 0;
   const capPct = previewOnly && duration > 0 ? Math.min(100, (maxSeek / duration) * 100) : null;
 
   return (
@@ -138,7 +165,7 @@ function PlayerBarScrub({ currentTime, duration, previewOnly, onSeek }) {
       role="slider"
       aria-valuemin={0}
       aria-valuemax={maxSeek || 0}
-      aria-valuenow={currentTime}
+      aria-valuenow={0}
       tabIndex={0}
       onMouseDown={onScrubStart}
       onTouchStart={onScrubStart}
@@ -147,13 +174,13 @@ function PlayerBarScrub({ currentTime, duration, previewOnly, onSeek }) {
       onClick={seekFromEvent}
     >
       <div className="player-bar-scrub__track">
-        <div className="player-bar-scrub-fill" style={{ width: `${progressPct}%` }} />
+        <div ref={fillRef} className="player-bar-scrub-fill" style={{ width: "0%" }} />
         {capPct != null ? <div className="player-bar-scrub-cap" style={{ left: `${capPct}%` }} aria-hidden /> : null}
-        <div className="player-bar-scrub-handle" style={{ left: `${progressPct}%` }} aria-hidden />
+        <div ref={handleRef} className="player-bar-scrub-handle" style={{ left: "0%" }} aria-hidden />
       </div>
     </div>
   );
-}
+});
 
 function MiniCoverHit({
   title,
@@ -309,7 +336,7 @@ function MiniPlayerDock({
         </div>
       </div>
       <div className="player-bar-compact-scrub">
-        <PlayerBarScrub currentTime={currentTime} duration={duration} previewOnly={previewOnly} onSeek={onSeek} />
+        <PlayerBarScrub duration={duration} previewOnly={previewOnly} onSeek={onSeek} />
       </div>
     </div>
   );
