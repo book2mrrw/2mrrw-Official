@@ -77,11 +77,30 @@ function LibraryCarousel({
   onLibraryChange,
   isMobile,
   highlightSlug,
+  listeningMap,
+  onPlayAll,
+  onShuffle,
 }) {
   if (!items?.length) return null;
   return (
     <section style={{ marginBottom: 32 }}>
-      <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>{title}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>{title}</div>
+        {(onPlayAll || onShuffle) ? (
+          <div style={{ display: "flex", gap: 6 }}>
+            {onPlayAll ? (
+              <button type="button" onClick={onPlayAll} style={{ padding: "5px 10px", background: "#111", border: "1px solid #333", color: "#ccc", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: 0.5 }}>
+                Play All
+              </button>
+            ) : null}
+            {onShuffle ? (
+              <button type="button" onClick={onShuffle} style={{ padding: "5px 10px", background: "#111", border: "1px solid #333", color: "#ccc", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: 0.5 }}>
+                Shuffle
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
       <div
         style={{
           display: "flex",
@@ -100,6 +119,9 @@ function LibraryCarousel({
           const access = resolveContentAccess(item, accountState);
           const locked = access.subscriptionLocked && !access.owned;
           const highlighted = highlightSlug && item.slug === highlightSlug;
+          const history = listeningMap?.get(item.slug);
+          const showBar = history && history.positionSeconds > 0 && history.durationSeconds > 0;
+          const barPct = showBar ? Math.min(100, (history.positionSeconds / history.durationSeconds) * 100) : 0;
           return (
             <div
               key={item.slug}
@@ -137,6 +159,11 @@ function LibraryCarousel({
                 <div style={{ position: "absolute", top: 8, left: 8 }}>
                   <MusicAccessBadge label={access.badge} compact />
                 </div>
+                {showBar ? (
+                  <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 3, background: "rgba(0,0,0,0.45)" }}>
+                    <div style={{ width: `${barPct}%`, height: "100%", background: "#00ffff" }} />
+                  </div>
+                ) : null}
               </div>
               <div style={{ padding: "10px 12px 12px" }}>
                 <div style={{ fontSize: 13, fontWeight: 700, marginBottom: item.gifted || item.source === "gift" ? 4 : 8, lineHeight: 1.3 }}>{item.title}</div>
@@ -370,15 +397,22 @@ function OwnedReleaseList({
                 }}
               >
                 {merged.cover ? (
-                  <img
-                    src={merged.cover}
-                    alt=""
+                  <div
                     role="button"
                     tabIndex={0}
                     onClick={() => (onOpenAlbumTracklist || onOpenAlbum)?.(merged)}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); (onOpenAlbumTracklist || onOpenAlbum)?.(merged); } }}
-                    style={{ width: 52, height: 52, borderRadius: 8, objectFit: "cover", flexShrink: 0, cursor: "pointer" }}
-                  />
+                    style={{ flexShrink: 0, cursor: "pointer" }}
+                  >
+                    <CoverArt
+                      src={merged.cover}
+                      type={merged.coverArtType}
+                      alt=""
+                      width={52}
+                      height={52}
+                      style={{ borderRadius: 8 }}
+                    />
+                  </div>
                 ) : null}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div
@@ -619,6 +653,29 @@ function MyMusicTab({
     void resume();
   }, [accountState, activeContinue, playItem, resume, singles]);
 
+  const playAllSingles = useCallback((shuffle = false) => {
+    const playable = mergedOwnedSingles
+      .filter((item) => resolveTrackAccess(item, accountState).canStream)
+      .map((item) => toPlaybackTrack(item, { ...accountState, userId: user?.id }, "my_music_all"));
+    if (!playable.length) return;
+    if (shuffle) {
+      setShuffle(true);
+      void playQueue([...playable].sort(() => Math.random() - 0.5), 0);
+    } else {
+      void playQueue(playable, 0);
+    }
+  }, [mergedOwnedSingles, accountState, user?.id, playQueue, setShuffle]);
+
+  const listeningMap = useMemo(() => {
+    const map = new Map();
+    for (const row of activeRecentlyPlayed) {
+      if (row.slug && row.positionSeconds > 0 && row.durationSeconds > 0) {
+        map.set(row.slug, { positionSeconds: row.positionSeconds, durationSeconds: row.durationSeconds });
+      }
+    }
+    return map;
+  }, [activeRecentlyPlayed]);
+
   const sortLabel = SORT_OPTIONS.find((o) => o.id === sortPref)?.label || "Recently Added";
 
   if (loading) {
@@ -748,7 +805,16 @@ function MyMusicTab({
         >
           <div style={{ fontSize: 10, color: "#00ffff", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8, fontWeight: 700 }}>Continue Listening</div>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            {activeContinue.cover && <img src={activeContinue.cover} alt="" style={{ width: 56, height: 56, borderRadius: 10, objectFit: "cover" }} />}
+            {activeContinue.cover && (
+              <CoverArt
+                src={activeContinue.cover}
+                type={activeContinue.coverArtType}
+                alt=""
+                width={56}
+                height={56}
+                style={{ borderRadius: 10 }}
+              />
+            )}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 800 }}>{activeContinue.title}</div>
               {activeContinue.positionSeconds > 0 && activeContinue.durationSeconds > 0 ? (
@@ -856,6 +922,9 @@ function MyMusicTab({
         onLibraryChange={refresh}
         isMobile={isMobile}
         highlightSlug={highlightSlug}
+        listeningMap={listeningMap}
+        onPlayAll={mergedOwnedSingles.length ? () => playAllSingles(false) : undefined}
+        onShuffle={mergedOwnedSingles.length > 1 ? () => playAllSingles(true) : undefined}
       />
 
       <OwnedReleaseList
