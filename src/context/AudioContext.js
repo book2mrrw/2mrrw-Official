@@ -4361,7 +4361,9 @@ export function AudioProvider({ children }) {
     streamErrorRetriedRef.current = false;
     patchState({ error: null, streamRetryable: false, accessDenied: false });
     const resumeAt = audioRef.current?.currentTime || stateRef.current.currentTime || 0;
-    return playTrackRef.current?.(track, { resumeAt, forceStream: true }) ?? false;
+    // preserveQueue: true — retry must not replace the album/EP queue; next/prev
+    // must still work after the stall recovers.
+    return playTrackRef.current?.(track, { resumeAt, forceStream: true, preserveQueue: true }) ?? false;
   }, [patchState]);
 
   useEffect(() => {
@@ -5848,8 +5850,20 @@ export function AudioProvider({ children }) {
   const executePlaybackCommand = useCallback(async (command) => {
     if (command.requestId !== activeCommandRef.current?.requestId) return false;
     switch (command.type) {
-      case PLAYBACK_COMMANDS.PLAY_TRACK:
-        return playTrackInternal(command.payload.track, command.payload.options || {});
+      case PLAYBACK_COMMANDS.PLAY_TRACK: {
+        const track = command.payload.track;
+        const opts = command.payload.options || {};
+        // Replace the queue with a single-item queue unless the caller explicitly
+        // opts out (retry/recovery flows) or the track is already in the current queue.
+        // Without this, playing a single or feature while an album queue is active
+        // leaves the old queue intact — when the single ends, the next album track
+        // auto-advances instead of stopping (or playing the next single).
+        if (track && !opts.preserveQueue) {
+          const alreadyQueued = queueRef.current.some((qt) => isSamePlaybackTrack(qt, track));
+          if (!alreadyQueued) setQueueInternal([track], 0);
+        }
+        return playTrackInternal(track, opts);
+      }
       case PLAYBACK_COMMANDS.PLAY_QUEUE:
         return playQueueInternal(
           command.payload.tracks || [],
