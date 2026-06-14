@@ -1020,6 +1020,10 @@ export function AudioProvider({ children }) {
   const retryStreamPlaybackRef = useRef(null);
   const positionSaveTimerRef = useRef(null);
   const bufferShowTimerRef = useRef(null);
+  const mainGainRef = useRef(null);
+  const crossfadeGainRef = useRef(null);
+  const crossfadeSourceRef = useRef(null);
+  const crossfadeStateRef = useRef("idle"); // "idle" | "fading" | "bridging"
   const lastPlayedSlugRef = useRef(null);
   const csHoldSavedRef = useRef(null);
   const csHoldActiveRef = useRef(false);
@@ -2098,13 +2102,18 @@ export function AudioProvider({ children }) {
     bassFilter.type = "lowshelf";
     bassFilter.frequency.value = 200;
     bassFilter.gain.value = 0;
+    const mainGain = ctx.createGain();
+    mainGain.gain.value = 1;
+    try { mainGainRef.current?.disconnect(); } catch {}
     try { analyserRef.current?.disconnect(); } catch {}
     try { stereoPannerRef.current?.disconnect(); } catch {}
     try { bassFilterRef.current?.disconnect(); } catch {}
-    source.connect(analyser);
+    source.connect(mainGain);
+    mainGain.connect(analyser);
     analyser.connect(stereoPanner);
     stereoPanner.connect(bassFilter);
     bassFilter.connect(ctx.destination);
+    mainGainRef.current = mainGain;
     analyserRef.current = analyser;
     stereoPannerRef.current = stereoPanner;
     bassFilterRef.current = bassFilter;
@@ -2150,6 +2159,24 @@ export function AudioProvider({ children }) {
       }
 
       connectWebAudioDownstream(ctx, source);
+      // Wire the next-track pre-buffer into a crossfade gain channel (one-time per AudioContext).
+      if (!crossfadeSourceRef.current) {
+        const nextEl = nextTrackPreloadRef.current;
+        if (nextEl && !nextEl[MRRW_MEDIA_SOURCE_BOUND]) {
+          try {
+            const cfSrc = ctx.createMediaElementSource(nextEl);
+            nextEl[MRRW_MEDIA_SOURCE_BOUND] = true;
+            const cfGain = ctx.createGain();
+            cfGain.gain.value = 0;
+            cfSrc.connect(cfGain);
+            cfGain.connect(ctx.destination);
+            crossfadeSourceRef.current = cfSrc;
+            crossfadeGainRef.current = cfGain;
+          } catch {
+            /* crossfade channel unavailable — graceful no-op */
+          }
+        }
+      }
       recordAudioContextState(ctx, "initWebAudio");
     } catch (err) {
       console.warn("[AUDIO] Web Audio graph init failed, routing direct:", err?.message || err);
@@ -2168,6 +2195,7 @@ export function AudioProvider({ children }) {
       } catch {
         /* partial graph */
       }
+      mainGainRef.current = null;
       analyserRef.current = null;
       stereoPannerRef.current = null;
       bassFilterRef.current = null;
@@ -2435,6 +2463,30 @@ export function AudioProvider({ children }) {
 
     const onPlay = () => {
       userPausedRef.current = false;
+
+      // Crossfade handoff: main audio has started; swap gain from bridge to main.
+      if (crossfadeStateRef.current === "bridging") {
+        crossfadeStateRef.current = "idle";
+        const ctx = audioCtxRef.current;
+        const mGain = mainGainRef.current;
+        const cfGain = crossfadeGainRef.current;
+        const nextEl = nextTrackPreloadRef.current;
+        if (ctx && mGain && cfGain && ctx.state === "running") {
+          const now = ctx.currentTime;
+          const HANDOFF = 0.35;
+          mGain.gain.cancelScheduledValues(now);
+          mGain.gain.setValueAtTime(0, now);
+          mGain.gain.linearRampToValueAtTime(1, now + HANDOFF);
+          cfGain.gain.cancelScheduledValues(now);
+          cfGain.gain.setValueAtTime(cfGain.gain.value, now);
+          cfGain.gain.linearRampToValueAtTime(0, now + HANDOFF);
+          if (nextEl) setTimeout(() => { try { if (!nextEl.paused) nextEl.pause(); nextEl.currentTime = 0; } catch {} }, (HANDOFF + 0.1) * 1000);
+        } else {
+          try { mainGainRef.current?.gain.setValueAtTime(1, audioCtxRef.current?.currentTime ?? 0); } catch {}
+          try { if (nextEl && !nextEl.paused) nextEl.pause(); if (nextEl) nextEl.currentTime = 0; } catch {}
+        }
+      }
+
       patchState({
         isPlaying: true,
         error: null,
@@ -2696,6 +2748,47 @@ export function AudioProvider({ children }) {
           });
         }
       }
+
+      // Crossfade trigger: begin fading out current track and fading in pre-buffer.
+      const CROSSFADE_SEC = 5;
+      if (
+        crossfadeStateRef.current === "idle" &&
+        !previewOnly &&
+        mainGainRef.current &&
+        crossfadeGainRef.current &&
+        audioCtxRef.current?.state === "running"
+      ) {
+        const dur = isFinite(audio.duration) ? audio.duration : 0;
+        const rem = dur > 0 ? dur - audio.currentTime : 0;
+        if (rem > 0 && rem <= CROSSFADE_SEC) {
+          const q = queueRef.current;
+          const qi = queueIndexRef.current;
+          if (q.length > qi + 1 && q[qi + 1]?.src) {
+            const nextEl = nextTrackPreloadRef.current;
+            if (nextEl && nextEl.src && nextEl.readyState >= 3) {
+              crossfadeStateRef.current = "fading";
+              const ctx = audioCtxRef.current;
+              const now = ctx.currentTime;
+              const mGain = mainGainRef.current;
+              const cfGain = crossfadeGainRef.current;
+              mGain.gain.cancelScheduledValues(now);
+              mGain.gain.setValueAtTime(mGain.gain.value, now);
+              mGain.gain.linearRampToValueAtTime(0, now + rem);
+              cfGain.gain.cancelScheduledValues(now);
+              cfGain.gain.setValueAtTime(0, now);
+              cfGain.gain.linearRampToValueAtTime(1, now + rem);
+              nextEl.currentTime = 0;
+              nextEl.play().catch(() => {
+                // Pre-buffer play blocked — abort crossfade silently
+                const t = audioCtxRef.current?.currentTime ?? 0;
+                try { mGain.gain.cancelScheduledValues(t); mGain.gain.setValueAtTime(1, t); } catch {}
+                try { cfGain.gain.cancelScheduledValues(t); cfGain.gain.setValueAtTime(0, t); } catch {}
+                crossfadeStateRef.current = "idle";
+              });
+            }
+          }
+        }
+      }
     };
 
     const onDuration = () => patchState({ duration: isFinite(audio.duration) ? audio.duration : 0 });
@@ -2812,6 +2905,7 @@ export function AudioProvider({ children }) {
             resetPlaybackTimingCapture();
             setPlaybackScenario(PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE, { source: "ended-handler" });
             perfMark(MARKS.PLAYBACK_TAP);
+            if (crossfadeStateRef.current === "fading") crossfadeStateRef.current = "bridging";
             void playTrackRef.current?.(nextTrack, { resumeAt: 0, playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE }).then((ok) => {
               if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
             });
@@ -3252,11 +3346,26 @@ export function AudioProvider({ children }) {
     }
   }, []);
 
+  const cancelCrossfade = useCallback(() => {
+    if (crossfadeStateRef.current === "idle") return;
+    crossfadeStateRef.current = "idle";
+    const nextEl = nextTrackPreloadRef.current;
+    try { if (nextEl && !nextEl.paused) nextEl.pause(); } catch {}
+    try { if (nextEl) nextEl.currentTime = 0; } catch {}
+    const ctx = audioCtxRef.current;
+    if (ctx && ctx.state !== "closed") {
+      const now = ctx.currentTime;
+      try { mainGainRef.current?.gain.cancelScheduledValues(now); mainGainRef.current?.gain.setValueAtTime(1, now); } catch {}
+      try { crossfadeGainRef.current?.gain.cancelScheduledValues(now); crossfadeGainRef.current?.gain.setValueAtTime(0, now); } catch {}
+    }
+  }, []);
+
   const playTrackInternal = useCallback(async (track, options = {}) => {
     logDirectInternalCallViolation("playTrackInternal");
     perfMark(MARKS.PLAYBACK_REQUEST);
     const requestId = playRequestIdRef.current + 1;
     playRequestIdRef.current = requestId;
+    if (crossfadeStateRef.current !== "bridging") cancelCrossfade();
     if (!options.preserveActiveStream && activeStreamAbortRef.current) {
       logStreamLifecycle("abort", { source: "playTrackInternal", slug: track?.slug });
       activeStreamAbortRef.current.abort();
@@ -5463,6 +5572,7 @@ export function AudioProvider({ children }) {
     logDirectInternalCallViolation("seekInternal");
     const audio = audioRef.current;
     if (!audio || !Number.isFinite(time)) return;
+    cancelCrossfade();
     tracePlayback("seekInternal", "seekInternal", { time });
     const track = stateRef.current.currentTrack;
     let capped = time;
@@ -5484,7 +5594,7 @@ export function AudioProvider({ children }) {
         durationSeconds: isFinite(audio.duration) ? audio.duration : 0,
       });
     }
-  }, [syncProgressTime, syncPositionState, tracePlayback, logDirectInternalCallViolation]);
+  }, [syncProgressTime, syncPositionState, tracePlayback, logDirectInternalCallViolation, cancelCrossfade]);
 
   const seekBack = useCallback((seconds = 15) => {
     const audio = audioRef.current;
