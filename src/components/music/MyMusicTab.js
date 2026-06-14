@@ -922,7 +922,17 @@ function MyMusicTab({
           items={activeRecentlyPlayed}
           accountState={accountState}
           userId={user?.id}
-          onPlay={playItem}
+          onPlay={(item, access) => {
+            const queue = activeRecentlyPlayed
+              .filter((s) => resolveTrackAccess(s, accountState).canStream)
+              .map((s) => toPlaybackTrack({ ...s, ...(singles.find((x) => x.slug === s.slug) || {}) }, { ...accountState, userId: user?.id }, "my_music_recent"));
+            const idx = queue.findIndex((t) => t.slug === item.slug);
+            if (idx >= 0 && queue.length > 1) {
+              void playQueue(queue, idx);
+            } else {
+              playItem(item, access);
+            }
+          }}
           onOpen={(item) => onOpenSingle?.(singles.find((s) => s.slug === item.slug) || item)}
           onLibraryChange={refresh}
           isMobile={isMobile}
@@ -997,7 +1007,17 @@ function MyMusicTab({
         items={mergedOwnedSingles}
         accountState={accountState}
         userId={user?.id}
-        onPlay={playItem}
+        onPlay={(item, access) => {
+          const queue = mergedOwnedSingles
+            .filter((s) => resolveTrackAccess(s, accountState).canStream)
+            .map((s) => toPlaybackTrack(s, { ...accountState, userId: user?.id }, "my_music"));
+          const idx = queue.findIndex((t) => t.slug === item.slug);
+          if (idx >= 0 && queue.length > 1) {
+            void playQueue(queue, idx);
+          } else {
+            playItem(item, access);
+          }
+        }}
         onOpen={(item) => onOpenSingle?.(singles.find((s) => s.slug === item.slug) || item)}
         onLibraryChange={refresh}
         isMobile={isMobile}

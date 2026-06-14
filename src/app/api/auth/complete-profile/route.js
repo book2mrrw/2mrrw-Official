@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminUser } from "@/lib/auth/constants";
 import { sendTransactionalEmail, buildWelcomeEmail } from "@/lib/server/email";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 function isMissingColumnError(error) {
   const msg = String(error?.message || "");
@@ -19,6 +20,14 @@ export async function POST(request) {
     if (!user?.id || user.email?.endsWith("@guest.2mrrw.local")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const limit = await checkRateLimit(request, {
+      routeKey: "auth.complete-profile",
+      limit: 10,
+      windowSeconds: 60,
+      identifier: user.id,
+    });
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
     const body = await request.json().catch(() => ({}));
     const phone = String(body.phone || "").trim();

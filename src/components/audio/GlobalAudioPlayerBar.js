@@ -210,6 +210,49 @@ function MiniCoverHit({
 // Layout: [Cover] [Title/Artist ·flex·] [Prev] [Play] [Next] [Repeat] [CS?]
 // Scrub bar sits below on its own row.
 
+function SleepTimerButton({ active, label, onClick }) {
+  return (
+    <button
+      type="button"
+      aria-label={active ? `Sleep timer active: ${label}` : "Set sleep timer"}
+      onClick={onClick}
+      style={{
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: "4px 6px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        color: active ? "#00ffff" : "#555",
+        flexShrink: 0,
+      }}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+      </svg>
+      {active && label ? (
+        <span style={{
+          position: "absolute",
+          bottom: -1,
+          right: -1,
+          fontSize: 8,
+          fontWeight: 800,
+          color: "#00ffff",
+          lineHeight: 1,
+          letterSpacing: -0.3,
+          background: "#0a0a0a",
+          borderRadius: 3,
+          padding: "1px 2px",
+        }}>
+          {label}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
 function MiniPlayerDock({
   currentTrack,
   duration,
@@ -239,6 +282,9 @@ function MiniPlayerDock({
   onCoverTouchStart,
   onCoverTouchMove,
   onCoverTouchEnd,
+  sleepTimerActive,
+  sleepTimerLabel,
+  onOpenSleepSheet,
 }) {
   const giftBadge =
     currentTrack?.source === "gift" || currentTrack?.gifted ? (
@@ -304,6 +350,7 @@ function MiniPlayerDock({
               onClick={onToggleRepeat}
             />
             {showCs ? <PlayerCsBarButton active={csActive} onClick={onToggleCs} /> : null}
+            <SleepTimerButton active={sleepTimerActive} label={sleepTimerLabel} onClick={onOpenSleepSheet} />
           </div>
         </div>
       </div>
@@ -349,9 +396,13 @@ function GlobalAudioPlayerBar() {
     playPrevious,
     repeatMode,
     toggleRepeat,
+    setSleepTimer,
+    sleepTimerEndsAt,
+    sleepAfterCurrentTrack,
   } = playback;
 
   const [isHoldAnimating, setIsHoldAnimating] = useState(false);
+  const [sleepSheetOpen, setSleepSheetOpen] = useState(false);
   const csOverlayImgRef = useRef(null);
   const touchMovedRef = useRef(false);
   const touchStartRef = useRef(null);
@@ -574,6 +625,18 @@ function GlobalAudioPlayerBar() {
   const showCs = Boolean(dockCurrentTrack?.hasCs || dockCurrentTrack?.csAudio);
   const handleToggleCs = useCallback(() => void toggleCSMode?.(), [toggleCSMode]);
 
+  const sleepTimerActive = Boolean(sleepTimerEndsAt || sleepAfterCurrentTrack);
+  const sleepTimerLabel = sleepAfterCurrentTrack
+    ? "end"
+    : sleepTimerEndsAt
+      ? `${Math.max(1, Math.ceil((sleepTimerEndsAt - Date.now()) / 60000))}m`
+      : null;
+  const handleOpenSleepSheet = useCallback(() => setSleepSheetOpen(true), []);
+  const handleSleepOption = useCallback((minutes) => {
+    setSleepTimer(minutes);
+    setSleepSheetOpen(false);
+  }, [setSleepTimer]);
+
   const csOpacity = csMode ? 1 : 0;
   const baseCoverUrl = resolveAbsoluteArtworkUrl(baseCover);
   const csCoverUrl = csCover ? resolveAbsoluteArtworkUrl(csCover) : null;
@@ -624,9 +687,56 @@ function GlobalAudioPlayerBar() {
     </div>
   ) : null;
 
+  const sleepSheet = sleepSheetOpen ? (
+    <div
+      role="dialog"
+      aria-label="Sleep timer"
+      style={{ position: "fixed", inset: 0, zIndex: 8000, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+      onClick={() => setSleepSheetOpen(false)}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: "100%", maxWidth: 480, background: "#0d0d0d", borderTop: "1px solid #222", borderRadius: "16px 16px 0 0", padding: "16px 20px max(24px, env(safe-area-inset-bottom, 0px))" }}
+      >
+        <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase", marginBottom: 4, fontWeight: 700 }}>Sleep Timer</div>
+        {sleepTimerActive && (
+          <div style={{ fontSize: 12, color: "#00ffff", marginBottom: 12 }}>
+            {sleepAfterCurrentTrack ? "Stops after current track" : `Stops in ${sleepTimerLabel}`}
+          </div>
+        )}
+        {[
+          { label: "15 minutes", value: 15 },
+          { label: "30 minutes", value: 30 },
+          { label: "45 minutes", value: 45 },
+          { label: "60 minutes", value: 60 },
+          { label: "End of track", value: "end_of_track" },
+        ].map(({ label, value }) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => handleSleepOption(value)}
+            style={{ display: "block", width: "100%", textAlign: "left", padding: "14px 4px", background: "none", border: "none", borderBottom: "1px solid #1a1a1a", color: "#ccc", fontSize: 15, fontWeight: 500, cursor: "pointer" }}
+          >
+            {label}
+          </button>
+        ))}
+        {sleepTimerActive && (
+          <button
+            type="button"
+            onClick={() => handleSleepOption(0)}
+            style={{ display: "block", width: "100%", textAlign: "left", padding: "14px 4px", background: "none", border: "none", color: "#ff4d4d", fontSize: 15, fontWeight: 700, cursor: "pointer", marginTop: 4 }}
+          >
+            Cancel timer
+          </button>
+        )}
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       {conflictDialog}
+      {sleepSheet}
       {(isBuffering || playbackOrchestrationState === "RECOVERING") && (
         <div
           className="player-immersive-buffer-indicator"
@@ -672,6 +782,9 @@ function GlobalAudioPlayerBar() {
         onCoverTouchStart={handleCoverTouchStart}
         onCoverTouchMove={handleCoverTouchMove}
         onCoverTouchEnd={handleCoverTouchEnd}
+        sleepTimerActive={sleepTimerActive}
+        sleepTimerLabel={sleepTimerLabel}
+        onOpenSleepSheet={handleOpenSleepSheet}
       />
     </>
   );

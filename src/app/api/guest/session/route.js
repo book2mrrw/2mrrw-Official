@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { clearGuestCookie, createOrRetrieveGuest, getGuestUser, withGuestCookie } from "@/lib/guest-session";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export async function GET() {
   try {
@@ -13,6 +14,13 @@ export async function GET() {
 
 export async function POST(req) {
   try {
+    const limit = await checkRateLimit(req, {
+      routeKey: "guest.session.create",
+      limit: 5,
+      windowSeconds: 60,
+    });
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
+
     const { email, phone, name } = await req.json();
     const user = await createOrRetrieveGuest({ email, phone, name });
     return withGuestCookie(NextResponse.json({ user }), user.id);
