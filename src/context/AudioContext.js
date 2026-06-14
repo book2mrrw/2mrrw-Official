@@ -982,6 +982,7 @@ export function AudioProvider({ children }) {
   const onPreviewEndedRef = useRef(null);
   const [previewEnded, setPreviewEnded] = useState(false);
   const wasPlayingBeforeHideRef = useRef(false);
+  const wakeLockRef = useRef(null);
   /** OS/lifecycle pause before React isPlaying clears — drives hide/resume intent (Phase 18A). */
   const playbackIntentBeforeHideRef = useRef(false);
   /** Tab hidden while playback intent active — suppress hard recovery (Phase 19). */
@@ -3230,27 +3231,6 @@ export function AudioProvider({ children }) {
     };
     window.addEventListener("online", onOnline);
 
-    // When the browser auto-resumes the AudioContext (e.g., tab regains focus on
-    // Android Chrome), re-sync mainGain to the current track's normalized target.
-    // The graph connections survive suspend/resume, but gain values can drift on
-    // some engines if the context was interrupted mid-ramp.
-    const onCtxStateChange = () => {
-      const ctx = audioCtxRef.current;
-      if (!ctx || ctx.state !== "running") return;
-      if (mainGainRef.current) {
-        try {
-          const now = ctx.currentTime;
-          mainGainRef.current.gain.cancelScheduledValues(now);
-          mainGainRef.current.gain.setValueAtTime(trackGainRef.current, now);
-        } catch {
-          /* best-effort */
-        }
-      }
-    };
-    const audioCtxForListener = audioCtxRef.current;
-    if (audioCtxForListener) {
-      audioCtxForListener.addEventListener("statechange", onCtxStateChange);
-    }
 
     let onDeviceChange = null;
     if (navigator.mediaDevices?.addEventListener) {
@@ -3274,9 +3254,6 @@ export function AudioProvider({ children }) {
     return () => {
       detachPlaybackDevTelemetry();
       window.removeEventListener("online", onOnline);
-      if (audioCtxForListener) {
-        audioCtxForListener.removeEventListener("statechange", onCtxStateChange);
-      }
       audio.removeEventListener("play", onPlay);
       audio.removeEventListener("pause", onPause);
       audio.removeEventListener("timeupdate", onTime);
@@ -6296,6 +6273,51 @@ export function AudioProvider({ children }) {
       }
     };
   }, [pause, resume, playNext, playPrevious, seek, stop, toggleCSMode, tracePlayback]);
+
+  // Screen wake lock — keeps display active during playback so iOS/Android don't
+  // throttle timers or suspend the audio pipeline when the screen dims.
+  // Acquired on play, released on pause/stop. Re-acquired on visibility return if
+  // still playing (lock is automatically released when the tab is hidden).
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("wakeLock" in navigator)) return;
+    const acquire = async () => {
+      if (wakeLockRef.current) return;
+      try {
+        wakeLockRef.current = await navigator.wakeLock.request("screen");
+        wakeLockRef.current.addEventListener("release", () => {
+          wakeLockRef.current = null;
+        });
+      } catch {
+        /* wake lock denied (battery saver, permissions) — non-fatal */
+      }
+    };
+    const release = () => {
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+    };
+    if (state.isPlaying) {
+      void acquire();
+    } else {
+      release();
+    }
+    return release;
+  }, [state.isPlaying]);
+
+  // Re-acquire after tab returns to visible (browser releases lock on hide).
+  useEffect(() => {
+    if (typeof document === "undefined" || !("wakeLock" in navigator)) return;
+    const onVisible = () => {
+      if (!state.isPlaying || wakeLockRef.current) return;
+      navigator.wakeLock.request("screen").then((lock) => {
+        wakeLockRef.current = lock;
+        lock.addEventListener("release", () => { wakeLockRef.current = null; });
+      }).catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [state.isPlaying]);
 
   useEffect(() => {
     const onVisibility = async () => {
