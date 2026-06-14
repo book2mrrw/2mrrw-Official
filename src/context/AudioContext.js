@@ -3399,12 +3399,17 @@ export function AudioProvider({ children }) {
     } else if (requiresSignedUrlFetch(kind)) {
       const slug = parseStreamSlugFromSrc(next.src) || next.slug;
       if (!slug) return;
-      const cached = nextTrackSignedUrlCacheRef.current[slug];
+      // Album/EP tracks carry both slug (release) and trackSlug (individual track).
+      // Must pass trackSlug to the stream endpoint and use it as part of the cache key,
+      // otherwise all tracks in a release share one cache entry and the wrong audio loads.
+      const trackSlug = parseStreamTrackSlugFromSrc(next.src) || next.metadata?.trackSlug || null;
+      const cacheKey = trackSlug ? `${slug}:${trackSlug}` : slug;
+      const cached = nextTrackSignedUrlCacheRef.current[cacheKey];
       if (cached && Date.now() - cached.fetchedAt < 90000) return;
       try {
-        const data = await fetchLibraryStream(slug, { force: false });
+        const data = await fetchLibraryStream(slug, { force: false, trackSlug });
         if (data?.url) {
-          nextTrackSignedUrlCacheRef.current[slug] = {
+          nextTrackSignedUrlCacheRef.current[cacheKey] = {
             url: data.url,
             fetchedAt: Date.now(),
           };
