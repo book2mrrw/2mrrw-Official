@@ -21,6 +21,7 @@ function preloadAudioLink(url, trackId) {
     try {
       const warm = new Audio();
       warm.preload = "auto";
+      warm.crossOrigin = "anonymous";
       warm.src = url;
       warm.load();
     } catch {

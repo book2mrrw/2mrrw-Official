@@ -1619,11 +1619,13 @@ export function AudioProvider({ children }) {
     if (!streamSwapPreloadRef.current) {
       const preload = new Audio();
       preload.preload = "auto";
+      preload.crossOrigin = "anonymous";
       streamSwapPreloadRef.current = preload;
     }
     if (!nextTrackPreloadRef.current) {
       const nextPreload = new Audio();
       nextPreload.preload = "auto";
+      nextPreload.crossOrigin = "anonymous";
       nextTrackPreloadRef.current = nextPreload;
     }
     return () => {

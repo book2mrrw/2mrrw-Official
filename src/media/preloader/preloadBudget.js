@@ -4,6 +4,22 @@ const LIMITS = {
   totalBytes: 50 * 1024 * 1024,
 };
 
+function networkAudioFactor() {
+  if (typeof navigator === "undefined") return 1;
+  const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (!conn) return 1;
+  if (conn.saveData) return 0;
+  switch (conn.effectiveType) {
+    case "slow-2g":
+    case "2g":
+      return 0;
+    case "3g":
+      return 0.4;
+    default:
+      return 1;
+  }
+}
+
 /** @type {Map<string, { type: string, bytes: number, ts: number }>} */
 const active = new Map();
 let totalBytes = 0;
@@ -21,9 +37,16 @@ function evictOldest() {
 }
 
 export function canPreload(type) {
-  const count = [...active.values()].filter((e) => e.type === type).length;
-  if (type === "audio" && count >= LIMITS.audio) return false;
-  if (type === "artwork" && count >= LIMITS.artwork) return false;
+  if (type === "audio") {
+    const factor = networkAudioFactor();
+    if (factor <= 0) return false;
+    const audioLimit = Math.max(1, Math.floor(LIMITS.audio * factor));
+    const count = [...active.values()].filter((e) => e.type === "audio").length;
+    if (count >= audioLimit) return false;
+  } else {
+    const count = [...active.values()].filter((e) => e.type === type).length;
+    if (type === "artwork" && count >= LIMITS.artwork) return false;
+  }
   if (totalBytes >= LIMITS.totalBytes) return false;
   return true;
 }

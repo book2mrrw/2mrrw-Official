@@ -7,6 +7,10 @@ const MEDIA_CORS_ORIGINS = new Set([
   "http://localhost:3000",
   "http://127.0.0.1:3000",
 ]);
+// Dynamically include the current Vercel deployment URL (set per-deployment by Vercel).
+if (process.env.VERCEL_URL) {
+  MEDIA_CORS_ORIGINS.add(`https://${process.env.VERCEL_URL}`);
+}
 
 /**
  * CORS headers for /api/media/* and /api/library/* — Range required for seeking.
