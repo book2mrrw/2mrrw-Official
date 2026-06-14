@@ -1022,6 +1022,7 @@ export function AudioProvider({ children }) {
   const bufferShowTimerRef = useRef(null);
   const mainGainRef = useRef(null);
   const limiterRef = useRef(null);
+  const trackGainRef = useRef(1); // target linear gain for the current track (from gainDb)
   const crossfadeGainRef = useRef(null);
   const crossfadeSourceRef = useRef(null);
   const crossfadeStateRef = useRef("idle"); // "idle" | "fading" | "bridging"
@@ -2476,8 +2477,16 @@ export function AudioProvider({ children }) {
     const onPlay = () => {
       userPausedRef.current = false;
 
+      // Loudness normalization: compute linear gain for this track.
+      // gainDb is the dB offset needed to reach –14 LUFS (stored server-side per track).
+      // null/undefined falls through to 0 dB = unity gain (no change).
+      const newTrack = stateRef.current.currentTrack;
+      const gainLinear = Math.pow(10, ((newTrack?.gainDb) || 0) / 20);
+      trackGainRef.current = gainLinear;
+
       // Crossfade handoff: main audio has started; swap gain from bridge to main.
-      if (crossfadeStateRef.current === "bridging") {
+      const wasBridging = crossfadeStateRef.current === "bridging";
+      if (wasBridging) {
         crossfadeStateRef.current = "idle";
         const ctx = audioCtxRef.current;
         const mGain = mainGainRef.current;
@@ -2488,14 +2497,22 @@ export function AudioProvider({ children }) {
           const HANDOFF = 0.35;
           mGain.gain.cancelScheduledValues(now);
           mGain.gain.setValueAtTime(0, now);
-          mGain.gain.linearRampToValueAtTime(1, now + HANDOFF);
+          mGain.gain.linearRampToValueAtTime(gainLinear, now + HANDOFF);
           cfGain.gain.cancelScheduledValues(now);
           cfGain.gain.setValueAtTime(cfGain.gain.value, now);
           cfGain.gain.linearRampToValueAtTime(0, now + HANDOFF);
           if (nextEl) setTimeout(() => { try { if (!nextEl.paused) nextEl.pause(); nextEl.currentTime = 0; } catch {} }, (HANDOFF + 0.1) * 1000);
         } else {
-          try { mainGainRef.current?.gain.setValueAtTime(1, audioCtxRef.current?.currentTime ?? 0); } catch {}
+          try { mainGainRef.current?.gain.setValueAtTime(gainLinear, audioCtxRef.current?.currentTime ?? 0); } catch {}
           try { if (nextEl && !nextEl.paused) nextEl.pause(); if (nextEl) nextEl.currentTime = 0; } catch {}
+        }
+      }
+
+      // Non-crossfade start: apply normalized gain immediately at track boundary.
+      if (!wasBridging) {
+        const ctx = audioCtxRef.current;
+        if (ctx && ctx.state === "running" && mainGainRef.current) {
+          try { mainGainRef.current.gain.setValueAtTime(gainLinear, ctx.currentTime); } catch {}
         }
       }
 
@@ -3367,7 +3384,7 @@ export function AudioProvider({ children }) {
     const ctx = audioCtxRef.current;
     if (ctx && ctx.state !== "closed") {
       const now = ctx.currentTime;
-      try { mainGainRef.current?.gain.cancelScheduledValues(now); mainGainRef.current?.gain.setValueAtTime(1, now); } catch {}
+      try { mainGainRef.current?.gain.cancelScheduledValues(now); mainGainRef.current?.gain.setValueAtTime(trackGainRef.current, now); } catch {}
       try { crossfadeGainRef.current?.gain.cancelScheduledValues(now); crossfadeGainRef.current?.gain.setValueAtTime(0, now); } catch {}
     }
   }, []);

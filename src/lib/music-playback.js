@@ -218,6 +218,9 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
   const playbackSrc = resolvePlaybackSrc(normalized, access, { userId, accountState });
   const previewSrc = previewPath ? catalogPreviewAudioUrl(previewPath) : null;
 
+  // gain_db: dB offset to reach -14 LUFS target. Null until populated server-side.
+  const gainDb = normalized?.gain_db ?? normalized?.gainDb ?? null;
+
   return {
     id: normalized?.slug || normalized?.id,
     slug: normalized?.slug,
@@ -231,6 +234,7 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
     csAudio: csAudioRaw ? resolveCsMediaUrl(csAudioRaw) : null,
     csCover: csCoverRaw ? catalogCoverUrl(csCoverRaw) : null,
     csCoverType,
+    gainDb,
     source,
     metadata: {
       access,
