@@ -12,7 +12,27 @@ export async function proxySignedR2Get(req, signedUrl, { timing } = {}) {
   const fetchHeaders = rangeHeader ? { Range: rangeHeader } : {};
   const method = req.method === "HEAD" ? "HEAD" : "GET";
 
-  const r2Response = await fetch(signedUrl, { method, headers: fetchHeaders });
+  let r2Response;
+  try {
+    r2Response = await fetch(signedUrl, {
+      method,
+      headers: fetchHeaders,
+      // Propagate client disconnect so we don't hold an open R2 socket after seek/skip.
+      signal: req.signal ?? undefined,
+    });
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      return new Response(null, { status: 499 });
+    }
+    console.error("[r2-stream-proxy] upstream fetch failed", { message: err?.message });
+    return applyMediaCors(
+      req,
+      new Response(JSON.stringify({ error: "Stream unavailable", code: "UPSTREAM_ERROR" }), {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+  }
   timing?.mark("cdn");
 
   const headers = {
