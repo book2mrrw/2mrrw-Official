@@ -1021,6 +1021,7 @@ export function AudioProvider({ children }) {
   const positionSaveTimerRef = useRef(null);
   const bufferShowTimerRef = useRef(null);
   const mainGainRef = useRef(null);
+  const limiterRef = useRef(null);
   const crossfadeGainRef = useRef(null);
   const crossfadeSourceRef = useRef(null);
   const crossfadeStateRef = useRef("idle"); // "idle" | "fading" | "bridging"
@@ -2104,19 +2105,29 @@ export function AudioProvider({ children }) {
     bassFilter.gain.value = 0;
     const mainGain = ctx.createGain();
     mainGain.gain.value = 1;
+    // Transparent limiter: only activates above -1 dBFS, preserves the artist's master.
+    const limiter = ctx.createDynamicsCompressor();
+    limiter.threshold.value = -1;
+    limiter.knee.value = 0;
+    limiter.ratio.value = 20;
+    limiter.attack.value = 0.003;
+    limiter.release.value = 0.1;
     try { mainGainRef.current?.disconnect(); } catch {}
     try { analyserRef.current?.disconnect(); } catch {}
     try { stereoPannerRef.current?.disconnect(); } catch {}
     try { bassFilterRef.current?.disconnect(); } catch {}
+    try { limiterRef.current?.disconnect(); } catch {}
     source.connect(mainGain);
     mainGain.connect(analyser);
     analyser.connect(stereoPanner);
     stereoPanner.connect(bassFilter);
-    bassFilter.connect(ctx.destination);
+    bassFilter.connect(limiter);
+    limiter.connect(ctx.destination);
     mainGainRef.current = mainGain;
     analyserRef.current = analyser;
     stereoPannerRef.current = stereoPanner;
     bassFilterRef.current = bassFilter;
+    limiterRef.current = limiter;
     webAudioInitializedRef.current = true;
     webAudioAvailableRef.current = true;
   }, []);
@@ -2196,6 +2207,7 @@ export function AudioProvider({ children }) {
         /* partial graph */
       }
       mainGainRef.current = null;
+      limiterRef.current = null;
       analyserRef.current = null;
       stereoPannerRef.current = null;
       bassFilterRef.current = null;
@@ -3402,6 +3414,10 @@ export function AudioProvider({ children }) {
     }
     if (audioEl?.paused && !sessionUnlockedRef.current) {
       await unlockAudioFromGesture(audioEl);
+      // Unlock the crossfade pre-buffer element at the same time so iOS allows
+      // play() on it when the crossfade triggers (no second user gesture available).
+      const nextEl = nextTrackPreloadRef.current;
+      if (nextEl) await unlockAudioFromGesture(nextEl);
     }
 
     initWebAudio();

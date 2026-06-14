@@ -10,7 +10,7 @@ function preloadAudioLink(url, trackId) {
   if (audioLink?.parentNode) audioLink.parentNode.removeChild(audioLink);
   const link = document.createElement("link");
   link.rel = "preload";
-  link.as = "fetch";
+  link.as = "audio";
   link.href = url;
   link.crossOrigin = "anonymous";
   document.head.appendChild(link);
