@@ -122,18 +122,40 @@ function CatalogGrid({
         >
           {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(mediaItem)} /> : null}
           <div onMouseEnter={hoverIn} onMouseLeave={hoverOut} onClick={() => onCardClick?.(mediaItem)} style={{ cursor: "pointer" }}>
-            <CoverArt
-              src={coverDisplay.src}
-              type={coverDisplay.type || mediaItem.coverArtType}
-              alt=""
-              width="100%"
-              height="auto"
-              style={{
-                aspectRatio: "1/1",
-                transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s",
-                display: "block",
-              }}
-            />
+            {coverDisplay.type === "video" && coverDisplay.src ? (
+              <video
+                src={coverDisplay.src}
+                poster={mediaItem.cover || undefined}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                webkit-playsinline="true"
+                style={{
+                  backgroundColor: "#0a0a0a",
+                  width: "100%",
+                  aspectRatio: "1/1",
+                  objectFit: "cover",
+                  display: "block",
+                  transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s",
+                  pointerEvents: "none",
+                }}
+              />
+            ) : (
+              <CoverArt
+                src={coverDisplay.src}
+                type={coverDisplay.type || mediaItem.coverArtType}
+                alt=""
+                width="100%"
+                height="auto"
+                style={{
+                  aspectRatio: "1/1",
+                  transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s",
+                  display: "block",
+                }}
+              />
+            )}
           </div>
           {type==="albums"&&(mediaItem.type==="deluxe"||mediaItem.releaseType==="deluxe")?(
             <span style={{position:"absolute",top:8,right:8,fontSize:9,fontWeight:800,letterSpacing:1.2,padding:"4px 7px",borderRadius:6,background:"rgba(245,158,11,0.92)",color:"#111"}}>DELUXE</span>

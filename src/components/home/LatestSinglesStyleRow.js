@@ -86,6 +86,32 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
     );
   }
 
+  if (coverDisplay?.type === "video" && coverDisplay.src) {
+    return (
+      <video
+        ref={videoRef}
+        src={coverDisplay.src}
+        poster={mediaItem.cover || undefined}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        webkit-playsinline="true"
+        style={{
+          backgroundColor: "#0a0a0a",
+          width: "100%",
+          aspectRatio: "1/1",
+          objectFit: "cover",
+          display: "block",
+          borderRadius: "13px 13px 0 0",
+          transition: "transform 0.3s, filter 0.3s",
+          pointerEvents: "none",
+        }}
+      />
+    );
+  }
+
   return (
     <CoverArt
       src={coverDisplay.src}

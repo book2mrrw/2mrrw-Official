@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useEffect } from "react";
+import { memo, useMemo, useEffect, useRef } from "react";
 import { useMountEnterAnimation } from "@/hooks/useMountEnterAnimation";
 import {
   isUiHydrationTraceEnabled,
@@ -31,6 +31,7 @@ const FeatureCard = memo(function FeatureCard({
   );
   const showPlayActions = itemHasPlayableAudio(mediaItem, access);
   const coverDisplay = useMemo(() => catalogCoverDisplay(mediaItem), [mediaItem]);
+  const videoRef = useRef(null);
   const { shouldAnimate } = useMountEnterAnimation();
 
   return (
@@ -67,15 +68,38 @@ const FeatureCard = memo(function FeatureCard({
         }}
         style={{ cursor: "pointer" }}
       >
-        <CoverArt
-          src={coverDisplay.src}
-          type={coverDisplay.type || "image"}
-          alt=""
-          width="100%"
-          height="auto"
-          borderRadius="13px 13px 0 0"
-          style={{ aspectRatio: "1/1", display: "block" }}
-        />
+        {coverDisplay.type === "video" && coverDisplay.src ? (
+          <video
+            ref={videoRef}
+            src={coverDisplay.src}
+            poster={mediaItem.cover || undefined}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="auto"
+            webkit-playsinline="true"
+            style={{
+              backgroundColor: "#0a0a0a",
+              width: "100%",
+              aspectRatio: "1/1",
+              objectFit: "cover",
+              display: "block",
+              borderRadius: "13px 13px 0 0",
+              pointerEvents: "none",
+            }}
+          />
+        ) : (
+          <CoverArt
+            src={coverDisplay.src}
+            type={coverDisplay.type || "image"}
+            alt=""
+            width="100%"
+            height="auto"
+            borderRadius="13px 13px 0 0"
+            style={{ aspectRatio: "1/1", display: "block" }}
+          />
+        )}
       </div>
       <div style={{ padding: isMobile ? "10px 12px 14px" : "12px 14px 16px" }}>
         <div className="hero-title-glow" style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, marginBottom: 4 }}>
