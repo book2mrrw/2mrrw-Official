@@ -95,12 +95,14 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: showPause ? "rgba(0,255,255,0.1)" : "#111",
-        border: `1px solid ${showPause ? "rgba(0,255,255,0.5)" : "#333"}`,
+        background: showPause ? "rgba(0,255,255,0.1)" : "#0a0a0a",
+        border: `1px solid ${showPause ? "rgba(0,255,255,0.7)" : "rgba(0,255,255,0.35)"}`,
         borderRadius: 10,
         cursor: "pointer",
         padding: 0,
-        boxShadow: showPause ? "0 0 10px rgba(0,255,255,0.2)" : "none",
+        boxShadow: showPause
+          ? "0 0 16px rgba(0,255,255,0.55), 0 0 6px rgba(0,255,255,0.25)"
+          : "0 0 8px rgba(0,255,255,0.18), 0 0 2px rgba(0,255,255,0.08)",
         transition: "all 0.2s",
         touchAction: "manipulation",
       }}
