@@ -27,14 +27,14 @@ export const metadata = {
     description: "Official music from 2MRRW — stream, collect, and experience every release.",
     url: "https://www.2mrrw.com",
     siteName: "2MRRW",
-    images: [{ url: `${R2}/images/albums/lovehz.jpg`, width: 1500, height: 1500, alt: "Love Hz Vol. 1 — 2MRRW" }],
+    images: [{ url: `${R2}/images/mixtapes-and-eps/love-hz-vol-1/lovehz.jpg`, width: 1500, height: 1500, alt: "Love Hz Vol. 1 — 2MRRW" }],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "2MRRW",
     description: "Official music from 2MRRW — stream, collect, and experience every release.",
-    images: [`${R2}/images/albums/lovehz.jpg`],
+    images: [`${R2}/images/mixtapes-and-eps/love-hz-vol-1/lovehz.jpg`],
   },
   icons: {
     apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],

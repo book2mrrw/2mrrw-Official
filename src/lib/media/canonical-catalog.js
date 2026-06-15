@@ -141,7 +141,7 @@ export const CANONICAL_MIXTAPES_AND_EPS = [
     release_date: "2026-08-01",
     price_cents: 1299,
     legacy_cover_stem: "lovehz",
-    legacy_cover: "images/albums/lovehz.jpg",
+    legacy_cover: "images/mixtapes-and-eps/love-hz-vol-1/lovehz.jpg",
     video: "videos/mixtapes-and-eps/love-hz-vol-1/love-hz-vol-1.mov",
   },
   {
@@ -152,7 +152,7 @@ export const CANONICAL_MIXTAPES_AND_EPS = [
     release_date: "2024-03-24",
     price_cents: 999,
     legacy_cover_stem: "ad",
-    legacy_cover: "images/albums/ad.jpg",
+    legacy_cover: "images/mixtapes-and-eps/ad/ad.jpg",
   },
   {
     slug: "tbh",
@@ -162,7 +162,7 @@ export const CANONICAL_MIXTAPES_AND_EPS = [
     release_date: "2022-07-07",
     price_cents: 999,
     legacy_cover_stem: "tbh",
-    legacy_cover: "images/albums/tbh.jpg",
+    legacy_cover: "images/mixtapes-and-eps/tbh/tbh.jpg",
   },
 ];
 
