@@ -142,7 +142,7 @@ export const CANONICAL_MIXTAPES_AND_EPS = [
     price_cents: 1299,
     legacy_cover_stem: "lovehz",
     legacy_cover: "images/mixtapes-and-eps/love-hz-vol-1/lovehz.jpg",
-    video: "videos/mixtapes-and-eps/love-hz-vol-1/love-hz-vol-1.mov",
+    video: "videos/mixtapes-and-eps/love-hz-vol-1/love-hz-vol-1.mp4",
   },
   {
     slug: "ad",
