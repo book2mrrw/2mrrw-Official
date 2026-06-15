@@ -2116,7 +2116,7 @@ function PageStorefront() {
       </PlaybackChromeIsland>
 
       {/* ── CSS ── */}
-      <style jsx>{`
+      <style jsx global>{`
         html,body{width:100%;overflow-x:clip;}
         *,*::before,*::after{box-sizing:border-box;}
         @media(max-width:768px){

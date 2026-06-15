@@ -1,3 +1,4 @@
+import "./globals.css";
 import StripeProvider from "./StripeProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import { AuthGateProvider } from "@/context/AuthGateContext";
