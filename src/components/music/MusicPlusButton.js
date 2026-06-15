@@ -123,29 +123,25 @@ export default function MusicPlusButton({
           setOpen(true);
         }}
         style={{
-          minWidth: 38,
-          minHeight: 38,
-          width: 38,
-          height: 38,
+          minWidth: 44,
+          minHeight: 44,
+          width: 44,
+          height: 44,
           padding: 0,
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: open ? "rgba(255,255,255,0.06)" : "transparent",
-          border: open ? "1.5px solid rgba(255,255,255,0.22)" : "1.5px solid rgba(255,255,255,0.1)",
-          borderRadius: "50%",
+          background: "transparent",
+          border: "none",
           cursor: "pointer",
           flexShrink: 0,
           touchAction: "manipulation",
-          color: open ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.5)",
-          transition: "color 0.15s, border-color 0.15s, background 0.15s",
-          WebkitAppearance: "none",
-          appearance: "none",
-          outline: "none",
+          color: open ? "rgba(255,255,255,.9)" : "rgba(255,255,255,.55)",
+          transition: "color 0.15s",
           ...style,
         }}
       >
-        <PlusIcon size={18} />
+        <PlusIcon size={22} />
       </button>
 
       <MusicOptionsSheet

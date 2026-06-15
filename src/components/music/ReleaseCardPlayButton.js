@@ -89,37 +89,28 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
       aria-label={playAriaLabel}
       onClick={handlePlay}
       style={{
-        width: 38,
-        height: 38,
+        width: 44,
+        height: 44,
         flexShrink: 0,
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: showPause ? "rgba(0,255,255,0.12)" : "rgba(0,255,255,0.05)",
-        border: `1.5px solid ${showPause ? "rgba(0,255,255,0.6)" : "rgba(0,255,255,0.22)"}`,
-        borderRadius: "50%",
+        background: showPause ? "rgba(0,255,255,0.1)" : "#111",
+        border: `1px solid ${showPause ? "rgba(0,255,255,0.5)" : "#333"}`,
+        borderRadius: 10,
         cursor: "pointer",
         padding: 0,
-        boxShadow: showPause
-          ? "0 0 18px rgba(0,255,255,0.35), inset 0 0 8px rgba(0,255,255,0.08)"
-          : "0 0 0px rgba(0,255,255,0)",
-        transition: "background 0.2s, border-color 0.2s, box-shadow 0.2s",
+        boxShadow: showPause ? "0 0 10px rgba(0,255,255,0.2)" : "none",
+        transition: "all 0.2s",
         touchAction: "manipulation",
-        WebkitAppearance: "none",
-        appearance: "none",
-        outline: "none",
-        fontFamily: "inherit",
-        lineHeight: 1,
       }}
     >
       <span
         style={{
           color: "#00ffff",
-          fontSize: showPause ? 11 : 13,
+          fontSize: showPause ? 13 : 16,
           lineHeight: 1,
-          letterSpacing: showPause ? 2 : 1,
-          marginLeft: showPause ? 0 : 2,
-          display: "block",
+          letterSpacing: showPause ? 2 : 0,
         }}
       >
         {showPause ? "❙❙" : "▶"}
