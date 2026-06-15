@@ -122,9 +122,9 @@ function CatalogGrid({
         >
           {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(mediaItem)} /> : null}
           <div onMouseEnter={hoverIn} onMouseLeave={hoverOut} onClick={() => onCardClick?.(mediaItem)} style={{ cursor: "pointer" }}>
-            {coverDisplay.type === "video" && coverDisplay.src ? (
+            {(mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video" ? (
               <video
-                src={coverDisplay.src}
+                src={mediaItem?.video || mediaItem?.visual || undefined}
                 poster={mediaItem.cover || undefined}
                 autoPlay
                 muted

@@ -86,11 +86,12 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
     );
   }
 
-  if (coverDisplay?.type === "video" && coverDisplay.src) {
+  if ((mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video") {
+    const coverVideoSrc = mediaItem?.video || mediaItem?.visual || null;
     return (
       <video
         ref={videoRef}
-        src={coverDisplay.src}
+        src={coverVideoSrc || undefined}
         poster={mediaItem.cover || undefined}
         autoPlay
         muted

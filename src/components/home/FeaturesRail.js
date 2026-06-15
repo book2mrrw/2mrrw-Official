@@ -68,10 +68,10 @@ const FeatureCard = memo(function FeatureCard({
         }}
         style={{ cursor: "pointer" }}
       >
-        {coverDisplay.type === "video" && coverDisplay.src ? (
+        {(mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video" ? (
           <video
             ref={videoRef}
-            src={coverDisplay.src}
+            src={mediaItem?.video || mediaItem?.visual || undefined}
             poster={mediaItem.cover || undefined}
             autoPlay
             muted
