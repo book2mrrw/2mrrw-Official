@@ -22,7 +22,9 @@ export const COLLECTOR_CARDS_CATALOG = [
     price: 89.99,
     editionSize: 200,
     accentColor: "#00ffff",
-    artwork: "/images/albums/tbh.jpg",
+    artwork: visualDiscoveryUrl("mixtape", "tbh", {
+      legacyImage: "images/mixtapes-and-eps/tbh/tbh.jpg",
+    }),
     faceType: "image",
   },
   {
@@ -33,7 +35,9 @@ export const COLLECTOR_CARDS_CATALOG = [
     price: 99.99,
     editionSize: 200,
     accentColor: "#ff6b35",
-    artwork: "/images/albums/ad.jpg",
+    artwork: visualDiscoveryUrl("mixtape", "ad", {
+      legacyImage: "images/mixtapes-and-eps/ad/ad.jpg",
+    }),
     faceType: "image",
   },
   {
@@ -45,11 +49,11 @@ export const COLLECTOR_CARDS_CATALOG = [
     editionSize: 100,
     accentColor: "#a259ff",
     artwork: visualDiscoveryUrl("ep", "love-hz-vol-1", {
-      legacyImage: "/images/albums/lovehz.jpg",
+      legacyImage: "images/mixtapes-and-eps/love-hz-vol-1/lovehz.jpg",
     }),
-    videoSrc: visualDiscoveryUrl("single", "w2d", {
-      legacyVideo: "/videos/singles/w2d.mp4",
-      legacyImage: "/images/singles/w2d.jpg",
+    videoSrc: visualDiscoveryUrl("ep", "love-hz-vol-1", {
+      legacyVideo: "videos/mixtapes-and-eps/love-hz-vol-1/love-hz-vol-1.mov",
+      legacyImage: "images/mixtapes-and-eps/love-hz-vol-1/lovehz.jpg",
     }),
     faceType: "video",
   },

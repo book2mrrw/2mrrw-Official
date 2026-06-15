@@ -1481,32 +1481,41 @@ body {
   overflow: hidden;
 }
 
+.collector-card-outer {
+  transition: transform 0.28s ease, box-shadow 0.28s ease;
+}
+.collector-card-item:hover .collector-card-outer {
+  transform: translateY(-4px) scale(1.015);
+}
+
 .collector-card-sheen::after {
   content: "";
   position: absolute;
-  inset: -40%;
-  z-index: 1;
+  inset: -60%;
+  z-index: 10;
   pointer-events: none;
   background: linear-gradient(
-    105deg,
-    transparent 38%,
-    rgba(255, 255, 255, 0.06) 44%,
-    rgba(255, 255, 255, 0.22) 50%,
-    rgba(255, 255, 255, 0.06) 56%,
-    transparent 62%
+    108deg,
+    transparent 32%,
+    rgba(255, 255, 255, 0.04) 40%,
+    rgba(255, 255, 255, 0.28) 46%,
+    rgba(255, 255, 255, 0.52) 50%,
+    rgba(255, 255, 255, 0.28) 54%,
+    rgba(255, 255, 255, 0.04) 60%,
+    transparent 68%
   );
-  transform: translateX(-130%) skewX(-18deg);
-  animation: collectorCardSheen 4.8s ease-in-out infinite;
+  transform: translateX(-160%) skewX(-18deg);
+  animation: collectorCardSheen 5.2s ease-in-out infinite;
 }
 
 @keyframes collectorCardSheen {
   0%,
   100% {
-    transform: translateX(-130%) skewX(-18deg);
+    transform: translateX(-160%) skewX(-18deg);
   }
-  45%,
-  55% {
-    transform: translateX(130%) skewX(-18deg);
+  42%,
+  58% {
+    transform: translateX(160%) skewX(-18deg);
   }
 }
 
