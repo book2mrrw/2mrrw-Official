@@ -112,7 +112,7 @@ export function withR2CatalogMedia(item) {
   if (next.csCover) {
     next.csCover = resolveCatalogMediaField(next.csCover, catalogCoverUrl);
   }
-  if (!next.coverArtType) next.coverArtType = next.video ? "video" : "image";
+  next.coverArtType = next.video ? "video" : (next.coverArtType || "image");
 
   if (slug) catalogMediaStableCache.set(slug, { sig, value: next });
   return next;

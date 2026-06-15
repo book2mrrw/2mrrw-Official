@@ -12,7 +12,7 @@ export { isUpcomingReleaseDate, withR2CatalogMedia };
 
 export function catalogCoverDisplay(item) {
   const resolved = withR2CatalogMedia(item);
-  const type = resolved.coverArtType || (resolved.video ? "video" : "image");
+  const type = resolved.video ? "video" : (resolved.coverArtType || "image");
   const visualSrc = resolved.visual || resolved.cover;
   const src =
     type === "video" && (resolved.video || resolved.visual)
