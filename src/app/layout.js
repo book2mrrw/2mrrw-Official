@@ -11,13 +11,28 @@ import PlaybackNetworkHints from "@/components/system/PlaybackNetworkHints";
 import { MediaErrorBoundary } from "@/system/errors";
 
 export const metadata = {
-  title: "Artist Site",
-  description: "Music, albums, and merch",
+  title: "2MRRW",
+  description: "Official music from 2MRRW — stream, collect, and experience every release.",
   manifest: "/manifest.json",
   themeColor: "#0a0a0a",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
+    title: "2MRRW",
+  },
+  openGraph: {
+    title: "2MRRW",
+    description: "Official music from 2MRRW — stream, collect, and experience every release.",
+    url: "https://www.2mrrw.com",
+    siteName: "2MRRW",
+    images: [{ url: "/icons/icon-512.png", width: 512, height: 512, alt: "2MRRW" }],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "2MRRW",
+    description: "Official music from 2MRRW — stream, collect, and experience every release.",
+    images: ["/icons/icon-512.png"],
   },
   icons: {
     apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],

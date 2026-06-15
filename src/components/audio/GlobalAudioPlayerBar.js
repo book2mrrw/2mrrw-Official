@@ -696,6 +696,29 @@ function GlobalAudioPlayerBar() {
     setSleepSheetOpen(false);
   }, [setSleepTimer]);
 
+  const dockCurrentTimeRef = useRef(dockCurrentTime);
+  useEffect(() => { dockCurrentTimeRef.current = dockCurrentTime; }, [dockCurrentTime]);
+
+  useEffect(() => {
+    if (!hasStarted) return;
+    function onKeyDown(e) {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
+      if (e.key === " " || e.code === "Space") {
+        e.preventDefault();
+        handlePlayToggle();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        handleEngineSeek(dockCurrentTimeRef.current - 10);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        handleEngineSeek(dockCurrentTimeRef.current + 10);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [hasStarted, handlePlayToggle, handleEngineSeek]);
+
   const csOpacity = csMode ? 1 : 0;
   const baseCoverUrl = resolveAbsoluteArtworkUrl(baseCover);
   const csCoverUrl = csCover ? resolveAbsoluteArtworkUrl(csCover) : null;
