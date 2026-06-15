@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/commerce/stripe";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { getOrCreateStripeCustomerForUser } from "@/lib/commerce/stripe-customers";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 const INNER_CIRCLE_PRICE_CENTS = 799;
 const INNER_CIRCLE_PRICE_ID = process.env.STRIPE_INNER_CIRCLE_PRICE_ID;
@@ -43,13 +44,21 @@ async function membershipLineItem(stripe) {
   };
 }
 
-export async function POST() {
+export async function POST(req) {
   try {
     const user = await getFanSessionUser();
 
     if (!user) {
       return NextResponse.json({ error: "Account session unavailable" }, { status: 401 });
     }
+
+    const limit = await checkRateLimit(req, {
+      routeKey: "membership.checkout",
+      limit: 5,
+      windowSeconds: 3600,
+      identifier: user.id,
+    });
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
     const stripe = getStripe();
     const metadata = {
