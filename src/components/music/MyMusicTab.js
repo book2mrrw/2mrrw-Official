@@ -74,6 +74,7 @@ function LibraryCarousel({
   userId,
   onPlay,
   onOpen,
+  onEnqueue,
   onLibraryChange,
   isMobile,
   highlightSlug,
@@ -264,6 +265,16 @@ function LibraryCarousel({
                   >
                     Open
                   </button>
+                  {onEnqueue && canPlay ? (
+                    <button
+                      type="button"
+                      aria-label="Add to queue"
+                      onClick={() => onEnqueue(item)}
+                      style={{ padding: "8px 8px", background: "#111", color: "#888", border: "1px solid #222", borderRadius: 8, cursor: "pointer", fontSize: 10, flexShrink: 0 }}
+                    >
+                      +Q
+                    </button>
+                  ) : null}
                   <MusicPlusButton
                     track={item}
                     userId={userId}
@@ -597,7 +608,7 @@ function MyMusicTab({
   const activeContinue = continueListening || lastPlayed;
   const activeRecentlyPlayed = recentlyPlayedRail.length ? recentlyPlayedRail : recentlyPlayed;
 
-  const { playTrack, playQueue, resume, setShuffle, currentTrack, isPlaying, toggle } = useAudioPlayer();
+  const { playTrack, playQueue, resume, setShuffle, currentTrack, isPlaying, toggle, enqueueTrack } = useAudioPlayer();
   const membershipActive =
     Boolean(accountState?.subscriberActive) || membershipHasPremiumAccess(accountState?.membership);
   const subscriptionLocked = Boolean(accountState?.membership && !membershipActive);
@@ -1017,6 +1028,10 @@ function MyMusicTab({
           } else {
             playItem(item, access);
           }
+        }}
+        onEnqueue={(item) => {
+          const track = toPlaybackTrack(item, { ...accountState, userId: user?.id }, "my_music");
+          enqueueTrack(track);
         }}
         onOpen={(item) => onOpenSingle?.(singles.find((s) => s.slug === item.slug) || item)}
         onLibraryChange={refresh}

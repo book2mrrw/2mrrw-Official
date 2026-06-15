@@ -6355,6 +6355,37 @@ export function AudioProvider({ children }) {
   const playPrevious = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PREV_TRACK), [dispatchPlaybackCommand]);
   const stop = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.STOP, {}, { cancelActiveStream: true }), [dispatchPlaybackCommand]);
 
+  const enqueueTrack = useCallback((track, { playNext = false } = {}) => {
+    const normalized = normalizeTrack(track);
+    if (!normalized?.src) return;
+    const current = [...queueRef.current];
+    if (!current.length) {
+      queueRef.current = [normalized];
+      queueIndexRef.current = 0;
+      startTransition(() => patchState({ queue: [normalized], queueIndex: 0 }));
+      return;
+    }
+    if (playNext) {
+      const insertAt = Math.max(0, queueIndexRef.current + 1);
+      current.splice(insertAt, 0, normalized);
+    } else {
+      current.push(normalized);
+    }
+    queueRef.current = current;
+    startTransition(() => patchState({ queue: current }));
+  }, [patchState]);
+
+  const removeFromQueue = useCallback((index) => {
+    const current = [...queueRef.current];
+    if (index < 0 || index >= current.length) return;
+    if (index === queueIndexRef.current) return;
+    current.splice(index, 1);
+    const newIndex = index < queueIndexRef.current ? queueIndexRef.current - 1 : queueIndexRef.current;
+    queueRef.current = current;
+    queueIndexRef.current = newIndex;
+    startTransition(() => patchState({ queue: current, queueIndex: newIndex }));
+  }, [patchState]);
+
   const setSleepTimer = useCallback((minutes) => {
     if (!minutes || minutes <= 0) {
       sleepTimerRef.current = { endsAt: null, afterCurrentTrack: false };
@@ -7094,6 +7125,8 @@ export function AudioProvider({ children }) {
       setSleepTimer,
       sleepTimerEndsAt,
       sleepAfterCurrentTrack,
+      enqueueTrack,
+      removeFromQueue,
       continuityFrozen,
       getContinuitySnapshot,
       clearContinuityFreeze,
@@ -7148,6 +7181,8 @@ export function AudioProvider({ children }) {
     setSleepTimer,
     sleepTimerEndsAt,
     sleepAfterCurrentTrack,
+    enqueueTrack,
+    removeFromQueue,
     subscribeProgress,
     getProgressSnapshot,
     getContinuitySnapshot,

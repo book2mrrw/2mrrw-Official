@@ -210,6 +210,55 @@ function MiniCoverHit({
 // Layout: [Cover] [Title/Artist ·flex·] [Prev] [Play] [Next] [Repeat] [CS?]
 // Scrub bar sits below on its own row.
 
+function QueueButton({ count, onClick }) {
+  return (
+    <button
+      type="button"
+      aria-label={count > 0 ? `View queue — ${count} up next` : "View queue"}
+      onClick={onClick}
+      style={{
+        background: "none",
+        border: "none",
+        cursor: "pointer",
+        padding: "4px 6px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        color: count > 0 ? "#ccc" : "#555",
+        flexShrink: 0,
+      }}
+    >
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <line x1="8" y1="6" x2="21" y2="6" />
+        <line x1="8" y1="12" x2="21" y2="12" />
+        <line x1="8" y1="18" x2="21" y2="18" />
+        <line x1="3" y1="6" x2="3.01" y2="6" />
+        <line x1="3" y1="12" x2="3.01" y2="12" />
+        <line x1="3" y1="18" x2="3.01" y2="18" />
+      </svg>
+      {count > 0 ? (
+        <span style={{
+          position: "absolute",
+          top: -1,
+          right: -1,
+          fontSize: 8,
+          fontWeight: 800,
+          color: "#00ffff",
+          lineHeight: 1,
+          background: "#0a0a0a",
+          borderRadius: 3,
+          padding: "1px 2px",
+          minWidth: 10,
+          textAlign: "center",
+        }}>
+          {count > 99 ? "99+" : count}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
 function SleepTimerButton({ active, label, onClick }) {
   return (
     <button
@@ -285,6 +334,8 @@ function MiniPlayerDock({
   sleepTimerActive,
   sleepTimerLabel,
   onOpenSleepSheet,
+  upNextCount,
+  onOpenQueueSheet,
 }) {
   const giftBadge =
     currentTrack?.source === "gift" || currentTrack?.gifted ? (
@@ -350,6 +401,7 @@ function MiniPlayerDock({
               onClick={onToggleRepeat}
             />
             {showCs ? <PlayerCsBarButton active={csActive} onClick={onToggleCs} /> : null}
+            <QueueButton count={upNextCount} onClick={onOpenQueueSheet} />
             <SleepTimerButton active={sleepTimerActive} label={sleepTimerLabel} onClick={onOpenSleepSheet} />
           </div>
         </div>
@@ -399,10 +451,14 @@ function GlobalAudioPlayerBar() {
     setSleepTimer,
     sleepTimerEndsAt,
     sleepAfterCurrentTrack,
+    queue,
+    queueIndex,
+    removeFromQueue,
   } = playback;
 
   const [isHoldAnimating, setIsHoldAnimating] = useState(false);
   const [sleepSheetOpen, setSleepSheetOpen] = useState(false);
+  const [queueSheetOpen, setQueueSheetOpen] = useState(false);
   const csOverlayImgRef = useRef(null);
   const touchMovedRef = useRef(false);
   const touchStartRef = useRef(null);
@@ -625,6 +681,9 @@ function GlobalAudioPlayerBar() {
   const showCs = Boolean(dockCurrentTrack?.hasCs || dockCurrentTrack?.csAudio);
   const handleToggleCs = useCallback(() => void toggleCSMode?.(), [toggleCSMode]);
 
+  const upNextCount = Math.max(0, (queue?.length ?? 0) - (queueIndex ?? 0) - 1);
+  const handleOpenQueueSheet = useCallback(() => setQueueSheetOpen(true), []);
+
   const sleepTimerActive = Boolean(sleepTimerEndsAt || sleepAfterCurrentTrack);
   const sleepTimerLabel = sleepAfterCurrentTrack
     ? "end"
@@ -687,6 +746,57 @@ function GlobalAudioPlayerBar() {
     </div>
   ) : null;
 
+  const upNextTracks = queue && queueIndex != null ? queue.slice(queueIndex + 1) : [];
+  const upNextStartIndex = (queueIndex ?? 0) + 1;
+
+  const queueSheet = queueSheetOpen ? (
+    <div
+      role="dialog"
+      aria-label="Up Next"
+      style={{ position: "fixed", inset: 0, zIndex: 8000, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+      onClick={() => setQueueSheetOpen(false)}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: "100%", maxWidth: 480, background: "#0d0d0d", borderTop: "1px solid #222", borderRadius: "16px 16px 0 0", maxHeight: "70vh", display: "flex", flexDirection: "column" }}
+      >
+        <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #1a1a1a", flexShrink: 0 }}>
+          <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700 }}>Up Next</div>
+          {dockCurrentTrack ? (
+            <div style={{ marginTop: 6, fontSize: 13, color: "#ccc", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              Now: {dockCurrentTrack.title}
+            </div>
+          ) : null}
+        </div>
+        <div style={{ overflowY: "auto", flex: 1, padding: "4px 0 max(16px, env(safe-area-inset-bottom, 0px))" }}>
+          {upNextTracks.length === 0 ? (
+            <div style={{ padding: "20px", color: "#555", fontSize: 13, textAlign: "center" }}>Nothing queued up next.</div>
+          ) : (
+            upNextTracks.map((track, i) => (
+              <div
+                key={`${track.slug ?? track.id ?? i}-${i}`}
+                style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: "1px solid #111" }}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{track.title}</div>
+                  <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{track.artist || "2MRRW"}</div>
+                </div>
+                <button
+                  type="button"
+                  aria-label={`Remove ${track.title} from queue`}
+                  onClick={() => removeFromQueue(upNextStartIndex + i)}
+                  style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 18, padding: "4px 8px", flexShrink: 0, lineHeight: 1 }}
+                >
+                  ×
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   const sleepSheet = sleepSheetOpen ? (
     <div
       role="dialog"
@@ -736,6 +846,7 @@ function GlobalAudioPlayerBar() {
   return (
     <>
       {conflictDialog}
+      {queueSheet}
       {sleepSheet}
       {(isBuffering || playbackOrchestrationState === "RECOVERING") && (
         <div
@@ -785,6 +896,8 @@ function GlobalAudioPlayerBar() {
         sleepTimerActive={sleepTimerActive}
         sleepTimerLabel={sleepTimerLabel}
         onOpenSleepSheet={handleOpenSleepSheet}
+        upNextCount={upNextCount}
+        onOpenQueueSheet={handleOpenQueueSheet}
       />
     </>
   );
