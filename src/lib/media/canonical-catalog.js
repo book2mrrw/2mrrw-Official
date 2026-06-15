@@ -141,6 +141,8 @@ export const CANONICAL_MIXTAPES_AND_EPS = [
     release_date: "2026-08-01",
     price_cents: 1299,
     legacy_cover_stem: "lovehz",
+    legacy_cover: "images/albums/lovehz.jpg",
+    video: "videos/mixtapes-and-eps/love-hz-vol-1/love-hz-vol-1.mov",
   },
   {
     slug: "ad",
@@ -150,6 +152,7 @@ export const CANONICAL_MIXTAPES_AND_EPS = [
     release_date: "2024-03-24",
     price_cents: 999,
     legacy_cover_stem: "ad",
+    legacy_cover: "images/albums/ad.jpg",
   },
   {
     slug: "tbh",
@@ -159,6 +162,7 @@ export const CANONICAL_MIXTAPES_AND_EPS = [
     release_date: "2022-07-07",
     price_cents: 999,
     legacy_cover_stem: "tbh",
+    legacy_cover: "images/albums/tbh.jpg",
   },
 ];
 
@@ -242,8 +246,8 @@ function enrichRelease(raw) {
     visual,
     cover: visual,
     preview: previewDiscoveryUrl(preview_path, preview_legacy),
-    video: releaseType === "single" ? visual : undefined,
-    coverArtType: releaseType === "single" ? "video" : "image",
+    video: releaseType === "single" ? visual : (raw.video || undefined),
+    coverArtType: releaseType === "single" ? "video" : (raw.video ? "video" : "image"),
   };
 }
 

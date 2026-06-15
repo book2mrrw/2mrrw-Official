@@ -10,6 +10,8 @@ import BlackscreenTraceBootstrap from "@/components/system/BlackscreenTraceBoots
 import PlaybackNetworkHints from "@/components/system/PlaybackNetworkHints";
 import { MediaErrorBoundary } from "@/system/errors";
 
+const R2 = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
+
 export const metadata = {
   title: "2MRRW",
   description: "Official music from 2MRRW — stream, collect, and experience every release.",
@@ -25,14 +27,14 @@ export const metadata = {
     description: "Official music from 2MRRW — stream, collect, and experience every release.",
     url: "https://www.2mrrw.com",
     siteName: "2MRRW",
-    images: [{ url: "/icons/icon-512.png", width: 512, height: 512, alt: "2MRRW" }],
+    images: [{ url: `${R2}/images/albums/lovehz.jpg`, width: 1500, height: 1500, alt: "Love Hz Vol. 1 — 2MRRW" }],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "2MRRW",
     description: "Official music from 2MRRW — stream, collect, and experience every release.",
-    images: ["/icons/icon-512.png"],
+    images: [`${R2}/images/albums/lovehz.jpg`],
   },
   icons: {
     apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
