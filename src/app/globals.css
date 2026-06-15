@@ -4294,9 +4294,10 @@ body.is-player-modal-open::before {
 .sheet-hdl:hover{background:rgba(255,255,255,.3);}
 
 /* Tracklist rows */
-.tr{display:flex;align-items:center;gap:10px;padding:10px 20px;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;position:relative;transition:background .15s;}
-.tr:active,.tr.active-tr{background:rgba(255,255,255,.03);}
-.tr.locked{opacity:.32;pointer-events:none;}
+.tr{display:flex;align-items:center;gap:12px;padding:13px 20px;border-bottom:1px solid rgba(255,255,255,.04);cursor:pointer;position:relative;transition:background .18s;}
+.tr:active{background:rgba(255,255,255,.04);}
+.tr.active-tr{background:rgba(255,255,255,.02);}
+.tr.locked{opacity:.28;pointer-events:none;}
 
 /* Bare icon buttons */
 .icon-btn{background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center;transition:transform .1s,opacity .1s;}

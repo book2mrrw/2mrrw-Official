@@ -16,6 +16,7 @@ import {
   isSamePlaybackTrack,
 } from "@/lib/music-playback";
 import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
+import GlyphLyricsPanel from "@/components/preview/GlyphLyricsPanel";
 
 const PREVIEW_CAP_SEC = 30;
 
@@ -505,6 +506,7 @@ export function SingleModal({
   releaseDetail,
 }) {
   const coverSrc = trackCoverSrc(track || {});
+  const isVideo = (track?.coverArtType || track?.coverType) === "video";
   const palette = useCoverPalette(coverSrc, track?.coverArtType || track?.coverType || "image");
   const t = useMemo(() => buildTheme(palette), [palette]);
   const vars = useMemo(() => themeVars(t), [t]);
@@ -522,6 +524,7 @@ export function SingleModal({
   const { mounted, closing, setClosing } = useModalAnim();
   const beat = useBeat(isPlaying);
   const [sheet, setSheet] = useState(null);
+  const [lyricsOpen, setLyricsOpen] = useState(false);
 
   usePlayerBodyState({ modalOpen: true });
 
@@ -535,6 +538,7 @@ export function SingleModal({
   const displayCurrent = isPreview ? Math.min(currentTime, PREVIEW_CAP_SEC) : currentTime;
 
   const release = releaseDetail || track;
+  const lyricsText = release?.lyrics || track?.lyrics || "";
   const editorial = useMemo(() => getReleaseEditorial(release), [release]);
   const creditRows = useMemo(() => getCreditsDisplayRows(editorial), [editorial]);
   const viewMoreRows = useMemo(() => {
@@ -606,15 +610,36 @@ export function SingleModal({
           ...vars,
         }}
       >
-        <div style={{ flex: "0 0 62%", position: "relative", overflow: "hidden" }}>
-          <Scene coverUrl={coverSrc} t={t} />
+        <div style={{ flex: "0 0 65%", position: "relative", overflow: "hidden" }}>
+          {/* Full-bleed cover art — jpg or mp4 loop */}
+          {isVideo ? (
+            <video
+              src={coverSrc}
+              autoPlay
+              loop
+              muted
+              playsInline
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : coverSrc ? (
+            <img
+              src={coverSrc}
+              alt=""
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <div style={{ position: "absolute", inset: 0, background: `linear-gradient(160deg,${t.bg[0]},${t.bg[1]},${t.bg[2]})` }} />
+          )}
+          {/* Palette-tinted ambient overlay — color from cover art */}
+          <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 28% 18%,${t.p1}30,transparent 58%)`, pointerEvents: "none" }} />
+          {/* Bottom gradient — controls legibility */}
           <div
             style={{
               position: "absolute",
               inset: 0,
               zIndex: 2,
               pointerEvents: "none",
-              background: "linear-gradient(to top,rgba(0,0,0,.94) 0%,rgba(0,0,0,.28) 44%,transparent 68%)",
+              background: "linear-gradient(to top,rgba(0,0,0,.97) 0%,rgba(0,0,0,.15) 42%,transparent 62%)",
             }}
           />
           <div style={{ position: "absolute", top: 14, left: 0, right: 0, zIndex: 30, display: "flex", justifyContent: "center" }}>
@@ -623,59 +648,54 @@ export function SingleModal({
           <div style={{ position: "absolute", top: 12, right: 14, zIndex: 30 }}>
             <Badge access={access} t={t} />
           </div>
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              zIndex: 3,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              pointerEvents: "none",
-            }}
-          >
-            <div className="art-lbl" style={{ "--glow": t.glow, "--glow-dim": t.glowDim }}>
-              {track?.title}
-            </div>
-          </div>
           {isPreview ? (
-            <div style={{ position: "absolute", bottom: 108, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center" }}>
-              <div
-                style={{
-                  fontFamily: "'DM Mono',monospace",
-                  fontSize: 8,
-                  letterSpacing: ".22em",
-                  padding: "4px 12px",
-                  borderRadius: 20,
-                  background: "rgba(0,0,0,.6)",
-                  border: "1px solid rgba(255,255,255,.12)",
-                  color: "rgba(255,255,255,.45)",
-                }}
-              >
+            <div style={{ position: "absolute", bottom: 118, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center" }}>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".22em", padding: "4px 12px", borderRadius: 20, background: "rgba(0,0,0,.65)", border: "1px solid rgba(255,255,255,.12)", color: "rgba(255,255,255,.45)" }}>
                 30 SEC PREVIEW
               </div>
             </div>
           ) : null}
-          <div style={{ position: "absolute", bottom: 100, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center" }}>
+          {/* Credits + Lyrics pills */}
+          <div style={{ position: "absolute", bottom: 108, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center", gap: 10 }}>
             <button
               type="button"
-              onClick={() => setSheet("more")}
+              onClick={() => { setLyricsOpen(false); setSheet("credits"); }}
               style={{
-                background: "rgba(255,255,255,.07)",
-                border: "1px solid rgba(255,255,255,.13)",
-                color: "rgba(255,255,255,.65)",
+                background: "rgba(0,0,0,.58)",
+                border: `1px solid ${t.p1}50`,
+                color: t.accent,
                 fontFamily: "'DM Mono',monospace",
                 fontSize: 9,
                 letterSpacing: ".22em",
                 textTransform: "uppercase",
-                padding: "7px 18px",
+                padding: "7px 20px",
                 borderRadius: 20,
                 cursor: "pointer",
-                backdropFilter: "blur(12px)",
-                WebkitBackdropFilter: "blur(12px)",
+                backdropFilter: "blur(14px)",
+                WebkitBackdropFilter: "blur(14px)",
               }}
             >
-              View More
+              Credits
+            </button>
+            <button
+              type="button"
+              onClick={() => { setSheet(null); setLyricsOpen(true); }}
+              style={{
+                background: "rgba(0,0,0,.58)",
+                border: `1px solid ${t.p1}50`,
+                color: t.accent,
+                fontFamily: "'DM Mono',monospace",
+                fontSize: 9,
+                letterSpacing: ".22em",
+                textTransform: "uppercase",
+                padding: "7px 20px",
+                borderRadius: 20,
+                cursor: "pointer",
+                backdropFilter: "blur(14px)",
+                WebkitBackdropFilter: "blur(14px)",
+              }}
+            >
+              Lyrics
             </button>
           </div>
           <FloatingPlayer
@@ -688,6 +708,10 @@ export function SingleModal({
             onPlay={toggle}
             onSeekRatio={(r) => seek(r * displayDuration)}
           />
+          {/* Lyrics overlay — sits above cover art, below controls */}
+          <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen ? "auto" : "none" }}>
+            <GlyphLyricsPanel open={lyricsOpen} lrcText={lyricsText} onClose={() => setLyricsOpen(false)} isMobile />
+          </div>
         </div>
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: t.dark, ...vars }}>
@@ -827,8 +851,8 @@ export function SingleModal({
         {sheet === "share" ? (
           <ShareSheet title={`Share ${track?.type || "Single"}`} sub={`${track?.title} · ${track?.artist}`} t={t} onClose={() => setSheet(null)} />
         ) : null}
-        {sheet === "more" ? (
-          <ViewMoreSheet title={track?.title} sub={`${track?.type || "Single"} · ${track?.artist}`} t={t} rows={viewMoreRows} onClose={() => setSheet(null)} />
+        {sheet === "credits" ? (
+          <ViewMoreSheet title="Credits" sub={`${track?.title} · ${track?.artist}`} t={t} rows={viewMoreRows} onClose={() => setSheet(null)} />
         ) : null}
       </div>
     </div>
@@ -837,6 +861,7 @@ export function SingleModal({
 
 function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex }) {
   const coverSrc = trackCoverSrc(album);
+  const isVideo = (album?.coverArtType || album?.coverType) === "video";
   const palette = useCoverPalette(coverSrc, album?.coverArtType || album?.coverType || "image");
   const t = useMemo(() => buildTheme(palette), [palette]);
   const vars = useMemo(() => themeVars(t), [t]);
@@ -846,7 +871,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const { mounted, closing, setClosing } = useModalAnim();
   const [activeTrack, setActiveTrack] = useState(() => tracks[0] || null);
   const [sheet, setSheet] = useState(null);
-  const [addTarget, setAddTarget] = useState(null);
+  const [lyricsOpen, setLyricsOpen] = useState(false);
   const [playbackNotice, setPlaybackNotice] = useState(null);
 
   const {
@@ -1005,23 +1030,51 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
           ...vars,
         }}
       >
-        <div style={{ flex: "0 0 62%", position: "relative", overflow: "hidden" }}>
-          <Scene coverUrl={coverSrc} t={t} />
-          <div style={{ position: "absolute", inset: 0, zIndex: 2, pointerEvents: "none", background: "linear-gradient(to top,rgba(0,0,0,.94) 0%,rgba(0,0,0,.28) 44%,transparent 68%)" }} />
+        <div style={{ flex: "0 0 65%", position: "relative", overflow: "hidden" }}>
+          {/* Full-bleed cover art */}
+          {isVideo ? (
+            <video
+              src={coverSrc}
+              autoPlay
+              loop
+              muted
+              playsInline
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : coverSrc ? (
+            <img
+              src={coverSrc}
+              alt=""
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+            />
+          ) : (
+            <div style={{ position: "absolute", inset: 0, background: `linear-gradient(160deg,${t.bg[0]},${t.bg[1]},${t.bg[2]})` }} />
+          )}
+          {/* Palette ambient overlay */}
+          <div style={{ position: "absolute", inset: 0, background: `radial-gradient(ellipse at 28% 18%,${t.p1}30,transparent 58%)`, pointerEvents: "none" }} />
+          {/* Bottom fade */}
+          <div style={{ position: "absolute", inset: 0, zIndex: 2, pointerEvents: "none", background: "linear-gradient(to top,rgba(0,0,0,.97) 0%,rgba(0,0,0,.15) 42%,transparent 62%)" }} />
           <div style={{ position: "absolute", top: 14, left: 0, right: 0, zIndex: 30, display: "flex", justifyContent: "center" }}>
             <div className="drag-pill" onClick={close} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && close()} />
           </div>
           <div style={{ position: "absolute", top: 12, right: 14, zIndex: 30 }}>
             <Badge access={access} t={t} />
           </div>
-          <div style={{ position: "absolute", inset: 0, zIndex: 3, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-            <div className="art-lbl" style={{ "--glow": t.glow, "--glow-dim": t.glowDim }}>
-              {album?.title}
-            </div>
-          </div>
-          <div style={{ position: "absolute", bottom: 100, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center" }}>
-            <button type="button" onClick={() => setSheet("more")} style={{ background: "rgba(255,255,255,.07)", border: "1px solid rgba(255,255,255,.13)", color: "rgba(255,255,255,.65)", fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".22em", textTransform: "uppercase", padding: "7px 18px", borderRadius: 20, cursor: "pointer", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)" }}>
-              View More
+          {/* Credits + Lyrics pills */}
+          <div style={{ position: "absolute", bottom: 108, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center", gap: 10 }}>
+            <button
+              type="button"
+              onClick={() => { setLyricsOpen(false); setSheet("credits"); }}
+              style={{ background: "rgba(0,0,0,.58)", border: `1px solid ${t.p1}50`, color: t.accent, fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".22em", textTransform: "uppercase", padding: "7px 20px", borderRadius: 20, cursor: "pointer", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}
+            >
+              Credits
+            </button>
+            <button
+              type="button"
+              onClick={() => { setSheet(null); setLyricsOpen(true); }}
+              style={{ background: "rgba(0,0,0,.58)", border: `1px solid ${t.p1}50`, color: t.accent, fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".22em", textTransform: "uppercase", padding: "7px 20px", borderRadius: 20, cursor: "pointer", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}
+            >
+              Lyrics
             </button>
           </div>
           <FloatingPlayer
@@ -1034,6 +1087,10 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
             onPlay={toggle}
             onSeekRatio={(r) => seek(r * displayDuration)}
           />
+          {/* Lyrics overlay */}
+          <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen ? "auto" : "none" }}>
+            <GlyphLyricsPanel open={lyricsOpen} lrcText={activeTrack?.lyrics || album?.lyrics || ""} onClose={() => setLyricsOpen(false)} isMobile />
+          </div>
         </div>
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: t.dark, ...vars }}>
@@ -1071,69 +1128,53 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
                 activeTrack != null && tr != null && String(activeTrack.id) === String(tr.id);
               const isPlayingThis = isActive && isPlaying;
               return (
-                <div key={tr.id ?? idx} className={`tr${isActive ? " active-tr" : ""}${locked ? " locked" : ""}`} onClick={() => handleTrack(tr)}>
-                  {isActive ? <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: t.p1, borderRadius: "0 1px 1px 0" }} /> : null}
-                  <div style={{ width: 20, flexShrink: 0, fontFamily: "'DM Mono',monospace", fontSize: 10, color: "rgba(255,255,255,.3)", display: "flex", gap: 2, alignItems: "flex-end", height: 13 }}>
+                <div
+                  key={tr.id ?? idx}
+                  className={`tr${isActive ? " active-tr" : ""}${locked ? " locked" : ""}`}
+                  style={isActive ? { background: `${t.p1}12` } : undefined}
+                  onClick={() => handleTrack(tr)}
+                >
+                  {isActive ? <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: `linear-gradient(to bottom,${t.accent},${t.p1})`, borderRadius: "0 1px 1px 0" }} /> : null}
+                  <div style={{ width: 22, flexShrink: 0, fontFamily: "'DM Mono',monospace", fontSize: 10, display: "flex", gap: 2, alignItems: "flex-end", height: 13 }}>
                     {isPlayingThis ? (
                       <>
-                        <div className="eq-b" style={{ background: t.p1 }} />
-                        <div className="eq-b" style={{ background: t.p1 }} />
-                        <div className="eq-b" style={{ background: t.p1 }} />
+                        <div className="eq-b" style={{ background: t.accent }} />
+                        <div className="eq-b" style={{ background: t.accent }} />
+                        <div className="eq-b" style={{ background: t.accent }} />
                       </>
                     ) : (
-                      <span>{tr.id ?? idx + 1}</span>
+                      <span style={{ color: isActive ? t.accent : "rgba(255,255,255,.28)" }}>{idx + 1}</span>
                     )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 400, color: isActive ? t.accent : "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tr.title}</div>
-                    {tr.feat ? <div style={{ fontSize: 10, fontWeight: 300, color: "rgba(255,255,255,.35)" }}>ft. {tr.feat}</div> : null}
+                    <div style={{ fontSize: isActive ? 13 : 12, fontWeight: isActive ? 600 : 400, color: isActive ? t.accent : "rgba(255,255,255,.88)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", letterSpacing: isActive ? ".01em" : 0 }}>{tr.title}</div>
+                    {tr.feat ? <div style={{ fontSize: 10, fontWeight: 300, color: "rgba(255,255,255,.32)" }}>ft. {tr.feat}</div> : null}
                   </div>
                   {tr.free ? (
-                    <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 7, letterSpacing: ".1em", padding: "2px 5px", borderRadius: 4, border: `1px solid ${t.p1}55`, color: t.accent, flexShrink: 0 }}>FREE</span>
+                    <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 7, letterSpacing: ".1em", padding: "2px 6px", borderRadius: 4, border: `1px solid ${t.p1}55`, color: t.accent, flexShrink: 0 }}>FREE</span>
                   ) : null}
-                  <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.3)", flexShrink: 0 }}>{tr.dur}</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: 3, flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                  <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: isActive ? `${t.accent}99` : "rgba(255,255,255,.25)", flexShrink: 0 }}>{tr.dur}</span>
+                  <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
                       style={{
-                        width: 26,
-                        height: 26,
+                        width: 28,
+                        height: 28,
                         borderRadius: "50%",
-                        background: "transparent",
-                        border: `1.5px solid ${isPlayingThis ? t.accent : `${t.p1}55`}`,
+                        background: isPlayingThis ? `${t.p1}22` : "transparent",
+                        border: `1.5px solid ${isPlayingThis ? t.accent : `${t.p1}44`}`,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                         cursor: locked ? "default" : "pointer",
-                        color: isPlayingThis ? t.accent : "rgba(255,255,255,.55)",
+                        color: isPlayingThis ? t.accent : `${t.p1}cc`,
+                        boxShadow: isPlayingThis ? `0 0 10px ${t.glow}` : "none",
+                        transition: "box-shadow .2s, border-color .2s",
                       }}
                       onClick={() => handleTrack(tr)}
                     >
                       {isPlayingThis ? <I.TrPause /> : <I.TrPlay />}
                     </button>
-                    {!locked ? (
-                      <button
-                        type="button"
-                        style={{
-                          width: 24,
-                          height: 24,
-                          borderRadius: "50%",
-                          background: "transparent",
-                          border: "1px solid rgba(255,255,255,.15)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          cursor: "pointer",
-                          color: "rgba(255,255,255,.4)",
-                        }}
-                        onClick={() => {
-                          setAddTarget(tr);
-                          setSheet("playlist");
-                        }}
-                      >
-                        <I.Plus s={14} />
-                      </button>
-                    ) : null}
                   </div>
                 </div>
               );
@@ -1197,27 +1238,19 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
         </div>
 
         {sheet === "share" ? <ShareSheet title={`Share ${album?.type || "Album"}`} sub={`${album?.title} · ${album?.artist}`} t={t} onClose={() => setSheet(null)} /> : null}
-        {sheet === "more" ? (
+        {sheet === "credits" ? (
           <ViewMoreSheet
-            title={album?.title}
-            sub={`${album?.type || "Album"} · ${album?.artist}`}
+            title="Credits"
+            sub={`${album?.title} · ${album?.artist}`}
             t={t}
             rows={[
               ["RELEASE DATE", album?.year || "—"],
               ["TRACKS", `${tracks.length} tracks`],
               ["FORMAT", "Digital"],
+              ["LABEL", "Kastaweh Records"],
             ]}
             onClose={() => setSheet(null)}
           />
-        ) : null}
-        {sheet === "playlist" ? (
-          <div className="bsheet" style={{ background: t.dark }}>
-            <div className="sheet-hdl" onClick={() => setSheet(null)} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && setSheet(null)} />
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".25em", textTransform: "uppercase", color: "rgba(255,255,255,.3)", padding: "2px 18px 8px" }}>
-              Add &quot;{addTarget?.title}&quot; to playlist
-            </div>
-            <div style={{ padding: "16px 18px 24px", fontSize: 12, color: "rgba(255,255,255,.45)" }}>Playlists open from My Music.</div>
-          </div>
         ) : null}
       </div>
     </div>
