@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
 import AudioVisualsSection from "@/components/home/AudioVisualsSection";
@@ -59,6 +60,7 @@ const HomeStorefront = memo(function HomeStorefront({
   onSelectEvent,
   onOpenCollection,
 }) {
+  const router = useRouter();
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
     logUiHydrationTrace("STORE_FRONT_RENDER", {});
@@ -72,7 +74,7 @@ const HomeStorefront = memo(function HomeStorefront({
           ♥ Donate
         </button>
         {showSubscribeCta && (
-          <button type="button" className="subscribe-shimmer-button" onClick={() => { window.location.href = "/subscribe"; }}>
+          <button type="button" className="subscribe-shimmer-button" onClick={() => router.push("/subscribe")}>
             Subscribe
           </button>
         )}

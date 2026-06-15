@@ -86,6 +86,7 @@ function CoverArt({
         loop
         muted
         playsInline
+        preload="auto"
         className={className}
         {...touchProps}
         style={baseStyle}

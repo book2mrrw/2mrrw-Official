@@ -4323,24 +4323,6 @@ body.is-player-modal-open::before {
 .icon-btn{background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center;transition:transform .1s,opacity .1s;}
 .icon-btn:active{transform:scale(.84);opacity:.6;}
 
-/* My Collection button — page.js inline style overrides this on homepage */
-.my-coll-btn{
-  font-family:'DM Mono',monospace;
-  font-size:9px;font-weight:700;letter-spacing:.12em;
-  color:#d4af37;
-  background:rgba(212,175,55,.1);
-  border:1px solid rgba(212,175,55,.42);
-  border-radius:20px;
-  padding:5px 12px;
-  cursor:pointer;
-  transition:background .2s,color .2s;
-  position:relative;overflow:hidden;
-  animation:goldPulse 2.8s ease-in-out infinite;
-  isolation:isolate;
-}
-.my-coll-btn:hover{background:rgba(212,175,55,.2);color:#ffd700;border-color:rgba(255,215,0,.7);animation-play-state:paused;box-shadow:0 0 28px rgba(212,175,55,.5),inset 0 1px 0 rgba(255,215,0,.12);}
-.my-coll-btn::after{content:"";position:absolute;top:-30%;bottom:-30%;left:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,215,0,.5),rgba(255,240,150,.3),transparent);animation:goldSweep 6.5s ease-in-out infinite;pointer-events:none;}
-
 /* Immersive modal — landscape phone rotation */
 @media screen and (orientation: landscape) and (max-height: 500px) {
   .modal-immersive-shell {

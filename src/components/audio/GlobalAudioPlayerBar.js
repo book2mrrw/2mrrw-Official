@@ -698,6 +698,10 @@ function GlobalAudioPlayerBar() {
 
   const dockCurrentTimeRef = useRef(dockCurrentTime);
   useEffect(() => { dockCurrentTimeRef.current = dockCurrentTime; }, [dockCurrentTime]);
+  const handlePlayToggleRef = useRef(handlePlayToggle);
+  useEffect(() => { handlePlayToggleRef.current = handlePlayToggle; }, [handlePlayToggle]);
+  const handleEngineSeekRef = useRef(handleEngineSeek);
+  useEffect(() => { handleEngineSeekRef.current = handleEngineSeek; }, [handleEngineSeek]);
 
   useEffect(() => {
     if (!hasStarted) return;
@@ -706,18 +710,18 @@ function GlobalAudioPlayerBar() {
       if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
       if (e.key === " " || e.code === "Space") {
         e.preventDefault();
-        handlePlayToggle();
+        handlePlayToggleRef.current();
       } else if (e.key === "ArrowLeft") {
         e.preventDefault();
-        handleEngineSeek(dockCurrentTimeRef.current - 10);
+        handleEngineSeekRef.current(dockCurrentTimeRef.current - 10);
       } else if (e.key === "ArrowRight") {
         e.preventDefault();
-        handleEngineSeek(dockCurrentTimeRef.current + 10);
+        handleEngineSeekRef.current(dockCurrentTimeRef.current + 10);
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [hasStarted, handlePlayToggle, handleEngineSeek]);
+  }, [hasStarted]);
 
   const csOpacity = csMode ? 1 : 0;
   const baseCoverUrl = resolveAbsoluteArtworkUrl(baseCover);
