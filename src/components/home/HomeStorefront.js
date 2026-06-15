@@ -3,6 +3,7 @@
 import { memo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import styles from "./HomeStorefront.module.css";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
 import AudioVisualsSection from "@/components/home/AudioVisualsSection";
 import HomeStorefrontCatalogMedia from "@/components/storefront/HomeStorefrontCatalogMedia";
@@ -70,11 +71,11 @@ const HomeStorefront = memo(function HomeStorefront({
   const storefront = (
     <>
       <div style={{ padding: "18px 0 8px", display: "flex", justifyContent: "flex-start", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-        <button type="button" className="donate-glow-button" onClick={onDonateOpen}>
+        <button type="button" className={styles.donateBtn} onClick={onDonateOpen}>
           ♥ Donate
         </button>
         {showSubscribeCta && (
-          <button type="button" className="subscribe-shimmer-button" onClick={() => router.push("/subscribe")}>
+          <button type="button" className={styles.subscribeBtn} onClick={() => router.push("/subscribe")}>
             Subscribe
           </button>
         )}
@@ -83,7 +84,7 @@ const HomeStorefront = memo(function HomeStorefront({
       <motion.div style={{ marginTop: 20, marginBottom: 4 }}>
         <motion.div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
           <h2 className="section-heading" style={{ margin: 0 }}>Latest Singles</h2>
-          <button type="button" className="my-coll-btn" onClick={onOpenCollection} aria-label="Open my music collection">
+          <button type="button" className={styles.collBtn} onClick={onOpenCollection} aria-label="Open my music collection">
             MY COLLECTION
           </button>
         </motion.div>

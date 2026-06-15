@@ -1,0 +1,150 @@
+@keyframes donateSweep {
+  0%   { transform: translateX(-140%) skewX(-18deg); opacity: 0; }
+  20%  { opacity: 0.65; }
+  52%  { opacity: 0.25; }
+  100% { transform: translateX(190%) skewX(-18deg); opacity: 0; }
+}
+
+@keyframes subscribeSweep {
+  0%   { transform: translateX(-145%) skewX(-18deg); opacity: 0; }
+  18%  { opacity: 0.65; }
+  48%  { opacity: 0.22; }
+  100% { transform: translateX(195%) skewX(-18deg); opacity: 0; }
+}
+
+@keyframes goldPulse {
+  0%, 100% {
+    box-shadow:
+      0 0 8px rgba(212,175,55,0.28),
+      0 0 18px rgba(212,175,55,0.1),
+      inset 0 1px 0 rgba(255,215,0,0.05);
+  }
+  50% {
+    box-shadow:
+      0 0 22px rgba(212,175,55,0.62),
+      0 0 42px rgba(212,175,55,0.24),
+      inset 0 1px 0 rgba(255,215,0,0.12);
+  }
+}
+
+@keyframes goldSweep {
+  0%   { transform: translateX(-140%) skewX(-18deg); opacity: 0; }
+  20%  { opacity: 0.55; }
+  55%  { opacity: 0.2; }
+  100% { transform: translateX(190%) skewX(-18deg); opacity: 0; }
+}
+
+/* ── Donate ── */
+.donateBtn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 10px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  background: rgba(0, 220, 220, 0.08);
+  color: #00e5ff;
+  border: 1px solid rgba(0, 255, 255, 0.38);
+  box-shadow: 0 0 16px rgba(0,255,255,0.12), inset 0 1px 0 rgba(0,255,255,0.06);
+  transition: color 0.2s, border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.donateBtn:hover {
+  color: #00ffff;
+  border-color: rgba(0,255,255,0.62);
+  background: rgba(0,220,220,0.16);
+  box-shadow: 0 0 30px rgba(0,255,255,0.3), inset 0 1px 0 rgba(0,255,255,0.1);
+  transform: translateY(-1px);
+}
+
+.donateBtn::after {
+  content: "";
+  position: absolute;
+  top: -30%; bottom: -30%;
+  left: 0;
+  width: 42%;
+  background: linear-gradient(90deg, transparent, rgba(0,255,255,0.55), rgba(180,255,255,0.32), transparent);
+  animation: donateSweep 5.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── Subscribe ── */
+.subscribeBtn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  padding: 10px 24px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  background: rgba(110, 35, 185, 0.16);
+  color: #dbb8ff;
+  border: 1px solid rgba(162,89,255,0.42);
+  box-shadow: 0 0 24px rgba(162,89,255,0.2), inset 0 1px 0 rgba(255,255,255,0.08);
+  transition: color 0.2s, border-color 0.2s, background 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.subscribeBtn:hover {
+  color: #ede0ff;
+  border-color: rgba(162,89,255,0.72);
+  background: rgba(110,35,185,0.28);
+  box-shadow: 0 0 40px rgba(162,89,255,0.36), inset 0 1px 0 rgba(255,255,255,0.12);
+  transform: translateY(-1px);
+}
+
+.subscribeBtn::after {
+  content: "";
+  position: absolute;
+  top: -32%; bottom: -32%;
+  left: 0;
+  width: 48%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), rgba(180,120,255,0.44), rgba(255,255,255,0.15), transparent);
+  animation: subscribeSweep 5.2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* ── My Collection ── */
+.collBtn {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 5px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  color: #d4af37;
+  background: rgba(212,175,55,0.1);
+  border: 1px solid rgba(212,175,55,0.42);
+  animation: goldPulse 2.8s ease-in-out infinite;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.collBtn:hover {
+  background: rgba(212,175,55,0.2);
+  color: #ffd700;
+  border-color: rgba(255,215,0,0.7);
+  animation-play-state: paused;
+  box-shadow: 0 0 28px rgba(212,175,55,0.5), inset 0 1px 0 rgba(255,215,0,0.12);
+}
+
+.collBtn::after {
+  content: "";
+  position: absolute;
+  top: -30%; bottom: -30%;
+  left: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255,215,0,0.5), rgba(255,240,150,0.3), transparent);
+  animation: goldSweep 6.5s ease-in-out infinite;
+  pointer-events: none;
+}
