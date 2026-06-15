@@ -3346,24 +3346,46 @@ body.is-player-modal-open::before {
   background: #1a1a1a;
 }
 
+@keyframes goldPulse{0%,100%{box-shadow:0 0 8px rgba(212,175,55,.28),0 0 18px rgba(212,175,55,.1),inset 0 1px 0 rgba(255,215,0,.05)}50%{box-shadow:0 0 22px rgba(212,175,55,.62),0 0 42px rgba(212,175,55,.24),inset 0 1px 0 rgba(255,215,0,.12)}}
+@keyframes goldSweep{0%{transform:translateX(-140%) skewX(-18deg);opacity:0}20%{opacity:.55}55%{opacity:.2}100%{transform:translateX(190%) skewX(-18deg);opacity:0}}
+
 /* Homepage collection portal — premium gold beside Latest Singles */
 .my-coll-btn {
   font-family: "DM Mono", monospace;
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.12em;
-  color: #00ffff;
-  background: rgba(0, 255, 255, 0.12);
-  border: 1px solid rgba(0, 255, 255, 0.35);
+  color: #d4af37;
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.42);
   border-radius: 20px;
   padding: 5px 12px;
   cursor: pointer;
-  transition: background 0.2s, box-shadow 0.2s;
+  transition: background 0.2s, color 0.2s;
+  position: relative;
+  overflow: hidden;
+  animation: goldPulse 2.8s ease-in-out infinite;
+  isolation: isolate;
 }
 
 .my-coll-btn:hover {
-  background: rgba(0, 255, 255, 0.18);
-  box-shadow: 0 0 14px rgba(0, 255, 255, 0.2);
+  background: rgba(212, 175, 55, 0.2);
+  color: #ffd700;
+  border-color: rgba(255, 215, 0, 0.7);
+  animation-play-state: paused;
+  box-shadow: 0 0 28px rgba(212, 175, 55, 0.5), inset 0 1px 0 rgba(255, 215, 0, 0.12);
+}
+
+.my-coll-btn::after {
+  content: "";
+  position: absolute;
+  top: -30%;
+  bottom: -30%;
+  left: 0;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.5), rgba(255, 240, 150, 0.3), transparent);
+  animation: goldSweep 6.5s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .collection-portal-link {
@@ -4280,19 +4302,23 @@ body.is-player-modal-open::before {
 .icon-btn{background:none;border:none;cursor:pointer;padding:6px;display:flex;align-items:center;justify-content:center;transition:transform .1s,opacity .1s;}
 .icon-btn:active{transform:scale(.84);opacity:.6;}
 
-/* My Collection button */
+/* My Collection button — page.js inline style overrides this on homepage */
 .my-coll-btn{
   font-family:'DM Mono',monospace;
   font-size:9px;font-weight:700;letter-spacing:.12em;
-  color:#00ffff;
-  background:rgba(0,255,255,.12);
-  border:1px solid rgba(0,255,255,.35);
+  color:#d4af37;
+  background:rgba(212,175,55,.1);
+  border:1px solid rgba(212,175,55,.42);
   border-radius:20px;
   padding:5px 12px;
   cursor:pointer;
-  transition:background .2s,box-shadow .2s;
+  transition:background .2s,color .2s;
+  position:relative;overflow:hidden;
+  animation:goldPulse 2.8s ease-in-out infinite;
+  isolation:isolate;
 }
-.my-coll-btn:hover{background:rgba(0,255,255,.18);box-shadow:0 0 14px rgba(0,255,255,.2);}
+.my-coll-btn:hover{background:rgba(212,175,55,.2);color:#ffd700;border-color:rgba(255,215,0,.7);animation-play-state:paused;box-shadow:0 0 28px rgba(212,175,55,.5),inset 0 1px 0 rgba(255,215,0,.12);}
+.my-coll-btn::after{content:"";position:absolute;top:-30%;bottom:-30%;left:0;width:40%;background:linear-gradient(90deg,transparent,rgba(255,215,0,.5),rgba(255,240,150,.3),transparent);animation:goldSweep 6.5s ease-in-out infinite;pointer-events:none;}
 
 /* Immersive modal — landscape phone rotation */
 @media screen and (orientation: landscape) and (max-height: 500px) {
