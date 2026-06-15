@@ -107,16 +107,16 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         touchAction: "manipulation",
       }}
     >
-      <span
-        style={{
-          color: "#00ffff",
-          fontSize: showPause ? 13 : 16,
-          lineHeight: 1,
-          letterSpacing: showPause ? 2 : 0,
-        }}
-      >
-        {showPause ? "❙❙" : "▶"}
-      </span>
+      {showPause ? (
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+          <rect x="2" y="1.5" width="3.5" height="11" rx="1.2" fill="#00ffff" />
+          <rect x="8.5" y="1.5" width="3.5" height="11" rx="1.2" fill="#00ffff" />
+        </svg>
+      ) : (
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden style={{ marginLeft: 2 }}>
+          <path d="M3 1.5L13 7L3 12.5V1.5Z" fill="#00ffff" />
+        </svg>
+      )}
     </button>
   );
 }
