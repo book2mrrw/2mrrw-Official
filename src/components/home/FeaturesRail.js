@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useEffect, useRef } from "react";
+import { memo, useMemo, useEffect, useRef, useState } from "react";
 import { useMountEnterAnimation } from "@/hooks/useMountEnterAnimation";
 import {
   isUiHydrationTraceEnabled,
@@ -32,6 +32,7 @@ const FeatureCard = memo(function FeatureCard({
   const showPlayActions = itemHasPlayableAudio(mediaItem, access);
   const coverDisplay = useMemo(() => catalogCoverDisplay(mediaItem), [mediaItem]);
   const videoRef = useRef(null);
+  const [videoFailed, setVideoFailed] = useState(false);
   const { shouldAnimate } = useMountEnterAnimation();
 
   return (
@@ -68,7 +69,7 @@ const FeatureCard = memo(function FeatureCard({
         }}
         style={{ cursor: "pointer" }}
       >
-        {(mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video" ? (
+        {!videoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video" ? (
           <video
             ref={videoRef}
             src={mediaItem?.video || mediaItem?.visual || undefined}
@@ -79,6 +80,7 @@ const FeatureCard = memo(function FeatureCard({
             playsInline
             preload="auto"
             webkit-playsinline="true"
+            onError={() => setVideoFailed(true)}
             style={{
               backgroundColor: "#0a0a0a",
               width: "100%",

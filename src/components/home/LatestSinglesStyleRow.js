@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, memo, useMemo, useEffect, useRef } from "react";
+import { forwardRef, memo, useMemo, useEffect, useRef, useState } from "react";
 import { useMountEnterAnimation } from "@/hooks/useMountEnterAnimation";
 import {
   isUiHydrationTraceEnabled,
@@ -25,6 +25,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
 }) {
   const videoRef = useRef(null);
   const assignedSrc = cardMedia === "video" ? mediaItem?.video || null : null;
+  const [coverVideoFailed, setCoverVideoFailed] = useState(false);
 
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
@@ -86,7 +87,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
     );
   }
 
-  if ((mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video") {
+  if (!coverVideoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video") {
     const coverVideoSrc = mediaItem?.video || mediaItem?.visual || null;
     return (
       <video
@@ -99,6 +100,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
         playsInline
         preload="auto"
         webkit-playsinline="true"
+        onError={() => setCoverVideoFailed(true)}
         style={{
           backgroundColor: "#0a0a0a",
           width: "100%",
