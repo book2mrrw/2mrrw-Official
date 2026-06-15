@@ -132,22 +132,35 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
     );
   }
 
-  if (!force) {
-    const active = await findActiveStreamSession(admin, user.id, productId);
-    if (active?.session_id) {
+  const redirect = req.nextUrl.searchParams.get("redirect") === "1";
+  // Range requests on the redirect path are byte-range continuations from the audio element.
+  // Auth + entitlement already passed above. Skip session CRUD (3-4 DB writes) so seeking
+  // doesn't incur 200-400 ms of DB overhead per request.
+  const rangeHeader = req.headers.get("range") || req.headers.get("Range");
+  const isStreamContinuation = redirect && Boolean(rangeHeader);
+
+  if (!isStreamContinuation) {
+    if (!force) {
+      const active = await findActiveStreamSession(admin, user.id, productId);
+      if (active?.session_id) {
+        await clearStreamSessionsForUserProduct(admin, user.id, productId);
+      }
+    } else {
       await clearStreamSessionsForUserProduct(admin, user.id, productId);
-    }
-  } else {
-    await clearStreamSessionsForUserProduct(admin, user.id, productId);
-    if (process.env.NODE_ENV === "development") {
-      clearMediaResolverCaches();
+      if (process.env.NODE_ENV === "development") {
+        clearMediaResolverCaches();
+      }
     }
   }
   timing?.mark("session");
 
   logStreamR2Env("signing");
-  const sessionId = await createStreamSession(admin, user.id, productId);
-  const streamEventId = await insertStreamEvent(admin, user.id, productId);
+  let sessionId = null;
+  let streamEventId = null;
+  if (!isStreamContinuation) {
+    sessionId = await createStreamSession(admin, user.id, productId);
+    streamEventId = await insertStreamEvent(admin, user.id, productId);
+  }
 
   const { url, cacheHit } = await getOrCreateStreamSignedUrl(user.id, slug, () =>
     createR2SignedGetUrl(resolved.key, STREAM_SIGNED_URL_TTL_SECONDS),
@@ -155,7 +168,6 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
   );
   timing?.mark("sign", cacheHit ? "cache_hit" : undefined);
 
-  const redirect = req.nextUrl.searchParams.get("redirect") === "1";
   if (redirect) {
     const proxied = await proxySignedR2Get(req, url, { timing });
     return applyResolverDiagnosticsHeaders(proxied, resolved);

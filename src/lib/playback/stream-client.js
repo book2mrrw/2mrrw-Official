@@ -257,11 +257,17 @@ export async function fetchLibraryStream(
     });
   }
   perfMark(MARKS.PLAYBACK_RESOLVER_END);
-  const contentType = await assertSignedAudioUrl(body.url, {
-    slug,
-    signal,
-    sessionId: body.sessionId || sessionId || null,
-  });
+  // Same-origin proxy URLs (/api/library/stream?redirect=1) always return audio — skip HEAD
+  // validation for them. assertSignedAudioUrl was designed for direct signed R2 URLs; calling
+  // it with a proxy URL makes a redundant authenticated request that creates an extra session.
+  let contentType = "audio/mpeg";
+  if (!isLibraryStreamSrc(body.url)) {
+    contentType = await assertSignedAudioUrl(body.url, {
+      slug,
+      signal,
+      sessionId: body.sessionId || sessionId || null,
+    });
+  }
   perfMark(MARKS.PLAYBACK_SIGNED_URL);
   logStreamLifecycle("ready", {
     source: "stream-client",

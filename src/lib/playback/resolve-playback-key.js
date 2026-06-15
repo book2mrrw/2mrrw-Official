@@ -160,7 +160,12 @@ export async function resolvePlaybackKey(admin, productSlug, options = {}) {
 
   const promise = resolvePlaybackKeyUncached(admin, slug, trackSlug)
     .then((value) => {
-      playbackKeyCache.set(cacheKey, { value, expiresAt: now + PLAYBACK_KEY_TTL_MS });
+      // Only cache successful results — a null (no audio key found) should not block
+      // the next attempt. Transient R2 listing failures or DB misses shouldn't lock
+      // users out for 60 seconds.
+      if (value !== null) {
+        playbackKeyCache.set(cacheKey, { value, expiresAt: now + PLAYBACK_KEY_TTL_MS });
+      }
       playbackKeyInflight.delete(cacheKey);
       return value;
     })
