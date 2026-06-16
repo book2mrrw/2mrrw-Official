@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanStreamProduct } from "@/lib/commerce/entitlements";
@@ -139,33 +139,54 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
   const rangeHeader = req.headers.get("range") || req.headers.get("Range");
   const isStreamContinuation = redirect && Boolean(rangeHeader);
 
+  // Signing has no data dependency on session bookkeeping below — start it now so
+  // both run concurrently instead of stacking onto the critical path before audio.
+  logStreamR2Env("signing");
+  const signedUrlPromise = getOrCreateStreamSignedUrl(user.id, slug, () =>
+    createR2SignedGetUrl(resolved.key, STREAM_SIGNED_URL_TTL_SECONDS),
+    trackSlug || null
+  );
+
+  let sessionId = null;
+  let streamEventId = null;
   if (!isStreamContinuation) {
-    if (!force) {
-      const active = await findActiveStreamSession(admin, user.id, productId);
-      if (active?.session_id) {
+    const runSessionBookkeeping = async () => {
+      if (!force) {
+        const active = await findActiveStreamSession(admin, user.id, productId);
+        if (active?.session_id) {
+          await clearStreamSessionsForUserProduct(admin, user.id, productId);
+        }
+      } else {
         await clearStreamSessionsForUserProduct(admin, user.id, productId);
+        if (process.env.NODE_ENV === "development") {
+          clearMediaResolverCaches();
+        }
       }
+      const [newSessionId, newStreamEventId] = await Promise.all([
+        createStreamSession(admin, user.id, productId),
+        insertStreamEvent(admin, user.id, productId),
+      ]);
+      return { sessionId: newSessionId, streamEventId: newStreamEventId };
+    };
+
+    if (redirect) {
+      // The audio-proxy response below never reads sessionId/streamEventId — let
+      // bookkeeping finish after the response via Next's `after()` instead of
+      // blocking the first audible byte on 3-4 sequential DB round trips.
+      after(() =>
+        runSessionBookkeeping().catch((err) => {
+          console.error("[library/stream] session bookkeeping failed", { slug, message: err?.message });
+        })
+      );
     } else {
-      await clearStreamSessionsForUserProduct(admin, user.id, productId);
-      if (process.env.NODE_ENV === "development") {
-        clearMediaResolverCaches();
-      }
+      const result = await runSessionBookkeeping();
+      sessionId = result.sessionId;
+      streamEventId = result.streamEventId;
     }
   }
   timing?.mark("session");
 
-  logStreamR2Env("signing");
-  let sessionId = null;
-  let streamEventId = null;
-  if (!isStreamContinuation) {
-    sessionId = await createStreamSession(admin, user.id, productId);
-    streamEventId = await insertStreamEvent(admin, user.id, productId);
-  }
-
-  const { url, cacheHit } = await getOrCreateStreamSignedUrl(user.id, slug, () =>
-    createR2SignedGetUrl(resolved.key, STREAM_SIGNED_URL_TTL_SECONDS),
-    trackSlug || null
-  );
+  const { url, cacheHit } = await signedUrlPromise;
   timing?.mark("sign", cacheHit ? "cache_hit" : undefined);
 
   if (redirect) {
