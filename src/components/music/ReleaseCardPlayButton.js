@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { usePlaybackIdentity } from "@/context/AudioContext";
 import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
-import { toPlaybackTrack } from "@/lib/music-playback";
+import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
 import { resolveTrackAccess } from "@/lib/music-access";
 import { getPlaybackPrewarmEntry, playbackPrewarmKeyForItem } from "@/lib/playback/playback-prewarm-cache";
 import { preloadTrack } from "@/media/preloader/MediaPreloader";
@@ -61,9 +61,11 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         return;
       }
       if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
-      void bridge?.playQueue?.([track], 0);
+      const { startTrack, needsUpgrade } = toInstantStartTrack(track);
+      void bridge?.playQueue?.([startTrack], 0);
       const needsPreviewUpgrade =
-        track.metadata?.access?.canStream && track.metadata?.access?.previewOnly;
+        needsUpgrade ||
+        (track.metadata?.access?.canStream && track.metadata?.access?.previewOnly);
       if (needsPreviewUpgrade) {
         upgradeTimerRef.current = setTimeout(() => {
           void bridge?.dispatchPlaybackCommand?.("upgradeStream");

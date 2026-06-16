@@ -68,6 +68,7 @@ import {
   normalizeTrackForPlayback,
   resolveCatalogPlaybackItem,
   toPlaybackTrack,
+  toInstantStartTrack,
 } from "@/lib/music-playback";
 import { usePagePlaybackActions } from "@/hooks/usePagePlaybackActions";
 import { dismissNowPlayingFromBridge } from "@/lib/playback/page-playback-actions-bridge";
@@ -386,6 +387,7 @@ function PageStorefront() {
   const singlesRowRef      = useRef(null);
   const heroContainerRef   = useRef(null);
   const heroVideoRef       = useRef(null);
+  const instantUpgradeTimerRef = useRef(null);
   const heroTextRef        = useRef(null);
   const heroSocialsRef     = useRef(null);
   const isMobileRef        = useRef(false);
@@ -771,6 +773,20 @@ function PageStorefront() {
     }
   }, [activeTab]);
 
+  // Entitled full-stream tracks resolve to a signed URL that needs a network round trip;
+  // start from the (already-known, near-instant) preview and swap in the full stream a
+  // moment later via the existing upgradeStream command, matching Spotify/Apple-level feel.
+  const scheduleInstantStreamUpgrade = useCallback(() => {
+    if (instantUpgradeTimerRef.current) clearTimeout(instantUpgradeTimerRef.current);
+    instantUpgradeTimerRef.current = setTimeout(() => {
+      void getPagePlaybackActionsBridge()?.dispatchPlaybackCommand?.("upgradeStream");
+    }, 2000);
+  }, []);
+
+  useEffect(() => () => {
+    if (instantUpgradeTimerRef.current) clearTimeout(instantUpgradeTimerRef.current);
+  }, []);
+
   const playAlbumTracks = useCallback(
     async (album, startIndex = 0) => {
       const auth = getPageAuthRef();
@@ -787,8 +803,13 @@ function PageStorefront() {
       if (playable.length) {
         const sourceTrack = tracks[startIndex];
         const queueIndex = resolveReleaseQueueStartIndex(playable, startIndex, sourceTrack);
+        const { startTrack, needsUpgrade } = toInstantStartTrack(playable[queueIndex]);
+        const instantQueue = needsUpgrade
+          ? playable.map((t, i) => (i === queueIndex ? startTrack : t))
+          : playable;
         try {
-          const result = await playQueue(playable, queueIndex);
+          const result = await playQueue(instantQueue, queueIndex);
+          if (needsUpgrade) scheduleInstantStreamUpgrade();
           return result !== false;
         } catch {
           return false;
@@ -805,7 +826,7 @@ function PageStorefront() {
         return false;
       }
     },
-    [playQueue, playTrack]
+    [playQueue, playTrack, scheduleInstantStreamUpgrade]
   );
 
   const playMixtapeEpCard = useCallback(
@@ -839,7 +860,11 @@ function PageStorefront() {
     if (isSameTrack) {
       if (bridge?.playbackState === "idle") {
         const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_single_card");
-        if (track?.src) void bridge?.playQueue?.([track], 0, { autoAdvance: false });
+        if (track?.src) {
+          const { startTrack, needsUpgrade } = toInstantStartTrack(track);
+          void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false });
+          if (needsUpgrade) scheduleInstantStreamUpgrade();
+        }
       } else {
         void bridge?.toggle?.();
       }
@@ -850,14 +875,25 @@ function PageStorefront() {
     const streamable = allSingles.filter((item) => resolveTrackAccess(item, account).canStream);
     if (!streamable.length) {
       const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_single_card");
-      if (track?.src) void bridge?.playQueue?.([track], 0, { autoAdvance: false });
+      if (track?.src) {
+        const { startTrack, needsUpgrade } = toInstantStartTrack(track);
+        void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false });
+        if (needsUpgrade) scheduleInstantStreamUpgrade();
+      }
       return;
     }
     const idx = Math.max(0, streamable.findIndex((s) => s.slug === clickedItem.slug));
     const tracks = streamable
       .map((item) => toPlaybackTrack(withR2CatalogMedia(item), account, "home_single_card"))
       .filter((t) => t?.src);
-    if (tracks.length) void bridge?.playQueue?.(tracks, idx, { autoAdvance: false });
+    if (tracks.length) {
+      const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[idx]);
+      const instantTracks = needsUpgrade
+        ? tracks.map((t, i) => (i === idx ? startTrack : t))
+        : tracks;
+      void bridge?.playQueue?.(instantTracks, idx, { autoAdvance: false });
+      if (needsUpgrade) scheduleInstantStreamUpgrade();
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const playFeaturesQueue = useCallback((e, clickedItem) => {
@@ -871,7 +907,11 @@ function PageStorefront() {
     if (isSameTrack) {
       if (bridge?.playbackState === "idle") {
         const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_feature_card");
-        if (track?.src) void bridge?.playQueue?.([track], 0, { autoAdvance: false });
+        if (track?.src) {
+          const { startTrack, needsUpgrade } = toInstantStartTrack(track);
+          void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false });
+          if (needsUpgrade) scheduleInstantStreamUpgrade();
+        }
       } else {
         void bridge?.toggle?.();
       }
@@ -882,14 +922,25 @@ function PageStorefront() {
     const streamable = allFeatures.filter((item) => resolveTrackAccess(item, account).canStream);
     if (!streamable.length) {
       const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_feature_card");
-      if (track?.src) void bridge?.playQueue?.([track], 0, { autoAdvance: false });
+      if (track?.src) {
+        const { startTrack, needsUpgrade } = toInstantStartTrack(track);
+        void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false });
+        if (needsUpgrade) scheduleInstantStreamUpgrade();
+      }
       return;
     }
     const idx = Math.max(0, streamable.findIndex((s) => s.slug === clickedItem.slug));
     const tracks = streamable
       .map((item) => toPlaybackTrack(withR2CatalogMedia(item), account, "home_feature_card"))
       .filter((t) => t?.src);
-    if (tracks.length) void bridge?.playQueue?.(tracks, idx, { autoAdvance: false });
+    if (tracks.length) {
+      const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[idx]);
+      const instantTracks = needsUpgrade
+        ? tracks.map((t, i) => (i === idx ? startTrack : t))
+        : tracks;
+      void bridge?.playQueue?.(instantTracks, idx, { autoAdvance: false });
+      if (needsUpgrade) scheduleInstantStreamUpgrade();
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const playCanonicalCatalogItem = useCallback((item, source) => {

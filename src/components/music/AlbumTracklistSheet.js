@@ -8,6 +8,7 @@ import {
   isSamePlaybackTrack,
   playableReleaseQueue,
   resolveReleaseQueueStartIndex,
+  toInstantStartTrack,
 } from "@/lib/music-playback";
 import { resolveTrackAccess } from "@/lib/music-access";
 import { useAudioPlayer } from "@/context/AudioContext";
@@ -49,6 +50,18 @@ export default function AlbumTracklistSheet({
   const dragY = useMotionValue(0);
   const sheetOpacity = useTransform(dragY, [0, 120], [1, 0.55]);
   const dismissTriggered = useRef(false);
+  const upgradeTimerRef = useRef(null);
+
+  useEffect(() => () => {
+    if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
+  }, []);
+
+  const scheduleInstantStreamUpgrade = useCallback(() => {
+    if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
+    upgradeTimerRef.current = setTimeout(() => {
+      void dispatchPlaybackCommand("upgradeStream");
+    }, 2000);
+  }, [dispatchPlaybackCommand]);
 
   const tracks = useMemo(
     () =>
@@ -84,9 +97,14 @@ export default function AlbumTracklistSheet({
       setShuffle(false);
       const sourceTrack = tracks[releaseTrackIndex];
       const queueIndex = resolveReleaseQueueStartIndex(playable, releaseTrackIndex, sourceTrack);
-      void dispatchPlaybackCommand("playQueue", { tracks: playable, startIndex: queueIndex });
+      const { startTrack, needsUpgrade } = toInstantStartTrack(playable[queueIndex]);
+      const instantQueue = needsUpgrade
+        ? playable.map((t, i) => (i === queueIndex ? startTrack : t))
+        : playable;
+      void dispatchPlaybackCommand("playQueue", { tracks: instantQueue, startIndex: queueIndex });
+      if (needsUpgrade) scheduleInstantStreamUpgrade();
     },
-    [tracks, accountState, userId, dispatchPlaybackCommand, setShuffle]
+    [tracks, accountState, userId, dispatchPlaybackCommand, setShuffle, scheduleInstantStreamUpgrade]
   );
 
   // Play All / Shuffle close the sheet after queuing.
@@ -97,14 +115,20 @@ export default function AlbumTracklistSheet({
       if (shuffle) {
         setShuffle(true);
         const order = [...playable].sort(() => Math.random() - 0.5);
-        void dispatchPlaybackCommand("playQueue", { tracks: order, startIndex: 0 });
+        const { startTrack, needsUpgrade } = toInstantStartTrack(order[0]);
+        const instantOrder = needsUpgrade ? [startTrack, ...order.slice(1)] : order;
+        void dispatchPlaybackCommand("playQueue", { tracks: instantOrder, startIndex: 0 });
+        if (needsUpgrade) scheduleInstantStreamUpgrade();
       } else {
         setShuffle(false);
-        void dispatchPlaybackCommand("playQueue", { tracks: playable, startIndex: 0 });
+        const { startTrack, needsUpgrade } = toInstantStartTrack(playable[0]);
+        const instantPlayable = needsUpgrade ? [startTrack, ...playable.slice(1)] : playable;
+        void dispatchPlaybackCommand("playQueue", { tracks: instantPlayable, startIndex: 0 });
+        if (needsUpgrade) scheduleInstantStreamUpgrade();
       }
       onClose?.();
     },
-    [tracks, accountState, userId, dispatchPlaybackCommand, setShuffle, onClose]
+    [tracks, accountState, userId, dispatchPlaybackCommand, setShuffle, onClose, scheduleInstantStreamUpgrade]
   );
 
   const isTrackActive = useCallback(

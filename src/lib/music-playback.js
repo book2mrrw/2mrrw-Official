@@ -252,6 +252,22 @@ export function toPlaybackTrack(item, accountState, source = "library", override
   return normalizeTrackForPlayback(item, accountState, source, overrides);
 }
 
+/**
+ * Entitled full-stream tracks resolve to the signed /api/library/stream proxy, which
+ * needs a network round trip before the first audible byte. Start from the (already
+ * public, near-instant) preview instead and let AudioContext's existing upgradeStream
+ * swap in the full stream moments later — same trick already used for previewOnly users.
+ * @returns {{ startTrack: object, needsUpgrade: boolean }}
+ */
+export function toInstantStartTrack(track) {
+  const previewSrc = track?.metadata?.previewSrc;
+  const isLibraryStream = /^\/api\/library\/stream/.test(track?.src || "");
+  if (!track || !isLibraryStream || !previewSrc || previewSrc === track.src) {
+    return { startTrack: track, needsUpgrade: false };
+  }
+  return { startTrack: { ...track, src: previewSrc }, needsUpgrade: true };
+}
+
 /** First-track catalog item for inline album card play — matches modal start index 0. */
 export function albumCardPlaybackItem(album, catalogLookup) {
   if (!album) return album;
