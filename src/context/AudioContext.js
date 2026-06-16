@@ -4381,6 +4381,10 @@ export function AudioProvider({ children }) {
         });
         return true;
       }
+      const preloadEl = streamSwapPreloadRef.current;
+      if (preloadEl) {
+        await warmupSignedStreamPreload(preloadEl, resolved.track.src, { timeoutMs: 2500 });
+      }
       const resumeAt = audio.currentTime || 0;
       skipPauseInterruptionRef.current = true;
       patchState({ playbackNetworkState: "loading_stream" });

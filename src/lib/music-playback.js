@@ -3,6 +3,7 @@ import { resolveContentAccess, resolvePlaybackSrc, resolveTrackAccess } from "@/
 import {
   getCanonicalReleaseBySlug,
   getCanonicalTrack,
+  getCanonicalTracksForAlbum,
   mergeCanonicalMetadata,
 } from "@/lib/media/canonical-catalog";
 import { getCachedAvailability } from "@/lib/media/availability-cache";
@@ -337,7 +338,11 @@ export function getPlayButtonState(track, accountState) {
 
 /** Map every release track in catalog order — full tracklist for queue construction and UI. */
 export function mapAlbumTracksForPlayback(album, accountState, source = "album", catalogLookup) {
-  const trackList = album?.tracks || album?.trackTitles || [];
+  let trackList = album?.tracks || album?.trackTitles || [];
+  if (!trackList.length && album?.slug) {
+    const canonical = getCanonicalTracksForAlbum(album.slug);
+    if (canonical.length) trackList = canonical;
+  }
   const albumSlug = album?.slug || "";
   return trackList.map((track, index) => {
     const trackSlug =
