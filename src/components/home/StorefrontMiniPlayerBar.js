@@ -42,6 +42,7 @@ function CtrlBtn({ onClick, title, children, active, size = 30 }) {
         color: active ? "#00ffff" : "#777",
         flexShrink: 0,
         padding: 0,
+        touchAction: "manipulation",
       }}
     >
       {children}
@@ -130,7 +131,7 @@ const StorefrontMiniPlayerBar = memo(function StorefrontMiniPlayerBar({
           </CtrlBtn>
           <button
             onClick={onToggle}
-            style={{ width: 36, height: 36, borderRadius: "50%", background: "#00ffff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+            style={{ width: 36, height: 36, borderRadius: "50%", background: "#00ffff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, touchAction: "manipulation" }}
           >
             <svg viewBox="0 0 24 24" fill="#000" width="14" height="14">
               <path d={isPlaying ? ICON_PAUSE : ICON_PLAY} style={isPlaying ? undefined : { marginLeft: 2 }} />
@@ -170,7 +171,7 @@ const StorefrontMiniPlayerBar = memo(function StorefrontMiniPlayerBar({
         </CtrlBtn>
         <button
           onClick={onToggle}
-          style={{ width: 36, height: 36, borderRadius: "50%", background: "#00ffff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+          style={{ width: 36, height: 36, borderRadius: "50%", background: "#00ffff", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, touchAction: "manipulation" }}
         >
           <svg viewBox="0 0 24 24" fill="#000" width="14" height="14">
             <path d={isPlaying ? ICON_PAUSE : ICON_PLAY} style={isPlaying ? undefined : { marginLeft: 2 }} />
