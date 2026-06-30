@@ -16,6 +16,11 @@ export async function getFanSessionUser() {
       .eq("id", user.id)
       .maybeSingle();
 
+    const metaRole =
+      user.app_metadata?.role ||
+      user.user_metadata?.role ||
+      null;
+
     return {
       id: user.id,
       email: profile?.email || user.email,
@@ -24,7 +29,7 @@ export async function getFanSessionUser() {
       name: profile?.full_name || "",
       isGuest: false,
       isOtp: true,
-      role: profile?.role || "user",
+      role: profile?.role || metaRole || "user",
     };
   }
 

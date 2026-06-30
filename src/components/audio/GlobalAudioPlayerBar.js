@@ -883,7 +883,7 @@ function GlobalAudioPlayerBar() {
           data-playback-orchestration={playbackOrchestrationState}
         />
       )}
-      {playbackState === "ended_preview" && dockCurrentTrack ? (
+      {playbackState === "ended_preview" && dockCurrentTrack && !entitlementAccountState?.permissions?.admin ? (
         <div className="player-preview-ended-cta">
           <span className="player-preview-ended-label">PREVIEW ENDED</span>
           <Link href={`/?track=${encodeURIComponent(dockCurrentTrack.slug)}&buy=1`} className="player-preview-ended-buy">
