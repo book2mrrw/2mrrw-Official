@@ -29,7 +29,7 @@ export async function getFanSessionUser() {
       name: profile?.full_name || "",
       isGuest: false,
       isOtp: true,
-      role: profile?.role || metaRole || "user",
+      role: [profile?.role, metaRole].find((r) => r === "admin") ?? profile?.role ?? "user",
     };
   }
 

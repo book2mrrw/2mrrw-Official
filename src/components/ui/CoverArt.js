@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect } from "react";
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import { imagePipeline } from "@/media/imagePipeline";
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
 import ArtworkSkeleton from "@/ui/skeletons/ArtworkSkeleton";
@@ -79,19 +79,7 @@ function CoverArt({
   const touchProps = { onClick, onTouchStart, onTouchEnd };
 
   if (mediaType === "video") {
-    return (
-      <video
-        src={src}
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="auto"
-        className={className}
-        {...touchProps}
-        style={baseStyle}
-      />
-    );
+    return <VideoArt src={src} className={className} touchProps={touchProps} baseStyle={baseStyle} />;
   }
 
   return (
@@ -100,6 +88,33 @@ function CoverArt({
       alt={alt}
       decoding="async"
       draggable={false}
+      className={className}
+      {...touchProps}
+      style={baseStyle}
+    />
+  );
+}
+
+function VideoArt({ src, className, touchProps, baseStyle }) {
+  const videoRef = useRef(null);
+  const prevSrcRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const el = videoRef.current;
+    if (!el || src === prevSrcRef.current) return;
+    prevSrcRef.current = src;
+    el.src = src;
+    el.load();
+  }, [src]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="auto"
       className={className}
       {...touchProps}
       style={baseStyle}

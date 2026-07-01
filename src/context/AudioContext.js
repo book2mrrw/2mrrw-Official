@@ -2488,7 +2488,9 @@ export function AudioProvider({ children }) {
       if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = setTimeout(() => {
         bufferShowTimerRef.current = null;
-        patchState({ isBuffering: true, playbackNetworkState: "buffering" });
+        const el = audioRef.current;
+        const networkState = el && !el.played?.length ? "loading_stream" : "buffering";
+        patchState({ isBuffering: true, playbackNetworkState: networkState });
       }, 500);
     };
     const onStalled = () => {
@@ -2496,7 +2498,9 @@ export function AudioProvider({ children }) {
       if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = setTimeout(() => {
         bufferShowTimerRef.current = null;
-        patchState({ isBuffering: true, playbackNetworkState: "buffering" });
+        const el = audioRef.current;
+        const networkState = el && !el.played?.length ? "loading_stream" : "buffering";
+        patchState({ isBuffering: true, playbackNetworkState: networkState });
       }, 500);
     };
     const onPlaying = () => {
@@ -4325,7 +4329,7 @@ export function AudioProvider({ children }) {
     const audio = audioRef.current;
     const track = stateRef.current.currentTrack;
     if (!audio || !track?.slug) return false;
-    const serverUserId = entitlementAccountState?.user?.id;
+    const serverUserId = entitlementAccountStateRef.current?.user?.id;
     const clientUserId = listeningUserIdRef.current;
     if (!serverUserId || !clientUserId || serverUserId !== clientUserId) {
       return false;
@@ -4452,7 +4456,6 @@ export function AudioProvider({ children }) {
   }, [
     patchState,
     resolveLibraryStreamForTrack,
-    entitlementAccountState?.user?.id,
     logDirectInternalCallViolation,
     tracePlayback,
   ]);
@@ -7200,6 +7203,19 @@ export function AudioProvider({ children }) {
   useEffect(() => () => {
     stopProgressRaf();
     stopKeepAlivePing();
+    stopPositionSaveTimer();
+    if (swellIntervalRef.current) {
+      cancelAnimationFrame(swellIntervalRef.current);
+      swellIntervalRef.current = null;
+    }
+    if (nextTrackPreloadRef.current) {
+      nextTrackPreloadRef.current.src = "";
+      nextTrackPreloadRef.current.load();
+    }
+    if (streamSwapPreloadRef.current) {
+      streamSwapPreloadRef.current.src = "";
+      streamSwapPreloadRef.current.load();
+    }
     if (queueWatchdogRef.current) {
       clearTimeout(queueWatchdogRef.current);
       queueWatchdogRef.current = null;
@@ -7208,7 +7224,7 @@ export function AudioProvider({ children }) {
       activeStreamAbortRef.current.abort();
       activeStreamAbortRef.current = null;
     }
-  }, [stopProgressRaf, stopKeepAlivePing]);
+  }, [stopProgressRaf, stopKeepAlivePing, stopPositionSaveTimer]);
 
   if (isPlaybackTraceEnabled()) {
     renderCountRef.current += 1;
