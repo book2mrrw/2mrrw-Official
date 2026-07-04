@@ -951,9 +951,11 @@ function PageStorefront() {
       source
     );
     if (playbackTrack?.src) {
-      void playTrack(playbackTrack);
+      const { startTrack, needsUpgrade } = toInstantStartTrack(playbackTrack);
+      void getPagePlaybackActionsBridge()?.playQueue?.([startTrack], 0);
+      if (needsUpgrade) scheduleInstantStreamUpgrade();
     }
-  }, [playTrack]);
+  }, [scheduleInstantStreamUpgrade]);
 
   const goRadio = useCallback((i) => {
     // phase11: startTransition — carousel index is non-urgent

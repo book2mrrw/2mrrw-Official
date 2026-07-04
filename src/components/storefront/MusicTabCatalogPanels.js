@@ -8,7 +8,7 @@ import AudioVisualsSection from "@/components/home/AudioVisualsSection";
 import MyMusicTab from "@/components/music/MyMusicTab";
 import { useCatalogSurface } from "@/components/storefront/catalog-surface-context";
 import { resolveContentAccess, resolveTrackAccess } from "@/lib/music-access";
-import { resolveCatalogPlaybackItem, toPlaybackTrack } from "@/lib/music-playback";
+import { resolveCatalogPlaybackItem, toInstantStartTrack, toPlaybackTrack } from "@/lib/music-playback";
 import { withR2CatalogMedia } from "@/components/home/catalogMedia";
 import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 
@@ -55,7 +55,11 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
     if (isSameTrack) {
       if (bridge?.playbackState === "idle") {
         const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "feature_card");
-        if (track.src) void bridge?.playQueue?.([track], 0, { autoAdvance: false });
+        const { startTrack, needsUpgrade } = toInstantStartTrack(track);
+        if (track.src) {
+          void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false });
+          if (needsUpgrade) setTimeout(() => void bridge?.dispatchPlaybackCommand?.("upgradeStream"), 2000);
+        }
       } else {
         void bridge?.toggle?.();
       }
@@ -67,14 +71,23 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
     );
     if (!streamable.length) {
       const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "feature_card");
-      if (track.src) void bridge?.playQueue?.([track], 0, { autoAdvance: false });
+      const { startTrack, needsUpgrade } = toInstantStartTrack(track);
+      if (track.src) {
+        void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false });
+        if (needsUpgrade) setTimeout(() => void bridge?.dispatchPlaybackCommand?.("upgradeStream"), 2000);
+      }
       return;
     }
     const idx = Math.max(0, streamable.findIndex((s) => s.slug === clickedItem.slug));
     const tracks = streamable
       .map((item) => toPlaybackTrack(withR2CatalogMedia(item), account, "feature_card"))
       .filter((t) => t.src);
-    if (tracks.length) void bridge?.playQueue?.(tracks, idx, { autoAdvance: false });
+    if (tracks.length) {
+      const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[idx]);
+      const instantTracks = needsUpgrade ? tracks.map((t, i) => (i === idx ? startTrack : t)) : tracks;
+      void bridge?.playQueue?.(instantTracks, idx, { autoAdvance: false });
+      if (needsUpgrade) setTimeout(() => void bridge?.dispatchPlaybackCommand?.("upgradeStream"), 2000);
+    }
   }, [displayFeatures, entitlementAccountState, userId]);
 
   const prevSingle = useCallback(

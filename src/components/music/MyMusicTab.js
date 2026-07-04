@@ -6,7 +6,7 @@ import { useAudioPlayer } from "@/context/AudioContext";
 import { useMusicLibrary } from "@/hooks/useMusicLibrary";
 import { membershipHasPremiumAccess } from "@/lib/commerce/entitlements";
 import { resolveContentAccess, resolveTrackAccess } from "@/lib/music-access";
-import { albumTracksForPlayback, playableReleaseQueue, toPlaybackTrack } from "@/lib/music-playback";
+import { albumTracksForPlayback, playableReleaseQueue, toInstantStartTrack, toPlaybackTrack } from "@/lib/music-playback";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import PlaylistSection from "@/components/music/PlaylistSection";
@@ -608,7 +608,7 @@ function MyMusicTab({
   const activeContinue = continueListening || lastPlayed;
   const activeRecentlyPlayed = recentlyPlayedRail.length ? recentlyPlayedRail : recentlyPlayed;
 
-  const { playTrack, playQueue, resume, setShuffle, currentTrack, isPlaying, toggle, enqueueTrack } = useAudioPlayer();
+  const { playTrack, playQueue, resume, setShuffle, currentTrack, isPlaying, toggle, enqueueTrack, dispatchPlaybackCommand } = useAudioPlayer();
   const membershipActive =
     Boolean(accountState?.subscriberActive) || membershipHasPremiumAccess(accountState?.membership);
   const subscriptionLocked = Boolean(accountState?.membership && !membershipActive);
@@ -688,17 +688,21 @@ function MyMusicTab({
       const resolvedAccess = access || resolveTrackAccess(item, accountState);
       if (!resolvedAccess?.canStream) return;
       const track = toPlaybackTrack(item, { ...accountState, userId: user?.id }, "my_music");
-      // Resume from saved position when available — Spotify/Apple Music behavior.
-      // Caller can pass explicit resumeAt (e.g. 0 to restart), otherwise use listening history.
       const savedPosition = resumeAt !== undefined
         ? resumeAt
         : (() => {
             const h = listeningMap.get(item.slug);
             return h && !h.completed && h.positionSeconds > 5 ? h.positionSeconds : 0;
           })();
-      void playTrack(track, { resumeAt: savedPosition });
+      if (savedPosition > 0) {
+        void playTrack(track, { resumeAt: savedPosition });
+        return;
+      }
+      const { startTrack, needsUpgrade } = toInstantStartTrack(track);
+      void playQueue([startTrack], 0);
+      if (needsUpgrade) setTimeout(() => void dispatchPlaybackCommand("upgradeStream"), 2000);
     },
-    [accountState, playTrack, user?.id, listeningMap]
+    [accountState, dispatchPlaybackCommand, playQueue, playTrack, user?.id, listeningMap]
   );
 
   const playAlbum = useCallback(
@@ -711,9 +715,12 @@ function MyMusicTab({
         playItem(album, access);
         return;
       }
-      void playQueue(playable, 0);
+      const { startTrack, needsUpgrade } = toInstantStartTrack(playable[0]);
+      const instantPlayable = needsUpgrade ? [startTrack, ...playable.slice(1)] : playable;
+      void playQueue(instantPlayable, 0);
+      if (needsUpgrade) setTimeout(() => void dispatchPlaybackCommand("upgradeStream"), 2000);
     },
-    [accountState, playItem, playQueue, user?.id]
+    [accountState, dispatchPlaybackCommand, playItem, playQueue, user?.id]
   );
 
   const playPlaylist = useCallback(
@@ -733,9 +740,12 @@ function MyMusicTab({
         tracks = [...tracks].sort(() => Math.random() - 0.5);
         setShuffle(true);
       }
-      void playQueue(tracks, 0);
+      const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[0]);
+      const instantTracks = needsUpgrade ? [startTrack, ...tracks.slice(1)] : tracks;
+      void playQueue(instantTracks, 0);
+      if (needsUpgrade) setTimeout(() => void dispatchPlaybackCommand("upgradeStream"), 2000);
     },
-    [accountState, catalogTracks, playQueue, setShuffle, user?.id]
+    [accountState, catalogTracks, dispatchPlaybackCommand, playQueue, setShuffle, user?.id]
   );
 
   const resumeLast = useCallback(() => {
@@ -751,13 +761,13 @@ function MyMusicTab({
       .filter((item) => resolveTrackAccess(item, accountState).canStream)
       .map((item) => toPlaybackTrack(item, { ...accountState, userId: user?.id }, "my_music_all"));
     if (!playable.length) return;
-    if (shuffle) {
-      setShuffle(true);
-      void playQueue([...playable].sort(() => Math.random() - 0.5), 0);
-    } else {
-      void playQueue(playable, 0);
-    }
-  }, [mergedOwnedSingles, accountState, user?.id, playQueue, setShuffle]);
+    let ordered = shuffle ? [...playable].sort(() => Math.random() - 0.5) : playable;
+    if (shuffle) setShuffle(true);
+    const { startTrack, needsUpgrade } = toInstantStartTrack(ordered[0]);
+    const instantOrdered = needsUpgrade ? [startTrack, ...ordered.slice(1)] : ordered;
+    void playQueue(instantOrdered, 0);
+    if (needsUpgrade) setTimeout(() => void dispatchPlaybackCommand("upgradeStream"), 2000);
+  }, [mergedOwnedSingles, accountState, dispatchPlaybackCommand, user?.id, playQueue, setShuffle]);
 
   const sortLabel = SORT_OPTIONS.find((o) => o.id === sortPref)?.label || "Recently Added";
 
