@@ -254,18 +254,16 @@ export function toPlaybackTrack(item, accountState, source = "library", override
 }
 
 /**
- * Some track shapes (catalog hydrate, recovery/restore placeholders) resolve `src` to the
- * bare /api/library/stream URL, which needs a JSON round trip before audio.src is even
- * assigned. resolvePlaybackSrc's normal output already carries `redirect=1` (instant,
- * same-origin proxy — see isLibraryStreamRedirectSrc) so the swap below must not fire for
- * that already-fast case, or every entitled play pays an unnecessary preview detour.
+ * Entitled full-stream tracks resolve to the signed /api/library/stream proxy, which
+ * needs a network round trip before the first audible byte. Start from the (already
+ * public, near-instant) preview instead and let AudioContext's existing upgradeStream
+ * swap in the full stream moments later — same trick already used for previewOnly users.
  * @returns {{ startTrack: object, needsUpgrade: boolean }}
  */
 export function toInstantStartTrack(track) {
   const previewSrc = track?.metadata?.previewSrc;
-  const isSlowLibraryStream =
-    /^\/api\/library\/stream/.test(track?.src || "") && !isLibraryStreamRedirectSrc(track?.src);
-  if (!track || !isSlowLibraryStream || !previewSrc || previewSrc === track.src) {
+  const isLibraryStream = /^\/api\/library\/stream/.test(track?.src || "");
+  if (!track || !isLibraryStream || !previewSrc || previewSrc === track.src) {
     return { startTrack: track, needsUpgrade: false };
   }
   return { startTrack: { ...track, src: previewSrc }, needsUpgrade: true };
