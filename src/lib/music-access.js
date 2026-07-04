@@ -102,12 +102,7 @@ export function canAddToPlaylist(access) {
  */
 export function resolveTrackAccess(track, accountState = {}) {
   if (accountState?.permissions?.admin === true) {
-    return {
-      canStream: true,
-      previewOnly: false,
-      owned: true,
-      source: "admin",
-    };
+    return adminTrackAccess();
   }
 
   const slug = track?.slug || track?.productSlug || track?.product_slug;
@@ -174,9 +169,8 @@ export function resolveTrackAccess(track, accountState = {}) {
 
   const isSubscriber =
     subscriptionActive &&
-    Boolean(accountState.subscriberActive) &&
-    Boolean(permissions.subscriber);
-  const canStreamFull = owned || isSubscriber || collectorCardOwner;
+    (Boolean(accountState.subscriberActive) || Boolean(permissions.subscriber));
+  const canStreamFull = owned || isSubscriber || collectorCardOwner || collector;
   const subscriptionExpired = Boolean(membership && !subscriptionActive && subscriptionLibrary.has(slug));
 
   let badge = null;
@@ -216,7 +210,7 @@ export function libraryStreamRedirectSrc(slug, { trackSlug = null } = {}) {
 /** Full stream only when client user matches server account/state user (cookie session aligned). */
 export function canRequestLibraryStream(access, { userId, accountState } = {}) {
   if (!access?.canStream || !userId) return false;
-  const serverUserId = accountState?.user?.id;
+  const serverUserId = accountState?.user?.id || accountState?.userId;
   if (!serverUserId) return false;
   return serverUserId === userId;
 }

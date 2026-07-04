@@ -35,7 +35,7 @@ export function classifySourceUrl(src) {
  * @param {keyof typeof SOURCE_KIND} kind
  */
 export function isDirectlyBufferable(kind) {
-  return kind === SOURCE_KIND.CDN || kind === SOURCE_KIND.PREVIEW;
+  return kind === SOURCE_KIND.CDN || kind === SOURCE_KIND.PREVIEW || kind === SOURCE_KIND.REDIRECT;
 }
 
 /**

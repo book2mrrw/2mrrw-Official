@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { PlusIcon, BookmarkIcon, PlaylistIcon } from "@/components/music/MusicIcons";
 
 const rowStyle = {
@@ -78,7 +79,7 @@ export default function MusicOptionsSheet({
     onClose?.();
   };
 
-  return (
+  return createPortal(
     <div
       role="presentation"
       onClick={closeAll}
@@ -212,6 +213,7 @@ export default function MusicOptionsSheet({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

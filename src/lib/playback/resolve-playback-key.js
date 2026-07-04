@@ -17,6 +17,63 @@ function playbackCacheKey(slug, trackSlug) {
   return trackSlug ? `${slug}:${trackSlug}` : slug;
 }
 
+/**
+ * Durable cache (survives cold serverless instances) for the discovered R2 key — separate
+ * from the in-memory Map above, which only helps while a single instance stays warm.
+ * @param {import('@supabase/supabase-js').SupabaseClient} admin
+ * @param {string} cacheKey
+ */
+async function loadPersistedKeyResolution(admin, cacheKey) {
+  const { data, error } = await admin
+    .from("playback_key_resolution_cache")
+    .select("audio_key, source, playback_source, entity_folder, product_id")
+    .eq("cache_key", cacheKey)
+    .maybeSingle();
+  if (error || !data?.audio_key) return null;
+  return {
+    key: data.audio_key,
+    source: data.source,
+    playbackSource: data.playback_source,
+    resolverResult: data.playback_source,
+    resolverDurationMs: 0,
+    entityFolder: data.entity_folder,
+    productId: data.product_id,
+  };
+}
+
+/** Fire-and-forget — never blocks the response on a write to the durable cache. */
+function persistKeyResolution(admin, cacheKey, result) {
+  if (!result?.key) return;
+  admin
+    .from("playback_key_resolution_cache")
+    .upsert({
+      cache_key: cacheKey,
+      audio_key: result.key,
+      source: result.source || null,
+      playback_source: result.playbackSource || null,
+      entity_folder: result.entityFolder || null,
+      product_id: result.productId || null,
+      resolved_at: new Date().toISOString(),
+    })
+    .then(({ error }) => {
+      if (error) {
+        console.warn("[resolvePlaybackKey] persist cache failed", { cacheKey, message: error.message });
+      }
+    });
+}
+
+/** Invalidate the durable cache entry — called on force-refresh (e.g. media re-upload). */
+export async function clearPersistedPlaybackKey(admin, slug, trackSlug = null) {
+  const cacheKey = playbackCacheKey(slug, trackSlug);
+  const { error } = await admin
+    .from("playback_key_resolution_cache")
+    .delete()
+    .eq("cache_key", cacheKey);
+  if (error) {
+    console.warn("[resolvePlaybackKey] clear persisted cache failed", { cacheKey, message: error.message });
+  }
+}
+
 const FULL_AUDIO_ROLES = ["full_audio", "master_audio", "audio", "audio_full_song", "track_audio"];
 
 function pickAssetPath(assetRow) {
@@ -186,6 +243,17 @@ export function clearPlaybackKeyCache() {
 
 async function resolvePlaybackKeyUncached(admin, slug, trackSlug) {
   const resolverStarted = performance.now();
+  const cacheKey = playbackCacheKey(slug, trackSlug);
+
+  const persisted = await loadPersistedKeyResolution(admin, cacheKey);
+  if (persisted) {
+    recordPlaybackResolverOutcome({
+      result: persisted.playbackSource || "master",
+      durationMs: Math.round((performance.now() - resolverStarted) * 10) / 10,
+      fallbackReason: null,
+    });
+    return persisted;
+  }
 
   const { data: product, error } = await admin
     .from("products")
@@ -283,7 +351,7 @@ async function resolvePlaybackKeyUncached(admin, slug, trackSlug) {
             : "media_assets"
           : "products.storage_path";
 
-  return {
+  const result = {
     key: audioKey,
     source: pathSource,
     playbackSource,
@@ -293,4 +361,11 @@ async function resolvePlaybackKeyUncached(admin, slug, trackSlug) {
     entityFolder: entityFolder.replace(/\/$/, "") || folderKey,
     productId: product.id,
   };
+
+  // Stream rendition keys are just as stable as master/preview — fixed at transcode time,
+  // invalidated the same way (clearPersistedPlaybackKey on re-upload). Persisting all three
+  // means the live R2 discovery + HEAD check below never reruns once an item is cached.
+  persistKeyResolution(admin, cacheKey, result);
+
+  return result;
 }

@@ -326,6 +326,7 @@ const LatestSinglesStyleRow = forwardRef(function LatestSinglesStyleRow(
         flexWrap: "nowrap",
         width: "100%",
         minWidth: 0,
+        touchAction: "pan-x",
       }}
     >
       {renderItems.map((rawItem, i) => {

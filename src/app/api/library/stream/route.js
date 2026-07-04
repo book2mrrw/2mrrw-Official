@@ -4,7 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { userCanStreamProduct } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
 import { getFanSessionUser } from "@/lib/auth/session-user";
-import { resolvePlaybackKey } from "@/lib/playback/resolve-playback-key";
+import {
+  resolvePlaybackKey,
+  clearPlaybackKeyCache,
+  clearPersistedPlaybackKey,
+} from "@/lib/playback/resolve-playback-key";
 import {
   clearStreamSession,
   clearStreamSessionsForUserProduct,
@@ -31,6 +35,14 @@ export async function OPTIONS(req) {
 }
 
 const R2_STREAM_DEBUG = process.env.R2_STREAM_DEBUG === "1";
+
+// Default OFF: only flip on after confirming R2 bucket CORS is live for the signed S3 endpoint
+// (docs/reports/r2-cors-policy-recommended.json). When on, full-stream bytes go straight from
+// the browser to R2/Cloudflare edge instead of relaying through this function — removes the
+// proxy hop entirely. Rollback: unset (or "0") and redeploy, no code change.
+const DIRECT_STREAM_REDIRECT_ENABLED =
+  process.env.DIRECT_STREAM_REDIRECT_ENABLED === "1" ||
+  process.env.DIRECT_STREAM_REDIRECT_ENABLED === "true";
 
 function logStreamR2Env(context) {
   if (!R2_STREAM_DEBUG) return;
@@ -158,6 +170,8 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
         }
       } else {
         await clearStreamSessionsForUserProduct(admin, user.id, productId);
+        clearPlaybackKeyCache();
+        await clearPersistedPlaybackKey(admin, slug, trackSlug);
         if (process.env.NODE_ENV === "development") {
           clearMediaResolverCaches();
         }
@@ -190,6 +204,13 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
   timing?.mark("sign", cacheHit ? "cache_hit" : undefined);
 
   if (redirect) {
+    if (DIRECT_STREAM_REDIRECT_ENABLED && req.method !== "HEAD") {
+      timing?.mark("cdn", "direct_redirect");
+      return applyResolverDiagnosticsHeaders(
+        applyMediaCors(req, NextResponse.redirect(url, 302)),
+        resolved
+      );
+    }
     const proxied = await proxySignedR2Get(req, url, { timing });
     return applyResolverDiagnosticsHeaders(proxied, resolved);
   }

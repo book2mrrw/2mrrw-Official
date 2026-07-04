@@ -1,6 +1,23 @@
 import { getPublicCdnBase, R2_PUBLIC_CDN_FALLBACK } from "@/lib/storage/r2-public-cdn";
 
-/** Domains touched on tap→audible (preview CDN + same-origin API proxy). No signed URL hosts. */
+/**
+ * Derive the virtual-hosted S3 origin for signed R2 URLs.
+ * CLOUDFLARE_R2_ENDPOINT = https://{accountId}.r2.cloudflarestorage.com
+ * Signed URL host        = https://{bucket}.{accountId}.r2.cloudflarestorage.com
+ */
+function getR2SignedUrlOrigin() {
+  const endpoint = (process.env.CLOUDFLARE_R2_ENDPOINT || "").replace(/\/$/, "");
+  const bucket = (process.env.CLOUDFLARE_R2_BUCKET_NAME || "").trim();
+  if (!endpoint || !bucket) return null;
+  try {
+    const { protocol, host } = new URL(endpoint);
+    return `${protocol}//${bucket}.${host}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Domains touched on tap→audible: public CDN, signed R2 stream host, same-origin API proxy. */
 export function getPlaybackPreconnectOrigins() {
   /** @type {string[]} */
   const origins = [];
@@ -22,6 +39,7 @@ export function getPlaybackPreconnectOrigins() {
   };
 
   add(getPublicCdnBase() || R2_PUBLIC_CDN_FALLBACK);
+  add(getR2SignedUrlOrigin());
 
   return origins;
 }
