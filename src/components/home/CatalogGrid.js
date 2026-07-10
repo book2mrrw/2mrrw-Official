@@ -68,7 +68,7 @@ function CatalogGrid({
   const isAdmin = isAdminStable;
   if (!items || items.length === 0) return null;
   const containerStyle = isMobile
-    ? { display:"flex", flexWrap:"nowrap", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollSnapType:"x mandatory", overscrollBehaviorX:"contain", gap:12, paddingBottom:10, touchAction:"pan-x" }
+    ? { display:"flex", flexWrap:"nowrap", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollSnapType:"x mandatory", overscrollBehaviorX:"contain", gap:12, paddingBottom:10 }
     : { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:22 };
   return (
     <div className={isMobile?`${type}-row`:""} style={containerStyle}>

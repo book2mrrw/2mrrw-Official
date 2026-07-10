@@ -8,11 +8,19 @@ export function useScrollRecovery() {
   const pathname = usePathname();
 
   useEffect(() => {
+    let scrollTimer = null;
     const onScroll = () => {
-      store.save(`scroll:${pathname}`, window.scrollY);
+      if (scrollTimer) clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(() => {
+        scrollTimer = null;
+        store.save(`scroll:${pathname}`, window.scrollY);
+      }, 200);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (scrollTimer) clearTimeout(scrollTimer);
+    };
   }, [pathname]);
 
   const restoreScroll = useCallback((path) => {

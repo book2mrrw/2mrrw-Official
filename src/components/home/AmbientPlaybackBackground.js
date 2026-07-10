@@ -25,6 +25,7 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobi
     objectFit: "cover",
     filter: videoFilter,
     transition: "opacity 500ms ease",
+    willChange: "transform, opacity",
   };
 
   const imageLayerStyle = {
@@ -37,6 +38,7 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobi
     filter: "blur(72px) brightness(0.32)",
     transform: "scale(1.08)",
     transition: "opacity 500ms ease",
+    willChange: "transform, opacity",
   };
 
   return (

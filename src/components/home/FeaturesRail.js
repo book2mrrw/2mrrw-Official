@@ -174,7 +174,6 @@ function FeaturesRail({
         overscrollBehaviorX: "contain",
         gap: isMobile ? 12 : 18,
         paddingBottom: 14,
-        touchAction: "pan-x",
       }}
     >
       {features.map((feat, i) => {
