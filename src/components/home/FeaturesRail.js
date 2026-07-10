@@ -171,7 +171,9 @@ function FeaturesRail({
         overflowX: "auto",
         WebkitOverflowScrolling: "touch",
         scrollSnapType: "x mandatory",
+        overflowY: "hidden",
         overscrollBehaviorX: "contain",
+        touchAction: "pan-x",
         gap: isMobile ? 12 : 18,
         paddingBottom: 14,
       }}
