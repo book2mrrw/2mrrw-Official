@@ -12,6 +12,7 @@ import {
 } from "@/lib/music-playback";
 import { resolveTrackAccess } from "@/lib/music-access";
 import { useAudioPlayer } from "@/context/AudioContext";
+import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import CSModeButton from "@/components/audio/CSModeButton";
 import CoverArt from "@/components/ui/CoverArt";
@@ -56,12 +57,13 @@ export default function AlbumTracklistSheet({
     if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
   }, []);
 
-  const scheduleInstantStreamUpgrade = useCallback(() => {
+  const scheduleInstantStreamUpgrade = useCallback((slug) => {
     if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
     upgradeTimerRef.current = setTimeout(() => {
-      void dispatchPlaybackCommand("upgradeStream");
+      const b = getPagePlaybackActionsBridge();
+      if (b?.currentTrack?.slug === slug) void b.dispatchPlaybackCommand("upgradeStream");
     }, 2000);
-  }, [dispatchPlaybackCommand]);
+  }, []);
 
   const tracks = useMemo(
     () =>
@@ -102,7 +104,7 @@ export default function AlbumTracklistSheet({
         ? playable.map((t, i) => (i === queueIndex ? startTrack : t))
         : playable;
       void dispatchPlaybackCommand("playQueue", { tracks: instantQueue, startIndex: queueIndex });
-      if (needsUpgrade) scheduleInstantStreamUpgrade();
+      if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
     },
     [tracks, accountState, userId, dispatchPlaybackCommand, setShuffle, scheduleInstantStreamUpgrade]
   );
@@ -118,13 +120,13 @@ export default function AlbumTracklistSheet({
         const { startTrack, needsUpgrade } = toInstantStartTrack(order[0]);
         const instantOrder = needsUpgrade ? [startTrack, ...order.slice(1)] : order;
         void dispatchPlaybackCommand("playQueue", { tracks: instantOrder, startIndex: 0 });
-        if (needsUpgrade) scheduleInstantStreamUpgrade();
+        if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
       } else {
         setShuffle(false);
         const { startTrack, needsUpgrade } = toInstantStartTrack(playable[0]);
         const instantPlayable = needsUpgrade ? [startTrack, ...playable.slice(1)] : playable;
         void dispatchPlaybackCommand("playQueue", { tracks: instantPlayable, startIndex: 0 });
-        if (needsUpgrade) scheduleInstantStreamUpgrade();
+        if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
       }
       onClose?.();
     },

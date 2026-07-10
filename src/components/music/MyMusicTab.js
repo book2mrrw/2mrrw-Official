@@ -7,6 +7,7 @@ import { useMusicLibrary } from "@/hooks/useMusicLibrary";
 import { membershipHasPremiumAccess } from "@/lib/commerce/entitlements";
 import { resolveContentAccess, resolveTrackAccess } from "@/lib/music-access";
 import { albumTracksForPlayback, playableReleaseQueue, toInstantStartTrack, toPlaybackTrack } from "@/lib/music-playback";
+import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import PlaylistSection from "@/components/music/PlaylistSection";
@@ -700,7 +701,13 @@ function MyMusicTab({
       }
       const { startTrack, needsUpgrade } = toInstantStartTrack(track);
       void playQueue([startTrack], 0);
-      if (needsUpgrade) setTimeout(() => void dispatchPlaybackCommand("upgradeStream"), 2000);
+      if (needsUpgrade) {
+        const upgradeSlug = startTrack.slug;
+        setTimeout(() => {
+          const b = getPagePlaybackActionsBridge();
+          if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
+        }, 2000);
+      }
     },
     [accountState, dispatchPlaybackCommand, playQueue, playTrack, user?.id, listeningMap]
   );
@@ -718,7 +725,13 @@ function MyMusicTab({
       const { startTrack, needsUpgrade } = toInstantStartTrack(playable[0]);
       const instantPlayable = needsUpgrade ? [startTrack, ...playable.slice(1)] : playable;
       void playQueue(instantPlayable, 0);
-      if (needsUpgrade) setTimeout(() => void dispatchPlaybackCommand("upgradeStream"), 2000);
+      if (needsUpgrade) {
+        const upgradeSlug = startTrack.slug;
+        setTimeout(() => {
+          const b = getPagePlaybackActionsBridge();
+          if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
+        }, 2000);
+      }
     },
     [accountState, dispatchPlaybackCommand, playItem, playQueue, user?.id]
   );
@@ -743,7 +756,13 @@ function MyMusicTab({
       const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[0]);
       const instantTracks = needsUpgrade ? [startTrack, ...tracks.slice(1)] : tracks;
       void playQueue(instantTracks, 0);
-      if (needsUpgrade) setTimeout(() => void dispatchPlaybackCommand("upgradeStream"), 2000);
+      if (needsUpgrade) {
+        const upgradeSlug = startTrack.slug;
+        setTimeout(() => {
+          const b = getPagePlaybackActionsBridge();
+          if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
+        }, 2000);
+      }
     },
     [accountState, catalogTracks, dispatchPlaybackCommand, playQueue, setShuffle, user?.id]
   );
@@ -766,7 +785,13 @@ function MyMusicTab({
     const { startTrack, needsUpgrade } = toInstantStartTrack(ordered[0]);
     const instantOrdered = needsUpgrade ? [startTrack, ...ordered.slice(1)] : ordered;
     void playQueue(instantOrdered, 0);
-    if (needsUpgrade) setTimeout(() => void dispatchPlaybackCommand("upgradeStream"), 2000);
+    if (needsUpgrade) {
+        const upgradeSlug = startTrack.slug;
+        setTimeout(() => {
+          const b = getPagePlaybackActionsBridge();
+          if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
+        }, 2000);
+      }
   }, [mergedOwnedSingles, accountState, dispatchPlaybackCommand, user?.id, playQueue, setShuffle]);
 
   const sortLabel = SORT_OPTIONS.find((o) => o.id === sortPref)?.label || "Recently Added";

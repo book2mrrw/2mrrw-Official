@@ -58,7 +58,13 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
         const { startTrack, needsUpgrade } = toInstantStartTrack(track);
         if (track.src) {
           void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false });
-          if (needsUpgrade) setTimeout(() => void bridge?.dispatchPlaybackCommand?.("upgradeStream"), 2000);
+          if (needsUpgrade) {
+            const upgradeSlug = startTrack.slug;
+            setTimeout(() => {
+              const b = getPagePlaybackActionsBridge();
+              if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
+            }, 2000);
+          }
         }
       } else {
         void bridge?.toggle?.();
@@ -74,7 +80,13 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
       const { startTrack, needsUpgrade } = toInstantStartTrack(track);
       if (track.src) {
         void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false });
-        if (needsUpgrade) setTimeout(() => void bridge?.dispatchPlaybackCommand?.("upgradeStream"), 2000);
+        if (needsUpgrade) {
+          const upgradeSlug = startTrack.slug;
+          setTimeout(() => {
+            const b = getPagePlaybackActionsBridge();
+            if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
+          }, 2000);
+        }
       }
       return;
     }
@@ -86,7 +98,13 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
       const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[idx]);
       const instantTracks = needsUpgrade ? tracks.map((t, i) => (i === idx ? startTrack : t)) : tracks;
       void bridge?.playQueue?.(instantTracks, idx, { autoAdvance: false });
-      if (needsUpgrade) setTimeout(() => void bridge?.dispatchPlaybackCommand?.("upgradeStream"), 2000);
+      if (needsUpgrade) {
+        const upgradeSlug = startTrack.slug;
+        setTimeout(() => {
+          const b = getPagePlaybackActionsBridge();
+          if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
+        }, 2000);
+      }
     }
   }, [displayFeatures, entitlementAccountState, userId]);
 

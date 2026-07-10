@@ -4094,6 +4094,37 @@ export function AudioProvider({ children }) {
           void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: false });
           return false;
         }
+        // While the preview plays, race-prefetch the signed stream URL + warm the
+        // preload element so the upgrade swap 2s later hits browser cache (near-zero gap).
+        if (!isSameTrack && previewSrc && syncSrc === previewSrc &&
+            nextTrack.metadata?.access?.canStream && !nextTrack.metadata?.access?.previewOnly &&
+            nextTrack.slug) {
+          void (async () => {
+            try {
+              if (streamAbortController.signal.aborted) return;
+              const data = await fetchLibraryStream(nextTrack.slug, {
+                force: false,
+                trackSlug: nextTrack.metadata?.trackSlug || nextTrack.trackSlug || null,
+                signal: streamAbortController.signal,
+              });
+              if (!data?.url || streamAbortController.signal.aborted) return;
+              streamMetaRef.current = {
+                slug: nextTrack.slug,
+                url: data.url,
+                fetchedAt: Date.now(),
+                expiresIn: data.expiresIn || 3600,
+                streamEventId: data.streamEventId || null,
+                sessionId: data.sessionId || null,
+              };
+              const preloadEl = streamSwapPreloadRef.current;
+              if (preloadEl) {
+                void warmupSignedStreamPreload(preloadEl, data.url, { signal: streamAbortController.signal });
+              }
+            } catch {
+              // Non-fatal — upgradeToFullStream fetches on its own if this race loses
+            }
+          })();
+        }
         // Start swell AFTER play() confirms audio is actually outputting.
         // Using requestAnimationFrame for 60fps smoothness; time-based so frame drops
         // don't stall the ramp (important for iOS which can drop frames on wake).
@@ -4363,7 +4394,11 @@ export function AudioProvider({ children }) {
 
     patchState({ playbackNetworkState: "loading_stream" });
     try {
-      const resolved = await resolveLibraryStreamForTrack(libraryTrack, { force: false });
+      const cachedMeta = streamMetaRef.current;
+      const useCachedUrl = cachedMeta?.slug === track.slug && cachedMeta?.url && !streamUrlNeedsRefresh(cachedMeta);
+      const resolved = useCachedUrl
+        ? { track: { ...libraryTrack, src: cachedMeta.url }, meta: cachedMeta }
+        : await resolveLibraryStreamForTrack(libraryTrack, { force: false, signal: activeStreamAbortRef.current?.signal });
       const nextSrc = normalizePlaybackSrc(resolved.track.src);
       if (nextSrc && nextSrc === currentPlaybackSrc) {
         patchState({
@@ -4392,7 +4427,7 @@ export function AudioProvider({ children }) {
       const resumeAt = audio.currentTime || 0;
       skipPauseInterruptionRef.current = true;
       patchState({ playbackNetworkState: "loading_stream" });
-      await waitAudioSrcReady(audio, resolved.track.src);
+      await waitAudioSrcReady(audio, resolved.track.src, { signal: activeStreamAbortRef.current?.signal });
       if (resumeAt > 0) {
         const applyUpgradeSeek = () => {
           if (isFinite(audio.duration) && audio.duration > 0) {
@@ -4435,6 +4470,7 @@ export function AudioProvider({ children }) {
       if (!audio.paused) await playAudioIfNotPaused(audio, stateRef.current.isPlaying);
       return true;
     } catch (err) {
+      if (err?.name === "AbortError" || err?.code === "AUDIO_SRC_ABORTED") return false;
       if (err?.code === "ACCESS_DENIED") {
         patchState({
           accessDenied: true,

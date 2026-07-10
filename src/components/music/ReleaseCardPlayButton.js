@@ -67,8 +67,10 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         needsUpgrade ||
         (track.metadata?.access?.canStream && track.metadata?.access?.previewOnly);
       if (needsPreviewUpgrade) {
+        const upgradeSlug = track.slug;
         upgradeTimerRef.current = setTimeout(() => {
-          void bridge?.dispatchPlaybackCommand?.("upgradeStream");
+          const b = getPagePlaybackActionsBridge();
+          if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
         }, 2000);
       }
     },

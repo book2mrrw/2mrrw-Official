@@ -776,10 +776,11 @@ function PageStorefront() {
   // Entitled full-stream tracks resolve to a signed URL that needs a network round trip;
   // start from the (already-known, near-instant) preview and swap in the full stream a
   // moment later via the existing upgradeStream command, matching Spotify/Apple-level feel.
-  const scheduleInstantStreamUpgrade = useCallback(() => {
+  const scheduleInstantStreamUpgrade = useCallback((slug) => {
     if (instantUpgradeTimerRef.current) clearTimeout(instantUpgradeTimerRef.current);
     instantUpgradeTimerRef.current = setTimeout(() => {
-      void getPagePlaybackActionsBridge()?.dispatchPlaybackCommand?.("upgradeStream");
+      const b = getPagePlaybackActionsBridge();
+      if (b?.currentTrack?.slug === slug) void b.dispatchPlaybackCommand("upgradeStream");
     }, 2000);
   }, []);
 
@@ -809,7 +810,7 @@ function PageStorefront() {
           : playable;
         try {
           const result = await playQueue(instantQueue, queueIndex);
-          if (needsUpgrade) scheduleInstantStreamUpgrade();
+          if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
           return result !== false;
         } catch {
           return false;
@@ -863,7 +864,7 @@ function PageStorefront() {
         if (track?.src) {
           const { startTrack, needsUpgrade } = toInstantStartTrack(track);
           void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false });
-          if (needsUpgrade) scheduleInstantStreamUpgrade();
+          if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
         }
       } else {
         void bridge?.toggle?.();
@@ -878,7 +879,7 @@ function PageStorefront() {
       if (track?.src) {
         const { startTrack, needsUpgrade } = toInstantStartTrack(track);
         void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false });
-        if (needsUpgrade) scheduleInstantStreamUpgrade();
+        if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
       }
       return;
     }
@@ -892,7 +893,7 @@ function PageStorefront() {
         ? tracks.map((t, i) => (i === idx ? startTrack : t))
         : tracks;
       void bridge?.playQueue?.(instantTracks, idx, { autoAdvance: false });
-      if (needsUpgrade) scheduleInstantStreamUpgrade();
+      if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -910,7 +911,7 @@ function PageStorefront() {
         if (track?.src) {
           const { startTrack, needsUpgrade } = toInstantStartTrack(track);
           void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false });
-          if (needsUpgrade) scheduleInstantStreamUpgrade();
+          if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
         }
       } else {
         void bridge?.toggle?.();
@@ -925,7 +926,7 @@ function PageStorefront() {
       if (track?.src) {
         const { startTrack, needsUpgrade } = toInstantStartTrack(track);
         void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false });
-        if (needsUpgrade) scheduleInstantStreamUpgrade();
+        if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
       }
       return;
     }
@@ -939,7 +940,7 @@ function PageStorefront() {
         ? tracks.map((t, i) => (i === idx ? startTrack : t))
         : tracks;
       void bridge?.playQueue?.(instantTracks, idx, { autoAdvance: false });
-      if (needsUpgrade) scheduleInstantStreamUpgrade();
+      if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -953,7 +954,7 @@ function PageStorefront() {
     if (playbackTrack?.src) {
       const { startTrack, needsUpgrade } = toInstantStartTrack(playbackTrack);
       void getPagePlaybackActionsBridge()?.playQueue?.([startTrack], 0);
-      if (needsUpgrade) scheduleInstantStreamUpgrade();
+      if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
     }
   }, [scheduleInstantStreamUpgrade]);
 
