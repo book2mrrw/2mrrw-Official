@@ -48,6 +48,7 @@ const FeatureCard = memo(function FeatureCard({
         animation: shouldAnimate ? `fadeInUp 0.5s ease ${index * 0.09}s forwards` : undefined,
         transition: "border-color 0.25s",
         position: "relative",
+        touchAction: "manipulation",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = "#a259ff55";
@@ -173,7 +174,7 @@ function FeaturesRail({
         scrollSnapType: "x mandatory",
         overflowY: "hidden",
         overscrollBehaviorX: "contain",
-        touchAction: "pan-x",
+        touchAction: "pan-x pan-y",
         gap: isMobile ? 12 : 18,
         paddingBottom: 14,
       }}

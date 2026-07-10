@@ -37,6 +37,7 @@ function PlaybackPrewarmCardShell({
       data-playback-prewarm-card
       onPointerDown={enabled ? warmOnInteraction : undefined}
       {...divProps}
+      style={{ touchAction: "manipulation", ...divProps.style }}
     >
       {children}
     </div>

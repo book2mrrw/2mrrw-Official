@@ -324,7 +324,7 @@ const LatestSinglesStyleRow = forwardRef(function LatestSinglesStyleRow(
         WebkitOverflowScrolling: "touch",
         overflowY: "hidden",
         overscrollBehaviorX: "contain",
-        touchAction: "pan-x",
+        touchAction: "pan-x pan-y",
         flexWrap: "nowrap",
         width: "100%",
         minWidth: 0,
