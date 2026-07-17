@@ -326,7 +326,8 @@ export function AuthProvider({ children }) {
 
       const fetchPromise = (async () => {
         try {
-          const res = await fetch("/api/account/state", {
+          const url = meta.force ? "/api/account/state?force=1" : "/api/account/state";
+          const res = await fetch(url, {
             credentials: "include",
             cache: "no-store",
           });

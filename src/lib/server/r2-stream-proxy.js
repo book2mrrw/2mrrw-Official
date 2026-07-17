@@ -1,8 +1,9 @@
 import { applyMediaCors } from "@/lib/server/media-cors";
 
 /**
- * Proxy a presigned R2 GET through Next.js so the browser never hits
- * *.r2.cloudflarestorage.com (S3 endpoint ignores dashboard CORS).
+ * Proxy a presigned R2 GET through Next.js. Used for HEAD requests and as fallback
+ * when DIRECT_STREAM_REDIRECT_ENABLED is off. Direct redirect path (302 → R2) is
+ * preferred for GET — see library/stream/route.js.
  * @param {Request} req
  * @param {string} signedUrl
  * @param {{ timing?: ReturnType<import("@/lib/server/server-timing").createServerTiming> }} [options]

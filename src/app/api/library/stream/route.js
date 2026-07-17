@@ -206,10 +206,9 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
   if (redirect) {
     if (DIRECT_STREAM_REDIRECT_ENABLED && req.method !== "HEAD") {
       timing?.mark("cdn", "direct_redirect");
-      return applyResolverDiagnosticsHeaders(
-        applyMediaCors(req, NextResponse.redirect(url, 302)),
-        resolved
-      );
+      const redirectRes = NextResponse.redirect(url, 302);
+      redirectRes.headers.set("Cache-Control", "no-store");
+      return applyResolverDiagnosticsHeaders(applyMediaCors(req, redirectRes), resolved);
     }
     const proxied = await proxySignedR2Get(req, url, { timing });
     return applyResolverDiagnosticsHeaders(proxied, resolved);

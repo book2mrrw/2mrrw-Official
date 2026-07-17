@@ -21,6 +21,10 @@ import {
   savePlaybackPosition,
 } from "@/lib/playback/position-memory";
 import {
+  loadPlaybackSession,
+  savePlaybackSession,
+} from "@/lib/playback/session-memory";
+import {
   clearLibraryStreamSession,
   endStreamAnalytics,
   fetchLibraryStream,
@@ -120,6 +124,7 @@ import {
 import AudioPhase10Bridge from "@/components/system/AudioPhase10Bridge";
 import { isFirstListen, markListened } from "@/lib/first-listen";
 import { isSamePlaybackTrack } from "@/lib/music-playback";
+import { resolveTrackAccess } from "@/lib/music-access";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import {
   AUDIBILITY_RECOVERY_MAX_ATTEMPTS,
@@ -1041,6 +1046,13 @@ export function AudioProvider({ children }) {
   const playRequestIdRef = useRef(0);
   const internalPlaybackAuthorityRef = useRef(false);
   const dispatchPlaybackCommandRef = useRef(null);
+  const nextNextTrackPreloadRef = useRef(null);
+  const prevTrackPreloadRef = useRef(null);
+  const tabIdRef = useRef(null);
+  const broadcastChannelRef = useRef(null);
+  const sessionRestoredRef = useRef(false);
+  const sessionSaveTimerRef = useRef(null);
+  const pendingSessionUpgradeRef = useRef(null);
   const stallSoftTimerRef = useRef(null);
   const stallRecoveryTimerRef = useRef(null);
   const progressListenersRef = useRef(new Set());
@@ -1620,9 +1632,107 @@ export function AudioProvider({ children }) {
     listeningUserIdRef.current = user?.id || null;
   }, [user?.id]);
 
+  // Session restore: hydrate queue/shuffle/repeat from last session when user is known.
+  useEffect(() => {
+    const userId = user?.id;
+    if (!userId) {
+      sessionRestoredRef.current = false;
+      return;
+    }
+    if (sessionRestoredRef.current) return;
+    sessionRestoredRef.current = true;
+    const session = loadPlaybackSession(userId);
+    if (!session?.queue?.length) return;
+    const valid = session.queue.filter((t) => t?.slug && t?.src);
+    if (!valid.length) return;
+    const idx = Math.max(0, Math.min(session.queueIndex ?? 0, valid.length - 1));
+    queueRef.current = valid;
+    queueIndexRef.current = idx;
+    shuffleRef.current = Boolean(session.shuffle);
+    repeatModeRef.current = session.repeatMode || "off";
+    const restoredTrack = valid[idx] || null;
+    patchState({
+      queue: valid,
+      queueIndex: idx,
+      currentTrack: restoredTrack,
+      shuffle: Boolean(session.shuffle),
+      repeatMode: session.repeatMode || "off",
+      isPlaying: false,
+      playbackState: "idle",
+    });
+    // Prime upgrade on next play if track has stream access.
+    if (
+      restoredTrack?.metadata?.access?.canStream &&
+      !restoredTrack?.metadata?.access?.previewOnly
+    ) {
+      pendingSessionUpgradeRef.current = restoredTrack.slug;
+    }
+  }, [user?.id, patchState]);
+
+  // BroadcastChannel: pause this tab when another tab starts playing.
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return undefined;
+    if (!tabIdRef.current) tabIdRef.current = Math.random().toString(36).slice(2);
+    const bc = new BroadcastChannel("2mrrw-audio");
+    broadcastChannelRef.current = bc;
+    bc.onmessage = (ev) => {
+      if (ev.data?.type !== "play-started" || ev.data?.tabId === tabIdRef.current) return;
+      const audio = audioRef.current;
+      if (!audio || audio.paused) return;
+      skipPauseInterruptionRef.current = false;
+      userPausedRef.current = true;
+      audio.pause();
+    };
+    return () => {
+      bc.close();
+      broadcastChannelRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     entitlementAccountStateRef.current = entitlementAccountState;
-  }, [entitlementAccountState]);
+
+    // Sync live queue access flags when entitlements change (user adds/removes from library,
+    // subscription activates/expires). Keeps queue accurate without rebuilding it.
+    const queue = queueRef.current;
+    if (!queue.length) return;
+
+    let changed = false;
+    const updated = queue.map((track) => {
+      const fresh = resolveTrackAccess(track, entitlementAccountState);
+      const prev = track.metadata?.access;
+      if (prev?.canStream === fresh.canStream && prev?.previewOnly === fresh.previewOnly) {
+        return track;
+      }
+      changed = true;
+      return {
+        ...track,
+        metadata: {
+          ...(track.metadata || {}),
+          access: { ...(prev || {}), ...fresh },
+        },
+      };
+    });
+
+    if (!changed) return;
+    queueRef.current = updated;
+    patchState({ queue: updated });
+
+    // If the currently-playing track just gained stream access, upgrade it immediately.
+    const currentTrack = stateRef.current.currentTrack;
+    if (currentTrack?.slug) {
+      const wasPreviewOnly = currentTrack.metadata?.access?.previewOnly;
+      const updatedCurrent = updated.find((t) => t.slug === currentTrack.slug);
+      if (wasPreviewOnly && updatedCurrent?.metadata?.access?.canStream) {
+        const upgradeSlug = currentTrack.slug;
+        setTimeout(() => {
+          if (stateRef.current.currentTrack?.slug === upgradeSlug) {
+            void dispatchPlaybackCommandRef.current?.("upgradeStream");
+          }
+        }, 500);
+      }
+    }
+  }, [entitlementAccountState, patchState]);
 
   useEffect(() => {
     if (!isBrowserPlaybackEnvironment()) return undefined;
@@ -1642,6 +1752,18 @@ export function AudioProvider({ children }) {
       nextPreload.preload = "auto";
       nextPreload.crossOrigin = "anonymous";
       nextTrackPreloadRef.current = nextPreload;
+    }
+    if (!nextNextTrackPreloadRef.current) {
+      const nn = new Audio();
+      nn.preload = "auto";
+      nn.crossOrigin = "anonymous";
+      nextNextTrackPreloadRef.current = nn;
+    }
+    if (!prevTrackPreloadRef.current) {
+      const prev = new Audio();
+      prev.preload = "auto";
+      prev.crossOrigin = "anonymous";
+      prevTrackPreloadRef.current = prev;
     }
     return () => {
       noteAudioProviderUnmount();
@@ -2403,6 +2525,21 @@ export function AudioProvider({ children }) {
     }
   }, [state, notifyProgressListeners]);
 
+  // Debounced session save when queue context changes (queue, index, shuffle, repeat).
+  useEffect(() => {
+    const userId = listeningUserIdRef.current;
+    if (!userId || !state.queue?.length) return;
+    if (sessionSaveTimerRef.current) clearTimeout(sessionSaveTimerRef.current);
+    sessionSaveTimerRef.current = setTimeout(() => {
+      savePlaybackSession(listeningUserIdRef.current, {
+        queue: state.queue,
+        queueIndex: state.queueIndex,
+        shuffle: state.shuffle,
+        repeatMode: state.repeatMode,
+      });
+    }, 400);
+  }, [state.queue, state.queueIndex, state.shuffle, state.repeatMode]);
+
   useEffect(() => {
     registerMediaEngineBridge({
       getState: () => {
@@ -2601,6 +2738,41 @@ export function AudioProvider({ children }) {
       emitPhase21AudibleSnapshot("onPlay");
       // Begin buffering the next queue item in background.
       void scheduleNextTrackPreload();
+
+      // Broadcast to other tabs so they pause (last-tab-wins coordination).
+      const bc = broadcastChannelRef.current;
+      if (bc) {
+        try { bc.postMessage({ type: "play-started", tabId: tabIdRef.current }); } catch {}
+      }
+
+      // Prime the previous-track element for back-navigation (CDN preview only).
+      const prevIdx = queueIndexRef.current - 1;
+      if (prevIdx >= 0 && prevTrackPreloadRef.current) {
+        const prevTrack = queueRef.current[prevIdx];
+        const prevSrc = prevTrack?.src;
+        if (prevSrc) {
+          const prevKind = classifySourceUrl(prevSrc);
+          if (isDirectlyBufferable(prevKind)) {
+            const prevNorm = normalizePlaybackSrc(prevSrc);
+            if (prevNorm && prevTrackPreloadRef.current.src !== prevNorm) {
+              prevTrackPreloadRef.current.src = prevNorm;
+              prevTrackPreloadRef.current.load();
+            }
+          }
+        }
+      }
+
+      // Dispatch stream upgrade for session-restore plays (callers don't schedule it).
+      const pendingUpgrade = pendingSessionUpgradeRef.current;
+      if (pendingUpgrade && stateRef.current.currentTrack?.slug === pendingUpgrade) {
+        pendingSessionUpgradeRef.current = null;
+        const upgradeSlug = pendingUpgrade;
+        setTimeout(() => {
+          if (stateRef.current.currentTrack?.slug === upgradeSlug) {
+            void dispatchPlaybackCommandRef.current?.("upgradeStream");
+          }
+        }, 2000);
+      }
     };
 
     const onPause = () => {
@@ -3516,6 +3688,24 @@ export function AudioProvider({ children }) {
         }
       } catch {
         // Non-fatal — next track fetches fresh on demand
+      }
+    }
+
+    // 2nd-ahead passive preload: buffer index+2 CDN preview for deeper gapless coverage.
+    const nnIdx = nextIdx + 1;
+    if (nnIdx < queue.length && nextNextTrackPreloadRef.current) {
+      const nn = queue[nnIdx];
+      const nnSrc = nn?.src;
+      if (nnSrc) {
+        const nnKind = classifySourceUrl(nnSrc);
+        if (isDirectlyBufferable(nnKind)) {
+          const nnNorm = normalizePlaybackSrc(nnSrc);
+          const nnEl = nextNextTrackPreloadRef.current;
+          if (nnNorm && nnEl.src !== nnNorm) {
+            nnEl.src = nnNorm;
+            nnEl.load();
+          }
+        }
       }
     }
   }, []);
@@ -5561,6 +5751,15 @@ export function AudioProvider({ children }) {
     const next = REPEAT_MODES.includes(mode) ? mode : "off";
     repeatModeRef.current = next;
     patchState({ repeatMode: next });
+    const userId = listeningUserIdRef.current;
+    if (userId && queueRef.current.length) {
+      savePlaybackSession(userId, {
+        queue: queueRef.current,
+        queueIndex: queueIndexRef.current,
+        shuffle: shuffleRef.current,
+        repeatMode: next,
+      });
+    }
   }, [patchState]);
 
   const toggleRepeat = useCallback(() => {
@@ -5579,6 +5778,15 @@ export function AudioProvider({ children }) {
       shufflePositionRef.current = 0;
     }
     patchState({ shuffle: Boolean(enabled) });
+    const userId = listeningUserIdRef.current;
+    if (userId && queueRef.current.length) {
+      savePlaybackSession(userId, {
+        queue: queueRef.current,
+        queueIndex: queueIndexRef.current,
+        shuffle: Boolean(enabled),
+        repeatMode: repeatModeRef.current,
+      });
+    }
   }, [patchState]);
 
   const toggleShuffle = useCallback(() => {

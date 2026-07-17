@@ -22,6 +22,27 @@ import {
 } from "@/lib/guest-session";
 import { DEFAULT_NOTIFICATION_PREFERENCES, getNotificationState } from "@/lib/notifications";
 
+// Per-user in-process cache. Eliminates repeated Supabase fan-out for the same
+// user hitting this route in quick succession (page transitions, tab focus, etc.).
+// 30s TTL balances freshness against query cost. Bypassed when ?force=1.
+const _stateCache = new Map();
+const STATE_CACHE_TTL_MS = 30_000;
+
+function getCachedState(userId) {
+  const entry = _stateCache.get(userId);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { _stateCache.delete(userId); return null; }
+  return entry.body;
+}
+
+function setCachedState(userId, body) {
+  _stateCache.set(userId, { body, expiresAt: Date.now() + STATE_CACHE_TTL_MS });
+}
+
+export function invalidateAccountStateCache(userId) {
+  if (userId) _stateCache.delete(userId);
+}
+
 function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest = true, user = null, userEntitlements = null }) {
   const hasActiveMembership = membershipHasPremiumAccess(membership) || hasEntitlement(userEntitlements, "subscriber");
   const hasCollectorFromFlags = hasEntitlement(userEntitlements, "collector_card");
@@ -71,6 +92,13 @@ export async function GET(req) {
       identifier: user?.id,
     });
     if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
+
+    const forceRefresh = new URL(req.url).searchParams.get("force") === "1";
+
+    if (user && !user.isGuest && !forceRefresh) {
+      const cached = getCachedState(user.id);
+      if (cached) return clearGuestCookieOnResponse(NextResponse.json(cached));
+    }
 
     if (!user) {
       return NextResponse.json({
@@ -313,6 +341,7 @@ export async function GET(req) {
     if (user.isGuest) {
       return withGuestCookie(NextResponse.json(body), user.id, { remember: session?.remember });
     }
+    setCachedState(user.id, body);
     return clearGuestCookieOnResponse(NextResponse.json(body));
   } catch (err) {
     console.error("account state error:", err);

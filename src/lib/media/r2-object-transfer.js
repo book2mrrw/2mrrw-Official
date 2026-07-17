@@ -47,6 +47,8 @@ export async function uploadR2ObjectBuffer(key, body, contentType) {
       Key: normalized,
       Body: body,
       ContentType: contentType || "audio/mp4",
+      CacheControl: "private, max-age=3600",
+      ContentDisposition: "inline",
     })
   );
 }

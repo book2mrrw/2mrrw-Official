@@ -52,10 +52,14 @@ export async function transcodeMasterToStreamFile(inputPath, outputPath, options
   const bitrateKbps = options.bitrateKbps ?? STREAM_UPLOAD_BITRATE_KBPS;
   const ffmpeg = resolveFfmpegBinary();
 
+  // loudnorm: EBU R128 single-pass normalization to -14 LUFS (Spotify/Apple target).
+  // TP=-1 keeps peaks 1dB below full scale; LRA=11 matches broadcast spec.
   await runCommand(ffmpeg, [
     "-y",
     "-i",
     inputPath,
+    "-af",
+    "loudnorm=I=-14:TP=-1:LRA=11",
     "-c:a",
     "aac",
     "-b:a",

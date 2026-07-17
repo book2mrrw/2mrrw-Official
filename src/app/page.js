@@ -15,6 +15,7 @@ const AlbumModal = dynamic(
 const GiftBottomSheet = dynamic(() => import("@/components/gifts/GiftBottomSheet"), { ssr: false });
 const CollectorCardAdminPanel = dynamic(() => import("@/components/admin/CollectorCardAdminPanel"), { ssr: false });
 const NotificationSettingsSection = dynamic(() => import("@/components/account/NotificationSettingsSection"), { ssr: false });
+const AnalyticsDashboard = dynamic(() => import("@/components/account/AnalyticsDashboard"), { ssr: false });
 const VaultUnlockedRoom = dynamic(
   () => import("@/components/vault/VaultUnlockedRoom").then((mod) => ({ default: mod.VaultUnlockedRoom })),
   { ssr: false }
@@ -328,6 +329,7 @@ function PageStorefront() {
     }
   });
   const [activeTab, setActiveTab]                 = useState("home");
+  const [accountSubTab, setAccountSubTab]         = useState("overview");
   const [musicSubTab, setMusicSubTab]             = useState("singles");
   const [activeVideo, setActiveVideo]             = useState("tv_aS-hJ880");
   const [addedFlash, setAddedFlash]               = useState(null);
@@ -1972,10 +1974,24 @@ function PageStorefront() {
                       <AuthSurfaceIsland islandId="account-admin">
                         {(auth) => (
                           <>
-                            {auth.isAdminStable ? <GiftsSentSection /> : null}
-                            {auth.isAdminStable ? (
-                              <CollectorCardAdminPanel accountState={auth.accountState} />
-                            ) : null}
+                            {auth.isAdminStable && (
+                              <div style={{display:"flex",gap:8}}>
+                                {["overview","analytics"].map(t=>(
+                                  <button key={t} onClick={()=>setAccountSubTab(t)} style={{padding:"7px 16px",background:accountSubTab===t?"rgba(0,255,255,0.1)":"transparent",border:`1px solid ${accountSubTab===t?"rgba(0,255,255,0.35)":"#222"}`,borderRadius:999,color:accountSubTab===t?"#00ffff":"#555",fontSize:10,fontWeight:900,letterSpacing:2,textTransform:"uppercase",cursor:"pointer",transition:"0.15s"}}>{t==="overview"?"OVERVIEW":"ANALYTICS"}</button>
+                                ))}
+                              </div>
+                            )}
+                            {(!auth.isAdminStable || accountSubTab==="overview") && (
+                              <>
+                                {auth.isAdminStable ? <GiftsSentSection /> : null}
+                                {auth.isAdminStable ? (
+                                  <CollectorCardAdminPanel accountState={auth.accountState} />
+                                ) : null}
+                              </>
+                            )}
+                            {auth.isAdminStable && accountSubTab==="analytics" && (
+                              <AnalyticsDashboard isMobile={isMobile} />
+                            )}
                           </>
                         )}
                       </AuthSurfaceIsland>

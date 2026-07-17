@@ -4,6 +4,7 @@
 
 import {
   DEFAULT_STREAM_EXT,
+  STREAM_HQ_FILENAME_SUFFIX,
   resolveStreamKey,
   resolveStreamPath,
   streamFilenameFromSlug,
@@ -27,8 +28,11 @@ const STREAM_ENTITY_FOLDER_RE = new RegExp(
   `^${STREAM_ROOT}/(${["singles", "features", "albums", "mixtapes-and-eps"].join("|")})/`
 );
 
+const _HQ_SUFFIX_PATTERN = STREAM_HQ_FILENAME_SUFFIX
+  ? `(?:${STREAM_HQ_FILENAME_SUFFIX})?`
+  : "";
 const STREAM_KEY_RE = new RegExp(
-  `^${STREAM_ROOT}/(?:singles|features|albums|mixtapes-and-eps)/(?:[a-z0-9-]+/)+[a-z0-9-]+(?:_192)?\\.${DEFAULT_STREAM_EXT}$`
+  `^${STREAM_ROOT}/(?:singles|features|albums|mixtapes-and-eps)/(?:[a-z0-9-]+/)+[a-z0-9-]+${_HQ_SUFFIX_PATTERN}\\.${DEFAULT_STREAM_EXT}$`
 );
 
 /**
@@ -123,7 +127,7 @@ export function validateStreamKey(streamKey) {
   if (!STREAM_KEY_RE.test(value)) {
     return {
       valid: false,
-      errors: [`stream_key must match streaming/{{releaseType}}/…/{{slug}}[${"_192"}].${DEFAULT_STREAM_EXT}`],
+      errors: [`stream_key must match streaming/{{releaseType}}/…/{{slug}}[${STREAM_HQ_FILENAME_SUFFIX}].${DEFAULT_STREAM_EXT}`],
     };
   }
   return { valid: true, errors: [] };

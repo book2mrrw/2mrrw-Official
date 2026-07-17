@@ -32,10 +32,10 @@ export const STREAM_CONTAINER_FORMAT = "m4a";
 /** Allowed quality tiers (bitrate mapping enforced at transcode — Stage 3). */
 export const STREAM_QUALITY_TIERS = Object.freeze(["standard", "hq"]);
 
-/** Bitrate targets by tier (kbps) — documentation only until Stage 3 transcode. */
+/** Bitrate targets by tier (kbps). */
 export const STREAM_BITRATE_KBPS = Object.freeze({
   standard: 128,
-  hq: 192,
+  hq: 256,
 });
 
 /** Loudness target (integrated LUFS) — documentation only until Stage 3. */
