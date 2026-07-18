@@ -11,6 +11,22 @@ const cache = new Map();
 /** @type {Map<string, Promise<{ url: string, cacheHit: boolean }>>} */
 const inflight = new Map();
 
+const CACHE_MAX_ENTRIES = 200;
+
+function evictCache() {
+  if (cache.size <= CACHE_MAX_ENTRIES) return;
+  const now = Date.now();
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt <= now) cache.delete(key);
+    if (cache.size <= CACHE_MAX_ENTRIES) return;
+  }
+  // If still over limit, evict by insertion order (Map preserves it)
+  for (const key of cache.keys()) {
+    cache.delete(key);
+    if (cache.size <= CACHE_MAX_ENTRIES) return;
+  }
+}
+
 export function streamCacheKey(userId, slug, trackSlug = null) {
   return trackSlug ? `${userId}:${slug}:${trackSlug}` : `${userId}:${slug}`;
 }
@@ -39,6 +55,7 @@ export async function getOrCreateStreamSignedUrl(userId, slug, factory, trackSlu
     .then(factory)
     .then((url) => {
       cache.set(key, { url, expiresAt: now + CACHE_TTL_MS });
+      evictCache();
       inflight.delete(key);
       return { url, cacheHit: false };
     })

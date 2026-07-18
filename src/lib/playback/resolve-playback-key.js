@@ -125,14 +125,11 @@ async function releasePrimaryAudioPath(admin, releaseId) {
   return trackFullAudioPath(admin, trackId);
 }
 
-async function resolveStoragePathFromProduct(admin, product, trackSlug) {
+async function resolveStoragePathFromProduct(admin, product, trackSlug, prefetchedTrackRow = undefined) {
   if (product?.storage_path && trackSlug) {
-    const { data: trackRow } = await admin
-      .from("catalog_tracks")
-      .select("storage_path")
-      .eq("album_slug", product.slug)
-      .eq("slug", String(trackSlug).trim())
-      .maybeSingle();
+    const trackRow = prefetchedTrackRow !== undefined
+      ? prefetchedTrackRow
+      : (await admin.from("catalog_tracks").select("storage_path").eq("album_slug", product.slug).eq("slug", String(trackSlug).trim()).maybeSingle()).data;
     if (trackRow?.storage_path) return trackRow.storage_path;
   }
 
@@ -140,12 +137,9 @@ async function resolveStoragePathFromProduct(admin, product, trackSlug) {
 
   const slug = String(product?.slug || "").trim();
   if (trackSlug && slug) {
-    const { data: trackRow } = await admin
-      .from("catalog_tracks")
-      .select("storage_path")
-      .eq("album_slug", slug)
-      .eq("slug", String(trackSlug).trim())
-      .maybeSingle();
+    const trackRow = prefetchedTrackRow !== undefined
+      ? prefetchedTrackRow
+      : (await admin.from("catalog_tracks").select("storage_path").eq("album_slug", slug).eq("slug", String(trackSlug).trim()).maybeSingle()).data;
     if (trackRow?.storage_path) return trackRow.storage_path;
   }
 
@@ -255,6 +249,12 @@ async function resolvePlaybackKeyUncached(admin, slug, trackSlug) {
     return persisted;
   }
 
+  // When trackSlug is known, run catalog_tracks concurrently with the products query
+  // to avoid a sequential round trip on the uncached hot path.
+  const catalogTrackPrefetchPromise = trackSlug
+    ? admin.from("catalog_tracks").select("storage_path").eq("album_slug", slug).eq("slug", trackSlug).maybeSingle()
+    : null;
+
   const { data: product, error } = await admin
     .from("products")
     .select(
@@ -265,13 +265,21 @@ async function resolvePlaybackKeyUncached(admin, slug, trackSlug) {
 
   if (error) {
     console.error("[resolvePlaybackKey] products lookup failed", { slug, message: error.message });
+    catalogTrackPrefetchPromise?.catch(() => {});
     return null;
   }
-  if (!product) return null;
+  if (!product) {
+    catalogTrackPrefetchPromise?.catch(() => {});
+    return null;
+  }
+
+  const prefetchedTrackRow = catalogTrackPrefetchPromise
+    ? (await catalogTrackPrefetchPromise).data ?? null
+    : undefined;
 
   const canonical = getCanonicalReleaseBySlug(slug);
   const releaseType = inferProductReleaseType(product);
-  const mediaPath = await resolveStoragePathFromProduct(admin, product, trackSlug);
+  const mediaPath = await resolveStoragePathFromProduct(admin, product, trackSlug, prefetchedTrackRow);
   let storagePath =
     mediaPath ||
     product.storage_path ||

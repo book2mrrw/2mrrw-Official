@@ -39,7 +39,7 @@ export async function proxySignedR2Get(req, signedUrl, { timing } = {}) {
   const headers = {
     "Content-Type": r2Response.headers.get("Content-Type") ?? "audio/mpeg",
     "Accept-Ranges": r2Response.headers.get("Accept-Ranges") ?? "bytes",
-    "Cache-Control": "private, no-store",
+    "Cache-Control": "private, max-age=3300",
     "X-Content-Type-Options": "nosniff",
   };
 

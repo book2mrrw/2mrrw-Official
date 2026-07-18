@@ -2771,7 +2771,7 @@ export function AudioProvider({ children }) {
           if (stateRef.current.currentTrack?.slug === upgradeSlug) {
             void dispatchPlaybackCommandRef.current?.("upgradeStream");
           }
-        }, 2000);
+        }, 4000);
       }
     };
 
@@ -3308,7 +3308,7 @@ export function AudioProvider({ children }) {
         patchState({ playbackNetworkState: "retrying_stream", isBuffering: true });
         const retryRequestId = activeCommandRef.current?.requestId;
         try {
-          const data = await fetchLibraryStream(slug, { force: false });
+          const data = await fetchLibraryStream(slug, { force: true });
           // Bail if a new track command superseded this error-retry
           if (activeCommandRef.current?.requestId !== retryRequestId) return;
           streamMetaRef.current = {
@@ -3666,7 +3666,7 @@ export function AudioProvider({ children }) {
       const trackSlug = parseStreamTrackSlugFromSrc(next.src) || next.metadata?.trackSlug || null;
       const cacheKey = trackSlug ? `${slug}:${trackSlug}` : slug;
       const cached = nextTrackSignedUrlCacheRef.current[cacheKey];
-      if (cached && Date.now() - cached.fetchedAt < 90000) return;
+      if (cached && Date.now() - cached.fetchedAt < 3_000_000) return;
       try {
         const data = await fetchLibraryStream(slug, { force: false, trackSlug });
         if (data?.url) {
@@ -4037,6 +4037,7 @@ export function AudioProvider({ children }) {
 
     const swapToSignedStream = async (resolved) => {
       if (requestId !== playRequestIdRef.current) return;
+      if (crossfadeStateRef.current !== "idle") cancelCrossfade();
       const signedUrl = resolved.track?.src;
       if (!signedUrl || signedUrl === syncSrc) return;
       const resumeAt = audio.currentTime || 0;
@@ -4364,11 +4365,11 @@ export function AudioProvider({ children }) {
       if (requestId !== playRequestIdRef.current) return false;
 
       if (pendingSeekRef.current) {
+        const pendingSnapshot = pendingSeekRef.current;
         const applyPendingSeek = () => {
           clearTimeout(pendingSeekTimeoutRef);
-          const pending = pendingSeekRef.current;
-          if (pending != null && isFinite(audio.duration) && audio.duration > 0) {
-            const safe = clampRestorePosition(pending, audio.duration);
+          if (pendingSnapshot != null && isFinite(audio.duration) && audio.duration > 0) {
+            const safe = clampRestorePosition(pendingSnapshot, audio.duration);
             if (safe != null) {
               audio.currentTime = safe;
             } else if (listeningUserIdRef.current && nextTrack.slug) {
@@ -5428,6 +5429,7 @@ export function AudioProvider({ children }) {
     if (!state.hasStarted) return undefined;
     const intervalId = setInterval(() => {
       if (!stateRef.current.hasStarted) return;
+      if (!stateRef.current.isPlaying && !playbackIntentBeforeHideRef.current) return;
       if (isRecoveringRef.current) return;
       if (Date.now() < recoveryCooldownUntilRef.current) return;
 
