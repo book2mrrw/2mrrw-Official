@@ -795,7 +795,7 @@ function PageStorefront() {
       const auth = getPageAuthRef();
       const catalogPlaybackLookup = getCatalogSurfaceRef().catalogPlaybackLookup;
       const albumItem = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
-      const account = { ...auth.accountState, userId: auth.currentUser?.id };
+      const account = { ...auth.accountState, userId: auth.currentUser?.id, isAdmin: auth.isAdmin };
       const tracks = albumTracksForPlayback(
         albumItem,
         account,
@@ -855,7 +855,7 @@ function PageStorefront() {
   const playSinglesQueue = useCallback((e, clickedItem) => {
     e.stopPropagation();
     const auth = getPageAuthRef();
-    const account = { ...auth.accountState, userId: auth.currentUser?.id };
+    const account = { ...auth.accountState, userId: auth.currentUser?.id, isAdmin: auth.isAdmin };
     const surface = getCatalogSurfaceRef();
     const bridge = getPagePlaybackActionsBridge();
 
@@ -902,7 +902,7 @@ function PageStorefront() {
   const playFeaturesQueue = useCallback((e, clickedItem) => {
     e.stopPropagation();
     const auth = getPageAuthRef();
-    const account = { ...auth.accountState, userId: auth.currentUser?.id };
+    const account = { ...auth.accountState, userId: auth.currentUser?.id, isAdmin: auth.isAdmin };
     const surface = getCatalogSurfaceRef();
     const bridge = getPagePlaybackActionsBridge();
 
@@ -950,7 +950,7 @@ function PageStorefront() {
     const auth = getPageAuthRef();
     const playbackTrack = normalizeTrackForPlayback(
       item,
-      { ...auth.accountState, userId: auth.currentUser?.id },
+      { ...auth.accountState, userId: auth.currentUser?.id, isAdmin: auth.isAdmin },
       source
     );
     if (playbackTrack?.src) {

@@ -104,11 +104,19 @@ export async function userCanStreamProduct(userId, productSlug, user = null) {
   if (!userId || !productSlug) return false;
   if (user && isAdminUser(user)) return true;
   const admin = createAdminClient();
-  if (await resolveAdminFromProfile(admin, userId)) return true;
-  if (await userOwnsProduct(userId, productSlug)) return true;
 
-  const membership = await getActiveMembership(userId);
-  const ownedSlugs = await getOwnedSlugs(userId);
+  // These two checks are independent — run them concurrently.
+  const [isAdmin, owns] = await Promise.all([
+    resolveAdminFromProfile(admin, userId),
+    userOwnsProduct(userId, productSlug),
+  ]);
+  if (isAdmin || owns) return true;
+
+  // Membership and owned slugs are also independent of each other.
+  const [membership, ownedSlugs] = await Promise.all([
+    getActiveMembership(userId),
+    getOwnedSlugs(userId),
+  ]);
   const collector = await getCollectorAccessState(admin, userId, [...ownedSlugs]);
   const entitled =
     membershipHasPremiumAccess(membership) || collector.hasCollectorAccess;

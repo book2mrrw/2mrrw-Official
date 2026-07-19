@@ -35,8 +35,14 @@ function getCachedState(userId) {
   return entry.body;
 }
 
+const CACHE_MAX_ENTRIES = 500;
+
 function setCachedState(userId, body) {
   _stateCache.set(userId, { body, expiresAt: Date.now() + STATE_CACHE_TTL_MS });
+  if (_stateCache.size > CACHE_MAX_ENTRIES) {
+    const oldest = _stateCache.keys().next().value;
+    if (oldest !== undefined) _stateCache.delete(oldest);
+  }
 }
 
 export function invalidateAccountStateCache(userId) {
@@ -150,7 +156,7 @@ export async function GET(req) {
         .select("product_slug, media_type, position_seconds, duration_seconds, completed, replay_count, last_played_at")
         .eq("user_id", user.id)
         .order("last_played_at", { ascending: false })
-        .limit(40),
+        .limit(100),
       getCollectorAccessRecords(admin, user.id),
     ]);
 

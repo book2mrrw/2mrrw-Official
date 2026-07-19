@@ -205,7 +205,10 @@ export async function resolvePlaybackKey(admin, productSlug, options = {}) {
   const cacheKey = playbackCacheKey(slug, trackSlug);
   const now = Date.now();
   const hit = playbackKeyCache.get(cacheKey);
-  if (hit && hit.expiresAt > now) return hit.value;
+  if (hit) {
+    if (hit.expiresAt > now) return hit.value;
+    playbackKeyCache.delete(cacheKey);
+  }
 
   if (playbackKeyInflight.has(cacheKey)) return playbackKeyInflight.get(cacheKey);
 
@@ -215,6 +218,10 @@ export async function resolvePlaybackKey(admin, productSlug, options = {}) {
       // the next attempt. Transient R2 listing failures or DB misses shouldn't lock
       // users out for 60 seconds.
       if (value !== null) {
+        if (playbackKeyCache.size >= 1000) {
+          const oldest = playbackKeyCache.keys().next().value;
+          if (oldest !== undefined) playbackKeyCache.delete(oldest);
+        }
         playbackKeyCache.set(cacheKey, { value, expiresAt: now + PLAYBACK_KEY_TTL_MS });
       }
       playbackKeyInflight.delete(cacheKey);

@@ -37,6 +37,9 @@ async function assertSignedAudioUrl(url, { slug, signal, sessionId = null } = {}
   const cacheKey = headValidationCacheKey(slug, url, sessionId);
   const cached = signedUrlHeadValidationCache.get(cacheKey);
   if (cached && Date.now() - cached.validatedAt < HEAD_VALIDATION_TTL_MS) {
+    // Reinsert to move this entry to the tail so FIFO eviction keeps recently-used entries.
+    signedUrlHeadValidationCache.delete(cacheKey);
+    signedUrlHeadValidationCache.set(cacheKey, cached);
     return cached.contentType;
   }
 

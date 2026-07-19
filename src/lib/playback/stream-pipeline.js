@@ -99,3 +99,24 @@ export async function endStreamEvent(admin, streamEventId, { durationSeconds = 0
 
   if (error && !isMissingTable(error)) throw error;
 }
+
+// Slug-based fallback for redirect-path plays where the client never receives a streamEventId.
+// Finds the most recent open event for this user+product and closes it.
+export async function endStreamEventForUser(admin, userId, productId, { durationSeconds = 0, completed = false } = {}) {
+  if (!userId || !productId) return;
+  const { data, error } = await admin
+    .from("stream_events")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("product_id", productId)
+    .is("ended_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) {
+    if (isMissingTable(error)) return;
+    throw error;
+  }
+  if (!data?.id) return;
+  await endStreamEvent(admin, data.id, { durationSeconds, completed });
+}

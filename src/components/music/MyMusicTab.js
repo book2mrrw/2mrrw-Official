@@ -118,6 +118,7 @@ function LibraryCarousel({
           width: "100%",
           minWidth: 0,
           maxWidth: "100%",
+          touchAction: "pan-x",
         }}
       >
         {items.map((item) => {
@@ -142,6 +143,7 @@ function LibraryCarousel({
                 borderRadius: 14,
                 overflow: "hidden",
                 boxShadow: isActive ? "0 0 12px rgba(0,255,255,0.12)" : undefined,
+                touchAction: "pan-x pan-y manipulation",
               }}
             >
               <div
@@ -307,6 +309,7 @@ function RecentlyAddedRow({ items, onPlay, accountState }) {
           paddingBottom: 8,
           scrollSnapType: "x mandatory",
           WebkitOverflowScrolling: "touch",
+          touchAction: "pan-x",
         }}
       >
         {items.map((item) => {

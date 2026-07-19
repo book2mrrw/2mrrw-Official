@@ -17,6 +17,12 @@ import {
   snapshotToAccountPayload,
 } from "@/lib/auth/entitlement-refresh-gating";
 import { logEntitlementRefreshBlocked, logStateChurn } from "@/lib/diagnostics/state-churn-log";
+import {
+  clearEntitlementsCache,
+  readEntitlementsCache,
+  writeEntitlementsCache,
+} from "@/lib/auth/entitlement-cache";
+import { SUPABASE_AUTH_STORAGE_KEY } from "@/lib/supabase/auth-storage-key";
 
 const EMPTY_ACCOUNT_STATE = {
   library: [],
@@ -90,12 +96,29 @@ export function resolveUserFromSession(session) {
   return { user, isAdmin: isAdminUser(user) };
 }
 
+// Read admin status synchronously from the Supabase localStorage session.
+// Called as a useState lazy initializer so isAdmin is true from the very first
+// render — no async gap, no preview flash for admin on any page load.
+function readAdminFromStorage() {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.localStorage.getItem(SUPABASE_AUTH_STORAGE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    const session = parsed?.access_token ? parsed : (parsed?.currentSession || null);
+    const user = session?.user || null;
+    return user ? isAdminUser(user) : false;
+  } catch {
+    return false;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [library, setLibrary] = useState([]);
   const [ownedSlugs, setOwnedSlugs] = useState(new Set());
   const [accountState, setAccountState] = useState(EMPTY_ACCOUNT_STATE);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(readAdminFromStorage);
   const [loading, setLoading] = useState(true);
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const [entitlementSnapshotVersion, setEntitlementSnapshotVersion] = useState(0);
@@ -358,6 +381,9 @@ export function AuthProvider({ children }) {
           }
           applyAccountPayload(data);
           commitEntitlementSnapshot(data, data.user?.id ?? signedInUserIdRef.current);
+          if (data.user?.id && !data.user?.isGuest) {
+            writeEntitlementsCache(data.user.id, data);
+          }
           return data;
         } catch (err) {
           console.error("[account/state] fetch failed:", err);
@@ -426,6 +452,7 @@ export function AuthProvider({ children }) {
     let mounted = true;
 
     const clearAuthenticatedState = () => {
+      clearEntitlementsCache(signedInUserIdRef.current);
       signedInUserIdRef.current = null;
       setUser(null);
       setIsAdmin(false);
@@ -445,6 +472,20 @@ export function AuthProvider({ children }) {
           const resolved = resolveUserFromSession(resolvedSession);
           if (resolved) {
             signedInUserIdRef.current = resolved.user.id;
+            // Identify the user immediately from the Supabase session so
+            // entitled users can receive library-stream URLs before the
+            // /api/account/state HTTP round-trip completes.
+            setUser(resolved.user);
+            setIsAdmin(resolved.isAdmin);
+            // Apply any cached entitlements synchronously — this lets
+            // subscribers, purchasers, collectors, and admin start playback
+            // instantly on every subsequent page load.
+            const cached = readEntitlementsCache(resolved.user.id);
+            if (cached && mounted) {
+              applyAccountPayload({ ...cached, user: resolved.user });
+              setSessionHydrated(true);
+              setLoading(false);
+            }
             await clearGuestSessionCookie();
             invalidateEntitlementSnapshot("auth:bootstrap");
             const accountData = await refreshAccountStateRef.current?.({

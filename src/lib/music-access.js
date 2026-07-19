@@ -101,7 +101,9 @@ export function canAddToPlaylist(access) {
  * @returns {{ owned: boolean, subscription: boolean, collector: boolean, previewOnly: boolean, canStream: boolean, badge: string|null }}
  */
 export function resolveTrackAccess(track, accountState = {}) {
-  if (accountState?.permissions?.admin === true) {
+  // accountState.isAdmin is set immediately from the Supabase session (before HTTP round-trip),
+  // so admin gets full access on every load including the very first.
+  if (accountState?.isAdmin === true || accountState?.permissions?.admin === true) {
     return adminTrackAccess();
   }
 
@@ -211,7 +213,13 @@ export function libraryStreamRedirectSrc(slug, { trackSlug = null } = {}) {
 export function canRequestLibraryStream(access, { userId, accountState } = {}) {
   if (!access?.canStream || !userId) return false;
   const serverUserId = accountState?.user?.id || accountState?.userId;
-  if (!serverUserId) return false;
+  if (!serverUserId) {
+    // Admin identity is confirmed synchronously from the Supabase session (build-time
+    // baked-in email/id constants). The server enforces access independently on every
+    // /api/library/stream request, so bypassing the server-confirmation guard here is safe.
+    if (accountState?.isAdmin) return true;
+    return false;
+  }
   return serverUserId === userId;
 }
 

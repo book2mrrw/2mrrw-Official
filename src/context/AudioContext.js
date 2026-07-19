@@ -144,6 +144,7 @@ import {
   PLAYBACK_ORCHESTRATION_STATES,
 } from "@/media/PlaybackStateMachine";
 import {
+  SOURCE_KIND,
   classifySourceUrl,
   isDirectlyBufferable,
   requiresSignedUrlFetch,
@@ -754,17 +755,16 @@ function isEntitledFullPlaybackTrack(track) {
 
 /** Whether a stream resolution/playback error should fall back to catalog preview. */
 function canFallbackStreamToPreview(err, track) {
-  const entitled = Boolean(track?.metadata?.access?.canStream);
   return (
     err?.status === 401 ||
+    err?.status === 403 ||
     err?.status === 404 ||
     err?.status === 415 ||
     err?.status === 422 ||
     err?.code === "MEDIA_UNAVAILABLE" ||
     err?.code === "INVALID_STREAM_CONTENT_TYPE" ||
     err?.code === "SIGNED_STREAM_INVALID_CONTENT_TYPE" ||
-    err?.code === "SIGNED_STREAM_UNREACHABLE" ||
-    (err?.status === 403 && !entitled)
+    err?.code === "SIGNED_STREAM_UNREACHABLE"
   );
 }
 
@@ -1856,10 +1856,11 @@ export function AudioProvider({ children }) {
   }, [stopPositionSaveTimer]);
 
   const finalizeStreamSession = useCallback((meta, { completed = false, durationSeconds = 0 } = {}) => {
-    if (!meta?.streamEventId && !meta?.sessionId) return;
+    if (!meta?.streamEventId && !meta?.sessionId && !meta?.slug) return;
     void endStreamAnalytics({
       streamEventId: meta.streamEventId || null,
       sessionId: meta.sessionId || null,
+      slug: meta.slug || null,
       durationSeconds,
       completed,
     });
@@ -3084,6 +3085,14 @@ export function AudioProvider({ children }) {
       }
 
       if (previewOnly) {
+        // If a session upgrade is already queued for this track, fire it now instead
+        // of dropping into preview-ended state (user just unlocked while playing preview).
+        const pendingUpgrade = pendingSessionUpgradeRef.current;
+        if (pendingUpgrade && track?.slug === pendingUpgrade) {
+          pendingSessionUpgradeRef.current = null;
+          void dispatchPlaybackCommandRef.current?.("upgradeStream");
+          return;
+        }
         stopProgressRaf();
         stopPositionSaveTimer();
         patchState({ isPlaying: false, playbackState: "ended_preview" });
@@ -3119,6 +3128,7 @@ export function AudioProvider({ children }) {
       const queue = queueRef.current;
       const queueIndex = queueIndexRef.current;
       const endedTrackSlug = track?.slug;
+      if (!endedTrackSlug) return;
 
       const finishEnded = () => {
         // If the user tapped a new track between the `ended` event and this microtask,
@@ -3212,11 +3222,14 @@ export function AudioProvider({ children }) {
               // Crossfade window missed — hard-cut from preload element to eliminate silence.
               // If the preload element has any buffered data, route its audio to the output
               // immediately so the gap is imperceptible while the main element loads.
+              // Skip on iOS: play() on a non-user-gesture element is blocked there, and the
+              // async rejection after main-gain=0 causes an audible gap worse than a hard cut.
               const nextEl = nextTrackPreloadRef.current;
               const ctx = audioCtxRef.current;
               const mGain = mainGainRef.current;
               const cfGain = crossfadeGainRef.current;
               if (
+                !isLikelyIOS() &&
                 nextEl && nextEl.src && nextEl.readyState >= 2 &&
                 mGain && cfGain && ctx?.state === "running"
               ) {
@@ -3256,6 +3269,7 @@ export function AudioProvider({ children }) {
     };
     const onError = async () => {
       stopStallRecovery();
+      if (crossfadeStateRef.current !== "idle") cancelCrossfade();
       const track = stateRef.current.currentTrack;
       const slug = track?.slug || streamMetaRef.current?.slug;
       const at = new Date().toISOString();
@@ -3308,7 +3322,7 @@ export function AudioProvider({ children }) {
         patchState({ playbackNetworkState: "retrying_stream", isBuffering: true });
         const retryRequestId = activeCommandRef.current?.requestId;
         try {
-          const data = await fetchLibraryStream(slug, { force: true });
+          const data = await fetchLibraryStream(slug, { force: true, signal: activeStreamAbortRef.current?.signal });
           // Bail if a new track command superseded this error-retry
           if (activeCommandRef.current?.requestId !== retryRequestId) return;
           streamMetaRef.current = {
@@ -3553,6 +3567,7 @@ export function AudioProvider({ children }) {
       resetPlaybackTelemetry();
     };
   }, [
+    cancelCrossfade,
     patchState,
     updateMediaSession,
     syncPositionState,
@@ -3652,6 +3667,10 @@ export function AudioProvider({ children }) {
     const kind = classifySourceUrl(next.src);
 
     if (isDirectlyBufferable(kind)) {
+      // REDIRECT-kind hits /api/library/stream?redirect=1 which fires after() session
+      // bookkeeping for a track the user hasn't played — skip to avoid spurious events.
+      // The redirect endpoint serves from Cloudflare CDN so the first bytes are instant anyway.
+      if (kind === SOURCE_KIND.REDIRECT) return;
       const normalized = normalizePlaybackSrc(next.src);
       if (normalized && preloadEl.src !== normalized) {
         preloadEl.src = normalized;
@@ -3677,8 +3696,15 @@ export function AudioProvider({ children }) {
           // Evict oldest when cache exceeds 20 entries to prevent unbounded growth.
           const cacheEntries = Object.entries(nextTrackSignedUrlCacheRef.current);
           if (cacheEntries.length > 20) {
-            const oldest = cacheEntries.sort((a, b) => a[1].fetchedAt - b[1].fetchedAt)[0];
-            if (oldest) delete nextTrackSignedUrlCacheRef.current[oldest[0]];
+            let oldestKey = cacheEntries[0][0];
+            let oldestAt = cacheEntries[0][1].fetchedAt;
+            for (let i = 1; i < cacheEntries.length; i++) {
+              if (cacheEntries[i][1].fetchedAt < oldestAt) {
+                oldestAt = cacheEntries[i][1].fetchedAt;
+                oldestKey = cacheEntries[i][0];
+              }
+            }
+            delete nextTrackSignedUrlCacheRef.current[oldestKey];
           }
           const normalized = normalizePlaybackSrc(data.url);
           if (normalized && preloadEl.src !== normalized) {
@@ -4004,6 +4030,11 @@ export function AudioProvider({ children }) {
           // creation resolves in the background.
           syncSrc = nextTrack.src;
           backgroundStreamResolve = true;
+          // Seed slug-only meta so finalizeStreamSession can send analytics via
+          // the server-side slug-based fallback (redirect plays never get a streamEventId).
+          if (!streamMetaRef.current?.streamEventId && !streamMetaRef.current?.sessionId) {
+            streamMetaRef.current = { slug: streamSlug };
+          }
         } else {
           try {
             const resolved = await resolveLibraryStreamForTrack(nextTrack, {
@@ -4432,7 +4463,10 @@ export function AudioProvider({ children }) {
     } catch (err) {
       // Superseded by a newer navigation command — the stream abort is intentional,
       // not an error. Exit silently so the new command can start without any error state.
-      if (err?.code === "AUDIO_SRC_ABORTED") return false;
+      if (err?.code === "AUDIO_SRC_ABORTED") {
+        if (crossfadeStateRef.current !== "idle") cancelCrossfade();
+        return false;
+      }
       const previewFallbackSrc =
         getTrackPreviewSrc(nextTrack) ||
         nextTrack?.metadata?.previewSrc ||
@@ -5982,7 +6016,7 @@ export function AudioProvider({ children }) {
 
       const meta = streamMetaRef.current;
       const slug = meta?.slug || parseStreamSlugFromSrc(track.src) || track.slug;
-      if (slug && meta && streamUrlNeedsRefresh(meta)) {
+      if (slug && meta && streamUrlNeedsRefresh(meta) && !isLibraryStreamRedirectSrc(meta.url)) {
         const refreshTrackSlug = track?.slug;
         void (async () => {
           try {
@@ -5999,7 +6033,7 @@ export function AudioProvider({ children }) {
             };
             const resumeAt = audio.currentTime || 0;
             skipPauseInterruptionRef.current = true;
-            await waitAudioSrcReady(audio, data.url);
+            await waitAudioSrcReady(audio, data.url, { signal: activeStreamAbortRef.current?.signal });
             // Check again after the async src-ready wait
             if (stateRef.current.currentTrack?.slug !== refreshTrackSlug) return;
             if (resumeAt > 0) {
@@ -6500,6 +6534,13 @@ export function AudioProvider({ children }) {
         });
         void dispatchPlaybackCommandRef.current?.(PLAYBACK_COMMANDS.UPGRADE_STREAM).catch(() => {});
       }
+      // Fire pending session upgrade immediately on entitlement change instead of
+      // waiting for the 4-second timer (avoids the upgrade racing with auth load).
+      const pendingUpgrade = pendingSessionUpgradeRef.current;
+      if (pendingUpgrade && track?.slug === pendingUpgrade && !meta?.previewOnly) {
+        pendingSessionUpgradeRef.current = null;
+        void dispatchPlaybackCommandRef.current?.(PLAYBACK_COMMANDS.UPGRADE_STREAM).catch(() => {});
+      }
     };
     window.addEventListener("entitlements:updated", onEntitlementsUpdated);
     return () => window.removeEventListener("entitlements:updated", onEntitlementsUpdated);
@@ -6844,9 +6885,11 @@ export function AudioProvider({ children }) {
         }
         const meta = streamMetaRef.current;
         const slug = meta?.slug || parseStreamSlugFromSrc(track.src) || track.slug;
-        if (slug && meta && streamUrlNeedsRefresh(meta)) {
+        if (slug && meta && streamUrlNeedsRefresh(meta) && !isLibraryStreamRedirectSrc(meta.url)) {
           void fetchLibraryStream(slug, { force: false })
             .then((data) => {
+              // Discard if the track changed while the tab was hidden
+              if (streamMetaRef.current?.slug !== slug) return;
               streamMetaRef.current = {
                 ...meta,
                 url: data.url,
@@ -7096,6 +7139,13 @@ export function AudioProvider({ children }) {
 
     const onPageHide = () => {
       const audioEl = audioRef.current;
+      const meta = streamMetaRef.current;
+      if (meta) {
+        finalizeStreamSession(meta, {
+          completed: false,
+          durationSeconds: audioEl?.currentTime || 0,
+        });
+      }
       if (audioEl && stateRef.current.isPlaying) {
         const t = stateRef.current.currentTrack;
         const userId = listeningUserIdRef.current;
@@ -7135,6 +7185,7 @@ export function AudioProvider({ children }) {
     emitBackgroundPlaybackDiagnostics,
     emitPhase21AudibleSnapshot,
     evaluateLifecyclePlaybackHealth,
+    finalizeStreamSession,
     readIsAudiblyPlaying,
     rehydrateMediaSession,
     runCoalescedLifecycleRecovery,

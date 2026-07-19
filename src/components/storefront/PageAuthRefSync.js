@@ -37,6 +37,7 @@ export default function PageAuthRefSync() {
       accountState,
       membership,
       sessionHydrated,
+      isAdmin,
       owns,
       signOut,
       refreshLibrary,

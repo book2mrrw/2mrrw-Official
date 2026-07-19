@@ -266,6 +266,13 @@ export function toInstantStartTrack(track) {
   if (!track || !isLibraryStream || !previewSrc || previewSrc === track.src) {
     return { startTrack: track, needsUpgrade: false };
   }
+  // Redirect-path streams (/api/library/stream?redirect=1) are already instant —
+  // the browser loads the URL directly and the server returns a 302 to R2.
+  // Entitled users (canStream) also skip the preview swap: the upgrade causes
+  // a stutter/reload worse than the initial buffer on the library stream URL.
+  if (isLibraryStreamRedirectSrc(track.src) || track?.metadata?.access?.canStream) {
+    return { startTrack: track, needsUpgrade: false };
+  }
   return { startTrack: { ...track, src: previewSrc }, needsUpgrade: true };
 }
 

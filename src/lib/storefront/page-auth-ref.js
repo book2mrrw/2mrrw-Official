@@ -11,6 +11,7 @@ const EMPTY_AUTH_REF = {
   accountState: null,
   membership: null,
   sessionHydrated: false,
+  isAdmin: false,
   loading: true,
   owns: () => false,
   signOut: async () => {},
