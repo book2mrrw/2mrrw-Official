@@ -1667,7 +1667,8 @@ export function AudioProvider({ children }) {
     ) {
       pendingSessionUpgradeRef.current = restoredTrack.slug;
     }
-  }, [user?.id, patchState]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // BroadcastChannel: pause this tab when another tab starts playing.
   useEffect(() => {
@@ -1732,7 +1733,8 @@ export function AudioProvider({ children }) {
         }, 500);
       }
     }
-  }, [entitlementAccountState, patchState]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [entitlementAccountState]);
 
   useEffect(() => {
     if (!isBrowserPlaybackEnvironment()) return undefined;
@@ -3567,7 +3569,6 @@ export function AudioProvider({ children }) {
       resetPlaybackTelemetry();
     };
   }, [
-    cancelCrossfade,
     patchState,
     updateMediaSession,
     syncPositionState,
