@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { grantLibraryItems } from "@/lib/commerce/entitlements";
 import { grantCollectorOwnerships } from "@/lib/commerce/collector-ownerships";
 import { grantVaultPassEntitlement } from "@/lib/commerce/vault-entitlements";
+import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
 
 export async function fulfillCheckoutSession(session) {
   const userId = session.metadata?.guest_user_id || session.metadata?.user_id;
@@ -55,6 +56,7 @@ export async function fulfillCheckoutSession(session) {
     ]);
   }
 
+  invalidateAccountStateCache(userId).catch(() => {});
   return { purchaseId: purchase.id, slugs };
 }
 
@@ -111,5 +113,6 @@ export async function fulfillPaymentIntent(paymentIntent) {
     ]);
   }
 
+  invalidateAccountStateCache(userId).catch(() => {});
   return { purchaseId: purchase.id, slugs, items };
 }

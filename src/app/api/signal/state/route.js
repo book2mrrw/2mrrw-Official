@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getGuestUser } from "@/lib/guest-session";
 import { isMissingSignalTable, recordSignalAction } from "@/lib/signals";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,14 @@ export async function POST(req) {
     if (!user) {
       return NextResponse.json({ error: "Enter email and phone before updating signal state" }, { status: 401 });
     }
+
+    const rl = await checkRateLimit(req, {
+      routeKey: "signal.state",
+      limit: 20,
+      windowSeconds: 60,
+      identifier: user.id,
+    });
+    if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
     const body = await req.json();
     const signalId = String(body.signalId || "").trim();

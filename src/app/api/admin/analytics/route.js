@@ -2,14 +2,23 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req) {
   const user = await getFanSessionUser();
   if (!user || !isAdminUser(user)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = await checkRateLimit(req, {
+    routeKey: "admin.analytics",
+    limit: 10,
+    windowSeconds: 60,
+    identifier: user.id,
+  });
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
   const admin = createAdminClient();
 

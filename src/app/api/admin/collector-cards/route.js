@@ -9,6 +9,8 @@ import {
   revokeEntitlementFlag,
 } from "@/lib/entitlements";
 import { hashCollectorSecret } from "@/lib/collector-cards";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
 
 async function requireAdmin() {
   const user = await getFanSessionUser();
@@ -44,6 +46,14 @@ export async function POST(req) {
   try {
     const auth = await requireAdmin();
     if (auth.error) return auth.error;
+
+    const rl = await checkRateLimit(req, {
+      routeKey: "admin.collector-cards",
+      limit: 10,
+      windowSeconds: 60,
+      identifier: auth.user.id,
+    });
+    if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
     const body = await req.json();
     const action = body.action;
@@ -115,6 +125,7 @@ async function giftVault(admin, body) {
   await grantEntitlementFlag(admin, userId, "vault_access", "admin_gift_vault", {
     metadata: { note: body.note || null },
   });
+  invalidateAccountStateCache(userId).catch(() => {});
   return NextResponse.json({ ok: true, userId, granted: "vault_access" });
 }
 
@@ -144,6 +155,7 @@ async function grantSubscriber(admin, body) {
   }
 
   await grantEntitlementFlag(admin, userId, "subscriber", "admin_grant");
+  invalidateAccountStateCache(userId).catch(() => {});
   return NextResponse.json({ ok: true, userId, granted: "subscriber" });
 }
 
@@ -154,6 +166,7 @@ async function grantCollector(admin, body) {
   await grantEntitlementFlag(admin, userId, "collector_card", "admin_grant", {
     collector_card_id: body.collectorCardId || null,
   });
+  invalidateAccountStateCache(userId).catch(() => {});
   return NextResponse.json({ ok: true, userId, granted: "collector_card" });
 }
 
@@ -164,9 +177,11 @@ async function revokeUser(admin, body) {
   const type = body.entitlementType;
   if (type && ["vault_access", "subscriber", "collector_card"].includes(type)) {
     await revokeEntitlementFlag(admin, userId, type);
+    invalidateAccountStateCache(userId).catch(() => {});
     return NextResponse.json({ ok: true, userId, revoked: type });
   }
 
   await revokeAllUserEntitlements(admin, userId, body.reason || "admin_revoke");
+  invalidateAccountStateCache(userId).catch(() => {});
   return NextResponse.json({ ok: true, userId, revoked: "all" });
 }

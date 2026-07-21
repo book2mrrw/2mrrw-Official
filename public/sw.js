@@ -1,12 +1,10 @@
 /* 2MRRW — background audio keep-alive + web push notifications + static asset caching */
 const SW_VERSION = "universal-background-audio-20260720";
-// Cache key is tied to SW_VERSION so bumping SW_VERSION automatically invalidates
-// all cached icons and fonts on the next SW update, preventing stale asset delivery.
+// All three cache names are tied to SW_VERSION so a single version bump atomically
+// invalidates static assets, API responses, and audio previews on next SW update.
 const STATIC_CACHE = `2mrrw-static-${SW_VERSION}`;
-// API cache — network-first for public catalog/events data.
-const API_CACHE = "2mrrw-api-v1";
-// Audio preview cache — cache-first; previews are immutable after release.
-const AUDIO_CACHE = "2mrrw-audio-v1";
+const API_CACHE = `2mrrw-api-${SW_VERSION}`;
+const AUDIO_CACHE = `2mrrw-audio-${SW_VERSION}`;
 
 // Public catalog/events routes safe to cache offline (no auth, public data).
 const CACHEABLE_API_PREFIXES = [

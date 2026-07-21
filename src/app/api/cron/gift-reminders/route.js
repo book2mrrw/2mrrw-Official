@@ -58,12 +58,14 @@ export async function GET(request) {
     );
 
     const sentIds = [];
+    let failedCount = 0;
     for (const outcome of outcomes) {
       if (outcome.status === "fulfilled") {
         if (outcome.value?.skipped) skipped_no_link++;
         else if (outcome.value?.id) sentIds.push(outcome.value.id);
       } else {
-        console.warn("gift-reminders: send failed", outcome.reason?.message);
+        failedCount++;
+        console.error("gift-reminders: send failed", outcome.reason?.message);
       }
     }
 
@@ -75,7 +77,11 @@ export async function GET(request) {
         .in("id", sentIds);
     }
 
-    return NextResponse.json({ reminders_sent: sentIds.length, skipped_no_link });
+    const status = failedCount > 0 && sentIds.length === 0 ? 500 : 200;
+    return NextResponse.json(
+      { reminders_sent: sentIds.length, failed: failedCount, skipped_no_link },
+      { status }
+    );
   } catch (err) {
     console.error("gift-reminders cron:", err);
     return NextResponse.json({ error: err.message || "Cron failed" }, { status: 500 });
