@@ -2,8 +2,15 @@ import { NextResponse } from "next/server";
 import { clearGuestCookie, createOrRetrieveGuest, getGuestUser, withGuestCookie } from "@/lib/guest-session";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
-export async function GET() {
+export async function GET(req) {
   try {
+    const limit = await checkRateLimit(req, {
+      routeKey: "guest.session.get",
+      limit: 20,
+      windowSeconds: 60,
+    });
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
+
     const user = await getGuestUser();
     return NextResponse.json({ user });
   } catch (err) {

@@ -15,6 +15,7 @@ import {
   getOrResolvePreviewMedia,
   previewCacheKey,
 } from "@/lib/playback/preview-resolution-cache";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,13 @@ export async function OPTIONS(req) {
  * Supports legacy flat keys via ?legacy= during migration.
  */
 export async function GET(req) {
+  const rl = await checkRateLimit(req, {
+    routeKey: "media.preview",
+    limit: 60,
+    windowSeconds: 60,
+  });
+  if (!rl.allowed) return applyMediaCors(req, rateLimitResponse(rl.retryAfterSeconds));
+
   const timing = createServerTiming("preview");
   const folder = req.nextUrl.searchParams.get("folder");
   const legacy = req.nextUrl.searchParams.get("legacy");

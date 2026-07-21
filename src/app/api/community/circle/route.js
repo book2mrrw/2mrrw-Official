@@ -122,8 +122,15 @@ async function loadFeed(admin) {
   return (posts || []).map((post) => mapPost(post, reactions));
 }
 
-export async function GET() {
+export async function GET(req) {
   try {
+    const limit = await checkRateLimit(req, {
+      routeKey: "community-circle.get",
+      limit: 30,
+      windowSeconds: 60,
+    });
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
+
     const admin = createAdminClient();
     const feed = await loadFeed(admin);
     const recentCutoff = new Date(Date.now() - 1000 * 60 * 30).toISOString();
@@ -206,7 +213,7 @@ export async function POST(req) {
         .maybeSingle();
       if (parentPostError) throw parentPostError;
 
-      const { error } = await admin.from("circle_replies").insert({
+      const { data: replyRow, error } = await admin.from("circle_replies").insert({
         post_id: body.postId,
         user_id: user.id,
         display_name: identity.displayName,
@@ -217,7 +224,7 @@ export async function POST(req) {
         subscriber_snapshot: identity.subscriber,
         collector_snapshot: identity.collector,
         inner_circle_snapshot: identity.innerCircle,
-      });
+      }).select("id").single();
       if (error) throw error;
 
       if (parentPost?.user_id && parentPost.user_id !== user.id) {
@@ -232,6 +239,7 @@ export async function POST(req) {
             preview: String(parentPost.content || "").slice(0, 160),
             actorId: user.id,
           },
+          dedupKey: replyRow?.id ? `reply:${replyRow.id}` : null,
         });
       }
     }

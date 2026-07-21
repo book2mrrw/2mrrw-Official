@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
-export async function GET() {
+export async function GET(req) {
   try {
     const user = await getFanSessionUser();
     if (!user || user.isGuest) {
@@ -12,6 +13,14 @@ export async function GET() {
     if (!isAdminUser(user)) {
       return NextResponse.json({ error: "Admin account required" }, { status: 403 });
     }
+
+    const rl = await checkRateLimit(req, {
+      routeKey: "gifts.sent",
+      limit: 20,
+      windowSeconds: 60,
+      identifier: user.id,
+    });
+    if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
     const admin = createAdminClient();
     const { data: gifts, error } = await admin

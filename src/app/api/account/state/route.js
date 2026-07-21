@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Redis } from "@upstash/redis";
+import { getCachedState, setCachedState } from "@/lib/server/account-state-cache";
 import { getCollectorAccessRecords } from "@/lib/collector-cards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -22,70 +22,6 @@ import {
   withGuestCookie,
 } from "@/lib/guest-session";
 import { DEFAULT_NOTIFICATION_PREFERENCES, getNotificationState } from "@/lib/notifications";
-
-// Distributed account state cache — shared across all Vercel instances via Upstash Redis.
-// Falls back to in-process Map when UPSTASH_REDIS_REST_URL / _TOKEN are not set.
-// 30s TTL balances freshness against Supabase fan-out cost. Bypassed when ?force=1.
-const STATE_CACHE_TTL_SECONDS = 30;
-const STATE_CACHE_TTL_MS = STATE_CACHE_TTL_SECONDS * 1000;
-const CACHE_MAX_ENTRIES = 500;
-
-// In-process fallback (single-instance only).
-const _stateCache = new Map();
-
-// Lazy Redis client — constructed once per module lifetime, reused across invocations.
-let _redis = null;
-function getRedis() {
-  if (_redis) return _redis;
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
-  if (!url || !token) return null;
-  _redis = new Redis({ url, token });
-  return _redis;
-}
-
-async function getCachedState(userId) {
-  const redis = getRedis();
-  if (redis) {
-    try {
-      const data = await redis.get(`account:state:${userId}`);
-      return data || null;
-    } catch {
-      // Redis unavailable — fall through to in-process cache.
-    }
-  }
-  const entry = _stateCache.get(userId);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) { _stateCache.delete(userId); return null; }
-  return entry.body;
-}
-
-async function setCachedState(userId, body) {
-  const redis = getRedis();
-  if (redis) {
-    try {
-      await redis.setex(`account:state:${userId}`, STATE_CACHE_TTL_SECONDS, body);
-      return;
-    } catch {
-      // Redis unavailable — fall through to in-process cache.
-    }
-  }
-  _stateCache.set(userId, { body, expiresAt: Date.now() + STATE_CACHE_TTL_MS });
-  if (_stateCache.size > CACHE_MAX_ENTRIES) {
-    const oldest = _stateCache.keys().next().value;
-    if (oldest !== undefined) _stateCache.delete(oldest);
-  }
-}
-
-export async function invalidateAccountStateCache(userId) {
-  const redis = getRedis();
-  if (redis) {
-    try {
-      await redis.del(`account:state:${userId}`);
-    } catch {}
-  }
-  if (userId) _stateCache.delete(userId);
-}
 
 function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest = true, user = null, userEntitlements = null }) {
   const hasActiveMembership = membershipHasPremiumAccess(membership) || hasEntitlement(userEntitlements, "subscriber");

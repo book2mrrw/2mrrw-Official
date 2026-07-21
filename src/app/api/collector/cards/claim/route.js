@@ -6,6 +6,7 @@ import {
 } from "@/lib/collector-cards";
 import { getGuestUser } from "@/lib/guest-session";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
 
 export async function POST(req) {
   try {
@@ -47,6 +48,7 @@ export async function POST(req) {
       }, { status: result.status || 400 });
     }
 
+    invalidateAccountStateCache(user.id).catch(() => {});
     return NextResponse.json({
       claimed: true,
       card: result.card,

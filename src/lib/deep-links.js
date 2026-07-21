@@ -20,7 +20,8 @@ export function buildDeepLinkPath({ type, slug }) {
 }
 
 export function buildShareUrl({ type, slug }, origin) {
-  const base = origin || (typeof window !== "undefined" ? window.location.origin : "");
+  if (!origin && typeof window === "undefined") return null;
+  const base = origin || window.location.origin;
   return `${base}${buildDeepLinkPath({ type, slug })}`;
 }
 

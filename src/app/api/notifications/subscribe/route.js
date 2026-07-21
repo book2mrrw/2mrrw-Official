@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export async function POST(req) {
   const supabase = await createClient();
@@ -11,6 +12,14 @@ export async function POST(req) {
   if (!user?.id || user.email?.endsWith("@guest.2mrrw.local")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const rl = await checkRateLimit(req, {
+    routeKey: "push.subscribe",
+    limit: 5,
+    windowSeconds: 300,
+    identifier: user.id,
+  });
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
   const body = await req.json().catch(() => ({}));
   const { subscription } = body;

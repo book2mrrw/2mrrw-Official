@@ -31,6 +31,13 @@ function mapComment(row) {
 
 export async function GET(req) {
   try {
+    const rl = await checkRateLimit(req, {
+      routeKey: "community-comments.get",
+      limit: 30,
+      windowSeconds: 60,
+    });
+    if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
+
     const section = req.nextUrl.searchParams.get("section");
     const itemId = req.nextUrl.searchParams.get("itemId");
 

@@ -12,6 +12,7 @@ import {
 import { getGuestUser } from "@/lib/guest-session";
 import { catalogCoverUrl } from "@/lib/media-urls";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
 
 export async function OPTIONS(req) {
   return mediaCorsPreflightResponse(req);
@@ -67,6 +68,7 @@ export async function POST(request) {
       slugs: [slug],
       source: "grant",
     });
+    invalidateAccountStateCache(user.id).catch(() => {});
     return applyMediaCors(request, NextResponse.json({ ok: true, slug, items }));
   } catch (err) {
     return applyMediaCors(

@@ -2,10 +2,19 @@ import { NextResponse } from "next/server";
 import { getCollectorAccessRecords } from "@/lib/collector-cards";
 import { getGuestUser } from "@/lib/guest-session";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
-export async function GET() {
+export async function GET(req) {
   try {
     const user = await getGuestUser();
+
+    const rl = await checkRateLimit(req, {
+      routeKey: "collector.cards.get",
+      limit: 60,
+      windowSeconds: 60,
+      identifier: user?.id,
+    });
+    if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
     if (!user) {
       return NextResponse.json({ collectorCards: [], collectorStatus: null, access: null });
     }

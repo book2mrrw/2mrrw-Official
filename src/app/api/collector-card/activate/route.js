@@ -6,6 +6,7 @@ import {
 } from "@/lib/collector-cards";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
 
 const LOG_PREFIX = "[collector-card-activate]";
 
@@ -60,6 +61,7 @@ export async function POST(req) {
 
     console.log(`${LOG_PREFIX} ok`, { userId: user.id, serial: result.card?.visibleSerial });
 
+    invalidateAccountStateCache(user.id).catch(() => {});
     return NextResponse.json({
       activated: true,
       alreadyActive: Boolean(result.alreadyActive),

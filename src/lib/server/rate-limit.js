@@ -47,60 +47,33 @@ export async function checkRateLimit(req, {
       admin.from("api_rate_limits").delete().lt("expires_at", new Date(now).toISOString()).then(() => {}).catch(() => {});
     });
 
-    const { data: existing, error: readError } = await admin
-      .from("api_rate_limits")
-      .select("count")
-      .eq("key", key)
-      .maybeSingle();
+    const { data, error } = await admin.rpc("increment_rate_limit", {
+      p_key: key,
+      p_route_key: routeKey,
+      p_id_hash: identifierHash,
+      p_window_start: windowStart,
+      p_expires_at: expiresAt,
+      p_limit: limit,
+    });
 
-    if (readError) {
-      if (isMissingSupabaseTable(readError)) return { allowed: true, limited: false, unavailable: true };
-      throw readError;
+    if (error) {
+      if (isMissingSupabaseTable(error) || error.code === "42883") {
+        // Table or RPC missing — fail open.
+        return { allowed: true, limited: false, unavailable: true };
+      }
+      throw error;
     }
 
-    const nextCount = (existing?.count || 0) + 1;
-    if (nextCount > limit) {
+    const row = Array.isArray(data) ? data[0] : data;
+    const newCount = row?.new_count ?? 1;
+    const allowed = row?.allowed ?? true;
+
+    if (!allowed) {
       const retryAfterSeconds = Math.max(1, Math.ceil((windowStartMs + windowMs - now) / 1000));
       return { allowed: false, limited: true, retryAfterSeconds };
     }
 
-    const values = {
-      key,
-      route_key: routeKey,
-      identifier_hash: identifierHash,
-      window_start: windowStart,
-      expires_at: expiresAt,
-      count: nextCount,
-    };
-
-    const { error: writeError } = existing
-      ? await admin.from("api_rate_limits").update(values).eq("key", key)
-      : await admin.from("api_rate_limits").insert(values);
-
-    if (writeError) {
-      if (isMissingSupabaseTable(writeError)) {
-        return { allowed: true, limited: false, unavailable: true };
-      }
-      if (writeError.code === "23505") {
-        // Two concurrent requests raced on a fresh window — one INSERT won, ours lost.
-        // Re-read the committed count and enforce the limit against it rather than
-        // treating this as "unavailable" (which would silently allow the request through).
-        const { data: raceRow } = await admin
-          .from("api_rate_limits")
-          .select("count")
-          .eq("key", key)
-          .maybeSingle();
-        const raceCount = raceRow?.count ?? 0;
-        if (raceCount > limit) {
-          const retryAfterSeconds = Math.max(1, Math.ceil((windowStartMs + windowMs - now) / 1000));
-          return { allowed: false, limited: true, retryAfterSeconds };
-        }
-        return { allowed: true, limited: false, remaining: Math.max(0, limit - raceCount) };
-      }
-      throw writeError;
-    }
-
-    return { allowed: true, limited: false, remaining: Math.max(0, limit - nextCount) };
+    return { allowed: true, limited: false, remaining: Math.max(0, limit - newCount) };
   } catch (err) {
     console.warn("Rate limit unavailable:", err.message);
     return { allowed: true, limited: false, unavailable: true };
