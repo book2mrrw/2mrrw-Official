@@ -212,18 +212,19 @@ export function PageAuthHelpSupport() {
 
 /**
  * Phase R1 — checkout pending URL effect (auth subscription isolated).
+ * onCheckout is stable (useCallback []) and reads cart via cartRef internally —
+ * no cart prop needed here, which prevents the effect from firing every render.
  */
-export function PageAuthCheckoutPendingEffect({ cart, onCheckout }) {
+export function PageAuthCheckoutPendingEffect({ onCheckout }) {
   const { currentUser } = useAuth();
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
     if (params.get("checkout") !== "pending") return;
-    if (cart.length === 0) return;
     window.history.replaceState({}, "", window.location.pathname);
     void onCheckout();
-  }, [currentUser, cart, onCheckout]);
+  }, [currentUser, onCheckout]);
 
   return null;
 }

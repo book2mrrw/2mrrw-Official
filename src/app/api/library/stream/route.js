@@ -232,9 +232,30 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
   );
 }
 
-/** HEAD uses the same entitlement + redirect proxy path as GET (Range-safe audio probes). */
+/**
+ * HEAD — lightweight auth check only. Skips entitlement lookup, R2 key resolution,
+ * session creation, URL signing, and proxying. Audio preflights only need to confirm
+ * the resource exists and is audio/mpeg; the subsequent GET enforces full entitlement.
+ */
 export async function HEAD(req) {
-  return GET(req);
+  const slug = req.nextUrl.searchParams.get("slug");
+  if (!slug) {
+    return applyMediaCors(req, new NextResponse(null, { status: 400 }));
+  }
+  const user = (await getFanSessionUser()) ?? (await getGuestUser());
+  if (!user) {
+    return applyMediaCors(req, new NextResponse(null, { status: 401 }));
+  }
+  return applyMediaCors(
+    req,
+    new NextResponse(null, {
+      status: 200,
+      headers: {
+        "Content-Type": "audio/mpeg",
+        "Accept-Ranges": "bytes",
+      },
+    })
+  );
 }
 
 export async function GET(req) {

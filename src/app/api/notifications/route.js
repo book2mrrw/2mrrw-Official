@@ -6,10 +6,14 @@ import {
   isMissingNotificationsTable,
   updateNotificationPreferences,
 } from "@/lib/notifications";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req) {
+  const rl = await checkRateLimit(req, { routeKey: "notifications.get", limit: 60, windowSeconds: 60 });
+  if (rl.limited) return rateLimitResponse(rl.retryAfterSeconds);
+
   try {
     const user = await getGuestUser();
     if (!user) {
@@ -29,6 +33,9 @@ export async function GET() {
 }
 
 export async function PATCH(req) {
+  const rl = await checkRateLimit(req, { routeKey: "notifications.patch", limit: 10, windowSeconds: 60 });
+  if (rl.limited) return rateLimitResponse(rl.retryAfterSeconds);
+
   try {
     const user = await getGuestUser();
     if (!user) {
@@ -56,6 +63,9 @@ export async function PATCH(req) {
 }
 
 export async function POST(req) {
+  const rl = await checkRateLimit(req, { routeKey: "notifications.post", limit: 30, windowSeconds: 60 });
+  if (rl.limited) return rateLimitResponse(rl.retryAfterSeconds);
+
   try {
     const user = await getGuestUser();
     if (!user) {

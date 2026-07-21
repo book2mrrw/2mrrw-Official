@@ -1,5 +1,17 @@
+import { storeAudioBlob, getAudioBlob, removeAudioBlob, getAllAudioKeys } from "@/lib/idb-audio-cache";
+
 const OFFLINE_PREFIX = "2mrrw_offline";
 const QUEUED_PREFIX = "2mrrw_offline_queued";
+
+// Unique to this page session — used to validate same-session blob URLs
+// created before IDB hydration completes.
+const SESSION_ID = typeof crypto !== "undefined" && crypto.randomUUID
+  ? crypto.randomUUID()
+  : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+
+// Module-level memory map of idbKey ("userId:slug") → active blob URL.
+// Populated by queueOfflineDownload (same session) and initOfflineAudioCache (cross-session).
+const blobUrlMap = new Map();
 
 function offlineKey(userId, slug) {
   return `${OFFLINE_PREFIX}:${userId || "guest"}:${slug}`;
@@ -7,6 +19,10 @@ function offlineKey(userId, slug) {
 
 function queuedKey(userId) {
   return `${QUEUED_PREFIX}:${userId || "guest"}`;
+}
+
+function idbKey(userId, slug) {
+  return `${userId || "guest"}:${slug}`;
 }
 
 function safeParse(raw, fallback) {
@@ -29,6 +45,7 @@ export function isOfflineQueued(userId, slug) {
 
 export function isOfflineCached(userId, slug) {
   if (typeof window === "undefined") return false;
+  if (blobUrlMap.has(idbKey(userId, slug))) return true;
   return Boolean(window.localStorage.getItem(offlineKey(userId, slug)));
 }
 
@@ -41,7 +58,9 @@ export function getOfflineCacheMeta(userId, slug) {
 }
 
 /**
- * MVP: mark slug as offline-queued; optionally store blob URL when fetch succeeds.
+ * Queue a track for offline playback. Fetches the audio, stores the blob in
+ * IndexedDB (persists across sessions) and puts the blob URL in blobUrlMap
+ * for immediate same-session use.
  */
 export async function queueOfflineDownload(userId, track, { streamUrl } = {}) {
   if (typeof window === "undefined" || !track?.slug) {
@@ -62,6 +81,10 @@ export async function queueOfflineDownload(userId, track, { streamUrl } = {}) {
       if (res.ok) {
         const blob = await res.blob();
         blobUrl = URL.createObjectURL(blob);
+        const key = idbKey(userId, track.slug);
+        blobUrlMap.set(key, blobUrl);
+        // Persist to IDB — non-fatal if storage is unavailable.
+        storeAudioBlob(key, blob).catch(() => {});
       }
     } catch {
       /* queued without blob — in-app playback uses stream URL */
@@ -73,6 +96,7 @@ export async function queueOfflineDownload(userId, track, { streamUrl } = {}) {
     title: track.title,
     cover: track.cover || track.coverArt,
     blobUrl,
+    blobSessionId: blobUrl ? SESSION_ID : null,
     streamUrl: url || null,
     queuedAt: new Date().toISOString(),
     status: blobUrl ? "cached" : "queued",
@@ -81,44 +105,84 @@ export async function queueOfflineDownload(userId, track, { streamUrl } = {}) {
   return meta;
 }
 
+/**
+ * Hydrate blobUrlMap from IndexedDB on session start.
+ * Call once when the authenticated userId is known (e.g. from PageAuthRefSync).
+ * Blob URLs created here are valid for this session; IDB blobs persist indefinitely.
+ */
+export async function initOfflineAudioCache(userId) {
+  if (typeof window === "undefined" || !userId) return;
+  const prefix = `${userId}:`;
+  try {
+    const keys = await getAllAudioKeys();
+    await Promise.all(
+      keys
+        .filter((k) => k.startsWith(prefix) && !blobUrlMap.has(k))
+        .map(async (key) => {
+          const blob = await getAudioBlob(key);
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          blobUrlMap.set(key, url);
+        })
+    );
+  } catch {
+    /* non-fatal — falls back to stream URL */
+  }
+}
+
 export function removeOfflineCache(userId, slug) {
   if (typeof window === "undefined") return;
   window.localStorage.removeItem(offlineKey(userId, slug));
   const queued = getOfflineQueuedSlugs(userId).filter((s) => s !== slug);
   window.localStorage.setItem(queuedKey(userId), JSON.stringify(queued));
+  const key = idbKey(userId, slug);
+  const url = blobUrlMap.get(key);
+  if (url) { try { URL.revokeObjectURL(url); } catch {} }
+  blobUrlMap.delete(key);
+  removeAudioBlob(key).catch(() => {});
 }
 
-/** Prefer blob URL for in-app offline playback when cached. */
+/**
+ * Prefer IDB-backed blob URL (persistent), then same-session blob URL from localStorage,
+ * then stream URL (requires network).
+ */
 export function getOfflinePlaybackUrl(userId, slug) {
+  const key = idbKey(userId, slug);
+  if (blobUrlMap.has(key)) return blobUrlMap.get(key);
   const meta = getOfflineCacheMeta(userId, slug);
   if (!meta) return null;
-  return meta.blobUrl || meta.streamUrl || null;
+  // Same-session blob URL created before IDB hydration completed.
+  if (meta.blobUrl && meta.blobSessionId === SESSION_ID) return meta.blobUrl;
+  return meta.streamUrl || null;
 }
 
-/** Revoke retained object URLs while tab hidden to reduce iOS memory pressure. */
+/**
+ * Revoke in-memory blob URLs to release iOS memory pressure.
+ * IDB blobs are unaffected — they will be re-hydrated on next initOfflineAudioCache call.
+ */
 export function releaseRetainedOfflineBlobUrls() {
   if (typeof window === "undefined") return;
+  for (const [, url] of blobUrlMap) {
+    try { URL.revokeObjectURL(url); } catch {}
+  }
+  blobUrlMap.clear();
+
+  // Clear blobUrl from localStorage metadata so stale URLs aren't re-used.
   const prefix = `${OFFLINE_PREFIX}:`;
-  for (let i = 0; i < window.localStorage.length; i += 1) {
+  const keys = [];
+  for (let i = 0; i < window.localStorage.length; i++) {
     const key = window.localStorage.key(i);
-    if (!key || !key.startsWith(prefix)) continue;
-    const rest = key.slice(prefix.length);
-    const sep = rest.indexOf(":");
-    if (sep < 0) continue;
-    const userId = rest.slice(0, sep);
-    const slug = rest.slice(sep + 1);
-    const meta = getOfflineCacheMeta(userId, slug);
-    if (!meta?.blobUrl) continue;
-    try {
-      URL.revokeObjectURL(meta.blobUrl);
-    } catch {
-      /* non-fatal */
+    if (key && key.startsWith(prefix)) keys.push(key);
+  }
+  for (const key of keys) {
+    const meta = safeParse(window.localStorage.getItem(key), null);
+    if (meta?.blobUrl) {
+      window.localStorage.setItem(key, JSON.stringify({
+        ...meta,
+        blobUrl: null,
+        blobSessionId: null,
+        status: meta.streamUrl ? "cached" : "queued",
+      }));
     }
-    const next = {
-      ...meta,
-      blobUrl: null,
-      status: meta.streamUrl ? "queued" : "queued",
-    };
-    window.localStorage.setItem(key, JSON.stringify(next));
   }
 }

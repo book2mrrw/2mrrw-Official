@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect } from "react";
 import { useAuth, useEntitlementAccountState } from "@/context/AuthContext";
 import { setPageAuthRef } from "@/lib/storefront/page-auth-ref";
 import { commitStorefrontCardChrome } from "@/lib/storefront/storefront-card-chrome-store";
+import { initOfflineAudioCache } from "@/lib/offline-cache";
 import {
   isUiHydrationTraceEnabled,
   logUiHydrationTrace,
@@ -81,6 +82,14 @@ export default function PageAuthRefSync() {
       });
     }
   }, [sessionHydrated, loading, currentUser?.id]);
+
+  // Hydrate offline audio cache from IndexedDB once the authenticated userId is known.
+  // Non-fatal — falls back to stream URL if IDB is unavailable.
+  useEffect(() => {
+    if (currentUser?.id) {
+      initOfflineAudioCache(currentUser.id).catch(() => {});
+    }
+  }, [currentUser?.id]);
 
   return null;
 }

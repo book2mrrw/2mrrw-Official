@@ -2,8 +2,12 @@ import { NextResponse } from "next/server";
 import { createPendingGiftTransaction } from "@/lib/commerce/gift-transactions";
 import { resolveCartLines } from "@/lib/commerce/resolve-cart";
 import { getGuestUser } from "@/lib/guest-session";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export async function POST(req) {
+  const rl = await checkRateLimit(req, { routeKey: "gifts.purchase", limit: 5, windowSeconds: 60 });
+  if (rl.limited) return rateLimitResponse(rl.retryAfterSeconds);
+
   try {
     const guest = await getGuestUser();
     if (!guest?.id) {

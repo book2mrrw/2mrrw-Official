@@ -15,12 +15,20 @@ function levelForEvent(event) {
 function log(event) {
   if (!event?.type || !shouldLogEvent(event)) return;
   const safe = sanitizeTelemetryPayload(event);
-  buffer.push(safe);
   const level = levelForEvent(safe);
   clientLog(level, safe.type.replace(/\./g, "_"), {
     domain: "telemetry",
     ...safe,
   });
+  if (level === "error" || level === "warn") {
+    // Urgent events go to PostHog immediately — skip the buffer so flush() doesn't double-send.
+    import("./posthogAdapter")
+      .then(({ flushToPosthog }) => flushToPosthog([safe]))
+      .catch(() => {});
+  } else {
+    // Non-urgent events accumulate in the ring buffer for batch flush.
+    buffer.push(safe);
+  }
 }
 
 function getBuffer() {
@@ -28,31 +36,18 @@ function getBuffer() {
 }
 
 function flush() {
+  // Buffer only contains info-level events — urgent events are sent immediately in log().
   const events = buffer.drain();
-  if (!events.length) return;
-  const urgent = events.filter((e) => {
-    const level = levelForEvent(e);
-    return level === "error" || level === "warn";
-  });
-  const info = events.filter((e) => levelForEvent(e) === "info");
-
-  if (urgent.length) {
+  if (!events.length || typeof window === "undefined") return;
+  const schedule =
+    typeof requestIdleCallback === "function"
+      ? requestIdleCallback
+      : (cb) => setTimeout(cb, 200);
+  schedule(() => {
     import("./posthogAdapter")
-      .then(({ flushToPosthog }) => flushToPosthog(urgent))
+      .then(({ flushToPosthog }) => flushToPosthog(events))
       .catch(() => {});
-  }
-
-  if (info.length && typeof window !== "undefined") {
-    const schedule =
-      typeof requestIdleCallback === "function"
-        ? requestIdleCallback
-        : (cb) => setTimeout(cb, 200);
-    schedule(() => {
-      import("./posthogAdapter")
-        .then(({ flushToPosthog }) => flushToPosthog(info))
-        .catch(() => {});
-    });
-  }
+  });
 }
 
 export const telemetry = { log, getBuffer, flush };

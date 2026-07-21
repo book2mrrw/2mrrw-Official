@@ -225,6 +225,9 @@ const HomeStorefront = memo(function HomeStorefront({
 
       <div id="home-shows">
         <h2 className="section-heading" style={{ marginBottom: 16 }}>Shows & Events</h2>
+        {events.length === 0 && (
+          <div style={{ color: "#555", fontSize: 13, letterSpacing: 1, padding: "12px 0" }}>No upcoming shows scheduled.</div>
+        )}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {events.map((evt) => (
             <div

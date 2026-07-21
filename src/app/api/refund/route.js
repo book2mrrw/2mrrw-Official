@@ -41,7 +41,10 @@ export async function POST(req) {
     }
 
     if (purchase.status === "refunded") {
-      return NextResponse.json({ error: "This purchase has already been refunded" }, { status: 409 });
+      return NextResponse.json({ error: "This purchase has already been refunded." }, { status: 409 });
+    }
+    if (purchase.status === "refunding") {
+      return NextResponse.json({ error: "A refund is already in progress. Please wait a moment and try again." }, { status: 409 });
     }
     if (purchase.status !== "completed") {
       return NextResponse.json({ error: "Only completed purchases can be refunded" }, { status: 400 });
@@ -63,13 +66,44 @@ export async function POST(req) {
       );
     }
 
+    // Atomic CAS: mark as "refunding" only if still "completed". If another concurrent
+    // request already claimed the row, this returns 0 rows and we abort before calling Stripe.
+    const { data: claimed, error: claimError } = await admin
+      .from("purchases")
+      .update({ status: "refunding", updated_at: new Date().toISOString() })
+      .eq("id", purchaseId)
+      .eq("user_id", user.id)
+      .eq("status", "completed")
+      .select("id");
+
+    if (claimError) throw claimError;
+    if (!claimed || claimed.length === 0) {
+      return NextResponse.json({ error: "This purchase has already been refunded" }, { status: 409 });
+    }
+
     const stripe = getStripe();
-    const refund = await stripe.refunds.create({
-      payment_intent: purchase.stripe_payment_intent_id,
-      reason: "requested_by_customer",
-    });
+    let refund;
+    try {
+      refund = await stripe.refunds.create({
+        payment_intent: purchase.stripe_payment_intent_id,
+        reason: "requested_by_customer",
+      });
+    } catch (stripeErr) {
+      // Stripe call failed — revert status so the user can try again.
+      await admin
+        .from("purchases")
+        .update({ status: "completed", updated_at: new Date().toISOString() })
+        .eq("id", purchaseId)
+        .eq("user_id", user.id);
+      throw stripeErr;
+    }
 
     if (refund.status !== "succeeded" && refund.status !== "pending") {
+      await admin
+        .from("purchases")
+        .update({ status: "completed", updated_at: new Date().toISOString() })
+        .eq("id", purchaseId)
+        .eq("user_id", user.id);
       return NextResponse.json({ error: "Refund could not be processed. Please contact support." }, { status: 502 });
     }
 
@@ -82,7 +116,8 @@ export async function POST(req) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", purchaseId)
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .eq("status", "refunding");
     if (updateError) throw updateError;
 
     return NextResponse.json({

@@ -181,7 +181,7 @@ const innerCirclePosts = [
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
 const nextLiveDateTime = new Date("2026-05-10T20:00:00");
-const events = [
+const FALLBACK_EVENTS = [
   { id:"evt-1", name:"2MRRW Live – Dallas",  location:"Dallas, TX",      date:"2026-05-10", time:"8:00 PM", price:25.00, tickets:50 },
   { id:"evt-2", name:"2MRRW Live – Houston", location:"Houston, TX",     date:"2026-05-24", time:"9:00 PM", price:25.00, tickets:75 },
   { id:"evt-3", name:"2MRRW Live – Atlanta", location:"Atlanta, GA",     date:"2026-06-07", time:"8:30 PM", price:30.00, tickets:60 },
@@ -289,6 +289,27 @@ function decrementInventory(inv, slug) {
   return next;
 }
 
+// Static data that never changes at runtime — declared at module level so they
+// are never recreated during renders.
+const liveStreamDate = nextLiveDateTime.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
+const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
+
+const sidebarNav = [
+  { groupId:"g-home",      label:"HOME",           directTab:"home",    subTabs:[] },
+  { groupId:"g-music",     label:"MUSIC",          directTab:"singles", subTabs:[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mymusic",label:"My Music Collection"}] },
+  { groupId:"g-shop",      label:"SHOP",           directTab:"shop",    subTabs:[{id:"shop",label:"Merch"}] },
+  { groupId:"g-cards",     label:"CARDS",          directTab:"cards",   subTabs:[{id:"cards",label:"Collector's Cards"}] },
+  { groupId:"g-vault",     label:"VAULT",          directTab:"vault",   subTabs:[{id:"vault",label:"Exclusive Drops"}] },
+  { groupId:"g-shows",     label:"SHOWS & EVENTS", directTab:"shows",   subTabs:[{id:"shows",label:"Upcoming Shows"}] },
+  { groupId:"g-community", label:"MORE",           directTab:"blog",    subTabs:[{id:"blog",label:"Blog"},{id:"vision",label:"Vision"},{id:"circle",label:"Circle"},{id:"innercircle",label:"Inner Circle"},{id:"live",label:"2MRRW Live"},{id:"help",label:"Help & Support"}] },
+];
+
+const blogPosts = [
+  { id:"post-1", title:"The Making of Love Hz Vol.1",          date:"April 2, 2026",      author:"2MRRW", body:"Love Hz Vol.1 started as a series of late-night sessions in a home studio with nothing but a laptop, a MIDI keyboard, and a vision. Every track on that project represents a different frequency of love — the highs, the lows, the static in between. We wanted listeners to feel the entire spectrum.\n\nThe process took nearly 18 months. Some songs were written in 10 minutes, others were rebuilt from scratch a dozen times. What you hear is the version that survived. We hope it resonates with you the way it resonated with us when we finally pressed play for the first time." },
+  { id:"post-2", title:"Why We Started 2MRRW",                 date:"March 15, 2026",     author:"2MRRW", body:"2MRRW was never supposed to be a brand. It started as a reminder — tomorrow is always possible. No matter what today looks like, tomorrow holds something different.\n\nWe put that energy into every record, every show, every piece of merch. It's not just a name on a hoodie. It's a mindset we live by and want to share with everyone who connects with the music." },
+  { id:"post-3", title:"Tour Prep: What Goes Into a Live Show", date:"February 28, 2026", author:"2MRRW", body:"People see the 90-minute set. They don't see the weeks of rehearsal, the production calls, the logistics of moving equipment across state lines. A live 2MRRW show is designed from the ground up — the lighting, the setlist order, the energy arc from opener to closer.\n\nWe treat every city like it's the only city. Dallas gets the same energy as NYC. That's the standard we hold ourselves to and always will." },
+];
+
 // ══════════════════════════════════════════════════════════════════════════════
 export default function Page() {
   return (
@@ -378,6 +399,7 @@ function PageStorefront() {
   const [mobileCartOpen, setMobileCartOpen]       = useState(false);
   const [mobileNavOpen, setMobileNavOpen]         = useState(false);
   const [mobileNavClosing, setMobileNavClosing]   = useState(false);
+  const [liveEvents, setLiveEvents]               = useState(FALLBACK_EVENTS);
 
   // ── REFS ──────────────────────────────────────────────────────────────────
   const cursorRef          = useRef(null);
@@ -399,6 +421,47 @@ function PageStorefront() {
   const homeStorefrontMountCountRef = useRef(0);
   const prevActiveTabForHomeScrollRef = useRef("home");
   const carouselMediaHealthyRef = useRef(false);
+  const eventsLoadedRef = useRef(false);
+
+  // Kept in sync with modal state each render so callbacks can read the
+  // current value without capturing stale closures or adding modal booleans
+  // to useCallback deps (which would recreate the callback on every open/close).
+  const previewModalOpenRef = useRef(false);
+  previewModalOpenRef.current = previewModalOpen;
+  const featureModalOpenRef = useRef(false);
+  featureModalOpenRef.current = featureModalOpen;
+  const albumModalOpenRef = useRef(false);
+  albumModalOpenRef.current = albumModalOpen;
+
+  // Mirror mutable state into refs so stable callbacks can read current values
+  // without capturing state in their deps (which would recreate them on every change).
+  const mobileNavOpenRef = useRef(false);
+  mobileNavOpenRef.current = mobileNavOpen;
+  const mobileNavClosingRef = useRef(false);
+  mobileNavClosingRef.current = mobileNavClosing;
+  const selectedAlbumRef = useRef(null);
+  selectedAlbumRef.current = selectedAlbum;
+  const cartRef = useRef([]);
+  cartRef.current = cart;
+  const inventoryRef = useRef({});
+  inventoryRef.current = inventory;
+
+  const normalizedSelectedAlbum = useMemo(() => {
+    if (!selectedAlbum) return null;
+    return {
+      ...selectedAlbum,
+      artist: selectedAlbum.artist || "2MRRW",
+      year: selectedAlbum.year || selectedAlbum.date,
+      coverArt: selectedAlbum.coverArt || selectedAlbum.cover,
+      price:
+        selectedAlbum.price != null &&
+        Number.isFinite(Number(selectedAlbum.price))
+          ? `$${Number(selectedAlbum.price).toFixed(2)}`
+          : selectedAlbum.price,
+      tracks: normalizeAlbumTracksForModal(selectedAlbum.tracks || []),
+    };
+  }, [selectedAlbum]);
+
   const ensureStorefrontCarouselMedia = useCallback(() => {
     const row = singlesRowRef.current;
     if (!row) return;
@@ -570,6 +633,15 @@ function PageStorefront() {
     setInventory(loadInventory());
   }, []);
 
+  // Lazy-load live events from API on first shows tab open; falls back to FALLBACK_EVENTS.
+  useEffect(() => {
+    if (activeTab !== "shows" || eventsLoadedRef.current) return;
+    eventsLoadedRef.current = true;
+    fetch("/api/public/events")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => { if (data?.events && !data.fallback) setLiveEvents(data.events); })
+      .catch(() => {});
+  }, [activeTab]);
 
   const enrichRadioSlide = useCallback(
     (slide) => {
@@ -977,7 +1049,7 @@ function PageStorefront() {
   }, [addToCartRaw]);
   const clearCart      = () => setCart([]);
   const removeFromCart = idx => setCart(p => p.filter((_, i) => i !== idx));
-  const total          = cart.reduce((s, item) => s + item.price, 0);
+  const total          = useMemo(() => cart.reduce((s, item) => s + item.price, 0), [cart]);
   const cartRequiresShipping = useMemo(() => cart.some((item) => {
     const slug = String(item?.slug || "");
     if (slug === "vault-pass") return false;
@@ -1019,12 +1091,12 @@ function PageStorefront() {
   }, []);
 
   const openSingleModal = useCallback((single) => {
-    if (featureModalOpen) {
+    if (featureModalOpenRef.current) {
       setFeatureModalOpen(false);
       setFeatureModalItem(null);
       setFeatureReleaseDetail(null);
     }
-    if (albumModalOpen) {
+    if (albumModalOpenRef.current) {
       setAlbumModalOpen(false);
       setSelectedAlbum(null);
     }
@@ -1037,21 +1109,17 @@ function PageStorefront() {
     void getControlSystemReleaseDetail({ slug: singleItem.slug, fallbackRelease: singleItem }).then((detail) => {
       if (detail) setSelectedReleaseDetail(detail);
     });
-  }, [
-    featureModalOpen,
-    albumModalOpen,
-    playCanonicalCatalogItem,
-  ]);
+  }, [playCanonicalCatalogItem]);
 
   const openFeatureModal = useCallback(
     (feat) => {
       dismissNowPlayingFromBridge();
-      if (previewModalOpen) {
+      if (previewModalOpenRef.current) {
         setPreviewModalOpen(false);
         setSelectedSingle(null);
         setSelectedReleaseDetail(null);
       }
-      if (albumModalOpen) {
+      if (albumModalOpenRef.current) {
         setAlbumModalOpen(false);
         setSelectedAlbum(null);
       }
@@ -1065,11 +1133,7 @@ function PageStorefront() {
         if (detail) setFeatureReleaseDetail(detail);
       });
     },
-    [
-      previewModalOpen,
-      albumModalOpen,
-      playCanonicalCatalogItem,
-    ]
+    [playCanonicalCatalogItem]
   );
 
   const closeFeatureModal = useCallback(() => {
@@ -1093,10 +1157,10 @@ function PageStorefront() {
 
   const playAlbumModalTrackAtIndex = useCallback(
     async (index) => {
-      if (!selectedAlbum) return false;
-      return playAlbumTracks(selectedAlbum, index);
+      if (!selectedAlbumRef.current) return false;
+      return playAlbumTracks(selectedAlbumRef.current, index);
     },
-    [selectedAlbum, playAlbumTracks]
+    [playAlbumTracks]
   );
 
   const handleSingleClick = useCallback(
@@ -1136,20 +1200,37 @@ function PageStorefront() {
     []
   );
 
-  const handleCheckout = async () => {
-    if (cart.length === 0) return;
-    setCheckingOut(true); setCheckoutError("");
+  const handleCheckout = useCallback(async () => {
+    if (cartRef.current.length === 0) return;
+    setCheckingOut(true);
+    setCheckoutError("");
     try {
-      const res  = await fetch("/api/create-payment-intent", { method:"POST", headers:{"Content-Type":"application/json"}, credentials:"include", body:JSON.stringify({ cart }) });
+      const res = await fetch("/api/create-payment-intent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ cart: cartRef.current }),
+      });
       const data = await res.json();
-      if (!res.ok) { setCheckoutError(data.error || data.message || "Checkout failed."); setCheckingOut(false); return; }
-      if (!data.clientSecret) { setCheckoutError("No client secret returned."); setCheckingOut(false); return; }
+      if (!res.ok) {
+        setCheckoutError(data.error || data.message || "Checkout failed.");
+        setCheckingOut(false);
+        return;
+      }
+      if (!data.clientSecret) {
+        setCheckoutError("No client secret returned.");
+        setCheckingOut(false);
+        return;
+      }
       setClientSecret(data.clientSecret);
       setCheckingOut(false);
-    } catch (err) { setCheckoutError(`Network error: ${err.message}`); setCheckingOut(false); }
-  };
+    } catch (err) {
+      setCheckoutError(`Network error: ${err.message}`);
+      setCheckingOut(false);
+    }
+  }, []);
 
-  const handleCheckoutSuccess = async (paymentIntentId) => {
+  const handleCheckoutSuccess = useCallback(async (paymentIntentId) => {
     if (paymentIntentId) {
       try {
         await fetch("/api/purchase/confirm", {
@@ -1160,8 +1241,9 @@ function PageStorefront() {
         });
       } catch { /* webhook may still fulfill */ }
     }
-    let inv = { ...inventory };
-    cart.forEach(item => {
+    // Read state via refs so this callback stays stable with [] deps.
+    let inv = { ...inventoryRef.current };
+    cartRef.current.forEach(item => {
       if (item.slug in REAL_INVENTORY) { inv = decrementInventory(inv, item.slug); }
     });
     setInventory(inv);
@@ -1178,8 +1260,8 @@ function PageStorefront() {
     ]);
     notifyEntitlementsUpdated({ source: "page.js", reason: "checkout-success" });
     setMembershipUpsellOpen(true);
-    if (isMobile) setMobileCartOpen(false);
-  };
+    if (isMobileRef.current) setMobileCartOpen(false);
+  }, []);
 
   const handleSignOut = async () => {
     await getPageAuthRef().signOut?.();
@@ -1188,7 +1270,7 @@ function PageStorefront() {
   const getDaysInMonth     = (m, y) => new Date(y, m+1, 0).getDate();
   const getFirstDayOfMonth = (m, y) => new Date(y, m, 1).getDay();
   const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const getShowsForDay = day => events.filter(s => { const d=new Date(s.date); return d.getFullYear()===calYear && d.getMonth()===calMonth && d.getDate()===day; });
+  const getShowsForDay = day => liveEvents.filter(s => { const d=new Date(s.date); return d.getFullYear()===calYear && d.getMonth()===calMonth && d.getDate()===day; });
   const prevMonth = () => { if (calMonth===0) { setCalMonth(11); setCalYear(calYear-1); } else setCalMonth(calMonth-1); };
   const nextMonth = () => { if (calMonth===11) { setCalMonth(0); setCalYear(calYear+1); } else setCalMonth(calMonth+1); };
 
@@ -1215,9 +1297,9 @@ function PageStorefront() {
   };
 
   const closeMobileNav = useCallback(() => {
-    if (!mobileNavOpen || mobileNavClosing) return;
+    if (!mobileNavOpenRef.current || mobileNavClosingRef.current) return;
     setMobileNavClosing(true);
-  }, [mobileNavOpen, mobileNavClosing]);
+  }, []);
 
   useEffect(() => {
     if (!mobileNavClosing) return undefined;
@@ -1263,36 +1345,38 @@ function PageStorefront() {
     });
   }, []);
 
-  const switchTab = tabId => {
+  const switchTab = useCallback((tabId) => {
     if (tabId === "cards") {
       window.location.assign(COLLECTORS_CARDS_ROUTE);
       return;
     }
     // phase11: startTransition — non-urgent UI update
     startTransition(() => {
-    setActiveTab(tabId);
-    const navGroupByTab = {
-      singles: "g-music",
-      albums: "g-music",
-      mymusic: "g-music",
-      shop: "g-shop",
-      blog: "g-community",
-      vision: "g-community",
-      circle: "g-community",
-      innercircle: "g-community",
-      vault: "g-vault",
-      shows: "g-shows",
-      live: "g-live",
-      home: "g-home",
-    };
-    if (navGroupByTab[tabId]) setExpandedGroup(navGroupByTab[tabId]);
-    if (isMobile) {
-      setMobileNavOpen(false);
-      setMobileNavClosing(false);
-      setMobileNavExpandedGroups(new Set());
-    }
+      setActiveTab(tabId);
+      const navGroupByTab = {
+        singles: "g-music",
+        albums: "g-music",
+        mymusic: "g-music",
+        shop: "g-shop",
+        blog: "g-community",
+        vision: "g-community",
+        circle: "g-community",
+        innercircle: "g-community",
+        vault: "g-vault",
+        shows: "g-shows",
+        live: "g-live",
+        home: "g-home",
+      };
+      if (navGroupByTab[tabId]) setExpandedGroup(navGroupByTab[tabId]);
+      // Read isMobileRef instead of isMobile state — keeps this callback stable
+      // with [] deps while still seeing the current mobile breakpoint at call time.
+      if (isMobileRef.current) {
+        setMobileNavOpen(false);
+        setMobileNavClosing(false);
+        setMobileNavExpandedGroups(new Set());
+      }
     });
-  };
+  }, []);
 
   const openCollection = useCallback(() => {
     switchTab("mymusic");
@@ -1337,33 +1421,17 @@ function PageStorefront() {
     });
   };
 
-  const shopItems      = printfulProducts.length > 0 ? printfulProducts : fallbackMerch;
-  const shopIsFallback = !printfulLoading && printfulProducts.length === 0;
+  const shopItems      = useMemo(() => printfulProducts.length > 0 ? printfulProducts : fallbackMerch, [printfulProducts]);
+  const shopIsFallback = useMemo(() => !printfulLoading && printfulProducts.length === 0, [printfulLoading, printfulProducts]);
 
-  const liveStreamDate = nextLiveDateTime.toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"});
-  const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US",{hour:"numeric",minute:"2-digit",hour12:true});
   const currentSlide   = useMemo(() => enrichedRadioSlides[radioIndex], [enrichedRadioSlides, radioIndex]);
   const handleDonateOpen = useCallback(() => setDonateOpen(true), []);
 
-  const exclusiveItems = exclusiveCatalog.map(item => ({
+  const exclusiveItems = useMemo(() => exclusiveCatalog.map(item => ({
     ...item,
     stock: inventory[item.slug] !== undefined ? inventory[item.slug] : REAL_INVENTORY[item.slug],
-  }));
-  const blogPosts = [
-    { id:"post-1", title:"The Making of Love Hz Vol.1",          date:"April 2, 2026",      author:"2MRRW", body:"Love Hz Vol.1 started as a series of late-night sessions in a home studio with nothing but a laptop, a MIDI keyboard, and a vision. Every track on that project represents a different frequency of love — the highs, the lows, the static in between. We wanted listeners to feel the entire spectrum.\n\nThe process took nearly 18 months. Some songs were written in 10 minutes, others were rebuilt from scratch a dozen times. What you hear is the version that survived. We hope it resonates with you the way it resonated with us when we finally pressed play for the first time." },
-    { id:"post-2", title:"Why We Started 2MRRW",                 date:"March 15, 2026",     author:"2MRRW", body:"2MRRW was never supposed to be a brand. It started as a reminder — tomorrow is always possible. No matter what today looks like, tomorrow holds something different.\n\nWe put that energy into every record, every show, every piece of merch. It's not just a name on a hoodie. It's a mindset we live by and want to share with everyone who connects with the music." },
-    { id:"post-3", title:"Tour Prep: What Goes Into a Live Show", date:"February 28, 2026", author:"2MRRW", body:"People see the 90-minute set. They don't see the weeks of rehearsal, the production calls, the logistics of moving equipment across state lines. A live 2MRRW show is designed from the ground up — the lighting, the setlist order, the energy arc from opener to closer.\n\nWe treat every city like it's the only city. Dallas gets the same energy as NYC. That's the standard we hold ourselves to and always will." },
-  ];
+  })), [exclusiveCatalog, inventory]);
 
-  const sidebarNav = [
-    { groupId:"g-home",      label:"HOME",           directTab:"home",    subTabs:[] },
-    { groupId:"g-music",     label:"MUSIC",          directTab:"singles", subTabs:[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mymusic",label:"My Music Collection"}] },
-    { groupId:"g-shop",      label:"SHOP",           directTab:"shop",    subTabs:[{id:"shop",label:"Merch"}] },
-    { groupId:"g-cards",     label:"CARDS",          directTab:"cards",   subTabs:[{id:"cards",label:"Collector's Cards"}] },
-    { groupId:"g-vault",     label:"VAULT",          directTab:"vault",   subTabs:[{id:"vault",label:"Exclusive Drops"}] },
-    { groupId:"g-shows",     label:"SHOWS & EVENTS", directTab:"shows",   subTabs:[{id:"shows",label:"Upcoming Shows"}] },
-    { groupId:"g-community", label:"MORE",           directTab:"blog",    subTabs:[{id:"blog",label:"Blog"},{id:"vision",label:"Vision"},{id:"circle",label:"Circle"},{id:"innercircle",label:"Inner Circle"},{id:"live",label:"2MRRW Live"},{id:"help",label:"Help & Support"}] },
-  ];
 
   const stockLabel = (item) => {
     if (item.stock === null || item.stock === undefined) return null;
@@ -1384,7 +1452,7 @@ function PageStorefront() {
         openAlbumModal={openAlbumModal}
         openFeatureModal={openFeatureModal}
       />
-      <PageAuthCheckoutPendingEffect cart={cart} onCheckout={handleCheckout} />
+      <PageAuthCheckoutPendingEffect onCheckout={handleCheckout} />
       <div ref={cursorRef} style={{position:"fixed",width:28,height:28,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.22) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99999,mixBlendMode:"screen",transition:"left 0.045s linear,top 0.045s linear",display:isMobile?"none":undefined}}/>
       <div ref={cursorTrailRef} style={{position:"fixed",width:16,height:16,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.10) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99998,mixBlendMode:"screen",transition:"left 0.18s ease,top 0.18s ease",display:isMobile?"none":undefined}}/>
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(circle at 18% 18%,rgba(0,255,255,0.026) 0%,transparent 55%),radial-gradient(circle at 82% 80%,rgba(162,89,255,0.018) 0%,transparent 52%)"}}/>
@@ -1457,18 +1525,7 @@ function PageStorefront() {
                     >
                       <AlbumModal
                         key={selectedAlbum.slug || selectedAlbum.id || "album"}
-                        album={{
-                          ...selectedAlbum,
-                          artist: selectedAlbum.artist || "2MRRW",
-                          year: selectedAlbum.year || selectedAlbum.date,
-                          coverArt: selectedAlbum.coverArt || selectedAlbum.cover,
-                          price:
-                            selectedAlbum.price != null &&
-                            Number.isFinite(Number(selectedAlbum.price))
-                              ? `$${Number(selectedAlbum.price).toFixed(2)}`
-                              : selectedAlbum.price,
-                          tracks: normalizeAlbumTracksForModal(selectedAlbum.tracks || []),
-                        }}
+                        album={normalizedSelectedAlbum}
                         access={
                           resolveTrackAccess(selectedAlbum, ent.entitlementAccountState)?.canStream
                             ? "full"
@@ -1648,7 +1705,7 @@ function PageStorefront() {
                   shopItems={shopItems}
                   printfulLoading={printfulLoading}
                   shopIsFallback={shopIsFallback}
-                  events={events}
+                  events={liveEvents}
                   onSelectEvent={setSelectedEvent}
                   onOpenCollection={openCollection}
                 />
@@ -1753,8 +1810,11 @@ function PageStorefront() {
                     </div>
                   )}
                   <h2 style={{letterSpacing:3,fontSize:14,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Upcoming Events</h2>
+                  {liveEvents.length === 0 && (
+                    <div style={{color:"#555",fontSize:13,letterSpacing:1,padding:"24px 0"}}>No upcoming shows scheduled.</div>
+                  )}
                   <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                    {events.map(evt=>(
+                    {liveEvents.map(evt=>(
                       <div key={evt.id} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?"14px":"18px 20px",display:"flex",alignItems:isMobile?"flex-start":"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
                         <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:isMobile?13:15,marginBottom:4}}>{evt.name}</div><div style={{fontSize:12,color:"#aaa"}}>{evt.location}</div><div style={{fontSize:11,color:"#555",marginTop:2}}>{new Date(evt.date).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})} · {evt.time}</div></div>
                         <div style={{display:"flex",alignItems:"center",gap:isMobile?10:14}}><div style={{fontSize:isMobile?15:18,fontWeight:900,color:"#00ffff"}}>${evt.price.toFixed(2)}</div><button onClick={()=>setSelectedEvent(evt)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"9px 14px":"10px 20px",background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontWeight:"bold",fontSize:isMobile?12:13,transition:"0.25s"}}>Get Tickets</button></div>

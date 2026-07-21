@@ -32,41 +32,50 @@ export async function GET(request) {
 
     if (error) throw error;
 
-    let reminders_sent = 0;
+    // Hoist import out of loop — re-evaluating import() per iteration is wasteful.
+    const { buildGiftLink } = await import("@/lib/gifts/email");
     let skipped_no_link = 0;
-    for (const gift of gifts || []) {
-      let giftLink = null;
-      if (gift.gift_link_token) {
-        const { buildGiftLink } = await import("@/lib/gifts/email");
-        giftLink = buildGiftLink(gift.gift_link_token);
-      } else if (gift.gift_link_token_hash) {
-        try {
+
+    // Process all gifts concurrently — one email failure should not block the rest.
+    const outcomes = await Promise.allSettled(
+      (gifts || []).map(async (gift) => {
+        let giftLink = null;
+        if (gift.gift_link_token) {
+          giftLink = buildGiftLink(gift.gift_link_token);
+        } else if (gift.gift_link_token_hash) {
           giftLink = await buildSignedGiftReminderLink(gift.id, gift.expires_at);
-        } catch (linkErr) {
-          console.warn("gift-reminders: signed link skipped", gift.id, linkErr.message);
-          skipped_no_link += 1;
-          continue;
+        } else {
+          return { skipped: true };
         }
+        await sendGiftReminderEmail({
+          to: gift.recipient_email,
+          itemTitle: gift.item_title || "your gift",
+          giftLink,
+          expiresAt: gift.expires_at,
+        });
+        return { id: gift.id };
+      })
+    );
+
+    const sentIds = [];
+    for (const outcome of outcomes) {
+      if (outcome.status === "fulfilled") {
+        if (outcome.value?.skipped) skipped_no_link++;
+        else if (outcome.value?.id) sentIds.push(outcome.value.id);
       } else {
-        skipped_no_link += 1;
-        continue;
+        console.warn("gift-reminders: send failed", outcome.reason?.message);
       }
-
-      await sendGiftReminderEmail({
-        to: gift.recipient_email,
-        itemTitle: gift.item_title || "your gift",
-        giftLink,
-        expiresAt: gift.expires_at,
-      });
-
-      const { error: updateError } = await admin
-        .from("gifts")
-        .update({ reminder_sent: true, updated_at: nowIso })
-        .eq("id", gift.id);
-      if (!updateError) reminders_sent += 1;
     }
 
-    return NextResponse.json({ reminders_sent, skipped_no_link });
+    // One batch UPDATE instead of N individual ones.
+    if (sentIds.length > 0) {
+      await admin
+        .from("gifts")
+        .update({ reminder_sent: true, updated_at: nowIso })
+        .in("id", sentIds);
+    }
+
+    return NextResponse.json({ reminders_sent: sentIds.length, skipped_no_link });
   } catch (err) {
     console.error("gift-reminders cron:", err);
     return NextResponse.json({ error: err.message || "Cron failed" }, { status: 500 });

@@ -48,26 +48,11 @@ export async function fulfillCheckoutSession(session) {
   if (purchaseErr) throw purchaseErr;
 
   if (slugs.length > 0) {
-    await grantLibraryItems({
-      userId,
-      purchaseId: purchase.id,
-      slugs,
-      source: "purchase",
-    });
-    await grantCollectorOwnerships({
-      userId,
-      purchaseId: purchase.id,
-      slugs,
-      items,
-      payment: session,
-    });
-    await grantVaultPassEntitlement({
-      userId,
-      purchaseId: purchase.id,
-      slugs,
-      items,
-      payment: session,
-    });
+    await Promise.all([
+      grantLibraryItems({ userId, purchaseId: purchase.id, slugs, source: "purchase" }),
+      grantCollectorOwnerships({ userId, purchaseId: purchase.id, slugs, items, payment: session }),
+      grantVaultPassEntitlement({ userId, purchaseId: purchase.id, slugs, items, payment: session }),
+    ]);
   }
 
   return { purchaseId: purchase.id, slugs };
@@ -119,26 +104,11 @@ export async function fulfillPaymentIntent(paymentIntent) {
   if (purchaseErr) throw purchaseErr;
 
   if (slugs.length > 0) {
-    await grantLibraryItems({
-      userId,
-      purchaseId: purchase.id,
-      slugs,
-      source: "purchase",
-    });
-    await grantCollectorOwnerships({
-      userId,
-      purchaseId: purchase.id,
-      slugs,
-      items,
-      payment: paymentIntent,
-    });
-    await grantVaultPassEntitlement({
-      userId,
-      purchaseId: purchase.id,
-      slugs,
-      items,
-      payment: paymentIntent,
-    });
+    await Promise.all([
+      grantLibraryItems({ userId, purchaseId: purchase.id, slugs, source: "purchase" }),
+      grantCollectorOwnerships({ userId, purchaseId: purchase.id, slugs, items, payment: paymentIntent }),
+      grantVaultPassEntitlement({ userId, purchaseId: purchase.id, slugs, items, payment: paymentIntent }),
+    ]);
   }
 
   return { purchaseId: purchase.id, slugs, items };

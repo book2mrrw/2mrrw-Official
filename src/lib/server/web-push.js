@@ -47,8 +47,13 @@ export async function sendWebPush(subscription, payload) {
   }
 }
 
+const PUSH_BATCH_SIZE = 100;
+const PUSH_PAGE_SIZE = 500;
+
 /**
  * Fan out a push notification to all enabled subscribers.
+ * Paginates through all subscribers so no one is silently skipped.
+ * Sends each page in batches of 100 to avoid overwhelming push services.
  * Automatically disables subscriptions that respond with 404/410 (expired).
  */
 export async function sendPushToSubscribers(admin, payload) {
@@ -57,30 +62,40 @@ export async function sendPushToSubscribers(admin, payload) {
     return { sent: 0, failed: 0 };
   }
 
-  const { data: subscriptions, error } = await admin
-    .from("notification_push_subscriptions")
-    .select("endpoint, p256dh, auth_secret, user_id")
-    .eq("enabled", true);
-
-  if (error || !subscriptions?.length) return { sent: 0, failed: 0 };
-
   let sent = 0;
   let failed = 0;
   const expired = [];
+  let offset = 0;
 
-  await Promise.all(
-    subscriptions.map(async (sub) => {
-      const result = await sendWebPush(sub, payload);
-      if (result === true) {
-        sent++;
-      } else if (result === "expired") {
-        expired.push(sub.endpoint);
-        failed++;
-      } else {
-        failed++;
-      }
-    })
-  );
+  while (true) {
+    const { data: page, error } = await admin
+      .from("notification_push_subscriptions")
+      .select("endpoint, p256dh, auth_secret, user_id")
+      .eq("enabled", true)
+      .range(offset, offset + PUSH_PAGE_SIZE - 1);
+
+    if (error || !page?.length) break;
+
+    for (let i = 0; i < page.length; i += PUSH_BATCH_SIZE) {
+      const batch = page.slice(i, i + PUSH_BATCH_SIZE);
+      await Promise.all(
+        batch.map(async (sub) => {
+          const result = await sendWebPush(sub, payload);
+          if (result === true) {
+            sent++;
+          } else if (result === "expired") {
+            expired.push(sub.endpoint);
+            failed++;
+          } else {
+            failed++;
+          }
+        })
+      );
+    }
+
+    offset += page.length;
+    if (page.length < PUSH_PAGE_SIZE) break;
+  }
 
   if (expired.length > 0) {
     await admin

@@ -183,6 +183,7 @@ export async function createInAppNotification(admin, {
   actionUrl = null,
   priority = "normal",
   metadata = {},
+  dedupKey = null,
 }) {
   if (!userId || !type || !title) return null;
 
@@ -192,24 +193,38 @@ export async function createInAppNotification(admin, {
     return null;
   }
 
-  const { data, error } = await admin
-    .from("notification_inbox")
-    .insert({
-      user_id: userId,
-      notification_type: type,
-      title: String(title).slice(0, 140),
-      body: String(body || "").slice(0, 1000),
-      action_url: actionUrl,
-      priority,
-      metadata,
-    })
-    .select("id")
-    .single();
+  const row = {
+    user_id: userId,
+    notification_type: type,
+    title: String(title).slice(0, 140),
+    body: String(body || "").slice(0, 1000),
+    action_url: actionUrl,
+    priority,
+    metadata,
+    ...(dedupKey ? { dedup_key: String(dedupKey) } : {}),
+  };
+
+  // When a dedupKey is provided, use upsert with DO NOTHING so a second insert
+  // of the same logical event (webhook retry, fan-out double-run) is a no-op.
+  const query = dedupKey
+    ? admin
+        .from("notification_inbox")
+        .upsert(row, { onConflict: "user_id,dedup_key", ignoreDuplicates: true })
+        .select("id")
+        .maybeSingle()
+    : admin
+        .from("notification_inbox")
+        .insert(row)
+        .select("id")
+        .single();
+
+  const { data, error } = await query;
 
   if (error) {
     if (isMissingNotificationsTable(error)) return null;
     throw error;
   }
 
+  // data is null when upsert hit the dedup constraint (duplicate suppressed) — treated as success.
   return data;
 }

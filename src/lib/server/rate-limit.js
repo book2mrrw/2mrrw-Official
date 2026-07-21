@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
+import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isMissingSupabaseTable } from "@/lib/commerce/entitlements";
 
@@ -41,7 +42,10 @@ export async function checkRateLimit(req, {
 
   try {
     const admin = createAdminClient();
-    await admin.from("api_rate_limits").delete().lt("expires_at", new Date(now).toISOString());
+    // Defer expired-row cleanup so it never blocks the response.
+    after(() => {
+      admin.from("api_rate_limits").delete().lt("expires_at", new Date(now).toISOString()).then(() => {}).catch(() => {});
+    });
 
     const { data: existing, error: readError } = await admin
       .from("api_rate_limits")
@@ -74,8 +78,24 @@ export async function checkRateLimit(req, {
       : await admin.from("api_rate_limits").insert(values);
 
     if (writeError) {
-      if (isMissingSupabaseTable(writeError) || writeError.code === "23505") {
+      if (isMissingSupabaseTable(writeError)) {
         return { allowed: true, limited: false, unavailable: true };
+      }
+      if (writeError.code === "23505") {
+        // Two concurrent requests raced on a fresh window — one INSERT won, ours lost.
+        // Re-read the committed count and enforce the limit against it rather than
+        // treating this as "unavailable" (which would silently allow the request through).
+        const { data: raceRow } = await admin
+          .from("api_rate_limits")
+          .select("count")
+          .eq("key", key)
+          .maybeSingle();
+        const raceCount = raceRow?.count ?? 0;
+        if (raceCount > limit) {
+          const retryAfterSeconds = Math.max(1, Math.ceil((windowStartMs + windowMs - now) / 1000));
+          return { allowed: false, limited: true, retryAfterSeconds };
+        }
+        return { allowed: true, limited: false, remaining: Math.max(0, limit - raceCount) };
       }
       throw writeError;
     }

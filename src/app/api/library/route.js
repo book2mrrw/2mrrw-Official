@@ -11,12 +11,16 @@ import {
 } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
 import { catalogCoverUrl } from "@/lib/media-urls";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export async function OPTIONS(req) {
   return mediaCorsPreflightResponse(req);
 }
 
 export async function POST(request) {
+  const rl = await checkRateLimit(request, { routeKey: "library.grant", limit: 20, windowSeconds: 60 });
+  if (rl.limited) return applyMediaCors(request, rateLimitResponse(rl.retryAfterSeconds));
+
   const user = await getGuestUser();
   if (!user) {
     return applyMediaCors(request, NextResponse.json({ error: "Unauthorized" }, { status: 401 }));
@@ -73,6 +77,9 @@ export async function POST(request) {
 }
 
 export async function GET(req) {
+  const rl = await checkRateLimit(req, { routeKey: "library.get", limit: 120, windowSeconds: 60 });
+  if (rl.limited) return applyMediaCors(req, rateLimitResponse(rl.retryAfterSeconds));
+
   const user = await getGuestUser();
 
   if (!user) {

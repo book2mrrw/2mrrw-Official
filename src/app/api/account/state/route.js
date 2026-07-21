@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Redis } from "@upstash/redis";
 import { getCollectorAccessRecords } from "@/lib/collector-cards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
@@ -22,22 +23,53 @@ import {
 } from "@/lib/guest-session";
 import { DEFAULT_NOTIFICATION_PREFERENCES, getNotificationState } from "@/lib/notifications";
 
-// Per-user in-process cache. Eliminates repeated Supabase fan-out for the same
-// user hitting this route in quick succession (page transitions, tab focus, etc.).
-// 30s TTL balances freshness against query cost. Bypassed when ?force=1.
-const _stateCache = new Map();
-const STATE_CACHE_TTL_MS = 30_000;
+// Distributed account state cache — shared across all Vercel instances via Upstash Redis.
+// Falls back to in-process Map when UPSTASH_REDIS_REST_URL / _TOKEN are not set.
+// 30s TTL balances freshness against Supabase fan-out cost. Bypassed when ?force=1.
+const STATE_CACHE_TTL_SECONDS = 30;
+const STATE_CACHE_TTL_MS = STATE_CACHE_TTL_SECONDS * 1000;
+const CACHE_MAX_ENTRIES = 500;
 
-function getCachedState(userId) {
+// In-process fallback (single-instance only).
+const _stateCache = new Map();
+
+// Lazy Redis client — constructed once per module lifetime, reused across invocations.
+let _redis = null;
+function getRedis() {
+  if (_redis) return _redis;
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) return null;
+  _redis = new Redis({ url, token });
+  return _redis;
+}
+
+async function getCachedState(userId) {
+  const redis = getRedis();
+  if (redis) {
+    try {
+      const data = await redis.get(`account:state:${userId}`);
+      return data || null;
+    } catch {
+      // Redis unavailable — fall through to in-process cache.
+    }
+  }
   const entry = _stateCache.get(userId);
   if (!entry) return null;
   if (Date.now() > entry.expiresAt) { _stateCache.delete(userId); return null; }
   return entry.body;
 }
 
-const CACHE_MAX_ENTRIES = 500;
-
-function setCachedState(userId, body) {
+async function setCachedState(userId, body) {
+  const redis = getRedis();
+  if (redis) {
+    try {
+      await redis.setex(`account:state:${userId}`, STATE_CACHE_TTL_SECONDS, body);
+      return;
+    } catch {
+      // Redis unavailable — fall through to in-process cache.
+    }
+  }
   _stateCache.set(userId, { body, expiresAt: Date.now() + STATE_CACHE_TTL_MS });
   if (_stateCache.size > CACHE_MAX_ENTRIES) {
     const oldest = _stateCache.keys().next().value;
@@ -45,7 +77,13 @@ function setCachedState(userId, body) {
   }
 }
 
-export function invalidateAccountStateCache(userId) {
+export async function invalidateAccountStateCache(userId) {
+  const redis = getRedis();
+  if (redis) {
+    try {
+      await redis.del(`account:state:${userId}`);
+    } catch {}
+  }
   if (userId) _stateCache.delete(userId);
 }
 
@@ -102,7 +140,7 @@ export async function GET(req) {
     const forceRefresh = new URL(req.url).searchParams.get("force") === "1";
 
     if (user && !user.isGuest && !forceRefresh) {
-      const cached = getCachedState(user.id);
+      const cached = await getCachedState(user.id);
       if (cached) return clearGuestCookieOnResponse(NextResponse.json(cached));
     }
 
@@ -145,7 +183,8 @@ export async function GET(req) {
       admin
         .from("products")
         .select("slug, title, product_type, cover_url, storage_path")
-        .eq("active", true),
+        .eq("active", true)
+        .limit(10000),
       admin
         .from("collector_ownerships")
         .select("id, product_slug, title, collector_type, sku, version, verification_status, entitlement_status, shipping_country, shipping_state, shipping_city, purchased_at, verified_at")
@@ -347,7 +386,7 @@ export async function GET(req) {
     if (user.isGuest) {
       return withGuestCookie(NextResponse.json(body), user.id, { remember: session?.remember });
     }
-    setCachedState(user.id, body);
+    setCachedState(user.id, body).catch(() => {});
     return clearGuestCookieOnResponse(NextResponse.json(body));
   } catch (err) {
     console.error("account state error:", err);

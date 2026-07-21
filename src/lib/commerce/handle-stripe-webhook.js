@@ -135,15 +135,20 @@ export async function handleStripeWebhook(req) {
   console.log(`${LOG_PREFIX} received`, event.id, event.type);
 
   const admin = createAdminClient();
-  const { data: existing } = await admin
-    .from("processed_stripe_events")
-    .select("event_id")
-    .eq("event_id", event.id)
-    .maybeSingle();
 
-  if (existing) {
+  // Claim the event atomically before processing. INSERT with unique constraint on
+  // event_id: if 23505, a concurrent handler already claimed it — return 200 immediately.
+  // If processing fails below, we DELETE the claim so Stripe can retry.
+  const { error: claimError } = await admin
+    .from("processed_stripe_events")
+    .insert({ event_id: event.id });
+
+  if (claimError?.code === "23505") {
     console.log(`${LOG_PREFIX} duplicate event skipped`, event.id, event.type);
     return NextResponse.json({ received: true, duplicate: true, eventId: event.id, type: event.type });
+  }
+  if (claimError) {
+    console.warn(`${LOG_PREFIX} idempotency claim failed (proceeding):`, event.id, claimError.message);
   }
 
   try {
@@ -297,20 +302,10 @@ export async function handleStripeWebhook(req) {
     }
   } catch (err) {
     console.error(`${LOG_PREFIX} handler error`, event.id, event.type, err.message, err.stack);
+    // Roll back the claim so Stripe can retry this event.
+    await admin.from("processed_stripe_events").delete().eq("event_id", event.id);
     return NextResponse.json(
       { error: "Webhook handler failed", eventId: event.id, type: event.type },
-      { status: 500 }
-    );
-  }
-
-  const { error: markErr } = await admin
-    .from("processed_stripe_events")
-    .insert({ event_id: event.id });
-
-  if (markErr) {
-    console.error(`${LOG_PREFIX} failed to mark event processed`, event.id, markErr.message);
-    return NextResponse.json(
-      { error: "Failed to record processed event", eventId: event.id, type: event.type },
       { status: 500 }
     );
   }

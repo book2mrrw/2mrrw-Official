@@ -75,11 +75,13 @@ export async function fetchControlSystemJson(path, { params, fetchOptions = {} }
     const isServer = typeof window === "undefined";
     const response = await fetch(target.href, {
       method: "GET",
-      headers: { Accept: "application/json" },
       credentials: "include",
-      cache: "no-store",
       ...restFetchOptions,
-      ...(isServer ? { next: { revalidate: 30 } } : {}),
+      // Server: ISR — cache for 30 s so repeated SSR/RSC calls hit Next.js cache.
+      // Client: no-store — always fresh (browser already has its own request cache).
+      // NOTE: combining cache:"no-store" with next.revalidate conflicts in Next.js;
+      // next.revalidate only works without an explicit cache directive.
+      ...(isServer ? { next: { revalidate: 30 } } : { cache: "no-store" }),
       signal: controller.signal,
       headers: {
         Accept: "application/json",

@@ -1,7 +1,10 @@
 import DeepLinkRedirect from "@/components/music/DeepLinkRedirect";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export const revalidate = 3600;
+
 const R2_CDN = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://2mrrw.com";
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
@@ -24,11 +27,14 @@ export async function generateMetadata({ params }) {
         ? data.cover_url
         : `${R2_CDN}/${data.cover_url}`
       : "/icons/icon-512.png";
+    const canonical = `${BASE_URL}/album/${slug}`;
 
     return {
       title,
       description,
+      alternates: { canonical },
       openGraph: {
+        url: canonical,
         title,
         description,
         images: [{ url: image, width: 500, height: 500, alt: data.title || "2MRRW" }],

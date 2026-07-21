@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { grantLibraryItems } from "@/lib/commerce/entitlements";
 import { createOrRetrieveGuest, withGuestCookie } from "@/lib/guest-session";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 function hashToken(raw) {
   return crypto.createHash("sha256").update(String(raw || "")).digest("hex");
@@ -10,6 +11,13 @@ function hashToken(raw) {
 
 export async function POST(req) {
   try {
+    const limit = await checkRateLimit(req, {
+      routeKey: "gifts.redeem",
+      limit: 5,
+      windowSeconds: 60,
+    });
+    if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
+
     const { token, email, phone, name } = await req.json();
     if (!token) {
       return NextResponse.json({ error: "Gift token required" }, { status: 400 });

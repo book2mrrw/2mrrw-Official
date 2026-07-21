@@ -156,16 +156,11 @@ export async function grantEntitlementFlag(admin, userId, type, source = null, e
     throw new Error(`Unknown entitlement type: ${type}`);
   }
 
-  const existing = await getUserEntitlements(userId, admin);
-  const patch = {
-    vault_access: existing.vault_access,
-    subscriber: existing.subscriber,
-    collector_card: existing.collector_card,
-    collector_card_id: existing.collector_card_id,
-    stripe_subscription_id: existing.stripe_subscription_id,
-    ...extra,
-    [type]: true,
-  };
+  // Supabase upsert with onConflict only updates columns included in the patch —
+  // existing columns not in the patch are left unchanged. No pre-read needed, and
+  // the read-modify-write pattern it replaced had a race: two concurrent grants
+  // could each read stale data and the second write would clobber the first.
+  const patch = { [type]: true, ...extra };
   if (type === "vault_access" && source) patch.vault_source = source;
   if (type === "subscriber" && source) patch.subscriber_source = source;
   if (type === "collector_card" && source) patch.collector_source = source;
