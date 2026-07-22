@@ -211,15 +211,14 @@ export function libraryStreamRedirectSrc(slug, { trackSlug = null } = {}) {
  */
 /** Full stream only when client user matches server account/state user (cookie session aligned). */
 export function canRequestLibraryStream(access, { userId, accountState } = {}) {
-  if (!access?.canStream || !userId) return false;
+  if (!access?.canStream) return false;
+  // Admin identity is confirmed synchronously from the Supabase session (build-time
+  // baked-in email/id constants). The server enforces access independently on every
+  // /api/library/stream request, so bypassing the client userId guard here is safe.
+  if (accountState?.isAdmin) return true;
+  if (!userId) return false;
   const serverUserId = accountState?.user?.id || accountState?.userId;
-  if (!serverUserId) {
-    // Admin identity is confirmed synchronously from the Supabase session (build-time
-    // baked-in email/id constants). The server enforces access independently on every
-    // /api/library/stream request, so bypassing the server-confirmation guard here is safe.
-    if (accountState?.isAdmin) return true;
-    return false;
-  }
+  if (!serverUserId) return false;
   return serverUserId === userId;
 }
 

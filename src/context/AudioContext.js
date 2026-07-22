@@ -4094,7 +4094,7 @@ export function AudioProvider({ children }) {
       } else {
         patchTransport({ playbackNetworkState: "loading_stream" });
       }
-      await waitAudioSrcReady(audio, signedUrl, { signal: streamAbortController.signal });
+      await waitAudioSrcReady(audio, signedUrl, { signal: streamAbortController.signal, timeoutMs: 25000 });
       const applySwapSeek = () => {
         clearTimeout(applySwapSeekTimeout);
         if (resumeAt > 0 && isFinite(audio.duration)) {
@@ -4163,7 +4163,16 @@ export function AudioProvider({ children }) {
           }
           return swapToSignedStream(resolved);
         })
-        .catch(redirectFastPath ? () => {} : applyStreamResolveError);
+        .catch(redirectFastPath
+          ? (err) => {
+              if (err?.name !== "AbortError") {
+                console.warn("[2MRRW] background stream resolve failed on redirect path", {
+                  slug: streamSlug,
+                  message: err?.message,
+                });
+              }
+            }
+          : applyStreamResolveError);
     }
 
     const userId = listeningUserIdRef.current;
@@ -4299,7 +4308,11 @@ export function AudioProvider({ children }) {
           audio.volume = 1;
         }
         spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
-        await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal });
+        // Redirect-path sources (/api/library/stream?redirect=1) proxy audio through Vercel.
+        // Cold Vercel starts can add 8-15s of overhead, so give them more headroom before
+        // falling back to the preview clip and downgrading a paying user's experience.
+        const srcReadyTimeout = isLibraryStreamRedirectSrc(syncSrc) ? 25000 : AUDIO_SRC_READY_TIMEOUT_MS;
+        await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: srcReadyTimeout });
         patchState({ hasStarted: true, playbackState: "ready" });
         const startedPlay = await playAudioIfNotPaused(audio, true, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
@@ -6522,6 +6535,13 @@ export function AudioProvider({ children }) {
           reason: "skipped-auth-loading",
           eventSource: detail.source,
         });
+        // Auth is still resolving. Schedule a one-shot retry: if auth finishes within
+        // 50ms and the playing track is still preview-only, fire the upgrade then.
+        setTimeout(() => {
+          if (!authLoadingRef.current && stateRef.current.currentTrack?.metadata?.access?.previewOnly) {
+            void dispatchPlaybackCommandRef.current?.(PLAYBACK_COMMANDS.UPGRADE_STREAM).catch(() => {});
+          }
+        }, 50);
         return;
       }
       const track = stateRef.current.currentTrack;

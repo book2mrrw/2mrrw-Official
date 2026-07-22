@@ -88,7 +88,7 @@ function CatalogGrid({
           albumLibraryItem?.gifted === true;
         const targetDate = mediaItem.scheduled_publish_at || mediaItem.date;
         const isUpcoming =
-          mediaItem.status === "scheduled" || isUpcomingReleaseDate(targetDate);
+          !isAdmin && (mediaItem.status === "scheduled" || isUpcomingReleaseDate(targetDate));
 
         if (isUpcoming) {
           return (

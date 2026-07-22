@@ -899,6 +899,17 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     });
   }, [tracks]);
 
+  // Sync tracklist highlight when AudioContext auto-advances to next track.
+  // engineTrack.metadata.trackIndex is the authoritative position in the queue.
+  useEffect(() => {
+    if (!engineTrack?.metadata?.albumSlug || engineTrack.metadata.albumSlug !== album?.slug) return;
+    const tIdx = engineTrack.metadata.trackIndex;
+    if (!Number.isFinite(tIdx) || tIdx < 0) return;
+    const rawTracks = Array.isArray(album?.tracks) ? album.tracks.filter(Boolean) : [];
+    if (tIdx >= rawTracks.length) return;
+    setActiveTrack(rawTracks[tIdx]);
+  }, [engineTrack?.id, engineTrack?.metadata?.trackIndex, engineTrack?.metadata?.albumSlug, album?.slug, album?.tracks]);
+
   const isPreview = access !== "full";
   const trackLocked = useCallback((tr) => isPreview && !tr?.free, [isPreview]);
   const trackDur = (tr) => (isPreview && !tr?.free ? PREVIEW_CAP_SEC : parseDurSec(tr) || 180);

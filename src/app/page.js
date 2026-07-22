@@ -209,7 +209,7 @@ const singles = [
     cover: "/images/singles/hourglass.jpg",
     video: "/videos/singles/hourglass.mp4",
     price: 2.99,
-    preview: "/audio/previews/hourglass-preview.mp3",
+    preview: "previews/singles/hour-glass/",
     csAudio: null,
     csCover: null,
     hasCs: false,
@@ -221,7 +221,7 @@ const singles = [
     cover: "/images/singles/w2d.jpg",
     video: "/videos/singles/w2d.mp4",
     price: 2.99,
-    preview: "/audio/previews/w2d-preview.mp3",
+    preview: "previews/singles/w2d/",
     csAudio: null,
     csCover: null,
     hasCs: false,
@@ -233,7 +233,7 @@ const singles = [
     cover: "/images/singles/artificial.jpg",
     video: "/videos/singles/artificial.mp4",
     price: 2.99,
-    preview: "/audio/previews/artificial-preview.mp3",
+    preview: "previews/singles/artificial/",
     csAudio: null,
     csCover: null,
     hasCs: false,
@@ -245,7 +245,7 @@ const singles = [
     cover: "/images/singles/turnt.jpg",
     video: "/videos/singles/turntme2dis.mp4",
     price: 2.99,
-    preview: "/audio/previews/turntme2dis-preview.mp3",
+    preview: "previews/singles/turnt-me-2-dis/",
     csAudio: null,
     csCover: null,
     hasCs: false,
@@ -1113,7 +1113,9 @@ function PageStorefront() {
 
   const openFeatureModal = useCallback(
     (feat) => {
-      dismissNowPlayingFromBridge();
+      // Do NOT call dismissNowPlayingFromBridge() here — it pauses audio unnecessarily.
+      // playCanonicalCatalogItem below replaces the queue; the mini player hides via
+      // featureModalOpen flag in PlaybackChromeIsland. Behavior now matches openSingleModal.
       if (previewModalOpenRef.current) {
         setPreviewModalOpen(false);
         setSelectedSingle(null);
@@ -1140,8 +1142,9 @@ function PageStorefront() {
     setFeatureModalOpen(false);
     setFeatureModalItem(null);
     setFeatureReleaseDetail(null);
-    pause();
-  }, [pause]);
+    // Do NOT pause here — audio continues in mini player after modal close,
+    // matching single modal behavior and enabling seamless cross-section continuity.
+  }, []);
 
   const openAlbumModal = useCallback(
     (album) => {

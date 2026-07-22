@@ -27,6 +27,7 @@ import { isAdminUser } from "@/lib/auth/constants";
 import { createServerTiming } from "@/lib/server/server-timing";
 import { getHybridStreamingFeatureFlags } from "@/lib/feature-flags";
 import { getPlaybackResolverDiagnostics } from "@/lib/playback/playback-resolver-diagnostics";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -281,6 +282,14 @@ export async function GET(req) {
   }
 
   const force = req.nextUrl.searchParams.get("force") === "true";
+
+  const rl = await checkRateLimit(req, {
+    routeKey: "library.stream",
+    limit: 120,
+    windowSeconds: 60,
+    identifier: user.id,
+  });
+  if (!rl.allowed) return withStreamTiming(req, rateLimitResponse(rl.retryAfterSeconds), timing);
 
   try {
     logStreamR2Env("get");

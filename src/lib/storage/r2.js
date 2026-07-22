@@ -132,9 +132,16 @@ export function isDirectChildObjectKey(folderPrefix, key) {
  * @param {{ recursive?: boolean }} [options]
  * @returns {Promise<Array<{ Key: string, Size?: number }>>}
  */
+let _r2BucketWarned = false;
 export async function listR2Objects(prefix, options = {}) {
   const { recursive = false } = options;
-  if (!R2_BUCKET) return [];
+  if (!R2_BUCKET) {
+    if (!_r2BucketWarned) {
+      _r2BucketWarned = true;
+      console.error("[R2] CLOUDFLARE_R2_BUCKET_NAME is not set — all R2 object listing returns empty; audio discovery will fail");
+    }
+    return [];
+  }
   const normalized = String(prefix || "").replace(/^\//, "");
   if (!normalized) return [];
 
@@ -184,6 +191,9 @@ export async function headR2ObjectKey(key) {
   } catch (err) {
     const status = err?.$metadata?.httpStatusCode;
     if (status === 404 || err?.name === "NotFound") return false;
+    // Re-throw permission failures and server errors — these are not "file not found"
+    // and masking them causes stale cache entries to serve deleted R2 objects.
+    if (status === 403 || (status >= 500 && status < 600)) throw err;
     return false;
   }
 }
