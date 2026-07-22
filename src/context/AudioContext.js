@@ -171,7 +171,7 @@ const STALL_SOFT_RECOVERY_MS = 2500;
 const STALL_HARD_RECOVERY_MS = 7000;
 const PLAYBACK_COMMAND_TIMEOUT_MS = 15000;
 /** Stream resolve / signed swap can exceed 15s without being stalled (Phase P1). */
-const PLAYBACK_STREAM_COMMAND_TIMEOUT_MS = 120000;
+const PLAYBACK_STREAM_COMMAND_TIMEOUT_MS = 35000;
 const TRANSPORT_ONLY_STATE_KEYS = new Set([
   "playbackNetworkState",
   "isBuffering",
@@ -2348,7 +2348,12 @@ export function AudioProvider({ children }) {
             const cfGain = ctx.createGain();
             cfGain.gain.value = 0;
             cfSrc.connect(cfGain);
-            cfGain.connect(ctx.destination);
+            // Connect into the analyser (after mainGain) so the crossfade signal
+            // passes through stereoPanner → bassFilter → limiter → destination.
+            // Connecting to mainGain directly would multiply by its fading gain value,
+            // silencing the incoming track. Connecting to destination would bypass the
+            // limiter, effects, and visualiser entirely.
+            cfGain.connect(analyserRef.current ?? ctx.destination);
             crossfadeSourceRef.current = cfSrc;
             crossfadeGainRef.current = cfGain;
           } catch {
@@ -3030,7 +3035,10 @@ export function AudioProvider({ children }) {
       ) {
         const dur = isFinite(audio.duration) ? audio.duration : 0;
         const rem = dur > 0 ? dur - audio.currentTime : 0;
-        if (rem > 0 && rem <= CROSSFADE_SEC) {
+        // Guard: dur > CROSSFADE_SEC * 2 prevents tracks shorter than 10s from
+        // triggering a crossfade immediately on play — they would never reach full
+        // volume if the fade window spans most or all of the track duration.
+        if (rem > 0 && rem <= CROSSFADE_SEC && dur > CROSSFADE_SEC * 2) {
           const q = queueRef.current;
           const qi = queueIndexRef.current;
           if (q.length > qi + 1 && q[qi + 1]?.src) {
