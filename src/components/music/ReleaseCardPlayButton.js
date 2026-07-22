@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { usePlaybackIdentity } from "@/context/AudioContext";
-import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
+import { getPagePlaybackActionsBridge, queuePlayIntent } from "@/lib/playback/page-playback-actions-bridge";
 import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
 import { resolveTrackAccess } from "@/lib/music-access";
 import { getPlaybackPrewarmEntry, playbackPrewarmKeyForItem } from "@/lib/playback/playback-prewarm-cache";
@@ -47,7 +47,6 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         onPlayClick(e, item);
         return;
       }
-      const bridge = getPagePlaybackActionsBridge();
       const prewarmKey = playbackPrewarmKeyForItem(item);
       const prewarmed = prewarmKey ? getPlaybackPrewarmEntry(prewarmKey) : null;
       const playbackItem = prewarmed?.normalizedFirst || item;
@@ -62,7 +61,7 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
       }
       if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
       const { startTrack, needsUpgrade } = toInstantStartTrack(track);
-      void bridge?.playQueue?.([startTrack], 0);
+      queuePlayIntent((bridge) => void bridge.playQueue?.([startTrack], 0));
       const needsPreviewUpgrade =
         needsUpgrade ||
         (track.metadata?.access?.canStream && track.metadata?.access?.previewOnly);

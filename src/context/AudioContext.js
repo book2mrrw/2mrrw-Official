@@ -988,7 +988,7 @@ export function AudioProvider({ children }) {
   const listeningProgressRef = useRef({ slug: null, recorded30s: false });
   const streamMetaRef = useRef(null);
   const streamSwapPreloadRef = useRef(null);
-  const streamErrorRetriedRef = useRef(false);
+  const streamErrorRetriedRef = useRef(0); // retry attempt count (0 = no retries yet)
   const onPreviewEndedRef = useRef(null);
   const [previewEnded, setPreviewEnded] = useState(false);
   const wasPlayingBeforeHideRef = useRef(false);
@@ -1838,7 +1838,7 @@ export function AudioProvider({ children }) {
         slug: track.slug,
         currentTime: audio.currentTime,
       });
-      streamErrorRetriedRef.current = false;
+      streamErrorRetriedRef.current = 0;
       void retryStreamPlaybackRef.current?.();
     }, STALL_HARD_RECOVERY_MS);
   }, [stopStallRecovery]);
@@ -3309,7 +3309,7 @@ export function AudioProvider({ children }) {
           window.removeEventListener("online", onOnline);
           const current = stateRef.current.currentTrack;
           if (current) {
-            streamErrorRetriedRef.current = false;
+            streamErrorRetriedRef.current = 0;
             void playTrackRef.current?.(current, {
               resumeAt: audio.currentTime || 0,
               forceStream: true,
@@ -3327,10 +3327,20 @@ export function AudioProvider({ children }) {
       const onLibraryStreamSrc =
         isLibraryStreamSrc(audio.currentSrc || audio.src || "") ||
         isLibraryStreamSrc(track?.src || "");
-      if (slug && (streamMetaRef.current || onLibraryStreamSrc) && !streamErrorRetriedRef.current) {
-        streamErrorRetriedRef.current = true;
-        patchState({ playbackNetworkState: "retrying_stream", isBuffering: true });
+      const MAX_STREAM_RETRIES = 3;
+      if (slug && (streamMetaRef.current || onLibraryStreamSrc) && streamErrorRetriedRef.current < MAX_STREAM_RETRIES) {
+        streamErrorRetriedRef.current += 1;
+        const attempt = streamErrorRetriedRef.current;
         const retryRequestId = activeCommandRef.current?.requestId;
+        // Exponential backoff: immediate on first error, 2s on second, 5s on third.
+        // Gives transient network blips time to clear without stranding the user.
+        const retryDelayMs = attempt === 1 ? 0 : attempt === 2 ? 2000 : 5000;
+        if (retryDelayMs > 0) {
+          patchState({ playbackNetworkState: "retrying_stream", isBuffering: true, error: `Reconnecting… (attempt ${attempt}/${MAX_STREAM_RETRIES})` });
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+          if (activeCommandRef.current?.requestId !== retryRequestId) return;
+        }
+        patchState({ playbackNetworkState: "retrying_stream", isBuffering: true });
         try {
           const data = await fetchLibraryStream(slug, { force: true, signal: activeStreamAbortRef.current?.signal });
           // Bail if a new track command superseded this error-retry
@@ -3431,7 +3441,7 @@ export function AudioProvider({ children }) {
           }
           if (retryErr?.code === "ACCESS_DENIED") {
             finalizeStreamSession(meta, { durationSeconds: resumeAt, completed: false });
-            streamErrorRetriedRef.current = false;
+            streamErrorRetriedRef.current = 0;
             skipPauseInterruptionRef.current = true;
             audio.pause();
             patchState({
@@ -3940,7 +3950,7 @@ export function AudioProvider({ children }) {
       audio.addEventListener("canplay", scheduleCoverPreload, { once: true });
     }
 
-    streamErrorRetriedRef.current = false;
+    streamErrorRetriedRef.current = 0;
 
     const streamSlug = parseStreamSlugFromSrc(nextTrack.src) || nextTrack.slug;
     const usesLibraryStream = isLibraryStreamSrc(nextTrack.src);
@@ -3995,7 +4005,7 @@ export function AudioProvider({ children }) {
       if (err?.code === "ACCESS_DENIED") {
         const prevMeta = streamMetaRef.current;
         if (prevMeta) finalizeStreamSession(prevMeta, { completed: false, durationSeconds: audio.currentTime || 0 });
-        streamErrorRetriedRef.current = false;
+        streamErrorRetriedRef.current = 0;
         skipPauseInterruptionRef.current = true;
         audio.pause();
         patchState({
@@ -4112,7 +4122,7 @@ export function AudioProvider({ children }) {
       } else {
         patchTransport({ playbackNetworkState: "loading_stream" });
       }
-      await waitAudioSrcReady(audio, signedUrl, { signal: streamAbortController.signal, timeoutMs: 25000 });
+      await waitAudioSrcReady(audio, signedUrl, { signal: streamAbortController.signal, timeoutMs: 12000 });
       const applySwapSeek = () => {
         clearTimeout(applySwapSeekTimeout);
         if (resumeAt > 0 && isFinite(audio.duration)) {
@@ -4326,10 +4336,10 @@ export function AudioProvider({ children }) {
           audio.volume = 1;
         }
         spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
-        // Redirect-path sources (/api/library/stream?redirect=1) proxy audio through Vercel.
-        // Cold Vercel starts can add 8-15s of overhead, so give them more headroom before
-        // falling back to the preview clip and downgrading a paying user's experience.
-        const srcReadyTimeout = isLibraryStreamRedirectSrc(syncSrc) ? 25000 : AUDIO_SRC_READY_TIMEOUT_MS;
+        // Redirect-path sources (/api/library/stream?redirect=1) with DIRECT_STREAM_REDIRECT_ENABLED
+        // go straight from Cloudflare edge to the browser — no Vercel proxy hop. 12s gives
+        // headroom for initial auth + signed URL resolution without stranding a paying user.
+        const srcReadyTimeout = isLibraryStreamRedirectSrc(syncSrc) ? 12000 : AUDIO_SRC_READY_TIMEOUT_MS;
         await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: srcReadyTimeout });
         patchState({ hasStarted: true, playbackState: "ready" });
         const startedPlay = await playAudioIfNotPaused(audio, true, {
@@ -4776,7 +4786,7 @@ export function AudioProvider({ children }) {
   const retryStreamPlayback = useCallback(async () => {
     const track = stateRef.current.currentTrack;
     if (!track) return false;
-    streamErrorRetriedRef.current = false;
+    streamErrorRetriedRef.current = 0;
     patchState({ error: null, streamRetryable: false, accessDenied: false });
     const resumeAt = audioRef.current?.currentTime || stateRef.current.currentTime || 0;
     // preserveQueue: true — retry must not replace the album/EP queue; next/prev
@@ -7264,7 +7274,7 @@ export function AudioProvider({ children }) {
         audio &&
         (stateRef.current.isPlaying || stateRef.current.error === "RECONNECTING")
       ) {
-        streamErrorRetriedRef.current = false;
+        streamErrorRetriedRef.current = 0;
         patchState({ error: null, isBuffering: true });
         void playTrackRef.current?.(track, {
           resumeAt: audio.currentTime || 0,
