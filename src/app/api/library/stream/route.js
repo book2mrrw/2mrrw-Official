@@ -151,6 +151,10 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
   // doesn't incur 200-400 ms of DB overhead per request.
   const rangeHeader = req.headers.get("range") || req.headers.get("Range");
   const isStreamContinuation = redirect && Boolean(rangeHeader);
+  // Preload requests buffer the next track while the current one plays — auth + entitlement
+  // are still enforced, but we must not record a stream event for audio the user hasn't
+  // intentionally started. The session is created when the track actually plays (?preload omitted).
+  const isPreloadIntent = redirect && req.nextUrl.searchParams.get("preload") === "1";
 
   // Signing has no data dependency on session bookkeeping below — start it now so
   // both run concurrently instead of stacking onto the critical path before audio.
@@ -162,7 +166,7 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
 
   let sessionId = null;
   let streamEventId = null;
-  if (!isStreamContinuation) {
+  if (!isStreamContinuation && !isPreloadIntent) {
     const runSessionBookkeeping = async () => {
       if (!force) {
         const active = await findActiveStreamSession(admin, user.id, productId);

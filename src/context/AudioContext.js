@@ -3668,10 +3668,20 @@ export function AudioProvider({ children }) {
     const kind = classifySourceUrl(next.src);
 
     if (isDirectlyBufferable(kind)) {
-      // REDIRECT-kind hits /api/library/stream?redirect=1 which fires after() session
-      // bookkeeping for a track the user hasn't played — skip to avoid spurious events.
-      // The redirect endpoint serves from Cloudflare CDN so the first bytes are instant anyway.
-      if (kind === SOURCE_KIND.REDIRECT) return;
+      if (kind === SOURCE_KIND.REDIRECT) {
+        // Preload the next redirect-path track with ?preload=1 so the stream route
+        // buffers audio bytes without creating a session event — the session is only
+        // recorded when the user actually starts the track (without ?preload=1).
+        // This activates the Web Audio crossfade graph for entitled users.
+        const normalized = normalizePlaybackSrc(next.src);
+        if (!normalized) return;
+        const preloadSrc = normalized.includes("preload=1") ? normalized : `${normalized}&preload=1`;
+        if (preloadEl.src !== preloadSrc) {
+          preloadEl.src = preloadSrc;
+          preloadEl.load();
+        }
+        return;
+      }
       const normalized = normalizePlaybackSrc(next.src);
       if (normalized && preloadEl.src !== normalized) {
         preloadEl.src = normalized;

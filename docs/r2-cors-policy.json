@@ -1,0 +1,23 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://www.2mrrw.com",
+      "https://2mrrw.com"
+    ],
+    "AllowedMethods": ["GET", "HEAD"],
+    "AllowedHeaders": [
+      "Range",
+      "Authorization",
+      "Content-Type",
+      "Origin"
+    ],
+    "ExposeHeaders": [
+      "Content-Range",
+      "Content-Length",
+      "Accept-Ranges",
+      "ETag",
+      "Content-Type"
+    ],
+    "MaxAgeSeconds": 86400
+  }
+]
