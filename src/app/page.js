@@ -490,14 +490,14 @@ function PageStorefront() {
 
   // ── EFFECTS ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    const check = () => {
-      const mobile = window.innerWidth < 768;
-      isMobileRef.current = mobile;
-      setIsMobile(mobile);
-    };
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    const mobile = window.innerWidth < 768;
+    isMobileRef.current = mobile;
+    setIsMobile(mobile);
+    // Only update the ref on resize — no setState, so orientation changes never trigger a re-render.
+    // isMobileRef stays accurate for callbacks; layout stays locked to the initial device detection.
+    const onResize = () => { isMobileRef.current = window.innerWidth < 768; };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
 
   // Phase 14C: applyHeroParallax disabled — height/opacity mutations caused layout thrash on scroll.
