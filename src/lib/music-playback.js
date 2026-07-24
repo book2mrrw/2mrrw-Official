@@ -185,6 +185,12 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
   const normalized = normalizeCatalogItemForPlayback(item);
   const access = resolveTrackAccess(normalized, accountState);
   const userId = accountState?.userId || overrides.userId;
+  // Album tracks built from string titles carry trackSlug only in overrides, not on the item.
+  // Propagate it onto normalized NOW so resolvePlaybackSrc below can include it in the URL.
+  // Without this, all tracks in an album resolve to the same stream (track 1's audio file).
+  if (!normalized.trackSlug && overrides.trackSlug) {
+    normalized.trackSlug = overrides.trackSlug;
+  }
   const csAudioRaw = normalized?.csAudio || normalized?.cs_audio || null;
   const csCoverRaw = normalized?.csCover || normalized?.cs_cover || normalized?.csCoverArt || null;
   const visualRaw = normalized?.visual || null;

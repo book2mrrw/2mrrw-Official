@@ -406,7 +406,7 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
   const currentSrc = normalizePlaybackSrc(audio.src);
   const sameSrc = normalizedSrc === currentSrc;
 
-  if (sameSrc && audio.readyState >= 2) {
+  if (sameSrc && audio.readyState >= 3) {
     perfMark(MARKS.PLAYBACK_WAIT_SRC_GUARD_SAME_SRC);
     perfMark(MARKS.PLAYBACK_SRC_ASSIGN);
     perfMark(MARKS.PLAYBACK_CANPLAY);
@@ -451,11 +451,14 @@ async function waitForAudioElementReady(audio, { signal, timeoutMs = AUDIO_SRC_R
     const onDataReady = () => {
       perfMark(MARKS.PLAYBACK_LOADEDDATA);
       perfMark(MARKS.PLAYBACK_FIRST_BYTE);
-      if (audio.readyState >= 2) onReady();
+      // readyState 3 = HAVE_FUTURE_DATA — the browser has a buffer ahead.
+      // readyState 2 (HAVE_CURRENT_DATA) is only one decoded frame; starting playback
+      // there causes immediate buffer underruns → stutter and pitch distortion on mobile.
+      if (audio.readyState >= 3) onReady();
     };
     const onMetadataReady = () => {
       perfMark(MARKS.PLAYBACK_LOADEDMETADATA);
-      if (audio.readyState >= 2) onReady();
+      if (audio.readyState >= 3) onReady();
     };
     const onError = (event) => {
       settle(
@@ -473,7 +476,7 @@ async function waitForAudioElementReady(audio, { signal, timeoutMs = AUDIO_SRC_R
       });
       settle(reject, createPlaybackError("AUDIO_SRC_ABORTED", "Playback source readiness was aborted"));
     };
-    if (audio.readyState >= 2) {
+    if (audio.readyState >= 3) {
       perfMark(MARKS.PLAYBACK_WAIT_SRC_GUARD_EARLY_READY);
       settle(resolve);
       return;
@@ -492,7 +495,7 @@ async function waitForAudioElementReady(audio, { signal, timeoutMs = AUDIO_SRC_R
     audio.addEventListener("loadeddata", onDataReady);
     audio.addEventListener("error", onError);
     signal?.addEventListener("abort", onAbort, { once: true });
-    if (audio.readyState < 2) {
+    if (audio.readyState < 3) {
       // Skip load() if the browser is already fetching this src (e.g. from early assignment).
       // Re-calling load() would abort the in-flight request and reset buffering.
       if (audio.networkState !== 2 /* NETWORK_LOADING */) {
@@ -1809,8 +1812,15 @@ export function AudioProvider({ children }) {
         currentTime: audio.currentTime,
       });
       try {
-        // Step back 0.1 s so the browser re-issues the Range request from a clean byte boundary.
-        audio.currentTime = Math.max(0, audio.currentTime - 0.1);
+        // On CDN-direct (redirect→R2) sources the browser is already fetching from the edge.
+        // A backward seek creates a NEW byte-range HTTP request which resets the buffer and
+        // can make the stall worse. Let the browser's natural buffer fill handle it.
+        // On proxied library streams, the 0.1 s nudge forces a fresh Range request to the
+        // proxy which often resolves stalls caused by dropped TCP connections.
+        const currentSrc = audio.currentSrc || audio.src || "";
+        if (!isLibraryStreamRedirectSrc(currentSrc)) {
+          audio.currentTime = Math.max(0, audio.currentTime - 0.1);
+        }
         // Guard: only call play() if the element is actually paused — a concurrent play()
         // promise may already be in flight (e.g. from waitAudioSrcReady), and a second
         // play() call while one is pending triggers an AbortError on most browsers.
@@ -3495,6 +3505,26 @@ export function AudioProvider({ children }) {
           durationSeconds: resumeAt,
         });
       }
+
+      // Auto-advance past unrecoverable track errors (missing file, 404, expired URL) to match
+      // Spotify/Apple Music behavior — the queue never stops because one file is unavailable.
+      // Only skip when in a multi-track queue where auto-advance makes sense.
+      const errQueue = queueRef.current;
+      const errQueueIdx = queueIndexRef.current;
+      if (!stopAfterEachTrackRef.current && errQueue.length > 0) {
+        let skipIdx = errQueueIdx + 1;
+        while (skipIdx < errQueue.length) {
+          const skipTrack = errQueue[skipIdx];
+          if (skipTrack?.src) {
+            queueIndexRef.current = skipIdx;
+            patchState({ queueIndex: skipIdx });
+            void playTrackRef.current?.(skipTrack, { resumeAt: 0, playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE });
+            return;
+          }
+          skipIdx += 1;
+        }
+      }
+
       patchState({
         isPlaying: false,
         error: "Stream unavailable — tap to retry",
@@ -4288,7 +4318,9 @@ export function AudioProvider({ children }) {
       listeningProgressRef.current = { slug: null, recorded30s: false };
     }
 
-    patchTransport({ playbackNetworkState: "loading_stream" });
+    // Show spinner immediately on new-track load — user tapped Play and expects feedback.
+    // onWaiting has a 500ms delay before setting isBuffering; this closes that gap.
+    patchTransport({ playbackNetworkState: "loading_stream", isBuffering: true });
     if (isUiHydrationTraceEnabled()) {
       logUiHydrationTrace("PLAYBACK_FIRST_MUTATION", {
         slug: nextTrack.slug ?? null,
