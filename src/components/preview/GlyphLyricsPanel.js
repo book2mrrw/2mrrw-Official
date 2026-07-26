@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { parseLrc, getActiveLrcIndex } from "@/lib/lrc";
 import { useAudioPlayer, usePlaybackProgress } from "@/context/AudioContext";
 
-function GlyphLyricsPanel({ open, lrcText, onClose, isMobile = false }) {
+function GlyphLyricsPanel({ open, lrcText, onClose, onSeek, isMobile = false }) {
   const { currentTime } = usePlaybackProgress();
   const lines = useMemo(() => parseLrc(lrcText), [lrcText]);
   const [activeIndex, setActiveIndex] = useState(-1);
@@ -136,6 +136,7 @@ function GlyphLyricsPanel({ open, lrcText, onClose, isMobile = false }) {
                       lineRefs.current[i] = el;
                     }}
                     className={active ? "hero-title-glow" : undefined}
+                    onClick={() => line.time != null && onSeek?.(line.time)}
                     style={{
                       margin: "0 0 14px",
                       fontSize: active ? 15 : 13,
@@ -144,6 +145,7 @@ function GlyphLyricsPanel({ open, lrcText, onClose, isMobile = false }) {
                       color: active ? "#fff" : "rgba(255,255,255,0.32)",
                       transition: "color 0.25s, font-size 0.25s, opacity 0.25s",
                       fontWeight: active ? 700 : 400,
+                      cursor: onSeek && line.time != null ? "pointer" : "default",
                     }}
                   >
                     {line.text}

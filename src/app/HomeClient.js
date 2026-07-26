@@ -1150,7 +1150,10 @@ function PageStorefront({ initialEvents }) {
       setSelectedAlbum(albumItem);
       setAlbumModalOpen(true);
       if (!albumItem) return;
-      playAlbumTracks(albumItem, 0);
+      // Don't restart from Track 1 if this album is already playing — just open the modal.
+      const currentTrack = getPagePlaybackActionsBridge()?.currentTrack;
+      const alreadyPlaying = currentTrack?.metadata?.albumSlug && currentTrack.metadata.albumSlug === albumItem.slug;
+      if (!alreadyPlaying) playAlbumTracks(albumItem, 0);
     },
     [playAlbumTracks, dismissPreviewAndFeatureModals]
   );
