@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
 const inputStyle = {
@@ -19,8 +19,9 @@ const inputStyle = {
 
 export default function CollectorActivatePage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading, refreshAccountState } = useAuth();
-  const [visibleSerial, setVisibleSerial] = useState("");
+  const [visibleSerial, setVisibleSerial] = useState(() => searchParams.get("serial") || "");
   const [legalName, setLegalName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -28,9 +29,13 @@ export default function CollectorActivatePage() {
 
   useEffect(() => {
     if (!loading && !user) {
-      router.replace("/join?next=/collector/activate");
+      const serial = searchParams.get("serial");
+      const next = serial
+        ? `/collector/activate?serial=${encodeURIComponent(serial)}`
+        : "/collector/activate";
+      router.replace(`/join?next=${encodeURIComponent(next)}`);
     }
-  }, [loading, user, router]);
+  }, [loading, user, router, searchParams]);
 
   const submit = useCallback(
     async (e) => {

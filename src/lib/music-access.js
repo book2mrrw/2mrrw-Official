@@ -10,15 +10,6 @@ function slugSet(values = []) {
   return new Set((values || []).filter(Boolean).map((v) => String(v)));
 }
 
-function librarySlugSet(library = []) {
-  const slugs = new Set();
-  (library || []).forEach((item) => {
-    if (item?.slug) slugs.add(item.slug);
-    if (item?.product_slug) slugs.add(item.product_slug);
-  });
-  return slugs;
-}
-
 function purchasedSlugsFromLibrary(library = []) {
   return new Set(
     (library || [])
@@ -169,10 +160,7 @@ export function resolveTrackAccess(track, accountState = {}) {
   const canAddToPlaylist = canAddToLibrary;
   const canShare = true;
 
-  const isSubscriber =
-    subscriptionActive &&
-    (Boolean(accountState.subscriberActive) || Boolean(permissions.subscriber));
-  const canStreamFull = owned || isSubscriber || collectorCardOwner || collector;
+  const canStreamFull = owned || subscriptionActive || collectorCardOwner || collector;
   const subscriptionExpired = Boolean(membership && !subscriptionActive && subscriptionLibrary.has(slug));
 
   let badge = null;
