@@ -26,6 +26,30 @@ import { resolvePlayerDisplayTitle } from "@/lib/playback/resolve-player-display
 
 const PREVIEW_MAX_SEC = 30;
 
+function fmtTime(sec) {
+  const s = Math.max(0, Math.floor(sec || 0));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+}
+
+// ─── Live current-time label (DOM-mutated, no React re-renders per frame) ────
+const PlayerBarCurrentTime = memo(function PlayerBarCurrentTime() {
+  const spanRef = useRef(null);
+  const { subscribeProgress, getProgressSnapshot } = useAudioPlayer();
+  useEffect(() => {
+    function apply() {
+      const { currentTime } = getProgressSnapshot();
+      if (spanRef.current) spanRef.current.textContent = fmtTime(currentTime);
+    }
+    apply();
+    return subscribeProgress(apply);
+  }, [subscribeProgress, getProgressSnapshot]);
+  return (
+    <span ref={spanRef} style={{ fontSize: 10, fontVariantNumeric: "tabular-nums", color: "#555", fontFamily: "monospace", flexShrink: 0, minWidth: 28 }}>
+      0:00
+    </span>
+  );
+});
+
 // ─── Scrub bar ───────────────────────────────────────────────────────────────
 
 const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onSeek }) {
@@ -407,7 +431,15 @@ function MiniPlayerDock({
         </div>
       </div>
       <div className="player-bar-compact-scrub">
-        <PlayerBarScrub duration={duration} previewOnly={previewOnly} onSeek={onSeek} />
+        <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 4px 4px" }}>
+          <PlayerBarCurrentTime />
+          <div style={{ flex: 1 }}>
+            <PlayerBarScrub duration={duration} previewOnly={previewOnly} onSeek={onSeek} />
+          </div>
+          <span style={{ fontSize: 10, fontVariantNumeric: "tabular-nums", color: "#555", fontFamily: "monospace", flexShrink: 0, minWidth: 28, textAlign: "right" }}>
+            {fmtTime(previewOnly ? Math.min(PREVIEW_MAX_SEC, duration || 0) : (duration || 0))}
+          </span>
+        </div>
       </div>
     </div>
   );

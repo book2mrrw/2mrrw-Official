@@ -45,10 +45,20 @@ export function mapMediaTrackToPlayInput(track = {}) {
   };
 }
 
+const VOL_KEY = "2mrrw-vol";
+
 function readVolume(audioRef) {
   const el = audioRef?.current;
-  if (el && typeof el.volume === "number") return el.volume;
-  return 1;
+  if (!el) return 1;
+  if (el.volume > 0) return el.volume;
+  // el.volume is 0 — restore from persisted value or default to 1
+  let v = 1;
+  try {
+    const s = parseFloat(localStorage.getItem(VOL_KEY) ?? "");
+    if (Number.isFinite(s) && s > 0) v = s;
+  } catch {}
+  el.volume = v;
+  return v;
 }
 
 function readElementPlaying(audioRef) {
@@ -168,8 +178,12 @@ export function mapAudioContextToMediaEngine(audio) {
     setVolume: (level) => {
       const el = audio.audioRef?.current;
       if (!el) return;
-      const v = Math.max(0, Math.min(1, Number(level)));
-      if (Number.isFinite(v)) el.volume = v;
+      // Clamp to valid range; minimum 0.01 so the slider can never fully mute
+      const v = Math.max(0.01, Math.min(1, Number(level)));
+      if (Number.isFinite(v)) {
+        el.volume = v;
+        try { localStorage.setItem(VOL_KEY, String(v)); } catch {}
+      }
     },
     toggle: audio.toggle,
     playNext: audio.playNext ?? null,
