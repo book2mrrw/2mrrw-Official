@@ -19,6 +19,8 @@ import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actio
 import GlyphLyricsPanel from "@/components/preview/GlyphLyricsPanel";
 import { postLibraryAdd } from "@/lib/library-client";
 import { queueOfflineDownload } from "@/lib/offline-cache";
+import { loadPlaylists, addTrackToPlaylist, createPlaylist } from "@/lib/playlists";
+import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 
 const PREVIEW_CAP_SEC = 30;
 
@@ -197,6 +199,48 @@ const I = {
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 5H5L8 2v10L5 9H2V5z" />
       <path d="M10 4a3.5 3.5 0 0 1 0 6" />
+    </svg>
+  ),
+  Dots: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <circle cx="3" cy="8" r="1.5" />
+      <circle cx="8" cy="8" r="1.5" />
+      <circle cx="13" cy="8" r="1.5" />
+    </svg>
+  ),
+  PlayNext: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="2,2 9,7 2,12" fill="currentColor" stroke="none" />
+      <line x1="11" y1="2" x2="11" y2="12" />
+    </svg>
+  ),
+  AddQueue: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="4" x2="9" y2="4" />
+      <line x1="2" y1="7" x2="9" y2="7" />
+      <line x1="2" y1="10" x2="6" y2="10" />
+      <line x1="11" y1="8" x2="11" y2="13" />
+      <line x1="8.5" y1="10.5" x2="13.5" y2="10.5" />
+    </svg>
+  ),
+  ListPlus: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="2" y1="4" x2="10" y2="4" />
+      <line x1="2" y1="7" x2="10" y2="7" />
+      <line x1="2" y1="10" x2="7" y2="10" />
+      <line x1="10.5" y1="9" x2="10.5" y2="13" />
+      <line x1="8.5" y1="11" x2="12.5" y2="11" />
+    </svg>
+  ),
+  ShareArrow: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 2l3 3-3 3" />
+      <path d="M12 5H5a3 3 0 0 0-3 3v2" />
+    </svg>
+  ),
+  Check: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="2,7 5.5,10.5 12,4" />
     </svg>
   ),
 };
@@ -647,6 +691,96 @@ function SleepTimerSheet({ t, sleepTimerEndsAt, sleepAfterCurrentTrack, setSleep
   );
 }
 
+function TrackContextSheet({ track, album, t, onPlayNext, onAddToQueue, onAddToPlaylist, onShare, onClose }) {
+  const actions = [
+    { label: "Play Next", icon: <I.PlayNext />, fn: onPlayNext },
+    { label: "Add to Queue", icon: <I.AddQueue />, fn: onAddToQueue },
+    { label: "Add to Playlist", icon: <I.ListPlus />, fn: onAddToPlaylist },
+    { label: "Share Track", icon: <I.ShareArrow />, fn: onShare },
+  ];
+  return (
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: 32 }}>
+      <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
+      <div style={{ padding: "4px 22px 14px", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+        <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 17, fontWeight: 500, color: "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{track?.title}</div>
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".18em", textTransform: "uppercase", color: t.accent, marginTop: 2 }}>{album?.artist} · {album?.title}</div>
+      </div>
+      {actions.map(({ label, icon, fn }) => (
+        <button
+          key={label}
+          type="button"
+          onClick={() => { fn?.(); onClose(); }}
+          style={{ width: "100%", padding: "14px 22px", background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,.04)", textAlign: "left", fontSize: 14, color: "rgba(255,255,255,.82)", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}
+        >
+          <span style={{ color: t.accent, display: "flex", alignItems: "center", width: 18, flexShrink: 0 }}>{icon}</span>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function PlaylistPickerSheet({ track, album, userId, t, onClose }) {
+  const [playlists, setPlaylists] = useState(() => loadPlaylists(userId));
+  const [added, setAdded] = useState(null);
+
+  const trackRef = useMemo(() => ({
+    id: track?.id,
+    slug: track?.slug,
+    title: track?.title,
+    artist: album?.artist || "2MRRW",
+    cover: album?.cover || album?.coverArt || null,
+  }), [track, album]);
+
+  const doAdd = useCallback((playlistId) => {
+    if (!userId || !trackRef.slug) return;
+    addTrackToPlaylist(userId, playlistId, trackRef);
+    setAdded(playlistId);
+    setTimeout(onClose, 900);
+  }, [userId, trackRef, onClose]);
+
+  const doNew = useCallback(() => {
+    if (!userId || !trackRef.slug) return;
+    const pl = createPlaylist(userId, { title: album?.title || "New Playlist" });
+    addTrackToPlaylist(userId, pl.id, trackRef);
+    setPlaylists(loadPlaylists(userId));
+    setAdded(pl.id);
+    setTimeout(onClose, 900);
+  }, [userId, trackRef, album, onClose]);
+
+  return (
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: 32, maxHeight: "70vh", overflowY: "auto" }}>
+      <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
+      <div style={{ padding: "4px 22px 14px", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+        <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 18, fontWeight: 400, color: "white" }}>Add to Playlist</div>
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".18em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", marginTop: 2 }}>{track?.title}</div>
+      </div>
+      <button
+        type="button"
+        onClick={doNew}
+        style={{ width: "100%", padding: "14px 22px", background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,.05)", textAlign: "left", fontSize: 14, color: t.accent, cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}
+      >
+        <span style={{ width: 20, height: 20, borderRadius: "50%", border: `1px solid ${t.p1}`, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 14, lineHeight: 1, flexShrink: 0 }}>+</span>
+        New Playlist
+      </button>
+      {playlists.filter(pl => !pl.isSystem).map((pl) => (
+        <button
+          key={pl.id}
+          type="button"
+          onClick={() => doAdd(pl.id)}
+          style={{ width: "100%", padding: "14px 22px", background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,.04)", textAlign: "left", fontSize: 13, color: added === pl.id ? t.accent : "rgba(255,255,255,.78)", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}
+        >
+          {added === pl.id ? <span style={{ color: t.accent, display: "flex", alignItems: "center" }}><I.Check /></span> : <span style={{ width: 14, display: "inline-block" }} />}
+          {pl.title}
+        </button>
+      ))}
+      {playlists.filter(pl => !pl.isSystem).length === 0 && (
+        <div style={{ padding: "18px 22px", fontSize: 12, color: "rgba(255,255,255,.3)", textAlign: "center" }}>No playlists yet. Create one above.</div>
+      )}
+    </div>
+  );
+}
+
 function VolumeSlider({ t, volume, onVolumeChange }) {
   const barRef = useRef(null);
   const draggingRef = useRef(false);
@@ -1088,7 +1222,7 @@ export function SingleModal({
   );
 }
 
-function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex }) {
+function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex, otherReleases, onReleaseClick }) {
   const coverSrc = trackCoverSrc(album);
   const isVideo = (album?.coverArtType || album?.coverType) === "video";
   const palette = useCoverPalette(coverSrc, album?.coverArtType || album?.coverType || "image");
@@ -1104,6 +1238,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const [playbackNotice, setPlaybackNotice] = useState(null);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [downloadStates, setDownloadStates] = useState({});
+  const [trackMenu, setTrackMenu] = useState(null);
 
   const {
     state: { isPlaying, currentTime, duration: engineDuration, currentTrack: engineTrack, volume, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack },
@@ -1117,6 +1252,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     toggleShuffle,
     toggleRepeat,
     setSleepTimer,
+    enqueueTrack,
   } = useMediaEngine();
   const beat = useBeat(isPlaying);
 
@@ -1271,6 +1407,14 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
       setDownloadStates((prev) => ({ ...prev, [slug]: null }));
     }
   }, [album?.slug, downloadStates, userId]);
+
+  const handleEnqueue = useCallback((tr, { playNext: insertNext = false } = {}) => {
+    if (!enqueueTrack || !album?.slug) return;
+    const idx = tracks.findIndex((t) => t && tr && String(t.id) === String(tr.id));
+    const allPlayback = albumTracksForPlayback(album, entitlementAccountState, "album_modal", getCatalogSurfaceRef().catalogPlaybackLookup);
+    const playbackTrack = idx >= 0 ? allPlayback[idx] : null;
+    if (playbackTrack?.src) enqueueTrack(playbackTrack, { playNext: insertNext });
+  }, [album, tracks, entitlementAccountState, enqueueTrack]);
 
   const isVisible = mounted && !closing;
 
@@ -1480,6 +1624,16 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
                   <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
+                      aria-label="More options"
+                      onClick={() => setTrackMenu(tr)}
+                      style={{ background: "none", border: "none", padding: "0 2px", cursor: "pointer", color: "rgba(255,255,255,.28)", display: "flex", alignItems: "center" }}
+                    >
+                      <I.Dots />
+                    </button>
+                  </div>
+                  <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
                       style={{
                         width: 28,
                         height: 28,
@@ -1503,6 +1657,32 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
               );
             })}
             <div style={{ height: 4 }} />
+
+            {otherReleases?.length > 0 && (
+              <div style={{ borderTop: "1px solid rgba(255,255,255,.06)", paddingTop: 14, paddingBottom: 8 }}>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".24em", textTransform: "uppercase", color: "rgba(255,255,255,.3)", padding: "0 20px 10px" }}>More Releases</div>
+                <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingLeft: 20, paddingRight: 20, scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", overflowY: "hidden" }}>
+                  {otherReleases.map((r) => (
+                    <button
+                      key={r.slug || r.id}
+                      type="button"
+                      onClick={() => onReleaseClick?.(r)}
+                      style={{ flexShrink: 0, width: 76, background: "none", border: "none", padding: 0, cursor: "pointer", scrollSnapAlign: "start", textAlign: "left" }}
+                    >
+                      <div style={{ width: 76, height: 76, borderRadius: 9, overflow: "hidden", border: "1px solid rgba(255,255,255,.1)", background: "#111" }}>
+                        {r.cover || r.coverArt ? (
+                          <img src={r.cover || r.coverArt} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
+                        ) : (
+                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Cormorant Garamond',serif", fontSize: 22, color: t.accent }}>{(r.title || "?").charAt(0)}</div>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 10, color: "rgba(255,255,255,.5)", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 76 }}>{r.title}</div>
+                      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 7, letterSpacing: ".1em", color: "rgba(255,255,255,.22)", marginTop: 1 }}>{r.type || r.release_type || "Release"}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {playbackNotice ? (
@@ -1578,14 +1758,43 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
         {sheet === "sleep" ? (
           <SleepTimerSheet t={t} sleepTimerEndsAt={sleepTimerEndsAt} sleepAfterCurrentTrack={sleepAfterCurrentTrack} setSleepTimer={setSleepTimer} onClose={() => setSheet(null)} />
         ) : null}
+        {trackMenu && sheet !== "playlist-pick" ? (
+          <TrackContextSheet
+            track={trackMenu}
+            album={album}
+            t={t}
+            onPlayNext={() => handleEnqueue(trackMenu, { playNext: true })}
+            onAddToQueue={() => handleEnqueue(trackMenu, { playNext: false })}
+            onAddToPlaylist={() => setSheet("playlist-pick")}
+            onShare={() => setSheet("track-share")}
+            onClose={() => setTrackMenu(null)}
+          />
+        ) : null}
+        {sheet === "playlist-pick" && trackMenu ? (
+          <PlaylistPickerSheet
+            track={trackMenu}
+            album={album}
+            userId={userId}
+            t={t}
+            onClose={() => { setSheet(null); setTrackMenu(null); }}
+          />
+        ) : null}
+        {sheet === "track-share" ? (
+          <ShareSheet
+            title={`Share "${trackMenu?.title || "Track"}"`}
+            sub={`${album?.title} · ${album?.artist}`}
+            t={t}
+            onClose={() => { setSheet(null); setTrackMenu(null); }}
+          />
+        ) : null}
       </div>
     </div>
   );
 }
 
-export function AlbumModal({ album, onPlayTrackAtIndex, ...rest }) {
+export function AlbumModal({ album, onPlayTrackAtIndex, otherReleases, onReleaseClick, ...rest }) {
   if (!album || (!album.slug && !album.id)) return null;
-  return <AlbumModalView album={album} onPlayTrackAtIndex={onPlayTrackAtIndex} {...rest} />;
+  return <AlbumModalView album={album} onPlayTrackAtIndex={onPlayTrackAtIndex} otherReleases={otherReleases} onReleaseClick={onReleaseClick} {...rest} />;
 }
 
 export default function ImmersivePreviewModal({

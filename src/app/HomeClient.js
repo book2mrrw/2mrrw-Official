@@ -1533,6 +1533,8 @@ function PageStorefront({ initialEvents }) {
                         }
                         onClose={closeAlbumModal}
                         onPlayTrackAtIndex={playAlbumModalTrackAtIndex}
+                        otherReleases={[...albums, ...mixtapesAndEps].filter(r => r.slug !== selectedAlbum?.slug)}
+                        onReleaseClick={openAlbumModal}
                       />
                     </ModalErrorBoundary>
                   )}

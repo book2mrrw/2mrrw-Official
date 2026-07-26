@@ -177,6 +177,7 @@ export function mapAudioContextToMediaEngine(audio) {
     toggleShuffle: audio.toggleShuffle ?? null,
     toggleRepeat: audio.toggleRepeat ?? null,
     setSleepTimer: audio.setSleepTimer ?? null,
+    enqueueTrack: audio.enqueueTrack ?? null,
     toggleCSMode: audio.toggleCSMode,
     toggleSpaceMode: audio.toggleSpaceMode,
     toggleBassBoost: audio.toggleBassBoost,
