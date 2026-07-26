@@ -3799,15 +3799,18 @@ export function AudioProvider({ children }) {
 
   const unlockAudioFromGesture = useCallback(async (audioEl) => {
     if (!audioEl || !audioEl.paused) return;
+    // Capture volume before any mutation so it can always be restored.
+    // Guarantee a non-silent value — if el.volume is already 0 for any reason, restore to 1.
+    const vol = audioEl.volume > 0 ? audioEl.volume : 1;
     try {
-      const vol = audioEl.volume;
       audioEl.volume = 0;
       await audioEl.play();
       audioEl.pause();
-      audioEl.volume = vol;
     } catch {
       /* unlock failure is non-fatal */
     }
+    // Unconditional restore: runs whether play() succeeded, failed, or threw.
+    audioEl.volume = vol;
   }, []);
 
   const cancelCrossfade = useCallback(() => {

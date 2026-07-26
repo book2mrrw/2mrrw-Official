@@ -2569,7 +2569,7 @@ body.is-player-modal-open::before {
 .player-bar-compact .player-bar-scrub__track {
   height: 3px;
   border-radius: 0;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .player-bar-scrub-fill {

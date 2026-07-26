@@ -44,7 +44,7 @@ const PlayerBarCurrentTime = memo(function PlayerBarCurrentTime() {
     return subscribeProgress(apply);
   }, [subscribeProgress, getProgressSnapshot]);
   return (
-    <span ref={spanRef} style={{ fontSize: 10, fontVariantNumeric: "tabular-nums", color: "#555", fontFamily: "monospace", flexShrink: 0, minWidth: 28 }}>
+    <span ref={spanRef} style={{ fontSize: 10, fontVariantNumeric: "tabular-nums", color: "rgba(255,255,255,0.45)", fontFamily: "monospace", flexShrink: 0, minWidth: 28 }}>
       0:00
     </span>
   );
@@ -436,7 +436,7 @@ function MiniPlayerDock({
           <div style={{ flex: 1 }}>
             <PlayerBarScrub duration={duration} previewOnly={previewOnly} onSeek={onSeek} />
           </div>
-          <span style={{ fontSize: 10, fontVariantNumeric: "tabular-nums", color: "#555", fontFamily: "monospace", flexShrink: 0, minWidth: 28, textAlign: "right" }}>
+          <span style={{ fontSize: 10, fontVariantNumeric: "tabular-nums", color: "rgba(255,255,255,0.45)", fontFamily: "monospace", flexShrink: 0, minWidth: 28, textAlign: "right" }}>
             {fmtTime(previewOnly ? Math.min(PREVIEW_MAX_SEC, duration || 0) : (duration || 0))}
           </span>
         </div>
@@ -495,6 +495,8 @@ function GlobalAudioPlayerBar() {
   const [dragQueue, setDragQueue] = useState(null); // { fromIdx, overIdx }
   const queueListRef = useRef(null);
   const queueItemHeightRef = useRef(50);
+  const dragGhostRef = useRef(null);
+  const dragPointerYRef = useRef(0);
   const csOverlayImgRef = useRef(null);
   const touchMovedRef = useRef(false);
   const touchStartRef = useRef(null);
@@ -723,6 +725,7 @@ function GlobalAudioPlayerBar() {
   const onQueueDragStart = useCallback((e, fromIdx) => {
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
+    dragPointerYRef.current = e.clientY;
     const list = queueListRef.current;
     if (list?.firstElementChild) {
       queueItemHeightRef.current = list.firstElementChild.offsetHeight || 50;
@@ -731,6 +734,11 @@ function GlobalAudioPlayerBar() {
   }, []);
 
   const onQueueDragMove = useCallback((e, trackCount) => {
+    dragPointerYRef.current = e.clientY;
+    // Move ghost via direct DOM mutation — no React re-render per frame
+    if (dragGhostRef.current) {
+      dragGhostRef.current.style.top = `${e.clientY - 24}px`;
+    }
     const list = queueListRef.current;
     if (!list) return;
     const rect = list.getBoundingClientRect();
@@ -889,9 +897,10 @@ function GlobalAudioPlayerBar() {
                     gap: 12,
                     padding: "10px 20px",
                     borderBottom: "1px solid #111",
-                    opacity: isDragging ? 0.4 : 1,
-                    background: isOver ? "rgba(0,255,255,0.06)" : undefined,
-                    borderTop: isOver ? "1px solid rgba(0,255,255,0.25)" : undefined,
+                    opacity: isDragging ? 0.25 : 1,
+                    background: isOver ? "rgba(0,255,255,0.08)" : undefined,
+                    borderTop: isOver ? "2px solid rgba(0,255,255,0.55)" : undefined,
+                    transition: isDragging ? "none" : "background 0.12s, border-color 0.12s",
                   }}
                 >
                   {/* drag handle */}
@@ -931,6 +940,41 @@ function GlobalAudioPlayerBar() {
           )}
         </div>
       </div>
+      {/* Drag ghost — follows finger, shows what's being moved */}
+      {dragQueue !== null && upNextTracks[dragQueue.fromIdx] ? (
+        <div
+          ref={dragGhostRef}
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            left: 20,
+            right: 20,
+            top: dragPointerYRef.current - 24,
+            zIndex: 9999,
+            background: "#1c1c1e",
+            border: "1px solid rgba(0,255,255,0.4)",
+            borderRadius: 10,
+            padding: "10px 16px",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            boxShadow: "0 12px 32px rgba(0,0,0,0.75), 0 0 0 1px rgba(0,255,255,0.06)",
+            pointerEvents: "none",
+            touchAction: "none",
+            willChange: "top",
+          }}
+        >
+          <div style={{ fontSize: 14, color: "rgba(0,255,255,0.55)", lineHeight: 1, flexShrink: 0 }}>≡</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#fff" }}>
+              {upNextTracks[dragQueue.fromIdx].title}
+            </div>
+            <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
+              {upNextTracks[dragQueue.fromIdx].artist || "2MRRW"}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   ) : null;
 
