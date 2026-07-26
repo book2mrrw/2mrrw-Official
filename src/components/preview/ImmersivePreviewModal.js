@@ -1023,6 +1023,12 @@ function QueueSheet({ queue, queueIndex, t, onRemove, onMove, onClear, onSaveAsP
 function VolumeSlider({ t, volume, onVolumeChange }) {
   const barRef = useRef(null);
   const draggingRef = useRef(false);
+  const [localVol, setLocalVol] = useState(() => volume ?? 1);
+
+  // Sync from engine only when not actively dragging
+  useEffect(() => {
+    if (!draggingRef.current) setLocalVol(volume ?? 1);
+  }, [volume]);
 
   const readPos = useCallback((e) => {
     const rect = (barRef.current || e.currentTarget).getBoundingClientRect();
@@ -1030,11 +1036,16 @@ function VolumeSlider({ t, volume, onVolumeChange }) {
     return Math.max(0, Math.min(1, (cx - rect.left) / rect.width));
   }, []);
 
+  const commit = useCallback((v) => {
+    setLocalVol(v);
+    onVolumeChange(v);
+  }, [onVolumeChange]);
+
   const onMouseDown = useCallback((e) => {
     e.preventDefault();
     draggingRef.current = true;
-    onVolumeChange(readPos(e));
-    const onMove = (ev) => { if (draggingRef.current) onVolumeChange(readPos(ev)); };
+    commit(readPos(e));
+    const onMove = (ev) => { if (draggingRef.current) commit(readPos(ev)); };
     const onUp = () => {
       draggingRef.current = false;
       window.removeEventListener("mousemove", onMove);
@@ -1042,23 +1053,26 @@ function VolumeSlider({ t, volume, onVolumeChange }) {
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [onVolumeChange, readPos]);
+  }, [commit, readPos]);
 
-  const onTouchMove = useCallback((e) => { e.preventDefault(); onVolumeChange(readPos(e)); }, [onVolumeChange, readPos]);
+  const onTouchStart = useCallback((e) => { draggingRef.current = true; commit(readPos(e)); }, [commit, readPos]);
+  const onTouchMove = useCallback((e) => { commit(readPos(e)); }, [commit, readPos]);
+  const onTouchEnd = useCallback(() => { draggingRef.current = false; }, []);
 
-  const pct = Math.round((volume ?? 1) * 100);
+  const pct = Math.round(localVol * 100);
   return (
     <div style={{ padding: "9px 20px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid rgba(255,255,255,.06)", flexShrink: 0 }}>
       <span style={{ color: "rgba(255,255,255,.38)", display: "flex", alignItems: "center", flexShrink: 0 }}><I.VolumeIcon /></span>
       <div
         ref={barRef}
         onMouseDown={onMouseDown}
-        onTouchStart={(e) => onVolumeChange(readPos(e))}
+        onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
         role="slider"
         aria-valuenow={pct}
         aria-label="Volume"
-        style={{ flex: 1, height: 4, background: "rgba(255,255,255,.1)", borderRadius: 4, cursor: "pointer", position: "relative" }}
+        style={{ flex: 1, height: 4, background: "rgba(255,255,255,.1)", borderRadius: 4, cursor: "pointer", position: "relative", touchAction: "none" }}
       >
         <div style={{ width: `${pct}%`, height: "100%", borderRadius: 4, background: `linear-gradient(90deg,${t.p1},${t.accent})`, position: "relative" }}>
           <div style={{ position: "absolute", right: -5, top: "50%", transform: "translateY(-50%)", width: 10, height: 10, borderRadius: "50%", background: t.accent }} />
@@ -1546,8 +1560,6 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const displayDuration = isPreview && activeTrack && !activeTrack?.free ? PREVIEW_CAP_SEC : engineDur;
   const displayCurrent =
     isPreview && activeTrack && !activeTrack?.free ? Math.min(currentTime, PREVIEW_CAP_SEC) : currentTime;
-  const miniPct = displayDuration ? (displayCurrent / displayDuration) * 100 : 0;
-
   const close = useCallback(() => {
     setSheet(null);
     setClosing(true);
@@ -1588,13 +1600,11 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
       // activeTrack.id is a DB id; queueId is composite albumSlug:trackSlug — check both.
       // The direct tr.id check is safe here because Fix 2 reverts activeTrack on failed playback,
       // so stale-activeTrack false positives are impossible.
-      const activeMatchesQueue =
-        activeTrack != null &&
-        tr != null &&
-        (String(activeTrack.id) === String(queueId) || String(activeTrack.id) === String(tr.id));
-      // Engine is the authoritative source of truth for what is actually playing.
+      // Engine is the sole source of truth: only toggle if the engine is actually
+      // playing this exact track. Comparing UI activeTrack state causes false positives
+      // when the highlight is stale (optimistic update in-flight or engine auto-advanced).
       const engineMatches = engineItem && isSamePlaybackTrack(engineItem, modalPlaybackItem);
-      const sameTrack = activeMatchesQueue || engineMatches;
+      const sameTrack = engineMatches;
 
       if (sameTrack) {
         toggle();
@@ -2110,42 +2120,6 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
               {playbackNotice}
             </div>
           ) : null}
-
-          <div style={{ flexShrink: 0, padding: "10px 18px 14px", borderTop: "1px solid rgba(255,255,255,.07)", display: "flex", alignItems: "center", gap: 10, position: "relative" }}>
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2 }}>
-              <div style={{ height: "100%", width: `${miniPct}%`, background: `linear-gradient(90deg,${t.p1},${t.accent})`, boxShadow: `0 0 6px ${t.glow}`, transition: "width .4s linear" }} />
-            </div>
-            <div style={{ width: 38, height: 38, borderRadius: 8, flexShrink: 0, background: `linear-gradient(135deg,${t.bg[0]},${t.bg[1]})`, border: `1px solid ${t.p1}30`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Cormorant Garamond',serif", fontSize: 16, color: t.accent }}>
-              {(album?.title || "?").charAt(0)}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 12, color: "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{activeTrack?.title}</div>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.35)" }}>
-                {album?.title} · {album?.artist}
-              </div>
-            </div>
-            <button
-              type="button"
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: "50%",
-                border: `1.5px solid ${t.p1}`,
-                background: "transparent",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                color: t.accent,
-                flexShrink: 0,
-                boxShadow: isPlaying ? `0 0 12px ${t.glow}` : "none",
-                transition: "box-shadow .2s",
-              }}
-              onClick={toggle}
-            >
-              {isPlaying ? <I.TrPause /> : <I.TrPlay />}
-            </button>
-          </div>
         </div>
 
         {sheet === "share" ? <ShareSheet title={`Share ${album?.type || "Album"}`} sub={`${album?.title} · ${album?.artist}`} t={t} onClose={() => setSheet(null)} /> : null}
