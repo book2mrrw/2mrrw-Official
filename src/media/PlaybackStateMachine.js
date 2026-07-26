@@ -160,6 +160,15 @@ class PlaybackStateMachine {
   _beginRecovery(event, payload) {
     if (!RECOVERY_EVENTS.has(event)) return Promise.resolve(false);
     if (this.recoveryPromise) return this.recoveryPromise;
+    // When DEGRADED, auto-desync events are absorbed — the audibility watchdog would
+    // busy-loop at 1250ms if we allowed them through. Only explicit RECOVERY_REQUESTED
+    // (from user action or command dispatch) may re-enter recovery from DEGRADED.
+    if (
+      this.state === PLAYBACK_ORCHESTRATION_STATES.DEGRADED &&
+      event !== PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED
+    ) {
+      return Promise.resolve(false);
+    }
     if (this.lifecycleRecoveryGuard?.()) {
       return Promise.resolve(false);
     }

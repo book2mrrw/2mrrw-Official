@@ -144,10 +144,7 @@ export function resolveTrackAccess(track, accountState = {}) {
     subscriptionLibrary.has(slug) || subscriptionLibrary.has(albumSlug);
   const subscriptionGlobal =
     subscriptionActive && Boolean(permissions.subscriber);
-  const subscription =
-    subscriptionActive &&
-    (Boolean(permissions.subscriber) || Boolean(accountState.subscriberActive)) &&
-    (subscriptionViaLibrary || subscriptionGlobal);
+  const subscription = subscriptionActive && (subscriptionViaLibrary || subscriptionGlobal);
 
   const collector =
     collectorCardOwner ||

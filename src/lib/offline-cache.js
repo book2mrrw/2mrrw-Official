@@ -58,6 +58,28 @@ export function getOfflineCacheMeta(userId, slug) {
 }
 
 /**
+ * Resolve an audio blob from either a direct URL or the /api/library/stream
+ * endpoint. The stream endpoint returns JSON { url, ... } pointing to a signed
+ * R2 URL — we follow that indirection to get real audio bytes.
+ */
+async function fetchAudioBlob(apiOrDirectUrl) {
+  const isStreamApi = apiOrDirectUrl.includes("/api/library/stream");
+  if (isStreamApi) {
+    const apiRes = await fetch(apiOrDirectUrl, { credentials: "include" });
+    if (!apiRes.ok) throw new Error(`stream_api_${apiRes.status}`);
+    const json = await apiRes.json();
+    if (!json?.url) throw new Error("stream_api_no_url");
+    // R2 signed URL uses URL-based auth — credentials must be omitted or CORS fails.
+    const audioRes = await fetch(json.url, { credentials: "omit" });
+    if (!audioRes.ok) throw new Error(`r2_fetch_${audioRes.status}`);
+    return audioRes.blob();
+  }
+  const res = await fetch(apiOrDirectUrl, { credentials: "include" });
+  if (!res.ok) throw new Error(`direct_fetch_${res.status}`);
+  return res.blob();
+}
+
+/**
  * Queue a track for offline playback. Fetches the audio, stores the blob in
  * IndexedDB (persists across sessions) and puts the blob URL in blobUrlMap
  * for immediate same-session use.
@@ -77,17 +99,14 @@ export async function queueOfflineDownload(userId, track, { streamUrl } = {}) {
   const url = streamUrl || track.full || track.audio || track.src || track.preview;
   if (url) {
     try {
-      const res = await fetch(url, { credentials: "include" });
-      if (res.ok) {
-        const blob = await res.blob();
-        blobUrl = URL.createObjectURL(blob);
-        const key = idbKey(userId, track.slug);
-        blobUrlMap.set(key, blobUrl);
-        // Persist to IDB — non-fatal if storage is unavailable.
-        storeAudioBlob(key, blob).catch(() => {});
-      }
+      const blob = await fetchAudioBlob(url);
+      blobUrl = URL.createObjectURL(blob);
+      const key = idbKey(userId, track.slug);
+      blobUrlMap.set(key, blobUrl);
+      // Persist to IDB — non-fatal if storage is unavailable.
+      storeAudioBlob(key, blob).catch(() => {});
     } catch {
-      /* queued without blob — in-app playback uses stream URL */
+      /* queued without blob — in-app playback falls back to stream URL */
     }
   }
 

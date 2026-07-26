@@ -891,15 +891,21 @@ function MyMusicTab({
     const catalog = singles.find((s) => s.slug === activeContinue.slug) || activeContinue;
     const access = resolveTrackAccess(catalog, accountState);
     playItem(catalog, access, activeContinue.completed ? 0 : Number(activeContinue.positionSeconds || 0));
-    void resume();
-  }, [accountState, activeContinue, playItem, resume, singles]);
+  }, [accountState, activeContinue, playItem, singles]);
 
   const playAllSingles = useCallback((shuffle = false) => {
     const playable = mergedOwnedSingles
       .filter((item) => resolveTrackAccess(item, accountState).canStream)
       .map((item) => toPlaybackTrack(item, { ...accountState, userId: user?.id }, "my_music_all"));
     if (!playable.length) return;
-    let ordered = shuffle ? [...playable].sort(() => Math.random() - 0.5) : playable;
+    let ordered = playable;
+    if (shuffle) {
+      ordered = [...playable];
+      for (let i = ordered.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [ordered[i], ordered[j]] = [ordered[j], ordered[i]];
+      }
+    }
     if (shuffle) setShuffle(true);
     const { startTrack, needsUpgrade } = toInstantStartTrack(ordered[0]);
     const instantOrdered = needsUpgrade ? [startTrack, ...ordered.slice(1)] : ordered;

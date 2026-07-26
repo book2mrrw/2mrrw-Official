@@ -16,16 +16,26 @@ export const SOURCE_KIND = Object.freeze({
 
 /**
  * Classify a source URL into a SOURCE_KIND without network I/O.
+ * Uses URL pathname for matching so query-parameter values cannot spoof the kind.
  * @param {string} src
  * @returns {keyof typeof SOURCE_KIND}
  */
 export function classifySourceUrl(src) {
   if (!src || typeof src !== "string") return SOURCE_KIND.UNKNOWN;
-  if (src.includes("/api/library/stream") && src.includes("redirect=1")) {
-    return SOURCE_KIND.REDIRECT;
+  let pathname = src;
+  let redirect = false;
+  try {
+    const parsed = new URL(src, "http://localhost");
+    pathname = parsed.pathname;
+    redirect = parsed.searchParams.get("redirect") === "1";
+  } catch {
+    // Malformed URL — fall through with raw string
+    redirect = src.includes("redirect=1");
   }
-  if (src.includes("/api/library/stream")) return SOURCE_KIND.LIBRARY_STREAM;
-  if (src.includes("/api/media/preview")) return SOURCE_KIND.PREVIEW;
+  if (pathname === "/api/library/stream" || pathname.endsWith("/api/library/stream")) {
+    return redirect ? SOURCE_KIND.REDIRECT : SOURCE_KIND.LIBRARY_STREAM;
+  }
+  if (pathname.includes("/api/media/preview")) return SOURCE_KIND.PREVIEW;
   return SOURCE_KIND.CDN;
 }
 

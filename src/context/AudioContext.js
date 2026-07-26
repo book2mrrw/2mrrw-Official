@@ -158,7 +158,7 @@ const SLOWED_SUFFIX = " · Slowed";
 const CS_PLAYBACK_RATE = 0.75;
 const POSITION_SAVE_INTERVAL_MS = 15000;
 const STORE_LINK_HREF = "/subscribe";
-const PREVIEW_HARD_CAP_SEC = 15;
+const PREVIEW_HARD_CAP_SEC = 30;
 const RESTORE_MIN_POSITION_SEC = 5;
 const RESTORE_NEAR_END_BUFFER_SEC = 3;
 const SPURIOUS_ENDED_GUARD_MS = 1200;
@@ -4687,9 +4687,12 @@ export function AudioProvider({ children }) {
       return true;
     }
 
+    const upgradeTrackSlug = track.metadata?.trackSlug || track.trackSlug || null;
+    const upgradeParams = new URLSearchParams({ slug: track.slug, redirect: "1" });
+    if (upgradeTrackSlug) upgradeParams.set("trackSlug", upgradeTrackSlug);
     const libraryTrack = {
       ...track,
-      src: `/api/library/stream?slug=${encodeURIComponent(track.slug)}&redirect=1`,
+      src: `/api/library/stream?${upgradeParams.toString()}`,
     };
 
     patchState({ playbackNetworkState: "loading_stream" });

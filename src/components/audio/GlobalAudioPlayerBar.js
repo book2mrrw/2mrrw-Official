@@ -24,7 +24,7 @@ import {
 } from "@/lib/player/constants";
 import { resolvePlayerDisplayTitle } from "@/lib/playback/resolve-player-display-title";
 
-const PREVIEW_MAX_SEC = 15;
+const PREVIEW_MAX_SEC = 30;
 
 // ─── Scrub bar ───────────────────────────────────────────────────────────────
 
