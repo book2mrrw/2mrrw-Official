@@ -62,21 +62,35 @@ export function getOfflineCacheMeta(userId, slug) {
  * endpoint. The stream endpoint returns JSON { url, ... } pointing to a signed
  * R2 URL — we follow that indirection to get real audio bytes.
  */
-async function fetchAudioBlob(apiOrDirectUrl) {
+async function fetchBlobWithProgress(url, credentials, onProgress) {
+  const res = await fetch(url, { credentials });
+  if (!res.ok) throw new Error(`fetch_${res.status}`);
+  const total = Number(res.headers.get("content-length")) || 0;
+  if (!total || !onProgress || !res.body) return res.blob();
+  const reader = res.body.getReader();
+  const chunks = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    onProgress(Math.min(99, Math.round((received / total) * 100)));
+  }
+  onProgress(100);
+  return new Blob(chunks);
+}
+
+async function fetchAudioBlob(apiOrDirectUrl, onProgress) {
   const isStreamApi = apiOrDirectUrl.includes("/api/library/stream");
   if (isStreamApi) {
     const apiRes = await fetch(apiOrDirectUrl, { credentials: "include" });
     if (!apiRes.ok) throw new Error(`stream_api_${apiRes.status}`);
     const json = await apiRes.json();
     if (!json?.url) throw new Error("stream_api_no_url");
-    // R2 signed URL uses URL-based auth — credentials must be omitted or CORS fails.
-    const audioRes = await fetch(json.url, { credentials: "omit" });
-    if (!audioRes.ok) throw new Error(`r2_fetch_${audioRes.status}`);
-    return audioRes.blob();
+    return fetchBlobWithProgress(json.url, "omit", onProgress);
   }
-  const res = await fetch(apiOrDirectUrl, { credentials: "include" });
-  if (!res.ok) throw new Error(`direct_fetch_${res.status}`);
-  return res.blob();
+  return fetchBlobWithProgress(apiOrDirectUrl, "include", onProgress);
 }
 
 /**
@@ -84,7 +98,7 @@ async function fetchAudioBlob(apiOrDirectUrl) {
  * IndexedDB (persists across sessions) and puts the blob URL in blobUrlMap
  * for immediate same-session use.
  */
-export async function queueOfflineDownload(userId, track, { streamUrl } = {}) {
+export async function queueOfflineDownload(userId, track, { streamUrl, onProgress } = {}) {
   if (typeof window === "undefined" || !track?.slug) {
     return { status: "unavailable", slug: track?.slug };
   }
@@ -99,7 +113,7 @@ export async function queueOfflineDownload(userId, track, { streamUrl } = {}) {
   const url = streamUrl || track.full || track.audio || track.src || track.preview;
   if (url) {
     try {
-      const blob = await fetchAudioBlob(url);
+      const blob = await fetchAudioBlob(url, onProgress);
       blobUrl = URL.createObjectURL(blob);
       const key = idbKey(userId, track.slug);
       blobUrlMap.set(key, blobUrl);

@@ -104,6 +104,7 @@ function mediaEngineStateChanged(next, prev) {
     next.duration !== prev.duration ||
     next.volume !== prev.volume ||
     !queueEqual(next.queue, prev.queue) ||
+    next.queueIndex !== prev.queueIndex ||
     next.playbackState !== prev.playbackState ||
     next.csMode !== prev.csMode ||
     next.spaceMode !== prev.spaceMode ||
@@ -150,6 +151,7 @@ export function mapAudioContextToMediaEngine(audio) {
       duration: audio.duration ?? 0,
       volume: readVolume(audio.audioRef),
       queue: audio.queue ?? [],
+      queueIndex: audio.queueIndex ?? -1,
       playbackState: audio.playbackState ?? null,
       csMode: Boolean(audio.csMode),
       spaceMode: Boolean(audio.spaceMode),
@@ -178,6 +180,15 @@ export function mapAudioContextToMediaEngine(audio) {
     toggleRepeat: audio.toggleRepeat ?? null,
     setSleepTimer: audio.setSleepTimer ?? null,
     enqueueTrack: audio.enqueueTrack ?? null,
+    removeFromQueue: audio.removeFromQueue ?? null,
+    moveInQueue: audio.moveInQueue ?? null,
+    setPlaybackRate: (rate) => {
+      const el = audio.audioRef?.current;
+      if (el && Number.isFinite(rate) && rate > 0) {
+        el.playbackRate = rate;
+        if (typeof el.preservesPitch !== "undefined") el.preservesPitch = true;
+      }
+    },
     toggleCSMode: audio.toggleCSMode,
     toggleSpaceMode: audio.toggleSpaceMode,
     toggleBassBoost: audio.toggleBassBoost,

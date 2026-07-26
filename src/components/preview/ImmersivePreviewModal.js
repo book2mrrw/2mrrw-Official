@@ -18,7 +18,7 @@ import {
 import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 import GlyphLyricsPanel from "@/components/preview/GlyphLyricsPanel";
 import { postLibraryAdd } from "@/lib/library-client";
-import { queueOfflineDownload, isOfflineCached } from "@/lib/offline-cache";
+import { queueOfflineDownload, isOfflineCached, removeOfflineCache } from "@/lib/offline-cache";
 import { loadPlaylists, addTrackToPlaylist, createPlaylist } from "@/lib/playlists";
 import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 
@@ -261,6 +261,52 @@ const I = {
     <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round">
       <rect x="2.5" y="0.5" width="3" height="4" rx="1.5" fill="currentColor" fillOpacity=".35" />
       <path d="M1.5 4a2.5 2.5 0 0 0 5 0" />
+    </svg>
+  ),
+  Grip: () => (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+      <circle cx="4" cy="3" r="1" /><circle cx="8" cy="3" r="1" />
+      <circle cx="4" cy="6" r="1" /><circle cx="8" cy="6" r="1" />
+      <circle cx="4" cy="9" r="1" /><circle cx="8" cy="9" r="1" />
+    </svg>
+  ),
+  Trash: () => (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="1,3 12,3" /><path d="M4,3V2a1,1 0 0,1 1-1h3a1,1 0 0,1 1,1v1" />
+      <path d="M2,3l.8,8.1A1,1 0 0,0 3.8,12h5.4a1,1 0 0,0 1-.9L11,3" />
+    </svg>
+  ),
+  Radio: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <circle cx="7" cy="7" r="2.5" />
+      <path d="M3.5 10.5a5 5 0 0 1 0-7" /><path d="M10.5 3.5a5 5 0 0 1 0 7" />
+      <path d="M1.5 12.5a8 8 0 0 1 0-11" /><path d="M12.5 1.5a8 8 0 0 1 0 11" />
+    </svg>
+  ),
+  Speed: ({ rate = 1 }) => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <circle cx="7" cy="8" r="5" />
+      <line x1="7" y1="8" x2="10" y2="4.5" />
+      <circle cx="7" cy="8" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  History: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+      <polyline points="2,2 2,6 6,6" /><path d="M2 6A6 6 0 1 1 3.5 10" />
+      <polyline points="7,4 7,7 9,9" />
+    </svg>
+  ),
+  Artist: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="7" cy="4.5" r="2.5" />
+      <path d="M1.5 12.5c0-3 2.5-5 5.5-5s5.5 2 5.5 5" />
+    </svg>
+  ),
+  RemoveDownload: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 7l3 3 3-3" /><path d="M7 2v8" /><line x1="2" y1="12" x2="12" y2="12" />
+      <line x1="10.5" y1="3" x2="13.5" y2="6" strokeWidth="1.2" />
+      <line x1="13.5" y1="3" x2="10.5" y2="6" strokeWidth="1.2" />
     </svg>
   ),
 };
@@ -711,12 +757,15 @@ function SleepTimerSheet({ t, sleepTimerEndsAt, sleepAfterCurrentTrack, setSleep
   );
 }
 
-function TrackContextSheet({ track, album, t, onPlayNext, onAddToQueue, onAddToPlaylist, onShare, onSaveToLibrary, onClose }) {
+function TrackContextSheet({ track, album, t, onPlayNext, onAddToQueue, onAddToPlaylist, onShare, onSaveToLibrary, onStartRadio, onGoToArtist, onRemoveFromDownloads, isCached, onClose }) {
   const actions = [
     { label: "Play Next", icon: <I.PlayNext />, fn: onPlayNext },
     { label: "Add to Queue", icon: <I.AddQueue />, fn: onAddToQueue },
+    { label: "Start Radio", icon: <I.Radio />, fn: onStartRadio },
     { label: "Add to Playlist", icon: <I.ListPlus />, fn: onAddToPlaylist },
     { label: "Save to Library", icon: <I.HeartOut />, fn: onSaveToLibrary },
+    { label: "Go to Artist", icon: <I.Artist />, fn: onGoToArtist },
+    ...(isCached ? [{ label: "Remove Download", icon: <I.RemoveDownload />, fn: onRemoveFromDownloads, danger: true }] : []),
     { label: "Share Track", icon: <I.ShareArrow />, fn: onShare },
   ];
   return (
@@ -726,14 +775,14 @@ function TrackContextSheet({ track, album, t, onPlayNext, onAddToQueue, onAddToP
         <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 17, fontWeight: 500, color: "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{track?.title}</div>
         <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".18em", textTransform: "uppercase", color: t.accent, marginTop: 2 }}>{album?.artist} · {album?.title}</div>
       </div>
-      {actions.map(({ label, icon, fn }) => (
+      {actions.map(({ label, icon, fn, danger }) => (
         <button
           key={label}
           type="button"
           onClick={() => { fn?.(); onClose(); }}
-          style={{ width: "100%", padding: "14px 22px", background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,.04)", textAlign: "left", fontSize: 14, color: "rgba(255,255,255,.82)", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}
+          style={{ width: "100%", padding: "14px 22px", background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,.04)", textAlign: "left", fontSize: 14, color: danger ? "rgba(255,80,80,.75)" : "rgba(255,255,255,.82)", cursor: "pointer", display: "flex", alignItems: "center", gap: 14 }}
         >
-          <span style={{ color: t.accent, display: "flex", alignItems: "center", width: 18, flexShrink: 0 }}>{icon}</span>
+          <span style={{ color: danger ? "rgba(255,80,80,.65)" : t.accent, display: "flex", alignItems: "center", width: 18, flexShrink: 0 }}>{icon}</span>
           {label}
         </button>
       ))}
@@ -802,49 +851,171 @@ function PlaylistPickerSheet({ track, album, userId, t, onClose }) {
   );
 }
 
-function QueueSheet({ queue, currentTrack, t, onClose }) {
-  const nowIdx = currentTrack
-    ? queue.findIndex((q) => (q.id ?? q.slug) === (currentTrack.id ?? currentTrack.slug))
-    : -1;
-  const nowPlaying = nowIdx >= 0 ? queue[nowIdx] : null;
-  const upNext = nowIdx >= 0 ? queue.slice(nowIdx + 1) : queue;
+const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+function PlaybackSpeedSheet({ speed, t, onSelect, onClose }) {
   return (
-    <div className="bsheet" style={{ background: t.dark, paddingBottom: 32, maxHeight: "70vh", display: "flex", flexDirection: "column" }}>
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: 32 }}>
       <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
-      <div style={{ padding: "4px 22px 12px", borderBottom: "1px solid rgba(255,255,255,.06)", flexShrink: 0 }}>
-        <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 18, fontWeight: 400, color: "white" }}>Queue</div>
-        {upNext.length > 0 && <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".15em", color: "rgba(255,255,255,.3)", marginTop: 2 }}>{upNext.length} UP NEXT</div>}
+      <div style={{ padding: "4px 22px 14px", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+        <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 18, fontWeight: 400, color: "white" }}>Playback Speed</div>
       </div>
-      <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
-        {nowPlaying ? (
-          <>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".2em", color: "rgba(255,255,255,.3)", padding: "12px 22px 4px" }}>NOW PLAYING</div>
-            <div style={{ padding: "8px 22px 10px", borderBottom: "1px solid rgba(255,255,255,.06)", display: "flex", alignItems: "center", gap: 12 }}>
+      {SPEED_OPTIONS.map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => { onSelect(s); onClose(); }}
+          style={{ width: "100%", padding: "14px 22px", background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,.04)", textAlign: "left", fontSize: 14, color: s === speed ? t.accent : "rgba(255,255,255,.8)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between" }}
+        >
+          <span>{s === 1 ? "Normal" : `${s}×`}</span>
+          {s === speed ? <span style={{ color: t.accent, fontSize: 12 }}>✓</span> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function QueueSheet({ queue, queueIndex, t, onRemove, onMove, onClear, onSaveAsPlaylist, userId, onClose }) {
+  const [tab, setTab] = useState("queue");
+  const [history] = useState(() => {
+    if (!userId || typeof window === "undefined") return [];
+    try { return JSON.parse(localStorage.getItem(`2mrrw:qhist:${userId}`) || "[]"); } catch { return []; }
+  });
+
+  const nowPlaying = queueIndex >= 0 ? queue[queueIndex] : null;
+  const upNext = queueIndex >= 0 ? queue.slice(queueIndex + 1) : queue;
+
+  // Touch drag state
+  const dragRef = useRef(null);
+  const [dragState, setDragState] = useState(null);
+  const ROW_H = 56;
+
+  const handleGripTouch = useCallback((absoluteIdx) => (e) => {
+    if (absoluteIdx === queueIndex) return;
+    e.stopPropagation();
+    dragRef.current = { fromIdx: absoluteIdx, startY: e.touches[0].clientY };
+    setDragState({ fromIdx: absoluteIdx, toIdx: absoluteIdx });
+  }, [queueIndex]);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!dragRef.current) return;
+      const deltaY = e.touches[0].clientY - dragRef.current.startY;
+      const steps = Math.round(deltaY / ROW_H);
+      const toIdx = Math.max(0, Math.min(queue.length - 1, dragRef.current.fromIdx + steps));
+      setDragState({ fromIdx: dragRef.current.fromIdx, toIdx });
+    };
+    const onEnd = () => {
+      if (dragRef.current && dragState && dragState.fromIdx !== dragState.toIdx) {
+        onMove_?.(dragState.fromIdx, dragState.toIdx);
+      }
+      dragRef.current = null;
+      setDragState(null);
+    };
+    // intentional: we need onMove to be a different name inside useEffect
+    const onMove_ = onMove;
+    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("touchend", onEnd);
+    return () => { window.removeEventListener("touchmove", onMove); window.removeEventListener("touchend", onEnd); };
+  }, [dragState, queue.length, onMove]);
+
+  const renderQueueRow = (item, absoluteIdx, label) => {
+    const isPlaying = absoluteIdx === queueIndex;
+    const isDragging = dragState?.fromIdx === absoluteIdx;
+    const isTarget = dragState && dragState.toIdx === absoluteIdx && dragState.fromIdx !== absoluteIdx;
+    return (
+      <div
+        key={item.id ?? item.slug ?? absoluteIdx}
+        style={{
+          display: "flex", alignItems: "center", gap: 10, padding: "10px 16px 10px 10px",
+          borderBottom: isTarget ? `2px solid ${t.p1}` : "1px solid rgba(255,255,255,.04)",
+          background: isDragging ? `${t.p1}18` : isPlaying ? `${t.p1}0e` : "transparent",
+          opacity: isDragging ? 0.75 : 1,
+          transition: isDragging ? "none" : "background .12s",
+        }}
+      >
+        <div
+          onTouchStart={handleGripTouch(absoluteIdx)}
+          style={{ color: isPlaying ? "rgba(155,93,229,.25)" : "rgba(255,255,255,.2)", cursor: isPlaying ? "default" : "grab", padding: "4px 6px", touchAction: "none", flexShrink: 0 }}
+        >
+          <I.Grip />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 12, fontWeight: isPlaying ? 600 : 400, color: isPlaying ? t.accent : "rgba(255,255,255,.82)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.title}</div>
+          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.28)", marginTop: 1 }}>{item.artist}</div>
+        </div>
+        {label ? <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 7, letterSpacing: ".1em", color: t.accent, flexShrink: 0 }}>{label}</span> : null}
+        {isPlaying ? (
+          <div style={{ display: "flex", gap: 2, flexShrink: 0 }}>
+            <div className="eq-b" style={{ background: t.accent }} />
+            <div className="eq-b" style={{ background: t.accent }} />
+            <div className="eq-b" style={{ background: t.accent }} />
+          </div>
+        ) : (
+          <button type="button" onClick={() => onRemove?.(absoluteIdx)} style={{ background: "none", border: "none", padding: 4, cursor: "pointer", color: "rgba(255,255,255,.22)", display: "flex", alignItems: "center", flexShrink: 0 }}>
+            <I.Trash />
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: 32, maxHeight: "72vh", display: "flex", flexDirection: "column" }}>
+      <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
+      <div style={{ padding: "4px 22px 10px", borderBottom: "1px solid rgba(255,255,255,.06)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 18, fontWeight: 400, color: "white" }}>Queue</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button type="button" onClick={() => setTab("queue")} style={{ padding: "4px 10px", borderRadius: 12, border: `1px solid ${tab === "queue" ? t.p1 : "rgba(255,255,255,.1)"}`, background: tab === "queue" ? `${t.p1}22` : "transparent", color: tab === "queue" ? t.accent : "rgba(255,255,255,.4)", fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".1em", cursor: "pointer" }}>QUEUE</button>
+          <button type="button" onClick={() => setTab("history")} style={{ padding: "4px 10px", borderRadius: 12, border: `1px solid ${tab === "history" ? t.p1 : "rgba(255,255,255,.1)"}`, background: tab === "history" ? `${t.p1}22` : "transparent", color: tab === "history" ? t.accent : "rgba(255,255,255,.4)", fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".1em", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><I.History /> HISTORY</button>
+        </div>
+      </div>
+
+      {tab === "queue" ? (
+        <>
+          <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+            {nowPlaying ? (
+              <>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".2em", color: "rgba(255,255,255,.3)", padding: "10px 22px 4px" }}>NOW PLAYING</div>
+                {renderQueueRow(nowPlaying, queueIndex, "NOW")}
+              </>
+            ) : null}
+            {upNext.length > 0 ? (
+              <>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".2em", color: "rgba(255,255,255,.3)", padding: "10px 22px 4px" }}>UP NEXT · {upNext.length} TRACKS</div>
+                {upNext.map((item, i) => renderQueueRow(item, queueIndex + 1 + i, null))}
+              </>
+            ) : null}
+            {!queue.length ? <div style={{ padding: "28px 22px", fontSize: 12, color: "rgba(255,255,255,.3)", textAlign: "center" }}>Queue is empty</div> : null}
+          </div>
+          <div style={{ flexShrink: 0, borderTop: "1px solid rgba(255,255,255,.06)", display: "flex", gap: 0 }}>
+            {upNext.length > 0 ? (
+              <button type="button" onClick={() => { onClear?.(); }} style={{ flex: 1, padding: "12px 16px", background: "transparent", border: "none", borderRight: "1px solid rgba(255,255,255,.06)", color: "rgba(255,100,100,.65)", fontSize: 12, cursor: "pointer" }}>
+                Clear Queue
+              </button>
+            ) : null}
+            {queue.length > 1 && userId ? (
+              <button type="button" onClick={() => { onSaveAsPlaylist?.(); onClose(); }} style={{ flex: 1, padding: "12px 16px", background: "transparent", border: "none", color: t.accent, fontSize: 12, cursor: "pointer" }}>
+                Save as Playlist
+              </button>
+            ) : null}
+          </div>
+        </>
+      ) : (
+        <div style={{ flex: 1, overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
+          {history.length ? history.map((h, i) => (
+            <div key={h.id ?? h.slug ?? i} style={{ padding: "10px 22px", borderBottom: "1px solid rgba(255,255,255,.04)", display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.2)", flexShrink: 0, minWidth: 16 }}>{i + 1}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: t.accent, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{nowPlaying.title}</div>
-                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.32)", marginTop: 2 }}>{nowPlaying.artist}</div>
+                <div style={{ fontSize: 12, color: "rgba(255,255,255,.7)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{h.title}</div>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.28)", marginTop: 1 }}>{h.artist}</div>
               </div>
             </div>
-          </>
-        ) : null}
-        {upNext.length > 0 ? (
-          <>
-            <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".2em", color: "rgba(255,255,255,.3)", padding: "12px 22px 4px" }}>UP NEXT</div>
-            {upNext.map((q, i) => (
-              <div key={q.id ?? q.slug ?? i} style={{ padding: "10px 22px", borderBottom: "1px solid rgba(255,255,255,.04)", display: "flex", alignItems: "center", gap: 12 }}>
-                <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.2)", flexShrink: 0, minWidth: 16 }}>{i + 1}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12, color: "rgba(255,255,255,.8)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{q.title}</div>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.28)", marginTop: 1 }}>{q.artist}</div>
-                </div>
-              </div>
-            ))}
-          </>
-        ) : null}
-        {!nowPlaying && !upNext.length ? (
-          <div style={{ padding: "28px 22px", fontSize: 12, color: "rgba(255,255,255,.3)", textAlign: "center" }}>Queue is empty</div>
-        ) : null}
-      </div>
+          )) : (
+            <div style={{ padding: "28px 22px", fontSize: 12, color: "rgba(255,255,255,.3)", textAlign: "center" }}>Nothing played yet</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1310,13 +1481,17 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const [activeTrack, setActiveTrack] = useState(() => tracks[0] || null);
   const [sheet, setSheet] = useState(null);
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [lyricsFullscreen, setLyricsFullscreen] = useState(false);
   const [playbackNotice, setPlaybackNotice] = useState(null);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [downloadStates, setDownloadStates] = useState({});
+  const [downloadProgress, setDownloadProgress] = useState({});
   const [trackMenu, setTrackMenu] = useState(null);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const swipeRef = useRef({});
 
   const {
-    state: { isPlaying, currentTime, duration: engineDuration, currentTrack: engineTrack, volume, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack, queue: engineQueue },
+    state: { isPlaying, currentTime, duration: engineDuration, currentTrack: engineTrack, volume, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack, queue: engineQueue, queueIndex: engineQueueIndex },
     toggle,
     seek,
     setVolume,
@@ -1328,6 +1503,9 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     toggleRepeat,
     setSleepTimer,
     enqueueTrack,
+    removeFromQueue,
+    moveInQueue,
+    setPlaybackRate,
   } = useMediaEngine();
   const beat = useBeat(isPlaying);
 
@@ -1467,19 +1645,23 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   }, [album?.slug, savedToLibrary, isPreview]);
 
   const handleDownload = useCallback(async (tr, e) => {
-    e.stopPropagation();
+    e?.stopPropagation();
     if (!userId || !album?.slug) return;
     const slug = tr?.slug;
     if (!slug || typeof slug !== "string" || /^\d+$/.test(slug)) return;
-    if (downloadStates[slug]) return;
-    setDownloadStates((prev) => ({ ...prev, [slug]: "queued" }));
+    if (downloadStates[slug] === "done" || typeof downloadStates[slug] === "number") return;
+    setDownloadStates((prev) => ({ ...prev, [slug]: 0 }));
+    setDownloadProgress((prev) => ({ ...prev, [slug]: 0 }));
     try {
       await queueOfflineDownload(userId, tr, {
         streamUrl: `/api/library/stream?slug=${encodeURIComponent(album.slug)}&trackSlug=${encodeURIComponent(slug)}`,
+        onProgress: (pct) => setDownloadProgress((prev) => ({ ...prev, [slug]: pct })),
       });
       setDownloadStates((prev) => ({ ...prev, [slug]: "done" }));
+      setDownloadProgress((prev) => ({ ...prev, [slug]: 100 }));
     } catch {
       setDownloadStates((prev) => ({ ...prev, [slug]: null }));
+      setDownloadProgress((prev) => ({ ...prev, [slug]: 0 }));
     }
   }, [album?.slug, downloadStates, userId]);
 
@@ -1494,13 +1676,15 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const handleDownloadAll = useCallback(async () => {
     if (!userId || !album?.slug || isPreview) return;
     const downloadable = tracks.filter(
-      (tr) => tr?.slug && typeof tr.slug === "string" && !/^\d+$/.test(tr.slug) && !downloadStates[tr.slug]
+      (tr) => tr?.slug && typeof tr.slug === "string" && !/^\d+$/.test(tr.slug) && downloadStates[tr.slug] !== "done"
     );
     for (const tr of downloadable) {
-      setDownloadStates((prev) => ({ ...prev, [tr.slug]: "queued" }));
+      if (typeof downloadStates[tr.slug] === "number") continue;
+      setDownloadStates((prev) => ({ ...prev, [tr.slug]: 0 }));
       try {
         await queueOfflineDownload(userId, tr, {
           streamUrl: `/api/library/stream?slug=${encodeURIComponent(album.slug)}&trackSlug=${encodeURIComponent(tr.slug)}`,
+          onProgress: (pct) => setDownloadProgress((prev) => ({ ...prev, [tr.slug]: pct })),
         });
         setDownloadStates((prev) => ({ ...prev, [tr.slug]: "done" }));
       } catch {
@@ -1509,10 +1693,62 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     }
   }, [album?.slug, downloadStates, isPreview, tracks, userId]);
 
+  const handleRemoveFromDownloads = useCallback((tr) => {
+    if (!userId || !tr?.slug) return;
+    removeOfflineCache(userId, tr.slug);
+    setDownloadStates((prev) => ({ ...prev, [tr.slug]: null }));
+    setDownloadProgress((prev) => ({ ...prev, [tr.slug]: 0 }));
+  }, [userId]);
+
   const handleSaveTrackToLibrary = useCallback(async (tr) => {
     if (!tr?.slug || isPreview) return;
     try { await postLibraryAdd(tr.slug); } catch { /* best effort */ }
   }, [isPreview]);
+
+  const handleStartRadio = useCallback((tr) => {
+    if (!otherReleases?.length || !enqueueTrack) return;
+    // Queue first track from each other release as a radio mix (up to 6)
+    const radioTracks = otherReleases
+      .filter((r) => Array.isArray(r.tracks) && r.tracks.length > 0)
+      .slice(0, 6)
+      .map((r) => {
+        const t0 = r.tracks[0];
+        const allPlayback = albumTracksForPlayback(r, entitlementAccountState, "radio", getCatalogSurfaceRef().catalogPlaybackLookup);
+        return allPlayback[0];
+      })
+      .filter(Boolean);
+    radioTracks.forEach((rt) => { if (rt?.src) enqueueTrack(rt, { playNext: false }); });
+    showPlaybackNotice(`Radio started · ${radioTracks.length} tracks queued`);
+  }, [otherReleases, enqueueTrack, entitlementAccountState, showPlaybackNotice]);
+
+  const handleGoToArtist = useCallback(() => {
+    close();
+  }, [close]);
+
+  const handleClearQueue = useCallback(() => {
+    if (!engineQueue?.length || !removeFromQueue) return;
+    // Remove all tracks after current (don't remove currently playing)
+    const afterCurrent = engineQueue.length - 1 - engineQueueIndex;
+    for (let i = 0; i < afterCurrent; i++) {
+      removeFromQueue(engineQueue.length - 1 - i);
+    }
+  }, [engineQueue, engineQueueIndex, removeFromQueue]);
+
+  const handleSaveQueueAsPlaylist = useCallback(() => {
+    if (!userId || !engineQueue?.length) return;
+    const pl = createPlaylist(userId, { title: `${album?.title || "Queue"} Mix` });
+    engineQueue.forEach((q) => {
+      addTrackToPlaylist(userId, pl.id, {
+        id: q.id, slug: q.slug, title: q.title, artist: q.artist, cover: q.artwork || null,
+      });
+    });
+    showPlaybackNotice(`Saved to "${pl.title}"`);
+  }, [userId, engineQueue, album?.title, showPlaybackNotice]);
+
+  const handleSpeedChange = useCallback((rate) => {
+    setPlaybackSpeed(rate);
+    setPlaybackRate?.(rate);
+  }, [setPlaybackRate]);
 
   const isVisible = mounted && !closing;
 
@@ -1618,9 +1854,20 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
             onToggleRepeat={toggleRepeat}
             repeatMode={repeatMode}
           />
-          {/* Lyrics overlay */}
-          <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen ? "auto" : "none" }}>
-            <GlyphLyricsPanel open={lyricsOpen} lrcText={activeTrack?.lyrics || album?.lyrics || ""} onClose={() => setLyricsOpen(false)} onSeek={seek} isMobile />
+          {/* Lyrics overlay — fullscreen version portals to fixed overlay via GlyphLyricsPanel */}
+          <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen && !lyricsFullscreen ? "auto" : "none" }}>
+            <GlyphLyricsPanel
+              open={lyricsOpen}
+              lrcText={activeTrack?.lyrics || album?.lyrics || ""}
+              onClose={() => { setLyricsOpen(false); setLyricsFullscreen(false); }}
+              onSeek={seek}
+              isMobile
+              fullscreen={lyricsFullscreen}
+              onFullscreenChange={setLyricsFullscreen}
+              albumTitle={album?.title}
+              artist={album?.artist}
+              accentColor={t.accent}
+            />
           </div>
         </div>
 
@@ -1672,6 +1919,14 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
                 </button>
                 <button
                   type="button"
+                  aria-label="Playback speed"
+                  onClick={() => setSheet("speed")}
+                  style={{ background: "none", border: "none", padding: "2px 5px", cursor: "pointer", color: playbackSpeed !== 1 ? t.accent : "rgba(255,255,255,.38)", fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".06em", borderRadius: 8, border: `1px solid ${playbackSpeed !== 1 ? t.p1 + "66" : "transparent"}` }}
+                >
+                  {playbackSpeed === 1 ? "1×" : `${playbackSpeed}×`}
+                </button>
+                <button
+                  type="button"
                   aria-label="Sleep timer"
                   onClick={() => setSheet("sleep")}
                   style={{ background: "none", border: "none", padding: 4, cursor: "pointer", color: (sleepTimerEndsAt || sleepAfterCurrentTrack) ? t.accent : "rgba(255,255,255,.38)", filter: (sleepTimerEndsAt || sleepAfterCurrentTrack) ? `drop-shadow(0 0 5px ${t.glow})` : "none", display: "flex", alignItems: "center" }}
@@ -1704,6 +1959,13 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
                   className={`tr${isActive ? " active-tr" : ""}${locked ? " locked" : ""}`}
                   style={isActive ? { background: `${t.p1}12` } : undefined}
                   onClick={() => handleTrack(tr)}
+                  onTouchStart={(e) => { swipeRef.current = { slug: tr.slug, startX: e.touches[0].clientX }; }}
+                  onTouchEnd={(e) => {
+                    if (!swipeRef.current?.slug) return;
+                    const deltaX = e.changedTouches[0].clientX - swipeRef.current.startX;
+                    if (deltaX > 60) { handleEnqueue(tr, { playNext: false }); showPlaybackNotice(`"${tr.title}" added to queue`); }
+                    swipeRef.current = {};
+                  }}
                 >
                   {isActive ? <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 2, background: `linear-gradient(to bottom,${t.accent},${t.p1})`, borderRadius: "0 1px 1px 0" }} /> : null}
                   <div style={{ width: 22, flexShrink: 0, fontFamily: "'DM Mono',monospace", fontSize: 10, display: "flex", gap: 2, alignItems: "flex-end", height: 13 }}>
@@ -1733,15 +1995,29 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
                   ) : null}
                   <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: isActive ? `${t.accent}99` : "rgba(255,255,255,.25)", flexShrink: 0 }}>{tr.dur}</span>
                   {!isPreview && userId && tr?.slug && typeof tr.slug === "string" && !/^\d+$/.test(tr.slug) ? (
-                    <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        aria-label={downloadStates[tr.slug] === "done" ? "Downloaded" : downloadStates[tr.slug] === "queued" ? "Queuing…" : "Download track"}
-                        onClick={(e) => handleDownload(tr, e)}
-                        style={{ background: "none", border: "none", padding: "0 4px", cursor: downloadStates[tr.slug] ? "default" : "pointer", color: downloadStates[tr.slug] === "done" ? t.accent : "rgba(255,255,255,.28)", display: "flex", alignItems: "center" }}
-                      >
-                        <I.CloudDown />
-                      </button>
+                    <div style={{ flexShrink: 0, position: "relative" }} onClick={(e) => e.stopPropagation()}>
+                      {typeof downloadStates[tr.slug] === "number" && downloadStates[tr.slug] !== "done" ? (
+                        <div style={{ width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <circle cx="10" cy="10" r="8" stroke="rgba(255,255,255,.12)" strokeWidth="2" />
+                            <circle cx="10" cy="10" r="8" stroke={t.accent} strokeWidth="2" strokeLinecap="round"
+                              strokeDasharray={`${2 * Math.PI * 8}`}
+                              strokeDashoffset={`${2 * Math.PI * 8 * (1 - (downloadProgress[tr.slug] || 0) / 100)}`}
+                              transform="rotate(-90 10 10)"
+                              style={{ transition: "stroke-dashoffset .3s linear" }}
+                            />
+                          </svg>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label={downloadStates[tr.slug] === "done" ? "Downloaded" : "Download track"}
+                          onClick={(e) => handleDownload(tr, e)}
+                          style={{ background: "none", border: "none", padding: "0 4px", cursor: downloadStates[tr.slug] === "done" ? "default" : "pointer", color: downloadStates[tr.slug] === "done" ? t.accent : "rgba(255,255,255,.28)", display: "flex", alignItems: "center" }}
+                        >
+                          <I.CloudDown />
+                        </button>
+                      )}
                     </div>
                   ) : null}
                   <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
@@ -1893,10 +2169,18 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
         {sheet === "queue" ? (
           <QueueSheet
             queue={engineQueue || []}
-            currentTrack={engineTrack}
+            queueIndex={engineQueueIndex ?? -1}
             t={t}
+            onRemove={(idx) => removeFromQueue?.(idx)}
+            onMove={(from, to) => moveInQueue?.(from, to)}
+            onClear={handleClearQueue}
+            onSaveAsPlaylist={handleSaveQueueAsPlaylist}
+            userId={userId}
             onClose={() => setSheet(null)}
           />
+        ) : null}
+        {sheet === "speed" ? (
+          <PlaybackSpeedSheet speed={playbackSpeed} t={t} onSelect={handleSpeedChange} onClose={() => setSheet(null)} />
         ) : null}
         {trackMenu && sheet !== "playlist-pick" && sheet !== "queue" ? (
           <TrackContextSheet
@@ -1905,8 +2189,12 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
             t={t}
             onPlayNext={() => handleEnqueue(trackMenu, { playNext: true })}
             onAddToQueue={() => handleEnqueue(trackMenu, { playNext: false })}
+            onStartRadio={() => handleStartRadio(trackMenu)}
             onAddToPlaylist={() => setSheet("playlist-pick")}
             onSaveToLibrary={() => handleSaveTrackToLibrary(trackMenu)}
+            onGoToArtist={handleGoToArtist}
+            onRemoveFromDownloads={() => handleRemoveFromDownloads(trackMenu)}
+            isCached={!!(userId && trackMenu?.slug && isOfflineCached(userId, trackMenu.slug))}
             onShare={() => setSheet("track-share")}
             onClose={() => setTrackMenu(null)}
           />
