@@ -1178,13 +1178,9 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
 
   const handleTrack = useCallback(
     async (tr) => {
-      if (trackLocked(tr)) {
-        showPlaybackNotice("Subscribe to play full tracks from this release.");
-        return;
-      }
       const idx = tracks.findIndex((t) => t && tr && String(t.id) === String(tr.id));
       const albumSlug = album?.slug || "";
-      const trackSlug = tr?.slug || tr?.id || "";
+      const trackSlug = tr?.slug || String(tr?.id || "");
       const queueId = albumSlug && trackSlug ? `${albumSlug}:${trackSlug}` : tr?.id || trackSlug;
       const modalPlaybackItem = {
         id: queueId,
@@ -1196,25 +1192,36 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
         },
       };
       const engineItem = engineTrack
-        ? {
-            id: engineTrack.id,
-            slug: engineTrack.slug,
-            metadata: engineTrack.metadata,
-          }
+        ? { id: engineTrack.id, slug: engineTrack.slug, metadata: engineTrack.metadata }
         : getPagePlaybackActionsBridge()?.currentTrack;
-      const sameTrack =
-        (activeTrack != null &&
-          tr != null &&
-          (String(activeTrack.id) === String(queueId) || String(activeTrack.id) === String(tr.id))) ||
-        (engineItem && isSamePlaybackTrack(engineItem, modalPlaybackItem));
+
+      // Determine if this tap targets the already-active track (toggle intent).
+      // activeTrack.id is a DB id; queueId is composite albumSlug:trackSlug — check both.
+      // The direct tr.id check is safe here because Fix 2 reverts activeTrack on failed playback,
+      // so stale-activeTrack false positives are impossible.
+      const activeMatchesQueue =
+        activeTrack != null &&
+        tr != null &&
+        (String(activeTrack.id) === String(queueId) || String(activeTrack.id) === String(tr.id));
+      // Engine is the authoritative source of truth for what is actually playing.
+      const engineMatches = engineItem && isSamePlaybackTrack(engineItem, modalPlaybackItem);
+      const sameTrack = activeMatchesQueue || engineMatches;
+
       if (sameTrack) {
         toggle();
         return;
       }
+
+      // Optimistic UI: highlight the tapped track immediately.
+      const prevActiveTrack = activeTrack;
       setActiveTrack(tr);
+
       if (idx >= 0) {
-        const ok = await onPlayTrackAtIndex?.(idx);
+        // Pass the live React entitlement state so the bridge uses the freshest permissions,
+        // not the potentially-stale page auth ref snapshot.
+        const ok = await onPlayTrackAtIndex?.(idx, entitlementAccountState);
         if (ok === false) {
+          setActiveTrack(prevActiveTrack); // revert optimistic highlight on failure
           const queueTracks = albumTracksForPlayback(album, entitlementAccountState, "album_modal");
           const blocked =
             getPagePlaybackActionsBridge()?.error ||
@@ -1236,7 +1243,6 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
       seek,
       showPlaybackNotice,
       toggle,
-      trackLocked,
       tracks,
     ]
   );

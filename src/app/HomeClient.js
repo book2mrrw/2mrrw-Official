@@ -140,16 +140,18 @@ function normalizeAlbumTracksForModal(tracks) {
   if (!Array.isArray(tracks)) return [];
   return tracks.map((track, index) => {
     if (typeof track === "string") {
-      return { id: index + 1, title: track, feat: null, dur: null, durSec: 0, free: false };
+      return { id: index + 1, slug: null, title: track, feat: null, dur: null, durSec: 0, free: false };
     }
     const dur = track?.dur ?? track?.duration ?? null;
     return {
       id: track?.id ?? index + 1,
+      slug: track?.slug || track?.trackSlug || track?.track_slug || null,
       title: track?.title || `Track ${index + 1}`,
       feat: track?.feat || track?.featuring || null,
       dur: typeof dur === "number" ? formatTime(dur) : dur,
       durSec: track?.durSec ?? (typeof dur === "number" ? dur : 0),
       free: Boolean(track?.free),
+      lyrics: track?.lyrics || null,
     };
   });
 }
@@ -856,11 +858,13 @@ function PageStorefront({ initialEvents }) {
   }, []);
 
   const playAlbumTracks = useCallback(
-    async (album, startIndex = 0) => {
+    async (album, startIndex = 0, accountStateOverride) => {
       const auth = getPageAuthRef();
       const catalogPlaybackLookup = getCatalogSurfaceRef().catalogPlaybackLookup;
       const albumItem = resolveCatalogPlaybackItem(album, catalogPlaybackLookup);
-      const account = { ...auth.accountState, userId: auth.currentUser?.id, isAdmin: auth.isAdmin };
+      const account = accountStateOverride
+        ? { ...accountStateOverride, userId: auth.currentUser?.id, isAdmin: Boolean(auth.isAdmin || accountStateOverride?.isAdmin) }
+        : { ...auth.accountState, userId: auth.currentUser?.id, isAdmin: auth.isAdmin };
       const tracks = albumTracksForPlayback(
         albumItem,
         account,
@@ -1152,9 +1156,9 @@ function PageStorefront({ initialEvents }) {
   );
 
   const playAlbumModalTrackAtIndex = useCallback(
-    async (index) => {
+    async (index, accountStateOverride) => {
       if (!selectedAlbumRef.current) return false;
-      return playAlbumTracks(selectedAlbumRef.current, index);
+      return playAlbumTracks(selectedAlbumRef.current, index, accountStateOverride);
     },
     [playAlbumTracks]
   );

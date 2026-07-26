@@ -256,6 +256,9 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
       price: normalized?.price,
       albumSlug: normalized?.albumSlug || overrides.albumSlug,
       trackSlug: normalized?.trackSlug || overrides.trackSlug || null,
+      // trackIndex must always be present for album tracks so isSamePlaybackTrack
+      // can distinguish between tracks that share the same album slug.
+      trackIndex: overrides.trackIndex ?? normalized?.trackIndex ?? normalized?.metadata?.trackIndex ?? null,
       ...overrides,
     },
   };
@@ -455,10 +458,20 @@ export function isSamePlaybackTrack(a, b) {
   const bAlbum = b.metadata?.albumSlug ?? b.albumSlug;
   const aIdx = a.metadata?.trackIndex ?? a.trackIndex;
   const bIdx = b.metadata?.trackIndex ?? b.trackIndex;
-  if (aAlbum && bAlbum && aAlbum === bAlbum && Number.isFinite(aIdx) && Number.isFinite(bIdx)) {
-    return aIdx === bIdx;
+  // Album tracks share the same album slug — must use trackIndex or trackSlug to distinguish them.
+  // Never fall through to slug comparison for album tracks (slug = albumSlug for all tracks).
+  if (aAlbum && bAlbum && aAlbum === bAlbum) {
+    if (Number.isFinite(aIdx) && Number.isFinite(bIdx)) return aIdx === bIdx;
+    // One side has an index but the other doesn't — cannot be the same positionally.
+    if (Number.isFinite(aIdx) || Number.isFinite(bIdx)) return false;
+    // Neither has an index — compare by per-track slug if available.
+    const aTSlug = a.metadata?.trackSlug ?? a.trackSlug;
+    const bTSlug = b.metadata?.trackSlug ?? b.trackSlug;
+    if (aTSlug && bTSlug) return aTSlug === bTSlug;
+    return false;
   }
-  if (a.slug && b.slug && a.slug === b.slug) return true;
+  // Singles and features have unique per-track slugs; slug comparison is valid.
+  if (!aAlbum && !bAlbum && a.slug && b.slug) return a.slug === b.slug;
   return false;
 }
 
