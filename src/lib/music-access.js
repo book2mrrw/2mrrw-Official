@@ -162,8 +162,8 @@ export function resolveTrackAccess(track, accountState = {}) {
 
   let badge = null;
   if (owned) badge = "OWNED";
-  else if (subscription && subscriptionActive) badge = "Included with Subscription";
   else if (collector) badge = "Collector Access";
+  else if (subscription && subscriptionActive) badge = "Included with Subscription";
   else if (subscriptionExpired) badge = "Subscription Expired";
 
   return {
@@ -338,7 +338,8 @@ export function itemHasPlayableAudio(item, access) {
 export function resolveContentAccess(item, accountState = {}) {
   const trackAccess = resolveTrackAccess(item, accountState);
   const membership = accountState.membership || null;
-  const subscriptionActive = membershipHasPremiumAccess(membership);
+  const subscriptionActive =
+    Boolean(accountState.subscriberActive) || membershipHasPremiumAccess(membership);
 
   if (trackAccess.admin) {
     return {
