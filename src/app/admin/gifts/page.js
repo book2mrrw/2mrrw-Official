@@ -4,11 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 
-const supabase = createBrowserClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-);
-
 const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "callme2mrrw@gmail.com").toLowerCase();
 
 function isAdmin(session) {
@@ -381,24 +376,33 @@ function GiftsHistory({ gifts, loading }) {
 
 export default function AdminGiftsPage() {
   const router = useRouter();
+  const [supabase] = useState(() => {
+    if (typeof window === "undefined") return null;
+    return createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    );
+  });
   const [session, setSession] = useState(undefined);
   const [catalog, setCatalog] = useState([]);
   const [gifts, setGifts] = useState([]);
   const [giftsLoading, setGiftsLoading] = useState(true);
 
   useEffect(() => {
+    if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => setSession(data?.session ?? null));
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => data.subscription.unsubscribe();
-  }, []);
+  }, [supabase]);
 
   const loadCatalog = useCallback(async () => {
+    if (!supabase) return;
     const { data } = await supabase
       .from("products")
       .select("slug, title, release_type")
       .order("release_date", { ascending: false });
     setCatalog(data ?? []);
-  }, []);
+  }, [supabase]);
 
   const loadGifts = useCallback(async () => {
     setGiftsLoading(true);

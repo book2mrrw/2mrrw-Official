@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -18,6 +18,20 @@ const inputStyle = {
 };
 
 export default function CollectorActivatePage() {
+  return (
+    <Suspense
+      fallback={
+        <main style={{ minHeight: "100vh", background: "#000", color: "#888", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          Loading…
+        </main>
+      }
+    >
+      <CollectorActivateContent />
+    </Suspense>
+  );
+}
+
+function CollectorActivateContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, loading, refreshAccountState } = useAuth();
