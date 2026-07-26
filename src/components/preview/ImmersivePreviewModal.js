@@ -565,7 +565,7 @@ function FloatingPlayer({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 2px", ...vars }}>
         <button
           type="button"
-          className={`c-sm${beat ? " beat" : ""}`}
+          className="c-sm"
           aria-label="Shuffle"
           onClick={onToggleShuffle ?? undefined}
           style={shuffleOn ? activeStyle : !onToggleShuffle ? dimStyle : undefined}
@@ -574,7 +574,7 @@ function FloatingPlayer({
         </button>
         <button
           type="button"
-          className={`c-sm${beat ? " beat" : ""}`}
+          className="c-sm"
           aria-label="Skip back 15 seconds"
           onClick={onSkipBack ?? undefined}
           style={!onSkipBack ? dimStyle : undefined}
@@ -583,7 +583,7 @@ function FloatingPlayer({
         </button>
         <button
           type="button"
-          className={`c-md${beat ? " beat" : ""}`}
+          className="c-md"
           onClick={onPrev}
           disabled={!onPrev}
           aria-label="Previous track"
@@ -591,12 +591,12 @@ function FloatingPlayer({
         >
           <I.Prev />
         </button>
-        <button type="button" className={`c-lg${playing ? " playing" : ""}${beat ? " beat" : ""}`} onClick={onPlay} style={vars}>
+        <button type="button" className={`c-lg${playing ? " playing" : ""}`} onClick={onPlay} style={vars}>
           {playing ? <I.Pause /> : <I.Play />}
         </button>
         <button
           type="button"
-          className={`c-md${beat ? " beat" : ""}`}
+          className="c-md"
           onClick={onNext}
           disabled={!onNext}
           aria-label="Next track"
@@ -606,7 +606,7 @@ function FloatingPlayer({
         </button>
         <button
           type="button"
-          className={`c-sm${beat ? " beat" : ""}`}
+          className="c-sm"
           aria-label="Skip forward 15 seconds"
           onClick={onSkipFwd ?? undefined}
           style={!onSkipFwd ? dimStyle : undefined}
@@ -615,7 +615,7 @@ function FloatingPlayer({
         </button>
         <button
           type="button"
-          className={`c-sm${beat ? " beat" : ""}`}
+          className="c-sm"
           aria-label={repeatMode === "off" ? "Enable repeat" : repeatMode === "all" ? "Repeat one" : "Disable repeat"}
           onClick={onToggleRepeat ?? undefined}
           style={repeatActive ? activeStyle : !onToggleRepeat ? dimStyle : undefined}
