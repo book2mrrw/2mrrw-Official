@@ -454,11 +454,15 @@ function GlobalAudioPlayerBar() {
     queue,
     queueIndex,
     removeFromQueue,
+    moveInQueue,
   } = playback;
 
   const [isHoldAnimating, setIsHoldAnimating] = useState(false);
   const [sleepSheetOpen, setSleepSheetOpen] = useState(false);
   const [queueSheetOpen, setQueueSheetOpen] = useState(false);
+  const [dragQueue, setDragQueue] = useState(null); // { fromIdx, overIdx }
+  const queueListRef = useRef(null);
+  const queueItemHeightRef = useRef(50);
   const csOverlayImgRef = useRef(null);
   const touchMovedRef = useRef(false);
   const touchStartRef = useRef(null);
@@ -684,6 +688,40 @@ function GlobalAudioPlayerBar() {
   const upNextCount = Math.max(0, (queue?.length ?? 0) - (queueIndex ?? 0) - 1);
   const handleOpenQueueSheet = useCallback(() => setQueueSheetOpen(true), []);
 
+  const onQueueDragStart = useCallback((e, fromIdx) => {
+    e.stopPropagation();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const list = queueListRef.current;
+    if (list?.firstElementChild) {
+      queueItemHeightRef.current = list.firstElementChild.offsetHeight || 50;
+    }
+    setDragQueue({ fromIdx, overIdx: fromIdx });
+  }, []);
+
+  const onQueueDragMove = useCallback((e, trackCount) => {
+    const list = queueListRef.current;
+    if (!list) return;
+    const rect = list.getBoundingClientRect();
+    const y = e.clientY - rect.top + list.scrollTop;
+    const h = queueItemHeightRef.current || 50;
+    const overIdx = Math.max(0, Math.min(trackCount - 1, Math.floor(y / h)));
+    setDragQueue((prev) => {
+      if (!prev) return prev;
+      if (prev.overIdx === overIdx) return prev;
+      return { ...prev, overIdx };
+    });
+  }, []);
+
+  const onQueueDragEnd = useCallback((_e, upNextStart) => {
+    setDragQueue((prev) => {
+      if (!prev) return null;
+      if (prev.fromIdx !== prev.overIdx) {
+        moveInQueue(upNextStart + prev.fromIdx, upNextStart + prev.overIdx);
+      }
+      return null;
+    });
+  }, [moveInQueue]);
+
   const sleepTimerActive = Boolean(sleepTimerEndsAt || sleepAfterCurrentTrack);
   const sleepTimerLabel = sleepAfterCurrentTrack
     ? "end"
@@ -795,29 +833,69 @@ function GlobalAudioPlayerBar() {
             </div>
           ) : null}
         </div>
-        <div style={{ overflowY: "auto", flex: 1, padding: "4px 0 max(16px, env(safe-area-inset-bottom, 0px))" }}>
+        <div
+          ref={queueListRef}
+          style={{
+            overflowY: "auto",
+            flex: 1,
+            padding: "4px 0 max(16px, env(safe-area-inset-bottom, 0px))",
+            touchAction: dragQueue ? "none" : "pan-y",
+          }}
+        >
           {upNextTracks.length === 0 ? (
             <div style={{ padding: "20px", color: "#555", fontSize: 13, textAlign: "center" }}>Nothing queued up next.</div>
           ) : (
-            upNextTracks.map((track, i) => (
-              <div
-                key={`${track.slug ?? track.id ?? i}-${i}`}
-                style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 20px", borderBottom: "1px solid #111" }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{track.title}</div>
-                  <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{track.artist || "2MRRW"}</div>
-                </div>
-                <button
-                  type="button"
-                  aria-label={`Remove ${track.title} from queue`}
-                  onClick={() => removeFromQueue(upNextStartIndex + i)}
-                  style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 18, padding: "4px 8px", flexShrink: 0, lineHeight: 1 }}
+            upNextTracks.map((track, i) => {
+              const isDragging = dragQueue?.fromIdx === i;
+              const isOver = dragQueue && dragQueue.overIdx === i && dragQueue.fromIdx !== i;
+              return (
+                <div
+                  key={`${track.slug ?? track.id ?? i}-${i}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "10px 20px",
+                    borderBottom: "1px solid #111",
+                    opacity: isDragging ? 0.4 : 1,
+                    background: isOver ? "rgba(0,255,255,0.06)" : undefined,
+                    borderTop: isOver ? "1px solid rgba(0,255,255,0.25)" : undefined,
+                  }}
                 >
-                  ×
-                </button>
-              </div>
-            ))
+                  {/* drag handle */}
+                  <div
+                    onPointerDown={(e) => onQueueDragStart(e, i)}
+                    onPointerMove={(e) => onQueueDragMove(e, upNextTracks.length)}
+                    onPointerUp={(e) => onQueueDragEnd(e, upNextStartIndex)}
+                    onPointerCancel={() => setDragQueue(null)}
+                    style={{
+                      cursor: isDragging ? "grabbing" : "grab",
+                      touchAction: "none",
+                      padding: "4px 4px",
+                      color: "#444",
+                      fontSize: 15,
+                      lineHeight: 1,
+                      flexShrink: 0,
+                      userSelect: "none",
+                    }}
+                  >
+                    ≡
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{track.title}</div>
+                    <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>{track.artist || "2MRRW"}</div>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${track.title} from queue`}
+                    onClick={() => removeFromQueue(upNextStartIndex + i)}
+                    style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 18, padding: "4px 8px", flexShrink: 0, lineHeight: 1 }}
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })
           )}
         </div>
       </div>

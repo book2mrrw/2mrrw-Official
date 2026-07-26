@@ -6762,6 +6762,25 @@ export function AudioProvider({ children }) {
     startTransition(() => patchState({ queue: current, queueIndex: newIndex }));
   }, [patchState]);
 
+  const moveInQueue = useCallback((from, to) => {
+    if (from === to) return;
+    const current = [...queueRef.current];
+    if (from < 0 || from >= current.length) return;
+    if (to < 0 || to >= current.length) return;
+    // Never move the currently playing track.
+    if (from === queueIndexRef.current) return;
+    const [item] = current.splice(from, 1);
+    current.splice(to, 0, item);
+    // queueIndex only shifts if a track was moved across the playing position.
+    const playingIdx = queueIndexRef.current;
+    let newIndex = playingIdx;
+    if (from < playingIdx && to >= playingIdx) newIndex = playingIdx - 1;
+    else if (from > playingIdx && to <= playingIdx) newIndex = playingIdx + 1;
+    queueRef.current = current;
+    queueIndexRef.current = newIndex;
+    startTransition(() => patchState({ queue: current, queueIndex: newIndex }));
+  }, [patchState]);
+
   const setSleepTimer = useCallback((minutes) => {
     if (!minutes || minutes <= 0) {
       sleepTimerRef.current = { endsAt: null, afterCurrentTrack: false };
@@ -7513,6 +7532,7 @@ export function AudioProvider({ children }) {
       sleepAfterCurrentTrack,
       enqueueTrack,
       removeFromQueue,
+      moveInQueue,
       continuityFrozen,
       getContinuitySnapshot,
       clearContinuityFreeze,
@@ -7569,6 +7589,7 @@ export function AudioProvider({ children }) {
     sleepAfterCurrentTrack,
     enqueueTrack,
     removeFromQueue,
+    moveInQueue,
     subscribeProgress,
     getProgressSnapshot,
     getContinuitySnapshot,
