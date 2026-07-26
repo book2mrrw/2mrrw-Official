@@ -1072,7 +1072,7 @@ function VolumeSlider({ t, volume, onVolumeChange }) {
         role="slider"
         aria-valuenow={pct}
         aria-label="Volume"
-        style={{ flex: 1, height: 4, background: "rgba(255,255,255,.1)", borderRadius: 4, cursor: "pointer", position: "relative", touchAction: "none" }}
+        style={{ flex: 1, height: 4, background: "rgba(255,255,255,.1)", borderRadius: 4, cursor: "pointer", position: "relative", touchAction: "pan-y" }}
       >
         <div style={{ width: `${pct}%`, height: "100%", borderRadius: 4, background: `linear-gradient(90deg,${t.p1},${t.accent})`, position: "relative" }}>
           <div style={{ position: "absolute", right: -5, top: "50%", transform: "translateY(-50%)", width: 10, height: 10, borderRadius: "50%", background: t.accent }} />
