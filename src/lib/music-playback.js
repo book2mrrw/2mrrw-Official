@@ -221,6 +221,11 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
         : coverRaw
           ? catalogCoverUrl(String(coverRaw).replace(/^\//, ""))
           : null;
+  // baseCover is always a static image URL — safe for <img> tags.
+  // When coverArtType === "video", cover is the MP4 motion URL; baseCover is the still image.
+  const baseCover = coverRaw
+    ? catalogCoverUrl(String(coverRaw).replace(/^\//, ""))
+    : cover || null;
   const previewPath =
     normalized?.preview_path || normalized?.previewPath || normalized?.preview || null;
   const playbackSrc = resolvePlaybackSrc(normalized, access, { userId, accountState });
@@ -237,6 +242,7 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
     title: normalized?.title || "Untitled",
     artist: normalized?.artist || "2MRRW",
     cover,
+    baseCover,
     coverArtType,
     src: playbackSrc,
     csAudio: csAudioRaw ? resolveCsMediaUrl(csAudioRaw) : null,

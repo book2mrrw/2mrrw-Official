@@ -20,6 +20,7 @@ export function mapContextTrackToMediaTrack(track) {
     artist: track.artist ?? "2MRRW",
     artwork: track.cover ?? track.baseCover ?? null,
     audioUrl: track.src ?? track.baseSrc ?? null,
+    metadata: track.metadata ?? null,
   };
 }
 
@@ -107,7 +108,11 @@ function mediaEngineStateChanged(next, prev) {
     next.csMode !== prev.csMode ||
     next.spaceMode !== prev.spaceMode ||
     next.bassMode !== prev.bassMode ||
-    next.atmosphereLevel !== prev.atmosphereLevel
+    next.atmosphereLevel !== prev.atmosphereLevel ||
+    next.shuffle !== prev.shuffle ||
+    next.repeatMode !== prev.repeatMode ||
+    next.sleepTimerEndsAt !== prev.sleepTimerEndsAt ||
+    next.sleepAfterCurrentTrack !== prev.sleepAfterCurrentTrack
   );
 }
 
@@ -150,6 +155,10 @@ export function mapAudioContextToMediaEngine(audio) {
       spaceMode: Boolean(audio.spaceMode),
       bassMode: Boolean(audio.bassMode),
       atmosphereLevel: audio.atmosphereLevel ?? 3,
+      shuffle: Boolean(audio.shuffle),
+      repeatMode: audio.repeatMode ?? "off",
+      sleepTimerEndsAt: audio.sleepTimerEndsAt ?? null,
+      sleepAfterCurrentTrack: Boolean(audio.sleepAfterCurrentTrack),
     },
     play: (track) => audio.playTrack(mapMediaTrackToPlayInput(track)),
     pause: audio.pause,
@@ -161,6 +170,13 @@ export function mapAudioContextToMediaEngine(audio) {
       if (Number.isFinite(v)) el.volume = v;
     },
     toggle: audio.toggle,
+    playNext: audio.playNext ?? null,
+    playPrevious: audio.playPrevious ?? null,
+    seekBack: audio.seekBack ?? null,
+    seekForward: audio.seekForward ?? null,
+    toggleShuffle: audio.toggleShuffle ?? null,
+    toggleRepeat: audio.toggleRepeat ?? null,
+    setSleepTimer: audio.setSleepTimer ?? null,
     toggleCSMode: audio.toggleCSMode,
     toggleSpaceMode: audio.toggleSpaceMode,
     toggleBassBoost: audio.toggleBassBoost,

@@ -976,6 +976,7 @@ export function AudioProvider({ children }) {
   const playTrackRef = useRef(null);
   const applyCSModeToTrackRef = useRef(null);
   const userPausedRef = useRef(false);
+  const pausedDuringCurrentLoadRef = useRef(false);
   const isInAudioVisualViewportRef = useRef(false);
   const wasPlayingBeforeViewportPauseRef = useRef(false);
   const viewportPauseRef = useRef(false);
@@ -3913,6 +3914,7 @@ export function AudioProvider({ children }) {
       return false;
     }
     const normalized = normalizeTrack(track);
+    pausedDuringCurrentLoadRef.current = false;
     lastUserActionRef.current = "track_change";
     clearViewportResume();
     tracePlayback("trackChange", "playTrackInternal", {
@@ -4374,8 +4376,29 @@ export function AudioProvider({ children }) {
         // headroom for initial auth + signed URL resolution without stranding a paying user.
         const srcReadyTimeout = isLibraryStreamRedirectSrc(syncSrc) ? 12000 : AUDIO_SRC_READY_TIMEOUT_MS;
         await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: srcReadyTimeout });
+        // For new-track plays, wait for canplaythrough (max 3 s) before starting playback.
+        // readyState 3 (HAVE_FUTURE_DATA) has only a small buffer — on slow connections this
+        // drains immediately and causes an audible mid-play stall. canplaythrough signals the
+        // browser's estimate that it can sustain continuous play. Cap at 3 s so users on slow
+        // connections still hear audio promptly.
+        if (!isSameTrack && audio.readyState < 4 && !streamAbortController.signal.aborted) {
+          await new Promise((resolve) => {
+            if (audio.readyState >= 4 || streamAbortController.signal.aborted) { resolve(); return; }
+            const cleanup = () => {
+              audio.removeEventListener("canplaythrough", onThrough);
+              clearTimeout(capId);
+            };
+            const onThrough = () => { cleanup(); resolve(); };
+            const capId = setTimeout(() => {
+              audio.removeEventListener("canplaythrough", onThrough);
+              resolve();
+            }, 3000);
+            streamAbortController.signal.addEventListener("abort", () => { cleanup(); resolve(); }, { once: true });
+            audio.addEventListener("canplaythrough", onThrough, { once: true });
+          });
+        }
         patchState({ hasStarted: true, playbackState: "ready" });
-        const startedPlay = await playAudioIfNotPaused(audio, true, {
+        const startedPlay = await playAudioIfNotPaused(audio, !pausedDuringCurrentLoadRef.current, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
           requestId,
           state: stateRef.current,
@@ -5957,6 +5980,7 @@ export function AudioProvider({ children }) {
       lastUserActionRef.current = "pause";
       clearViewportResume();
       userPausedRef.current = true;
+      pausedDuringCurrentLoadRef.current = true;
     } else if (fromViewport) {
       viewportPauseRef.current = true;
     } else if (!interrupt) {

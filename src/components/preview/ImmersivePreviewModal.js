@@ -17,6 +17,8 @@ import {
 } from "@/lib/music-playback";
 import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 import GlyphLyricsPanel from "@/components/preview/GlyphLyricsPanel";
+import { postLibraryAdd } from "@/lib/library-client";
+import { queueOfflineDownload } from "@/lib/offline-cache";
 
 const PREVIEW_CAP_SEC = 30;
 
@@ -149,6 +151,54 @@ const I = {
       <rect x="6" y="0" width="3" height="10" rx="1" fill="currentColor" />
     </svg>
   ),
+  SkipBack: () => (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <polyline points="5,2 1,4.5 5,7" fill="none" />
+      <path d="M1 4.5A8 8 0 1 1 1 13.5" fill="none" />
+      <text x="5.2" y="11.8" fontSize="5.2" fill="currentColor" stroke="none" fontFamily="sans-serif" fontWeight="700">15</text>
+    </svg>
+  ),
+  SkipFwd: () => (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <polyline points="13,2 17,4.5 13,7" fill="none" />
+      <path d="M17 4.5A8 8 0 1 0 17 13.5" fill="none" />
+      <text x="5.2" y="11.8" fontSize="5.2" fill="currentColor" stroke="none" fontFamily="sans-serif" fontWeight="700">15</text>
+    </svg>
+  ),
+  RepeatOne: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+      <path d="M3 4h10v3l3-3-3-3v3" />
+      <path d="M13 12H3V9l-3 3 3 3v-3" />
+      <text x="6.5" y="9.5" fontSize="5" fill="currentColor" stroke="none" fontFamily="sans-serif" fontWeight="700">1</text>
+    </svg>
+  ),
+  Moon: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13.5 10A6 6 0 0 1 6 2.5a6 6 0 1 0 7.5 7.5z" />
+    </svg>
+  ),
+  CloudDown: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3.5 9.5A2.5 2.5 0 0 1 4 4.5a3.5 3.5 0 0 1 6.5 1 2 2 0 0 1-.5 4" />
+      <path d="M7 7v5M5 10l2 2 2-2" />
+    </svg>
+  ),
+  HeartOut: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 13.5S1.5 9 1.5 5.5a3.5 3.5 0 0 1 6.5-1.7A3.5 3.5 0 0 1 14.5 5.5C14.5 9 8 13.5 8 13.5z" />
+    </svg>
+  ),
+  HeartFill: () => (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M8 13.5S1.5 9 1.5 5.5a3.5 3.5 0 0 1 6.5-1.7A3.5 3.5 0 0 1 14.5 5.5C14.5 9 8 13.5 8 13.5z" />
+    </svg>
+  ),
+  VolumeIcon: () => (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 5H5L8 2v10L5 9H2V5z" />
+      <path d="M10 4a3.5 3.5 0 0 1 0 6" />
+    </svg>
+  ),
 };
 
 function useBeat(playing) {
@@ -277,16 +327,39 @@ function Waveform({ playing, t, bars = 26 }) {
 
 function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
   const barRef = useRef(null);
-  const handle = (e) => {
+  const draggingRef = useRef(false);
+
+  const seekAt = useCallback((e) => {
     const rect = (barRef.current || e.currentTarget).getBoundingClientRect();
-    const cx = e.touches?.[0]?.clientX ?? e.clientX;
+    const cx = e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX;
     onSeekRatio(Math.max(0, Math.min(1, (cx - rect.left) / rect.width)));
-  };
+  }, [onSeekRatio]);
+
+  const onMouseDown = useCallback((e) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    seekAt(e);
+    const onMove = (ev) => { if (draggingRef.current) seekAt(ev); };
+    const onUp = () => {
+      draggingRef.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [seekAt]);
+
+  const onTouchMove = useCallback((e) => {
+    e.preventDefault();
+    seekAt(e);
+  }, [seekAt]);
+
   return (
     <div
       ref={barRef}
-      onClick={handle}
-      onTouchStart={handle}
+      onMouseDown={onMouseDown}
+      onTouchStart={seekAt}
+      onTouchMove={onTouchMove}
       role="slider"
       aria-valuenow={pct}
       style={{
@@ -343,9 +416,19 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
   );
 }
 
-function FloatingPlayer({ t, playing, current, duration, isPreview, beat, onPlay, onSeekRatio }) {
+function FloatingPlayer({
+  t, playing, current, duration, isPreview, beat,
+  onPlay, onSeekRatio, onPrev, onNext,
+  onSkipBack, onSkipFwd,
+  onToggleShuffle, shuffleOn,
+  onToggleRepeat, repeatMode,
+}) {
   const pct = duration ? (current / duration) * 100 : 0;
   const vars = themeVars(t);
+  const activeStyle = { color: t.accent, filter: `drop-shadow(0 0 5px ${t.glow})` };
+  const dimStyle = { opacity: 0.35, cursor: "default" };
+  const RepeatIcon = repeatMode === "one" ? I.RepeatOne : I.Repeat;
+  const repeatActive = repeatMode && repeatMode !== "off";
   return (
     <div
       style={{
@@ -361,46 +444,73 @@ function FloatingPlayer({ t, playing, current, duration, isPreview, beat, onPlay
     >
       <Waveform playing={playing} t={t} bars={26} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <span
-          style={{
-            fontFamily: "'DM Mono',monospace",
-            fontSize: 10,
-            color: "rgba(255,255,255,.38)",
-            flexShrink: 0,
-            minWidth: 28,
-          }}
-        >
+        <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "rgba(255,255,255,.38)", flexShrink: 0, minWidth: 28 }}>
           {fmt(current)}
         </span>
         <ScrubBar pct={pct} t={t} onSeekRatio={onSeekRatio} isPreview={isPreview} />
-        <span
-          style={{
-            fontFamily: "'DM Mono',monospace",
-            fontSize: 10,
-            color: "rgba(255,255,255,.38)",
-            flexShrink: 0,
-            minWidth: 28,
-            textAlign: "right",
-          }}
-        >
+        <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "rgba(255,255,255,.38)", flexShrink: 0, minWidth: 28, textAlign: "right" }}>
           {isPreview ? "0:30" : fmt(duration)}
         </span>
       </div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 4px", ...vars }}>
-        <button type="button" className={`c-sm${beat ? " beat" : ""}`} aria-hidden>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 2px", ...vars }}>
+        <button
+          type="button"
+          className={`c-sm${beat ? " beat" : ""}`}
+          aria-label="Shuffle"
+          onClick={onToggleShuffle ?? undefined}
+          style={shuffleOn ? activeStyle : !onToggleShuffle ? dimStyle : undefined}
+        >
           <I.Shuffle />
         </button>
-        <button type="button" className={`c-md${beat ? " beat" : ""}`} aria-hidden>
+        <button
+          type="button"
+          className={`c-sm${beat ? " beat" : ""}`}
+          aria-label="Skip back 15 seconds"
+          onClick={onSkipBack ?? undefined}
+          style={!onSkipBack ? dimStyle : undefined}
+        >
+          <I.SkipBack />
+        </button>
+        <button
+          type="button"
+          className={`c-md${beat ? " beat" : ""}`}
+          onClick={onPrev}
+          disabled={!onPrev}
+          aria-label="Previous track"
+          style={!onPrev ? dimStyle : undefined}
+        >
           <I.Prev />
         </button>
         <button type="button" className={`c-lg${playing ? " playing" : ""}${beat ? " beat" : ""}`} onClick={onPlay} style={vars}>
           {playing ? <I.Pause /> : <I.Play />}
         </button>
-        <button type="button" className={`c-md${beat ? " beat" : ""}`} aria-hidden>
+        <button
+          type="button"
+          className={`c-md${beat ? " beat" : ""}`}
+          onClick={onNext}
+          disabled={!onNext}
+          aria-label="Next track"
+          style={!onNext ? dimStyle : undefined}
+        >
           <I.Next />
         </button>
-        <button type="button" className={`c-sm${beat ? " beat" : ""}`} aria-hidden>
-          <I.Repeat />
+        <button
+          type="button"
+          className={`c-sm${beat ? " beat" : ""}`}
+          aria-label="Skip forward 15 seconds"
+          onClick={onSkipFwd ?? undefined}
+          style={!onSkipFwd ? dimStyle : undefined}
+        >
+          <I.SkipFwd />
+        </button>
+        <button
+          type="button"
+          className={`c-sm${beat ? " beat" : ""}`}
+          aria-label={repeatMode === "off" ? "Enable repeat" : repeatMode === "all" ? "Repeat one" : "Disable repeat"}
+          onClick={onToggleRepeat ?? undefined}
+          style={repeatActive ? activeStyle : !onToggleRepeat ? dimStyle : undefined}
+        >
+          <RepeatIcon />
         </button>
       </div>
     </div>
@@ -495,6 +605,96 @@ function ViewMoreSheet({ title, sub, t, rows, onClose }) {
   );
 }
 
+function SleepTimerSheet({ t, sleepTimerEndsAt, sleepAfterCurrentTrack, setSleepTimer, onClose }) {
+  const active = sleepTimerEndsAt != null || sleepAfterCurrentTrack;
+  const remaining = sleepTimerEndsAt ? Math.max(0, Math.ceil((sleepTimerEndsAt - Date.now()) / 60000)) : null;
+  const opts = [
+    { label: "15 minutes", value: 15 },
+    { label: "30 minutes", value: 30 },
+    { label: "45 minutes", value: 45 },
+    { label: "60 minutes", value: 60 },
+    { label: "End of track", value: "end_of_track" },
+  ];
+  return (
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: 28 }}>
+      <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
+      <div style={{ padding: "6px 22px 14px" }}>
+        <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 20, fontWeight: 400, color: "white", marginBottom: 2 }}>Sleep Timer</div>
+        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".15em", color: active ? t.accent : "rgba(255,255,255,.35)" }}>
+          {sleepAfterCurrentTrack ? "AFTER CURRENT TRACK" : remaining != null ? `${remaining} MINUTES REMAINING` : "STOP PLAYBACK AFTER"}
+        </div>
+      </div>
+      {opts.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => { setSleepTimer?.(opt.value); onClose(); }}
+          style={{ width: "100%", padding: "13px 22px", background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,.05)", textAlign: "left", fontSize: 14, color: "rgba(255,255,255,.82)", cursor: "pointer" }}
+        >
+          {opt.label}
+        </button>
+      ))}
+      {active ? (
+        <button
+          type="button"
+          onClick={() => { setSleepTimer?.(0); onClose(); }}
+          style={{ width: "100%", padding: "13px 22px", background: "transparent", border: "none", textAlign: "left", fontSize: 14, color: "rgba(255,100,100,.75)", cursor: "pointer" }}
+        >
+          Cancel Timer
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function VolumeSlider({ t, volume, onVolumeChange }) {
+  const barRef = useRef(null);
+  const draggingRef = useRef(false);
+
+  const readPos = useCallback((e) => {
+    const rect = (barRef.current || e.currentTarget).getBoundingClientRect();
+    const cx = e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX;
+    return Math.max(0, Math.min(1, (cx - rect.left) / rect.width));
+  }, []);
+
+  const onMouseDown = useCallback((e) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    onVolumeChange(readPos(e));
+    const onMove = (ev) => { if (draggingRef.current) onVolumeChange(readPos(ev)); };
+    const onUp = () => {
+      draggingRef.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, [onVolumeChange, readPos]);
+
+  const onTouchMove = useCallback((e) => { e.preventDefault(); onVolumeChange(readPos(e)); }, [onVolumeChange, readPos]);
+
+  const pct = Math.round((volume ?? 1) * 100);
+  return (
+    <div style={{ padding: "9px 20px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid rgba(255,255,255,.06)", flexShrink: 0 }}>
+      <span style={{ color: "rgba(255,255,255,.38)", display: "flex", alignItems: "center", flexShrink: 0 }}><I.VolumeIcon /></span>
+      <div
+        ref={barRef}
+        onMouseDown={onMouseDown}
+        onTouchStart={(e) => onVolumeChange(readPos(e))}
+        onTouchMove={onTouchMove}
+        role="slider"
+        aria-valuenow={pct}
+        aria-label="Volume"
+        style={{ flex: 1, height: 4, background: "rgba(255,255,255,.1)", borderRadius: 4, cursor: "pointer", position: "relative" }}
+      >
+        <div style={{ width: `${pct}%`, height: "100%", borderRadius: 4, background: `linear-gradient(90deg,${t.p1},${t.accent})`, position: "relative" }}>
+          <div style={{ position: "absolute", right: -5, top: "50%", transform: "translateY(-50%)", width: 10, height: 10, borderRadius: "50%", background: t.accent }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SingleModal({
   track,
   access = "preview",
@@ -516,9 +716,17 @@ export function SingleModal({
   const duration = isPreview ? PREVIEW_CAP_SEC : fullDur || 222;
 
   const {
-    state: { isPlaying, currentTime, duration: engineDuration },
+    state: { isPlaying, currentTime, duration: engineDuration, volume, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack },
     toggle,
     seek,
+    setVolume,
+    playNext,
+    playPrevious,
+    seekBack,
+    seekForward,
+    toggleShuffle,
+    toggleRepeat,
+    setSleepTimer,
   } = useMediaEngine();
 
   const { mounted, closing, setClosing } = useModalAnim();
@@ -707,6 +915,14 @@ export function SingleModal({
             beat={beat}
             onPlay={toggle}
             onSeekRatio={(r) => seek(r * displayDuration)}
+            onPrev={playPrevious}
+            onNext={playNext}
+            onSkipBack={seekBack}
+            onSkipFwd={seekForward}
+            onToggleShuffle={toggleShuffle}
+            shuffleOn={shuffle}
+            onToggleRepeat={toggleRepeat}
+            repeatMode={repeatMode}
           />
           {/* Lyrics overlay — sits above cover art, below controls */}
           <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen ? "auto" : "none" }}>
@@ -715,6 +931,7 @@ export function SingleModal({
         </div>
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: t.dark, ...vars }}>
+          <VolumeSlider t={t} volume={volume} onVolumeChange={setVolume} />
           <div style={{ flex: 1, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18, overflowY: "auto" }}>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 30, fontWeight: 500, color: "white", lineHeight: 1.1, marginBottom: 6 }}>
@@ -749,7 +966,7 @@ export function SingleModal({
                 </button>
               </div>
             ) : (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 52 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 40 }}>
                 <button
                   type="button"
                   className="icon-btn col-glow"
@@ -757,6 +974,15 @@ export function SingleModal({
                   onClick={() => onLibraryChange?.()}
                 >
                   <I.Coll s={30} />
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label="Sleep timer"
+                  style={{ color: (sleepTimerEndsAt || sleepAfterCurrentTrack) ? t.accent : "rgba(255,255,255,.38)", filter: (sleepTimerEndsAt || sleepAfterCurrentTrack) ? `drop-shadow(0 0 5px ${t.glow})` : "none" }}
+                  onClick={() => setSheet("sleep")}
+                >
+                  <I.Moon />
                 </button>
                 <button type="button" className="icon-btn" style={{ color: "rgba(255,255,255,.38)" }} onClick={() => setSheet("share")}>
                   <I.Plus s={26} />
@@ -854,6 +1080,9 @@ export function SingleModal({
         {sheet === "credits" ? (
           <ViewMoreSheet title="Credits" sub={`${track?.title} · ${track?.artist}`} t={t} rows={viewMoreRows} onClose={() => setSheet(null)} />
         ) : null}
+        {sheet === "sleep" ? (
+          <SleepTimerSheet t={t} sleepTimerEndsAt={sleepTimerEndsAt} sleepAfterCurrentTrack={sleepAfterCurrentTrack} setSleepTimer={setSleepTimer} onClose={() => setSheet(null)} />
+        ) : null}
       </div>
     </div>
   );
@@ -873,11 +1102,21 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const [sheet, setSheet] = useState(null);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [playbackNotice, setPlaybackNotice] = useState(null);
+  const [savedToLibrary, setSavedToLibrary] = useState(false);
+  const [downloadStates, setDownloadStates] = useState({});
 
   const {
-    state: { isPlaying, currentTime, duration: engineDuration, currentTrack: engineTrack },
+    state: { isPlaying, currentTime, duration: engineDuration, currentTrack: engineTrack, volume, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack },
     toggle,
     seek,
+    setVolume,
+    playNext,
+    playPrevious,
+    seekBack,
+    seekForward,
+    toggleShuffle,
+    toggleRepeat,
+    setSleepTimer,
   } = useMediaEngine();
   const beat = useBeat(isPlaying);
 
@@ -1002,6 +1241,31 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     ]
   );
 
+  const userId = entitlementAccountState?.user?.id ?? null;
+
+  const handleSaveToLibrary = useCallback(async () => {
+    if (!album?.slug || savedToLibrary || isPreview) return;
+    setSavedToLibrary(true);
+    try { await postLibraryAdd(album.slug); } catch { /* best effort */ }
+  }, [album?.slug, savedToLibrary, isPreview]);
+
+  const handleDownload = useCallback(async (tr, e) => {
+    e.stopPropagation();
+    if (!userId || !album?.slug) return;
+    const slug = tr?.slug;
+    if (!slug || typeof slug !== "string" || /^\d+$/.test(slug)) return;
+    if (downloadStates[slug]) return;
+    setDownloadStates((prev) => ({ ...prev, [slug]: "queued" }));
+    try {
+      await queueOfflineDownload(userId, tr, {
+        streamUrl: `/api/library/stream?slug=${encodeURIComponent(album.slug)}&trackSlug=${encodeURIComponent(slug)}`,
+      });
+      setDownloadStates((prev) => ({ ...prev, [slug]: "done" }));
+    } catch {
+      setDownloadStates((prev) => ({ ...prev, [slug]: null }));
+    }
+  }, [album?.slug, downloadStates, userId]);
+
   const isVisible = mounted && !closing;
 
   return (
@@ -1097,6 +1361,14 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
             beat={beat}
             onPlay={toggle}
             onSeekRatio={(r) => seek(r * displayDuration)}
+            onPrev={playPrevious}
+            onNext={playNext}
+            onSkipBack={seekBack}
+            onSkipFwd={seekForward}
+            onToggleShuffle={toggleShuffle}
+            shuffleOn={shuffle}
+            onToggleRepeat={toggleRepeat}
+            repeatMode={repeatMode}
           />
           {/* Lyrics overlay */}
           <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen ? "auto" : "none" }}>
@@ -1121,11 +1393,33 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
                   {album.price} · Acquire
                 </button>
               ) : null}
-              <button type="button" onClick={() => setSheet("share")} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.04)", fontSize: 10, color: "rgba(255,255,255,.5)", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
-                <I.Plus s={12} /> Share
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                {!isPreview ? (
+                  <button
+                    type="button"
+                    aria-label={savedToLibrary ? "Saved to library" : "Save to library"}
+                    onClick={handleSaveToLibrary}
+                    style={{ background: "none", border: "none", padding: 4, cursor: savedToLibrary ? "default" : "pointer", color: savedToLibrary ? t.accent : "rgba(255,255,255,.38)", filter: savedToLibrary ? `drop-shadow(0 0 5px ${t.glow})` : "none", display: "flex", alignItems: "center" }}
+                  >
+                    {savedToLibrary ? <I.HeartFill /> : <I.HeartOut />}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  aria-label="Sleep timer"
+                  onClick={() => setSheet("sleep")}
+                  style={{ background: "none", border: "none", padding: 4, cursor: "pointer", color: (sleepTimerEndsAt || sleepAfterCurrentTrack) ? t.accent : "rgba(255,255,255,.38)", filter: (sleepTimerEndsAt || sleepAfterCurrentTrack) ? `drop-shadow(0 0 5px ${t.glow})` : "none", display: "flex", alignItems: "center" }}
+                >
+                  <I.Moon />
+                </button>
+                <button type="button" onClick={() => setSheet("share")} style={{ padding: "6px 12px", borderRadius: 20, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.04)", fontSize: 10, color: "rgba(255,255,255,.5)", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                  <I.Plus s={12} /> Share
+                </button>
+              </div>
             </div>
           </div>
+
+          <VolumeSlider t={t} volume={volume} onVolumeChange={setVolume} />
 
           <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>
             {!tracks.length ? (
@@ -1165,6 +1459,18 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
                     <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 7, letterSpacing: ".1em", padding: "2px 6px", borderRadius: 4, border: `1px solid ${t.p1}55`, color: t.accent, flexShrink: 0 }}>FREE</span>
                   ) : null}
                   <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: isActive ? `${t.accent}99` : "rgba(255,255,255,.25)", flexShrink: 0 }}>{tr.dur}</span>
+                  {!isPreview && userId && tr?.slug && typeof tr.slug === "string" && !/^\d+$/.test(tr.slug) ? (
+                    <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        aria-label={downloadStates[tr.slug] === "done" ? "Downloaded" : downloadStates[tr.slug] === "queued" ? "Queuing…" : "Download track"}
+                        onClick={(e) => handleDownload(tr, e)}
+                        style={{ background: "none", border: "none", padding: "0 4px", cursor: downloadStates[tr.slug] ? "default" : "pointer", color: downloadStates[tr.slug] === "done" ? t.accent : "rgba(255,255,255,.28)", display: "flex", alignItems: "center" }}
+                      >
+                        <I.CloudDown />
+                      </button>
+                    </div>
+                  ) : null}
                   <div style={{ flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
@@ -1262,6 +1568,9 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
             ]}
             onClose={() => setSheet(null)}
           />
+        ) : null}
+        {sheet === "sleep" ? (
+          <SleepTimerSheet t={t} sleepTimerEndsAt={sleepTimerEndsAt} sleepAfterCurrentTrack={sleepAfterCurrentTrack} setSleepTimer={setSleepTimer} onClose={() => setSheet(null)} />
         ) : null}
       </div>
     </div>
