@@ -7,7 +7,7 @@ const COOKIE_NAME = "guest_session";
 const ONE_YEAR = 60 * 60 * 24 * 365;
 
 function secret() {
-  return process.env.GUEST_SESSION_SECRET || process.env.ADMIN_SEED_SECRET || process.env.STRIPE_SECRET_KEY;
+  return process.env.GUEST_SESSION_SECRET || process.env.ADMIN_SEED_SECRET;
 }
 
 export function normalizeEmail(email) {

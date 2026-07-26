@@ -1,9 +1,12 @@
-import { handleStripeWebhook } from "@/lib/commerce/handle-stripe-webhook";
+import { NextResponse } from "next/server";
 
-/** Legacy alias → same handler as /api/webhook (for old Stripe Dashboard URLs). */
+/** Legacy path — decommissioned. Configure Stripe Dashboard to use /api/webhook only. */
 export const runtime = "nodejs";
 
-export async function POST(req) {
-  console.warn("[stripe-webhook] hit legacy path /api/webhooks/stripe — update Stripe to /api/webhook");
-  return handleStripeWebhook(req);
+export async function POST() {
+  console.error("[stripe-webhook] /api/webhooks/stripe is decommissioned — remove this endpoint from Stripe Dashboard");
+  return NextResponse.json(
+    { error: "This webhook endpoint is no longer active. Update Stripe Dashboard to POST to /api/webhook." },
+    { status: 410 }
+  );
 }

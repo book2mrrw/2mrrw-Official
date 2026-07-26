@@ -22,17 +22,12 @@ export async function GET(req) {
 
   const admin = createAdminClient();
 
-  // Bound play-event and purchase queries to the last 90 days so the payload stays
-  // manageable as the platform ages, while keeping analytics meaningful and current.
+  // Bound purchase queries to the last 90 days so the payload stays manageable.
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [playEventsResult, libraryResult, purchasesResult, productsResult] = await Promise.all([
-    admin
-      .from("media_stream_events")
-      .select("product_slug, completion_rate")
-      .eq("event_type", "play")
-      .gte("created_at", ninetyDaysAgo)
-      .limit(10000),
+  const [playStatsResult, libraryResult, purchasesResult, productsResult] = await Promise.all([
+    // DB-level GROUP BY via RPC — returns one row per slug instead of 10k individual events.
+    admin.rpc("get_play_stats", { since: ninetyDaysAgo }),
     admin
       .from("library_items")
       .select("product_id, source, products(slug, title, cover_url)")
@@ -51,17 +46,14 @@ export async function GET(req) {
       .limit(1000),
   ]);
 
-  // Aggregate play counts + avg completion per slug
+  // RPC already aggregated — build the stats map directly from the grouped result.
   const playStats = {};
-  for (const row of playEventsResult.data || []) {
-    const s = row.product_slug;
-    if (!s) continue;
-    if (!playStats[s]) playStats[s] = { plays: 0, completionTotal: 0, completionCount: 0 };
-    playStats[s].plays++;
-    if (row.completion_rate != null) {
-      playStats[s].completionTotal += Number(row.completion_rate);
-      playStats[s].completionCount++;
-    }
+  for (const row of playStatsResult.data || []) {
+    playStats[row.product_slug] = {
+      plays: Number(row.plays) || 0,
+      completionTotal: Number(row.avg_completion) || 0,
+      completionCount: row.avg_completion != null ? 1 : 0,
+    };
   }
 
   // Purchase counts from purchases.items JSON
@@ -92,7 +84,7 @@ export async function GET(req) {
       purchases: purchaseCounts[p.slug] || 0,
       listeners: listenerCounts[p.slug] || 0,
       completionRate: stats.completionCount > 0
-        ? Math.round((stats.completionTotal / stats.completionCount) * 100)
+        ? Math.round(stats.completionTotal * 100)
         : null,
     };
   }).sort((a, b) => b.plays - a.plays);

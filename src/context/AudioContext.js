@@ -2363,7 +2363,7 @@ export function AudioProvider({ children }) {
             // Connecting to mainGain directly would multiply by its fading gain value,
             // silencing the incoming track. Connecting to destination would bypass the
             // limiter, effects, and visualiser entirely.
-            cfGain.connect(analyserRef.current ?? ctx.destination);
+            cfGain.connect(analyserRef.current ?? limiterRef.current ?? ctx.destination);
             crossfadeSourceRef.current = cfSrc;
             crossfadeGainRef.current = cfGain;
           } catch {
@@ -3744,13 +3744,14 @@ export function AudioProvider({ children }) {
       const trackSlug = parseStreamTrackSlugFromSrc(next.src) || next.metadata?.trackSlug || null;
       const cacheKey = trackSlug ? `${slug}:${trackSlug}` : slug;
       const cached = nextTrackSignedUrlCacheRef.current[cacheKey];
-      if (cached && Date.now() - cached.fetchedAt < 3_000_000) return;
+      if (cached && !streamUrlNeedsRefresh(cached) && Date.now() - cached.fetchedAt < 3_000_000) return;
       try {
         const data = await fetchLibraryStream(slug, { force: false, trackSlug });
         if (data?.url) {
           nextTrackSignedUrlCacheRef.current[cacheKey] = {
             url: data.url,
             fetchedAt: Date.now(),
+            expiresIn: data.expiresIn ?? 3600,
           };
           // Evict oldest when cache exceeds 20 entries to prevent unbounded growth.
           const cacheEntries = Object.entries(nextTrackSignedUrlCacheRef.current);

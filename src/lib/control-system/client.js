@@ -57,7 +57,9 @@ export async function fetchControlSystemJson(path, { params, fetchOptions = {} }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 4000);
-  const { signal: externalSignal, ...restFetchOptions } = fetchOptions;
+  // Exclude headers and signal from the spread — headers are merged explicitly below,
+  // avoiding a silent duplicate-key override in the fetch options object.
+  const { signal: externalSignal, headers: _callerHeaders, ...restFetchOptions } = fetchOptions;
 
   const upstreamOnAbort = () => controller.abort();
   if (externalSignal) {
