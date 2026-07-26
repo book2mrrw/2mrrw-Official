@@ -1,12 +1,20 @@
+import { Redis } from "@upstash/redis";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isMissingSupabaseTable } from "@/lib/commerce/entitlements";
 
-// KV is available when Vercel KV env vars are set (linked store in Vercel dashboard).
-// Falls back to Supabase when KV is not configured or unavailable.
-const KV_ENABLED = Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
+// Vercel KV stores are prefixed with the store name.
+const _KV_URL = process.env.rate_limits_2mrrw_KV_REST_API_URL;
+const _KV_TOKEN = process.env.rate_limits_2mrrw_KV_REST_API_TOKEN;
+const REDIS_ENABLED = Boolean(_KV_URL && _KV_TOKEN);
+
+let _redis = null;
+function getRedis() {
+  if (!_redis) _redis = new Redis({ url: _KV_URL, token: _KV_TOKEN });
+  return _redis;
+}
 
 function clientIp(req) {
   const forwarded = req.headers.get("x-forwarded-for");
@@ -30,20 +38,19 @@ export function rateLimitResponse(retryAfterSeconds = 60) {
   );
 }
 
-async function checkWithKv(kvKey, limit, windowSeconds) {
-  const { kv } = await import("@vercel/kv");
+async function checkWithRedis(key, windowSeconds) {
+  const redis = getRedis();
   // INCR is atomic — returns the new count after increment.
-  const count = await kv.incr(kvKey);
+  const count = await redis.incr(key);
   if (count === 1) {
     // New window — set TTL to 2× the window so the key self-expires.
-    await kv.expire(kvKey, windowSeconds * 2);
+    await redis.expire(key, windowSeconds * 2);
   }
   return count;
 }
 
 async function checkWithSupabase(key, routeKey, identifierHash, windowStart, expiresAt, limit, now) {
   const admin = createAdminClient();
-  // Defer expired-row cleanup so it never blocks the response.
   after(() => {
     admin.from("api_rate_limits").delete().lt("expires_at", new Date(now).toISOString()).then(() => {}).catch(() => {});
   });
@@ -80,27 +87,26 @@ export async function checkRateLimit(req, {
   const windowMs = windowSeconds * 1000;
   const windowStartMs = Math.floor(now / windowMs) * windowMs;
   const identifierHash = hashIdentifier(identifier || clientIp(req));
-  const kvKey = `rl:${routeKey}:${identifierHash}:${windowStartMs}`;
+  const key = `rl:${routeKey}:${identifierHash}:${windowStartMs}`;
 
-  if (KV_ENABLED) {
+  if (REDIS_ENABLED) {
     try {
-      const count = await checkWithKv(kvKey, limit, windowSeconds);
+      const count = await checkWithRedis(key, windowSeconds);
       if (count > limit) {
         const retryAfterSeconds = Math.max(1, Math.ceil((windowStartMs + windowMs - now) / 1000));
         return { allowed: false, limited: true, retryAfterSeconds };
       }
       return { allowed: true, limited: false, remaining: Math.max(0, limit - count) };
     } catch (err) {
-      console.warn("[rate-limit] KV unavailable, falling back to Supabase:", err.message);
-      // Fall through to Supabase
+      console.warn("[rate-limit] Redis unavailable, falling back to Supabase:", err.message);
     }
   }
 
-  // Supabase fallback (used when KV is not configured or KV threw).
+  // Supabase fallback.
   try {
     const windowStart = new Date(windowStartMs).toISOString();
     const expiresAt = new Date(windowStartMs + windowMs * 2).toISOString();
-    const result = await checkWithSupabase(kvKey, routeKey, identifierHash, windowStart, expiresAt, limit, now);
+    const result = await checkWithSupabase(key, routeKey, identifierHash, windowStart, expiresAt, limit, now);
 
     if (result.unavailable) return { allowed: true, limited: false, unavailable: true };
 
