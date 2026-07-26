@@ -8,6 +8,7 @@ import { membershipHasPremiumAccess } from "@/lib/commerce/entitlements";
 import { resolveContentAccess, resolveTrackAccess } from "@/lib/music-access";
 import { albumTracksForPlayback, playableReleaseQueue, toInstantStartTrack, toPlaybackTrack } from "@/lib/music-playback";
 import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
+import { queueOfflineDownload, removeOfflineCache, isOfflineCached } from "@/lib/offline-cache";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import PlaylistSection from "@/components/music/PlaylistSection";
@@ -68,6 +69,77 @@ function CollectionRailPlaceholder({ label }) {
   );
 }
 
+function DownloadButton({ status, onDownload, onRemove }) {
+  if (!status || status === "idle" || status === "error") {
+    return (
+      <button
+        type="button"
+        aria-label="Download for offline"
+        title={status === "error" ? "Download failed — tap to retry" : "Download for offline"}
+        onClick={onDownload}
+        style={{
+          padding: "8px 8px",
+          background: status === "error" ? "rgba(255,60,60,0.1)" : "#111",
+          color: status === "error" ? "#ff5555" : "#888",
+          border: `1px solid ${status === "error" ? "#ff5555" : "#222"}`,
+          borderRadius: 8,
+          cursor: "pointer",
+          fontSize: 11,
+          flexShrink: 0,
+          lineHeight: 1,
+        }}
+      >
+        ↓
+      </button>
+    );
+  }
+  if (status === "downloading") {
+    return (
+      <button
+        type="button"
+        disabled
+        aria-label="Downloading…"
+        style={{
+          padding: "8px 8px",
+          background: "#111",
+          color: "#00ffff",
+          border: "1px solid #222",
+          borderRadius: 8,
+          cursor: "not-allowed",
+          fontSize: 11,
+          flexShrink: 0,
+          lineHeight: 1,
+          opacity: 0.7,
+        }}
+      >
+        …
+      </button>
+    );
+  }
+  // cached — tap to remove
+  return (
+    <button
+      type="button"
+      aria-label="Remove offline download"
+      title="Saved offline — tap to remove"
+      onClick={onRemove}
+      style={{
+        padding: "8px 8px",
+        background: "rgba(0,255,136,0.08)",
+        color: "#00ff88",
+        border: "1px solid rgba(0,255,136,0.25)",
+        borderRadius: 8,
+        cursor: "pointer",
+        fontSize: 11,
+        flexShrink: 0,
+        lineHeight: 1,
+      }}
+    >
+      ✓
+    </button>
+  );
+}
+
 function LibraryCarousel({
   title,
   items,
@@ -85,6 +157,9 @@ function LibraryCarousel({
   activeSlug,
   isPlaying,
   onToggle,
+  downloadStates,
+  onDownload,
+  onRemoveDownload,
 }) {
   if (!items?.length) return null;
   return (
@@ -277,6 +352,13 @@ function LibraryCarousel({
                     >
                       +Q
                     </button>
+                  ) : null}
+                  {onDownload && canPlay ? (
+                    <DownloadButton
+                      status={downloadStates?.[item.slug] ?? "idle"}
+                      onDownload={() => onDownload(item)}
+                      onRemove={() => onRemoveDownload?.(item.slug)}
+                    />
                   ) : null}
                   <MusicPlusButton
                     track={item}
@@ -620,10 +702,44 @@ function MyMusicTab({
   const hasCollectorCard = Boolean(accountState?.collectorCard);
   const [sortPref, setSortPref] = useState("recent");
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
+  const [downloadStates, setDownloadStates] = useState({});
 
   useEffect(() => {
     setSortPref(readSortPref());
   }, []);
+
+  // Seed download states from IDB on mount so cached badges survive page reload.
+  useEffect(() => {
+    if (!user?.id || !mergedOwnedSingles.length) return;
+    const initial = {};
+    for (const item of mergedOwnedSingles) {
+      if (item.slug && isOfflineCached(user.id, item.slug)) {
+        initial[item.slug] = "cached";
+      }
+    }
+    if (Object.keys(initial).length) {
+      setDownloadStates((prev) => ({ ...prev, ...initial }));
+    }
+  }, [user?.id, mergedOwnedSingles]);
+
+  const handleDownload = useCallback(async (item) => {
+    if (!user?.id || !item?.slug) return;
+    setDownloadStates((prev) => ({ ...prev, [item.slug]: "downloading" }));
+    try {
+      // Use the proxy path (no redirect) to fetch full audio bytes cross-session-safely.
+      const streamUrl = `/api/library/stream?slug=${encodeURIComponent(item.slug)}`;
+      await queueOfflineDownload(user.id, item, { streamUrl });
+      setDownloadStates((prev) => ({ ...prev, [item.slug]: "cached" }));
+    } catch {
+      setDownloadStates((prev) => ({ ...prev, [item.slug]: "error" }));
+    }
+  }, [user?.id]);
+
+  const handleRemoveDownload = useCallback((slug) => {
+    if (!user?.id || !slug) return;
+    removeOfflineCache(user.id, slug);
+    setDownloadStates((prev) => ({ ...prev, [slug]: "idle" }));
+  }, [user?.id]);
 
   useEffect(() => {
     if (user && !loading) {
@@ -1081,6 +1197,9 @@ function MyMusicTab({
         activeSlug={currentTrack?.slug}
         isPlaying={isPlaying}
         onToggle={toggle}
+        downloadStates={downloadStates}
+        onDownload={handleDownload}
+        onRemoveDownload={handleRemoveDownload}
       />
 
       <OwnedReleaseList
