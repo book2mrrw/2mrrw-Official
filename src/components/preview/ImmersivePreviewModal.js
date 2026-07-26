@@ -1023,11 +1023,18 @@ function QueueSheet({ queue, queueIndex, t, onRemove, onMove, onClear, onSaveAsP
 function VolumeSlider({ t, volume, onVolumeChange }) {
   const barRef = useRef(null);
   const draggingRef = useRef(false);
-  const [localVol, setLocalVol] = useState(() => volume ?? 1);
+  // If el.volume is 0 (stuck from accidental drag), start at 1 visually
+  const [localVol, setLocalVol] = useState(() => (volume > 0 ? volume : 1));
 
-  // Sync from engine only when not actively dragging
+  // Mount-only: if audio element volume is 0, restore to audible immediately
   useEffect(() => {
-    if (!draggingRef.current) setLocalVol(volume ?? 1);
+    if (!((volume ?? 1) > 0)) onVolumeChange(1);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sync from engine when not dragging; skip 0 so stale engine reads don't re-mute
+  useEffect(() => {
+    if (!draggingRef.current && (volume ?? 1) > 0) setLocalVol(volume);
   }, [volume]);
 
   const readPos = useCallback((e) => {
@@ -1829,6 +1836,24 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
           <div style={{ position: "absolute", top: 12, right: 14, zIndex: 30 }}>
             <Badge access={access} t={t} />
           </div>
+          {/* Now playing track title — overlaid on art, above pills */}
+          {activeTrack && (
+            <div style={{ position: "absolute", bottom: 152, left: 0, right: 0, zIndex: 10, padding: "0 22px", pointerEvents: "none" }}>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".22em", textTransform: "uppercase", color: t.accent, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>
+                {isPlaying ? (
+                  <div style={{ display: "flex", gap: 2, alignItems: "flex-end" }}>
+                    <div className="eq-b" style={{ background: t.accent }} />
+                    <div className="eq-b" style={{ background: t.accent }} />
+                    <div className="eq-b" style={{ background: t.accent }} />
+                  </div>
+                ) : null}
+                {isPlaying ? "Now Playing" : "Selected"}
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textShadow: "0 1px 8px rgba(0,0,0,.9)" }}>
+                {activeTrack.title}
+              </div>
+            </div>
+          )}
           {/* Credits + Lyrics pills */}
           <div style={{ position: "absolute", bottom: 108, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center", gap: 10 }}>
             <button
