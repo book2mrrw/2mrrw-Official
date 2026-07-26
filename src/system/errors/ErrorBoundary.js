@@ -43,6 +43,9 @@ export default class ErrorBoundary extends Component {
       boundary,
       error: error?.message || "unknown",
     });
+    import("@sentry/nextjs")
+      .then(({ captureException }) => captureException(error, { extra: { boundary, componentStack: errorInfo?.componentStack } }))
+      .catch(() => {});
     this.props.onError?.(error, errorInfo);
   }
 
