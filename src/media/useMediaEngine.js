@@ -51,13 +51,14 @@ function readVolume(audioRef) {
   const el = audioRef?.current;
   if (!el) return 1;
   if (el.volume > 0) return el.volume;
-  // el.volume is 0 — restore from persisted value or default to 1
+  // el.volume is 0 — report what volume should be without mutating here.
+  // The audio engine owns el.volume; mutating it inside useMemo races against
+  // the engine's own volume management (e.g. preview fades, swell ramps).
   let v = 1;
   try {
     const s = parseFloat(localStorage.getItem(VOL_KEY) ?? "");
     if (Number.isFinite(s) && s > 0) v = s;
   } catch {}
-  el.volume = v;
   return v;
 }
 

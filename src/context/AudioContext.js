@@ -2442,7 +2442,10 @@ export function AudioProvider({ children }) {
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
-    const unlockFromGesture = async () => {
+    // Synchronous — no async/await so iOS WebKit never loses the user-gesture token.
+    // ctx.resume() is called synchronously within the event handler stack; the returned
+    // promise is handled fire-and-forget via .then() which runs after the gesture is done.
+    const unlockFromGesture = () => {
       const ctx = audioCtxRef.current;
       const needsUnlock =
         !sessionUnlockedRef.current || ctx?.state === "suspended" || ctx?.state === "interrupted";
@@ -2451,9 +2454,6 @@ export function AudioProvider({ children }) {
       const audio = audioRef.current;
       if (audio) {
         try {
-          // Only call audio.load() when the element has no src or hasn't started loading yet.
-          // Calling load() on an element with readyState >= HAVE_METADATA aborts the in-flight
-          // byte-range request, doubling buffering latency on gesture during active playback.
           if (!audio.src || audio.networkState === /* NETWORK_EMPTY */ 0) {
             audio.load();
           }
@@ -2463,28 +2463,25 @@ export function AudioProvider({ children }) {
       }
 
       initWebAudio();
-      await resumeWebAudioContextIfSuspended(audioCtxRef);
-      recordAudioContextState(audioCtxRef.current, "gesture-unlock");
 
-      try {
-        const Ctx = window.AudioContext || window.webkitAudioContext;
-        if (Ctx && !audioCtxRef.current) {
-          const ephemeral = new Ctx();
-          if (ephemeral.state === "suspended") {
-            await ephemeral.resume();
-          }
-          recordAudioContextState(ephemeral, "ephemeral-unlock");
-          await ephemeral.close();
+      const newCtx = audioCtxRef.current;
+      if (!newCtx || newCtx.state === "closed") return;
+
+      const onRunning = () => {
+        recordAudioContextState(newCtx, "gesture-unlock");
+        if (newCtx.state === "running" && !sessionUnlockedRef.current) {
+          sessionUnlockedRef.current = true;
+          GESTURE_UNLOCK_EVENTS.forEach((evt) => {
+            document.removeEventListener(evt, unlockFromGesture, true);
+          });
         }
-      } catch {
-        /* iOS unlock best-effort */
-      }
+      };
 
-      if (audioCtxRef.current?.state === "running") {
-        sessionUnlockedRef.current = true;
-        GESTURE_UNLOCK_EVENTS.forEach((evt) => {
-          document.removeEventListener(evt, unlockFromGesture, true);
-        });
+      if (newCtx.state === "running") {
+        onRunning();
+      } else {
+        // Synchronous call within gesture token — iOS honors ctx.resume() even without await.
+        void newCtx.resume().then(onRunning).catch(() => {});
       }
     };
 
@@ -4360,19 +4357,14 @@ export function AudioProvider({ children }) {
           audio.pause();
         }
         // Set volume while the element is paused — before waitAudioSrcReady and play().
-        // Setting audio.volume after play() causes a digital pop when the volume snaps
-        // from a preview-fade value. Volume = 0 for first-listen; swell starts AFTER play().
         if (swellIntervalRef.current) {
           cancelAnimationFrame(swellIntervalRef.current);
           swellIntervalRef.current = null;
         }
-        const isFirst = isFirstListen(nextTrack.slug);
-        if (isFirst) {
+        if (isFirstListen(nextTrack.slug)) {
           markListened(nextTrack.slug);
-          audio.volume = 0;
-        } else {
-          audio.volume = 1;
         }
+        audio.volume = 1;
         spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
         // Redirect-path sources (/api/library/stream?redirect=1) with DIRECT_STREAM_REDIRECT_ENABLED
         // go straight from Cloudflare edge to the browser — no Vercel proxy hop. 12s gives
@@ -4447,23 +4439,6 @@ export function AudioProvider({ children }) {
               // Non-fatal — upgradeToFullStream fetches on its own if this race loses
             }
           })();
-        }
-        // Start swell AFTER play() confirms audio is actually outputting.
-        // Using requestAnimationFrame for 60fps smoothness; time-based so frame drops
-        // don't stall the ramp (important for iOS which can drop frames on wake).
-        if (isFirst) {
-          const SWELL_DURATION_MS = 500;
-          const swellStart = performance.now();
-          const swellStep = () => {
-            const t = Math.min(1, (performance.now() - swellStart) / SWELL_DURATION_MS);
-            audio.volume = t;
-            if (t < 1) {
-              swellIntervalRef.current = requestAnimationFrame(swellStep);
-            } else {
-              swellIntervalRef.current = null;
-            }
-          };
-          swellIntervalRef.current = requestAnimationFrame(swellStep);
         }
         pendingSeekRef.current = resumeAt;
       } else {
