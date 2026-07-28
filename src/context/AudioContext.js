@@ -5873,14 +5873,11 @@ export function AudioProvider({ children }) {
     const normalized = setQueueInternal(tracks, startIndex);
     if (!normalized.length) return false;
     const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
-    // queueRef and queueIndexRef are now updated — kick preload for index+1 immediately
-    // so library-stream signed-URL fetches begin before the first track even starts playing.
-    void scheduleNextTrackPreload();
     return playTrackInternal(normalized[index], {
       ...options,
       preserveActiveStream: Boolean(options.preserveActiveStream),
     });
-  }, [setQueueInternal, playTrackInternal, scheduleNextTrackPreload, logDirectInternalCallViolation]);
+  }, [setQueueInternal, playTrackInternal, logDirectInternalCallViolation]);
 
   const pauseInternal = useCallback((opts = {}) => {
     logDirectInternalCallViolation("pauseInternal");
