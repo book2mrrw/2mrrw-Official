@@ -4090,7 +4090,7 @@ export function AudioProvider({ children }) {
           5000
         );
       }
-      if (wasPlaying && audio.paused) {
+      if (wasPlaying && audio.paused && !pausedDuringCurrentLoadRef.current) {
         await playAudioIfNotPaused(audio, true, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
           requestId,
@@ -6513,9 +6513,11 @@ export function AudioProvider({ children }) {
   }, []);
 
   const toggle = useCallback(() => {
-    if (audioRef.current?.paused) return resume();
-    pause();
-    return false;
+    if (stateRef.current.isPlaying) {
+      pause();
+      return false;
+    }
+    return resume();
   }, [pause, resume]);
 
   useEffect(() => {
