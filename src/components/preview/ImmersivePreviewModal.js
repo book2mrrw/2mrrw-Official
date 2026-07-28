@@ -1026,12 +1026,6 @@ function VolumeSlider({ t, volume, onVolumeChange }) {
   // If el.volume is 0 (stuck from accidental drag), start at 1 visually
   const [localVol, setLocalVol] = useState(() => (volume > 0 ? volume : 1));
 
-  // Mount-only: if audio element volume is 0, restore to audible immediately
-  useEffect(() => {
-    if (!((volume ?? 1) > 0)) onVolumeChange(1);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Sync from engine when not dragging; skip 0 so stale engine reads don't re-mute
   useEffect(() => {
     if (!draggingRef.current && (volume ?? 1) > 0) setLocalVol(volume);

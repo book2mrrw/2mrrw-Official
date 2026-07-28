@@ -38,8 +38,7 @@ export function mapMediaTrackToPlayInput(track = {}) {
     title: track.title,
     artist: track.artist,
     cover: track.artwork ?? track.cover,
-    coverArt: track.artwork ?? track.cover,
-    image: track.artwork ?? track.cover,
+    gainDb: track.gainDb ?? track.gain_db ?? null,
     metadata: track.metadata,
     source: track.source,
   };
@@ -160,7 +159,7 @@ export function mapAudioContextToMediaEngine(audio) {
       isPlaying,
       currentTime: audio.getCurrentTime?.() ?? audio.currentTime ?? 0,
       duration: audio.duration ?? 0,
-      volume: readVolume(audio.audioRef),
+      volume: audio.getUserVolume?.() ?? readVolume(audio.audioRef),
       queue: audio.queue ?? [],
       queueIndex: audio.queueIndex ?? -1,
       playbackState: audio.playbackState ?? null,
@@ -177,14 +176,7 @@ export function mapAudioContextToMediaEngine(audio) {
     pause: audio.pause,
     seek: audio.seek,
     setVolume: (level) => {
-      const el = audio.audioRef?.current;
-      if (!el) return;
-      // Clamp to valid range; minimum 0.01 so the slider can never fully mute
-      const v = Math.max(0.01, Math.min(1, Number(level)));
-      if (Number.isFinite(v)) {
-        el.volume = v;
-        try { localStorage.setItem(VOL_KEY, String(v)); } catch {}
-      }
+      audio.setUserVolume?.(level);
     },
     toggle: audio.toggle,
     playNext: audio.playNext ?? null,

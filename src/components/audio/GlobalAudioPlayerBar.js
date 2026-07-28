@@ -526,6 +526,16 @@ function GlobalAudioPlayerBar() {
     };
   }, [continuityFrozen, continuitySnap, currentTrack]);
 
+  // Screen-reader track announcer — DOM-mutated on slug change, never causes a re-render.
+  const trackAnnouncerRef = useRef(null);
+  useEffect(() => {
+    const el = trackAnnouncerRef.current;
+    if (!el || !dockCurrentTrack) return;
+    const title = dockCurrentTrack.title || "Untitled";
+    const artist = dockCurrentTrack.artist;
+    el.textContent = artist ? `Now playing: ${title} by ${artist}` : `Now playing: ${title}`;
+  }, [dockCurrentTrack?.slug]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const baseCover = dockCurrentTrack?.baseCover || dockCurrentTrack?.cover;
   const csCover = dockCurrentTrack?.csCover || null;
   const csAudio = dockCurrentTrack?.csAudio || null;
@@ -1026,6 +1036,24 @@ function GlobalAudioPlayerBar() {
 
   return (
     <>
+      {/* Visually hidden — announces track changes to screen readers */}
+      <div
+        ref={trackAnnouncerRef}
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        style={{
+          position: "absolute",
+          width: "1px",
+          height: "1px",
+          padding: 0,
+          margin: "-1px",
+          overflow: "hidden",
+          clip: "rect(0,0,0,0)",
+          whiteSpace: "nowrap",
+          border: 0,
+        }}
+      />
       {conflictDialog}
       {queueSheet}
       {sleepSheet}

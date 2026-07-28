@@ -110,6 +110,11 @@ import {
   noteAudioProviderMount,
   noteAudioProviderUnmount,
 } from "@/lib/playback/audio-engine-runtime";
+import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
+import { dispatchPlaybackCommand } from "@/lib/playback/command-dispatcher";
+import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
+import { registerPlaybackKeyboardShortcuts } from "@/lib/playback/keyboard-shortcuts";
+import { createPlaybackError } from "@/lib/playback/playback-errors";
 import {
   MARKS,
   perfMark,
@@ -122,7 +127,7 @@ import {
   PLAYBACK_SCENARIOS,
 } from "@/lib/dev/performanceMarks";
 import AudioPhase10Bridge from "@/components/system/AudioPhase10Bridge";
-import { isFirstListen, markListened } from "@/lib/first-listen";
+
 import { isSamePlaybackTrack } from "@/lib/music-playback";
 import { resolveTrackAccess } from "@/lib/music-access";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
@@ -169,9 +174,6 @@ const AUDIO_SRC_READY_TIMEOUT_MS = 12000;
 // Two-stage stall recovery: soft (seek nudge) then hard (full retry).
 const STALL_SOFT_RECOVERY_MS = 2500;
 const STALL_HARD_RECOVERY_MS = 7000;
-const PLAYBACK_COMMAND_TIMEOUT_MS = 15000;
-/** Stream resolve / signed swap can exceed 15s without being stalled (Phase P1). */
-const PLAYBACK_STREAM_COMMAND_TIMEOUT_MS = 35000;
 const TRANSPORT_ONLY_STATE_KEYS = new Set([
   "playbackNetworkState",
   "isBuffering",
@@ -247,7 +249,6 @@ const LIFECYCLE_RECOVERY_LOCK_MS = 4000;
 const LIFECYCLE_RECOVERY_SUPPRESSION_MS = 2500;
 const BFCACHE_RECOVERY_TIMEOUT_MS = 5000;
 const MRRW_MEDIA_SOURCE_BOUND = Symbol.for("2mrrw.mediaElementSourceBound");
-const ACTIVE_COMMAND_STALE_MS = 20000;
 /** Phase 21B — lifecycle audio truth model (A–D). */
 const LIFECYCLE_AUDIO_TRUTH_STATES = Object.freeze({
   USER_PLAYING: "USER_PLAYING",
@@ -256,49 +257,7 @@ const LIFECYCLE_AUDIO_TRUTH_STATES = Object.freeze({
   RECOVERING: "RECOVERING",
 });
 
-const PLAYBACK_COMMANDS = {
-  PLAY_TRACK: "PLAY_TRACK",
-  PLAY_QUEUE: "PLAY_QUEUE",
-  PAUSE: "PAUSE",
-  RESUME: "RESUME",
-  SEEK: "SEEK",
-  NEXT_TRACK: "NEXT_TRACK",
-  PREV_TRACK: "PREV_TRACK",
-  INTERRUPT: "INTERRUPT",
-  RECOVER: "RECOVER",
-  STOP: "STOP",
-  COMPLETE: "COMPLETE",
-  SET_QUEUE: "SET_QUEUE",
-  REPLACE_TRACK: "REPLACE_TRACK",
-  UPGRADE_STREAM: "UPGRADE_STREAM",
-  RECOVER_PLAYBACK: "RECOVER_PLAYBACK",
-  VIEWPORT_PAUSE: "VIEWPORT_PAUSE",
-  VIEWPORT_RESUME: "VIEWPORT_RESUME",
-};
 
-/** Lowercase / legacy aliases accepted by dispatchPlaybackCommand (Phase 8 authority lock). */
-const PLAYBACK_COMMAND_ALIASES = {
-  play: PLAYBACK_COMMANDS.PLAY_TRACK,
-  pause: PLAYBACK_COMMANDS.PAUSE,
-  resume: PLAYBACK_COMMANDS.RESUME,
-  stop: PLAYBACK_COMMANDS.STOP,
-  seek: PLAYBACK_COMMANDS.SEEK,
-  setQueue: PLAYBACK_COMMANDS.SET_QUEUE,
-  playQueue: PLAYBACK_COMMANDS.PLAY_QUEUE,
-  playTrack: PLAYBACK_COMMANDS.PLAY_TRACK,
-  replaceTrack: PLAYBACK_COMMANDS.REPLACE_TRACK,
-  upgradeStream: PLAYBACK_COMMANDS.UPGRADE_STREAM,
-  recoverPlayback: PLAYBACK_COMMANDS.RECOVER_PLAYBACK,
-  viewportPause: PLAYBACK_COMMANDS.VIEWPORT_PAUSE,
-  viewportResume: PLAYBACK_COMMANDS.VIEWPORT_RESUME,
-};
-
-function createPlaybackError(code, message, context = {}) {
-  const error = new Error(message);
-  error.code = code;
-  Object.assign(error, context);
-  return error;
-}
 
 function normalizePlaybackSrc(src) {
   if (!src || typeof src !== "string") return "";
@@ -635,15 +594,6 @@ function isLifecycleInterruptReason(reason) {
   );
 }
 
-/** Commands that must resume Web Audio synchronously inside the activating gesture (before queue microtask). */
-const USER_GESTURE_PLAYBACK_COMMANDS = new Set([
-  PLAYBACK_COMMANDS.PLAY_TRACK,
-  PLAYBACK_COMMANDS.RESUME,
-  PLAYBACK_COMMANDS.PLAY_QUEUE,
-  PLAYBACK_COMMANDS.NEXT_TRACK,
-  PLAYBACK_COMMANDS.PREV_TRACK,
-  PLAYBACK_COMMANDS.REPLACE_TRACK,
-]);
 
 /**
  * Invoke AudioContext.resume() synchronously inside a user gesture (no await before call).
@@ -651,7 +601,7 @@ const USER_GESTURE_PLAYBACK_COMMANDS = new Set([
  */
 function resumeWebAudioContextFromUserGesture(ctxRef, source = "resumeWebAudioContextFromUserGesture") {
   const ctx = ctxRef?.current;
-  if (!ctx || ctx.state !== "suspended") return false;
+  if (!ctx || ctx.state === "running" || ctx.state === "closed") return false;
   const prevState = ctx.state;
   try {
     void ctx.resume();
@@ -684,7 +634,7 @@ function resumeWebAudioContextFromUserGesture(ctxRef, source = "resumeWebAudioCo
 /** Safari keeps AudioContext suspended until resumed inside a user gesture. */
 async function resumeWebAudioContextIfSuspended(ctxRef, source = "resumeWebAudioContextIfSuspended") {
   const ctx = ctxRef?.current;
-  if (!ctx || ctx.state !== "suspended") return;
+  if (!ctx || ctx.state === "running" || ctx.state === "closed") return;
   const prevState = ctx.state;
   try {
     await ctx.resume();
@@ -840,6 +790,7 @@ const normalizeTrack = (track = {}) => {
   const csCover = track.csCover || track.cs_cover || track.csCoverArt || null;
   const coverArtType = track.coverArtType || track.cover_art_type || (track.video ? "video" : "image");
   const csCoverType = track.csCoverType || track.cs_cover_type || "image";
+  const gainDb = track.gainDb ?? track.gain_db ?? track.metadata?.gainDb ?? null;
   return {
     id: id || slug || src,
     slug: slug || id,
@@ -854,10 +805,10 @@ const normalizeTrack = (track = {}) => {
     csCover: csCover || null,
     csCoverType,
     hasCs: Boolean(csAudio || csCover),
+    gainDb,
     source: track.source || "unknown",
     metadata: track.metadata || {},
     preview: track.preview || track.preview_path || track.previewPath || null,
-    preview_path: track.preview_path || track.previewPath || track.preview || null,
   };
 };
 
@@ -944,27 +895,36 @@ export function AudioProvider({ children }) {
   }
   const {
     audioRef,
-    commandQueueRef,
-    commandRequestIdRef,
+    queueRef,
+    queueIndexRef,
     commandExecutionDepthRef,
     activeCommandRef,
-    queueCircuitOpenRef,
     queueWatchdogRef,
     activeStreamAbortRef,
+    audioCtxRef,
+    sourceRef,
+    analyserRef,
+    stereoPannerRef,
+    bassFilterRef,
+    mainGainRef,
+    limiterRef,
+    crossfadeGainRef,
+    crossfadeSourceRef,
+    mediaElementSourceElementRef,
+    webAudioInitializedRef,
+    webAudioAvailableRef,
+    dispatchPlaybackCommandRef,
+    initWebAudioRef,
+    stateGetterRef,
+    tracePlaybackRef,
+    commandHandlersRef,
   } = engineRefsRef.current;
   const csImgRef = useRef(null);
   const csVidRef = useRef(null);
   const csAudioRef = useRef(null);
-  const audioCtxRef = useRef(null);
-  const analyserRef = useRef(null);
-  const sourceRef = useRef(null);
-  const stereoPannerRef = useRef(null);
-  const bassFilterRef = useRef(null);
   const lastPersistRef = useRef({ key: null, at: 0 });
   const pendingSeekRef = useRef(null);
   const stateRef = useRef(EMPTY_STATE);
-  const queueRef = useRef([]);
-  const queueIndexRef = useRef(-1);
   const repeatModeRef = useRef("off");
   const stopAfterEachTrackRef = useRef(false);
   const sleepTimerRef = useRef({ endsAt: null, afterCurrentTrack: false });
@@ -1013,7 +973,7 @@ export function AudioProvider({ children }) {
   /** Phase 21B — preserve MS playbackState during OS_SUSPENDED (class C). */
   const lastMediaSessionPlaybackStateRef = useRef(null);
   const keepAliveIntervalRef = useRef(null);
-  const swellIntervalRef = useRef(null);
+  const userVolumeRef = useRef(getWebAudioEngine().getUserVolume());
   // Next-track preload: buffers the upcoming queue item while current track plays.
   const nextTrackPreloadRef = useRef(null);
   const nextTrackSignedUrlCacheRef = useRef({});
@@ -1021,8 +981,6 @@ export function AudioProvider({ children }) {
   const shuffledOrderRef = useRef(null);
   const shufflePositionRef = useRef(0);
   const sessionUnlockedRef = useRef(false);
-  const webAudioInitializedRef = useRef(false);
-  const webAudioAvailableRef = useRef(true);
   const audibilitySampleRef = useRef(createAudibilitySample());
   const recoverAudioHardRef = useRef(null);
   const isRecoveringRef = useRef(false);
@@ -1033,15 +991,10 @@ export function AudioProvider({ children }) {
   const bfcacheRecoveryInProgressRef = useRef(false);
   const bfcacheRecoveryTimeoutRef = useRef(null);
   const recoveryCooldownUntilRef = useRef(0);
-  const mediaElementSourceElementRef = useRef(null);
   const retryStreamPlaybackRef = useRef(null);
   const positionSaveTimerRef = useRef(null);
   const bufferShowTimerRef = useRef(null);
-  const mainGainRef = useRef(null);
-  const limiterRef = useRef(null);
-  const trackGainRef = useRef(1); // target linear gain for the current track (from gainDb)
-  const crossfadeGainRef = useRef(null);
-  const crossfadeSourceRef = useRef(null);
+  const trackGainRef = useRef(1);
   const crossfadeStateRef = useRef("idle"); // "idle" | "fading" | "bridging"
   const lastPlayedSlugRef = useRef(null);
   const csHoldSavedRef = useRef(null);
@@ -1049,7 +1002,6 @@ export function AudioProvider({ children }) {
   const spuriousEndedGuardRef = useRef(0);
   const playRequestIdRef = useRef(0);
   const internalPlaybackAuthorityRef = useRef(false);
-  const dispatchPlaybackCommandRef = useRef(null);
   const nextNextTrackPreloadRef = useRef(null);
   const prevTrackPreloadRef = useRef(null);
   const tabIdRef = useRef(null);
@@ -1771,7 +1723,9 @@ export function AudioProvider({ children }) {
       prev.crossOrigin = "anonymous";
       prevTrackPreloadRef.current = prev;
     }
+    const cleanupKeyboard = registerPlaybackKeyboardShortcuts();
     return () => {
+      cleanupKeyboard();
       noteAudioProviderUnmount();
     };
   }, []);
@@ -2272,85 +2226,45 @@ export function AudioProvider({ children }) {
     [updateMediaSession]
   );
 
-  const connectWebAudioDownstream = useCallback((ctx, source) => {
-    const analyser = ctx.createAnalyser();
-    analyser.fftSize = 256;
-    analyser.smoothingTimeConstant = 0.8;
-    const stereoPanner = ctx.createStereoPanner();
-    stereoPanner.pan.value = 0;
-    const bassFilter = ctx.createBiquadFilter();
-    bassFilter.type = "lowshelf";
-    bassFilter.frequency.value = 200;
-    bassFilter.gain.value = 0;
-    const mainGain = ctx.createGain();
-    mainGain.gain.value = 1;
-    // Transparent limiter: only activates above -1 dBFS, preserves the artist's master.
-    const limiter = ctx.createDynamicsCompressor();
-    limiter.threshold.value = -1;
-    limiter.knee.value = 0;
-    limiter.ratio.value = 20;
-    limiter.attack.value = 0.003;
-    limiter.release.value = 0.1;
-    try { mainGainRef.current?.disconnect(); } catch {}
-    try { analyserRef.current?.disconnect(); } catch {}
-    try { stereoPannerRef.current?.disconnect(); } catch {}
-    try { bassFilterRef.current?.disconnect(); } catch {}
-    try { limiterRef.current?.disconnect(); } catch {}
-    source.connect(mainGain);
-    mainGain.connect(analyser);
-    analyser.connect(stereoPanner);
-    stereoPanner.connect(bassFilter);
-    bassFilter.connect(limiter);
-    limiter.connect(ctx.destination);
-    mainGainRef.current = mainGain;
-    analyserRef.current = analyser;
-    stereoPannerRef.current = stereoPanner;
-    bassFilterRef.current = bassFilter;
-    limiterRef.current = limiter;
+  const connectWebAudioDownstream = useCallback(() => {
+    const engine = getWebAudioEngine();
+    engine.buildGraph(crossfadeGainRef.current);
+    mainGainRef.current = engine.mainGain;
+    analyserRef.current = engine.analyser;
+    stereoPannerRef.current = engine.stereoPanner;
+    bassFilterRef.current = engine.bassFilter;
+    limiterRef.current = engine.limiter;
     webAudioInitializedRef.current = true;
     webAudioAvailableRef.current = true;
+    if (audioRef.current) audioRef.current.volume = engine.getUserVolume();
   }, []);
 
   const initWebAudio = useCallback(() => {
     if (webAudioInitializedRef.current || typeof window === "undefined") return;
     const audio = audioRef.current;
     if (!audio) return;
-    mediaElementSourceElementRef.current = audio;
 
+    const engine = getWebAudioEngine();
     try {
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
-
-      let ctx = audioCtxRef.current;
-      let source = sourceRef.current;
-
-      if (ctx && ctx.state !== "closed" && source && mediaElementSourceElementRef.current === audio) {
-        connectWebAudioDownstream(ctx, source);
-        recordAudioContextState(ctx, "initWebAudio:reconnect");
+      const { ok } = engine.createContextAndSource(audio);
+      if (!ok) {
+        webAudioAvailableRef.current = false;
+        webAudioInitializedRef.current = false;
         return;
       }
+      audioCtxRef.current = engine.ctx;
+      sourceRef.current = engine.source;
+      mediaElementSourceElementRef.current = audio;
 
-      if (!ctx || ctx.state === "closed") {
-        ctx = new Ctx();
-        audioCtxRef.current = ctx;
-      }
+      connectWebAudioDownstream();
 
-      if (!source || mediaElementSourceElementRef.current !== audio) {
-        if (!audio[MRRW_MEDIA_SOURCE_BOUND]) {
-          source = ctx.createMediaElementSource(audio);
-          audio[MRRW_MEDIA_SOURCE_BOUND] = true;
-          sourceRef.current = source;
-          mediaElementSourceElementRef.current = audio;
-        } else if (!sourceRef.current) {
-          webAudioAvailableRef.current = false;
-          webAudioInitializedRef.current = false;
-          return;
-        }
-      }
-
-      connectWebAudioDownstream(ctx, source);
       // Wire the next-track pre-buffer into a crossfade gain channel (one-time per AudioContext).
+      // Connect into the analyser so the crossfade signal passes through stereoPanner →
+      // bassFilter → limiter → destination. Connecting to mainGain multiplies by its
+      // fading gain value (silences incoming track); connecting to destination bypasses
+      // the limiter, effects, and visualiser entirely.
       if (!crossfadeSourceRef.current) {
+        const ctx = engine.ctx;
         const nextEl = nextTrackPreloadRef.current;
         if (nextEl && !nextEl[MRRW_MEDIA_SOURCE_BOUND]) {
           try {
@@ -2359,11 +2273,6 @@ export function AudioProvider({ children }) {
             const cfGain = ctx.createGain();
             cfGain.gain.value = 0;
             cfSrc.connect(cfGain);
-            // Connect into the analyser (after mainGain) so the crossfade signal
-            // passes through stereoPanner → bassFilter → limiter → destination.
-            // Connecting to mainGain directly would multiply by its fading gain value,
-            // silencing the incoming track. Connecting to destination would bypass the
-            // limiter, effects, and visualiser entirely.
             cfGain.connect(analyserRef.current ?? limiterRef.current ?? ctx.destination);
             crossfadeSourceRef.current = cfSrc;
             crossfadeGainRef.current = cfGain;
@@ -2372,24 +2281,12 @@ export function AudioProvider({ children }) {
           }
         }
       }
-      recordAudioContextState(ctx, "initWebAudio");
+      recordAudioContextState(engine.ctx, "initWebAudio");
     } catch (err) {
       console.warn("[AUDIO] Web Audio graph init failed, routing direct:", err?.message || err);
-      try {
-        analyserRef.current?.disconnect();
-      } catch {
-        /* partial graph */
-      }
-      try {
-        stereoPannerRef.current?.disconnect();
-      } catch {
-        /* partial graph */
-      }
-      try {
-        bassFilterRef.current?.disconnect();
-      } catch {
-        /* partial graph */
-      }
+      try { analyserRef.current?.disconnect(); } catch {}
+      try { stereoPannerRef.current?.disconnect(); } catch {}
+      try { bassFilterRef.current?.disconnect(); } catch {}
       mainGainRef.current = null;
       limiterRef.current = null;
       analyserRef.current = null;
@@ -2988,7 +2885,7 @@ export function AudioProvider({ children }) {
         const fadeStart = PREVIEW_HARD_CAP_SEC - 2;
         const elapsed = audio.currentTime - fadeStart;
         const fadeProgress = Math.min(1, elapsed / 2);
-        audio.volume = Math.max(0, 1 - fadeProgress);
+        audio.volume = Math.max(0, userVolumeRef.current * (1 - fadeProgress));
 
         if (audio.currentTime >= PREVIEW_HARD_CAP_SEC) {
           skipPauseInterruptionRef.current = true;
@@ -3032,8 +2929,26 @@ export function AudioProvider({ children }) {
         patchState({ isPlaying: false, playbackState: "paused" });
       }
 
-      // Crossfade trigger: begin fading out current track and fading in pre-buffer.
+      // Preload safety-net: if within 30s of track end and the preload element hasn't
+      // started loading (readyState 0 = HAVE_NOTHING), kick scheduleNextTrackPreload again.
+      // This covers the case where the initial onPlay call failed silently (e.g. the
+      // library-stream signed-URL fetch threw before setting preloadEl.src).
+      const PRELOAD_LEAD_SEC = 30;
       const CROSSFADE_SEC = 5;
+      if (
+        crossfadeStateRef.current === "idle" &&
+        !previewOnly &&
+        dur > CROSSFADE_SEC * 2 &&
+        rem > CROSSFADE_SEC &&
+        rem <= PRELOAD_LEAD_SEC
+      ) {
+        const preloadEl = nextTrackPreloadRef.current;
+        if (preloadEl && preloadEl.readyState === 0) {
+          void scheduleNextTrackPreload();
+        }
+      }
+
+      // Crossfade trigger: begin fading out current track and fading in pre-buffer.
       if (
         crossfadeStateRef.current === "idle" &&
         !previewOnly &&
@@ -3796,18 +3711,15 @@ export function AudioProvider({ children }) {
 
   const unlockAudioFromGesture = useCallback(async (audioEl) => {
     if (!audioEl || !audioEl.paused) return;
-    // Capture volume before any mutation so it can always be restored.
-    // Guarantee a non-silent value — if el.volume is already 0 for any reason, restore to 1.
-    const vol = audioEl.volume > 0 ? audioEl.volume : 1;
     try {
       audioEl.volume = 0;
       await audioEl.play();
+      skipPauseInterruptionRef.current = true;
       audioEl.pause();
     } catch {
-      /* unlock failure is non-fatal */
+      skipPauseInterruptionRef.current = false;
     }
-    // Unconditional restore: runs whether play() succeeded, failed, or threw.
-    audioEl.volume = vol;
+    audioEl.volume = userVolumeRef.current;
   }, []);
 
   const cancelCrossfade = useCallback(() => {
@@ -3822,6 +3734,12 @@ export function AudioProvider({ children }) {
       try { mainGainRef.current?.gain.cancelScheduledValues(now); mainGainRef.current?.gain.setValueAtTime(trackGainRef.current, now); } catch {}
       try { crossfadeGainRef.current?.gain.cancelScheduledValues(now); crossfadeGainRef.current?.gain.setValueAtTime(0, now); } catch {}
     }
+  }, []);
+
+  const setUserVolume = useCallback((level) => {
+    const engine = getWebAudioEngine();
+    engine.setUserVolume(level);
+    userVolumeRef.current = engine.getUserVolume();
   }, []);
 
   const playTrackInternal = useCallback(async (track, options = {}) => {
@@ -3905,6 +3823,7 @@ export function AudioProvider({ children }) {
           playbackState: "paused",
           playbackNetworkState: transportIntact ? "idle" : "recovering",
         });
+        cancelCrossfade();
         return false;
       }
     }
@@ -4006,7 +3925,7 @@ export function AudioProvider({ children }) {
         const previewFallbackSrc =
           getTrackPreviewSrc(nextTrack) ||
           nextTrack?.metadata?.previewSrc ||
-          nextTrack?.previewUrl ||
+          nextTrack?.preview ||
           null;
         if (previewFallbackSrc) {
           skipPauseInterruptionRef.current = true;
@@ -4166,7 +4085,7 @@ export function AudioProvider({ children }) {
         applySwapSeek();
       } else {
         audio.addEventListener("loadedmetadata", applySwapSeek, { once: true });
-        const applySwapSeekTimeout = setTimeout(
+        setTimeout(
           () => audio.removeEventListener("loadedmetadata", applySwapSeek),
           5000
         );
@@ -4357,14 +4276,7 @@ export function AudioProvider({ children }) {
           audio.pause();
         }
         // Set volume while the element is paused — before waitAudioSrcReady and play().
-        if (swellIntervalRef.current) {
-          cancelAnimationFrame(swellIntervalRef.current);
-          swellIntervalRef.current = null;
-        }
-        if (isFirstListen(nextTrack.slug)) {
-          markListened(nextTrack.slug);
-        }
-        audio.volume = 1;
+        audio.volume = userVolumeRef.current;
         spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
         // Redirect-path sources (/api/library/stream?redirect=1) with DIRECT_STREAM_REDIRECT_ENABLED
         // go straight from Cloudflare edge to the browser — no Vercel proxy hop. 12s gives
@@ -4496,11 +4408,7 @@ export function AudioProvider({ children }) {
       // Same-track resume: ensure volume is 1 (a stale preview fade may have left it < 1).
       // New-track path already applied volume/swell above before waitAudioSrcReady.
       if (isSameTrack) {
-        if (swellIntervalRef.current) {
-          cancelAnimationFrame(swellIntervalRef.current);
-          swellIntervalRef.current = null;
-        }
-        audio.volume = 1;
+        audio.volume = userVolumeRef.current;
       }
 
       if (isSameTrack) {
@@ -4546,7 +4454,7 @@ export function AudioProvider({ children }) {
       const previewFallbackSrc =
         getTrackPreviewSrc(nextTrack) ||
         nextTrack?.metadata?.previewSrc ||
-        nextTrack?.previewUrl ||
+        nextTrack?.preview ||
         null;
       const failedLibraryStream =
         isLibraryStreamSrc(syncSrc) || isLibraryStreamSrc(nextTrack?.src || "");
@@ -6354,242 +6262,41 @@ export function AudioProvider({ children }) {
     notifyTransportListeners,
   ]);
 
-  const executePlaybackCommand = useCallback(async (command) => {
-    if (command.requestId !== activeCommandRef.current?.requestId) return false;
-    switch (command.type) {
-      case PLAYBACK_COMMANDS.PLAY_TRACK: {
-        const track = command.payload.track;
-        const opts = command.payload.options || {};
-        // Replace the queue with a single-item queue unless the caller explicitly
-        // opts out (retry/recovery flows) or the track is already in the current queue.
-        // Without this, playing a single or feature while an album queue is active
-        // leaves the old queue intact — when the single ends, the next album track
-        // auto-advances instead of stopping (or playing the next single).
-        if (track && !opts.preserveQueue) {
-          const alreadyQueued = queueRef.current.some((qt) => isSamePlaybackTrack(qt, track));
-          if (!alreadyQueued) setQueueInternal([track], 0);
-        }
-        return playTrackInternal(track, opts);
-      }
-      case PLAYBACK_COMMANDS.PLAY_QUEUE:
-        return playQueueInternal(
-          command.payload.tracks || [],
-          command.payload.startIndex || 0,
-          command.payload.options || {}
-        );
-      case PLAYBACK_COMMANDS.PAUSE:
-        pauseInternal({ userInitiated: true });
-        return true;
-      case PLAYBACK_COMMANDS.INTERRUPT:
-        pauseInternal({ interrupt: true });
-        return true;
-      case PLAYBACK_COMMANDS.RESUME:
-        return resumeInternal();
-      case PLAYBACK_COMMANDS.RECOVER: {
-        tracePlayback("recovery", "executePlaybackCommand", {
-          command: "RECOVER",
-          reason: command.payload?.reason ?? null,
-        });
-        if (command.payload?.hard === false) {
-          return resumeInternal();
-        }
-        return requestPlaybackRecovery(
-          PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
-          {
-            reason: command.payload?.reason || "recover_command",
-            resumeAfter: Boolean(command.payload?.resumeAfter ?? true),
-          }
-        );
-      }
-      case PLAYBACK_COMMANDS.SEEK:
-        seekInternal(command.payload.time);
-        return true;
-      case PLAYBACK_COMMANDS.NEXT_TRACK:
-        return playNextInternal();
-      case PLAYBACK_COMMANDS.COMPLETE:
-        return playNextInternal({ autoAdvance: true });
-      case PLAYBACK_COMMANDS.PREV_TRACK:
-        return playPreviousInternal();
-      case PLAYBACK_COMMANDS.STOP:
-        stopInternal();
-        return true;
-      case PLAYBACK_COMMANDS.SET_QUEUE:
-        setQueueInternal(command.payload.tracks || [], command.payload.startIndex ?? 0);
-        return true;
-      case PLAYBACK_COMMANDS.REPLACE_TRACK:
-        return playTrackInternal(command.payload.track, command.payload.options || {});
-      case PLAYBACK_COMMANDS.UPGRADE_STREAM:
-        return upgradeToFullStream();
-      case PLAYBACK_COMMANDS.RECOVER_PLAYBACK:
-        return retryStreamPlayback();
-      case PLAYBACK_COMMANDS.VIEWPORT_PAUSE:
-        pauseInternal({ fromViewport: true });
-        return true;
-      case PLAYBACK_COMMANDS.VIEWPORT_RESUME:
-        return resumeFromViewport();
-      default:
-        return false;
-    }
-  }, [
-    pauseInternal,
-    playNextInternal,
-    playPreviousInternal,
-    playQueueInternal,
-    playTrackInternal,
-    resumeFromViewport,
-    requestPlaybackRecovery,
-    resumeInternal,
-    retryStreamPlayback,
-    seekInternal,
-    setQueueInternal,
-    stopInternal,
-    upgradeToFullStream,
-  ]);
 
-  /**
-   * Phase 8 — single authority for playback mutations. Serial by default (`commandQueueRef`).
-   * Accepts `PLAYBACK_COMMANDS.*` or aliases: play, pause, resume, stop, seek, setQueue,
-   * replaceTrack, upgradeStream, recoverPlayback.
-   */
-  const dispatchPlaybackCommand = useCallback((type, payload = {}, { serial = true, cancelActiveStream = false } = {}) => {
-    const resolvedType = PLAYBACK_COMMAND_ALIASES[type] || type;
-    const requestId = commandRequestIdRef.current + 1;
-    commandRequestIdRef.current = requestId;
-    const command = { type: resolvedType, payload, requestId, issuedAt: Date.now() };
-    const isEmergencyBypass =
-      resolvedType === PLAYBACK_COMMANDS.STOP || resolvedType === PLAYBACK_COMMANDS.PAUSE;
-
-    if (USER_GESTURE_PLAYBACK_COMMANDS.has(resolvedType)) {
-      initWebAudio();
-      resumeWebAudioContextFromUserGesture(audioCtxRef, `dispatch:${resolvedType}`);
-    }
-
-    const run = async () => {
-      commandExecutionDepthRef.current += 1;
-      perfMark(MARKS.PLAYBACK_QUEUE_RESOLVED);
-      if (
-        activeCommandRef.current &&
-        Date.now() - (activeCommandRef.current.issuedAt || 0) > ACTIVE_COMMAND_STALE_MS
-      ) {
-        reportPlaybackDiagnostic({
-          level: "warn",
-          code: "PLAYBACK_COMMAND_STALE_CLEANUP",
-          command: resolvedType,
-          requestId,
-          state: stateRef.current,
-          context: {
-            staleRequestId: activeCommandRef.current.requestId,
-            staleType: activeCommandRef.current.type,
-          },
-        });
-        activeCommandRef.current = null;
-      }
-      activeCommandRef.current = command;
-      if (cancelActiveStream && activeStreamAbortRef.current) {
-        activeStreamAbortRef.current.abort();
-      }
-      try {
-        const streamCommand =
-          resolvedType === PLAYBACK_COMMANDS.PLAY_TRACK ||
-          resolvedType === PLAYBACK_COMMANDS.PLAY_QUEUE ||
-          resolvedType === PLAYBACK_COMMANDS.UPGRADE_STREAM ||
-          resolvedType === PLAYBACK_COMMANDS.REPLACE_TRACK;
-        const commandTimeoutMs = streamCommand
-          ? PLAYBACK_STREAM_COMMAND_TIMEOUT_MS
-          : PLAYBACK_COMMAND_TIMEOUT_MS;
-        const result = await Promise.race([
-          executePlaybackCommand(command),
-          new Promise((_, reject) => {
-            queueWatchdogRef.current = setTimeout(() => {
-              reject(
-                createPlaybackError("PLAYBACK_COMMAND_TIMEOUT", "Playback command watchdog timeout", {
-                  command: resolvedType,
-                  requestId,
-                  timeoutMs: commandTimeoutMs,
-                })
-              );
-            }, commandTimeoutMs);
-          }),
-        ]);
-        queueCircuitOpenRef.current = false;
-        return result;
-      } catch (error) {
-        if (error?.code === "PLAYBACK_COMMAND_TIMEOUT") {
-          queueCircuitOpenRef.current = true;
-        }
-        reportPlaybackDiagnostic({
-          code: "PLAYBACK_COMMAND_FAILED",
-          command: resolvedType,
-          requestId,
-          state: stateRef.current,
-          error,
-          context: {
-            ...payload,
-            visibility: typeof document !== "undefined" ? document.visibilityState : null,
-            source: stateRef.current?.source || null,
-          },
-        });
-        // Return null instead of re-throwing so the promise chain never produces
-        // an unhandled rejection in callers that don't .catch() the result.
-        return null;
-      } finally {
-        commandExecutionDepthRef.current = Math.max(0, commandExecutionDepthRef.current - 1);
-        if (queueWatchdogRef.current) {
-          clearTimeout(queueWatchdogRef.current);
-          queueWatchdogRef.current = null;
-        }
-        if (activeCommandRef.current?.requestId === requestId) {
-          activeCommandRef.current = null;
-        }
-        const track = stateRef.current?.currentTrack;
-        correlateBlackscreenPlayback(resolvedType, {
-          requestId,
-          trackId: track?.id ?? track?.trackId ?? track?.slug ?? null,
-          isPlaying: Boolean(stateRef.current?.isPlaying),
-        });
-      }
-    };
-
-    if (!serial) return Promise.resolve().then(run);
-    if (isEmergencyBypass) {
-      return Promise.resolve()
-        .then(run)
-        .finally(() => {
-          if (queueCircuitOpenRef.current) {
-            commandQueueRef.current = Promise.resolve();
-            queueCircuitOpenRef.current = false;
-          }
-        });
-    }
-    if (queueCircuitOpenRef.current) {
-      reportPlaybackDiagnostic({
-        level: "warn",
-        code: "PLAYBACK_QUEUE_RELEASE_FALLBACK",
-        command: resolvedType,
-        requestId,
-        state: stateRef.current,
-      });
-      commandQueueRef.current = Promise.resolve();
-    }
-    // Navigation commands supersede any in-progress stream load. Aborting here
-    // causes the running waitAudioSrcReady to resolve instantly with AUDIO_SRC_ABORTED,
-    // the active command's run() exits cleanly, and the new command starts without delay.
-    if (
-      resolvedType === PLAYBACK_COMMANDS.PLAY_TRACK ||
-      resolvedType === PLAYBACK_COMMANDS.PLAY_QUEUE ||
-      resolvedType === PLAYBACK_COMMANDS.NEXT_TRACK ||
-      resolvedType === PLAYBACK_COMMANDS.PREV_TRACK ||
-      resolvedType === PLAYBACK_COMMANDS.REPLACE_TRACK
-    ) {
-      activeStreamAbortRef.current?.abort();
-    }
-    commandQueueRef.current = commandQueueRef.current.catch(() => undefined).then(run);
-    return commandQueueRef.current;
-  }, [executePlaybackCommand, initWebAudio]);
+  // dispatchPlaybackCommand is a stable module function imported from command-dispatcher.js.
+  // It lives entirely outside React and reads all mutable state via runtime refs at call time.
+  useEffect(() => {
+    // dispatchPlaybackCommand is a stable module function — this fires once on mount.
+    dispatchPlaybackCommandRef.current = dispatchPlaybackCommand;
+  }, []);
 
   useEffect(() => {
-    dispatchPlaybackCommandRef.current = dispatchPlaybackCommand;
-  }, [dispatchPlaybackCommand]);
+    initWebAudioRef.current = initWebAudio;
+  }, [initWebAudio]);
+
+  useEffect(() => {
+    stateGetterRef.current = () => stateRef.current;
+  }, []);
+
+  useEffect(() => {
+    tracePlaybackRef.current = tracePlayback;
+  }, [tracePlayback]);
+
+  // Handler bag — keeps commandHandlersRef.current current as internal callbacks
+  // change identity. One effect per handler so unrelated churn doesn't cross-trigger.
+  useEffect(() => { commandHandlersRef.current.pause         = pauseInternal;          }, [pauseInternal]);
+  useEffect(() => { commandHandlersRef.current.playTrack     = playTrackInternal;       }, [playTrackInternal]);
+  useEffect(() => { commandHandlersRef.current.playQueue     = playQueueInternal;       }, [playQueueInternal]);
+  useEffect(() => { commandHandlersRef.current.setQueue      = setQueueInternal;        }, [setQueueInternal]);
+  useEffect(() => { commandHandlersRef.current.playNext      = playNextInternal;        }, [playNextInternal]);
+  useEffect(() => { commandHandlersRef.current.playPrev      = playPreviousInternal;    }, [playPreviousInternal]);
+  useEffect(() => { commandHandlersRef.current.seek          = seekInternal;            }, [seekInternal]);
+  useEffect(() => { commandHandlersRef.current.resume        = resumeInternal;          }, [resumeInternal]);
+  useEffect(() => { commandHandlersRef.current.stop          = stopInternal;            }, [stopInternal]);
+  useEffect(() => { commandHandlersRef.current.recover       = requestPlaybackRecovery; }, [requestPlaybackRecovery]);
+  useEffect(() => { commandHandlersRef.current.upgradeStream = upgradeToFullStream;     }, [upgradeToFullStream]);
+  useEffect(() => { commandHandlersRef.current.retryStream   = retryStreamPlayback;     }, [retryStreamPlayback]);
+  useEffect(() => { commandHandlersRef.current.resumeViewport = resumeFromViewport;     }, [resumeFromViewport]);
 
   useEffect(() => {
     const onEntitlementsUpdated = (event) => {
@@ -6636,7 +6343,7 @@ export function AudioProvider({ children }) {
   const setQueue = useCallback(
     (tracks = [], startIndex = 0) =>
       dispatchPlaybackCommand(PLAYBACK_COMMANDS.SET_QUEUE, { tracks, startIndex }),
-    [dispatchPlaybackCommand]
+    []
   );
 
   const playTrack = useCallback((track, options = {}) => {
@@ -6690,7 +6397,7 @@ export function AudioProvider({ children }) {
       { track, options },
       { serial: true, cancelActiveStream: true }
     );
-  }, [dispatchPlaybackCommand, initWebAudio]);
+  }, [initWebAudio]);
 
   const playQueue = useCallback((tracks = [], startIndex = 0, options = {}) => {
     resetPlaybackTimingCapture();
@@ -6716,7 +6423,7 @@ export function AudioProvider({ children }) {
       },
       { serial: true, cancelActiveStream: !sameQueue }
     );
-  }, [dispatchPlaybackCommand, initWebAudio]);
+  }, [initWebAudio]);
 
   const playNext = useCallback(() => {
     resetPlaybackTimingCapture();
@@ -6725,16 +6432,16 @@ export function AudioProvider({ children }) {
     initWebAudio();
     resumeWebAudioContextFromUserGesture(audioCtxRef, "playNext:gesture");
     return dispatchPlaybackCommand(PLAYBACK_COMMANDS.NEXT_TRACK);
-  }, [dispatchPlaybackCommand, initWebAudio]);
-  const pause = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PAUSE), [dispatchPlaybackCommand]);
+  }, [initWebAudio]);
+  const pause = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PAUSE), []);
   const resume = useCallback(() => {
     initWebAudio();
     resumeWebAudioContextFromUserGesture(audioCtxRef, "resume:gesture");
     return dispatchPlaybackCommand(PLAYBACK_COMMANDS.RESUME);
-  }, [dispatchPlaybackCommand, initWebAudio]);
-  const seek = useCallback((time) => dispatchPlaybackCommand(PLAYBACK_COMMANDS.SEEK, { time }, { serial: false }), [dispatchPlaybackCommand]);
-  const playPrevious = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PREV_TRACK), [dispatchPlaybackCommand]);
-  const stop = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.STOP, {}, { cancelActiveStream: true }), [dispatchPlaybackCommand]);
+  }, [initWebAudio]);
+  const seek = useCallback((time) => dispatchPlaybackCommand(PLAYBACK_COMMANDS.SEEK, { time }, { serial: false }), []);
+  const playPrevious = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PREV_TRACK), []);
+  const stop = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.STOP, {}, { cancelActiveStream: true }), []);
 
   const enqueueTrack = useCallback((track, { playNext = false } = {}) => {
     const normalized = normalizeTrack(track);
@@ -6886,7 +6593,7 @@ export function AudioProvider({ children }) {
         /* ignore */
       }
     };
-  }, [pause, resume, playNext, playPrevious, seek, stop, toggleCSMode, tracePlayback]);
+  }, [pause, resume, playNext, playPrevious, seek, stop, toggleCSMode]);
 
   // Screen wake lock — keeps display active during playback so iOS/Android don't
   // throttle timers or suspend the audio pipeline when the screen dims.
@@ -7532,6 +7239,8 @@ export function AudioProvider({ children }) {
       getAnalyser: () => (webAudioAvailableRef.current ? analyserRef.current : null),
       getCurrentTime: () => stateRef.current.currentTime ?? 0,
       getIsAudiblyPlaying: readIsAudiblyPlaying,
+      setUserVolume,
+      getUserVolume: () => userVolumeRef.current,
       setSleepTimer,
       sleepTimerEndsAt,
       sleepAfterCurrentTrack,
@@ -7555,7 +7264,6 @@ export function AudioProvider({ children }) {
     exitAudioVisualViewport,
     getCurrentPlaybackSnapshot,
     resumeTrackAtPosition,
-    dispatchPlaybackCommand,
     playQueue,
     playTrack,
     playNext,
@@ -7589,6 +7297,7 @@ export function AudioProvider({ children }) {
     toggleBassBoost,
     cycleAtmosphere,
     readIsAudiblyPlaying,
+    setUserVolume,
     setSleepTimer,
     sleepTimerEndsAt,
     sleepAfterCurrentTrack,
@@ -7609,10 +7318,6 @@ export function AudioProvider({ children }) {
     stopProgressRaf();
     stopKeepAlivePing();
     stopPositionSaveTimer();
-    if (swellIntervalRef.current) {
-      cancelAnimationFrame(swellIntervalRef.current);
-      swellIntervalRef.current = null;
-    }
     if (nextTrackPreloadRef.current) {
       nextTrackPreloadRef.current.src = "";
       nextTrackPreloadRef.current.load();

@@ -21,7 +21,10 @@ function createRuntimeState() {
     providerMountCount: 0,
     audioElement: null,
     refs: {
+      // Command pipeline — stable across HMR and route changes.
       audioRef: { current: null },
+      queueRef: { current: [] },
+      queueIndexRef: { current: -1 },
       commandQueueRef: { current: Promise.resolve() },
       commandRequestIdRef: { current: 0 },
       commandExecutionDepthRef: { current: 0 },
@@ -29,6 +32,32 @@ function createRuntimeState() {
       queueCircuitOpenRef: { current: false },
       queueWatchdogRef: { current: null },
       activeStreamAbortRef: { current: null },
+      // Stable dispatch handle — module-accessible without going through React context.
+      dispatchPlaybackCommandRef: { current: null },
+      // One-shot Web Audio init — called synchronously inside user gesture commands.
+      initWebAudioRef: { current: null },
+      // Stable state reader — returns current playback state at call time (diagnostics).
+      stateGetterRef: { current: null },
+      // Stable trace handle — populated by AudioContext; executor uses it without React.
+      tracePlaybackRef: { current: null },
+      // Command handler bag — keyed by short name, populated by AudioContext effects.
+      // Lives in the runtime so handlers from the previous mount remain valid during
+      // the remount window (all handlers close over runtime refs, not React state).
+      commandHandlersRef: { current: {} },
+      // Web Audio graph — must outlive React mounts so the MediaElementSourceNode
+      // (one-time-per-element) is never lost when AudioProvider unmounts/remounts.
+      audioCtxRef: { current: null },
+      sourceRef: { current: null },
+      analyserRef: { current: null },
+      stereoPannerRef: { current: null },
+      bassFilterRef: { current: null },
+      mainGainRef: { current: null },
+      limiterRef: { current: null },
+      crossfadeGainRef: { current: null },
+      crossfadeSourceRef: { current: null },
+      mediaElementSourceElementRef: { current: null },
+      webAudioInitializedRef: { current: false },
+      webAudioAvailableRef: { current: true },
     },
   };
 }
@@ -118,3 +147,17 @@ export function noteAudioProviderUnmount() {
     });
   }
 }
+
+/**
+ * Imperative dispatch — callable from any module without React context.
+ * Returns null if the AudioProvider has not mounted yet.
+ *
+ * @param {string} type  PLAYBACK_COMMANDS constant or legacy alias.
+ * @param {Record<string, any>} [payload]
+ * @param {{ serial?: boolean, cancelActiveStream?: boolean }} [opts]
+ * @returns {Promise<any> | null}
+ */
+export { dispatchPlaybackCommand } from "@/lib/playback/command-dispatcher";
+
+export { getPlaybackCommandBus } from "@/lib/playback/command-bus";
+export { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
