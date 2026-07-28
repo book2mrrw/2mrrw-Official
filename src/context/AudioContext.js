@@ -4016,29 +4016,55 @@ export function AudioProvider({ children }) {
           if (!streamMetaRef.current?.streamEventId && !streamMetaRef.current?.sessionId) {
             streamMetaRef.current = { slug: streamSlug };
           }
+          // Fast-path: if the preload element already followed the proxy redirect
+          // and has buffered the CDN URL, use it directly on the main element.
+          // This skips the proxy hop AND hits the browser HTTP cache filled by
+          // the preload element — reducing gap to near-zero on non-iOS.
+          const preloadElForRedirect = nextTrackPreloadRef.current;
+          const preloadCdnUrl = preloadElForRedirect?.currentSrc || "";
+          if (
+            preloadCdnUrl &&
+            preloadElForRedirect.readyState >= 2 &&
+            !isLibraryStreamSrc(preloadCdnUrl)
+          ) {
+            syncSrc = preloadCdnUrl;
+            backgroundStreamResolve = false;
+          }
         } else {
-          try {
-            const resolved = await resolveLibraryStreamForTrack(nextTrack, {
-              force: options.forceStream,
-              signal: streamAbortController.signal,
-            });
-            const signedUrl = resolved?.track?.src;
-            if (signedUrl) {
-              syncSrc = signedUrl;
-              backgroundStreamResolve = false;
-            } else if (isLibraryStreamRedirectSrc(nextTrack.src)) {
-              syncSrc = nextTrack.src;
-              backgroundStreamResolve = true;
-            }
-          } catch (err) {
-            if (requestId !== playRequestIdRef.current) return false;
-            if (err?.name === "AbortError") return false;
-            if (isLibraryStreamRedirectSrc(nextTrack.src)) {
-              syncSrc = nextTrack.src;
-              backgroundStreamResolve = true;
-            } else {
-              applyStreamResolveError(err);
-              return false;
+          // Fast-path: scheduleNextTrackPreload already fetched and cached the
+          // signed URL from onPlay. Reusing the same URL means waitAudioSrcReady
+          // gets an instant HTTP cache hit from the preload element's buffering,
+          // and canplaythrough fires in < 100ms instead of after a full network fetch.
+          const preloadTrackSlug = parseStreamTrackSlugFromSrc(nextTrack.src) || nextTrack.metadata?.trackSlug || null;
+          const preloadCacheKey = preloadTrackSlug ? `${streamSlug}:${preloadTrackSlug}` : streamSlug;
+          const preloadCached = nextTrackSignedUrlCacheRef.current[preloadCacheKey];
+          if (preloadCached?.url && !streamUrlNeedsRefresh(preloadCached)) {
+            syncSrc = preloadCached.url;
+            backgroundStreamResolve = false;
+          } else {
+            try {
+              const resolved = await resolveLibraryStreamForTrack(nextTrack, {
+                force: options.forceStream,
+                signal: streamAbortController.signal,
+              });
+              const signedUrl = resolved?.track?.src;
+              if (signedUrl) {
+                syncSrc = signedUrl;
+                backgroundStreamResolve = false;
+              } else if (isLibraryStreamRedirectSrc(nextTrack.src)) {
+                syncSrc = nextTrack.src;
+                backgroundStreamResolve = true;
+              }
+            } catch (err) {
+              if (requestId !== playRequestIdRef.current) return false;
+              if (err?.name === "AbortError") return false;
+              if (isLibraryStreamRedirectSrc(nextTrack.src)) {
+                syncSrc = nextTrack.src;
+                backgroundStreamResolve = true;
+              } else {
+                applyStreamResolveError(err);
+                return false;
+              }
             }
           }
         }
