@@ -3704,29 +3704,6 @@ export function AudioProvider({ children }) {
             nnEl.src = nnNorm;
             nnEl.load();
           }
-        } else if (requiresSignedUrlFetch(nnKind)) {
-          const nnEl = nextNextTrackPreloadRef.current;
-          if (nnEl) {
-            const nnSlug = parseStreamSlugFromSrc(nnSrc) || nn.slug;
-            const nnTrackSlug = parseStreamTrackSlugFromSrc(nnSrc) || nn.metadata?.trackSlug || null;
-            const nnCacheKey = nnTrackSlug ? `${nnSlug}:${nnTrackSlug}` : nnSlug;
-            const nnCached = nextTrackSignedUrlCacheRef.current[nnCacheKey];
-            if (nnCached && !streamUrlNeedsRefresh(nnCached) && Date.now() - nnCached.fetchedAt < 3_000_000) {
-              const nnNorm = normalizePlaybackSrc(nnCached.url);
-              if (nnNorm && nnEl.src !== nnNorm) { nnEl.src = nnNorm; nnEl.load(); }
-            } else {
-              fetchLibraryStream(nnSlug, { force: false, trackSlug: nnTrackSlug }).then((nnData) => {
-                if (!nnData?.url) return;
-                nextTrackSignedUrlCacheRef.current[nnCacheKey] = {
-                  url: nnData.url,
-                  fetchedAt: Date.now(),
-                  expiresIn: nnData.expiresIn ?? 3600,
-                };
-                const nnNorm = normalizePlaybackSrc(nnData.url);
-                if (nnNorm && nnEl.src !== nnNorm) { nnEl.src = nnNorm; nnEl.load(); }
-              }).catch(() => {});
-            }
-          }
         }
       }
     }

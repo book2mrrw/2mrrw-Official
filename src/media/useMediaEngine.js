@@ -147,13 +147,11 @@ export function mapAudioContextToMediaEngine(audio) {
   const audiblyPlaying = audio.getIsAudiblyPlaying?.();
   const bridgePlaying = bridge?.getState?.()?.isPlaying;
   const isPlaying =
-    typeof audio.isPlaying === "boolean"
-      ? audio.isPlaying
-      : typeof audiblyPlaying === "boolean"
-        ? audiblyPlaying
-        : typeof bridgePlaying === "boolean"
-          ? bridgePlaying
-          : readElementPlaying(audio.audioRef);
+    typeof audiblyPlaying === "boolean"
+      ? audiblyPlaying
+      : typeof bridgePlaying === "boolean"
+        ? bridgePlaying
+        : readElementPlaying(audio.audioRef);
 
   return {
     state: {
