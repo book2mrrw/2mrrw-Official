@@ -5,79 +5,111 @@ import {
   addTrackToPlaylist,
   createPlaylist,
   deletePlaylist,
+  fetchAndSyncPlaylists,
   loadPlaylists,
+  migrateLocalToServer,
   removeTrackFromPlaylist,
   reorderPlaylistTracks,
   updatePlaylist,
 } from "@/lib/playlists";
 
 export function usePlaylists(userId) {
-  const [playlists, setPlaylists] = useState([]);
+  const [playlists, setPlaylists] = useState(() => loadPlaylists(userId));
+  const [loading, setLoading] = useState(false);
+  const [synced, setSynced] = useState(false);
+
+  useEffect(() => {
+    if (!userId || userId === "guest") {
+      setPlaylists(loadPlaylists(userId));
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+
+    migrateLocalToServer(userId)
+      .then(() => fetchAndSyncPlaylists(userId))
+      .then((result) => {
+        if (!cancelled) {
+          setPlaylists(result);
+          setSynced(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPlaylists(loadPlaylists(userId));
+          setSynced(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [userId]);
 
   const reload = useCallback(() => {
     setPlaylists(loadPlaylists(userId));
   }, [userId]);
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
-
   const create = useCallback(
     (payload) => {
       const created = createPlaylist(userId, payload);
-      reload();
+      setPlaylists(loadPlaylists(userId));
       return created;
     },
-    [userId, reload]
+    [userId]
   );
 
   const update = useCallback(
     (playlistId, patch) => {
       const next = updatePlaylist(userId, playlistId, patch);
-      reload();
+      setPlaylists(loadPlaylists(userId));
       return next;
     },
-    [userId, reload]
+    [userId]
   );
 
   const remove = useCallback(
     (playlistId) => {
       const next = deletePlaylist(userId, playlistId);
-      reload();
+      setPlaylists(next);
       return next;
     },
-    [userId, reload]
+    [userId]
   );
 
   const addTrack = useCallback(
     (playlistId, trackRef) => {
       const next = addTrackToPlaylist(userId, playlistId, trackRef);
-      reload();
+      setPlaylists(loadPlaylists(userId));
       return next;
     },
-    [userId, reload]
+    [userId]
   );
 
   const removeTrack = useCallback(
     (playlistId, trackKey) => {
       const next = removeTrackFromPlaylist(userId, playlistId, trackKey);
-      reload();
+      setPlaylists(loadPlaylists(userId));
       return next;
     },
-    [userId, reload]
+    [userId]
   );
 
   const reorder = useCallback(
     (playlistId, trackIds) => {
       const next = reorderPlaylistTracks(userId, playlistId, trackIds);
-      reload();
+      setPlaylists(loadPlaylists(userId));
       return next;
     },
-    [userId, reload]
+    [userId]
   );
 
   return {
     playlists,
+    loading,
+    synced,
     reload,
     create,
     update,
