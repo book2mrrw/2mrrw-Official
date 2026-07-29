@@ -2,11 +2,16 @@
  * Playback session memory — persists queue, queue index, shuffle, and repeat mode
  * across page reloads. Key: `2mrrw_sess_{userId}`. TTL: 7 days.
  * Tracks are stripped to minimal fields (CDN preview src only — signed URLs expire).
+ *
+ * Cross-device sync: server sync via /api/queue (throttled fire-and-forget).
+ * On mount, AudioContext loads local session first; falls back to server if absent.
  */
 
 const SESSION_VERSION = 1;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const MAX_QUEUE_STORE = 50;
+// Minimum time between server syncs — debounced anyway from AudioContext, this is a floor.
+const SERVER_SYNC_THROTTLE_MS = 10_000;
 
 const sessionKey = (userId) => `2mrrw_sess_${userId}`;
 
@@ -56,6 +61,7 @@ export function savePlaybackSession(userId, { queue, queueIndex, shuffle, repeat
         savedAt: Date.now(),
       })
     );
+    syncQueueToServer(userId, { queue: stripped, queueIndex, shuffle, repeatMode });
   } catch {
     /* localStorage quota — non-fatal */
   }
@@ -80,4 +86,47 @@ export function clearPlaybackSession(userId) {
   try {
     localStorage.removeItem(sessionKey(userId));
   } catch {}
+}
+
+// ─── Server sync ──────────────────────────────────────────────────────────────
+
+let _lastServerSyncAt = 0;
+let _pendingSyncTimer = null;
+
+function syncQueueToServer(userId, { queue, queueIndex, shuffle, repeatMode }) {
+  if (!userId || typeof fetch === "undefined") return;
+  // Already debounced by AudioContext (400ms); add a floor to prevent rapid-fire on shuffle.
+  if (_pendingSyncTimer) clearTimeout(_pendingSyncTimer);
+  _pendingSyncTimer = setTimeout(() => {
+    _pendingSyncTimer = null;
+    const now = Date.now();
+    if (now - _lastServerSyncAt < SERVER_SYNC_THROTTLE_MS) return;
+    _lastServerSyncAt = now;
+    fetch("/api/queue", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queue, queueIndex, shuffle, repeatMode }),
+    }).catch(() => {});
+  }, 2000);
+}
+
+/** Load queue from server. Returns null if unavailable or user is not authenticated. */
+export async function fetchQueueFromServer() {
+  if (typeof fetch === "undefined") return null;
+  try {
+    const res = await fetch("/api/queue");
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.queue?.length) return null;
+    return {
+      v: SESSION_VERSION,
+      queue: data.queue,
+      queueIndex: data.queueIndex ?? 0,
+      shuffle: Boolean(data.shuffle),
+      repeatMode: data.repeatMode || "off",
+      savedAt: data.savedAt ? new Date(data.savedAt).getTime() : Date.now(),
+    };
+  } catch {
+    return null;
+  }
 }

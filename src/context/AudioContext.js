@@ -21,6 +21,7 @@ import {
   savePlaybackPosition,
 } from "@/lib/playback/position-memory";
 import {
+  fetchQueueFromServer,
   loadPlaybackSession,
   savePlaybackSession,
 } from "@/lib/playback/session-memory";
@@ -1595,6 +1596,7 @@ export function AudioProvider({ children }) {
   }, [user?.id]);
 
   // Session restore: hydrate queue/shuffle/repeat from last session when user is known.
+  // Falls back to server queue if no valid local session (cross-device continuity).
   useEffect(() => {
     const userId = user?.id;
     if (!userId) {
@@ -1603,31 +1605,42 @@ export function AudioProvider({ children }) {
     }
     if (sessionRestoredRef.current) return;
     sessionRestoredRef.current = true;
-    const session = loadPlaybackSession(userId);
-    if (!session?.queue?.length) return;
-    const valid = session.queue.filter((t) => t?.slug && t?.src);
-    if (!valid.length) return;
-    const idx = Math.max(0, Math.min(session.queueIndex ?? 0, valid.length - 1));
-    queueRef.current = valid;
-    queueIndexRef.current = idx;
-    shuffleRef.current = Boolean(session.shuffle);
-    repeatModeRef.current = session.repeatMode || "off";
-    const restoredTrack = valid[idx] || null;
-    patchState({
-      queue: valid,
-      queueIndex: idx,
-      currentTrack: restoredTrack,
-      shuffle: Boolean(session.shuffle),
-      repeatMode: session.repeatMode || "off",
-      isPlaying: false,
-      playbackState: "idle",
-    });
-    // Prime upgrade on next play if track has stream access.
-    if (
-      restoredTrack?.metadata?.access?.canStream &&
-      !restoredTrack?.metadata?.access?.previewOnly
-    ) {
-      pendingSessionUpgradeRef.current = restoredTrack.slug;
+
+    function applySession(session) {
+      if (!session?.queue?.length) return;
+      const valid = session.queue.filter((t) => t?.slug && t?.src);
+      if (!valid.length) return;
+      const idx = Math.max(0, Math.min(session.queueIndex ?? 0, valid.length - 1));
+      queueRef.current = valid;
+      queueIndexRef.current = idx;
+      shuffleRef.current = Boolean(session.shuffle);
+      repeatModeRef.current = session.repeatMode || "off";
+      const restoredTrack = valid[idx] || null;
+      patchState({
+        queue: valid,
+        queueIndex: idx,
+        currentTrack: restoredTrack,
+        shuffle: Boolean(session.shuffle),
+        repeatMode: session.repeatMode || "off",
+        isPlaying: false,
+        playbackState: "idle",
+      });
+      if (
+        restoredTrack?.metadata?.access?.canStream &&
+        !restoredTrack?.metadata?.access?.previewOnly
+      ) {
+        pendingSessionUpgradeRef.current = restoredTrack.slug;
+      }
+    }
+
+    const local = loadPlaybackSession(userId);
+    if (local?.queue?.length) {
+      applySession(local);
+    } else {
+      // No local session — try server for cross-device queue restore.
+      fetchQueueFromServer().then((serverSession) => {
+        if (serverSession?.queue?.length) applySession(serverSession);
+      }).catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
