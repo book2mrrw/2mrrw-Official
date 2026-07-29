@@ -3171,14 +3171,14 @@ export function AudioProvider({ children }) {
               // Crossfade window missed — hard-cut from preload element to eliminate silence.
               // If the preload element has any buffered data, route its audio to the output
               // immediately so the gap is imperceptible while the main element loads.
-              // Skip on iOS: play() on a non-user-gesture element is blocked there, and the
-              // async rejection after main-gain=0 causes an audible gap worse than a hard cut.
+              // iOS is no longer excluded: unlockAudioFromGesture() runs on nextEl during the
+              // first user gesture (playTrackInternal lines ~3803-3806), so play() succeeds
+              // without a second gesture. The .catch() below rolls back gracefully on any failure.
               const nextEl = nextTrackPreloadRef.current;
               const ctx = audioCtxRef.current;
               const mGain = mainGainRef.current;
               const cfGain = crossfadeGainRef.current;
               if (
-                !isLikelyIOS() &&
                 nextEl && nextEl.src && nextEl.readyState >= 2 &&
                 mGain && cfGain && ctx?.state === "running"
               ) {
