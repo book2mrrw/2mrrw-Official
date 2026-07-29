@@ -4349,6 +4349,35 @@ export function AudioProvider({ children }) {
             audio.addEventListener("canplaythrough", onThrough, { once: true });
           });
         }
+        // Guard against premature canplaythrough: the browser fires it optimistically when the
+        // preload element's signed URL shares HTTP cache with the main element, giving a fast
+        // canplay/canplaythrough signal before enough bytes are actually buffered. Without this
+        // check, play starts with < 1s of audio and the stall recovery fires 2.5s later
+        // (audible as: plays → silence → plays). Verify at least 3s is buffered before play();
+        // on fast connections the check passes instantly, on slow connections we wait up to 2s.
+        if (!isSameTrack && !streamAbortController.signal.aborted) {
+          const MIN_BUF = 3;
+          const goodBuffer = () => {
+            try {
+              const buf = audio.buffered;
+              const t = audio.currentTime;
+              for (let i = 0; i < buf.length; i++) {
+                if (buf.start(i) <= t + 0.01 && buf.end(i) - t >= MIN_BUF) return true;
+              }
+            } catch {}
+            return false;
+          };
+          if (!goodBuffer()) {
+            await new Promise((resolve) => {
+              if (goodBuffer() || streamAbortController.signal.aborted) { resolve(); return; }
+              let checkId = null;
+              const done = () => { clearInterval(checkId); clearTimeout(capId2); resolve(); };
+              checkId = setInterval(() => { if (goodBuffer() || streamAbortController.signal.aborted) done(); }, 100);
+              const capId2 = setTimeout(done, 2000);
+              streamAbortController.signal.addEventListener("abort", done, { once: true });
+            });
+          }
+        }
         patchState({ hasStarted: true, playbackState: "ready" });
         const startedPlay = await playAudioIfNotPaused(audio, !pausedDuringCurrentLoadRef.current, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
