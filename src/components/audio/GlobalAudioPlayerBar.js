@@ -374,7 +374,7 @@ function MiniPlayerDock({
       />
     ) : null;
 
-  const artistLine = error || accessDenied ? errorMessage : currentTrack.artist;
+  const artistLine = accessDenied ? errorMessage : (currentTrack?.artist || "2MRRW");
   const displayTitle = resolvePlayerDisplayTitle(currentTrack);
 
   return (
@@ -402,7 +402,7 @@ function MiniPlayerDock({
             </div>
             <div
               className="player-bar-compact-artist"
-              data-error={error || accessDenied ? "1" : undefined}
+              data-error={accessDenied ? "1" : undefined}
             >
               {artistLine}
             </div>
@@ -832,9 +832,7 @@ function GlobalAudioPlayerBar() {
         </>
       ) : null}
     </span>
-  ) : (
-    error
-  );
+  ) : null;
 
   const isLifecycleVisibleState =
     hasStarted ||

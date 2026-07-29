@@ -1677,6 +1677,9 @@ body {
     transform: translateX(-50%) rotate(360deg);
   }
 }
+@keyframes playerBufferFadeIn {
+  to { opacity: 1; }
+}
 
 @keyframes audioIslandWave {
   0%,
@@ -2367,7 +2370,8 @@ body.is-player-modal-open::before {
   border: 2px solid rgba(255, 255, 255, 0.12);
   border-top-color: var(--player-accent, rgba(220, 218, 212, 0.75));
   border-radius: 50%;
-  animation: playerBufferSpin 0.8s linear infinite;
+  opacity: 0;
+  animation: playerBufferFadeIn 0.15s ease 0.25s forwards, playerBufferSpin 0.8s 0.25s linear infinite;
 }
 
 .player-immersive-buffer-indicator[data-mobile="1"] {

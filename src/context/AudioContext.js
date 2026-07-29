@@ -977,6 +977,9 @@ export function AudioProvider({ children }) {
   // Next-track preload: buffers the upcoming queue item while current track plays.
   const nextTrackPreloadRef = useRef(null);
   const nextTrackSignedUrlCacheRef = useRef({});
+  // Maps slug → resolved CDN URL after following a redirect-path 302. Populated in onPlay;
+  // consumed by playTrackInternal to skip the 302 round-trip on replay.
+  const redirectResolveCacheRef = useRef({});
   // Shuffle order: Fisher-Yates permutation of queue indices (null = not yet generated).
   const shuffledOrderRef = useRef(null);
   const shufflePositionRef = useRef(0);
@@ -2637,6 +2640,13 @@ export function AudioProvider({ children }) {
           completed: false,
         });
         void updateMediaSession(track, { playing: true });
+        // Cache the resolved CDN URL for redirect-path tracks so replay skips the 302.
+        if (track.slug && isLibraryStreamRedirectSrc(track.src || "")) {
+          const resolvedCdn = audio.currentSrc;
+          if (resolvedCdn && resolvedCdn !== audio.src && !isLibraryStreamSrc(resolvedCdn)) {
+            redirectResolveCacheRef.current[track.slug] = resolvedCdn;
+          }
+        }
       }
       logLifecycleAudioStateTransition({
         source: "onPlay",
@@ -4016,7 +4026,14 @@ export function AudioProvider({ children }) {
           if (!streamMetaRef.current?.streamEventId && !streamMetaRef.current?.sessionId) {
             streamMetaRef.current = { slug: streamSlug };
           }
-          // Fast-path: if the preload element already followed the proxy redirect
+          // Fast-path 1: resolved CDN URL from a prior play of this same track —
+          // skips the 302 round-trip entirely.
+          const cachedCdnUrl = redirectResolveCacheRef.current[streamSlug];
+          if (cachedCdnUrl) {
+            syncSrc = cachedCdnUrl;
+            backgroundStreamResolve = false;
+          }
+          // Fast-path 2: if the preload element already followed the proxy redirect
           // and has buffered the CDN URL, use it directly on the main element.
           // This skips the proxy hop AND hits the browser HTTP cache filled by
           // the preload element — reducing gap to near-zero on non-iOS.
