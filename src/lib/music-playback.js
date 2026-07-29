@@ -369,8 +369,9 @@ export function getPlayButtonState(track, accountState) {
   const access = resolveTrackAccess(track, accountState);
   const previewPath = track.preview || track.preview_path || track.previewPath || track.metadata?.previewSrc;
   const hasPlayableSrc = Boolean(track.src) || Boolean(previewPath);
-  if (!hasPlayableSrc && !access?.canStream) {
-    return { label: "Preview Not Ready", disabled: true, canAttemptPlay: false };
+  if (!hasPlayableSrc) {
+    const label = access?.canStream ? "Unavailable" : "Preview Not Ready";
+    return { label, disabled: true, canAttemptPlay: false };
   }
   return { label: "Play", disabled: false, canAttemptPlay: true };
 }

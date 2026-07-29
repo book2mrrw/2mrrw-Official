@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion, useMotionValue, useTransform, animate } from "framer-motion";
+import { motion, useMotionValue, useTransform, animate, useDragControls } from "framer-motion";
 import {
   albumTracksForPlayback,
   getPlayButtonState,
@@ -51,6 +51,7 @@ export default function AlbumTracklistSheet({
   const dragY = useMotionValue(0);
   const sheetOpacity = useTransform(dragY, [0, 120], [1, 0.55]);
   const dismissTriggered = useRef(false);
+  const dragControls = useDragControls();
   const upgradeTimerRef = useRef(null);
 
   useEffect(() => () => {
@@ -185,6 +186,8 @@ export default function AlbumTracklistSheet({
       <motion.div
         onClick={(e) => e.stopPropagation()}
         drag="y"
+        dragControls={dragControls}
+        dragListener={false}
         dragConstraints={{ top: 0, bottom: 200 }}
         dragElastic={{ top: 0, bottom: 0.35 }}
         style={{
@@ -192,7 +195,7 @@ export default function AlbumTracklistSheet({
           opacity: sheetOpacity,
           width: "100%",
           maxWidth: isMobile ? "100%" : 480,
-          touchAction: "none",
+          touchAction: "pan-y",
           boxSizing: "border-box",
         }}
         onDragEnd={handleDragEnd}
@@ -213,16 +216,26 @@ export default function AlbumTracklistSheet({
           }}
         >
           <div
-            className="player-sheet-handle"
+            onPointerDown={(e) => dragControls.start(e)}
             style={{
-              width: 40,
-              height: 5,
-              borderRadius: 3,
-              background: "rgba(140,140,148,0.55)",
-              margin: "10px auto 0",
+              padding: "10px 0 6px",
+              cursor: "grab",
+              touchAction: "none",
+              display: "flex",
+              justifyContent: "center",
               flexShrink: 0,
             }}
-          />
+          >
+            <div
+              className="player-sheet-handle"
+              style={{
+                width: 40,
+                height: 5,
+                borderRadius: 3,
+                background: "rgba(140,140,148,0.55)",
+              }}
+            />
+          </div>
 
           <div
             style={{
