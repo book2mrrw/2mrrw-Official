@@ -99,7 +99,9 @@ export default function AlbumTracklistSheet({
       setShuffle(false);
       const sourceTrack = tracks[releaseTrackIndex];
       const queueIndex = resolveReleaseQueueStartIndex(playable, releaseTrackIndex, sourceTrack);
-      const { startTrack, needsUpgrade } = toInstantStartTrack(playable[queueIndex]);
+      const queueTrack = playable[queueIndex];
+      if (!queueTrack) return;
+      const { startTrack, needsUpgrade } = toInstantStartTrack(queueTrack);
       const instantQueue = needsUpgrade
         ? playable.map((t, i) => (i === queueIndex ? startTrack : t))
         : playable;
@@ -302,6 +304,7 @@ export default function AlbumTracklistSheet({
           </div>
 
           <div
+            onPointerDown={(e) => e.stopPropagation()}
             style={{
               overflowY: "auto",
               overflowX: "hidden",
