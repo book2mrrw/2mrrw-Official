@@ -128,6 +128,7 @@ import {
 } from "@/lib/dev/performanceMarks";
 import AudioPhase10Bridge from "@/components/system/AudioPhase10Bridge";
 
+import { redirectResolveCache, setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
 import { isSamePlaybackTrack } from "@/lib/music-playback";
 import { resolveTrackAccess } from "@/lib/music-access";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
@@ -977,9 +978,10 @@ export function AudioProvider({ children }) {
   // Next-track preload: buffers the upcoming queue item while current track plays.
   const nextTrackPreloadRef = useRef(null);
   const nextTrackSignedUrlCacheRef = useRef({});
-  // Maps slug → resolved CDN URL after following a redirect-path 302. Populated in onPlay;
-  // consumed by playTrackInternal to skip the 302 round-trip on replay.
-  const redirectResolveCacheRef = useRef({});
+  // Maps slug → resolved CDN URL after following a redirect-path 302. Points at the
+  // module-level singleton so probes fired by viewport/hover hooks are immediately
+  // visible to playTrackInternal without any bridge or event round-trip.
+  const redirectResolveCacheRef = useRef(redirectResolveCache);
   // Shuffle order: Fisher-Yates permutation of queue indices (null = not yet generated).
   const shuffledOrderRef = useRef(null);
   const shufflePositionRef = useRef(0);
@@ -2644,7 +2646,7 @@ export function AudioProvider({ children }) {
         if (track.slug && isLibraryStreamRedirectSrc(track.src || "")) {
           const resolvedCdn = audio.currentSrc;
           if (resolvedCdn && resolvedCdn !== audio.src && !isLibraryStreamSrc(resolvedCdn)) {
-            redirectResolveCacheRef.current[track.slug] = resolvedCdn;
+            setResolvedCdnUrl(track.slug, resolvedCdn);
           }
         }
       }

@@ -6,6 +6,7 @@ import { getPagePlaybackActionsBridge, queuePlayIntent } from "@/lib/playback/pa
 import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
 import { resolveTrackAccess } from "@/lib/music-access";
 import { getPlaybackPrewarmEntry, playbackPrewarmKeyForItem } from "@/lib/playback/playback-prewarm-cache";
+import { probeRedirectUrl } from "@/lib/playback/redirect-resolve-cache";
 import { preloadTrack } from "@/media/preloader/MediaPreloader";
 import { catalogPreviewAudioUrl } from "@/lib/media-urls";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
@@ -15,6 +16,7 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
   const { currentTrackId, currentTrackSlug, isPlaying } = usePlaybackIdentity();
   const upgradeTimerRef = useRef(null);
   const lastTapRef = useRef(0);
+  const hoverProbeTimerRef = useRef(null);
 
   const access = useMemo(
     () => resolveTrackAccess(item, { ...(accountState || {}), userId }),
@@ -35,6 +37,26 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
 
   useEffect(() => () => {
     if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
+    if (hoverProbeTimerRef.current) clearTimeout(hoverProbeTimerRef.current);
+  }, []);
+
+  const handleMouseEnter = useCallback(() => {
+    if (!access?.canStream) return;
+    if (hoverProbeTimerRef.current) clearTimeout(hoverProbeTimerRef.current);
+    hoverProbeTimerRef.current = setTimeout(() => {
+      const prewarmKey = playbackPrewarmKeyForItem(item);
+      const prewarmed = prewarmKey ? getPlaybackPrewarmEntry(prewarmKey) : null;
+      const redirectUrl = prewarmed?.urlDescriptor?.streamPath;
+      const slug = prewarmed?.releaseSlug || item?.albumSlug || item?.slug;
+      if (redirectUrl && slug) probeRedirectUrl(slug, redirectUrl);
+    }, 200);
+  }, [access?.canStream, item]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (hoverProbeTimerRef.current) {
+      clearTimeout(hoverProbeTimerRef.current);
+      hoverProbeTimerRef.current = null;
+    }
   }, []);
 
   const handlePlay = useCallback(
@@ -91,6 +113,8 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
       type="button"
       aria-label={playAriaLabel}
       onClick={handlePlay}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       style={{
         width: 44,
         height: 44,

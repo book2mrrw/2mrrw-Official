@@ -5,6 +5,7 @@ import {
   buildReleasePrewarmBundle,
   warmReleasePrewarmBundle,
 } from "@/lib/playback/playback-prewarm-cache";
+import { probeRedirectUrl } from "@/lib/playback/redirect-resolve-cache";
 
 const DEFAULT_THRESHOLD = 0.15;
 const DEFAULT_ROOT_MARGIN = "80px 0px";
@@ -62,7 +63,15 @@ export function usePlaybackCardPrewarm(
           playItem: cfg.playItem,
           isAlbumCard: cfg.isAlbumCard,
         });
-        if (bundle) warmReleasePrewarmBundle(bundle);
+        if (bundle) {
+          warmReleasePrewarmBundle(bundle);
+          // Probe the redirect URL to resolve 302 → CDN URL before the user taps.
+          // Stores result in the module-level cache AudioContext reads on play.
+          const { releaseSlug, urlDescriptor } = bundle;
+          if (urlDescriptor?.streamPath && urlDescriptor.accessSnapshot?.canStream) {
+            probeRedirectUrl(releaseSlug, urlDescriptor.streamPath);
+          }
+        }
       },
       { threshold: DEFAULT_THRESHOLD, rootMargin: DEFAULT_ROOT_MARGIN }
     );
@@ -72,10 +81,9 @@ export function usePlaybackCardPrewarm(
   }, [containerRef, enabled, releaseItem]);
 
   const warmOnInteraction = useCallback(() => {
-    if (!enabled || warmedRef.current) return;
+    if (!enabled) return;
     const cfg = configRef.current;
     if (!cfg?.releaseItem) return;
-    warmedRef.current = true;
     const bundle = buildReleasePrewarmBundle(cfg.releaseItem, {
       catalogLookup: cfg.catalogLookup,
       accountState: cfg.accountState || {},
@@ -84,7 +92,17 @@ export function usePlaybackCardPrewarm(
       playItem: cfg.playItem,
       isAlbumCard: cfg.isAlbumCard,
     });
-    if (bundle) warmReleasePrewarmBundle(bundle);
+    if (bundle) {
+      if (!warmedRef.current) {
+        warmedRef.current = true;
+        warmReleasePrewarmBundle(bundle);
+      }
+      // Always re-probe on interaction — covers cases where viewport probe was throttled.
+      const { releaseSlug, urlDescriptor } = bundle;
+      if (urlDescriptor?.streamPath && urlDescriptor.accessSnapshot?.canStream) {
+        probeRedirectUrl(releaseSlug, urlDescriptor.streamPath);
+      }
+    }
   }, [enabled]);
 
   return { warmOnInteraction };
