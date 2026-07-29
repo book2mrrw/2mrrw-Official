@@ -16,6 +16,7 @@ import CoverArt from "@/components/ui/CoverArt";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import GiftsSentSection from "@/components/gifts/GiftsSentSection";
 import { useListeningHistory } from "@/hooks/useListeningHistory";
+import { buildRecommendations } from "@/lib/recommendations";
 
 const SORT_STORAGE_KEY = "mymusic_sort_pref";
 
@@ -803,6 +804,18 @@ function MyMusicTab({
     return map;
   }, [activeRecentlyPlayed]);
 
+  const recommendations = useMemo(
+    () =>
+      buildRecommendations({
+        accountState,
+        singles,
+        albums,
+        mixtapesAndEps,
+        recentlyPlayedRail: activeRecentlyPlayed,
+      }),
+    [accountState, singles, albums, mixtapesAndEps, activeRecentlyPlayed]
+  );
+
   const playItem = useCallback(
     (item, access, resumeAt) => {
       const resolvedAccess = access || resolveTrackAccess(item, accountState);
@@ -1127,6 +1140,47 @@ function MyMusicTab({
         />
       ) : (
         <CollectionRailPlaceholder label="Recently Added — new collection items will land here." />
+      )}
+
+      {recommendations.length > 0 && (
+        <section style={{ marginBottom: 36 }}>
+          <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, marginBottom: 16 }}>
+            For You
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+            {recommendations.map((rec) => (
+              <button
+                key={rec.slug}
+                type="button"
+                onClick={() => {
+                  if (rec.type === "album" && rec.item) {
+                    onOpenAlbum?.(rec.item);
+                  } else if (rec.albumSlug) {
+                    const album = [...albums, ...mixtapesAndEps].find((a) => a.slug === rec.albumSlug);
+                    if (album) onOpenAlbum?.(album);
+                  } else {
+                    const single = singles.find((s) => s.slug === rec.slug);
+                    if (single) onOpenSingle?.(single);
+                  }
+                }}
+                style={{ display: "flex", alignItems: "center", gap: 12, background: "none", border: "none", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "10px 0", cursor: "pointer", textAlign: "left", width: "100%" }}
+              >
+                {rec.cover && (
+                  <img src={rec.cover} alt="" width={44} height={44} style={{ borderRadius: 6, objectFit: "cover", flexShrink: 0 }} />
+                )}
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ color: "#fff", fontSize: isMobile ? 13 : 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {rec.title}
+                  </div>
+                  <div style={{ color: "rgba(255,255,255,0.35)", fontSize: 11, marginTop: 2 }}>
+                    {rec.albumTitle ? `${rec.albumTitle} · Track` : rec.type === "album" ? "Album" : "Single"}
+                  </div>
+                </div>
+                <span style={{ color: "rgba(255,255,255,0.2)", fontSize: 12, flexShrink: 0 }}>▶</span>
+              </button>
+            ))}
+          </div>
+        </section>
       )}
 
       <section style={{ marginBottom: 36 }}>
