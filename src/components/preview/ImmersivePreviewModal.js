@@ -1056,9 +1056,19 @@ function VolumeSlider({ t, volume, onVolumeChange }) {
     window.addEventListener("mouseup", onUp);
   }, [commit, readPos]);
 
-  const onTouchStart = useCallback((e) => { draggingRef.current = true; commit(readPos(e)); }, [commit, readPos]);
-  const onTouchMove = useCallback((e) => { commit(readPos(e)); }, [commit, readPos]);
-  const onTouchEnd = useCallback(() => { draggingRef.current = false; }, []);
+  const onTouchStart = useCallback((e) => {
+    e.preventDefault();
+    draggingRef.current = true;
+    commit(readPos(e));
+    const onMove = (ev) => { if (draggingRef.current) commit(readPos(ev)); };
+    const onEnd = () => {
+      draggingRef.current = false;
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+    };
+    window.addEventListener("touchmove", onMove, { passive: false });
+    window.addEventListener("touchend", onEnd);
+  }, [commit, readPos]);
 
   const pct = Math.round(localVol * 100);
   return (
@@ -1068,12 +1078,10 @@ function VolumeSlider({ t, volume, onVolumeChange }) {
         ref={barRef}
         onMouseDown={onMouseDown}
         onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
         role="slider"
         aria-valuenow={pct}
         aria-label="Volume"
-        style={{ flex: 1, height: 4, background: "rgba(255,255,255,.1)", borderRadius: 4, cursor: "pointer", position: "relative", touchAction: "pan-y" }}
+        style={{ flex: 1, height: 4, background: "rgba(255,255,255,.1)", borderRadius: 4, cursor: "pointer", position: "relative", touchAction: "none" }}
       >
         <div style={{ width: `${pct}%`, height: "100%", borderRadius: 4, background: `linear-gradient(90deg,${t.p1},${t.accent})`, position: "relative" }}>
           <div style={{ position: "absolute", right: -5, top: "50%", transform: "translateY(-50%)", width: 10, height: 10, borderRadius: "50%", background: t.accent }} />
