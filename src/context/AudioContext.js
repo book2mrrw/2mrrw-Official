@@ -4323,22 +4323,6 @@ export function AudioProvider({ children }) {
         // Set volume while the element is paused — before waitAudioSrcReady and play().
         audio.volume = userVolumeRef.current;
         spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
-        // Spotify's approach is element rotation: promote the preload element to main player so
-        // its buffered bytes transfer instantly. We approximate that here by stopping the preload
-        // before the main element starts downloading — its already-fetched bytes stay in the
-        // browser HTTP cache and serve the main element's first range requests from cache (fast),
-        // but subsequent bytes are fetched with full bandwidth and no competition. Without this,
-        // both elements download the same CDN URL simultaneously, splitting bandwidth and causing
-        // the play-for-a-second-then-stall pattern on every track after the first.
-        // Skip during active bridge: preload IS the audible source at that moment.
-        if (crossfadeStateRef.current !== "bridging") {
-          const preEl = nextTrackPreloadRef.current;
-          if (preEl && preEl.readyState > 0) {
-            try { preEl.pause(); } catch {}
-            preEl.src = "";
-            preEl.load();
-          }
-        }
         // Redirect-path sources (/api/library/stream?redirect=1) with DIRECT_STREAM_REDIRECT_ENABLED
         // go straight from Cloudflare edge to the browser — no Vercel proxy hop. 12s gives
         // headroom for initial auth + signed URL resolution without stranding a paying user.
