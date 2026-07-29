@@ -2643,10 +2643,14 @@ export function AudioProvider({ children }) {
         });
         void updateMediaSession(track, { playing: true });
         // Cache the resolved CDN URL for redirect-path tracks so replay skips the 302.
+        // Compound key (albumSlug:trackSlug) prevents tracks in the same album from
+        // overwriting each other's cached CDN URL.
         if (track.slug && isLibraryStreamRedirectSrc(track.src || "")) {
           const resolvedCdn = audio.currentSrc;
           if (resolvedCdn && resolvedCdn !== audio.src && !isLibraryStreamSrc(resolvedCdn)) {
-            setResolvedCdnUrl(track.slug, resolvedCdn);
+            const onPlayTrackSlug = parseStreamTrackSlugFromSrc(track.src || "") || track.metadata?.trackSlug || null;
+            const onPlayCacheKey = onPlayTrackSlug ? `${track.slug}:${onPlayTrackSlug}` : track.slug;
+            setResolvedCdnUrl(onPlayCacheKey, resolvedCdn);
           }
         }
       }
@@ -4029,22 +4033,32 @@ export function AudioProvider({ children }) {
             streamMetaRef.current = { slug: streamSlug };
           }
           // Fast-path 1: resolved CDN URL from a prior play of this same track —
-          // skips the 302 round-trip entirely.
-          const cachedCdnUrl = redirectResolveCacheRef.current[streamSlug];
+          // skips the 302 round-trip entirely. Key is compound (albumSlug:trackSlug)
+          // to avoid cache collisions between tracks in the same album.
+          const fp1TrackSlug = parseStreamTrackSlugFromSrc(nextTrack.src) || nextTrack.metadata?.trackSlug || null;
+          const fp1CacheKey = fp1TrackSlug ? `${streamSlug}:${fp1TrackSlug}` : streamSlug;
+          const cachedCdnUrl = redirectResolveCacheRef.current[fp1CacheKey];
           if (cachedCdnUrl) {
             syncSrc = cachedCdnUrl;
             backgroundStreamResolve = false;
           }
           // Fast-path 2: if the preload element already followed the proxy redirect
           // and has buffered the CDN URL, use it directly on the main element.
-          // This skips the proxy hop AND hits the browser HTTP cache filled by
-          // the preload element — reducing gap to near-zero on non-iOS.
+          // Validated against the current track's slug+trackSlug to ensure the
+          // preload element was loading THIS track, not the previous or next one.
           const preloadElForRedirect = nextTrackPreloadRef.current;
           const preloadCdnUrl = preloadElForRedirect?.currentSrc || "";
+          const preloadSrc = preloadElForRedirect?.src || "";
+          const fp2TrackSlug = parseStreamTrackSlugFromSrc(preloadSrc);
+          const fp2AlbumSlug = parseStreamSlugFromSrc(preloadSrc);
+          const fp2TrackMatch = fp1TrackSlug ? fp2TrackSlug === fp1TrackSlug : true;
+          const fp2AlbumMatch = fp2AlbumSlug ? fp2AlbumSlug === streamSlug : true;
           if (
             preloadCdnUrl &&
             preloadElForRedirect.readyState >= 2 &&
-            !isLibraryStreamSrc(preloadCdnUrl)
+            !isLibraryStreamSrc(preloadCdnUrl) &&
+            fp2TrackMatch &&
+            fp2AlbumMatch
           ) {
             syncSrc = preloadCdnUrl;
             backgroundStreamResolve = false;
@@ -4378,6 +4392,9 @@ export function AudioProvider({ children }) {
             });
           }
         }
+        // If a newer play request arrived while we were waiting (canplaythrough or buffer guard),
+        // bail out cleanly — do NOT set error state, this track was intentionally superseded.
+        if (requestId !== playRequestIdRef.current || streamAbortController.signal.aborted) return false;
         patchState({ hasStarted: true, playbackState: "ready" });
         const startedPlay = await playAudioIfNotPaused(audio, !pausedDuringCurrentLoadRef.current, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,

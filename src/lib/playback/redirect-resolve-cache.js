@@ -25,6 +25,18 @@ function isSlowConnection() {
   return type === "slow-2g" || type === "2g";
 }
 
+// Build the cache key for a redirect URL. For album tracks the URL contains both
+// slug (albumSlug) and trackSlug params — combine them so tracks in the same album
+// don't overwrite each other's resolved CDN URL.
+function redirectCacheKey(slug, url) {
+  if (!url) return slug;
+  try {
+    const qs = url.includes("?") ? url.split("?")[1] : "";
+    const trackSlug = new URLSearchParams(qs).get("trackSlug");
+    return trackSlug ? `${slug}:${trackSlug}` : slug;
+  } catch { return slug; }
+}
+
 /**
  * Fire a lightweight audio probe to resolve a redirect-path URL to its CDN URL.
  * Uses preload="metadata" — downloads only the audio container header (~2-8 KB),
@@ -35,7 +47,8 @@ function isSlowConnection() {
 export function probeRedirectUrl(slug, redirectUrl) {
   if (!slug || !redirectUrl) return;
   if (typeof window === "undefined") return;
-  if (redirectResolveCache[slug]) return; // already resolved
+  const cacheKey = redirectCacheKey(slug, redirectUrl);
+  if (redirectResolveCache[cacheKey]) return; // already resolved
   if (_activeProbes >= MAX_ACTIVE_PROBES) return;
   if (isSlowConnection()) return;
 
@@ -54,7 +67,7 @@ export function probeRedirectUrl(slug, redirectUrl) {
     "loadedmetadata",
     () => {
       const cdn = probe.currentSrc;
-      if (cdn && cdn !== redirectUrl) setResolvedCdnUrl(slug, cdn);
+      if (cdn && cdn !== redirectUrl) setResolvedCdnUrl(cacheKey, cdn);
       cleanup();
     },
     { once: true }
