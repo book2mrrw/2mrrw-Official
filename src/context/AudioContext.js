@@ -4265,12 +4265,12 @@ export function AudioProvider({ children }) {
     }
     if (!resumeAt && !playedDifferentSince && !authLoadingRef.current && entitlementAccountStateRef.current?.mediaProgress?.length) {
       const savedProgress = entitlementAccountStateRef.current.mediaProgress.find(
-        (p) => p.product_slug === nextTrack.slug && !p.completed
+        (p) => p.slug === nextTrack.slug && !p.completed
       );
-      if (savedProgress?.position_seconds > RESTORE_MIN_POSITION_SEC) {
+      if (savedProgress?.positionSeconds > RESTORE_MIN_POSITION_SEC) {
         const clamped = clampRestorePosition(
-          savedProgress.position_seconds,
-          savedProgress.duration_seconds
+          savedProgress.positionSeconds,
+          savedProgress.durationSeconds
         );
         if (clamped != null) resumeAt = clamped;
       }
