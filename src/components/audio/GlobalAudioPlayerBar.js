@@ -332,6 +332,8 @@ function MiniPlayerDock({
   isPlaying,
   isBuffering,
   error,
+  streamRetryable,
+  onRetryStream,
   accessDenied,
   errorMessage,
   csOpacity,
@@ -374,7 +376,11 @@ function MiniPlayerDock({
       />
     ) : null;
 
-  const artistLine = accessDenied ? errorMessage : (currentTrack?.artist || "2MRRW");
+  const artistLine = accessDenied
+    ? errorMessage
+    : streamRetryable
+      ? "Connection lost — tap to retry"
+      : (currentTrack?.artist || "2MRRW");
   const displayTitle = resolvePlayerDisplayTitle(currentTrack);
 
   return (
@@ -402,7 +408,7 @@ function MiniPlayerDock({
             </div>
             <div
               className="player-bar-compact-artist"
-              data-error={accessDenied ? "1" : undefined}
+              data-error={(accessDenied || streamRetryable) ? "1" : undefined}
             >
               {artistLine}
             </div>
@@ -415,7 +421,7 @@ function MiniPlayerDock({
               isBuffering={isBuffering}
               progress={progress}
               size={40}
-              onClick={handlePlayToggle}
+              onClick={streamRetryable && onRetryStream ? onRetryStream : handlePlayToggle}
               className="player-bar-compact-play"
             />
             <TrackTransportButton direction="forward" size={40} onClick={onNextTrack} />
@@ -460,6 +466,8 @@ function GlobalAudioPlayerBar() {
     currentTime,
     duration,
     error,
+    streamRetryable,
+    retryStreamPlayback,
     isBuffering,
     accessDenied,
     streamConflict,
@@ -1077,6 +1085,8 @@ function GlobalAudioPlayerBar() {
         isPlaying={dockIsPlaying}
         isBuffering={isBuffering}
         error={error}
+        streamRetryable={streamRetryable}
+        onRetryStream={retryStreamPlayback}
         accessDenied={accessDenied}
         errorMessage={errorMessage}
         csOpacity={csOpacity}
