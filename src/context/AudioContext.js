@@ -4340,6 +4340,7 @@ export function AudioProvider({ children }) {
         if (!startedPlay) {
           patchState({
             isPlaying: false,
+            isBuffering: false,
             error: "Audio playback failed. Try again in a moment.",
             playbackState: "paused",
             playbackNetworkState: "error_stream",
@@ -4475,6 +4476,7 @@ export function AudioProvider({ children }) {
       // not an error. Exit silently so the new command can start without any error state.
       if (err?.code === "AUDIO_SRC_ABORTED") {
         if (crossfadeStateRef.current !== "idle") cancelCrossfade();
+        patchTransport({ isBuffering: false, playbackNetworkState: "idle" });
         return false;
       }
       const previewFallbackSrc =
@@ -4536,6 +4538,7 @@ export function AudioProvider({ children }) {
           }
           patchState({
             isPlaying: false,
+            isBuffering: false,
             error: "Preview unavailable",
             streamRetryable: false,
             hasStarted: false,
@@ -4557,6 +4560,7 @@ export function AudioProvider({ children }) {
       });
       patchState({
         isPlaying: false,
+        isBuffering: false,
         error: "Audio playback failed. Try again in a moment.",
         playbackState: "paused",
         playbackNetworkState: "error_stream",

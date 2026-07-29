@@ -69,6 +69,7 @@ function resolveCatalogMediaField(value, resolver) {
   const raw = String(value || "").trim();
   if (!raw) return "";
   if (isResolvedCatalogMediaUrl(raw)) return raw;
+  if (isStorefrontInlineMediaPath(raw)) return raw;
   return resolver(String(raw).replace(/^\//, ""));
 }
 
