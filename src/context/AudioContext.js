@@ -954,6 +954,7 @@ export function AudioProvider({ children }) {
   const streamMetaRef = useRef(null);
   const streamSwapPreloadRef = useRef(null);
   const streamErrorRetriedRef = useRef(0); // retry attempt count (0 = no retries yet)
+  const stallHardAttemptRef = useRef(0);  // Stage-2 stall recovery attempt count
   const onPreviewEndedRef = useRef(null);
   const [previewEnded, setPreviewEnded] = useState(false);
   const wasPlayingBeforeHideRef = useRef(false);
@@ -1798,16 +1799,29 @@ export function AudioProvider({ children }) {
       const audio = audioRef.current;
       if (!audio || audio.paused || !stateRef.current.isPlaying) return;
       if (!stateRef.current.isBuffering) return;
+      const MAX_STALL_HARD_RETRIES = 3;
+      stallHardAttemptRef.current += 1;
       logPlaybackResilience("stall-recovery", {
         source: "AudioContext",
         code: "STALL_RECOVERY_RETRY",
         slug: track.slug,
         currentTime: audio.currentTime,
+        attempt: stallHardAttemptRef.current,
       });
       tracePlayback("recovery", "stallHardRecovery", {
         slug: track.slug,
         currentTime: audio.currentTime,
+        attempt: stallHardAttemptRef.current,
       });
+      if (stallHardAttemptRef.current > MAX_STALL_HARD_RETRIES) {
+        patchState({
+          error: "Connection lost. Check your internet and tap to retry.",
+          streamRetryable: true,
+          isBuffering: false,
+          playbackNetworkState: "error_stream",
+        });
+        return;
+      }
       streamErrorRetriedRef.current = 0;
       void retryStreamPlaybackRef.current?.();
     }, STALL_HARD_RECOVERY_MS);
@@ -3248,6 +3262,7 @@ export function AudioProvider({ children }) {
           window.removeEventListener("online", onOnline);
           const current = stateRef.current.currentTrack;
           if (current) {
+            stallHardAttemptRef.current = 0;
             streamErrorRetriedRef.current = 0;
             void playTrackRef.current?.(current, {
               resumeAt: audio.currentTime || 0,
@@ -3380,6 +3395,7 @@ export function AudioProvider({ children }) {
           }
           if (retryErr?.code === "ACCESS_DENIED") {
             finalizeStreamSession(meta, { durationSeconds: resumeAt, completed: false });
+            stallHardAttemptRef.current = 0;
             streamErrorRetriedRef.current = 0;
             skipPauseInterruptionRef.current = true;
             audio.pause();
@@ -3918,6 +3934,7 @@ export function AudioProvider({ children }) {
       audio.addEventListener("canplay", scheduleCoverPreload, { once: true });
     }
 
+    stallHardAttemptRef.current = 0;
     streamErrorRetriedRef.current = 0;
 
     const streamSlug = parseStreamSlugFromSrc(nextTrack.src) || nextTrack.slug;
@@ -3973,6 +3990,7 @@ export function AudioProvider({ children }) {
       if (err?.code === "ACCESS_DENIED") {
         const prevMeta = streamMetaRef.current;
         if (prevMeta) finalizeStreamSession(prevMeta, { completed: false, durationSeconds: audio.currentTime || 0 });
+        stallHardAttemptRef.current = 0;
         streamErrorRetriedRef.current = 0;
         skipPauseInterruptionRef.current = true;
         audio.pause();
@@ -4826,6 +4844,7 @@ export function AudioProvider({ children }) {
   const retryStreamPlayback = useCallback(async () => {
     const track = stateRef.current.currentTrack;
     if (!track) return false;
+    stallHardAttemptRef.current = 0;
     streamErrorRetriedRef.current = 0;
     patchState({ error: null, streamRetryable: false, accessDenied: false });
     const resumeAt = audioRef.current?.currentTime || stateRef.current.currentTime || 0;
@@ -7135,6 +7154,7 @@ export function AudioProvider({ children }) {
         audio &&
         (stateRef.current.isPlaying || stateRef.current.error === "RECONNECTING")
       ) {
+        stallHardAttemptRef.current = 0;
         streamErrorRetriedRef.current = 0;
         patchState({ error: null, isBuffering: true });
         void playTrackRef.current?.(track, {
