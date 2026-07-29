@@ -101,6 +101,7 @@ import {
   getStorefrontAlbums,
   getStorefrontMixtapesAndEps,
 } from "@/lib/media/canonical-catalog";
+import { buildSearchIndex, searchCatalog } from "@/lib/catalog-search";
 import { imagePipeline } from "@/media/imagePipeline";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { ModalErrorBoundary } from "@/system/errors";
@@ -354,6 +355,7 @@ function PageStorefront({ initialEvents }) {
   const [activeTab, setActiveTab]                 = useState("home");
   const [accountSubTab, setAccountSubTab]         = useState("overview");
   const [musicSubTab, setMusicSubTab]             = useState("singles");
+  const [searchQuery, setSearchQuery]             = useState("");
   const [activeVideo, setActiveVideo]             = useState("tv_aS-hJ880");
   const [addedFlash, setAddedFlash]               = useState(null);
   const [soundOn, setSoundOn]                     = useState(false);
@@ -463,6 +465,9 @@ function PageStorefront({ initialEvents }) {
       tracks: normalizeAlbumTracksForModal(selectedAlbum.tracks || []),
     };
   }, [selectedAlbum]);
+
+  const searchIndex = useMemo(() => buildSearchIndex(singles, albums, mixtapesAndEps), []);
+  const searchResults = useMemo(() => searchCatalog(searchIndex, searchQuery), [searchIndex, searchQuery]);
 
   const ensureStorefrontCarouselMedia = useCallback(() => {
     const row = singlesRowRef.current;
@@ -1723,6 +1728,55 @@ function PageStorefront({ initialEvents }) {
                     <AuthSurfaceIsland islandId="music-tab" onGiftRequest={setGiftSheetRelease}>
                       {(auth) => (
                 <>
+                  {/* Search bar */}
+                  <div style={{marginTop:12,marginBottom:12,position:"relative"}}>
+                    <input
+                      type="search"
+                      placeholder="Search tracks, albums…"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:isMobile?"11px 40px 11px 14px":"12px 44px 12px 16px",color:"#fff",fontSize:isMobile?14:15,outline:"none",WebkitAppearance:"none",appearance:"none"}}
+                    />
+                    {searchQuery ? (
+                      <button type="button" onClick={()=>setSearchQuery("")} aria-label="Clear search" style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"rgba(255,255,255,0.45)",fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>✕</button>
+                    ) : (
+                      <span aria-hidden style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",color:"rgba(255,255,255,0.25)",pointerEvents:"none",fontSize:16}}>⌕</span>
+                    )}
+                  </div>
+
+                  {/* Search results */}
+                  {searchQuery.trim() ? (
+                    <div style={{marginBottom:32}}>
+                      {searchResults.length === 0 ? (
+                        <div style={{padding:"40px 0",textAlign:"center",color:"rgba(255,255,255,0.25)",fontSize:14}}>No results for &ldquo;{searchQuery}&rdquo;</div>
+                      ) : (
+                        <>
+                          <div style={{fontSize:11,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.3)",textTransform:"uppercase",marginBottom:12}}>{searchResults.length} result{searchResults.length!==1?"s":""}</div>
+                          {searchResults.map((r,i)=>(
+                            <button key={`${r.type}-${r.slug}-${i}`} type="button"
+                              onClick={()=>{
+                                setSearchQuery("");
+                                if(r.type==="single") openSingleModal(r.item);
+                                else if(r.type==="album") openAlbumModal(r.item);
+                                else if(r.type==="track") openAlbumModal(r.album);
+                              }}
+                              style={{display:"flex",alignItems:"center",gap:12,width:"100%",background:"none",border:"none",borderBottom:"1px solid rgba(255,255,255,0.05)",padding:"10px 4px",cursor:"pointer",textAlign:"left"}}
+                            >
+                              {r.cover && <img src={r.cover} alt="" width={40} height={40} style={{borderRadius:6,objectFit:"cover",flexShrink:0}} />}
+                              <div style={{minWidth:0,flex:1}}>
+                                <div style={{color:"#fff",fontSize:isMobile?13:14,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.title}</div>
+                                <div style={{color:"rgba(255,255,255,0.4)",fontSize:11,marginTop:2}}>
+                                  {r.type==="track"?`Track · ${r.albumTitle}`:r.type==="album"?"Album":"Single"}
+                                </div>
+                              </div>
+                              <span style={{color:"rgba(255,255,255,0.2)",fontSize:11,flexShrink:0}}>▶</span>
+                            </button>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  ) : (
+                    <>
                   <div style={{marginTop:8,marginBottom:0}}>
                     <div style={{display:"flex",gap:0,borderBottom:"1px solid #1a1a1a",marginBottom:24}}>
                       {[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mymusic",label:"Collection"}].map(sub=>(
@@ -1762,6 +1816,8 @@ function PageStorefront({ initialEvents }) {
                     handleLibraryChange={auth.handleLibraryChange}
                     onPlayAlbum={playAlbumCard}
                   />
+                    </>
+                  )}
                 </>
                       )}
                     </AuthSurfaceIsland>
