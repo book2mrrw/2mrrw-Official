@@ -47,6 +47,7 @@ export default function AlbumTracklistSheet({
     setShuffle,
     seekBack,
     seekForward,
+    error,
   } = useAudioPlayer();
   const dragY = useMotionValue(0);
   const sheetOpacity = useTransform(dragY, [0, 120], [1, 0.55]);
@@ -504,6 +505,23 @@ export default function AlbumTracklistSheet({
               );
             })}
           </div>
+
+          {error && tracks.some((t) => isSamePlaybackTrack(currentTrack, t)) && (
+            <div
+              style={{
+                padding: "10px 16px",
+                background: "rgba(255,60,60,0.1)",
+                borderTop: "1px solid rgba(255,60,60,0.18)",
+                fontSize: 12,
+                color: "rgba(255,160,160,0.9)",
+                flexShrink: 0,
+                textAlign: "center",
+                letterSpacing: 0.2,
+              }}
+            >
+              Can't play this right now. Try another track.
+            </div>
+          )}
 
           <div style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom))", flexShrink: 0 }} />
         </div>
