@@ -1689,10 +1689,14 @@ export function AudioProvider({ children }) {
       // collector access), also update src to the redirect stream URL so the next play
       // starts directly on the full stream without going through the preview-then-upgrade path.
       const justGainedStream = !prev?.canStream && fresh.canStream && track.slug;
+      // trackSlug identifies a track within an album. For singles the trackSlug equals the
+      // product slug — passing it creates a "slug:slug" server cache key that was never
+      // resolved and triggers a fresh R2 lookup that fails for singles. Only pass it when
+      // the track is genuinely a sub-track inside a different album.
+      const rawTrackSlug = track.metadata?.trackSlug || null;
+      const subTrackSlug = rawTrackSlug && rawTrackSlug !== track.slug ? rawTrackSlug : null;
       const freshSrc = justGainedStream
-        ? libraryStreamRedirectSrc(track.slug, {
-            trackSlug: track.metadata?.trackSlug || null,
-          })
+        ? libraryStreamRedirectSrc(track.slug, { trackSlug: subTrackSlug })
         : track.src;
       return {
         ...track,
@@ -2662,28 +2666,6 @@ export function AudioProvider({ children }) {
           try { mainGainRef.current.gain.setValueAtTime(gainLinear, ctx.currentTime); } catch {}
         }
       }
-
-      // ── AUDIO SIGNAL CHAIN DIAGNOSTIC ───────────────────────────────────────
-      if (typeof window !== "undefined") {
-        const _ctx  = audioCtxRef.current;
-        const _mGain = mainGainRef.current;
-        const _cfGain = crossfadeGainRef.current;
-        console.warn("╔══ 2MRRW AUDIO DIAGNOSTIC ══════════════════════════════");
-        console.warn("║ 1. AudioContext state    :", _ctx?.state ?? "NULL — no context");
-        console.warn("║ 2. AudioContext count    : 1 (singleton — window.__2MRRW_AUDIO_ENGINE_RUNTIME__)");
-        console.warn("║ 3. audio.src             :", audio?.currentSrc?.slice(-80) || audio?.src?.slice(-80) || "NULL");
-        console.warn("║ 4. audio.volume          :", audio?.volume ?? "NULL");
-        console.warn("║ 5. audio.muted           :", audio?.muted ?? "NULL");
-        console.warn("║ 6a. mainGain.gain.value  :", _mGain?.gain?.value ?? "NULL — no mainGain (graph not built!)");
-        console.warn("║ 6b. crossfadeGain.value  :", _cfGain?.gain?.value ?? "NULL");
-        console.warn("║ 7. gainLinear (this track):", gainLinear, "  gainDb:", newTrack?.gainDb ?? "null");
-        console.warn("║ 8. webAudioInitialized   :", webAudioInitializedRef.current);
-        console.warn("║ 8b. webAudioAvailable    :", webAudioAvailableRef.current);
-        console.warn("║ 9. crossfadeState        :", crossfadeStateRef.current);
-        console.warn("║ 10. wasBridging          :", wasBridging);
-        console.warn("╚════════════════════════════════════════════════════════");
-      }
-      // ── END DIAGNOSTIC ───────────────────────────────────────────────────────
 
       patchState({
         isPlaying: true,
@@ -3784,7 +3766,7 @@ export function AudioProvider({ children }) {
     perfMark(MARKS.PLAYBACK_REQUEST);
     const requestId = playRequestIdRef.current + 1;
     playRequestIdRef.current = requestId;
-    cancelCrossfade();
+    if (crossfadeStateRef.current !== "bridging") cancelCrossfade();
     if (!options.preserveActiveStream && activeStreamAbortRef.current) {
       logStreamLifecycle("abort", { source: "playTrackInternal", slug: track?.slug });
       activeStreamAbortRef.current.abort();
@@ -4435,45 +4417,12 @@ export function AudioProvider({ children }) {
           void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: false });
           return false;
         }
-        // While the preview plays, race-prefetch the signed stream URL + warm the
-        // preload element so the upgrade swap 2s later hits browser cache (near-zero gap).
-        if (!isSameTrack && previewSrc && syncSrc === previewSrc &&
-            nextTrack.metadata?.access?.canStream && !nextTrack.metadata?.access?.previewOnly &&
-            nextTrack.slug) {
-          void (async () => {
-            try {
-              if (streamAbortController.signal.aborted) return;
-              const data = await fetchLibraryStream(nextTrack.slug, {
-                force: false,
-                trackSlug: nextTrack.metadata?.trackSlug || nextTrack.trackSlug || null,
-                signal: streamAbortController.signal,
-              });
-              if (!data?.url || streamAbortController.signal.aborted) return;
-              streamMetaRef.current = {
-                slug: nextTrack.slug,
-                url: data.url,
-                fetchedAt: Date.now(),
-                expiresIn: data.expiresIn || 3600,
-                streamEventId: data.streamEventId || null,
-                sessionId: data.sessionId || null,
-              };
-              const preloadEl = streamSwapPreloadRef.current;
-              if (preloadEl) {
-                // When warmup completes, signal immediately — no need to wait for the 2s timer.
-                warmupSignedStreamPreload(preloadEl, data.url, { signal: streamAbortController.signal })
-                  .then(() => {
-                    if (!streamAbortController.signal.aborted) {
-                      window.dispatchEvent(new CustomEvent("2mrrw:stream-preload-ready", {
-                        detail: { slug: nextTrack.slug },
-                      }));
-                    }
-                  })
-                  .catch(() => {});
-              }
-            } catch {
-              // Non-fatal — upgradeToFullStream fetches on its own if this race loses
-            }
-          })();
+        // Entitled users (canStream) start on the full library stream directly — they never
+        // enter the preview path. Non-entitled users who gain access mid-session are upgraded
+        // via upgradeToFullStream dispatched from the onEntitlementsUpdated handler, not by
+        // racing a prefetch here. No preview-first path for any entitled tier.
+        if (process.env.NODE_ENV !== "production" && nextTrack.metadata?.access?.canStream && syncSrc === previewSrc) {
+          console.error("[AudioContext] BUG: entitled user started on preview src — check toInstantStartTrack and justGainedStream", { slug: nextTrack.slug });
         }
         pendingSeekRef.current = resumeAt;
       } else {
@@ -4722,7 +4671,10 @@ export function AudioProvider({ children }) {
       return true;
     }
 
-    const upgradeTrackSlug = track.metadata?.trackSlug || track.trackSlug || null;
+    const rawUpgradeTrackSlug = track.metadata?.trackSlug || track.trackSlug || null;
+    // Only add trackSlug when it actually identifies a sub-track inside a different album.
+    // For singles, trackSlug === slug — adding it creates a wrong cache key on the server.
+    const upgradeTrackSlug = rawUpgradeTrackSlug && rawUpgradeTrackSlug !== track.slug ? rawUpgradeTrackSlug : null;
     const upgradeParams = new URLSearchParams({ slug: track.slug, redirect: "1" });
     if (upgradeTrackSlug) upgradeParams.set("trackSlug", upgradeTrackSlug);
     const libraryTrack = {
