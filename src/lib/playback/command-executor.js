@@ -99,6 +99,9 @@ export async function executePlaybackCommand(command) {
       return true;
     case PLAYBACK_COMMANDS.VIEWPORT_RESUME:
       return h.resumeViewport();
+    case PLAYBACK_COMMANDS.SET_PLAYBACK_RATE:
+      h.setPlaybackRate(command.payload.rate);
+      return true;
     default:
       return false;
   }

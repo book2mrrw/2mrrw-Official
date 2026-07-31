@@ -7,6 +7,7 @@ import {
   usePlaybackTransport,
 } from "@/context/AudioContext";
 import { getMediaEngineBridge, subscribeMediaEngine } from "@/media/mediaEngineBridge";
+import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
 
 /**
  * Maps AudioContext track shape to subscription-layer track fields.
@@ -190,10 +191,8 @@ export function mapAudioContextToMediaEngine(audio) {
     removeFromQueue: audio.removeFromQueue ?? null,
     moveInQueue: audio.moveInQueue ?? null,
     setPlaybackRate: (rate) => {
-      const el = audio.audioRef?.current;
-      if (el && Number.isFinite(rate) && rate > 0) {
-        el.playbackRate = rate;
-        if (typeof el.preservesPitch !== "undefined") el.preservesPitch = true;
+      if (Number.isFinite(rate) && rate > 0) {
+        audio.dispatchPlaybackCommand(PLAYBACK_COMMANDS.SET_PLAYBACK_RATE, { rate });
       }
     },
     toggleCSMode: audio.toggleCSMode,

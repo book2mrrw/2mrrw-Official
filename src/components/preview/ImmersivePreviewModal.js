@@ -9,6 +9,7 @@ import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview
 import { usePlayerBodyState } from "@/lib/player/usePlayerBodyState";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { useEntitlementAccountState } from "@/context/AuthContext";
+import { useAudioPlayer } from "@/context/AudioContext";
 import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 import {
   albumTracksForPlayback,
@@ -1530,6 +1531,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     moveInQueue,
     setPlaybackRate,
   } = useMediaEngine();
+  const { setShuffle } = useAudioPlayer();
   const beat = useBeat(isPlaying);
 
   usePlayerBodyState({ modalOpen: true });
@@ -1588,7 +1590,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
 
   const handleTrack = useCallback(
     async (tr) => {
-      const idx = tracks.findIndex((t) => t && tr && String(t.id) === String(tr.id));
+      const idx = tracks.indexOf(tr);
       const albumSlug = album?.slug || "";
       const trackSlug = tr?.slug || String(tr?.id || "");
       const queueId = albumSlug && trackSlug ? `${albumSlug}:${trackSlug}` : tr?.id || trackSlug;
@@ -1620,6 +1622,9 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
         return;
       }
 
+      // Tapping a specific track overrides shuffle — same behavior as Spotify/Apple Music.
+      setShuffle(false);
+
       // Optimistic UI: highlight the tapped track immediately.
       const prevActiveTrack = activeTrack;
       setActiveTrack(tr);
@@ -1640,7 +1645,6 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
         return;
       }
       showPlaybackNotice("This track isn't in the playback queue yet.");
-      seek(0);
     },
     [
       activeTrack,
@@ -1648,12 +1652,44 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
       engineTrack,
       entitlementAccountState,
       onPlayTrackAtIndex,
-      seek,
+      setShuffle,
       showPlaybackNotice,
       toggle,
       tracks,
     ]
   );
+
+  const handlePlayAll = useCallback(async () => {
+    if (!tracks.length) return;
+    setShuffle(false);
+    setActiveTrack(tracks[0]);
+    const ok = await onPlayTrackAtIndex?.(0, entitlementAccountState);
+    if (ok === false) {
+      setActiveTrack(null);
+      const playbackTracks = albumTracksForPlayback(album, entitlementAccountState, "album_modal");
+      showPlaybackNotice(
+        describeAlbumQueuePlaybackFailure(playbackTracks, album, entitlementAccountState) ||
+          "Couldn't start playback. Try again."
+      );
+    }
+  }, [tracks, album, setShuffle, onPlayTrackAtIndex, entitlementAccountState, showPlaybackNotice]);
+
+  const handleShufflePlay = useCallback(async () => {
+    if (!tracks.length) return;
+    setShuffle(true);
+    // No optimistic highlight — the engine may resolve to a different track than
+    // the raw index (unavailable tracks are skipped). The engine-sync useEffect
+    // will update activeTrack once playback actually starts.
+    const idx = Math.floor(Math.random() * tracks.length);
+    const ok = await onPlayTrackAtIndex?.(idx, entitlementAccountState);
+    if (ok === false) {
+      const playbackTracks = albumTracksForPlayback(album, entitlementAccountState, "album_modal");
+      showPlaybackNotice(
+        describeAlbumQueuePlaybackFailure(playbackTracks, album, entitlementAccountState) ||
+          "Couldn't start playback. Try again."
+      );
+    }
+  }, [tracks, album, setShuffle, onPlayTrackAtIndex, entitlementAccountState, showPlaybackNotice]);
 
   const userId = entitlementAccountState?.user?.id ?? null;
 
@@ -1977,6 +2013,58 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
             </div>
           </div>
 
+          <div style={{ flexShrink: 0, display: "flex", gap: 8, padding: "10px 20px 4px" }}>
+            <button
+              type="button"
+              aria-label="Play all tracks from the beginning"
+              onClick={handlePlayAll}
+              style={{
+                flex: 1,
+                padding: "9px 0",
+                borderRadius: 22,
+                border: "none",
+                background: t.p1,
+                color: "rgba(0,0,0,.9)",
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: ".08em",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+                boxShadow: `0 0 14px ${t.glowDim}`,
+              }}
+            >
+              <I.TrPlay />
+              PLAY ALL
+            </button>
+            <button
+              type="button"
+              aria-label="Shuffle play all tracks"
+              onClick={handleShufflePlay}
+              style={{
+                flex: 1,
+                padding: "9px 0",
+                borderRadius: 22,
+                border: `1px solid ${t.p1}55`,
+                background: "rgba(255,255,255,.05)",
+                color: t.accent,
+                fontSize: 11,
+                fontWeight: 800,
+                letterSpacing: ".08em",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 6,
+              }}
+            >
+              <I.Shuffle />
+              SHUFFLE
+            </button>
+          </div>
+
           <VolumeSlider t={t} volume={volume} onVolumeChange={setVolume} />
 
           <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>
@@ -1988,7 +2076,12 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
             {tracks.map((tr, idx) => {
               const locked = trackLocked(tr);
               const isActive =
-                activeTrack != null && tr != null && String(activeTrack.id) === String(tr.id);
+                activeTrack != null &&
+                tr != null &&
+                (activeTrack === tr ||
+                  (activeTrack.id != null &&
+                    tr.id != null &&
+                    String(activeTrack.id) === String(tr.id)));
               const isPlayingThis = isActive && isPlaying;
               return (
                 <div

@@ -120,10 +120,12 @@ export default function AlbumTracklistSheet({
       if (!playable.length) return;
       if (shuffle) {
         setShuffle(true);
-        const order = [...playable].sort(() => Math.random() - 0.5);
-        const { startTrack, needsUpgrade } = toInstantStartTrack(order[0]);
-        const instantOrder = needsUpgrade ? [startTrack, ...order.slice(1)] : order;
-        void dispatchPlaybackCommand("playQueue", { tracks: instantOrder, startIndex: 0 });
+        const randomIdx = Math.floor(Math.random() * playable.length);
+        const { startTrack, needsUpgrade } = toInstantStartTrack(playable[randomIdx]);
+        const instantPlayable = needsUpgrade
+          ? playable.map((t, i) => (i === randomIdx ? startTrack : t))
+          : playable;
+        void dispatchPlaybackCommand("playQueue", { tracks: instantPlayable, startIndex: randomIdx });
         if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
       } else {
         setShuffle(false);

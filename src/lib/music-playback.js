@@ -281,11 +281,17 @@ export function toInstantStartTrack(track) {
   if (!track || !isLibraryStream || !previewSrc || previewSrc === track.src) {
     return { startTrack: track, needsUpgrade: false };
   }
-  // Redirect-path streams (/api/library/stream?redirect=1) are already instant —
-  // the browser loads the URL directly and the server returns a 302 to R2.
-  // Entitled users (canStream) also skip the preview swap: the upgrade causes
-  // a stutter/reload worse than the initial buffer on the library stream URL.
-  if (isLibraryStreamRedirectSrc(track.src) || track?.metadata?.access?.canStream) {
+  // Redirect-path streams have a server round-trip (auth + signed URL + 302) that
+  // adds 1-3s before first audio byte. When a preview exists, play it instantly and
+  // let AudioContext's race-prefetch warm the library stream — the upgrade 2s later
+  // is seamless because the preload element is already buffered.
+  if (isLibraryStreamRedirectSrc(track.src)) {
+    if (!previewSrc) return { startTrack: track, needsUpgrade: false };
+    return { startTrack: { ...track, src: previewSrc }, needsUpgrade: true };
+  }
+  // Non-redirect canStream: proxied signed URL path. The upgrade swap causes a
+  // stutter on this path (no redirect warmup), so play the library stream directly.
+  if (track?.metadata?.access?.canStream) {
     return { startTrack: track, needsUpgrade: false };
   }
   return { startTrack: { ...track, src: previewSrc }, needsUpgrade: true };

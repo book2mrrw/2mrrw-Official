@@ -10,6 +10,7 @@ import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
 import {
   TrackTransportButton,
   RepeatButton,
+  ShuffleButton,
 } from "@/components/audio/PlayerControlButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import { useRenderTracker } from "@/lib/dev/useRenderTracker";
@@ -349,6 +350,8 @@ function MiniPlayerDock({
   onNextTrack,
   repeatMode,
   onToggleRepeat,
+  shuffleEnabled,
+  onToggleShuffle,
   showCs,
   csActive,
   onToggleCs,
@@ -414,6 +417,7 @@ function MiniPlayerDock({
             </div>
           </div>
           <div className="player-bar-controls">
+            <ShuffleButton active={shuffleEnabled} size={36} onClick={onToggleShuffle} />
             <TrackTransportButton direction="back" size={40} onClick={onPrevTrack} />
             <SignaturePlayRing
               isPlaying={isPlaying}
@@ -488,6 +492,8 @@ function GlobalAudioPlayerBar() {
     playPrevious,
     repeatMode,
     toggleRepeat,
+    shuffle,
+    toggleShuffle,
     setSleepTimer,
     sleepTimerEndsAt,
     sleepAfterCurrentTrack,
@@ -519,6 +525,11 @@ function GlobalAudioPlayerBar() {
 
   const dockCurrentTrack = useMemo(() => {
     if (!continuityFrozen || !continuitySnap || !currentTrack) return currentTrack;
+    // Only apply snap data when it belongs to the same track. A stale snap from a
+    // prior OS-suspended session must not overwrite a newly-started track's metadata.
+    const snapSlug = continuitySnap.slug;
+    const liveSlug = currentTrack.slug;
+    if (snapSlug && liveSlug && snapSlug !== liveSlug) return currentTrack;
     return {
       ...currentTrack,
       id: continuitySnap.trackId,
@@ -728,6 +739,10 @@ function GlobalAudioPlayerBar() {
     (e) => { e?.stopPropagation(); toggleRepeat?.(); },
     [toggleRepeat]
   );
+  const handleToggleShuffle = useCallback(
+    (e) => { e?.stopPropagation(); toggleShuffle?.(); },
+    [toggleShuffle]
+  );
 
   const dockProgress = useMemo(() => {
     if (!dockDuration) return 0;
@@ -791,33 +806,6 @@ function GlobalAudioPlayerBar() {
     setSleepTimer(minutes);
     setSleepSheetOpen(false);
   }, [setSleepTimer]);
-
-  const dockCurrentTimeRef = useRef(dockCurrentTime);
-  useEffect(() => { dockCurrentTimeRef.current = dockCurrentTime; }, [dockCurrentTime]);
-  const handlePlayToggleRef = useRef(handlePlayToggle);
-  useEffect(() => { handlePlayToggleRef.current = handlePlayToggle; }, [handlePlayToggle]);
-  const handleEngineSeekRef = useRef(handleEngineSeek);
-  useEffect(() => { handleEngineSeekRef.current = handleEngineSeek; }, [handleEngineSeek]);
-
-  useEffect(() => {
-    if (!hasStarted) return;
-    function onKeyDown(e) {
-      const tag = document.activeElement?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
-      if (e.key === " " || e.code === "Space") {
-        e.preventDefault();
-        handlePlayToggleRef.current();
-      } else if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        handleEngineSeekRef.current(dockCurrentTimeRef.current - 10);
-      } else if (e.key === "ArrowRight") {
-        e.preventDefault();
-        handleEngineSeekRef.current(dockCurrentTimeRef.current + 10);
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [hasStarted]);
 
   const csOpacity = csMode ? 1 : 0;
   const baseCoverUrl = resolveAbsoluteArtworkUrl(baseCover);
@@ -1102,6 +1090,8 @@ function GlobalAudioPlayerBar() {
         onNextTrack={handleNextTrack}
         repeatMode={repeatMode}
         onToggleRepeat={handleToggleRepeat}
+        shuffleEnabled={shuffle}
+        onToggleShuffle={handleToggleShuffle}
         showCs={showCs}
         csActive={csMode}
         onToggleCs={handleToggleCs}

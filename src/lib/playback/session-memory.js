@@ -18,6 +18,7 @@ const sessionKey = (userId) => `2mrrw_sess_${userId}`;
 function stripTrackForStorage(t) {
   if (!t) return null;
   return {
+    id: t.id ?? null,
     slug: t.slug,
     src: t.src,
     title: t.title,
@@ -31,6 +32,8 @@ function stripTrackForStorage(t) {
     metadata: t.metadata
       ? {
           trackSlug: t.metadata.trackSlug ?? null,
+          albumSlug: t.metadata.albumSlug ?? null,
+          trackIndex: t.metadata.trackIndex ?? null,
           access: t.metadata.access
             ? {
                 canStream: Boolean(t.metadata.access.canStream),

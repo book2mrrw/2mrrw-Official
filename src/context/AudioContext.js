@@ -131,7 +131,7 @@ import AudioPhase10Bridge from "@/components/system/AudioPhase10Bridge";
 
 import { redirectResolveCache, setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
 import { isSamePlaybackTrack } from "@/lib/music-playback";
-import { resolveTrackAccess } from "@/lib/music-access";
+import { libraryStreamRedirectSrc, resolveTrackAccess } from "@/lib/music-access";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import {
   AUDIBILITY_RECOVERY_MAX_ATTEMPTS,
@@ -1638,8 +1638,11 @@ export function AudioProvider({ children }) {
       applySession(local);
     } else {
       // No local session — try server for cross-device queue restore.
+      // Guard: abort if the user has already started playing while the request was in flight.
       fetchQueueFromServer().then((serverSession) => {
-        if (serverSession?.queue?.length) applySession(serverSession);
+        if (!serverSession?.queue?.length) return;
+        if (stateRef.current.hasStarted || stateRef.current.isPlaying) return;
+        applySession(serverSession);
       }).catch(() => {});
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1681,8 +1684,18 @@ export function AudioProvider({ children }) {
         return track;
       }
       changed = true;
+      // When canStream is newly granted (e.g. user just purchased, subscribed, or received
+      // collector access), also update src to the redirect stream URL so the next play
+      // starts directly on the full stream without going through the preview-then-upgrade path.
+      const justGainedStream = !prev?.canStream && fresh.canStream && track.slug;
+      const freshSrc = justGainedStream
+        ? libraryStreamRedirectSrc(track.slug, {
+            trackSlug: track.metadata?.trackSlug || null,
+          })
+        : track.src;
       return {
         ...track,
+        src: freshSrc,
         metadata: {
           ...(track.metadata || {}),
           access: { ...(prev || {}), ...fresh },
@@ -4254,18 +4267,22 @@ export function AudioProvider({ children }) {
     }
     lastPlayedSlugRef.current = nextTrack.slug;
 
+    // resumeAt === 0 signals an explicit "start from beginning" intent (e.g. user taps a
+    // catalog card). It suppresses BOTH the localStorage and server-side position restores
+    // so saved progress can never silently resume a track mid-way on an intentional play.
+    const forceFromBeginning = options.resumeAt === 0;
     let resumeAt =
       options.resumeAt != null && options.resumeAt > RESTORE_MIN_POSITION_SEC
         ? options.resumeAt
         : null;
-    if (options.resumeAt === 0) {
+    if (forceFromBeginning) {
       resumeAt = null;
       if (userId && streamSlug) clearPlaybackPosition(userId, streamSlug);
     }
     if (playedDifferentSince && userId && streamSlug) {
       clearPlaybackPosition(userId, streamSlug);
     }
-    if (!resumeAt && !playedDifferentSince && userId && streamSlug) {
+    if (!resumeAt && !forceFromBeginning && !playedDifferentSince && userId && streamSlug) {
       const saved = getSavedPlaybackPosition(userId, streamSlug);
       if (saved?.positionSeconds > RESTORE_MIN_POSITION_SEC) {
         const clamped = clampRestorePosition(saved.positionSeconds, saved.durationSeconds);
@@ -4276,7 +4293,7 @@ export function AudioProvider({ children }) {
         }
       }
     }
-    if (!resumeAt && !playedDifferentSince && !authLoadingRef.current && entitlementAccountStateRef.current?.mediaProgress?.length) {
+    if (!resumeAt && !forceFromBeginning && !playedDifferentSince && !authLoadingRef.current && entitlementAccountStateRef.current?.mediaProgress?.length) {
       const savedProgress = entitlementAccountStateRef.current.mediaProgress.find(
         (p) => p.slug === nextTrack.slug && !p.completed
       );
@@ -6067,6 +6084,13 @@ export function AudioProvider({ children }) {
     const track = stateRef.current.currentTrack;
     if (!audio || !track) return false;
 
+    // Session restore: audio element has no source — track was restored to UI state but
+    // playback never started. Route through the full play pipeline so src gets loaded
+    // and position is restored from position memory.
+    if (!audio.src || audio.src === window.location.href) {
+      return playTrackInternal(track);
+    }
+
     tracePlayback("resumeInternal", "resumeInternal", { slug: track.slug });
     lastUserActionRef.current = "play";
     userPausedRef.current = false;
@@ -6206,6 +6230,7 @@ export function AudioProvider({ children }) {
     unlockAudioFromGesture,
     tracePlayback,
     logDirectInternalCallViolation,
+    playTrackInternal,
   ]);
 
   const seekInternal = useCallback((time) => {
@@ -6248,6 +6273,15 @@ export function AudioProvider({ children }) {
     const max = isFinite(audio.duration) && audio.duration > 0 ? audio.duration : (audio.currentTime || 0) + seconds;
     seekInternal(Math.min(max, (audio.currentTime || 0) + seconds));
   }, [seekInternal]);
+
+  const setPlaybackRateInternal = useCallback((rate) => {
+    logDirectInternalCallViolation("setPlaybackRateInternal");
+    const audio = audioRef.current;
+    if (!audio || !Number.isFinite(rate) || rate <= 0) return;
+    tracePlayback("setPlaybackRateInternal", "setPlaybackRateInternal", { rate });
+    audio.playbackRate = rate;
+    if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+  }, [tracePlayback, logDirectInternalCallViolation]);
 
   const resumeTrackAtPosition = useCallback(
     async (trackId, position) => {
@@ -6423,7 +6457,8 @@ export function AudioProvider({ children }) {
   useEffect(() => { commandHandlersRef.current.recover       = requestPlaybackRecovery; }, [requestPlaybackRecovery]);
   useEffect(() => { commandHandlersRef.current.upgradeStream = upgradeToFullStream;     }, [upgradeToFullStream]);
   useEffect(() => { commandHandlersRef.current.retryStream   = retryStreamPlayback;     }, [retryStreamPlayback]);
-  useEffect(() => { commandHandlersRef.current.resumeViewport = resumeFromViewport;     }, [resumeFromViewport]);
+  useEffect(() => { commandHandlersRef.current.resumeViewport    = resumeFromViewport;       }, [resumeFromViewport]);
+  useEffect(() => { commandHandlersRef.current.setPlaybackRate   = setPlaybackRateInternal;  }, [setPlaybackRateInternal]);
 
   useEffect(() => {
     const onEntitlementsUpdated = (event) => {

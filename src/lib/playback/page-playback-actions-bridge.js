@@ -6,9 +6,6 @@
 /** @type {import("@/context/AudioContext").AudioContextValue | null} */
 let playbackActionsBridge = null;
 
-/** @type {(() => void) | null} */
-let dismissNowPlayingBridge = null;
-
 // Deferred play intent: if a card is tapped before PlaybackChromeIsland's useEffect has
 // wired the bridge (typically a <50ms window on first load), store the intent and drain it
 // the moment the bridge comes up. TTL prevents stale intents from firing unexpectedly.
@@ -46,11 +43,3 @@ export function queuePlayIntent(fn) {
   _pendingIntent = { fn, queuedAt: Date.now() };
 }
 
-/** @param {(() => void) | null} fn */
-export function setDismissNowPlayingBridge(fn) {
-  dismissNowPlayingBridge = fn;
-}
-
-export function dismissNowPlayingFromBridge() {
-  dismissNowPlayingBridge?.();
-}

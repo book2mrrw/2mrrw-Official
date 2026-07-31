@@ -124,43 +124,6 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
   if (activeTab === "singles") {
     return (
       <>
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ position: "relative" }}>
-            <input
-              placeholder="Search singles…"
-              style={{
-                width: "100%",
-                padding: "11px 14px 11px 38px",
-                background: "#0d0d0d",
-                border: "1px solid #1e1e1e",
-                borderRadius: 10,
-                color: "white",
-                fontSize: 13,
-                outline: "none",
-                boxSizing: "border-box",
-                transition: "border-color 0.2s",
-              }}
-              onFocus={(e) => {
-                e.currentTarget.style.borderColor = "#00ffff33";
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.borderColor = "#1e1e1e";
-              }}
-            />
-            <svg
-              style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", opacity: 0.3 }}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="white"
-              strokeWidth="2"
-              width="16"
-              height="16"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.35-4.35" />
-            </svg>
-          </div>
-        </div>
         <h2 className="section-heading" style={{ marginBottom: 14 }}>
           Singles
         </h2>

@@ -21,6 +21,7 @@ export const PLAYBACK_COMMANDS = Object.freeze({
   RECOVER_PLAYBACK: "RECOVER_PLAYBACK",
   VIEWPORT_PAUSE: "VIEWPORT_PAUSE",
   VIEWPORT_RESUME: "VIEWPORT_RESUME",
+  SET_PLAYBACK_RATE: "SET_PLAYBACK_RATE",
 });
 
 /** Lowercase / legacy string aliases resolved by dispatchPlaybackCommand. */
@@ -38,6 +39,7 @@ export const PLAYBACK_COMMAND_ALIASES = Object.freeze({
   recoverPlayback: PLAYBACK_COMMANDS.RECOVER_PLAYBACK,
   viewportPause: PLAYBACK_COMMANDS.VIEWPORT_PAUSE,
   viewportResume: PLAYBACK_COMMANDS.VIEWPORT_RESUME,
+  setPlaybackRate: PLAYBACK_COMMANDS.SET_PLAYBACK_RATE,
 });
 
 /**

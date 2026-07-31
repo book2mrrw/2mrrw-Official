@@ -72,7 +72,6 @@ import {
   toInstantStartTrack,
 } from "@/lib/music-playback";
 import { usePagePlaybackActions } from "@/hooks/usePagePlaybackActions";
-import { dismissNowPlayingFromBridge } from "@/lib/playback/page-playback-actions-bridge";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
 import MobileHomeBottomNav from "@/components/nav/MobileHomeBottomNav";
 import {
@@ -1029,7 +1028,9 @@ function PageStorefront({ initialEvents }) {
     );
     if (playbackTrack?.src) {
       const { startTrack, needsUpgrade } = toInstantStartTrack(playbackTrack);
-      void getPagePlaybackActionsBridge()?.playQueue?.([startTrack], 0);
+      // resumeAt: 0 — explicit catalog tap always starts from the beginning;
+      // clears any saved listening position so the track never resumes mid-way.
+      void getPagePlaybackActionsBridge()?.playQueue?.([startTrack], 0, { resumeAt: 0 });
       if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
     }
   }, [scheduleInstantStreamUpgrade]);
@@ -1115,9 +1116,6 @@ function PageStorefront({ initialEvents }) {
 
   const openFeatureModal = useCallback(
     (feat) => {
-      // Do NOT call dismissNowPlayingFromBridge() here — it pauses audio unnecessarily.
-      // playCanonicalCatalogItem below replaces the queue; the mini player hides via
-      // featureModalOpen flag in PlaybackChromeIsland. Behavior now matches openSingleModal.
       if (previewModalOpenRef.current) {
         setPreviewModalOpen(false);
         setSelectedSingle(null);
@@ -1611,9 +1609,6 @@ function PageStorefront({ initialEvents }) {
       {/* ══════════════════════ MAIN LAYOUT ═══════════════════════════════════ */}
       <PlaybackChromeIsland
         isMobile={isMobile}
-        previewModalOpen={previewModalOpen}
-        featureModalOpen={featureModalOpen}
-        albumModalOpen={albumModalOpen}
         ambientRefs={ambientRefs}
       >
       <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>

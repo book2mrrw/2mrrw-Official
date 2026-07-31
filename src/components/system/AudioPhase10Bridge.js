@@ -7,6 +7,7 @@ import { usePlaybackRecovery } from "@/system/recovery";
 import { logStateChurn } from "@/lib/diagnostics/state-churn-log";
 import { logRestoredTitleSource } from "@/lib/diagnostics/playback-trace";
 import { RECOVERY_PLACEHOLDER_TITLE } from "@/lib/playback/resolve-player-display-title";
+import { playbackStateMachine, PLAYBACK_ORCHESTRATION_STATES } from "@/media/PlaybackStateMachine";
 
 function recoveryDisplayTitleFromSlug(id) {
   if (!id || typeof id !== "string") return "Continuing playback";
@@ -65,6 +66,8 @@ export default function AudioPhase10Bridge() {
   });
 
   useEffect(() => {
+    let pendingRecoverySeekCleanup = null;
+
     const handler = (e) => {
       const detail = e.detail;
       if (!detail?.queueIds?.length) return;
@@ -120,25 +123,51 @@ export default function AudioPhase10Bridge() {
         startIndex: detail.queueIndex ?? 0,
       }).then(() => resumePlaybackTransport());
       if (detail.currentTime > 0) {
-        let attempts = 0;
-        const trySeekWhenStable = () => {
-          attempts += 1;
-          const shouldDefer =
-            !hasStartedRef.current ||
-            !currentTrackRef.current ||
-            playbackStateRef.current === "loading" ||
-            playbackStateRef.current === "ready";
-          if (!shouldDefer || attempts > 40) {
-            seek(detail.currentTime);
-            return;
-          }
-          window.setTimeout(trySeekWhenStable, 75);
-        };
-        trySeekWhenStable();
+        const targetTime = detail.currentTime;
+
+        const isEngineStable = () =>
+          hasStartedRef.current &&
+          currentTrackRef.current &&
+          playbackStateRef.current !== "loading" &&
+          playbackStateRef.current !== "ready";
+
+        if (isEngineStable()) {
+          seek(targetTime);
+        } else {
+          // Subscribe to the formal state machine — fires the moment the engine
+          // transitions to a seekable state, with no busy-wait polling.
+          let unsubscribeMachine;
+          const failsafe = window.setTimeout(() => {
+            unsubscribeMachine?.();
+            pendingRecoverySeekCleanup = null;
+            seek(targetTime);
+          }, 5000);
+
+          unsubscribeMachine = playbackStateMachine.subscribe((machineState) => {
+            if (
+              machineState === PLAYBACK_ORCHESTRATION_STATES.PLAYING ||
+              machineState === PLAYBACK_ORCHESTRATION_STATES.PAUSED ||
+              machineState === PLAYBACK_ORCHESTRATION_STATES.DEGRADED
+            ) {
+              clearTimeout(failsafe);
+              unsubscribeMachine();
+              pendingRecoverySeekCleanup = null;
+              seek(targetTime);
+            }
+          });
+
+          pendingRecoverySeekCleanup = () => {
+            clearTimeout(failsafe);
+            unsubscribeMachine?.();
+          };
+        }
       }
     };
     window.addEventListener("2mrrw:playback-recovery", handler);
-    return () => window.removeEventListener("2mrrw:playback-recovery", handler);
+    return () => {
+      window.removeEventListener("2mrrw:playback-recovery", handler);
+      pendingRecoverySeekCleanup?.();
+    };
   }, [dispatchPlaybackCommand, resumePlaybackTransport, seek]);
 
   return null;
