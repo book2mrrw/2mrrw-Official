@@ -415,6 +415,7 @@ function PageStorefront({ initialEvents }) {
   const heroContainerRef   = useRef(null);
   const heroVideoRef       = useRef(null);
   const instantUpgradeTimerRef = useRef(null);
+  const instantUpgradeCleanupRef = useRef(null);
   const heroTextRef        = useRef(null);
   const heroSocialsRef     = useRef(null);
   const isMobileRef        = useRef(false);
@@ -847,17 +848,50 @@ function PageStorefront({ initialEvents }) {
   }, [activeTab]);
 
   // Entitled full-stream tracks resolve to a signed URL that needs a network round trip;
-  // start from the (already-known, near-instant) preview and swap in the full stream a
-  // moment later via the existing upgradeStream command, matching Spotify/Apple-level feel.
+  // start from the (already-known, near-instant) preview and swap in the full stream as
+  // soon as the race-prefetch signals the preload element is buffered. Falls back to a
+  // 2 s timer so the upgrade still fires on slow networks where the warmup takes longer.
   const scheduleInstantStreamUpgrade = useCallback((slug) => {
-    if (instantUpgradeTimerRef.current) clearTimeout(instantUpgradeTimerRef.current);
-    instantUpgradeTimerRef.current = setTimeout(() => {
+    // Cancel any previous pending upgrade (different track played before upgrade fired).
+    instantUpgradeCleanupRef.current?.();
+
+    let fired = false;
+    const doUpgrade = () => {
+      if (fired) return;
+      fired = true;
       const b = getPagePlaybackActionsBridge();
       if (b?.currentTrack?.slug === slug) void b.dispatchPlaybackCommand("upgradeStream");
+    };
+
+    // Listen for the preload-ready signal emitted by AudioContext's race-prefetch.
+    const onPreloadReady = (e) => {
+      if (e.detail?.slug !== slug) return;
+      cleanup();
+      // 150 ms settle — ensures the audio element is in a stable playing state before
+      // we hand off from preview to library stream.
+      instantUpgradeTimerRef.current = setTimeout(doUpgrade, 150);
+    };
+
+    // 2 s fallback: fires if the network is slow or the preload signal never arrives.
+    const fallbackId = setTimeout(() => {
+      cleanup();
+      doUpgrade();
     }, 2000);
+
+    window.addEventListener("2mrrw:stream-preload-ready", onPreloadReady);
+
+    const cleanup = () => {
+      window.removeEventListener("2mrrw:stream-preload-ready", onPreloadReady);
+      clearTimeout(fallbackId);
+      clearTimeout(instantUpgradeTimerRef.current);
+      instantUpgradeCleanupRef.current = null;
+    };
+
+    instantUpgradeCleanupRef.current = cleanup;
   }, []);
 
   useEffect(() => () => {
+    instantUpgradeCleanupRef.current?.();
     if (instantUpgradeTimerRef.current) clearTimeout(instantUpgradeTimerRef.current);
   }, []);
 

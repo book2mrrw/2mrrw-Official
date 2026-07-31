@@ -4390,33 +4390,13 @@ export function AudioProvider({ children }) {
         // headroom for initial auth + signed URL resolution without stranding a paying user.
         const srcReadyTimeout = isLibraryStreamRedirectSrc(syncSrc) ? 12000 : AUDIO_SRC_READY_TIMEOUT_MS;
         await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: srcReadyTimeout });
-        // For new-track plays, wait for canplaythrough (max 3 s) before starting playback.
-        // readyState 3 (HAVE_FUTURE_DATA) has only a small buffer — on slow connections this
-        // drains immediately and causes an audible mid-play stall. canplaythrough signals the
-        // browser's estimate that it can sustain continuous play. Cap at 3 s so users on slow
-        // connections still hear audio promptly.
-        if (!isSameTrack && audio.readyState < 4 && !streamAbortController.signal.aborted) {
-          await new Promise((resolve) => {
-            if (audio.readyState >= 4 || streamAbortController.signal.aborted) { resolve(); return; }
-            const cleanup = () => {
-              audio.removeEventListener("canplaythrough", onThrough);
-              clearTimeout(capId);
-            };
-            const onThrough = () => { cleanup(); resolve(); };
-            const capId = setTimeout(() => {
-              audio.removeEventListener("canplaythrough", onThrough);
-              resolve();
-            }, 3000);
-            streamAbortController.signal.addEventListener("abort", () => { cleanup(); resolve(); }, { once: true });
-            audio.addEventListener("canplaythrough", onThrough, { once: true });
-          });
-        }
-        // Guard against premature canplaythrough: the browser fires it optimistically when the
-        // preload element's signed URL shares HTTP cache with the main element, giving a fast
-        // canplay/canplaythrough signal before enough bytes are actually buffered. Without this
-        // check, play starts with < 1s of audio and the stall recovery fires 2.5s later
-        // (audible as: plays → silence → plays). Verify at least 3s is buffered before play();
-        // on fast connections the check passes instantly, on slow connections we wait up to 2s.
+        // Combined readiness gate: wait until readyState >= 4 (HAVE_ENOUGH_DATA) AND at least
+        // 3 s is buffered ahead. Both conditions must pass together because the browser fires
+        // canplaythrough optimistically when the preload element's signed URL shares HTTP cache
+        // with the main element — readyState 4 can appear before real bytes are buffered,
+        // causing the "plays → silence → plays" stall 2.5 s in. A single 3 s cap replaces the
+        // former stacked 3 s + 2 s guards, halving worst-case silent wait on slow connections.
+        // On a cache-warm preloaded stream both conditions pass instantly (< 5 ms).
         if (!isSameTrack && !streamAbortController.signal.aborted) {
           const MIN_BUF = 3;
           const goodBuffer = () => {
@@ -4429,13 +4409,24 @@ export function AudioProvider({ children }) {
             } catch {}
             return false;
           };
-          if (!goodBuffer()) {
+          const isReady = () => audio.readyState >= 4 && goodBuffer();
+          if (!isReady()) {
             await new Promise((resolve) => {
-              if (goodBuffer() || streamAbortController.signal.aborted) { resolve(); return; }
-              let checkId = null;
-              const done = () => { clearInterval(checkId); clearTimeout(capId2); resolve(); };
-              checkId = setInterval(() => { if (goodBuffer() || streamAbortController.signal.aborted) done(); }, 100);
-              const capId2 = setTimeout(done, 2000);
+              if (isReady() || streamAbortController.signal.aborted) { resolve(); return; }
+              let pollId = null;
+              const done = () => {
+                audio.removeEventListener("canplaythrough", onThrough);
+                clearInterval(pollId);
+                clearTimeout(capId);
+                resolve();
+              };
+              // canplaythrough is the primary signal on cache-hit paths (< 100 ms).
+              // The 100 ms poll catches buffered-but-no-event cases (Edge/Safari quirks)
+              // and the case where canplaythrough fired before buffer >= 3 s.
+              const onThrough = () => { if (isReady()) done(); };
+              pollId = setInterval(() => { if (isReady() || streamAbortController.signal.aborted) done(); }, 100);
+              const capId = setTimeout(done, 3000);
+              audio.addEventListener("canplaythrough", onThrough, { once: true });
               streamAbortController.signal.addEventListener("abort", done, { once: true });
             });
           }
@@ -4485,7 +4476,16 @@ export function AudioProvider({ children }) {
               };
               const preloadEl = streamSwapPreloadRef.current;
               if (preloadEl) {
-                void warmupSignedStreamPreload(preloadEl, data.url, { signal: streamAbortController.signal });
+                // When warmup completes, signal immediately — no need to wait for the 2s timer.
+                warmupSignedStreamPreload(preloadEl, data.url, { signal: streamAbortController.signal })
+                  .then(() => {
+                    if (!streamAbortController.signal.aborted) {
+                      window.dispatchEvent(new CustomEvent("2mrrw:stream-preload-ready", {
+                        detail: { slug: nextTrack.slug },
+                      }));
+                    }
+                  })
+                  .catch(() => {});
               }
             } catch {
               // Non-fatal — upgradeToFullStream fetches on its own if this race loses
