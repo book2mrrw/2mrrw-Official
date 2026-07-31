@@ -22,6 +22,7 @@ import {
   withGuestCookie,
 } from "@/lib/guest-session";
 import { DEFAULT_NOTIFICATION_PREFERENCES, getNotificationState } from "@/lib/notifications";
+import { deriveUserTier, derivePlaybackPolicy } from "@/lib/playback/playback-policy";
 
 function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest = true, user = null, userEntitlements = null }) {
   const hasActiveMembership = membershipHasPremiumAccess(membership) || hasEntitlement(userEntitlements, "subscriber");
@@ -267,6 +268,23 @@ export async function GET(req) {
       })),
       ...ledgerOwnerships,
     ];
+    const resolvedPermissions = (() => {
+      const permissions = permissionsFor({
+        membership,
+        hasCollectorAccess,
+        hasVaultPass,
+        isGuest: Boolean(user.isGuest),
+        user,
+        userEntitlements,
+      });
+      if (isAdmin) {
+        return { ...permissions, subscriber: true };
+      }
+      return permissions;
+    })();
+    const tier = deriveUserTier(resolvedPermissions, finalOwnedSlugs);
+    const playbackPolicy = derivePlaybackPolicy(tier);
+
     const body = {
       user,
       library,
@@ -276,6 +294,8 @@ export async function GET(req) {
       vaultAccess: vaultAccessFlag,
       collectorOwnerships,
       membership,
+      tier,
+      playbackPolicy,
       mediaProgress: (mediaProgressResult.data || []).map((row) => ({
         slug: row.product_slug,
         mediaType: row.media_type,
@@ -295,20 +315,7 @@ export async function GET(req) {
         entitlement: vaultPassAccess.entitlement,
       },
       notifications: notificationState,
-      permissions: (() => {
-        const permissions = permissionsFor({
-          membership,
-          hasCollectorAccess,
-          hasVaultPass,
-          isGuest: Boolean(user.isGuest),
-          user,
-          userEntitlements,
-        });
-        if (isAdmin) {
-          return { ...permissions, subscriber: true };
-        }
-        return permissions;
-      })(),
+      permissions: resolvedPermissions,
       userEntitlements: {
         vault_access: Boolean(userEntitlements?.vault_access),
         subscriber: Boolean(userEntitlements?.subscriber),

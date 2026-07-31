@@ -113,6 +113,34 @@ function syncQueueToServer(userId, { queue, queueIndex, shuffle, repeatMode }) {
   }, 2000);
 }
 
+/**
+ * Load the playback session, preferring the freshest source.
+ * Checks localStorage first; if absent or older than the server record, fetches
+ * from the server and writes it back to localStorage for instant future access.
+ *
+ * @param {string} userId
+ * @returns {Promise<object|null>}
+ */
+export async function loadPlaybackSessionServerFirst(userId) {
+  const local = loadPlaybackSession(userId);
+  const localSavedAt = local?.savedAt ?? 0;
+  try {
+    const server = await fetchQueueFromServer();
+    const serverSavedAt = server?.savedAt ?? 0;
+    if (server && serverSavedAt > localSavedAt) {
+      // Server has a fresher session — persist it locally so next load is instant.
+      try {
+        localStorage.setItem(
+          sessionKey(userId),
+          JSON.stringify({ ...server, savedAt: serverSavedAt })
+        );
+      } catch { /* quota — non-fatal */ }
+      return server;
+    }
+  } catch { /* server unavailable — local is fine */ }
+  return local;
+}
+
 /** Load queue from server. Returns null if unavailable or user is not authenticated. */
 export async function fetchQueueFromServer() {
   if (typeof fetch === "undefined") return null;

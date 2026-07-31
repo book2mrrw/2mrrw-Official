@@ -45,22 +45,7 @@ export function mapMediaTrackToPlayInput(track = {}) {
   };
 }
 
-const VOL_KEY = "2mrrw-vol";
 
-function readVolume(audioRef) {
-  const el = audioRef?.current;
-  if (!el) return 1;
-  if (el.volume > 0) return el.volume;
-  // el.volume is 0 — report what volume should be without mutating here.
-  // The audio engine owns el.volume; mutating it inside useMemo races against
-  // the engine's own volume management (e.g. preview fades, swell ramps).
-  let v = 1;
-  try {
-    const s = parseFloat(localStorage.getItem(VOL_KEY) ?? "");
-    if (Number.isFinite(s) && s > 0) v = s;
-  } catch {}
-  return v;
-}
 
 function readElementPlaying(audioRef) {
   const el = audioRef?.current;
@@ -160,7 +145,6 @@ export function mapAudioContextToMediaEngine(audio) {
       isPlaying,
       currentTime: audio.getCurrentTime?.() ?? audio.currentTime ?? 0,
       duration: audio.duration ?? 0,
-      volume: audio.getUserVolume?.() ?? readVolume(audio.audioRef),
       queue: audio.queue ?? [],
       queueIndex: audio.queueIndex ?? -1,
       playbackState: audio.playbackState ?? null,
@@ -176,9 +160,6 @@ export function mapAudioContextToMediaEngine(audio) {
     play: (track) => audio.playTrack(mapMediaTrackToPlayInput(track)),
     pause: audio.pause,
     seek: audio.seek,
-    setVolume: (level) => {
-      audio.setUserVolume?.(level);
-    },
     toggle: audio.toggle,
     playNext: audio.playNext ?? null,
     playPrevious: audio.playPrevious ?? null,

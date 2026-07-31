@@ -1295,27 +1295,7 @@ body {
   text-align: right;
 }
 
-.modal-immersive-player__volume {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-  width: 100%;
-}
 
-.modal-immersive-player__volume-icon {
-  font-size: 11px;
-  opacity: 0.45;
-  flex-shrink: 0;
-}
-
-.modal-immersive-player__volume-slider {
-  flex: 1;
-  min-width: 0;
-  height: 4px;
-  accent-color: var(--modal-accent, #00dcd2);
-  cursor: pointer;
-}
 
 .modal-immersive-actions {
   display: flex;

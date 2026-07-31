@@ -92,9 +92,8 @@ export function canAddToPlaylist(access) {
  * @returns {{ owned: boolean, subscription: boolean, collector: boolean, previewOnly: boolean, canStream: boolean, badge: string|null }}
  */
 export function resolveTrackAccess(track, accountState = {}) {
-  // accountState.isAdmin is set immediately from the Supabase session (before HTTP round-trip),
-  // so admin gets full access on every load including the very first.
-  if (accountState?.isAdmin === true || accountState?.permissions?.admin === true) {
+  // (1) Admin short-circuit — resolved synchronously from baked-in email constants.
+  if (accountState?.isAdmin === true || accountState?.permissions?.admin === true || isAdminAccount(accountState)) {
     return adminTrackAccess();
   }
 
@@ -114,9 +113,30 @@ export function resolveTrackAccess(track, accountState = {}) {
   };
   if (!slug && !albumSlug) return empty;
 
-  if (isAdminAccount(accountState)) {
+  // (2) playbackPolicy fast-path — O(1) for FULL_CATALOG and UNRESTRICTED tiers.
+  // Resolved once at session creation; no per-slug array searches needed.
+  const policy = accountState?.playbackPolicy;
+  if (policy === "UNRESTRICTED") {
     return adminTrackAccess();
   }
+  if (policy === "FULL_CATALOG") {
+    const isCollector = isCollectorCardOwner(accountState);
+    return {
+      owned: true,
+      subscription: Boolean(accountState?.permissions?.subscriber || accountState?.subscriberActive),
+      collector: isCollector,
+      collectorCardOwner: isCollector,
+      previewOnly: false,
+      canStream: true,
+      canAddToLibrary: true,
+      canAddToPlaylist: true,
+      canShare: true,
+      subscriptionLocked: false,
+      badge: isCollector ? "Collector Access" : "Included with Subscription",
+    };
+  }
+
+  // (3) PURCHASE_LIBRARY or no policy — per-slug ownership resolution.
 
   const ownedSlugs = slugSet(permanentOwnedSlugsFromState(accountState));
   const library = accountState.library || [];

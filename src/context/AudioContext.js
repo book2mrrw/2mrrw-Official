@@ -112,6 +112,7 @@ import {
   noteAudioProviderUnmount,
 } from "@/lib/playback/audio-engine-runtime";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
+import { cancelCrossfadeEngine, triggerCrossfadeIfReady, CROSSFADE_WINDOW_SEC } from "@/lib/audio/crossfade-engine";
 import { dispatchPlaybackCommand } from "@/lib/playback/command-dispatcher";
 import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
 import { registerPlaybackKeyboardShortcuts } from "@/lib/playback/keyboard-shortcuts";
@@ -2985,18 +2986,19 @@ export function AudioProvider({ children }) {
         patchState({ isPlaying: false, playbackState: "paused" });
       }
 
+      // Compute duration/remaining once — shared by preload safety-net and crossfade trigger.
+      const PRELOAD_LEAD_SEC = 30;
+      const cfDur = isFinite(audio.duration) ? audio.duration : 0;
+      const cfRem = cfDur > 0 ? cfDur - audio.currentTime : 0;
+
       // Preload safety-net: if within 30s of track end and the preload element hasn't
       // started loading (readyState 0 = HAVE_NOTHING), kick scheduleNextTrackPreload again.
-      // This covers the case where the initial onPlay call failed silently (e.g. the
-      // library-stream signed-URL fetch threw before setting preloadEl.src).
-      const PRELOAD_LEAD_SEC = 30;
-      const CROSSFADE_SEC = 5;
       if (
         crossfadeStateRef.current === "idle" &&
         !previewOnly &&
-        dur > CROSSFADE_SEC * 2 &&
-        rem > CROSSFADE_SEC &&
-        rem <= PRELOAD_LEAD_SEC
+        cfDur > CROSSFADE_WINDOW_SEC * 2 &&
+        cfRem > CROSSFADE_WINDOW_SEC &&
+        cfRem <= PRELOAD_LEAD_SEC
       ) {
         const preloadEl = nextTrackPreloadRef.current;
         if (preloadEl && preloadEl.readyState === 0) {
@@ -3004,49 +3006,14 @@ export function AudioProvider({ children }) {
         }
       }
 
-      // Crossfade trigger: begin fading out current track and fading in pre-buffer.
-      if (
-        crossfadeStateRef.current === "idle" &&
-        !previewOnly &&
-        mainGainRef.current &&
-        crossfadeGainRef.current &&
-        audioCtxRef.current?.state === "running"
-      ) {
-        const dur = isFinite(audio.duration) ? audio.duration : 0;
-        const rem = dur > 0 ? dur - audio.currentTime : 0;
-        // Guard: dur > CROSSFADE_SEC * 2 prevents tracks shorter than 10s from
-        // triggering a crossfade immediately on play — they would never reach full
-        // volume if the fade window spans most or all of the track duration.
-        if (rem > 0 && rem <= CROSSFADE_SEC && dur > CROSSFADE_SEC * 2) {
-          const q = queueRef.current;
-          const qi = queueIndexRef.current;
-          if (q.length > qi + 1 && q[qi + 1]?.src) {
-            const nextEl = nextTrackPreloadRef.current;
-            if (nextEl && nextEl.src && nextEl.readyState >= 3) {
-              crossfadeStateRef.current = "fading";
-              const ctx = audioCtxRef.current;
-              const now = ctx.currentTime;
-              const mGain = mainGainRef.current;
-              const cfGain = crossfadeGainRef.current;
-              // Loudness-normalize the pre-buffered next track — same formula as onPlay.
-              const nextTrackGainLinear = Math.pow(10, (q[qi + 1].gainDb || 0) / 20);
-              mGain.gain.cancelScheduledValues(now);
-              mGain.gain.setValueAtTime(mGain.gain.value, now);
-              mGain.gain.linearRampToValueAtTime(0, now + rem);
-              cfGain.gain.cancelScheduledValues(now);
-              cfGain.gain.setValueAtTime(0, now);
-              cfGain.gain.linearRampToValueAtTime(nextTrackGainLinear, now + rem);
-              nextEl.currentTime = 0;
-              nextEl.play().catch(() => {
-                // Pre-buffer play blocked — restore main gain and abort crossfade silently.
-                const t = audioCtxRef.current?.currentTime ?? 0;
-                try { mGain.gain.cancelScheduledValues(t); mGain.gain.setValueAtTime(trackGainRef.current, t); } catch {}
-                try { cfGain.gain.cancelScheduledValues(t); cfGain.gain.setValueAtTime(0, t); } catch {}
-                crossfadeStateRef.current = "idle";
-              });
-            }
-          }
-        }
+      // Crossfade trigger — delegated to crossfade-engine.js (refs-bag pattern, no React deps).
+      {
+        const q = queueRef.current;
+        const qi = queueIndexRef.current;
+        triggerCrossfadeIfReady(
+          { crossfadeStateRef, nextTrackPreloadRef, audioCtxRef, mainGainRef, crossfadeGainRef, trackGainRef },
+          { rem: cfRem, dur: cfDur, nextTrack: q[qi + 1] ?? null, previewOnly }
+        );
       }
     };
 
@@ -3781,17 +3748,7 @@ export function AudioProvider({ children }) {
   }, []);
 
   const cancelCrossfade = useCallback(() => {
-    if (crossfadeStateRef.current === "idle") return;
-    crossfadeStateRef.current = "idle";
-    const nextEl = nextTrackPreloadRef.current;
-    try { if (nextEl && !nextEl.paused) nextEl.pause(); } catch {}
-    try { if (nextEl) nextEl.currentTime = 0; } catch {}
-    const ctx = audioCtxRef.current;
-    if (ctx && ctx.state !== "closed") {
-      const now = ctx.currentTime;
-      try { mainGainRef.current?.gain.cancelScheduledValues(now); mainGainRef.current?.gain.setValueAtTime(trackGainRef.current, now); } catch {}
-      try { crossfadeGainRef.current?.gain.cancelScheduledValues(now); crossfadeGainRef.current?.gain.setValueAtTime(0, now); } catch {}
-    }
+    cancelCrossfadeEngine({ crossfadeStateRef, nextTrackPreloadRef, audioCtxRef, mainGainRef, crossfadeGainRef, trackGainRef });
   }, []);
 
   const setUserVolume = useCallback((level) => {

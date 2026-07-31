@@ -5,6 +5,18 @@
  */
 export const redirectResolveCache = {};
 
+import { registerCache } from "@/lib/playback/playback-cache-manager";
+registerCache("redirect-resolve", {
+  maxEntries: 200,
+  ttlMs: 30_000,
+  getSize: () => Object.keys(redirectResolveCache).length,
+  evict: () => {
+    const keys = Object.keys(redirectResolveCache);
+    const overage = keys.length - 150;
+    for (let i = 0; i < overage; i++) delete redirectResolveCache[keys[i]];
+  },
+});
+
 export function setResolvedCdnUrl(slug, cdnUrl) {
   if (slug && cdnUrl) redirectResolveCache[slug] = cdnUrl;
 }

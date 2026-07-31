@@ -93,14 +93,38 @@ async function fetchAudioBlob(apiOrDirectUrl, onProgress) {
   return fetchBlobWithProgress(apiOrDirectUrl, "include", onProgress);
 }
 
+/** Minimum free storage bytes required before attempting an offline download (50 MB). */
+const MIN_FREE_STORAGE_BYTES = 50 * 1024 * 1024;
+
 /**
  * Queue a track for offline playback. Fetches the audio, stores the blob in
  * IndexedDB (persists across sessions) and puts the blob URL in blobUrlMap
  * for immediate same-session use.
+ *
+ * @param {string} userId
+ * @param {object} track
+ * @param {{ streamUrl?: string, onProgress?: function, playbackPolicy?: string }} [opts]
  */
-export async function queueOfflineDownload(userId, track, { streamUrl, onProgress } = {}) {
+export async function queueOfflineDownload(userId, track, { streamUrl, onProgress, playbackPolicy } = {}) {
   if (typeof window === "undefined" || !track?.slug) {
     return { status: "unavailable", slug: track?.slug };
+  }
+
+  // Playback policy gate — preview-only sessions cannot cache full streams.
+  if (playbackPolicy === "PREVIEW_ONLY" || (!playbackPolicy && !streamUrl)) {
+    return { status: "policy_denied", slug: track.slug };
+  }
+
+  // Storage quota gate — ensure at least 50 MB free before downloading.
+  if (navigator.storage?.estimate) {
+    try {
+      const { quota = 0, usage = 0 } = await navigator.storage.estimate();
+      if (quota > 0 && (quota - usage) < MIN_FREE_STORAGE_BYTES) {
+        return { status: "quota_exceeded", slug: track.slug };
+      }
+    } catch {
+      /* non-fatal — proceed without quota check */
+    }
   }
 
   const queued = getOfflineQueuedSlugs(userId);

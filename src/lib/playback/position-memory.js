@@ -73,3 +73,32 @@ export function clearPlaybackPosition(userId, slug) {
     _lastServerSync.delete(`${userId}:${slug}`);
   } catch {}
 }
+
+/**
+ * Fetch position from the server — server is authoritative for cross-device resume.
+ * Returns null on error or when the server has no record.
+ *
+ * @param {string} userId
+ * @param {string} slug
+ * @returns {Promise<{positionSeconds: number, durationSeconds: number, updatedAt: string}|null>}
+ */
+export async function fetchPositionFromServer(userId, slug) {
+  if (!userId || !slug || typeof fetch === "undefined") return null;
+  try {
+    const res = await fetch(
+      `/api/media/playback?slug=${encodeURIComponent(slug)}&userId=${encodeURIComponent(userId)}`,
+      { credentials: "include" }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const pos = data?.positionSeconds ?? data?.position_seconds;
+    if (!pos || pos <= 0) return null;
+    return {
+      positionSeconds: Number(pos),
+      durationSeconds: Number(data?.durationSeconds ?? data?.duration_seconds ?? 0),
+      updatedAt: data?.lastPlayedAt ?? data?.last_played_at ?? new Date().toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}

@@ -6,10 +6,24 @@ import {
 } from "@/lib/music-playback";
 import { resolveTrackAccess, libraryStreamRedirectSrc } from "@/lib/music-access";
 import { catalogPreviewAudioUrl } from "@/lib/media-urls";
+import { registerCache } from "@/lib/playback/playback-cache-manager";
 
 const MAX_ENTRIES = 96;
 /** @type {Map<string, object>} */
 const cache = new Map();
+
+registerCache("prewarm", {
+  maxEntries: MAX_ENTRIES,
+  ttlMs: 120_000,
+  getSize: () => cache.size,
+  evict: () => {
+    while (cache.size > Math.floor(MAX_ENTRIES * 0.75)) {
+      const oldest = cache.keys().next().value;
+      if (oldest) cache.delete(oldest);
+      else break;
+    }
+  },
+});
 
 export function playbackPrewarmKey({ releaseSlug, trackSlug, trackIndex = 0 } = {}) {
   const release = String(releaseSlug || "unknown");

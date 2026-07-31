@@ -36,6 +36,10 @@ export function writeEntitlementsCache(userId, data) {
       library: (data.library || []).slice(0, 500),
       userEntitlements: data.userEntitlements || null,
       syncedAt: data.syncedAt || null,
+      // Platform session policy — resolved server-side, cached so playback decisions
+      // are available synchronously on session bootstrap before the HTTP round-trip.
+      tier: data.tier || null,
+      playbackPolicy: data.playbackPolicy || null,
       cachedAt: Date.now(),
     };
     localStorage.setItem(cacheKey(userId), JSON.stringify(entry));

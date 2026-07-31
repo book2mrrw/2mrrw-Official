@@ -1,4 +1,6 @@
 import { buildControlSystemUrl } from "./client";
+import { telemetry } from "@/system/telemetry/telemetry";
+import { PLAYBACK_EVENT_TYPES, mapControlSystemEventType } from "@/system/telemetry/playback-event-types";
 
 const PLAYBACK_EVENTS = new Set(["play", "progress", "complete", "replay", "pause", "seek", "save", "queue_add"]);
 const BACKEND_PLAYBACK_EVENTS = new Set(["play", "progress", "complete", "pause", "skip"]);
@@ -183,6 +185,19 @@ async function dispatchPlaybackEvent(track, eventType, details = {}) {
     slug: track.slug,
     inFlight: inFlightCount,
     ...getPlaybackTelemetryDiagnostics(),
+  });
+
+  // Mirror to platform telemetry using canonical event type constants.
+  const canonicalType = mapControlSystemEventType(normalized) || PLAYBACK_EVENT_TYPES.PROGRESS;
+  telemetry.log({
+    type: canonicalType,
+    slug: track.slug || null,
+    title: track.title || null,
+    artist: track.artist || "2MRRW",
+    source: track.source || "unknown",
+    positionSeconds: Number.isFinite(details.positionSeconds) ? details.positionSeconds : 0,
+    durationSeconds: Number.isFinite(details.durationSeconds) ? details.durationSeconds : 0,
+    completed: Boolean(details.completed || eventType === "complete"),
   });
 
   try {

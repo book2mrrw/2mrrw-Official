@@ -1021,76 +1021,6 @@ function QueueSheet({ queue, queueIndex, t, onRemove, onMove, onClear, onSaveAsP
   );
 }
 
-function VolumeSlider({ t, volume, onVolumeChange }) {
-  const barRef = useRef(null);
-  const draggingRef = useRef(false);
-  // If el.volume is 0 (stuck from accidental drag), start at 1 visually
-  const [localVol, setLocalVol] = useState(() => (volume > 0 ? volume : 1));
-
-  // Sync from engine when not dragging; skip 0 so stale engine reads don't re-mute
-  useEffect(() => {
-    if (!draggingRef.current && (volume ?? 1) > 0) setLocalVol(volume);
-  }, [volume]);
-
-  const readPos = useCallback((e) => {
-    const rect = (barRef.current || e.currentTarget).getBoundingClientRect();
-    const cx = e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX;
-    return Math.max(0, Math.min(1, (cx - rect.left) / rect.width));
-  }, []);
-
-  const commit = useCallback((v) => {
-    setLocalVol(v);
-    onVolumeChange(v);
-  }, [onVolumeChange]);
-
-  const onMouseDown = useCallback((e) => {
-    e.preventDefault();
-    draggingRef.current = true;
-    commit(readPos(e));
-    const onMove = (ev) => { if (draggingRef.current) commit(readPos(ev)); };
-    const onUp = () => {
-      draggingRef.current = false;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  }, [commit, readPos]);
-
-  const onTouchStart = useCallback((e) => {
-    e.preventDefault();
-    draggingRef.current = true;
-    commit(readPos(e));
-    const onMove = (ev) => { if (draggingRef.current) commit(readPos(ev)); };
-    const onEnd = () => {
-      draggingRef.current = false;
-      window.removeEventListener("touchmove", onMove);
-      window.removeEventListener("touchend", onEnd);
-    };
-    window.addEventListener("touchmove", onMove, { passive: false });
-    window.addEventListener("touchend", onEnd);
-  }, [commit, readPos]);
-
-  const pct = Math.round(localVol * 100);
-  return (
-    <div style={{ padding: "9px 20px", display: "flex", alignItems: "center", gap: 10, borderBottom: "1px solid rgba(255,255,255,.06)", flexShrink: 0 }}>
-      <span style={{ color: "rgba(255,255,255,.38)", display: "flex", alignItems: "center", flexShrink: 0 }}><I.VolumeIcon /></span>
-      <div
-        ref={barRef}
-        onMouseDown={onMouseDown}
-        onTouchStart={onTouchStart}
-        role="slider"
-        aria-valuenow={pct}
-        aria-label="Volume"
-        style={{ flex: 1, height: 4, background: "rgba(255,255,255,.1)", borderRadius: 4, cursor: "pointer", position: "relative", touchAction: "none" }}
-      >
-        <div style={{ width: `${pct}%`, height: "100%", borderRadius: 4, background: `linear-gradient(90deg,${t.p1},${t.accent})`, position: "relative" }}>
-          <div style={{ position: "absolute", right: -5, top: "50%", transform: "translateY(-50%)", width: 10, height: 10, borderRadius: "50%", background: t.accent }} />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function SingleModal({
   track,
@@ -1113,10 +1043,9 @@ export function SingleModal({
   const duration = isPreview ? PREVIEW_CAP_SEC : fullDur || 222;
 
   const {
-    state: { isPlaying, currentTime, duration: engineDuration, volume, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack },
+    state: { isPlaying, currentTime, duration: engineDuration, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack },
     toggle,
     seek,
-    setVolume,
     playNext,
     playPrevious,
     seekBack,
@@ -1328,7 +1257,6 @@ export function SingleModal({
         </div>
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: t.dark, ...vars }}>
-          <VolumeSlider t={t} volume={volume} onVolumeChange={setVolume} />
           <div style={{ flex: 1, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18, overflowY: "auto" }}>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 30, fontWeight: 500, color: "white", lineHeight: 1.1, marginBottom: 6 }}>
@@ -1515,10 +1443,9 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const swipeRef = useRef({});
 
   const {
-    state: { isPlaying, currentTime, duration: engineDuration, currentTrack: engineTrack, volume, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack, queue: engineQueue, queueIndex: engineQueueIndex },
+    state: { isPlaying, currentTime, duration: engineDuration, currentTrack: engineTrack, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack, queue: engineQueue, queueIndex: engineQueueIndex },
     toggle,
     seek,
-    setVolume,
     playNext,
     playPrevious,
     seekBack,
@@ -2064,8 +1991,6 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
               SHUFFLE
             </button>
           </div>
-
-          <VolumeSlider t={t} volume={volume} onVolumeChange={setVolume} />
 
           <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>
             {!tracks.length ? (

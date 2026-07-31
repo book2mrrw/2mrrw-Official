@@ -15,6 +15,7 @@ import {
 } from "@/lib/media/canonical-paths";
 import { attachStreamRegistrationToRow } from "@/lib/media/stream-registration";
 import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
+import { validateCatalogArray } from "@/lib/media/catalog-schema";
 
 /** Per release-type folder + legacy key builders (entity-folder authoritative). */
 export const CANONICAL_CATALOG = {
@@ -205,6 +206,13 @@ export const CANONICAL_TRACKS = [
 export const CANONICAL_SLUG_ALIASES = {
   "love-hz": "love-hz-vol-1",
 };
+
+// Validate all arrays at module init — throws in dev, warns in prod.
+validateCatalogArray(CANONICAL_SINGLES, "CANONICAL_SINGLES", "release");
+validateCatalogArray(CANONICAL_FEATURES, "CANONICAL_FEATURES", "release");
+validateCatalogArray(CANONICAL_TRUE_ALBUMS, "CANONICAL_TRUE_ALBUMS", "release");
+validateCatalogArray(CANONICAL_MIXTAPES_AND_EPS, "CANONICAL_MIXTAPES_AND_EPS", "release");
+validateCatalogArray(CANONICAL_TRACKS, "CANONICAL_TRACKS", "track");
 
 function defaultLegacyStem(releaseSlug, overrideStem) {
   if (overrideStem) return overrideStem;
