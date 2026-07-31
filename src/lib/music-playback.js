@@ -269,10 +269,18 @@ export function toPlaybackTrack(item, accountState, source = "library", override
 }
 
 /**
- * Entitled full-stream tracks resolve to the signed /api/library/stream proxy, which
- * needs a network round trip before the first audible byte. Start from the (already
- * public, near-instant) preview instead and let AudioContext's existing upgradeStream
- * swap in the full stream moments later — same trick already used for previewOnly users.
+ * Resolve which track src to start playback with.
+ *
+ * Entitled users (canStream = true) — admin, subscribers, purchasers, collectors —
+ * always receive the redirect URL directly. The eagerPrimeFirstCard probe has likely
+ * already resolved the CDN URL into fast-path 1 cache, so the redirect round-trip is
+ * skipped entirely and playback starts in < 100ms. These users must never be routed
+ * through a preview clip; their tier is resolved once at sign-in and cached in
+ * track.metadata.access.canStream.
+ *
+ * Preview-only users receive a 30-second public preview (no auth) and will be upgraded
+ * to the full stream once they establish a session / purchase.
+ *
  * @returns {{ startTrack: object, needsUpgrade: boolean }}
  */
 export function toInstantStartTrack(track) {
@@ -281,16 +289,14 @@ export function toInstantStartTrack(track) {
   if (!track || !isLibraryStream || !previewSrc || previewSrc === track.src) {
     return { startTrack: track, needsUpgrade: false };
   }
-  // Redirect-path streams have a server round-trip (auth + signed URL + 302) that
-  // adds 1-3s before first audio byte. When a preview exists, play it instantly and
-  // let AudioContext's race-prefetch warm the library stream — the upgrade 2s later
-  // is seamless because the preload element is already buffered.
   if (isLibraryStreamRedirectSrc(track.src)) {
-    if (!previewSrc) return { startTrack: track, needsUpgrade: false };
+    // Entitled users bypass preview-first — they get the redirect URL directly.
+    if (track?.metadata?.access?.canStream) {
+      return { startTrack: track, needsUpgrade: false };
+    }
     return { startTrack: { ...track, src: previewSrc }, needsUpgrade: true };
   }
-  // Non-redirect canStream: proxied signed URL path. The upgrade swap causes a
-  // stutter on this path (no redirect warmup), so play the library stream directly.
+  // Non-redirect path: entitled users play the library stream directly.
   if (track?.metadata?.access?.canStream) {
     return { startTrack: track, needsUpgrade: false };
   }

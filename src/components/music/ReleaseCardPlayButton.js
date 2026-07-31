@@ -83,7 +83,7 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
       }
       if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
       const { startTrack, needsUpgrade } = toInstantStartTrack(track);
-      queuePlayIntent((bridge) => void bridge.playQueue?.([startTrack], 0));
+      queuePlayIntent((bridge) => void bridge.playQueue?.([startTrack], 0, { resumeAt: 0 }));
       const needsPreviewUpgrade =
         needsUpgrade ||
         (track.metadata?.access?.canStream && track.metadata?.access?.previewOnly);
