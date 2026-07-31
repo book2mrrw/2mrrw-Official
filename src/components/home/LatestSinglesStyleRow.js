@@ -144,6 +144,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
   source,
   cardMedia,
   titleClassName,
+  isFirstCard,
 }) {
   const { entitlementAccountState, userId, isAdminStable } = useStorefrontCardChrome();
   const catalogPlaybackLookup = getCatalogSurfaceRef().catalogPlaybackLookup;
@@ -172,6 +173,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
       userId={userId}
       source={source}
       isAlbumCard={cardMedia === "cover"}
+      isFirstCard={isFirstCard}
       enabled={showPlayActions}
       data-single-card={cardMedia === "video" ? true : undefined}
       onClick={() => onCardClick?.(mediaItem)}
@@ -347,6 +349,7 @@ const LatestSinglesStyleRow = forwardRef(function LatestSinglesStyleRow(
             source={source}
             cardMedia={cardMedia}
             titleClassName={titleClassName}
+            isFirstCard={i === 0}
           />
         );
       })}

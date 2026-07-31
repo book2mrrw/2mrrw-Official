@@ -5,7 +5,11 @@ import {
   buildReleasePrewarmBundle,
   warmReleasePrewarmBundle,
 } from "@/lib/playback/playback-prewarm-cache";
-import { probeRedirectUrl } from "@/lib/playback/redirect-resolve-cache";
+import {
+  probeRedirectUrl,
+  eagerPrimeFirstCard,
+  cancelEagerPrime,
+} from "@/lib/playback/redirect-resolve-cache";
 
 const DEFAULT_THRESHOLD = 0.15;
 const DEFAULT_ROOT_MARGIN = "80px 0px";
@@ -24,11 +28,13 @@ export function usePlaybackCardPrewarm(
     userId = null,
     source = "home_card",
     isAlbumCard = false,
+    isFirstCard = false,
     enabled = true,
   } = {}
 ) {
   const warmedRef = useRef(false);
   const configRef = useRef(null);
+  const eagerPrimeSlugRef = useRef(null);
 
   configRef.current = {
     releaseItem,
@@ -38,6 +44,7 @@ export function usePlaybackCardPrewarm(
     userId,
     source,
     isAlbumCard,
+    isFirstCard,
   };
 
   useEffect(() => {
@@ -51,25 +58,56 @@ export function usePlaybackCardPrewarm(
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (!entry?.isIntersecting || warmedRef.current) return;
+        if (!entry) return;
         const cfg = configRef.current;
         if (!cfg?.releaseItem) return;
-        warmedRef.current = true;
-        const bundle = buildReleasePrewarmBundle(cfg.releaseItem, {
-          catalogLookup: cfg.catalogLookup,
-          accountState: cfg.accountState || {},
-          userId: cfg.userId,
-          source: cfg.source,
-          playItem: cfg.playItem,
-          isAlbumCard: cfg.isAlbumCard,
-        });
-        if (bundle) {
+
+        if (!entry.isIntersecting) {
+          // Card left viewport — release eager buffer if we own it.
+          if (eagerPrimeSlugRef.current) {
+            cancelEagerPrime(eagerPrimeSlugRef.current);
+          }
+          return;
+        }
+
+        if (!warmedRef.current) {
+          // First intersection: warm descriptors + start probe/eager-prime.
+          const bundle = buildReleasePrewarmBundle(cfg.releaseItem, {
+            catalogLookup: cfg.catalogLookup,
+            accountState: cfg.accountState || {},
+            userId: cfg.userId,
+            source: cfg.source,
+            playItem: cfg.playItem,
+            isAlbumCard: cfg.isAlbumCard,
+          });
+          if (!bundle) return;
+          warmedRef.current = true;
           warmReleasePrewarmBundle(bundle);
-          // Probe the redirect URL to resolve 302 → CDN URL before the user taps.
-          // Stores result in the module-level cache AudioContext reads on play.
           const { releaseSlug, urlDescriptor } = bundle;
           if (urlDescriptor?.streamPath && urlDescriptor.accessSnapshot?.canStream) {
-            probeRedirectUrl(releaseSlug, urlDescriptor.streamPath);
+            if (cfg.isFirstCard) {
+              // First card: buffer audio bytes, not just the redirect URL.
+              eagerPrimeFirstCard(releaseSlug, urlDescriptor.streamPath);
+              eagerPrimeSlugRef.current = releaseSlug;
+            } else {
+              // Other cards: resolve redirect URL into cache (no byte buffering).
+              probeRedirectUrl(releaseSlug, urlDescriptor.streamPath);
+            }
+          }
+        } else if (cfg.isFirstCard) {
+          // Card re-entered viewport after leaving — restore eager prime.
+          // Descriptors are already warm; just re-buffer bytes.
+          const bundle = buildReleasePrewarmBundle(cfg.releaseItem, {
+            catalogLookup: cfg.catalogLookup,
+            accountState: cfg.accountState || {},
+            userId: cfg.userId,
+            source: cfg.source,
+            playItem: cfg.playItem,
+            isAlbumCard: cfg.isAlbumCard,
+          });
+          if (bundle?.urlDescriptor?.streamPath && bundle.urlDescriptor.accessSnapshot?.canStream) {
+            eagerPrimeFirstCard(bundle.releaseSlug, bundle.urlDescriptor.streamPath);
+            eagerPrimeSlugRef.current = bundle.releaseSlug;
           }
         }
       },
@@ -77,7 +115,14 @@ export function usePlaybackCardPrewarm(
     );
 
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      // Release the eager buffer when component unmounts or enabled/releaseItem changes.
+      if (eagerPrimeSlugRef.current) {
+        cancelEagerPrime(eagerPrimeSlugRef.current);
+        eagerPrimeSlugRef.current = null;
+      }
+    };
   }, [containerRef, enabled, releaseItem]);
 
   const warmOnInteraction = useCallback(() => {
@@ -97,10 +142,16 @@ export function usePlaybackCardPrewarm(
         warmedRef.current = true;
         warmReleasePrewarmBundle(bundle);
       }
-      // Always re-probe on interaction — covers cases where viewport probe was throttled.
       const { releaseSlug, urlDescriptor } = bundle;
       if (urlDescriptor?.streamPath && urlDescriptor.accessSnapshot?.canStream) {
-        probeRedirectUrl(releaseSlug, urlDescriptor.streamPath);
+        if (cfg.isFirstCard) {
+          // Keep the eager-prime warm on interaction (deduped internally).
+          eagerPrimeFirstCard(releaseSlug, urlDescriptor.streamPath);
+          eagerPrimeSlugRef.current = releaseSlug;
+        } else {
+          // Always re-probe on interaction — covers cases where viewport probe was throttled.
+          probeRedirectUrl(releaseSlug, urlDescriptor.streamPath);
+        }
       }
     }
   }, [enabled]);

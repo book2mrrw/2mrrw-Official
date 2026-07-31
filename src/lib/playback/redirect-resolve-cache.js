@@ -79,6 +79,93 @@ export function probeRedirectUrl(slug, redirectUrl) {
   probe.load();
 }
 
+// Singleton element that buffers the first ~3s of audio for the topmost visible card.
+let _eagerEl = null;
+let _eagerSlug = null;
+
+function getOrCreateEagerEl() {
+  if (_eagerEl) return _eagerEl;
+  if (typeof document === "undefined") return null;
+  _eagerEl = document.createElement("audio");
+  _eagerEl.muted = true;
+  _eagerEl.volume = 0;
+  _eagerEl.preload = "auto";
+  _eagerEl.crossOrigin = "anonymous";
+  return _eagerEl;
+}
+
+/**
+ * Buffer the first ~3s of audio for the topmost visible card before the user taps.
+ * Resolves the redirect URL to a CDN URL, then assigns it to a persistent singleton
+ * <audio preload="auto"> element. When AudioContext plays the same CDN URL, the
+ * browser serves the buffered bytes from cache — collapsing wait time to near zero.
+ *
+ * Only one card is eager-buffered at a time. Call cancelEagerPrime when the card
+ * leaves the viewport. No-ops on slow connections and data-saver mode.
+ */
+export function eagerPrimeFirstCard(slug, redirectUrl) {
+  if (!slug || !redirectUrl || typeof window === "undefined") return;
+  if (isSlowConnection()) return;
+
+  const cacheKey = redirectCacheKey(slug, redirectUrl);
+  const cached = redirectResolveCache[cacheKey];
+
+  if (cached) {
+    if (_eagerSlug === slug) return;
+    _eagerSlug = slug;
+    const el = getOrCreateEagerEl();
+    if (!el || el.src === cached) return;
+    el.src = cached;
+    el.load();
+    return;
+  }
+
+  if (_eagerSlug === slug) return;
+  _eagerSlug = slug;
+
+  if (_activeProbes >= MAX_ACTIVE_PROBES) return;
+  _activeProbes++;
+
+  const probe = document.createElement("audio");
+  probe.preload = "metadata";
+  probe.muted = true;
+  probe.volume = 0;
+  probe.crossOrigin = "anonymous";
+
+  const done = () => {
+    _activeProbes--;
+    try { probe.src = ""; probe.load(); } catch {}
+  };
+
+  probe.addEventListener("loadedmetadata", () => {
+    const cdn = probe.currentSrc;
+    if (cdn && cdn !== redirectUrl) setResolvedCdnUrl(cacheKey, cdn);
+    done();
+    if (_eagerSlug !== slug) return;
+    const el = getOrCreateEagerEl();
+    if (!el) return;
+    const finalUrl = cdn || redirectUrl;
+    if (el.src !== finalUrl) { el.src = finalUrl; el.load(); }
+  }, { once: true });
+  probe.addEventListener("error", () => { if (_eagerSlug === slug) _eagerSlug = null; done(); }, { once: true });
+  probe.addEventListener("abort", () => { if (_eagerSlug === slug) _eagerSlug = null; done(); }, { once: true });
+
+  probe.src = redirectUrl;
+  probe.load();
+}
+
+/**
+ * Release the eager buffer element when the first visible card leaves the viewport.
+ */
+export function cancelEagerPrime(slug) {
+  if (_eagerSlug !== slug) return;
+  _eagerSlug = null;
+  const el = _eagerEl;
+  if (el) {
+    try { el.src = ""; el.load(); } catch {}
+  }
+}
+
 /**
  * Pre-buffer initial audio bytes for a track that the user is likely about to play
  * (e.g., hovering the play button). Reuses an existing preload element provided by

@@ -15,6 +15,7 @@ function PlaybackPrewarmCardShell({
   userId = null,
   source = "home_card",
   isAlbumCard = false,
+  isFirstCard = false,
   enabled = true,
   children,
   ...divProps
@@ -28,6 +29,7 @@ function PlaybackPrewarmCardShell({
     userId,
     source,
     isAlbumCard,
+    isFirstCard,
     enabled,
   });
 
