@@ -2663,6 +2663,28 @@ export function AudioProvider({ children }) {
         }
       }
 
+      // ── AUDIO SIGNAL CHAIN DIAGNOSTIC ───────────────────────────────────────
+      if (typeof window !== "undefined") {
+        const _ctx  = audioCtxRef.current;
+        const _mGain = mainGainRef.current;
+        const _cfGain = crossfadeGainRef.current;
+        console.warn("╔══ 2MRRW AUDIO DIAGNOSTIC ══════════════════════════════");
+        console.warn("║ 1. AudioContext state    :", _ctx?.state ?? "NULL — no context");
+        console.warn("║ 2. AudioContext count    : 1 (singleton — window.__2MRRW_AUDIO_ENGINE_RUNTIME__)");
+        console.warn("║ 3. audio.src             :", audio?.currentSrc?.slice(-80) || audio?.src?.slice(-80) || "NULL");
+        console.warn("║ 4. audio.volume          :", audio?.volume ?? "NULL");
+        console.warn("║ 5. audio.muted           :", audio?.muted ?? "NULL");
+        console.warn("║ 6a. mainGain.gain.value  :", _mGain?.gain?.value ?? "NULL — no mainGain (graph not built!)");
+        console.warn("║ 6b. crossfadeGain.value  :", _cfGain?.gain?.value ?? "NULL");
+        console.warn("║ 7. gainLinear (this track):", gainLinear, "  gainDb:", newTrack?.gainDb ?? "null");
+        console.warn("║ 8. webAudioInitialized   :", webAudioInitializedRef.current);
+        console.warn("║ 8b. webAudioAvailable    :", webAudioAvailableRef.current);
+        console.warn("║ 9. crossfadeState        :", crossfadeStateRef.current);
+        console.warn("║ 10. wasBridging          :", wasBridging);
+        console.warn("╚════════════════════════════════════════════════════════");
+      }
+      // ── END DIAGNOSTIC ───────────────────────────────────────────────────────
+
       patchState({
         isPlaying: true,
         error: null,
