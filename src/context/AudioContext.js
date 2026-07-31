@@ -3805,7 +3805,7 @@ export function AudioProvider({ children }) {
     perfMark(MARKS.PLAYBACK_REQUEST);
     const requestId = playRequestIdRef.current + 1;
     playRequestIdRef.current = requestId;
-    if (crossfadeStateRef.current !== "bridging") cancelCrossfade();
+    cancelCrossfade();
     if (!options.preserveActiveStream && activeStreamAbortRef.current) {
       logStreamLifecycle("abort", { source: "playTrackInternal", slug: track?.slug });
       activeStreamAbortRef.current.abort();
@@ -4398,7 +4398,7 @@ export function AudioProvider({ children }) {
         // former stacked 3 s + 2 s guards, halving worst-case silent wait on slow connections.
         // On a cache-warm preloaded stream both conditions pass instantly (< 5 ms).
         if (!isSameTrack && !streamAbortController.signal.aborted) {
-          const MIN_BUF = 3;
+          const MIN_BUF = 1.5;
           const goodBuffer = () => {
             try {
               const buf = audio.buffered;
@@ -4425,7 +4425,7 @@ export function AudioProvider({ children }) {
               // and the case where canplaythrough fired before buffer >= 3 s.
               const onThrough = () => { if (isReady()) done(); };
               pollId = setInterval(() => { if (isReady() || streamAbortController.signal.aborted) done(); }, 100);
-              const capId = setTimeout(done, 3000);
+              const capId = setTimeout(done, 1500);
               audio.addEventListener("canplaythrough", onThrough, { once: true });
               streamAbortController.signal.addEventListener("abort", done, { once: true });
             });
@@ -4433,7 +4433,11 @@ export function AudioProvider({ children }) {
         }
         // If a newer play request arrived while we were waiting (canplaythrough or buffer guard),
         // bail out cleanly — do NOT set error state, this track was intentionally superseded.
-        if (requestId !== playRequestIdRef.current || streamAbortController.signal.aborted) return false;
+        // Always restore gain before returning so mainGainRef never stays at 0.
+        if (requestId !== playRequestIdRef.current || streamAbortController.signal.aborted) {
+          cancelCrossfade();
+          return false;
+        }
         patchState({ hasStarted: true, playbackState: "ready" });
         const startedPlay = await playAudioIfNotPaused(audio, !pausedDuringCurrentLoadRef.current, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,

@@ -709,6 +709,20 @@ function MyMusicTab({
     setSortPref(readSortPref());
   }, []);
 
+  const sortedOwnedSingles = useMemo(
+    () => sortOwnedSingles(ownedSingles, sortPref),
+    [ownedSingles, sortPref]
+  );
+
+  const mergedOwnedSingles = useMemo(
+    () =>
+      sortedOwnedSingles.map((item) => ({
+        ...item,
+        ...(singles.find((s) => s.slug === item.slug) || {}),
+      })),
+    [sortedOwnedSingles, singles]
+  );
+
   // Seed download states from IDB on mount so cached badges survive page reload.
   useEffect(() => {
     if (!user?.id || !mergedOwnedSingles.length) return;
@@ -757,20 +771,6 @@ function MyMusicTab({
     }
     setSortSheetOpen(false);
   }, []);
-
-  const sortedOwnedSingles = useMemo(
-    () => sortOwnedSingles(ownedSingles, sortPref),
-    [ownedSingles, sortPref]
-  );
-
-  const mergedOwnedSingles = useMemo(
-    () =>
-      sortedOwnedSingles.map((item) => ({
-        ...item,
-        ...(singles.find((s) => s.slug === item.slug) || {}),
-      })),
-    [sortedOwnedSingles, singles]
-  );
 
   const recentlyAddedSingles = useMemo(() => {
     const permanent = library?.filter((item) => item.source === "purchase" || item.source === "gift" || item.gifted) || ownedSingles;
