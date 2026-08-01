@@ -4,7 +4,6 @@
  */
 
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
-import { Readable } from "stream";
 
 const {
   R2_ACCOUNT_ID,
@@ -32,7 +31,9 @@ const s3 = new S3Client({
  */
 export async function downloadStream(key) {
   const res = await s3.send(new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: key }));
-  return Readable.fromWeb(res.Body);
+  // AWS SDK v3 Body is SdkStreamMixin — not a raw ReadableStream.
+  // transformToNodeStream() returns a proper Node.js Readable without buffering.
+  return res.Body.transformToNodeStream();
 }
 
 /**
