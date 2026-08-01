@@ -24,7 +24,9 @@ export async function claimNextJob(workerId) {
   // Supabase JS doesn't expose raw FOR UPDATE SKIP LOCKED — use RPC
   const { data, error } = await db.rpc("hls_claim_next_job", { p_worker_id: workerId });
   if (error) throw new Error(`claimNextJob RPC error: ${error.message}`);
-  return data ?? null; // null = queue empty
+  // SETOF RPC returns [] when queue is empty, [{...row}] when a job is claimed
+  if (!data || (Array.isArray(data) && data.length === 0)) return null;
+  return Array.isArray(data) ? data[0] : data;
 }
 
 export async function markJobProcessing(jobId, workerId) {
