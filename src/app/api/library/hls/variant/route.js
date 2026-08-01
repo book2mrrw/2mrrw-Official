@@ -63,12 +63,12 @@ export async function GET(req) {
 
   // Fetch manifest metadata from DB — single query, no presigning needed
   const admin = createAdminClient();
-  const { data: manifest, error } = await admin
+  let manifestQ = admin
     .from("hls_manifests")
     .select("hls_prefix, segment_duration_secs, duration_seconds, segment_counts")
-    .eq("slug", slug)
-    .eq("track_slug", trackSlug ?? "")
-    .maybeSingle();
+    .eq("slug", slug);
+  manifestQ = trackSlug ? manifestQ.eq("track_slug", trackSlug) : manifestQ.is("track_slug", null);
+  const { data: manifest, error } = await manifestQ.maybeSingle();
 
   if (error) {
     console.error("[hls/variant] DB error", { slug, trackSlug, message: error.message });

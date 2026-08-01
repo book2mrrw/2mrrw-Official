@@ -71,12 +71,12 @@ export async function GET(req) {
 
   // Look up completed HLS manifest
   const admin = createAdminClient();
-  const { data: manifest, error } = await admin
+  let manifestQ = admin
     .from("hls_manifests")
     .select("bitrates, segment_duration_secs, duration_seconds")
-    .eq("slug", slug)
-    .eq("track_slug", trackSlug ?? "")  // COALESCE(track_slug, '') in DB constraint
-    .maybeSingle();
+    .eq("slug", slug);
+  manifestQ = trackSlug ? manifestQ.eq("track_slug", trackSlug) : manifestQ.is("track_slug", null);
+  const { data: manifest, error } = await manifestQ.maybeSingle();
 
   if (error) {
     console.error("[hls/manifest] DB error", { slug, trackSlug, message: error.message });
