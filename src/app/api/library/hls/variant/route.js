@@ -87,17 +87,15 @@ export async function GET(req) {
     return cors(req, NextResponse.json({ error: "No segments for this bitrate" }, { status: 404 }));
   }
 
-  // Build R2 keys for all segments of this bitrate
-  const initKey    = `${prefix}${bitrate}/init.mp4`;
-  const segKeys    = Array.from({ length: segCount }, (_, i) =>
-    `${prefix}${bitrate}/seg_${String(i + 1).padStart(5, "0")}.m4s`
+  // Build R2 keys for all segments of this bitrate (MPEG-TS)
+  const segKeys = Array.from({ length: segCount }, (_, i) =>
+    `${prefix}${bitrate}/seg_${String(i + 1).padStart(5, "0")}.ts`
   );
 
-  // Sign all presigned URLs concurrently — single S3 round-trip per URL
-  const [initUrl, ...segUrls] = await Promise.all([
-    createR2SignedGetUrl(initKey, SEGMENT_URL_TTL_SECONDS),
-    ...segKeys.map((k) => createR2SignedGetUrl(k, SEGMENT_URL_TTL_SECONDS)),
-  ]);
+  // Sign all presigned URLs concurrently
+  const segUrls = await Promise.all(
+    segKeys.map((k) => createR2SignedGetUrl(k, SEGMENT_URL_TTL_SECONDS))
+  );
 
   // Issue a key-delivery token (10 min) for the AES-128 decryption key
   const keyToken  = await signKeyToken({ slug, trackSlug, userId: payload.userId });
@@ -110,17 +108,13 @@ export async function GET(req) {
   const ivBuf = await deriveHLSIV(slug, trackSlug);
   const ivHex = ivBuf.toString("hex");
 
-  // Build variant playlist (HLS spec §4.3)
+  // Build variant playlist (MPEG-TS, HLS v3 — no init segment needed)
   const targetDuration = segDuration;
   const lines = [
     "#EXTM3U",
-    "#EXT-X-VERSION:7",
+    "#EXT-X-VERSION:3",
     `#EXT-X-TARGETDURATION:${targetDuration}`,
     "#EXT-X-PLAYLIST-TYPE:VOD",
-    "#EXT-X-INDEPENDENT-SEGMENTS",
-    "",
-    // fMP4 init segment (contains codec box — required for CMAF/fMP4 HLS)
-    `#EXT-X-MAP:URI="${initUrl}"`,
     "",
     // AES-128 encryption — key rotates per track, not per segment
     `#EXT-X-KEY:METHOD=AES-128,URI="${keyUrl}",IV=0x${ivHex}`,

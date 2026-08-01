@@ -101,8 +101,7 @@ export async function GET(req) {
   // Build HLS master playlist (HLS spec §4.3.4)
   const lines = [
     "#EXTM3U",
-    "#EXT-X-VERSION:7",
-    "#EXT-X-INDEPENDENT-SEGMENTS",
+    "#EXT-X-VERSION:3",
     "",
   ];
 

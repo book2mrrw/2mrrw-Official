@@ -78,8 +78,7 @@ async function transcodeOneBitrate({ sourceStream, bitrate, slug, trackSlug, tmp
   const bitrateDir = path.join(tmpDir, bitrate);
   fs.mkdirSync(bitrateDir, { recursive: true });
 
-  const initPath    = path.join(bitrateDir, "init.mp4");
-  const segPattern  = path.join(bitrateDir, "seg_%05d.m4s");
+  const segPattern  = path.join(bitrateDir, "seg_%05d.ts");
   const playlistPath = path.join(bitrateDir, "playlist.m3u8");
 
   const kbps = bitrate.replace("k", "");
@@ -94,16 +93,14 @@ async function transcodeOneBitrate({ sourceStream, bitrate, slug, trackSlug, tmp
     "-ac", "2",           // stereo
     "-ar", "44100",       // 44.1 kHz — CD quality sample rate
 
-    // Output: HLS with fMP4 segments
+    // Output: HLS with MPEG-TS segments (fMP4 AES-128 is not implemented in FFmpeg)
     "-f", "hls",
     "-hls_time", String(SEG_DURATION),
-    "-hls_segment_type", "fmp4",
-    "-hls_fmp4_init_filename", "init.mp4",
     "-hls_segment_filename", segPattern,
     "-hls_playlist_type", "vod",
     "-hls_flags", "independent_segments",
 
-    // AES-128 encryption
+    // AES-128 encryption — supported for MPEG-TS
     "-hls_key_info_file", keyInfoFile,
 
     // Write playlist
@@ -146,13 +143,13 @@ async function transcodeOneBitrate({ sourceStream, bitrate, slug, trackSlug, tmp
 
   // Collect segment paths in order
   const entries = fs.readdirSync(bitrateDir)
-    .filter((f) => f.endsWith(".m4s"))
+    .filter((f) => f.endsWith(".ts"))
     .sort();
   const segmentPaths = entries.map((f) => path.join(bitrateDir, f));
 
   logger.info("ffmpeg done", { bitrate, segments: segmentPaths.length, durationSeconds });
 
-  return { initPath, segmentPaths, durationSeconds };
+  return { segmentPaths, durationSeconds };
 }
 
 /** Sum all #EXTINF durations from an HLS playlist string */
@@ -194,19 +191,15 @@ export async function transcode({ job }) {
       // Fresh download per bitrate — streaming, not buffered
       const sourceStream = await downloadStream(sourceKey);
 
-      const { initPath, segmentPaths, durationSeconds: dur } = await transcodeOneBitrate({
+      const { segmentPaths, durationSeconds: dur } = await transcodeOneBitrate({
         sourceStream, bitrate, slug, trackSlug, tmpDir, keyInfoFile,
       });
 
-      // Upload init segment
-      const initKey = `${prefix}${bitrate}/init.mp4`;
-      await upload(initKey, fs.readFileSync(initPath), "video/mp4");
-
-      // Upload segments
+      // Upload MPEG-TS segments
       for (let i = 0; i < segmentPaths.length; i++) {
         const segNum = String(i + 1).padStart(5, "0");
-        const segKey = `${prefix}${bitrate}/seg_${segNum}.m4s`;
-        await upload(segKey, fs.readFileSync(segmentPaths[i]), "video/iso.segment");
+        const segKey = `${prefix}${bitrate}/seg_${segNum}.ts`;
+        await upload(segKey, fs.readFileSync(segmentPaths[i]), "video/mp2t");
       }
 
       segmentCounts[bitrate] = segmentPaths.length;
