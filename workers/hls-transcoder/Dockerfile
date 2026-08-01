@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-slim
 
 # Install FFmpeg from Debian repos — system binary, no bundled wrappers.
 # ffmpeg-7.x ships in Debian bookworm (Node 20 slim is bookworm-based).
