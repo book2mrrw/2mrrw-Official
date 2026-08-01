@@ -24,8 +24,9 @@ export async function claimNextJob(workerId) {
   // Supabase JS doesn't expose raw FOR UPDATE SKIP LOCKED — use RPC
   const { data, error } = await db.rpc("hls_claim_next_job", { p_worker_id: workerId });
   if (error) throw new Error(`claimNextJob RPC error: ${error.message}`);
-  // SETOF RPC returns [] when queue is empty, [{...row}] when a job is claimed
-  if (!data || (Array.isArray(data) && data.length === 0)) return null;
+  // PostgreSQL composite NULL serializes as {id: null, ...} in Supabase JS.
+  // id is always a non-null UUID when a real job is claimed — null id = empty queue.
+  if (!data || (Array.isArray(data) ? data.length === 0 : data.id == null)) return null;
   return Array.isArray(data) ? data[0] : data;
 }
 
