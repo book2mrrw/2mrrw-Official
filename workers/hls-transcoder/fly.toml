@@ -1,33 +1,14 @@
-# Fly.io configuration for the 2MRRW HLS transcoding worker.
-# Deploy: fly deploy --config workers/hls-transcoder/fly.toml
-
-app = "2mrrw-hls-transcoder"
-primary_region = "iad"   # US East — change to match your R2/Supabase region
+app = '2mrrw-hls-transcoder'
+primary_region = 'iad'
 
 [build]
   dockerfile = "Dockerfile"
-
-# Worker process — no HTTP port needed.
-# Fly watches for exit to restart; the process loops internally.
-[[processes]]
-  name = "worker"
-  cmd  = "node src/index.js"
 
 [env]
   LOG_LEVEL    = "info"
   IDLE_POLL_MS = "5000"
 
-# Single machine — scale up by adding more machines via `fly scale count N`.
-# Each machine claims separate jobs via FOR UPDATE SKIP LOCKED.
 [[vm]]
-  size       = "performance-2x"   # 2 vCPU / 4 GB RAM — FFmpeg is CPU-bound
-  memory     = "4096"
-
-# Secrets (set via `fly secrets set KEY=value`):
-#   SUPABASE_URL
-#   SUPABASE_SERVICE_ROLE_KEY
-#   R2_ACCOUNT_ID
-#   R2_ACCESS_KEY_ID
-#   R2_SECRET_ACCESS_KEY
-#   R2_BUCKET_NAME
-#   HLS_MASTER_SECRET        — must match your Next.js deployment
+  memory   = '2gb'
+  cpu_kind = 'shared'
+  cpus     = 2

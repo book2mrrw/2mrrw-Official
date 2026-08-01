@@ -39,7 +39,7 @@ function deriveKey(slug, trackSlug) {
   const secret  = process.env.HLS_MASTER_SECRET;
   if (!secret) throw new Error("HLS_MASTER_SECRET is required");
 
-  const canonical  = trackSlug ? `${slug}/${trackSlug}` : slug;
+  const canonical  = trackSlug ? `${slug}:${trackSlug}` : slug;
   const keyInput   = `2mrrw:hls:${canonical}:key`;
   const ivInput    = `2mrrw:hls:${canonical}:iv`;
 
