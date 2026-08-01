@@ -1,10 +1,10 @@
+# Stage 1: pull the static FFmpeg 7.x binary (encrypted fMP4 requires FFmpeg 6+; Debian bookworm only ships 5.1)
+FROM mwader/static-ffmpeg:7.1 AS ffmpeg-stage
+
+# Stage 2: runtime
 FROM node:22-slim
 
-# Install FFmpeg from Debian repos — system binary, no bundled wrappers.
-# ffmpeg-7.x ships in Debian bookworm (Node 20 slim is bookworm-based).
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg && \
-    rm -rf /var/lib/apt/lists/*
+COPY --from=ffmpeg-stage /ffmpeg /usr/local/bin/ffmpeg
 
 WORKDIR /app
 
