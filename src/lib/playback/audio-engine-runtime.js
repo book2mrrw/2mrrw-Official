@@ -52,12 +52,16 @@ function createRuntimeState() {
       stereoPannerRef: { current: null },
       bassFilterRef: { current: null },
       mainGainRef: { current: null },
+      userGainRef: { current: null },
       limiterRef: { current: null },
       crossfadeGainRef: { current: null },
       crossfadeSourceRef: { current: null },
       mediaElementSourceElementRef: { current: null },
       webAudioInitializedRef: { current: false },
       webAudioAvailableRef: { current: true },
+      // HLS engine — holds the active hls.js instance (or null for progressive playback).
+      // Null means the current track is being served via progressive download (pre-transcode fallback).
+      hlsEngineRef: { current: null },
     },
   };
 }

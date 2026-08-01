@@ -3,7 +3,16 @@
  * Owns the AudioContext, MediaElementSourceNode, and all downstream nodes.
  * Survives React provider remounts and route changes; graph is built once and persists.
  *
- * Chain: source → mainGain → analyser → stereoPanner → bassFilter → limiter → destination
+ * Signal chain (Spotify-architecture):
+ *   source → mainGain → userGain → analyser → stereoPanner → bassFilter → limiter → destination
+ *
+ * mainGain  — per-track loudness normalization + crossfade amplitude (managed by crossfade engine)
+ * userGain  — user volume preference (0–1, persisted to localStorage)
+ *             This is the single volume authority. HTMLAudioElement.volume is locked at 1.0.
+ *
+ * crossfadeGain (caller-owned) wires into userGain so both the fading-out track and the
+ * fading-in track pass through the same user-volume GainNode. Changing volume during a
+ * crossfade affects both tracks equally.
  */
 
 const MRRW_SOURCE_BOUND = Symbol.for("2mrrw.mediaElementSourceBound");
@@ -15,8 +24,10 @@ export class WebAudioEngine {
     this.ctx = null;
     /** @type {MediaElementAudioSourceNode|null} */
     this.source = null;
-    /** @type {GainNode|null} mainGain — normalization + crossfade fader. Never set el.volume here. */
+    /** @type {GainNode|null} Per-track normalization + crossfade fader. */
     this.mainGain = null;
+    /** @type {GainNode|null} Single user-volume authority. Element volume stays at 1.0. */
+    this.userGain = null;
     /** @type {AnalyserNode|null} */
     this.analyser = null;
     /** @type {StereoPannerNode|null} */
@@ -28,6 +39,8 @@ export class WebAudioEngine {
     /** @type {HTMLAudioElement|null} */
     this._boundElement = null;
     this._userVolume = this._readStoredVolume();
+    /** @type {(() => void)|null} Fired when AudioContext transitions back to "running". */
+    this._onContextRunning = null;
   }
 
   // ── Volume ─────────────────────────────────────────────────────────────────
@@ -45,13 +58,32 @@ export class WebAudioEngine {
   }
 
   /**
+   * Set user volume through the GainNode — the single volume authority.
+   * HTMLAudioElement.volume stays permanently locked at 1.0.
+   * Falls back to element.volume only when Web Audio is unavailable.
    * @param {number} level  0–1 inclusive
    */
   setUserVolume(level) {
     const v = Math.max(0, Math.min(1, Number(level)));
     if (!Number.isFinite(v)) return;
     this._userVolume = v;
-    if (this._boundElement) this._boundElement.volume = v;
+    if (this.userGain) {
+      // Primary path: Web Audio GainNode controls user volume.
+      // Smooth the ramp over 15 ms to eliminate zipper noise on rapid changes.
+      if (this.ctx && this.ctx.state === "running") {
+        const now = this.ctx.currentTime;
+        this.userGain.gain.cancelScheduledValues(now);
+        this.userGain.gain.setValueAtTime(this.userGain.gain.value, now);
+        this.userGain.gain.linearRampToValueAtTime(v, now + 0.015);
+      } else {
+        this.userGain.gain.value = v;
+      }
+      // Ensure element stays locked — belt-and-suspenders.
+      if (this._boundElement) this._boundElement.volume = 1;
+    } else if (this._boundElement) {
+      // Fallback: no Web Audio graph yet — use element volume directly.
+      this._boundElement.volume = v;
+    }
     try { localStorage.setItem(VOL_KEY, String(v)); } catch {}
   }
 
@@ -82,11 +114,8 @@ export class WebAudioEngine {
         audioEl[MRRW_SOURCE_BOUND] = true;
         this._boundElement = audioEl;
       } else if (!this.source) {
-        // Source was created for this element in a prior session but the node reference
-        // was lost. A MediaElementSourceNode can only be created once per element.
         return { ok: false };
       }
-      // else: source exists and element matches — nothing to create
     }
 
     return { ok: true };
@@ -97,13 +126,20 @@ export class WebAudioEngine {
   /**
    * Build or rebuild the downstream processing chain.
    * Disconnects stale nodes before connecting fresh ones to prevent fan-out accumulation.
+   * After this call, HTMLAudioElement.volume is locked at 1.0.
    *
-   * @param {GainNode|null} crossfadeGain  Existing crossfade gain to re-wire into new graph.
+   * @param {GainNode|null} crossfadeGain  Existing crossfade gain to re-wire through userGain.
    */
   buildGraph(crossfadeGain = null) {
     const ctx = this.ctx;
     const source = this.source;
     if (!ctx || !source) return;
+
+    const mainGain = ctx.createGain();
+    mainGain.gain.value = 1;
+
+    const userGain = ctx.createGain();
+    userGain.gain.value = this._userVolume;
 
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
@@ -117,10 +153,7 @@ export class WebAudioEngine {
     bassFilter.frequency.value = 200;
     bassFilter.gain.value = 0;
 
-    const mainGain = ctx.createGain();
-    mainGain.gain.value = 1;
-
-    // Transparent limiter — only activates above −1 dBFS, preserves the artist's master.
+    // Transparent limiter — activates only above −1 dBFS, preserves the artist's master.
     const limiter = ctx.createDynamicsCompressor();
     limiter.threshold.value = -1;
     limiter.knee.value = 0;
@@ -128,7 +161,9 @@ export class WebAudioEngine {
     limiter.attack.value = 0.003;
     limiter.release.value = 0.1;
 
+    // Tear down stale nodes before connecting.
     try { this.mainGain?.disconnect(); } catch {}
+    try { this.userGain?.disconnect(); } catch {}
     try { this.analyser?.disconnect(); } catch {}
     try { this.stereoPanner?.disconnect(); } catch {}
     try { this.bassFilter?.disconnect(); } catch {}
@@ -136,33 +171,54 @@ export class WebAudioEngine {
     try { crossfadeGain?.disconnect(); } catch {}
     try { source.disconnect(this.mainGain); } catch {}
 
+    // Primary chain: source → mainGain → userGain → analyser → stereoPanner → bassFilter → limiter → destination
     source.connect(mainGain);
-    mainGain.connect(analyser);
+    mainGain.connect(userGain);
+    userGain.connect(analyser);
     analyser.connect(stereoPanner);
     stereoPanner.connect(bassFilter);
     bassFilter.connect(limiter);
     limiter.connect(ctx.destination);
 
-    // Re-wire crossfade channel into the new analyser so it passes through
-    // stereoPanner → bassFilter → limiter → destination (not direct to destination).
+    // Crossfade channel routes through userGain so both tracks respect user volume equally.
     if (crossfadeGain) {
-      try { crossfadeGain.connect(analyser); } catch {}
+      try { crossfadeGain.connect(userGain); } catch {}
     }
 
     this.mainGain = mainGain;
+    this.userGain = userGain;
     this.analyser = analyser;
     this.stereoPanner = stereoPanner;
     this.bassFilter = bassFilter;
     this.limiter = limiter;
+
+    // Lock element volume at 1.0. All user volume control flows through userGain.
+    if (this._boundElement) this._boundElement.volume = 1;
   }
 
   // ── AudioContext lifecycle ──────────────────────────────────────────────────
 
+  /**
+   * Register a callback to fire when AudioContext transitions back to "running".
+   * Used for Bluetooth/headphone reconnect detection — caller checks if audio
+   * element is stalled and restarts it.
+   * @param {(() => void)|null} fn
+   */
+  registerContextRunningCallback(fn) {
+    this._onContextRunning = typeof fn === "function" ? fn : null;
+  }
+
   _attachStateChange() {
     if (!this.ctx) return;
     this.ctx.onstatechange = () => {
-      if (this.ctx.state === "suspended" || this.ctx.state === "interrupted") {
+      const state = this.ctx?.state;
+      if (state === "suspended" || state === "interrupted") {
+        // Resume silently — no user gesture required for re-entrant resume.
         void this.ctx.resume().catch(() => {});
+      } else if (state === "running") {
+        // Notify AudioContext.js so it can detect stalled audio elements
+        // (Bluetooth reconnect, headphone plug-in, tab re-focus on iOS).
+        this._onContextRunning?.();
       }
     };
   }

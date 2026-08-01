@@ -1,6 +1,45 @@
 /**
  * Phase 15 — playback orchestration state machine.
  * Recovery is centralized here: only the registered recover executor may call recoverAudioHard.
+ *
+ * State diagram:
+ *
+ *   IDLE
+ *     └─ LOAD_START → LOADING
+ *
+ *   LOADING
+ *     ├─ LOAD_END(playing)  → PLAYING
+ *     ├─ LOAD_END(!playing) → PAUSED
+ *     └─ recovery events    → RECOVERING
+ *
+ *   PLAYING
+ *     ├─ PLAY_PAUSE         → PAUSED
+ *     ├─ BUFFER_START       → BUFFERING
+ *     ├─ CROSSFADE_START    → CROSSFADE
+ *     └─ recovery events    → RECOVERING
+ *
+ *   BUFFERING
+ *     ├─ BUFFER_END         → PLAYING
+ *     ├─ PLAY_PAUSE         → PAUSED
+ *     └─ recovery events    → RECOVERING
+ *
+ *   CROSSFADE
+ *     ├─ CROSSFADE_END      → PLAYING
+ *     ├─ PLAY_PAUSE         → PAUSED
+ *     └─ recovery events    → RECOVERING
+ *
+ *   PAUSED
+ *     ├─ PLAY_SUCCESS       → PLAYING
+ *     ├─ LOAD_START         → LOADING
+ *     └─ recovery events    → RECOVERING
+ *
+ *   RECOVERING
+ *     ├─ RECOVER_COMPLETE(playing)  → PLAYING
+ *     ├─ RECOVER_COMPLETE(!playing) → PAUSED
+ *     └─ RECOVER_FAILED            → DEGRADED
+ *
+ *   DEGRADED
+ *     └─ RECOVERY_REQUESTED (explicit only) → RECOVERING
  */
 
 import { useSyncExternalStore } from "react";
@@ -9,6 +48,8 @@ export const PLAYBACK_ORCHESTRATION_STATES = Object.freeze({
   IDLE: "IDLE",
   LOADING: "LOADING",
   PLAYING: "PLAYING",
+  BUFFERING: "BUFFERING",
+  CROSSFADE: "CROSSFADE",
   PAUSED: "PAUSED",
   DEGRADED: "DEGRADED",
   RECOVERING: "RECOVERING",
@@ -19,6 +60,10 @@ export const PLAYBACK_ORCHESTRATION_EVENTS = Object.freeze({
   LOAD_END: "LOAD_END",
   PLAY_SUCCESS: "PLAY_SUCCESS",
   PLAY_PAUSE: "PLAY_PAUSE",
+  BUFFER_START: "BUFFER_START",
+  BUFFER_END: "BUFFER_END",
+  CROSSFADE_START: "CROSSFADE_START",
+  CROSSFADE_END: "CROSSFADE_END",
   STOP: "STOP",
   RESET: "RESET",
   AUDIO_DESYNC_DETECTED: "AUDIO_DESYNC_DETECTED",
@@ -99,53 +144,80 @@ class PlaybackStateMachine {
    * @returns {Promise<boolean> | boolean}
    */
   transition(event, payload = {}) {
+    const S = PLAYBACK_ORCHESTRATION_STATES;
+    const E = PLAYBACK_ORCHESTRATION_EVENTS;
+
     switch (event) {
-      case PLAYBACK_ORCHESTRATION_EVENTS.LOAD_START:
-        if (this.state !== PLAYBACK_ORCHESTRATION_STATES.RECOVERING) {
-          this._setState(PLAYBACK_ORCHESTRATION_STATES.LOADING);
+      // ── Track load ──────────────────────────────────────────────────────────
+      case E.LOAD_START:
+        if (this.state !== S.RECOVERING) {
+          this._setState(S.LOADING);
         }
         return true;
 
-      case PLAYBACK_ORCHESTRATION_EVENTS.LOAD_END:
-        if (this.state === PLAYBACK_ORCHESTRATION_STATES.RECOVERING) return true;
-        this._setState(
-          payload.playing
-            ? PLAYBACK_ORCHESTRATION_STATES.PLAYING
-            : PLAYBACK_ORCHESTRATION_STATES.PAUSED
-        );
+      case E.LOAD_END:
+        if (this.state === S.RECOVERING) return true;
+        this._setState(payload.playing ? S.PLAYING : S.PAUSED);
         return true;
 
-      case PLAYBACK_ORCHESTRATION_EVENTS.PLAY_SUCCESS:
-        if (this.state !== PLAYBACK_ORCHESTRATION_STATES.RECOVERING) {
-          this._setState(PLAYBACK_ORCHESTRATION_STATES.PLAYING);
+      // ── Normal play / pause ─────────────────────────────────────────────────
+      case E.PLAY_SUCCESS:
+        if (this.state !== S.RECOVERING) {
+          this._setState(S.PLAYING);
         }
         return true;
 
-      case PLAYBACK_ORCHESTRATION_EVENTS.PLAY_PAUSE:
-        if (this.state !== PLAYBACK_ORCHESTRATION_STATES.RECOVERING) {
-          this._setState(PLAYBACK_ORCHESTRATION_STATES.PAUSED);
+      case E.PLAY_PAUSE:
+        if (this.state !== S.RECOVERING) {
+          this._setState(S.PAUSED);
         }
         return true;
 
-      case PLAYBACK_ORCHESTRATION_EVENTS.STOP:
-      case PLAYBACK_ORCHESTRATION_EVENTS.RESET:
-        this._setState(PLAYBACK_ORCHESTRATION_STATES.IDLE);
+      // ── Buffering (mid-playback stall) ──────────────────────────────────────
+      case E.BUFFER_START:
+        // Only enter BUFFERING from active playback states; ignore if loading/recovering.
+        if (this.state === S.PLAYING || this.state === S.CROSSFADE) {
+          this._setState(S.BUFFERING);
+        }
         return true;
 
-      case PLAYBACK_ORCHESTRATION_EVENTS.RECOVER_COMPLETE:
-        this._setState(
-          payload.playing
-            ? PLAYBACK_ORCHESTRATION_STATES.PLAYING
-            : PLAYBACK_ORCHESTRATION_STATES.PAUSED
-        );
+      case E.BUFFER_END:
+        if (this.state === S.BUFFERING) {
+          this._setState(S.PLAYING);
+        }
         return true;
 
-      case PLAYBACK_ORCHESTRATION_EVENTS.RECOVER_FAILED:
-        this._setState(PLAYBACK_ORCHESTRATION_STATES.DEGRADED);
+      // ── Crossfade ───────────────────────────────────────────────────────────
+      case E.CROSSFADE_START:
+        if (this.state === S.PLAYING) {
+          this._setState(S.CROSSFADE);
+        }
+        return true;
+
+      case E.CROSSFADE_END:
+        if (this.state === S.CROSSFADE) {
+          this._setState(S.PLAYING);
+        }
+        return true;
+
+      // ── Stop / reset ────────────────────────────────────────────────────────
+      case E.STOP:
+      case E.RESET:
+        this._setState(S.IDLE);
+        return true;
+
+      // ── Recovery completion ─────────────────────────────────────────────────
+      case E.RECOVER_COMPLETE:
+        this._setState(payload.playing ? S.PLAYING : S.PAUSED);
+        return true;
+
+      case E.RECOVER_FAILED:
+        this._setState(S.DEGRADED);
         return false;
 
-      case PLAYBACK_ORCHESTRATION_EVENTS.AUDIO_DESYNC_DETECTED:
-      case PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED:
+      // ── Recovery entry ──────────────────────────────────────────────────────
+      case E.AUDIO_DESYNC_DETECTED:
+      case E.RECOVERY_REQUESTED:
         return this._beginRecovery(event, payload);
 
       default:

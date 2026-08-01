@@ -425,7 +425,7 @@ function MiniPlayerDock({
               isBuffering={isBuffering}
               progress={progress}
               size={40}
-              onClick={streamRetryable && onRetryStream ? onRetryStream : handlePlayToggle}
+              onClick={handlePlayToggle}
               className="player-bar-compact-play"
             />
             <TrackTransportButton direction="forward" size={40} onClick={onNextTrack} />
@@ -716,8 +716,7 @@ function GlobalAudioPlayerBar() {
 
   const dockCurrentTime = continuityFrozen && continuitySnap ? continuitySnap.playbackPosition : currentTime;
   const dockDuration = continuityFrozen && continuitySnap ? continuitySnap.duration ?? duration : duration;
-  const dockAudible = hasStarted && typeof getIsAudiblyPlaying === "function" ? getIsAudiblyPlaying() : null;
-  const dockIsPlaying = continuityFrozen ? Boolean(continuitySnap?.isPlaying) : dockAudible ?? isPlaying;
+  const dockIsPlaying = continuityFrozen ? Boolean(continuitySnap?.isPlaying) : isPlaying;
 
   const maxPreviewSeek = useMemo(() => {
     if (!previewOnly || !dockDuration) return dockDuration || 0;

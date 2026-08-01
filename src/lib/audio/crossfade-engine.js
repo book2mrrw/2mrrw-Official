@@ -68,13 +68,15 @@ export function cancelCrossfadeEngine(refs) {
  * @param {number} args.dur  Total track duration in seconds.
  * @param {object|null} args.nextTrack  Next track in queue (with src and gainDb).
  * @param {boolean} args.previewOnly    True when current track is a preview clip.
+ * @param {string} [args.repeatMode]    Current repeat mode ("off" | "one" | "all").
  * @returns {boolean} True if crossfade was initiated.
  */
-export function triggerCrossfadeIfReady(refs, { rem, dur, nextTrack, previewOnly }) {
+export function triggerCrossfadeIfReady(refs, { rem, dur, nextTrack, previewOnly, repeatMode }) {
   const { crossfadeStateRef, audioCtxRef, mainGainRef, crossfadeGainRef, nextTrackPreloadRef, trackGainRef } = refs;
 
   if (crossfadeStateRef.current !== "idle") return false;
   if (previewOnly) return false;
+  if (repeatMode === "one") return false;
   if (!mainGainRef.current || !crossfadeGainRef.current) return false;
   if (audioCtxRef.current?.state !== "running") return false;
   if (rem <= 0 || rem > CROSSFADE_SEC || dur <= CROSSFADE_SEC * 2) return false;

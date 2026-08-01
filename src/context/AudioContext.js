@@ -112,6 +112,8 @@ import {
   noteAudioProviderUnmount,
 } from "@/lib/playback/audio-engine-runtime";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
+import { getHLSEngine } from "@/lib/audio/HLSEngine";
+import { getQualityLevel as getHLSQualityLevel } from "@/lib/audio/network-quality";
 import { cancelCrossfadeEngine, triggerCrossfadeIfReady, CROSSFADE_WINDOW_SEC } from "@/lib/audio/crossfade-engine";
 import { dispatchPlaybackCommand } from "@/lib/playback/command-dispatcher";
 import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
@@ -910,6 +912,7 @@ export function AudioProvider({ children }) {
     stereoPannerRef,
     bassFilterRef,
     mainGainRef,
+    userGainRef,
     limiterRef,
     crossfadeGainRef,
     crossfadeSourceRef,
@@ -921,12 +924,14 @@ export function AudioProvider({ children }) {
     stateGetterRef,
     tracePlaybackRef,
     commandHandlersRef,
+    hlsEngineRef,
   } = engineRefsRef.current;
   const csImgRef = useRef(null);
   const csVidRef = useRef(null);
   const csAudioRef = useRef(null);
   const lastPersistRef = useRef({ key: null, at: 0 });
   const pendingSeekRef = useRef(null);
+  const previewFadeInitRef = useRef(false);
   const stateRef = useRef(EMPTY_STATE);
   const repeatModeRef = useRef("off");
   const stopAfterEachTrackRef = useRef(false);
@@ -2280,13 +2285,15 @@ export function AudioProvider({ children }) {
     const engine = getWebAudioEngine();
     engine.buildGraph(crossfadeGainRef.current);
     mainGainRef.current = engine.mainGain;
+    userGainRef.current = engine.userGain;
     analyserRef.current = engine.analyser;
     stereoPannerRef.current = engine.stereoPanner;
     bassFilterRef.current = engine.bassFilter;
     limiterRef.current = engine.limiter;
     webAudioInitializedRef.current = true;
     webAudioAvailableRef.current = true;
-    if (audioRef.current) audioRef.current.volume = engine.getUserVolume();
+    // audio.volume is locked at 1.0 by buildGraph() — do NOT restore user volume here.
+    // All volume control flows through userGainRef (the single volume authority).
   }, []);
 
   const initWebAudio = useCallback(() => {
@@ -2323,7 +2330,8 @@ export function AudioProvider({ children }) {
             const cfGain = ctx.createGain();
             cfGain.gain.value = 0;
             cfSrc.connect(cfGain);
-            cfGain.connect(analyserRef.current ?? limiterRef.current ?? ctx.destination);
+            // Route crossfade through userGain so user volume applies equally to both tracks.
+            cfGain.connect(userGainRef.current ?? analyserRef.current ?? limiterRef.current ?? ctx.destination);
             crossfadeSourceRef.current = cfSrc;
             crossfadeGainRef.current = cfGain;
           } catch {
@@ -2332,6 +2340,29 @@ export function AudioProvider({ children }) {
         }
       }
       recordAudioContextState(engine.ctx, "initWebAudio");
+
+      // Bluetooth / headphone reconnect recovery.
+      // When the OS returns AudioContext to "running" after a hardware interruption
+      // (Bluetooth device reconnect, headphone plug-in, iOS audio session restore),
+      // the HTML audio element may still be paused. We detect the stall and restart it.
+      engine.registerContextRunningCallback(() => {
+        const el = audioRef.current;
+        const s = stateRef.current;
+        if (!s.isPlaying || !el || !el.paused) return;
+        // 150 ms grace — let the OS fully stabilize the audio route before play().
+        setTimeout(() => {
+          const current = stateRef.current;
+          const elem = audioRef.current;
+          if (!current.isPlaying || !elem || !elem.paused) return;
+          void elem.play().catch(() => {
+            // play() still refused after reconnect — enter the recovery path.
+            void playbackStateMachine.transition(
+              PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
+              { reason: "audio_context_reconnect_stall", resumeAfter: true }
+            );
+          });
+        }, 150);
+      });
     } catch (err) {
       console.warn("[AUDIO] Web Audio graph init failed, routing direct:", err?.message || err);
       try { analyserRef.current?.disconnect(); } catch {}
@@ -2591,6 +2622,7 @@ export function AudioProvider({ children }) {
         const el = audioRef.current;
         const networkState = el && !el.played?.length ? "loading_stream" : "buffering";
         patchState({ isBuffering: true, playbackNetworkState: networkState });
+        playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_START);
       }, 500);
     };
     const onStalled = () => {
@@ -2601,6 +2633,7 @@ export function AudioProvider({ children }) {
         const el = audioRef.current;
         const networkState = el && !el.played?.length ? "loading_stream" : "buffering";
         patchState({ isBuffering: true, playbackNetworkState: networkState });
+        playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_START);
       }, 500);
     };
     const onPlaying = () => {
@@ -2610,6 +2643,7 @@ export function AudioProvider({ children }) {
       }
       stopStallRecovery();
       patchState({ isBuffering: false, playbackNetworkState: "playing" });
+      playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_END);
       perfMark(MARKS.PLAYBACK_AUDIBLE);
       perfMark(MARKS.AUDIO_START_LATENCY_END);
       perfMeasure("audio-start-latency", MARKS.AUDIO_START_LATENCY_START, MARKS.AUDIO_START_LATENCY_END);
@@ -2623,6 +2657,7 @@ export function AudioProvider({ children }) {
       stopStallRecovery();
       perfMark(MARKS.PLAYBACK_CANPLAYTHROUGH);
       patchState({ isBuffering: false, playbackNetworkState: "playing" });
+      playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_END);
     };
 
     const onPlay = () => {
@@ -2639,6 +2674,7 @@ export function AudioProvider({ children }) {
       const wasBridging = crossfadeStateRef.current === "bridging";
       if (wasBridging) {
         crossfadeStateRef.current = "idle";
+        playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.CROSSFADE_END);
         const ctx = audioCtxRef.current;
         const mGain = mainGainRef.current;
         const cfGain = crossfadeGainRef.current;
@@ -2943,16 +2979,34 @@ export function AudioProvider({ children }) {
       const previewOnly = track?.metadata?.access?.previewOnly;
 
       if (previewOnly && audio.currentTime >= PREVIEW_HARD_CAP_SEC - 2) {
-        const fadeStart = PREVIEW_HARD_CAP_SEC - 2;
-        const elapsed = audio.currentTime - fadeStart;
-        const fadeProgress = Math.min(1, elapsed / 2);
-        audio.volume = Math.max(0, userVolumeRef.current * (1 - fadeProgress));
+        // Schedule the userGain fade once via Web Audio API for sample-accurate smoothness.
+        // Per-frame audio.volume assignments are replaced by a single scheduled ramp —
+        // GainNode automation runs on the audio thread, not the main thread.
+        if (!previewFadeInitRef.current) {
+          previewFadeInitRef.current = true;
+          const gain = userGainRef.current;
+          const ctx = audioCtxRef.current;
+          if (gain && ctx && ctx.state === "running") {
+            const rem = Math.max(0.05, PREVIEW_HARD_CAP_SEC - audio.currentTime);
+            const now = ctx.currentTime;
+            gain.gain.cancelScheduledValues(now);
+            gain.gain.setValueAtTime(userVolumeRef.current, now);
+            gain.gain.linearRampToValueAtTime(0, now + rem);
+          }
+        }
 
         if (audio.currentTime >= PREVIEW_HARD_CAP_SEC) {
+          // Restore gain immediately so the next track starts at full user volume.
+          const gain = userGainRef.current;
+          const ctx = audioCtxRef.current;
+          if (gain && ctx) {
+            const now = ctx.currentTime;
+            gain.gain.cancelScheduledValues(now);
+            gain.gain.setValueAtTime(userVolumeRef.current, now);
+          }
+          previewFadeInitRef.current = false;
           skipPauseInterruptionRef.current = true;
           audio.pause();
-          // Do NOT restore audio.volume here — the next playTrackInternal call will set it
-          // correctly before play(). Restoring while audio is fading out causes a pop.
           audio.currentTime = PREVIEW_HARD_CAP_SEC;
           syncProgressTime(PREVIEW_HARD_CAP_SEC);
           patchState({
@@ -3014,10 +3068,13 @@ export function AudioProvider({ children }) {
       {
         const q = queueRef.current;
         const qi = queueIndexRef.current;
-        triggerCrossfadeIfReady(
+        const didStartCrossfade = triggerCrossfadeIfReady(
           { crossfadeStateRef, nextTrackPreloadRef, audioCtxRef, mainGainRef, crossfadeGainRef, trackGainRef },
-          { rem: cfRem, dur: cfDur, nextTrack: q[qi + 1] ?? null, previewOnly }
+          { rem: cfRem, dur: cfDur, nextTrack: q[qi + 1] ?? null, previewOnly, repeatMode: repeatModeRef.current }
         );
+        if (didStartCrossfade) {
+          playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.CROSSFADE_START);
+        }
       }
     };
 
@@ -3740,15 +3797,24 @@ export function AudioProvider({ children }) {
 
   const unlockAudioFromGesture = useCallback(async (audioEl) => {
     if (!audioEl || !audioEl.paused) return;
+    // Silence via GainNode before the unlock play/pause cycle to prevent audio pops.
+    // audio.volume stays locked at 1.0 — muting through the signal chain is correct here.
+    const gain = userGainRef.current;
+    const ctx = audioCtxRef.current;
+    if (gain && ctx) {
+      gain.gain.setValueAtTime(0, ctx.currentTime);
+    }
     try {
-      audioEl.volume = 0;
       await audioEl.play();
       skipPauseInterruptionRef.current = true;
       audioEl.pause();
     } catch {
       skipPauseInterruptionRef.current = false;
     }
-    audioEl.volume = userVolumeRef.current;
+    // Restore user volume through the GainNode.
+    if (gain && ctx) {
+      gain.gain.setValueAtTime(userVolumeRef.current, ctx.currentTime);
+    }
   }, []);
 
   const cancelCrossfade = useCallback(() => {
@@ -4343,23 +4409,87 @@ export function AudioProvider({ children }) {
           skipPauseInterruptionRef.current = true;
           audio.pause();
         }
-        // Set volume while the element is paused — before waitAudioSrcReady and play().
-        audio.volume = userVolumeRef.current;
+        // Reset any preview fade that was scheduled and restore userGain to full user volume.
+        // audio.volume is permanently locked at 1.0 — volume control lives in userGainRef.
+        previewFadeInitRef.current = false;
+        const ugain = userGainRef.current;
+        const uctx = audioCtxRef.current;
+        if (ugain && uctx) {
+          const now = uctx.currentTime;
+          ugain.gain.cancelScheduledValues(now);
+          ugain.gain.setValueAtTime(userVolumeRef.current, now);
+        }
         spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
+
+        // HLS adaptive bitrate path — entitled users (canStream) get AES-128 encrypted
+        // fMP4 segments over hls.js when a pre-transcoded manifest is available.
+        // Falls back transparently to progressive download on 404 (not yet transcoded).
+        // Preview users and non-stream paths always use progressive download.
+        const isEntitledForHLS = Boolean(nextTrack.metadata?.access?.canStream) && usesLibraryStream && streamSlug;
+        let hlsDidLoad = false;
+        if (isEntitledForHLS && !streamAbortController.signal.aborted) {
+          const hlsTrackSlug = nextTrack.metadata?.trackSlug || parseStreamTrackSlugFromSrc(nextTrack.src) || null;
+          const hlsParams = new URLSearchParams({ slug: streamSlug });
+          if (hlsTrackSlug) hlsParams.set("trackSlug", hlsTrackSlug);
+          const hlsManifestUrl = `/api/library/hls?${hlsParams}`;
+
+          const hlsEngine = getHLSEngine();
+          // Detach any previous track's hls.js instance before loading the new one.
+          // This releases MSE buffers and cancels in-flight segment requests.
+          hlsEngine.detach();
+
+          const qualityLevel = await getHLSQualityLevel();
+          if (qualityLevel >= 0) hlsEngine.setQualityLevel(qualityLevel);
+
+          hlsDidLoad = await new Promise((resolve) => {
+            let settled = false;
+            const done = (loaded) => {
+              if (settled) return;
+              settled = true;
+              resolve(loaded);
+            };
+            hlsEngine.onFallback = () => done(false); // 404 — not yet transcoded
+            hlsEngine.onError    = () => done(false); // fatal error — fall back
+
+            hlsEngine.loadTrack(hlsManifestUrl, audio, {
+              startPosition: resumeAt || 0,
+            }).then((loaded) => done(loaded)).catch(() => done(false));
+
+            // Respect abort signal — don't block if a newer play request arrived
+            streamAbortController.signal.addEventListener("abort", () => done(false), { once: true });
+          });
+
+          hlsEngineRef.current = hlsDidLoad ? hlsEngine : null;
+        } else {
+          // No HLS for this track — detach any lingering engine from the previous track
+          if (hlsEngineRef.current) {
+            hlsEngineRef.current.detach();
+            hlsEngineRef.current = null;
+          }
+        }
+
+        // Progressive download fallback (non-HLS path or HLS manifest 404)
         // Redirect-path sources (/api/library/stream?redirect=1) with DIRECT_STREAM_REDIRECT_ENABLED
         // go straight from Cloudflare edge to the browser — no Vercel proxy hop. 12s gives
         // headroom for initial auth + signed URL resolution without stranding a paying user.
-        const srcReadyTimeout = isLibraryStreamRedirectSrc(syncSrc) ? 12000 : AUDIO_SRC_READY_TIMEOUT_MS;
-        await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: srcReadyTimeout });
-        // Combined readiness gate: wait until readyState >= 4 (HAVE_ENOUGH_DATA) AND at least
-        // 3 s is buffered ahead. Both conditions must pass together because the browser fires
-        // canplaythrough optimistically when the preload element's signed URL shares HTTP cache
-        // with the main element — readyState 4 can appear before real bytes are buffered,
-        // causing the "plays → silence → plays" stall 2.5 s in. A single 3 s cap replaces the
-        // former stacked 3 s + 2 s guards, halving worst-case silent wait on slow connections.
-        // On a cache-warm preloaded stream both conditions pass instantly (< 5 ms).
+        if (!hlsDidLoad) {
+          const srcReadyTimeout = isLibraryStreamRedirectSrc(syncSrc) ? 12000 : AUDIO_SRC_READY_TIMEOUT_MS;
+          await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: srcReadyTimeout });
+        }
+        // Industry-level buffer gate: require readyState >= 4 (HAVE_ENOUGH_DATA) AND
+        // at least 3 s buffered ahead of currentTime before starting playback.
+        //
+        // Why both conditions together:
+        //   • readyState 4 alone fires optimistically when signed URLs share HTTP cache
+        //     with the preload element — real decode buffer can still be < 1 s, causing
+        //     the audible "plays → silence → continues" pattern at 2–3 s in.
+        //   • 3 s ahead matches HLS segment pre-roll (Apple/Spotify standard) and gives
+        //     the decoder enough runway to sustain playback through a 250 ms stall event.
+        //   • 5 s timeout cap: if network hasn't buffered 3 s in 5 s we start anyway
+        //     (graceful degradation beats infinite spinner). Cache-warm preloaded streams
+        //     pass both conditions in < 5 ms.
         if (!isSameTrack && !streamAbortController.signal.aborted) {
-          const MIN_BUF = 1.5;
+          const MIN_BUF = 3;
           const goodBuffer = () => {
             try {
               const buf = audio.buffered;
@@ -4377,17 +4507,20 @@ export function AudioProvider({ children }) {
               let pollId = null;
               const done = () => {
                 audio.removeEventListener("canplaythrough", onThrough);
+                audio.removeEventListener("progress", onProgress);
                 clearInterval(pollId);
                 clearTimeout(capId);
                 resolve();
               };
               // canplaythrough is the primary signal on cache-hit paths (< 100 ms).
-              // The 100 ms poll catches buffered-but-no-event cases (Edge/Safari quirks)
-              // and the case where canplaythrough fired before buffer >= 3 s.
+              // progress events fire as new bytes arrive on slow connections.
+              // 100 ms poll catches Edge/Safari quirks where events are suppressed.
               const onThrough = () => { if (isReady()) done(); };
+              const onProgress = () => { if (isReady()) done(); };
               pollId = setInterval(() => { if (isReady() || streamAbortController.signal.aborted) done(); }, 100);
-              const capId = setTimeout(done, 1500);
+              const capId = setTimeout(done, 5000);
               audio.addEventListener("canplaythrough", onThrough, { once: true });
+              audio.addEventListener("progress", onProgress);
               streamAbortController.signal.addEventListener("abort", done, { once: true });
             });
           }
@@ -4477,10 +4610,17 @@ export function AudioProvider({ children }) {
         );
       }
 
-      // Same-track resume: ensure volume is 1 (a stale preview fade may have left it < 1).
-      // New-track path already applied volume/swell above before waitAudioSrcReady.
+      // Same-track resume: restore userGain if a preview fade left it faded to 0.
+      // New-track path already reset gain before waitAudioSrcReady.
       if (isSameTrack) {
-        audio.volume = userVolumeRef.current;
+        previewFadeInitRef.current = false;
+        const resGain = userGainRef.current;
+        const resCtx = audioCtxRef.current;
+        if (resGain && resCtx) {
+          const now = resCtx.currentTime;
+          resGain.gain.cancelScheduledValues(now);
+          resGain.gain.setValueAtTime(userVolumeRef.current, now);
+        }
       }
 
       if (isSameTrack) {
@@ -4932,6 +5072,12 @@ export function AudioProvider({ children }) {
         if (audio) {
           skipPauseInterruptionRef.current = true;
           audio.pause();
+          // Detach HLS engine before clearing src — prevents hls.js from
+          // firing error events on a deliberately cleared element.
+          if (hlsEngineRef.current) {
+            hlsEngineRef.current.detach();
+            hlsEngineRef.current = null;
+          }
           try {
             audio.removeAttribute("src");
             audio.load();
@@ -5852,6 +5998,9 @@ export function AudioProvider({ children }) {
   const setRepeatMode = useCallback((mode) => {
     const next = REPEAT_MODES.includes(mode) ? mode : "off";
     repeatModeRef.current = next;
+    if (next === "one") {
+      cancelCrossfadeEngine({ crossfadeStateRef, nextTrackPreloadRef, audioCtxRef, mainGainRef, crossfadeGainRef, trackGainRef });
+    }
     patchState({ repeatMode: next });
     const userId = listeningUserIdRef.current;
     if (userId && queueRef.current.length) {
@@ -6324,6 +6473,10 @@ export function AudioProvider({ children }) {
     if (audio) {
       skipPauseInterruptionRef.current = true;
       audio.pause();
+      if (hlsEngineRef.current) {
+        hlsEngineRef.current.detach();
+        hlsEngineRef.current = null;
+      }
       audio.removeAttribute("src");
       audio.load();
     }

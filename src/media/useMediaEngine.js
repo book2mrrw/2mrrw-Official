@@ -132,12 +132,17 @@ export function mapAudioContextToMediaEngine(audio) {
   const bridge = getMediaEngineBridge();
   const audiblyPlaying = audio.getIsAudiblyPlaying?.();
   const bridgePlaying = bridge?.getState?.()?.isPlaying;
+  // audiblyPlaying returns false both when "confirmed silent" and "not yet sampled".
+  // Only let it override isPlaying when it positively confirms audible output.
+  // Otherwise fall back to React's isPlaying (playback intent) → bridge → element.
   const isPlaying =
-    typeof audiblyPlaying === "boolean"
-      ? audiblyPlaying
-      : typeof bridgePlaying === "boolean"
-        ? bridgePlaying
-        : readElementPlaying(audio.audioRef);
+    audiblyPlaying === true
+      ? true
+      : audio.isPlaying ?? (
+          typeof bridgePlaying === "boolean"
+            ? bridgePlaying
+            : readElementPlaying(audio.audioRef)
+        );
 
   return {
     state: {
