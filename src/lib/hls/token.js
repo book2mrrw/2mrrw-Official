@@ -10,7 +10,7 @@
  */
 
 const VARIANT_TTL_SECONDS = 3600;   // 60 min — covers a full stream session
-const KEY_TTL_SECONDS     = 600;    // 10 min — key requests happen at the start of each segment batch
+const KEY_TTL_SECONDS     = 3300;   // 55 min — matches variant playlist cache-control (3300s)
 
 /** @returns {string} */
 function getHmacSecret() {

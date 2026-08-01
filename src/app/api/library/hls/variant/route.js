@@ -4,27 +4,27 @@
  * Serves an HLS variant playlist for a single bitrate tier.
  * Auth is via the HMAC variant token issued by /api/library/hls — no DB round-trip.
  *
- * The variant playlist lists all segments as presigned R2 URLs (1 h TTL).
- * Segments are AES-128 encrypted; the decryption key is delivered by
- * /api/library/hls/key on a separate short-lived token (10 min).
+ * Segments are listed as public Cloudflare CDN URLs (no presigning).
+ * Content is AES-128 encrypted — public URLs are useless without the decryption key.
+ * The key is delivered by /api/library/hls/key (auth-gated, 60 min token).
  *
- * Segment files follow the naming convention set by the worker:
- *   hls/<releaseType>/<slug>/[<trackSlug>/]<bitrate>/init.mp4
- *   hls/<releaseType>/<slug>/[<trackSlug>/]<bitrate>/seg_00001.m4s
- *   ...
+ * This architecture scales to millions of users:
+ *   - Cloudflare CDN caches the encrypted segments at edge globally
+ *   - Zero server involvement for segment delivery
+ *   - Key server is the single entitlement checkpoint
  */
 
 import { NextResponse } from "next/server";
 import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
 import { verifyVariantToken, signKeyToken } from "@/lib/hls/token";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createR2SignedGetUrl } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
-// Segment presigned URL TTL — long enough to survive a full streaming session
-const SEGMENT_URL_TTL_SECONDS = 3600; // 1 hour
+// Public Cloudflare R2 CDN base — no auth required, content is AES-128 encrypted
+const R2_CDN = process.env.NEXT_PUBLIC_R2_CDN_URL?.replace(/\/$/, "") ||
+               "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
 
 function cors(req, res) {
   return applyMediaCors(req, res);
@@ -61,7 +61,7 @@ export async function GET(req) {
   });
   if (!rl.allowed) return cors(req, rateLimitResponse(rl.retryAfterSeconds));
 
-  // Fetch manifest metadata from DB
+  // Fetch manifest metadata from DB — single query, no presigning needed
   const admin = createAdminClient();
   const { data: manifest, error } = await admin
     .from("hls_manifests")
@@ -78,57 +78,45 @@ export async function GET(req) {
     return cors(req, NextResponse.json({ error: "Manifest not found" }, { status: 404 }));
   }
 
-  const prefix       = manifest.hls_prefix;                    // "hls/singles/my-slug/"
-  const segCount     = (manifest.segment_counts?.[bitrate]) ?? 0;
-  const segDuration  = manifest.segment_duration_secs ?? 6;
-  const totalDur     = manifest.duration_seconds ?? 0;
+  const prefix      = manifest.hls_prefix;
+  const segCount    = (manifest.segment_counts?.[bitrate]) ?? 0;
+  const segDuration = manifest.segment_duration_secs ?? 6;
+  const totalDur    = manifest.duration_seconds ?? 0;
 
   if (segCount === 0) {
     return cors(req, NextResponse.json({ error: "No segments for this bitrate" }, { status: 404 }));
   }
 
-  // Build R2 keys for all segments of this bitrate (MPEG-TS)
-  const segKeys = Array.from({ length: segCount }, (_, i) =>
-    `${prefix}${bitrate}/seg_${String(i + 1).padStart(5, "0")}.ts`
-  );
-
-  // Sign all presigned URLs concurrently
-  const segUrls = await Promise.all(
-    segKeys.map((k) => createR2SignedGetUrl(k, SEGMENT_URL_TTL_SECONDS))
-  );
-
-  // Issue a key-delivery token (10 min) for the AES-128 decryption key
+  // Issue a key-delivery token (60 min, matches variant token lifetime)
   const keyToken  = await signKeyToken({ slug, trackSlug, userId: payload.userId });
   const keyParams = new URLSearchParams({ token: keyToken });
   const keyUrl    = `${origin}/api/library/hls/key?${keyParams}`;
 
-  // Derive the IV for this track (hex, 32 chars = 16 bytes)
-  // IV is derived server-side and embedded in the playlist — no DB storage.
+  // Derive the IV for this track — embedded in playlist, never stored in DB
   const { deriveHLSIV } = await import("@/lib/hls/derive-key");
   const ivBuf = await deriveHLSIV(slug, trackSlug);
   const ivHex = ivBuf.toString("hex");
 
-  // Build variant playlist (MPEG-TS, HLS v3 — no init segment needed)
-  const targetDuration = segDuration;
+  // Build variant playlist (MPEG-TS, HLS v3)
   const lines = [
     "#EXTM3U",
     "#EXT-X-VERSION:3",
-    `#EXT-X-TARGETDURATION:${targetDuration}`,
+    `#EXT-X-TARGETDURATION:${segDuration}`,
     "#EXT-X-PLAYLIST-TYPE:VOD",
     "",
-    // AES-128 encryption — key rotates per track, not per segment
     `#EXT-X-KEY:METHOD=AES-128,URI="${keyUrl}",IV=0x${ivHex}`,
     "",
   ];
 
-  for (let i = 0; i < segUrls.length; i++) {
-    // Last segment may be shorter than segDuration
-    const isLast = i === segUrls.length - 1;
-    const segDur = isLast && totalDur > 0
+  for (let i = 0; i < segCount; i++) {
+    const segNum  = String(i + 1).padStart(5, "0");
+    const segUrl  = `${R2_CDN}/${prefix}${bitrate}/seg_${segNum}.ts`;
+    const isLast  = i === segCount - 1;
+    const segDur  = isLast && totalDur > 0
       ? Math.max(0.001, totalDur - (segDuration * i)).toFixed(6)
       : segDuration.toFixed(6);
 
-    lines.push(`#EXTINF:${segDur},`, segUrls[i]);
+    lines.push(`#EXTINF:${segDur},`, segUrl);
   }
 
   lines.push("#EXT-X-ENDLIST");
@@ -139,8 +127,8 @@ export async function GET(req) {
       status: 200,
       headers: {
         "Content-Type": "application/x-mpegURL",
-        // Allow hls.js to cache variant playlists briefly (segments are immutable)
-        "Cache-Control": "private, max-age=300",
+        // Segment URLs are stable CDN paths — cache variant playlist for key token lifetime
+        "Cache-Control": "private, max-age=3300",
         "X-Content-Type-Options": "nosniff",
       },
     })

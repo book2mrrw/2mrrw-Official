@@ -39,12 +39,22 @@ export async function markJobProcessing(jobId, workerId) {
 }
 
 export async function markJobComplete(jobId, manifest) {
-  // Upsert the manifest record, then mark the job done — in that order
-  const { error: mErr } = await db.from("hls_manifests").upsert(manifest, {
-    onConflict: "slug, COALESCE(track_slug, '')",
-    ignoreDuplicates: false,
-  });
-  if (mErr) throw new Error(`upsert manifest: ${mErr.message}`);
+  // PostgREST's onConflict can't reference expression-based indexes (COALESCE).
+  // INSERT first; on unique constraint violation (23505), UPDATE the existing row.
+  const { error: insErr } = await db.from("hls_manifests").insert(manifest);
+
+  if (insErr) {
+    if (insErr.code === "23505") {
+      const { error: updErr } = await db
+        .from("hls_manifests")
+        .update({ ...manifest, updated_at: new Date().toISOString() })
+        .eq("slug", manifest.slug)
+        .is("track_slug", manifest.track_slug ?? null);
+      if (updErr) throw new Error(`update manifest: ${updErr.message}`);
+    } else {
+      throw new Error(`insert manifest: ${insErr.message}`);
+    }
+  }
 
   const { error: jErr } = await db
     .from("hls_transcode_jobs")
