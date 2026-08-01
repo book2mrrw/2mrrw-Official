@@ -12,8 +12,7 @@
  *   attempt_count < MAX_ATTEMPTS  → reset to 'pending'   (worker will re-claim it)
  *   attempt_count >= MAX_ATTEMPTS → escalate to 'failed' (requires manual intervention)
  *
- * vercel.json:
- *   { "crons": [{ "path": "/api/cron/hls-stale-jobs", "schedule": "*/10 * * * *" }] }
+ * vercel.json schedule: every 10 minutes ("star/10 star star star star")
  */
 
 import { NextResponse } from "next/server";
