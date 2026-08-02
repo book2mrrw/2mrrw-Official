@@ -464,7 +464,14 @@ async function waitForAudioElementReady(audio, { signal, timeoutMs = AUDIO_SRC_R
       // Re-calling load() would abort the in-flight request and reset buffering.
       if (audio.networkState !== 2 /* NETWORK_LOADING */) {
         perfMark(MARKS.PLAYBACK_WAIT_SRC_LOAD_CALL);
+        // Contract: audio.load() auto-suspends the AudioContext on iOS Safari.
+        // The engine owns this invariant — capture state before, correct immediately after.
+        const _engine = getWebAudioEngine();
+        const _ctxWasRunning = _engine.ctx?.state === "running";
         audio.load();
+        if (_ctxWasRunning && _engine.ctx?.state !== "running") {
+          void _engine.ctx.resume().catch(() => {});
+        }
       }
     }
   });
@@ -2677,6 +2684,9 @@ export function AudioProvider({ children }) {
         bufferShowTimerRef.current = null;
       }
       stopStallRecovery();
+      // Engine owns context lifecycle: start the guardian the moment audio is audible.
+      // The guardian polls every 250 ms and resumes the context if iOS auto-suspends it.
+      getWebAudioEngine().startPlaybackGuard();
       patchState({ isBuffering: false, playbackNetworkState: "playing" });
       playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_END);
       perfMark(MARKS.PLAYBACK_AUDIBLE);
@@ -2841,6 +2851,7 @@ export function AudioProvider({ children }) {
     };
 
     const onPause = () => {
+      getWebAudioEngine().stopPlaybackGuard();
       stopStallRecovery();
       if (previewFadeInitRef.current) {
         const gain = userGainRef.current;
@@ -3152,6 +3163,7 @@ export function AudioProvider({ children }) {
 
     const onDuration = () => patchState({ duration: isFinite(audio.duration) ? audio.duration : 0 });
     const onEnded = () => {
+      getWebAudioEngine().stopPlaybackGuard();
       const track = stateRef.current.currentTrack;
       const previewOnly = track?.metadata?.access?.previewOnly;
 
