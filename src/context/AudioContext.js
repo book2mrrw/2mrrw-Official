@@ -3275,7 +3275,10 @@ export function AudioProvider({ children }) {
                 });
               }
             }
-            void playTrackRef.current?.(nextTrack, { resumeAt: 0, playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE }).then((ok) => {
+            const cfResumeAt = crossfadeStateRef.current === "bridging"
+              ? Math.max(0, nextTrackPreloadRef.current?.currentTime ?? 0)
+              : 0;
+            void playTrackRef.current?.(nextTrack, { resumeAt: cfResumeAt, playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE }).then((ok) => {
               if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
             });
             return;
@@ -4495,7 +4498,11 @@ export function AudioProvider({ children }) {
         //   • 5 s timeout cap: if network hasn't buffered 3 s in 5 s we start anyway
         //     (graceful degradation beats infinite spinner). Cache-warm preloaded streams
         //     pass both conditions in < 5 ms.
-        if (!isSameTrack && !streamAbortController.signal.aborted) {
+        // During a crossfade bridge the preload element is already audible, so the
+        // 5-second buffer gate serves no purpose — it only lets the preload element's
+        // position drift away from the main element's start position, producing the
+        // audible jump-back on handoff. Skip it; position is snapped below before play().
+        if (!isSameTrack && !streamAbortController.signal.aborted && crossfadeStateRef.current !== "bridging") {
           const MIN_BUF = 3;
           const goodBuffer = () => {
             try {
@@ -4538,6 +4545,17 @@ export function AudioProvider({ children }) {
         if (requestId !== playRequestIdRef.current || streamAbortController.signal.aborted) {
           cancelCrossfade();
           return false;
+        }
+        // Crossfade bridging: snap main element to preload element's current position
+        // so the 0.35s gain handoff crosses two streams at the same playhead. Without
+        // this, the main element starts at cfResumeAt while the preload element has
+        // drifted forward by the HLS manifest negotiation time, producing an audible
+        // position jump when mainGain ramps up and cfGain ramps down simultaneously.
+        if (crossfadeStateRef.current === "bridging") {
+          const preloadEl = nextTrackPreloadRef.current;
+          if (preloadEl && isFinite(preloadEl.currentTime) && preloadEl.currentTime > 0.05) {
+            try { audio.currentTime = preloadEl.currentTime; } catch {}
+          }
         }
         patchState({ hasStarted: true, playbackState: "ready" });
         const startedPlay = await playAudioIfNotPaused(audio, !pausedDuringCurrentLoadRef.current, {
