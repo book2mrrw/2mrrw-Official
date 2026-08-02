@@ -1010,6 +1010,7 @@ export function AudioProvider({ children }) {
   const retryStreamPlaybackRef = useRef(null);
   const positionSaveTimerRef = useRef(null);
   const bufferShowTimerRef = useRef(null);
+  const recentStallTimeRef = useRef(0); // epoch ms of last waiting/stalled event
   const trackGainRef = useRef(1);
   const crossfadeStateRef = useRef("idle"); // "idle" | "fading" | "bridging"
   // Crossfade is off by default — gapless playback without the blend.
@@ -2647,6 +2648,7 @@ export function AudioProvider({ children }) {
     };
 
     const onWaiting = () => {
+      recentStallTimeRef.current = Date.now();
       startStallRecovery();
       if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = setTimeout(() => {
@@ -2658,6 +2660,7 @@ export function AudioProvider({ children }) {
       }, 500);
     };
     const onStalled = () => {
+      recentStallTimeRef.current = Date.now();
       startStallRecovery();
       if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = setTimeout(() => {
@@ -3774,6 +3777,9 @@ export function AudioProvider({ children }) {
       if (effectiveType === "slow-2g" || effectiveType === "2g") return;
     }
     if (stateRef.current.isBuffering) return;
+    // After a stall, give the current track 15 s of undivided bandwidth before
+    // starting any preload that would compete with its recovery download.
+    if (Date.now() - recentStallTimeRef.current < 15_000) return;
 
     const queue = queueRef.current;
     const idx = queueIndexRef.current;
