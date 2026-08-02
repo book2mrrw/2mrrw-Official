@@ -2368,6 +2368,15 @@ export function AudioProvider({ children }) {
       try { analyserRef.current?.disconnect(); } catch {}
       try { stereoPannerRef.current?.disconnect(); } catch {}
       try { bassFilterRef.current?.disconnect(); } catch {}
+      // Emergency fallback: the audio element is now silenced (createMediaElementSource
+      // was already called, muting its direct output). Connect source → destination
+      // directly so the user hears audio even without the full signal chain.
+      // All normalization/EQ/limiting is lost but silence is never acceptable.
+      try {
+        const src = engine.source;
+        const dst = engine.ctx?.destination;
+        if (src && dst) src.connect(dst);
+      } catch {}
       mainGainRef.current = null;
       limiterRef.current = null;
       analyserRef.current = null;
@@ -2696,11 +2705,23 @@ export function AudioProvider({ children }) {
       }
 
       // Non-crossfade start: apply normalized gain immediately at track boundary.
-      if (!wasBridging) {
+      // The ctx.state === "running" guard was removed: setValueAtTime is valid on a
+      // suspended context (schedules at currentTime=0, applies on resume). Keeping the
+      // guard caused mainGain to stay unset on iOS when the AudioContext was still
+      // transitioning from suspended → running at the moment onPlay fired — producing
+      // audible play duration with complete silence.
+      if (!wasBridging && mainGainRef.current) {
         const ctx = audioCtxRef.current;
-        if (ctx && ctx.state === "running" && mainGainRef.current) {
-          try { mainGainRef.current.gain.setValueAtTime(gainLinear, ctx.currentTime); } catch {}
-        }
+        try {
+          if (ctx && ctx.state === "running") {
+            mainGainRef.current.gain.setValueAtTime(gainLinear, ctx.currentTime);
+          } else {
+            // Context not yet running — set value directly so it takes effect the moment
+            // the context transitions to "running". Also kick off another resume attempt.
+            mainGainRef.current.gain.value = gainLinear;
+            if (ctx && ctx.state !== "closed") void ctx.resume().catch(() => {});
+          }
+        } catch {}
       }
 
       patchState({
