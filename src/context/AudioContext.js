@@ -4591,7 +4591,12 @@ export function AudioProvider({ children }) {
         // buffer gate serves no purpose — it only lets the preload element's position
         // drift away from the main element's start position. Skip it; position is snapped.
         if (!isSameTrack && !streamAbortController.signal.aborted && crossfadeStateRef.current !== "bridging") {
-          const MIN_BUF = 5;
+          // Spotify-standard buffer gate: require 1 s of buffered audio ahead of
+          // the current position at readyState >= 3 (HAVE_FUTURE_DATA). This is
+          // enough to avoid an immediate stall on play while keeping start latency
+          // under 300 ms on any reasonable connection. readyState >= 4 and MIN_BUF=5
+          // caused 5+ second delays before sound started.
+          const MIN_BUF = 1;
           const goodBuffer = () => {
             try {
               const buf = audio.buffered;
@@ -4602,36 +4607,35 @@ export function AudioProvider({ children }) {
             } catch {}
             return false;
           };
-          const isReady = () => audio.readyState >= 4 && goodBuffer();
+          const isReady = () => audio.readyState >= 3 && goodBuffer();
           if (!isReady()) {
             await new Promise((resolve) => {
               if (isReady() || streamAbortController.signal.aborted) { resolve(); return; }
               let pollId = null;
               const done = () => {
-                audio.removeEventListener("canplaythrough", onThrough);
+                audio.removeEventListener("canplay", onCanPlay);
                 audio.removeEventListener("progress", onProgress);
                 clearInterval(pollId);
                 clearTimeout(capId);
                 resolve();
               };
-              // canplaythrough is the primary signal on cache-hit paths (< 100 ms).
-              // progress events fire as new bytes arrive on slow connections.
-              // 100 ms poll catches Edge/Safari quirks where events are suppressed.
-              const onThrough = () => { if (isReady()) done(); };
+              // canplay fires at readyState >= 3 — enough data to start without stalling.
+              // progress fires as bytes arrive on slower connections.
+              // 100 ms poll guards against Safari/Edge suppressing events.
+              const onCanPlay = () => { if (isReady()) done(); };
               const onProgress = () => { if (isReady()) done(); };
               pollId = setInterval(() => { if (isReady() || streamAbortController.signal.aborted) done(); }, 100);
-              // 8 s primary cap. If browser has HAVE_NOTHING (no bytes at all) after 8 s,
-              // extend by 4 s rather than starting into guaranteed silence — the network
-              // is extremely slow and a few extra seconds avoids an immediate stall.
+              // 4 s primary cap. On HAVE_NOTHING (zero bytes after 4 s), extend 2 s
+              // before giving up — covers genuinely slow or cold CDN connections.
               const capId = setTimeout(() => {
                 if (audio.readyState === 0 && !streamAbortController.signal.aborted) {
-                  const extId = setTimeout(done, 4000);
+                  const extId = setTimeout(done, 2000);
                   streamAbortController.signal.addEventListener("abort", () => { clearTimeout(extId); done(); }, { once: true });
                 } else {
                   done();
                 }
-              }, 8000);
-              audio.addEventListener("canplaythrough", onThrough, { once: true });
+              }, 4000);
+              audio.addEventListener("canplay", onCanPlay, { once: true });
               audio.addEventListener("progress", onProgress);
               streamAbortController.signal.addEventListener("abort", done, { once: true });
             });
