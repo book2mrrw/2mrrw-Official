@@ -2646,26 +2646,8 @@ export function AudioProvider({ children }) {
       });
     };
 
-    const abortPreloadForBandwidth = () => {
-      // When the current track stalls, abort any background preload downloads so
-      // they stop competing for the same bandwidth. scheduleNextTrackPreload() will
-      // restart them once the track recovers (onPlaying). Only abort during idle
-      // (not mid-crossfade, where the preload element IS the next track).
-      if (crossfadeStateRef.current !== "idle") return;
-      const pl = nextTrackPreloadRef.current;
-      if (pl && pl.networkState === 2 /* NETWORK_LOADING */ && pl.src) {
-        pl.src = "";
-        pl.load();
-      }
-      const nn = nextNextTrackPreloadRef.current;
-      if (nn && nn.networkState === 2 /* NETWORK_LOADING */ && nn.src) {
-        nn.src = "";
-        nn.load();
-      }
-    };
     const onWaiting = () => {
       startStallRecovery();
-      abortPreloadForBandwidth();
       if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = setTimeout(() => {
         bufferShowTimerRef.current = null;
@@ -2677,7 +2659,6 @@ export function AudioProvider({ children }) {
     };
     const onStalled = () => {
       startStallRecovery();
-      abortPreloadForBandwidth();
       if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = setTimeout(() => {
         bufferShowTimerRef.current = null;
@@ -2699,9 +2680,6 @@ export function AudioProvider({ children }) {
       perfMark(MARKS.AUDIO_START_LATENCY_END);
       perfMeasure("audio-start-latency", MARKS.AUDIO_START_LATENCY_START, MARKS.AUDIO_START_LATENCY_END);
       dumpPlaybackTiming();
-      // Restart preload that was aborted during the stall — signed URL is already
-      // cached so this is essentially free (no API call) and restores the buffer.
-      void scheduleNextTrackPreload();
     };
     const onCanPlayThrough = () => {
       if (bufferShowTimerRef.current) {
