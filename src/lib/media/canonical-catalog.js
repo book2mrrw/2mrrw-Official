@@ -550,7 +550,7 @@ export function mergeCanonicalMetadata(item) {
     artwork_path: release.artwork_path || item.artwork_path,
     preview_path: release.preview_path || item.preview_path,
     preview: item.preview || release.preview,
-    cover: item.cover || release.cover,
+    cover: item.cover || release.cover || release.legacy_cover,
     visual: item.visual || release.visual,
     video: item.video || release.video,
     coverArtType: release.coverArtType || item.coverArtType,

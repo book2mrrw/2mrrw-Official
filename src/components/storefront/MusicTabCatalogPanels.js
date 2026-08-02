@@ -57,7 +57,7 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
         const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "feature_card");
         const { startTrack, needsUpgrade } = toInstantStartTrack(track);
         if (track.src) {
-          void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false, resumeAt: 0 });
+          void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
           if (needsUpgrade) {
             const upgradeSlug = startTrack.slug;
             setTimeout(() => {
@@ -79,7 +79,7 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
       const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "feature_card");
       const { startTrack, needsUpgrade } = toInstantStartTrack(track);
       if (track.src) {
-        void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false, resumeAt: 0 });
+        void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
         if (needsUpgrade) {
           const upgradeSlug = startTrack.slug;
           setTimeout(() => {
@@ -97,7 +97,7 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
     if (tracks.length) {
       const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[idx]);
       const instantTracks = needsUpgrade ? tracks.map((t, i) => (i === idx ? startTrack : t)) : tracks;
-      void bridge?.playQueue?.(instantTracks, idx, { autoAdvance: false, resumeAt: 0 });
+      void bridge?.playQueue?.(instantTracks, idx, { resumeAt: 0 });
       if (needsUpgrade) {
         const upgradeSlug = startTrack.slug;
         setTimeout(() => {

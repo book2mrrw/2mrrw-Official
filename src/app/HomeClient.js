@@ -972,7 +972,7 @@ function PageStorefront({ initialEvents }) {
         const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_single_card");
         if (track?.src) {
           const { startTrack, needsUpgrade } = toInstantStartTrack(track);
-          void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false, resumeAt: 0 });
+          void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
           if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
         }
       } else {
@@ -987,7 +987,7 @@ function PageStorefront({ initialEvents }) {
       const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_single_card");
       if (track?.src) {
         const { startTrack, needsUpgrade } = toInstantStartTrack(track);
-        void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false, resumeAt: 0 });
+        void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
         if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
       }
       return;
@@ -1001,7 +1001,7 @@ function PageStorefront({ initialEvents }) {
       const instantTracks = needsUpgrade
         ? tracks.map((t, i) => (i === idx ? startTrack : t))
         : tracks;
-      void bridge?.playQueue?.(instantTracks, idx, { autoAdvance: false, resumeAt: 0 });
+      void bridge?.playQueue?.(instantTracks, idx, { resumeAt: 0 });
       if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1019,7 +1019,7 @@ function PageStorefront({ initialEvents }) {
         const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_feature_card");
         if (track?.src) {
           const { startTrack, needsUpgrade } = toInstantStartTrack(track);
-          void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false, resumeAt: 0 });
+          void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
           if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
         }
       } else {
@@ -1034,7 +1034,7 @@ function PageStorefront({ initialEvents }) {
       const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_feature_card");
       if (track?.src) {
         const { startTrack, needsUpgrade } = toInstantStartTrack(track);
-        void bridge?.playQueue?.([startTrack], 0, { autoAdvance: false, resumeAt: 0 });
+        void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
         if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
       }
       return;
@@ -1048,7 +1048,7 @@ function PageStorefront({ initialEvents }) {
       const instantTracks = needsUpgrade
         ? tracks.map((t, i) => (i === idx ? startTrack : t))
         : tracks;
-      void bridge?.playQueue?.(instantTracks, idx, { autoAdvance: false, resumeAt: 0 });
+      void bridge?.playQueue?.(instantTracks, idx, { resumeAt: 0 });
       if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
