@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { usePlaybackIdentity } from "@/context/AudioContext";
 import { getPagePlaybackActionsBridge, queuePlayIntent } from "@/lib/playback/page-playback-actions-bridge";
-import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
+import { toPlaybackTrack, toInstantStartTrack, albumTracksForPlayback, playableReleaseQueue } from "@/lib/music-playback";
 import { resolveTrackAccess } from "@/lib/music-access";
 import { getPlaybackPrewarmEntry, playbackPrewarmKeyForItem } from "@/lib/playback/playback-prewarm-cache";
 import { probeRedirectUrl } from "@/lib/playback/redirect-resolve-cache";
@@ -82,6 +82,31 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         return;
       }
       if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
+
+      // Build a full album queue when the item has a tracklist so auto-advance works.
+      // Falls back to single-track if tracks aren't available (singles, features).
+      const fullTracks = item.tracks?.length
+        ? playableReleaseQueue(
+            albumTracksForPlayback(item, { ...accountState, userId }, source, null),
+            { ...accountState, userId }
+          )
+        : null;
+
+      if (fullTracks?.length > 1) {
+        const { startTrack, needsUpgrade } = toInstantStartTrack(fullTracks[0]);
+        const instantQueue = needsUpgrade ? [startTrack, ...fullTracks.slice(1)] : fullTracks;
+        queuePlayIntent((bridge) => void bridge.playQueue?.(instantQueue, 0, { resumeAt: 0 }));
+        if (needsUpgrade || (track.metadata?.access?.canStream && track.metadata?.access?.previewOnly)) {
+          const upgradeSlug = startTrack.slug;
+          upgradeTimerRef.current = setTimeout(() => {
+            const b = getPagePlaybackActionsBridge();
+            if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
+          }, 2000);
+        }
+        return;
+      }
+
+      // Single track (no tracklist on item).
       const { startTrack, needsUpgrade } = toInstantStartTrack(track);
       queuePlayIntent((bridge) => void bridge.playQueue?.([startTrack], 0, { resumeAt: 0 }));
       const needsPreviewUpgrade =

@@ -80,12 +80,25 @@ export default function AlbumTracklistSheet({
     [album, accountState, catalogPlaybackLookup, userId]
   );
 
+  const autoPlayedRef = useRef(false);
+
   useEffect(() => {
     if (open) {
       dragY.set(0);
       dismissTriggered.current = false;
+      autoPlayedRef.current = false;
     }
   }, [open, dragY]);
+
+  // Auto-play first track when modal opens, unless something from this album is already playing.
+  useEffect(() => {
+    if (!open || autoPlayedRef.current || !tracks.length) return;
+    const alreadyPlayingThisAlbum = tracks.some((t) => isTrackActive(t));
+    if (!alreadyPlayingThisAlbum) {
+      autoPlayedRef.current = true;
+      playTrackInSheet(0);
+    }
+  }, [open, tracks, isTrackActive, playTrackInSheet]);
 
   useEffect(() => {
     if (!open) return undefined;
