@@ -2900,6 +2900,14 @@ export function AudioProvider({ children }) {
       }
       if (userInitiated) {
         playbackIntentBeforeHideRef.current = false;
+        // A user-initiated pause must cancel any pending OS-interrupt canplay listener.
+        // Without this, if an OS event (headphone disconnect, phone call) registered a
+        // canplay auto-resume listener and the user then explicitly pauses, the stale
+        // listener fires on the next canplay event and overrides the user's pause intent.
+        if (pendingResumeAfterInterruptRef.current) {
+          audio.removeEventListener("canplay", pendingResumeAfterInterruptRef.current);
+          pendingResumeAfterInterruptRef.current = null;
+        }
         logLifecycleAudioStateTransition({
           source: "onPause",
           classification: "USER_PAUSED",
@@ -3951,7 +3959,14 @@ export function AudioProvider({ children }) {
       return false;
     }
     const normalized = normalizeTrack(track);
-    pausedDuringCurrentLoadRef.current = false;
+    // Auto-advance (QUEUE_AUTO_ADVANCE) must NOT clear the user's pause intent.
+    // If the user pressed pause and then Track A ended triggering auto-advance to
+    // Track B, we should NOT start playing Track B. Only user-initiated plays
+    // (explicit track selection, skip, etc.) should reset this flag.
+    // resumeInternal also resets it when the user explicitly unpauses.
+    if (options?.playbackScenario !== PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE) {
+      pausedDuringCurrentLoadRef.current = false;
+    }
     lastUserActionRef.current = "track_change";
     clearViewportResume();
     tracePlayback("trackChange", "playTrackInternal", {
@@ -6225,6 +6240,9 @@ export function AudioProvider({ children }) {
     tracePlayback("resumeInternal", "resumeInternal", { slug: track.slug });
     lastUserActionRef.current = "play";
     userPausedRef.current = false;
+    // Clear the user-pause flag so the buffer gate in any in-flight playTrackInternal
+    // (e.g. triggered by auto-advance) knows the user now wants to be playing.
+    pausedDuringCurrentLoadRef.current = false;
 
     try {
       // iOS gesture trust fix: initWebAudio + ctx.resume() MUST run synchronously in the
