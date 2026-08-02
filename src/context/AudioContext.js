@@ -938,6 +938,9 @@ export function AudioProvider({ children }) {
   const sleepTimerRef = useRef({ endsAt: null, afterCurrentTrack: false });
   const [sleepTimerEndsAt, setSleepTimerEndsAt] = useState(null);
   const [sleepAfterCurrentTrack, setSleepAfterCurrentTrack] = useState(false);
+  const [crossfadeEnabled, setCrossfadeEnabled] = useState(
+    typeof window !== "undefined" && window.localStorage.getItem("2mrrw_crossfade") === "1"
+  );
   const shuffleRef = useRef(false);
   const csModeRef = useRef(false);
   const csUsingAlternateSrcRef = useRef(false);
@@ -1009,6 +1012,11 @@ export function AudioProvider({ children }) {
   const bufferShowTimerRef = useRef(null);
   const trackGainRef = useRef(1);
   const crossfadeStateRef = useRef("idle"); // "idle" | "fading" | "bridging"
+  // Crossfade is off by default — gapless playback without the blend.
+  // User can opt in via toggleCrossfade(); preference is persisted to localStorage.
+  const crossfadeEnabledRef = useRef(
+    typeof window !== "undefined" && window.localStorage.getItem("2mrrw_crossfade") === "1"
+  );
   const lastPlayedSlugRef = useRef(null);
   const csHoldSavedRef = useRef(null);
   const csHoldActiveRef = useRef(false);
@@ -2483,6 +2491,21 @@ export function AudioProvider({ children }) {
     };
   }, [initWebAudio]);
 
+  const toggleCrossfade = useCallback(() => {
+    const next = !crossfadeEnabledRef.current;
+    crossfadeEnabledRef.current = next;
+    setCrossfadeEnabled(next);
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("2mrrw_crossfade", next ? "1" : "0");
+      }
+    } catch {}
+    if (!next) {
+      // Turning off mid-crossfade: cancel the active crossfade immediately.
+      cancelCrossfadeEngine({ crossfadeStateRef, nextTrackPreloadRef, audioCtxRef, mainGainRef, crossfadeGainRef, trackGainRef });
+    }
+  }, []);
+
   const toggleSpaceMode = useCallback(() => {
     const next = !stateRef.current.spaceMode;
     patchState({ spaceMode: next });
@@ -3102,8 +3125,8 @@ export function AudioProvider({ children }) {
         }
       }
 
-      // Crossfade trigger — delegated to crossfade-engine.js (refs-bag pattern, no React deps).
-      {
+      // Crossfade trigger — gated by user preference (default OFF).
+      if (crossfadeEnabledRef.current) {
         const q = queueRef.current;
         const qi = queueIndexRef.current;
         const didStartCrossfade = triggerCrossfadeIfReady(
@@ -7551,6 +7574,8 @@ export function AudioProvider({ children }) {
       setOnPreviewEnded,
       previewEnded,
       setPreviewEnded,
+      crossfadeEnabled,
+      toggleCrossfade,
       toggleSpaceMode,
       toggleBassBoost,
       cycleAtmosphere,
@@ -7611,6 +7636,8 @@ export function AudioProvider({ children }) {
     setOnPreviewEnded,
     previewEnded,
     setPreviewEnded,
+    crossfadeEnabled,
+    toggleCrossfade,
     toggleSpaceMode,
     toggleBassBoost,
     cycleAtmosphere,
