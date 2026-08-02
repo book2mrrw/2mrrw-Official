@@ -5,7 +5,7 @@ import Link from "next/link";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 import { SignaturePlayRing, useImmersivePlayback, usePlayerBodyState } from "@/components/player/ImmersivePlayerEngine";
 import { usePlaybackStateMachine } from "@/media/PlaybackStateMachine";
-import { useAudioPlayer } from "@/context/AudioContext";
+import { useAudioPlayer, usePlaybackIdentity } from "@/context/AudioContext";
 import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
 import {
   TrackTransportButton,
@@ -463,10 +463,16 @@ function GlobalAudioPlayerBar() {
   const playbackOrchestrationState = usePlaybackStateMachine();
   const playback = useImmersivePlayback();
   const { continuityFrozen, getContinuitySnapshot } = useAudioPlayer();
+  // usePlaybackIdentity uses useSyncExternalStore — it updates synchronously, in the
+  // same frame as release card buttons. useAudioPlayer() is a React context that
+  // batches updates, so it can lag by one render cycle, causing the global bar to
+  // show Play while a card correctly shows Pause. Override isPlaying with the
+  // synchronous snapshot so both always flip at the same time.
+  const { isPlaying: syncedIsPlaying } = usePlaybackIdentity();
   const {
     currentTrack,
     hasStarted,
-    isPlaying,
+    isPlaying: _audioIsPlaying,
     currentTime,
     duration,
     error,
@@ -560,6 +566,7 @@ function GlobalAudioPlayerBar() {
   const csAudio = dockCurrentTrack?.csAudio || null;
   const hasCs = Boolean(csCover || csAudio);
 
+  const isPlaying = syncedIsPlaying;
   const frozenIsPlaying = continuityFrozen ? Boolean(continuitySnap?.isPlaying) : isPlaying;
 
   usePlayerBodyState({ playing: frozenIsPlaying && hasStarted, expanded: false });
