@@ -2646,8 +2646,26 @@ export function AudioProvider({ children }) {
       });
     };
 
+    const abortPreloadForBandwidth = () => {
+      // When the current track stalls, abort any background preload downloads so
+      // they stop competing for the same bandwidth. scheduleNextTrackPreload() will
+      // restart them once the track recovers (onPlaying). Only abort during idle
+      // (not mid-crossfade, where the preload element IS the next track).
+      if (crossfadeStateRef.current !== "idle") return;
+      const pl = nextTrackPreloadRef.current;
+      if (pl && pl.networkState === 2 /* NETWORK_LOADING */ && pl.src) {
+        pl.src = "";
+        pl.load();
+      }
+      const nn = nextNextTrackPreloadRef.current;
+      if (nn && nn.networkState === 2 /* NETWORK_LOADING */ && nn.src) {
+        nn.src = "";
+        nn.load();
+      }
+    };
     const onWaiting = () => {
       startStallRecovery();
+      abortPreloadForBandwidth();
       if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = setTimeout(() => {
         bufferShowTimerRef.current = null;
@@ -2659,6 +2677,7 @@ export function AudioProvider({ children }) {
     };
     const onStalled = () => {
       startStallRecovery();
+      abortPreloadForBandwidth();
       if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = setTimeout(() => {
         bufferShowTimerRef.current = null;
@@ -2680,6 +2699,9 @@ export function AudioProvider({ children }) {
       perfMark(MARKS.AUDIO_START_LATENCY_END);
       perfMeasure("audio-start-latency", MARKS.AUDIO_START_LATENCY_START, MARKS.AUDIO_START_LATENCY_END);
       dumpPlaybackTiming();
+      // Restart preload that was aborted during the stall — signed URL is already
+      // cached so this is essentially free (no API call) and restores the buffer.
+      void scheduleNextTrackPreload();
     };
     const onCanPlayThrough = () => {
       if (bufferShowTimerRef.current) {
@@ -2790,8 +2812,16 @@ export function AudioProvider({ children }) {
       lifecycleAudioTruthStateRef.current = LIFECYCLE_AUDIO_TRUTH_STATES.USER_PLAYING;
       lastMediaSessionPlaybackStateRef.current = "playing";
       emitPhase21AudibleSnapshot("onPlay");
-      // Begin buffering the next queue item in background.
-      void scheduleNextTrackPreload();
+      // Begin buffering the next queue item — delayed 6 s so the current track
+      // has time to build a healthy decode buffer before any competing download
+      // starts. The onTime safety-net (cfRem <= PRELOAD_LEAD_SEC) covers late starts.
+      // For HLS-eligible tracks the preload only fetches a signed URL (no bytes),
+      // so the delay matters mainly for progressive-download (non-entitled) users.
+      setTimeout(() => {
+        if (stateRef.current.isPlaying && !stateRef.current.isBuffering) {
+          void scheduleNextTrackPreload();
+        }
+      }, 6000);
 
       // Broadcast to other tabs so they pause (last-tab-wins coordination).
       const bc = broadcastChannelRef.current;
@@ -3829,10 +3859,18 @@ export function AudioProvider({ children }) {
             }
             delete nextTrackSignedUrlCacheRef.current[oldestKey];
           }
-          const normalized = normalizePlaybackSrc(data.url);
-          if (normalized && preloadEl.src !== normalized) {
-            preloadEl.src = normalized;
-            preloadEl.load();
+          // Only buffer progressive bytes if the next track will actually use them.
+          // HLS-eligible tracks (canStream) go through hls.js on transition, which
+          // loads HLS segments independently — any bytes the preload element downloads
+          // here are discarded, wasting bandwidth that could stall the current track.
+          // For non-HLS users the bytes ARE used (HTTP cache sharing with waitAudioSrcReady).
+          const nextIsHlsEligible = Boolean(next.metadata?.access?.canStream);
+          if (!nextIsHlsEligible) {
+            const normalized = normalizePlaybackSrc(data.url);
+            if (normalized && preloadEl.src !== normalized) {
+              preloadEl.src = normalized;
+              preloadEl.load();
+            }
           }
         }
       } catch {
@@ -4546,29 +4584,30 @@ export function AudioProvider({ children }) {
           await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: srcReadyTimeout });
         }
         // Industry-level buffer gate: require readyState >= 4 (HAVE_ENOUGH_DATA) AND
-        // at least 3 s buffered ahead of currentTime before starting playback.
+        // at least 5 s buffered ahead of currentTime before starting playback.
         //
         // Why both conditions together:
         //   • readyState 4 alone fires optimistically when signed URLs share HTTP cache
         //     with the preload element — real decode buffer can still be < 1 s, causing
         //     the audible "plays → silence → continues" pattern at 2–3 s in.
-        //   • 3 s ahead matches HLS segment pre-roll (Apple/Spotify standard) and gives
-        //     the decoder enough runway to sustain playback through a 250 ms stall event.
-        //   • 5 s timeout cap: if network hasn't buffered 3 s in 5 s we start anyway
-        //     (graceful degradation beats infinite spinner). Cache-warm preloaded streams
-        //     pass both conditions in < 5 ms.
+        //   • 5 s ahead covers one full HLS segment (6 s) and gives the decoder enough
+        //     runway to absorb mobile bandwidth variance without stalling.
+        //   • 8 s timeout cap: if network hasn't buffered 5 s in 8 s we start anyway
+        //     (graceful degradation beats infinite spinner). The cap will NOT fire if the
+        //     browser has literally no data yet (readyState 0) — it extends up to 12 s
+        //     in that case to avoid starting into guaranteed silence.
+        //   • Cache-warm preloaded streams pass both conditions in < 5 ms.
         // During a crossfade bridge the preload element is already audible, so the
-        // 5-second buffer gate serves no purpose — it only lets the preload element's
-        // position drift away from the main element's start position, producing the
-        // audible jump-back on handoff. Skip it; position is snapped below before play().
+        // buffer gate serves no purpose — it only lets the preload element's position
+        // drift away from the main element's start position. Skip it; position is snapped.
         if (!isSameTrack && !streamAbortController.signal.aborted && crossfadeStateRef.current !== "bridging") {
-          const MIN_BUF = 3;
+          const MIN_BUF = 5;
           const goodBuffer = () => {
             try {
               const buf = audio.buffered;
               const t = audio.currentTime;
               for (let i = 0; i < buf.length; i++) {
-                if (buf.start(i) <= t + 0.01 && buf.end(i) - t >= MIN_BUF) return true;
+                if (buf.start(i) <= t + 0.5 && buf.end(i) - t >= MIN_BUF) return true;
               }
             } catch {}
             return false;
@@ -4591,7 +4630,17 @@ export function AudioProvider({ children }) {
               const onThrough = () => { if (isReady()) done(); };
               const onProgress = () => { if (isReady()) done(); };
               pollId = setInterval(() => { if (isReady() || streamAbortController.signal.aborted) done(); }, 100);
-              const capId = setTimeout(done, 5000);
+              // 8 s primary cap. If browser has HAVE_NOTHING (no bytes at all) after 8 s,
+              // extend by 4 s rather than starting into guaranteed silence — the network
+              // is extremely slow and a few extra seconds avoids an immediate stall.
+              const capId = setTimeout(() => {
+                if (audio.readyState === 0 && !streamAbortController.signal.aborted) {
+                  const extId = setTimeout(done, 4000);
+                  streamAbortController.signal.addEventListener("abort", () => { clearTimeout(extId); done(); }, { once: true });
+                } else {
+                  done();
+                }
+              }, 8000);
               audio.addEventListener("canplaythrough", onThrough, { once: true });
               audio.addEventListener("progress", onProgress);
               streamAbortController.signal.addEventListener("abort", done, { once: true });
