@@ -41,37 +41,6 @@ export class WebAudioEngine {
     this._userVolume = this._readStoredVolume();
     /** @type {(() => void)|null} Fired when AudioContext transitions back to "running". */
     this._onContextRunning = null;
-    /** @type {ReturnType<typeof setInterval>|null} Active-playback context guardian handle. */
-    this._guardId = null;
-  }
-
-  // ── Playback guardian ───────────────────────────────────────────────────────
-
-  /**
-   * Start the active-playback AudioContext guardian.
-   *
-   * During playback the AudioContext must stay in "running" state — iOS Safari
-   * can auto-suspend it on audio.load(), phone interruptions, or background
-   * transitions. The guardian polls every 250 ms and calls resume() the instant
-   * it detects a suspension, so the context is always running before the next
-   * audio frame is rendered. Spotify's engine applies the same invariant: the
-   * playback engine owns the context lifecycle, not individual call sites.
-   *
-   * Call startPlaybackGuard() when audio starts playing (onPlay element event).
-   * Call stopPlaybackGuard() when audio pauses or stops (onPause / onEnded).
-   */
-  startPlaybackGuard() {
-    if (this._guardId !== null) return; // already running
-    this._guardId = setInterval(() => {
-      if (!this.ctx || this.ctx.state === "running" || this.ctx.state === "closed") return;
-      void this.ctx.resume().catch(() => {});
-    }, 250);
-  }
-
-  stopPlaybackGuard() {
-    if (this._guardId === null) return;
-    clearInterval(this._guardId);
-    this._guardId = null;
   }
 
   // ── Volume ─────────────────────────────────────────────────────────────────
