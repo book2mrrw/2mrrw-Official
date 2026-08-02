@@ -61,7 +61,8 @@ export function dispatchPlaybackCommand(type, payload = {}, { serial = true, can
     // any await, then resume the AudioContext in the same synchronous turn.
     // iOS rejects AudioContext.resume() issued after an await.
     initWebAudioRef.current?.();
-    getWebAudioEngine().resumeSync();
+    const _syncResumed = getWebAudioEngine().resumeSync();
+    console.warn("[AUDIO-DIAG] gesture-frame: initWebAudio done, resumeSync=", _syncResumed, "ctx.state=", getWebAudioEngine().ctx?.state ?? "no-ctx");
   }
 
   const run = async () => {

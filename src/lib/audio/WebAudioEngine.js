@@ -62,9 +62,17 @@ export class WebAudioEngine {
    */
   startPlaybackGuard() {
     if (this._guardId !== null) return; // already running
+    let _guardTick = 0;
     this._guardId = setInterval(() => {
+      _guardTick += 1;
+      const state = this.ctx?.state ?? "no-ctx";
+      if (_guardTick <= 8 || state !== "running") {
+        console.warn("[AUDIO-DIAG] guardian tick #" + _guardTick + " ctx.state=" + state);
+      }
       if (!this.ctx || this.ctx.state === "running" || this.ctx.state === "closed") return;
-      void this.ctx.resume().catch(() => {});
+      void this.ctx.resume()
+        .then(() => console.warn("[AUDIO-DIAG] guardian resume() RESOLVED ctx.state=", this.ctx?.state))
+        .catch((err) => console.warn("[AUDIO-DIAG] guardian resume() REJECTED", err?.message ?? err));
     }, 250);
   }
 
