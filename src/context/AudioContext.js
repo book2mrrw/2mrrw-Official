@@ -2725,27 +2725,33 @@ export function AudioProvider({ children }) {
           cfGain.gain.linearRampToValueAtTime(0, now + HANDOFF);
           if (nextEl) setTimeout(() => { try { if (!nextEl.paused) nextEl.pause(); nextEl.currentTime = 0; } catch {} }, (HANDOFF + 0.1) * 1000);
         } else {
-          try { mainGainRef.current?.gain.setValueAtTime(gainLinear, audioCtxRef.current?.currentTime ?? 0); } catch {}
+          try {
+            const now = audioCtxRef.current?.currentTime ?? 0;
+            mainGainRef.current?.gain.cancelScheduledValues(now);
+            mainGainRef.current?.gain.setValueAtTime(gainLinear, now);
+          } catch {}
           try { if (nextEl && !nextEl.paused) nextEl.pause(); if (nextEl) nextEl.currentTime = 0; } catch {}
         }
       }
 
       // Non-crossfade start: apply normalized gain immediately at track boundary.
-      // The ctx.state === "running" guard was removed: setValueAtTime is valid on a
-      // suspended context (schedules at currentTime=0, applies on resume). Keeping the
-      // guard caused mainGain to stay unset on iOS when the AudioContext was still
-      // transitioning from suspended → running at the moment onPlay fired — producing
-      // audible play duration with complete silence.
+      // cancelScheduledValues is mandatory here — any in-flight crossfade ramp-to-zero
+      // (linearRampToValueAtTime) remains alive in the automation timeline even when you
+      // set gain.value directly. That scheduled ramp fires on context resume and zeroes
+      // the gain, producing exactly the symptom: onPlaying fires, ctx=running, gains read
+      // as 1, but zero audible sound. cancelScheduledValues kills the ramp before
+      // setValueAtTime commits the correct gain. This works on both running and suspended
+      // contexts — on suspended, currentTime is frozen and cancelScheduledValues clears
+      // all future-scheduled events; setValueAtTime at that timestamp fires immediately
+      // on resume.
       if (!wasBridging && mainGainRef.current) {
         const ctx = audioCtxRef.current;
         try {
-          if (ctx && ctx.state === "running") {
-            mainGainRef.current.gain.setValueAtTime(gainLinear, ctx.currentTime);
-          } else {
-            // Context not yet running — set value directly so it takes effect the moment
-            // the context transitions to "running". Also kick off another resume attempt.
-            mainGainRef.current.gain.value = gainLinear;
-            if (ctx && ctx.state !== "closed") void ctx.resume().catch(() => {});
+          const now = ctx?.currentTime ?? 0;
+          mainGainRef.current.gain.cancelScheduledValues(now);
+          mainGainRef.current.gain.setValueAtTime(gainLinear, now);
+          if (ctx && ctx.state !== "running" && ctx.state !== "closed") {
+            void ctx.resume().catch(() => {});
           }
         } catch {}
       }
