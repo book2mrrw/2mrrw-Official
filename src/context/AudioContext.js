@@ -4314,11 +4314,6 @@ export function AudioProvider({ children }) {
         );
       }
       if (wasPlaying && audio.paused && !pausedDuringCurrentLoadRef.current) {
-        // audio.load() may have auto-suspended the Web Audio context on iOS Safari.
-        // Resume synchronously (sticky activation from the earlier gesture resume).
-        if (audioCtxRef.current?.state === "suspended") {
-          try { await audioCtxRef.current.resume(); } catch {}
-        }
         await playAudioIfNotPaused(audio, true, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
           requestId,
@@ -4655,12 +4650,6 @@ export function AudioProvider({ children }) {
           }
         }
         patchState({ hasStarted: true, playbackState: "ready" });
-        // audio.load() in waitAudioSrcReady and the buffer gate wait can span many seconds.
-        // iOS Safari may auto-suspend the Web Audio context during that time.
-        // Resume now (sticky activation from the earlier gesture-level resume holds).
-        if (audioCtxRef.current?.state === "suspended") {
-          try { await audioCtxRef.current.resume(); } catch {}
-        }
         const startedPlay = await playAudioIfNotPaused(audio, !pausedDuringCurrentLoadRef.current, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
           requestId,
