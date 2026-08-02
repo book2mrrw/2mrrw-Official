@@ -882,7 +882,12 @@ function MyMusicTab({
         .filter((t) => t.src);
       if (!tracks.length) return;
       if (playlist.shuffle) {
-        tracks = [...tracks].sort(() => Math.random() - 0.5);
+        const arr = [...tracks];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        tracks = arr;
         setShuffle(true);
       }
       const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[0]);

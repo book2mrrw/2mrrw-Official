@@ -112,7 +112,7 @@ import {
   noteAudioProviderUnmount,
 } from "@/lib/playback/audio-engine-runtime";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
-import { getHLSEngine } from "@/lib/audio/HLSEngine";
+import { replaceHLSEngine } from "@/lib/audio/HLSEngine";
 import { getQualityLevel as getHLSQualityLevel } from "@/lib/audio/network-quality";
 import { cancelCrossfadeEngine, triggerCrossfadeIfReady, CROSSFADE_WINDOW_SEC } from "@/lib/audio/crossfade-engine";
 import { dispatchPlaybackCommand } from "@/lib/playback/command-dispatcher";
@@ -2787,6 +2787,15 @@ export function AudioProvider({ children }) {
 
     const onPause = () => {
       stopStallRecovery();
+      if (previewFadeInitRef.current) {
+        const gain = userGainRef.current;
+        const ctx = audioCtxRef.current;
+        if (gain && ctx) {
+          const now = ctx.currentTime;
+          gain.gain.cancelScheduledValues(now);
+          gain.gain.setValueAtTime(userVolumeRef.current, now);
+        }
+      }
       const userInitiated = userPausedRef.current;
       const wasViewportPause = viewportPauseRef.current;
       userPausedRef.current = false;
@@ -4433,10 +4442,7 @@ export function AudioProvider({ children }) {
           if (hlsTrackSlug) hlsParams.set("trackSlug", hlsTrackSlug);
           const hlsManifestUrl = `/api/library/hls?${hlsParams}`;
 
-          const hlsEngine = getHLSEngine();
-          // Detach any previous track's hls.js instance before loading the new one.
-          // This releases MSE buffers and cancels in-flight segment requests.
-          hlsEngine.detach();
+          const hlsEngine = replaceHLSEngine();
 
           const qualityLevel = await getHLSQualityLevel();
           if (qualityLevel >= 0) hlsEngine.setQualityLevel(qualityLevel);
@@ -5691,6 +5697,7 @@ export function AudioProvider({ children }) {
       const audibilityParams = getAudibilityParams();
       const { audio } = audibilityParams;
       if (!audio) return;
+      if (audio.ended) return;
 
       updateAudibilitySample(audio, audibilitySampleRef);
 

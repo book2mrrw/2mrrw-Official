@@ -263,7 +263,7 @@ export function isInLibrary(userId, slug) {
 
 export function resolvePlaylistTracks(playlist, catalogBySlug = new Map()) {
   const refs = playlist?.tracks?.length
-    ? playlist.tracks
+    ? playlist.tracks.filter(Boolean)
     : (playlist?.trackIds || []).map((id) => catalogBySlug.get(id)).filter(Boolean);
   return refs.map((t) => ({
     id: t.id || t.slug,
