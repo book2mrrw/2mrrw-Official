@@ -1050,7 +1050,7 @@ function GlobalAudioPlayerBar() {
       {conflictDialog}
       {queueSheet}
       {sleepSheet}
-      {(isBuffering || playbackOrchestrationState === "RECOVERING") && (
+      {playbackOrchestrationState === "RECOVERING" && (
         <div
           className="player-immersive-buffer-indicator"
           aria-live="polite"

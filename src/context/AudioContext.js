@@ -112,7 +112,7 @@ import {
   noteAudioProviderUnmount,
 } from "@/lib/playback/audio-engine-runtime";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
-import { replaceHLSEngine } from "@/lib/audio/HLSEngine";
+import { getHLSEngine } from "@/lib/audio/HLSEngine";
 import { getQualityLevel as getHLSQualityLevel } from "@/lib/audio/network-quality";
 import { cancelCrossfadeEngine, triggerCrossfadeIfReady, CROSSFADE_WINDOW_SEC } from "@/lib/audio/crossfade-engine";
 import { dispatchPlaybackCommand } from "@/lib/playback/command-dispatcher";
@@ -4442,7 +4442,8 @@ export function AudioProvider({ children }) {
           if (hlsTrackSlug) hlsParams.set("trackSlug", hlsTrackSlug);
           const hlsManifestUrl = `/api/library/hls?${hlsParams}`;
 
-          const hlsEngine = replaceHLSEngine();
+          const hlsEngine = getHLSEngine();
+          hlsEngine.detach();
 
           const qualityLevel = await getHLSQualityLevel();
           if (qualityLevel >= 0) hlsEngine.setQualityLevel(qualityLevel);
