@@ -468,14 +468,9 @@ async function waitForAudioElementReady(audio, { signal, timeoutMs = AUDIO_SRC_R
         // The engine owns this invariant — capture state before, correct immediately after.
         const _engine = getWebAudioEngine();
         const _ctxWasRunning = _engine.ctx?.state === "running";
-        console.warn("[AUDIO-DIAG] waitForReady: before load() ctx.state=", _engine.ctx?.state ?? "no-ctx");
         audio.load();
-        console.warn("[AUDIO-DIAG] waitForReady: after  load() ctx.state=", _engine.ctx?.state ?? "no-ctx", "wasRunning=", _ctxWasRunning);
         if (_ctxWasRunning && _engine.ctx?.state !== "running") {
-          console.warn("[AUDIO-DIAG] waitForReady: ctx suspended by load() — firing resume()");
-          void _engine.ctx.resume()
-            .then(() => console.warn("[AUDIO-DIAG] waitForReady: resume() RESOLVED ctx.state=", _engine.ctx?.state))
-            .catch((err) => console.warn("[AUDIO-DIAG] waitForReady: resume() REJECTED", err?.message ?? err));
+          void _engine.ctx.resume().catch(() => {});
         }
       }
     }
@@ -2684,7 +2679,6 @@ export function AudioProvider({ children }) {
       }, 500);
     };
     const onPlaying = () => {
-      { const _e = getWebAudioEngine(); console.warn("[AUDIO-DIAG] onPlaying: ctx.state=", _e.ctx?.state ?? "no-ctx", "mainGain=", _e.mainGain?.gain?.value, "userGain=", _e.userGain?.gain?.value); }
       if (bufferShowTimerRef.current) {
         clearTimeout(bufferShowTimerRef.current);
         bufferShowTimerRef.current = null;
@@ -3953,9 +3947,7 @@ export function AudioProvider({ children }) {
         skipPauseInterruptionRef.current = true;
         audioEl.pause();
         audioEl.src = track.src;
-        { const _e = getWebAudioEngine(); console.warn("[AUDIO-DIAG] fast-path-redirect: before load() ctx.state=", _e.ctx?.state ?? "no-ctx"); }
         audioEl.load();
-        { const _e = getWebAudioEngine(); console.warn("[AUDIO-DIAG] fast-path-redirect: after  load() ctx.state=", _e.ctx?.state ?? "no-ctx"); }
       }
     } else if (track?.src && audioEl) {
       // CDN/Preview fast-path: early src assignment so the browser fetch overlaps
@@ -3969,9 +3961,7 @@ export function AudioProvider({ children }) {
             audioEl.pause();
           }
           audioEl.src = track.src;
-          { const _e = getWebAudioEngine(); console.warn("[AUDIO-DIAG] fast-path-cdn: before load() ctx.state=", _e.ctx?.state ?? "no-ctx"); }
           audioEl.load();
-          { const _e = getWebAudioEngine(); console.warn("[AUDIO-DIAG] fast-path-cdn: after  load() ctx.state=", _e.ctx?.state ?? "no-ctx"); }
         }
       }
     }
@@ -3984,9 +3974,7 @@ export function AudioProvider({ children }) {
     }
 
     initWebAudio();
-    { const _e = getWebAudioEngine(); console.warn("[AUDIO-DIAG] after-unlock-before-resume: ctx.state=", _e.ctx?.state ?? "no-ctx", "sessionUnlocked=", sessionUnlockedRef.current); }
     await resumeWebAudioContextIfSuspended(audioCtxRef, "playTrack-entry");
-    { const _e = getWebAudioEngine(); console.warn("[AUDIO-DIAG] after-resumeIfSuspended: ctx.state=", _e.ctx?.state ?? "no-ctx"); }
     recordAudioContextState(audioCtxRef.current, "playTrack-resume");
     if (!(await ensureWebAudioRunning(audioCtxRef))) {
       const lightOk = await attemptLightweightPlaybackResume("playTrack_ctx_suspended");
