@@ -1,60 +1,20 @@
 {
-  "name": "artist-platform",
-  "version": "0.1.0",
+  "name": "2mrrw",
   "private": true,
+  "version": "0.0.0",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint .",
-    "deploy:prod": "vercel deploy --prod --yes",
-    "test:foundation": "node scripts/frontend-foundation-smoke.mjs",
-    "test:playback-resolver-fallback": "node --import ./scripts/register-alias.mjs scripts/test-playback-resolver-fallback.mjs",
-    "test:direct-preview-cdn": "node --import ./scripts/register-alias.mjs scripts/test-direct-preview-cdn.mjs",
-    "backfill:stream-assets": "node --import ./scripts/register-alias.mjs scripts/backfill-stream-assets.mjs",
-    "backfill:playback-keys": "node --import ./scripts/register-alias.mjs scripts/backfill-playback-keys.mjs",
-    "check:frontend-guardrails": "node scripts/check-frontend-guardrails.mjs",
-    "verify:foundation": "node scripts/recovery/verify-foundation.mjs",
-    "recover:foundation": "node scripts/recovery/recover-foundation.mjs",
-    "recover:stable": "node scripts/recovery/recover-stable.mjs",
-    "recover:rollback": "node scripts/recovery/recover-rollback.mjs",
-    "recover:deploy": "node scripts/recovery/recover-deploy.mjs",
-    "snapshot:foundation": "node scripts/recovery/create-frontend-snapshot.mjs",
-    "recover:checkpoint": "node scripts/recovery/create-frontend-checkpoint.mjs"
-  },
-  "dependencies": {
-    "@aws-sdk/client-s3": "3.1051.0",
-    "@aws-sdk/s3-request-presigner": "3.1051.0",
-    "@sentry/nextjs": "^10.68.0",
-    "@stripe/react-stripe-js": "6.2.0",
-    "@stripe/stripe-js": "9.2.0",
-    "@supabase/ssr": "0.10.3",
-    "@supabase/supabase-js": "2.105.4",
-    "@tanstack/react-virtual": "3.13.25",
-    "@types/howler": "2.2.13",
-    "@types/three": "0.184.1",
-    "@upstash/redis": "^1.38.0",
-    "@vercel/kv": "^3.0.0",
-    "colorthief": "3.3.1",
-    "framer-motion": "12.38.0",
-    "hls.js": "^1.6.16",
-    "howler": "2.2.4",
-    "lucide-react": "1.16.0",
-    "next": "16.2.4",
-    "posthog-js": "1.376.0",
-    "qrcode.react": "4.2.0",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "stripe": "22.0.2",
-    "three": "0.184.0",
-    "web-push": "3.6.7",
-    "zustand": "5.0.13"
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "build:web": "pnpm --filter web build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "4.2.2",
-    "eslint": "9.39.4",
-    "eslint-config-next": "16.2.4",
-    "tailwindcss": "4.2.2",
-    "vercel": "54.7.1"
-  }
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "packageManager": "pnpm@9.15.4"
 }

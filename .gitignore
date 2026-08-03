@@ -1,8 +1,6 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
-/node_modules
-/.pnp
+# dependencies — all workspaces
+node_modules
+.pnp
 .pnp.*
 .yarn/*
 !.yarn/patches
@@ -10,28 +8,40 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
-/coverage
+# pnpm
+.pnpm-debug.log*
+pnpm-lock.yaml
 
-# next.js
-/.next/
-/out/
+# testing
+coverage
+
+# next.js (apps/web)
+apps/web/.next/
+apps/web/out/
+
+# expo (apps/mobile)
+apps/mobile/.expo/
+apps/mobile/android/
+apps/mobile/ios/
+apps/mobile/node_modules/
 
 # production
-/build
+build
 
 # misc
 .DS_Store
 *.pem
+Thumbs.db
 
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# env files — never commit secrets
+.env
+.env.*
+!.env.example
 
 # vercel
 .vercel
@@ -40,9 +50,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# temporary audit/report folders
+# temporary audit/report folders (Claude Code worktrees)
 .tmp-*
 .backfill-*
 
-.vercel
-.env*
+# eas (Expo Application Services)
+.easignore
