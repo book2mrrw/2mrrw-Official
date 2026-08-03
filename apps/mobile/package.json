@@ -1,0 +1,24 @@
+{
+  "name": "@2mrrw/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo run:ios",
+    "android": "expo run:android",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@2mrrw/types": "workspace:*",
+    "@2mrrw/config": "workspace:*",
+    "@2mrrw/core": "workspace:*",
+    "@2mrrw/auth": "workspace:*",
+    "@2mrrw/api": "workspace:*",
+    "@2mrrw/audio-contract": "workspace:*",
+    "@2mrrw/design-system": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
