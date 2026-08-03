@@ -44,7 +44,7 @@ import {
   persistMediaSessionTrack,
   readPersistedMediaSessionTrack,
 } from "@/lib/media-session-artwork";
-import { resolveCoverMediaType } from "@/components/ui/CoverArt";
+import { resolveCoverMediaType } from "@/lib/media/cover-media-type";
 import { mapContextTrackToMediaTrack } from "@/media/track-mapper";
 import {
   notifyMediaEngineBridge,

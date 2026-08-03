@@ -161,7 +161,3 @@ export function noteAudioProviderUnmount() {
  * @param {{ serial?: boolean, cancelActiveStream?: boolean }} [opts]
  * @returns {Promise<any> | null}
  */
-export { dispatchPlaybackCommand } from "@/lib/playback/command-dispatcher";
-
-export { getPlaybackCommandBus } from "@/lib/playback/command-bus";
-export { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
