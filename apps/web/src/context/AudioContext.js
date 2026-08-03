@@ -998,6 +998,12 @@ export function AudioProvider({ children }) {
   const userVolumeRef = useRef(getWebAudioEngine().getUserVolume());
   // Next-track preload: buffers the upcoming queue item while current track plays.
   const nextTrackPreloadRef = useRef(null);
+  // Intent prewarm: dedicated element for hover/touchstart intent signals.
+  // Separate from nextTrackPreloadRef so it never competes with gapless preloading.
+  // preload="auto" + crossOrigin="anonymous" → bytes are HTTP-cache-shareable with
+  // the main crossOrigin="anonymous" audio element, giving waitAudioSrcReady an
+  // instant cache hit when the user's gesture fires 150-3000ms after the intent signal.
+  const intentPrewarmRef = useRef(null);
   const nextTrackSignedUrlCacheRef = useRef({});
   // Maps slug → resolved CDN URL after following a redirect-path 302. Points at the
   // module-level singleton so probes fired by viewport/hover hooks are immediately
@@ -1783,6 +1789,12 @@ export function AudioProvider({ children }) {
       prev.preload = "auto";
       prev.crossOrigin = "anonymous";
       prevTrackPreloadRef.current = prev;
+    }
+    if (!intentPrewarmRef.current) {
+      const intent = new Audio();
+      intent.preload = "auto";
+      intent.crossOrigin = "anonymous";
+      intentPrewarmRef.current = intent;
     }
     const cleanupKeyboard = registerPlaybackKeyboardShortcuts();
     return () => {
@@ -3909,20 +3921,28 @@ export function AudioProvider({ children }) {
     }
   }, []);
 
-  // Spotify-style intent-signal preload: buffer the first track of an upcoming play
-  // before the user presses play, eliminating waitAudioSrcReady latency.
-  // - CDN/preview tracks: loads bytes directly → fast-path 2 (lines 4249-4258) picks them up
-  // - Redirect tracks: ?preload=1 follows the 302, buffers CDN bytes without creating a session
-  // - Signed-URL tracks: fetches + caches the signed URL in nextTrackSignedUrlCacheRef so
-  //   playTrackInternal skips the resolveLibraryStreamForTrack network round-trip entirely
+  // Intent-signal preload — Spotify parity: buffer audio bytes the moment the user
+  // signals intent (hover, touchstart, sheet/modal open) so waitAudioSrcReady gets
+  // an instant HTTP-cache hit when play is pressed 150 ms – 5 s later.
+  //
+  // Uses intentPrewarmRef (dedicated element, preload="auto", crossOrigin="anonymous")
+  // which is SEPARATE from nextTrackPreloadRef — never competes with gapless preloading
+  // and carries NO isPlaying guard, so it works even during active playback.
+  //
+  // Track type coverage:
+  //   CDN/preview → loads bytes directly; HTTP cache shared with main element (same URL)
+  //   Redirect     → ?preload=1 follows 302, buffers CDN bytes; fast-path 3 reads currentSrc
+  //   Signed-URL   → fetches + caches in nextTrackSignedUrlCacheRef; playTrackInternal
+  //                  skips resolveLibraryStreamForTrack network call entirely
   const hintUpcomingPlay = useCallback(async (track) => {
     if (!track?.src) return;
     if (typeof navigator !== "undefined") {
-      const effectiveType = navigator.connection?.effectiveType;
-      if (effectiveType === "slow-2g" || effectiveType === "2g") return;
+      const conn = navigator.connection;
+      if (conn?.saveData) return;
+      const et = conn?.effectiveType;
+      if (et === "slow-2g" || et === "2g") return;
     }
-    if (stateRef.current.isPlaying || stateRef.current.isBuffering) return;
-    const preloadEl = nextTrackPreloadRef.current;
+    const preloadEl = intentPrewarmRef.current;
     if (!preloadEl) return;
     const kind = classifySourceUrl(track.src);
     if (isDirectlyBufferable(kind)) {
@@ -4307,6 +4327,27 @@ export function AudioProvider({ children }) {
           ) {
             syncSrc = preloadCdnUrl;
             backgroundStreamResolve = false;
+          }
+          // Fast-path 3: intent prewarm element has CDN bytes from a hover/touchstart
+          // gesture (intentPrewarmRef). Same slug-match validation as fast-path 2.
+          if (backgroundStreamResolve) {
+            const intentEl = intentPrewarmRef.current;
+            const intentCdnUrl = intentEl?.currentSrc || "";
+            const intentSrc = intentEl?.src || "";
+            const fp3TrackSlug = parseStreamTrackSlugFromSrc(intentSrc);
+            const fp3AlbumSlug = parseStreamSlugFromSrc(intentSrc);
+            const fp3TrackMatch = fp1TrackSlug ? fp3TrackSlug === fp1TrackSlug : true;
+            const fp3AlbumMatch = fp3AlbumSlug ? fp3AlbumSlug === streamSlug : true;
+            if (
+              intentCdnUrl &&
+              intentEl.readyState >= 2 &&
+              !isLibraryStreamSrc(intentCdnUrl) &&
+              fp3TrackMatch &&
+              fp3AlbumMatch
+            ) {
+              syncSrc = intentCdnUrl;
+              backgroundStreamResolve = false;
+            }
           }
         } else {
           // Fast-path: scheduleNextTrackPreload already fetched and cached the
@@ -7805,6 +7846,10 @@ export function AudioProvider({ children }) {
     if (prevTrackPreloadRef.current) {
       prevTrackPreloadRef.current.src = "";
       prevTrackPreloadRef.current.load();
+    }
+    if (intentPrewarmRef.current) {
+      intentPrewarmRef.current.src = "";
+      intentPrewarmRef.current.load();
     }
     try { if (csAudioRef.current) { csAudioRef.current.src = ""; csAudioRef.current.load(); } } catch {}
     try { if (csVidRef.current) { csVidRef.current.src = ""; csVidRef.current.load(); } } catch {}

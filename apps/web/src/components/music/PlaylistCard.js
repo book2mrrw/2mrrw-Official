@@ -2,7 +2,7 @@
 
 const COVER_GRADIENT = "linear-gradient(135deg, rgba(0,255,255,0.12), rgba(162,89,255,0.12))";
 
-export default function PlaylistCard({ playlist, trackCount, cover, onOpen, onPlay, isMobile }) {
+export default function PlaylistCard({ playlist, trackCount, cover, onOpen, onPlay, onPlayIntent, isMobile }) {
   const resolvedCover = cover || playlist.artwork || playlist.tracks?.[0]?.cover;
 
   return (
@@ -37,6 +37,8 @@ export default function PlaylistCard({ playlist, trackCount, cover, onOpen, onPl
             e.stopPropagation();
             onPlay?.();
           }}
+          onMouseEnter={onPlayIntent}
+          onTouchStart={onPlayIntent}
           aria-label={`Play ${playlist.title}`}
           style={{
             position: "absolute",

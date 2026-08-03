@@ -4,7 +4,7 @@ import { useAudioPlayer } from "@/context/AudioContext";
 import { resolvePlaybackSrc } from "@/lib/music-access";
 
 export default function ContinueListening({ lastPlayed, access, isMobile }) {
-  const { playTrack } = useAudioPlayer();
+  const { playTrack, hintUpcomingPlay } = useAudioPlayer();
   if (!lastPlayed?.slug) return null;
 
   const track = {
@@ -70,6 +70,8 @@ export default function ContinueListening({ lastPlayed, access, isMobile }) {
       <button
         type="button"
         onClick={() => playTrack(track, { resumeAt: lastPlayed.positionSeconds || 0 })}
+        onMouseEnter={() => void hintUpcomingPlay(track)}
+        onTouchStart={() => void hintUpcomingPlay(track)}
         style={{
           padding: "10px 18px",
           background: "#00ffff",

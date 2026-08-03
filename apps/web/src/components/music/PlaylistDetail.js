@@ -5,7 +5,7 @@ import { useAudioPlayer } from "@/context/AudioContext";
 import { resolvePlaylistTracks } from "@/lib/playlists";
 
 export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobile }) {
-  const { playQueue, toggleShuffle, shuffle, toggleRepeat, repeatMode } = useAudioPlayer();
+  const { playQueue, toggleShuffle, shuffle, toggleRepeat, repeatMode, hintUpcomingPlay } = useAudioPlayer();
 
   const tracks = useMemo(
     () => resolvePlaylistTracks(playlist, catalogBySlug),
@@ -26,6 +26,8 @@ export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobi
         <button
           type="button"
           onClick={() => playQueue(tracks, 0)}
+          onMouseEnter={() => tracks[0] && void hintUpcomingPlay(tracks[0])}
+          onTouchStart={() => tracks[0] && void hintUpcomingPlay(tracks[0])}
           style={{ padding: "10px 18px", background: "#00ffff", color: "#000", border: "none", borderRadius: 10, fontWeight: 900, fontSize: 12, cursor: "pointer" }}
         >
           Play All
@@ -67,6 +69,8 @@ export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobi
             <button
               type="button"
               onClick={() => playQueue(tracks, i)}
+              onMouseEnter={() => void hintUpcomingPlay(track)}
+              onTouchStart={() => void hintUpcomingPlay(track)}
               style={{ background: "none", border: "none", color: "#00ffff", cursor: "pointer", fontSize: 16 }}
               aria-label={`Play ${track.title}`}
             >

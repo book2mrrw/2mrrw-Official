@@ -170,7 +170,29 @@ function LibraryCarousel({
         {(onPlayAll || onShuffle) ? (
           <div style={{ display: "flex", gap: 6 }}>
             {onPlayAll ? (
-              <button type="button" onClick={onPlayAll} style={{ padding: "5px 10px", background: "#111", border: "1px solid #333", color: "#ccc", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: 0.5 }}>
+              <button
+                type="button"
+                onClick={onPlayAll}
+                onMouseEnter={() => {
+                  const first = items[0];
+                  if (!first) return;
+                  const track = toPlaybackTrack(first, { ...accountState, userId }, "library_all");
+                  if (track?.src) {
+                    const { startTrack } = toInstantStartTrack(track);
+                    if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);
+                  }
+                }}
+                onTouchStart={() => {
+                  const first = items[0];
+                  if (!first) return;
+                  const track = toPlaybackTrack(first, { ...accountState, userId }, "library_all");
+                  if (track?.src) {
+                    const { startTrack } = toInstantStartTrack(track);
+                    if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);
+                  }
+                }}
+                style={{ padding: "5px 10px", background: "#111", border: "1px solid #333", color: "#ccc", borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: 0.5 }}
+              >
                 Play All
               </button>
             ) : null}
@@ -321,6 +343,22 @@ function LibraryCarousel({
                         onToggle();
                       } else {
                         onPlay(item, access);
+                      }
+                    }}
+                    onMouseEnter={() => {
+                      if (!canPlay) return;
+                      const track = toPlaybackTrack(item, { ...accountState, userId }, "library_item");
+                      if (track?.src) {
+                        const { startTrack } = toInstantStartTrack(track);
+                        if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);
+                      }
+                    }}
+                    onTouchStart={() => {
+                      if (!canPlay) return;
+                      const track = toPlaybackTrack(item, { ...accountState, userId }, "library_item");
+                      if (track?.src) {
+                        const { startTrack } = toInstantStartTrack(track);
+                        if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);
                       }
                     }}
                     style={{

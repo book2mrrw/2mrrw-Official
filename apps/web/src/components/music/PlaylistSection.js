@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Reorder, useDragControls } from "framer-motion";
 import { usePlaylists } from "@/hooks/usePlaylists";
 import PlaylistCard from "@/components/music/PlaylistCard";
+import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 
 const COVER_GRADIENT = "linear-gradient(135deg, rgba(0,255,255,0.12), rgba(162,89,255,0.12))";
 
@@ -651,6 +652,10 @@ function PlaylistSection({
                     return;
                   }
                   onPlayPlaylist?.({ ...playlist, tracks: tracksForPlay, shuffle: false });
+                }}
+                onPlayIntent={() => {
+                  const first = tracksForPlay[0];
+                  if (first?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(first);
                 }}
               />
             );
