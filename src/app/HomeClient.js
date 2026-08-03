@@ -497,14 +497,25 @@ function PageStorefront({ initialEvents }) {
 
   // ── EFFECTS ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    const mobile = window.innerWidth < 768;
-    isMobileRef.current = mobile;
-    setIsMobile(mobile);
-    // Only update the ref on resize — no setState, so orientation changes never trigger a re-render.
-    // isMobileRef stays accurate for callbacks; layout stays locked to the initial device detection.
-    const onResize = () => { isMobileRef.current = window.innerWidth < 768; };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    const detect = () => window.innerWidth < 768;
+    isMobileRef.current = detect();
+    setIsMobile(detect());
+    let rafId = null;
+    const onResize = () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const m = detect();
+        isMobileRef.current = m;
+        setIsMobile((prev) => (prev === m ? prev : m));
+      });
+    };
+    window.addEventListener("resize", onResize, { passive: true });
+    // orientationchange fires before innerWidth updates on some Android browsers;
+    // the resize event follows it, so one listener covers both.
+    return () => {
+      window.removeEventListener("resize", onResize);
+      if (rafId) cancelAnimationFrame(rafId);
+    };
   }, []);
 
   // Phase 14C: applyHeroParallax disabled — height/opacity mutations caused layout thrash on scroll.
@@ -1645,10 +1656,10 @@ function PageStorefront({ initialEvents }) {
         isMobile={isMobile}
         ambientRefs={ambientRefs}
       >
-      <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100vh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
+      <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100dvh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
         {/* ── DESKTOP SIDEBAR ── */}
         {!isMobile && (
-          <div style={{width:220,flexShrink:0,borderRight:"1px solid #141414",background:"rgba(4,4,4,0.9)",backdropFilter:"blur(20px)",display:"flex",flexDirection:"column",height:"100vh",overflowY:"auto",boxShadow:"2px 0 32px rgba(0,0,0,0.5)"}}>
+          <div style={{width:220,flexShrink:0,borderRight:"1px solid #141414",background:"rgba(4,4,4,0.9)",backdropFilter:"blur(20px)",display:"flex",flexDirection:"column",height:"100dvh",overflowY:"auto",boxShadow:"2px 0 32px rgba(0,0,0,0.5)"}}>
             <div style={{padding:"22px 18px 18px",borderBottom:"1px solid #111",flexShrink:0}}>
               <div style={{fontSize:20,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 24px rgba(0,255,255,0.45)",marginBottom:4}}>2MRRW</div>
               <PageAuthSidebarBadge

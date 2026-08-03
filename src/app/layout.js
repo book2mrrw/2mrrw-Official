@@ -13,6 +13,13 @@ import { MediaErrorBoundary } from "@/system/errors";
 
 const R2 = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  interactiveWidget: "resizes-content",
+};
+
 export const metadata = {
   title: "2MRRW",
   description: "Official music from 2MRRW — stream, collect, and experience every release.",
