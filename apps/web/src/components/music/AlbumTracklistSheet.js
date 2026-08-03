@@ -48,6 +48,7 @@ export default function AlbumTracklistSheet({
     seekBack,
     seekForward,
     error,
+    hintUpcomingPlay,
   } = useAudioPlayer();
   const dragY = useMotionValue(0);
   const sheetOpacity = useTransform(dragY, [0, 120], [1, 0.55]);
@@ -122,6 +123,18 @@ export default function AlbumTracklistSheet({
     registerModal("album-tracklist-sheet");
     return () => unregisterModal("album-tracklist-sheet");
   }, [open]);
+
+  // Intent-signal preload: start buffering the first track the moment the sheet opens,
+  // before the user presses play — giving the browser 1-3s of head start.
+  // Mirrors Spotify's hover-to-buffer pattern. Skipped when already playing so
+  // we never compete with the active track's bandwidth.
+  useEffect(() => {
+    if (!open || !tracks.length || isPlaying) return;
+    const playable = playableReleaseQueue(tracks, { ...accountState, userId });
+    if (!playable.length) return;
+    const { startTrack } = toInstantStartTrack(playable[0]);
+    if (startTrack?.src) void hintUpcomingPlay(startTrack);
+  }, [open, tracks, accountState, userId, isPlaying, hintUpcomingPlay]);
 
   // Auto-play track 1 when sheet opens — only if nothing from this album is already playing.
   // autoPlayedRef blocks re-fire if deps change while the sheet stays open.

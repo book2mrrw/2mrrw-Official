@@ -3909,6 +3909,58 @@ export function AudioProvider({ children }) {
     }
   }, []);
 
+  // Spotify-style intent-signal preload: buffer the first track of an upcoming play
+  // before the user presses play, eliminating waitAudioSrcReady latency.
+  // - CDN/preview tracks: loads bytes directly → fast-path 2 (lines 4249-4258) picks them up
+  // - Redirect tracks: ?preload=1 follows the 302, buffers CDN bytes without creating a session
+  // - Signed-URL tracks: fetches + caches the signed URL in nextTrackSignedUrlCacheRef so
+  //   playTrackInternal skips the resolveLibraryStreamForTrack network round-trip entirely
+  const hintUpcomingPlay = useCallback(async (track) => {
+    if (!track?.src) return;
+    if (typeof navigator !== "undefined") {
+      const effectiveType = navigator.connection?.effectiveType;
+      if (effectiveType === "slow-2g" || effectiveType === "2g") return;
+    }
+    if (stateRef.current.isPlaying || stateRef.current.isBuffering) return;
+    const preloadEl = nextTrackPreloadRef.current;
+    if (!preloadEl) return;
+    const kind = classifySourceUrl(track.src);
+    if (isDirectlyBufferable(kind)) {
+      const normalized = normalizePlaybackSrc(track.src);
+      if (!normalized) return;
+      if (kind === SOURCE_KIND.REDIRECT) {
+        const preloadSrc = normalized.includes("preload=1") ? normalized : `${normalized}&preload=1`;
+        if (preloadEl.src !== preloadSrc) { preloadEl.src = preloadSrc; preloadEl.load(); }
+        return;
+      }
+      if (preloadEl.src !== normalized) { preloadEl.src = normalized; preloadEl.load(); }
+    } else if (requiresSignedUrlFetch(kind)) {
+      const slug = parseStreamSlugFromSrc(track.src) || track.slug;
+      if (!slug) return;
+      const trackSlug = parseStreamTrackSlugFromSrc(track.src) || track.metadata?.trackSlug || null;
+      const cacheKey = trackSlug ? `${slug}:${trackSlug}` : slug;
+      const cached = nextTrackSignedUrlCacheRef.current[cacheKey];
+      if (cached && !streamUrlNeedsRefresh(cached) && Date.now() - cached.fetchedAt < 3_000_000) return;
+      try {
+        const data = await fetchLibraryStream(slug, { force: false, trackSlug });
+        if (data?.url) {
+          nextTrackSignedUrlCacheRef.current[cacheKey] = {
+            url: data.url,
+            fetchedAt: Date.now(),
+            expiresIn: data.expiresIn ?? 3600,
+          };
+          const isHlsEligible = Boolean(track.metadata?.access?.canStream);
+          if (!isHlsEligible) {
+            const normalized = normalizePlaybackSrc(data.url);
+            if (normalized && preloadEl.src !== normalized) { preloadEl.src = normalized; preloadEl.load(); }
+          }
+        }
+      } catch {
+        // Non-fatal — play fetches fresh on demand
+      }
+    }
+  }, []);
+
   const unlockAudioFromGesture = useCallback(async (audioEl) => {
     if (!audioEl || !audioEl.paused) return;
     // Silence via GainNode before the unlock play/pause cycle to prevent audio pops.
@@ -7672,6 +7724,7 @@ export function AudioProvider({ children }) {
       getTransportSnapshot,
       subscribeIdentity,
       getIdentitySnapshot,
+      hintUpcomingPlay,
     };
   }, [
     pause,
@@ -7730,6 +7783,7 @@ export function AudioProvider({ children }) {
     getTransportSnapshot,
     subscribeIdentity,
     getIdentitySnapshot,
+    hintUpcomingPlay,
   ]);
 
   useEffect(() => () => {
