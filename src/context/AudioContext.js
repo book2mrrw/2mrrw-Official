@@ -130,7 +130,8 @@ import {
   setPlaybackScenario,
   PLAYBACK_SCENARIOS,
 } from "@/lib/dev/performanceMarks";
-import AudioPhase10Bridge from "@/components/system/AudioPhase10Bridge";
+import dynamic from "next/dynamic";
+const AudioPhase10Bridge = dynamic(() => import("@/components/system/AudioPhase10Bridge"), { ssr: false });
 
 import { redirectResolveCache, setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
 import { isSamePlaybackTrack } from "@/lib/music-playback";
