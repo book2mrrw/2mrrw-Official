@@ -81,6 +81,34 @@ export default function AlbumTracklistSheet({
     [album, accountState, catalogPlaybackLookup, userId]
   );
 
+  // Plays a specific track without closing the sheet — user can change tracks at will.
+  const playTrackInSheet = useCallback(
+    (releaseTrackIndex) => {
+      const playable = playableReleaseQueue(tracks, { ...accountState, userId });
+      if (!playable.length) return;
+      setShuffle(false);
+      const sourceTrack = tracks[releaseTrackIndex];
+      const queueIndex = resolveReleaseQueueStartIndex(playable, releaseTrackIndex, sourceTrack);
+      const queueTrack = playable[queueIndex];
+      if (!queueTrack) return;
+      const { startTrack, needsUpgrade } = toInstantStartTrack(queueTrack);
+      const instantQueue = needsUpgrade
+        ? playable.map((t, i) => (i === queueIndex ? startTrack : t))
+        : playable;
+      void dispatchPlaybackCommand("playQueue", { tracks: instantQueue, startIndex: queueIndex });
+      if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
+    },
+    [tracks, accountState, userId, dispatchPlaybackCommand, setShuffle, scheduleInstantStreamUpgrade]
+  );
+
+  const isTrackActive = useCallback(
+    (track) => {
+      if (!hasStarted || !currentTrack) return false;
+      return isSamePlaybackTrack(currentTrack, track);
+    },
+    [currentTrack, hasStarted]
+  );
+
   useEffect(() => {
     if (open) {
       dragY.set(0);
@@ -104,26 +132,6 @@ export default function AlbumTracklistSheet({
     autoPlayedRef.current = true;
     playTrackInSheet(0);
   }, [open, tracks, isTrackActive, playTrackInSheet]);
-
-  // Plays a specific track without closing the sheet — user can change tracks at will.
-  const playTrackInSheet = useCallback(
-    (releaseTrackIndex) => {
-      const playable = playableReleaseQueue(tracks, { ...accountState, userId });
-      if (!playable.length) return;
-      setShuffle(false);
-      const sourceTrack = tracks[releaseTrackIndex];
-      const queueIndex = resolveReleaseQueueStartIndex(playable, releaseTrackIndex, sourceTrack);
-      const queueTrack = playable[queueIndex];
-      if (!queueTrack) return;
-      const { startTrack, needsUpgrade } = toInstantStartTrack(queueTrack);
-      const instantQueue = needsUpgrade
-        ? playable.map((t, i) => (i === queueIndex ? startTrack : t))
-        : playable;
-      void dispatchPlaybackCommand("playQueue", { tracks: instantQueue, startIndex: queueIndex });
-      if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
-    },
-    [tracks, accountState, userId, dispatchPlaybackCommand, setShuffle, scheduleInstantStreamUpgrade]
-  );
 
   // Play All / Shuffle close the sheet after queuing.
   const playAndClose = useCallback(
@@ -149,14 +157,6 @@ export default function AlbumTracklistSheet({
       onClose?.();
     },
     [tracks, accountState, userId, dispatchPlaybackCommand, setShuffle, onClose, scheduleInstantStreamUpgrade]
-  );
-
-  const isTrackActive = useCallback(
-    (track) => {
-      if (!hasStarted || !currentTrack) return false;
-      return isSamePlaybackTrack(currentTrack, track);
-    },
-    [currentTrack, hasStarted]
   );
 
   const handleDragEnd = useCallback(
