@@ -3,6 +3,16 @@ import * as budget from "./preloadBudget";
 
 let audioLink = null;
 const warmedPreviewUrls = new Set();
+// Tracks warm Audio elements by URL so they can be aborted on eviction or cancelAll.
+const warmAudioElements = new Map();
+
+function abortWarmElement(url) {
+  const el = warmAudioElements.get(url);
+  if (el) {
+    try { el.src = ""; el.load(); } catch {}
+    warmAudioElements.delete(url);
+  }
+}
 
 function preloadAudioLink(url, trackId) {
   if (typeof document === "undefined" || !url) return;
@@ -17,9 +27,11 @@ function preloadAudioLink(url, trackId) {
   audioLink = link;
 
   if (!warmedPreviewUrls.has(url)) {
-    // Evict oldest when cap exceeded — Set preserves insertion order.
+    // Evict oldest when cap exceeded — abort its download before removing.
     if (warmedPreviewUrls.size >= 50) {
-      warmedPreviewUrls.delete(warmedPreviewUrls.values().next().value);
+      const oldest = warmedPreviewUrls.values().next().value;
+      warmedPreviewUrls.delete(oldest);
+      abortWarmElement(oldest);
     }
     warmedPreviewUrls.add(url);
     try {
@@ -28,6 +40,7 @@ function preloadAudioLink(url, trackId) {
       warm.crossOrigin = "anonymous";
       warm.src = url;
       warm.load();
+      warmAudioElements.set(url, warm);
     } catch {
       /* preview warm-up is best-effort */
     }
@@ -48,5 +61,7 @@ export function preloadTrack(trackId, audioUrl, artworkUrl, coverArtType) {
 export function cancelAll() {
   if (audioLink?.parentNode) audioLink.parentNode.removeChild(audioLink);
   audioLink = null;
+  for (const url of warmedPreviewUrls) abortWarmElement(url);
+  warmedPreviewUrls.clear();
   imagePipeline.cancelHints();
 }

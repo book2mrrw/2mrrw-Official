@@ -862,6 +862,13 @@ function isStandalonePwa() {
 }
 
 function preloadCsAssets(track, refs) {
+  // Abort previous CS media before dereferencing — prevents abandoned Audio/Video
+  // elements from continuing to download CS bytes and competing for bandwidth.
+  const prevAudio = refs.csAudioRef.current;
+  if (prevAudio) { try { prevAudio.src = ""; prevAudio.load(); } catch {} }
+  const prevVid = refs.csVidRef.current;
+  if (prevVid) { try { prevVid.src = ""; prevVid.load(); } catch {} }
+
   refs.csImgRef.current = null;
   refs.csVidRef.current = null;
   refs.csAudioRef.current = null;
@@ -3338,10 +3345,20 @@ export function AudioProvider({ children }) {
                 nextEl.currentTime = 0;
                 nextEl.play().catch(() => {
                   // Preload element blocked — roll back so main element plays normally.
+                  // Use a 15ms ramp instead of an instant step to avoid a click/pop on rollback.
                   crossfadeStateRef.current = "idle";
                   const now = audioCtxRef.current?.currentTime ?? 0;
-                  try { mGain.gain.cancelScheduledValues(now); mGain.gain.setValueAtTime(trackGainRef.current, now); } catch {}
-                  try { cfGain.gain.cancelScheduledValues(now); cfGain.gain.setValueAtTime(0, now); } catch {}
+                  const rampEnd = now + 0.015;
+                  try {
+                    mGain.gain.cancelScheduledValues(now);
+                    mGain.gain.setValueAtTime(mGain.gain.value, now);
+                    mGain.gain.linearRampToValueAtTime(trackGainRef.current, rampEnd);
+                  } catch {}
+                  try {
+                    cfGain.gain.cancelScheduledValues(now);
+                    cfGain.gain.setValueAtTime(cfGain.gain.value, now);
+                    cfGain.gain.linearRampToValueAtTime(0, rampEnd);
+                  } catch {}
                 });
               }
             }
@@ -7715,6 +7732,16 @@ export function AudioProvider({ children }) {
       streamSwapPreloadRef.current.src = "";
       streamSwapPreloadRef.current.load();
     }
+    if (nextNextTrackPreloadRef.current) {
+      nextNextTrackPreloadRef.current.src = "";
+      nextNextTrackPreloadRef.current.load();
+    }
+    if (prevTrackPreloadRef.current) {
+      prevTrackPreloadRef.current.src = "";
+      prevTrackPreloadRef.current.load();
+    }
+    try { if (csAudioRef.current) { csAudioRef.current.src = ""; csAudioRef.current.load(); } } catch {}
+    try { if (csVidRef.current) { csVidRef.current.src = ""; csVidRef.current.load(); } } catch {}
     if (queueWatchdogRef.current) {
       clearTimeout(queueWatchdogRef.current);
       queueWatchdogRef.current = null;
