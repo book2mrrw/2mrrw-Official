@@ -54,6 +54,7 @@ export default function AlbumTracklistSheet({
   const dismissTriggered = useRef(false);
   const dragControls = useDragControls();
   const upgradeTimerRef = useRef(null);
+  const autoPlayedRef = useRef(false);
 
   useEffect(() => () => {
     if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
@@ -84,6 +85,7 @@ export default function AlbumTracklistSheet({
     if (open) {
       dragY.set(0);
       dismissTriggered.current = false;
+      autoPlayedRef.current = false;
     }
   }, [open, dragY]);
 
@@ -92,6 +94,16 @@ export default function AlbumTracklistSheet({
     registerModal("album-tracklist-sheet");
     return () => unregisterModal("album-tracklist-sheet");
   }, [open]);
+
+  // Auto-play track 1 when sheet opens — only if nothing from this album is already playing.
+  // autoPlayedRef blocks re-fire if deps change while the sheet stays open.
+  useEffect(() => {
+    if (!open || autoPlayedRef.current || !tracks.length) return;
+    const alreadyPlayingThisAlbum = tracks.some((t) => isTrackActive(t));
+    if (alreadyPlayingThisAlbum) return;
+    autoPlayedRef.current = true;
+    playTrackInSheet(0);
+  }, [open, tracks, isTrackActive, playTrackInSheet]);
 
   // Plays a specific track without closing the sheet — user can change tracks at will.
   const playTrackInSheet = useCallback(
