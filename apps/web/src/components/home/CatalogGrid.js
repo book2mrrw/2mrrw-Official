@@ -9,14 +9,15 @@ import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
 import PlaybackPrewarmCardShell from "@/components/music/PlaybackPrewarmCardShell";
 import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
-import { albumCardPlaybackItem } from "@/lib/music-playback";
+import { albumCardPlaybackItem, toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
+import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 import { withR2CatalogMedia, isUpcomingReleaseDate, catalogCoverDisplay } from "@/components/home/catalogMedia";
 import { CountdownTimer } from "@/components/music/CountdownTimer";
 
-function CatalogCardCoverSurface({ mediaItem, coverDisplay, hoverIn, hoverOut, onCardClick }) {
+function CatalogCardCoverSurface({ mediaItem, coverDisplay, hoverIn, hoverOut, onCardClick, onHintPlay }) {
   const [videoFailed, setVideoFailed] = useState(false);
   return (
-    <div onMouseEnter={hoverIn} onMouseLeave={hoverOut} onClick={() => onCardClick?.(mediaItem)} style={{ cursor: "pointer" }}>
+    <div onMouseEnter={() => { hoverIn?.(); onHintPlay?.(); }} onMouseLeave={hoverOut} onTouchStart={onHintPlay} onClick={() => onCardClick?.(mediaItem)} style={{ cursor: "pointer" }}>
       {!videoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video" ? (
         <video
           src={mediaItem?.video || mediaItem?.visual || undefined}
@@ -152,6 +153,12 @@ function CatalogGrid({
             hoverIn={hoverIn}
             hoverOut={hoverOut}
             onCardClick={onCardClick}
+            onHintPlay={() => {
+              const track = toPlaybackTrack(withR2CatalogMedia(playItem), { ...accountState, userId }, type === "albums" ? "home_album_card" : "home_card");
+              if (!track?.src) return;
+              const { startTrack } = toInstantStartTrack(track);
+              if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);
+            }}
           />
           {type==="albums"&&(mediaItem.type==="deluxe"||mediaItem.releaseType==="deluxe")?(
             <span style={{position:"absolute",top:8,right:8,fontSize:9,fontWeight:800,letterSpacing:1.2,padding:"4px 7px",borderRadius:6,background:"rgba(245,158,11,0.92)",color:"#111"}}>DELUXE</span>

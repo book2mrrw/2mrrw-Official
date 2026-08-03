@@ -8,6 +8,8 @@ import GiftIcon from "@/components/gifts/GiftIcon";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import { resolveContentAccess } from "@/lib/music-access";
+import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
+import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singleIndex, singles, prevSingle, nextSingle, goToSingle, onSingleClick, addToCart, addVinylToCart, buttonHoverIn, buttonHoverOut, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   const [previewHover, setPreviewHover] = useState(false);
@@ -22,6 +24,13 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
   const currentSingleIsGifted =
     currentLibraryItem?.source === "gift" ||
     currentLibraryItem?.gifted === true;
+  const hintCurrentSingle = () => {
+    if (!currentSingle) return;
+    const track = toPlaybackTrack(currentSingle, { ...accountState, userId }, "carousel");
+    if (!track?.src) return;
+    const { startTrack } = toInstantStartTrack(track);
+    if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);
+  };
   return (
     <div style={{display:"flex",flexDirection:isMobile?"column":"row",alignItems:isMobile?"stretch":"center",gap:isMobile?16:20,background:"linear-gradient(135deg,#0e0e0e,#111)",border:"1px solid #1e1e1e",borderRadius:isMobile?16:20,padding:isMobile?"20px 16px":large?"32px 28px":"28px 24px",position:"relative",overflow:"hidden",boxShadow:"0 4px 40px rgba(0,0,0,0.5)"}}>
       {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(currentSingle)} /> : null}
@@ -29,7 +38,7 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
       {isMobile ? (
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <button onClick={prevSingle} style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.06)",border:"1px solid #2a2a2a",color:"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>‹</button>
-          <div style={{flex:1,position:"relative",aspectRatio:"1/1"}} onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
+          <div style={{flex:1,position:"relative",aspectRatio:"1/1"}} onMouseEnter={()=>{setPreviewHover(true);hintCurrentSingle();}} onMouseLeave={()=>setPreviewHover(false)} onTouchStart={hintCurrentSingle}>
             <CoverArt
               src={coverDisplay.src}
               type={coverDisplay.type || "image"}
@@ -55,7 +64,7 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
         <button onClick={prevSingle} style={{width:large?50:44,height:large?50:44,borderRadius:"50%",background:"rgba(255,255,255,0.04)",border:"1px solid #2a2a2a",color:"#555",fontSize:large?22:20,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.color="#00ffff";e.currentTarget.style.boxShadow="0 0 10px rgba(0,255,255,0.3)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#2a2a2a";e.currentTarget.style.color="#555";e.currentTarget.style.boxShadow="none";}}>‹</button>
       )}
       {!isMobile && (
-        <div style={{flexShrink:0,width:large?340:300,height:large?340:300,position:"relative"}} onMouseEnter={()=>setPreviewHover(true)} onMouseLeave={()=>setPreviewHover(false)}>
+        <div style={{flexShrink:0,width:large?340:300,height:large?340:300,position:"relative"}} onMouseEnter={()=>{setPreviewHover(true);hintCurrentSingle();}} onMouseLeave={()=>setPreviewHover(false)} onTouchStart={hintCurrentSingle}>
           <CoverArt
             src={coverDisplay.src}
             type={coverDisplay.type || "image"}
