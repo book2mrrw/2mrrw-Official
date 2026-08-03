@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import * as store from "./recoveryStore";
-import { refreshSignedUrlsForQueue } from "./signedUrlRefresher";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 
 /**
@@ -42,21 +41,6 @@ export function useSessionRecovery() {
             },
           });
         }
-        try {
-          await refreshSignedUrlsForQueue(hydratedTracks);
-        } catch (error) {
-          reportPlaybackDiagnostic({
-            level: "warn",
-            code: "RECOVERY_SIGNED_URL_REFRESH_FAILED",
-            command: "RECOVERY_SIGNED_URL_REFRESH",
-            error,
-            context: {
-              queueSize: hydratedTracks.length,
-              visibility: typeof document !== "undefined" ? document.visibilityState : null,
-              source: "session_recovery",
-            },
-          });
-        }
         if (!cancelled) {
           window.dispatchEvent(
             new CustomEvent("2mrrw:playback-recovery", {
@@ -64,6 +48,11 @@ export function useSessionRecovery() {
             })
           );
         }
+        // Stream session bookkeeping runs via after() in the stream route on the actual
+        // play request — no need to block recovery dispatch waiting for a pre-warm that:
+        //   1. provided no benefit on serverless (per-lambda in-process cache is not shared)
+        //   2. did not include trackSlug so was broken for album tracks anyway
+        //   3. cleared active sessions which could race with recovery-triggered playback
       }
       if (!cancelled) setIsRecovering(false);
     })();
