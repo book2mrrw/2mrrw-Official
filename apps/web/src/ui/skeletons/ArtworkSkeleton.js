@@ -1,9 +1,43 @@
 "use client";
 
-import { useState } from "react";
-import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
+import { useState, useRef, useLayoutEffect } from "react";
+import { resolveCoverMediaType } from "@/lib/media/cover-media-type";
 import SkeletonBase from "./SkeletonBase";
 import ProgressiveReveal from "./ProgressiveReveal";
+
+function VideoArt({ src, width, height, borderRadius, onClick, onTouchStart, onTouchEnd }) {
+  const videoRef = useRef(null);
+  const prevSrcRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const el = videoRef.current;
+    if (!el || src === prevSrcRef.current) return;
+    prevSrcRef.current = src;
+    el.src = src;
+    el.load();
+  }, [src]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="auto"
+      onClick={onClick}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      style={{
+        width: width ?? "100%",
+        height: height ?? "100%",
+        borderRadius,
+        display: "block",
+        objectFit: "cover",
+      }}
+    />
+  );
+}
 
 export default function ArtworkSkeleton({
   src,
@@ -55,10 +89,8 @@ export default function ArtworkSkeleton({
       ) : null}
       <ProgressiveReveal visible={loaded}>
         {mediaType === "video" ? (
-          <CoverArt
+          <VideoArt
             src={src}
-            type={type}
-            alt={alt}
             width="100%"
             height="100%"
             borderRadius={borderRadius}

@@ -4,13 +4,8 @@ import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import { imagePipeline } from "@/media/imagePipeline";
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
 import ArtworkSkeleton from "@/ui/skeletons/ArtworkSkeleton";
-
-export function resolveCoverMediaType(src, type = "image") {
-  if (type === "video" || type === "motion") return "video";
-  const s = String(src || "").toLowerCase();
-  if (/\.(mp4|webm)(\?|#|$)/.test(s)) return "video";
-  return "image";
-}
+import { resolveCoverMediaType } from "@/lib/media/cover-media-type";
+export { resolveCoverMediaType };
 
 function CoverArt({
   src,
