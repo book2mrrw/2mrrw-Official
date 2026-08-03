@@ -955,6 +955,8 @@ export function AudioProvider({ children }) {
   const playTrackRef = useRef(null);
   const applyCSModeToTrackRef = useRef(null);
   const userPausedRef = useRef(false);
+  /** Persistent user-pause intent — set on explicit user pause, cleared only on explicit user play. */
+  const userIntentPausedRef = useRef(false);
   const pausedDuringCurrentLoadRef = useRef(false);
   const isInAudioVisualViewportRef = useRef(false);
   const wasPlayingBeforeViewportPauseRef = useRef(false);
@@ -1121,7 +1123,7 @@ export function AudioProvider({ children }) {
     const lifecycleBackground =
       lifecycleInBackgroundRef.current || documentHidden;
     const playbackIntent = playbackIntentBeforeHideRef.current;
-    const userPaused = userPausedRef.current;
+    const userPaused = userPausedRef.current || userIntentPausedRef.current;
     const machineRecovering =
       playbackStateMachine.getState() === PLAYBACK_ORCHESTRATION_STATES.RECOVERING;
 
@@ -1351,7 +1353,7 @@ export function AudioProvider({ children }) {
       playbackIntentBeforeHideRef.current || Boolean(lifecycleIntent);
 
     if (!resumeAfter) {
-      if (hasInterruptIntent && audio.paused && !userPausedRef.current) {
+      if (hasInterruptIntent && audio.paused && !userPausedRef.current && !userIntentPausedRef.current) {
         return { healthy: false, reason: "paused_after_lifecycle_interrupt" };
       }
       logLifecycleTransportHealthy({
@@ -2096,7 +2098,7 @@ export function AudioProvider({ children }) {
               {
                 reason: "fatal_audio_desync_invariant",
                 resumeAfter:
-                  !userPausedRef.current && Boolean(next.currentTrack),
+                  !userPausedRef.current && !userIntentPausedRef.current && Boolean(next.currentTrack),
               }
             );
           });
@@ -2292,6 +2294,7 @@ export function AudioProvider({ children }) {
       const shouldShowPlaying =
         resumeAfter &&
         !userPausedRef.current &&
+        !userIntentPausedRef.current &&
         Boolean(audio && !audio.paused && !audio.ended);
       await updateMediaSession(track, { playing: shouldShowPlaying });
     },
@@ -2408,7 +2411,7 @@ export function AudioProvider({ children }) {
     async (source) => {
       const audio = audioRef.current;
       const track = stateRef.current.currentTrack;
-      if (!audio || !track || userPausedRef.current) return false;
+      if (!audio || !track || userPausedRef.current || userIntentPausedRef.current) return false;
       if (!hasIntactPlaybackTransport(audio, track)) return false;
 
       internalPlaybackAuthorityRef.current = true;
@@ -2935,7 +2938,7 @@ export function AudioProvider({ children }) {
         });
         if (audio.paused) {
           setTimeout(() => {
-            if (!userPausedRef.current) {
+            if (!userPausedRef.current && !userIntentPausedRef.current) {
               void playAudioIfNotPaused(audio, true, {
                 command: PLAYBACK_COMMANDS.RECOVER,
                 requestId: activeCommandRef.current?.requestId || null,
@@ -3032,7 +3035,8 @@ export function AudioProvider({ children }) {
             pendingResumeAfterInterruptRef.current = null;
             if (
               (wasPlayingBeforePause || playbackIntentBeforeHideRef.current) &&
-              audio.paused
+              audio.paused &&
+              !userIntentPausedRef.current
             ) {
               logPlaybackIntentRetry({
                 source: "onPause_canplay",
@@ -3940,6 +3944,7 @@ export function AudioProvider({ children }) {
   const playTrackInternal = useCallback(async (track, options = {}) => {
     logDirectInternalCallViolation("playTrackInternal");
     perfMark(MARKS.PLAYBACK_REQUEST);
+    userIntentPausedRef.current = false;
     const requestId = playRequestIdRef.current + 1;
     playRequestIdRef.current = requestId;
     if (crossfadeStateRef.current !== "bridging") cancelCrossfade();
@@ -5125,6 +5130,7 @@ export function AudioProvider({ children }) {
       });
       const lifecycleOnlyPause =
         !userPausedRef.current &&
+        !userIntentPausedRef.current &&
         transportPre.intact &&
         audioPre?.paused &&
         (playbackIntentBeforeHideRef.current ||
@@ -5196,6 +5202,7 @@ export function AudioProvider({ children }) {
       const shouldResume =
         Boolean(resumeAfter) &&
         !userPausedRef.current &&
+        !userIntentPausedRef.current &&
         Boolean(track) &&
         (isEntitledFullPlaybackTrack(track) || !track?.metadata?.access?.previewOnly);
 
@@ -5663,7 +5670,7 @@ export function AudioProvider({ children }) {
           });
         }
 
-        if (resumeAfter && !userPausedRef.current) {
+        if (resumeAfter && !userPausedRef.current && !userIntentPausedRef.current) {
           logBackgroundRecoveryTrigger({
             source: trigger,
             reason,
@@ -5847,7 +5854,7 @@ export function AudioProvider({ children }) {
       if (
         isDocumentPlaybackHidden() ||
         lifecycleInBackgroundRef.current ||
-        (playbackIntentBeforeHideRef.current && !userPausedRef.current)
+        (playbackIntentBeforeHideRef.current && !userPausedRef.current && !userIntentPausedRef.current)
       ) {
         return;
       }
@@ -5866,6 +5873,7 @@ export function AudioProvider({ children }) {
             resumeAfter:
               stateRef.current.isPlaying &&
               !userPausedRef.current &&
+              !userIntentPausedRef.current &&
               Boolean(stateRef.current.currentTrack),
           }
         );
@@ -5877,7 +5885,7 @@ export function AudioProvider({ children }) {
       if (
         isDocumentPlaybackHidden() ||
         lifecycleInBackgroundRef.current ||
-        (playbackIntentBeforeHideRef.current && !userPausedRef.current)
+        (playbackIntentBeforeHideRef.current && !userPausedRef.current && !userIntentPausedRef.current)
       ) {
         return;
       }
@@ -5928,7 +5936,7 @@ export function AudioProvider({ children }) {
         PLAYBACK_ORCHESTRATION_EVENTS.AUDIO_DESYNC_DETECTED,
         {
           reason: "silent_desync_detected",
-          resumeAfter: !userPausedRef.current,
+          resumeAfter: !userPausedRef.current && !userIntentPausedRef.current,
         }
       );
     }, AUDIBILITY_WATCHDOG_MS);
@@ -6240,6 +6248,7 @@ export function AudioProvider({ children }) {
       lastUserActionRef.current = "pause";
       clearViewportResume();
       userPausedRef.current = true;
+      userIntentPausedRef.current = true;
       pausedDuringCurrentLoadRef.current = true;
     } else if (fromViewport) {
       viewportPauseRef.current = true;
@@ -6324,7 +6333,8 @@ export function AudioProvider({ children }) {
     tracePlayback("resumeInternal", "resumeInternal", { slug: track.slug });
     lastUserActionRef.current = "play";
     userPausedRef.current = false;
-    // Clear the user-pause flag so the buffer gate in any in-flight playTrackInternal
+    userIntentPausedRef.current = false;
+    // Clear the user-pause flags so the buffer gate in any in-flight playTrackInternal
     // (e.g. triggered by auto-advance) knows the user now wants to be playing.
     pausedDuringCurrentLoadRef.current = false;
 
@@ -7156,6 +7166,7 @@ export function AudioProvider({ children }) {
           const resumeAfter =
             wasPlayingBeforeHide &&
             !userPausedRef.current &&
+            !userIntentPausedRef.current &&
             isEntitledFullPlaybackTrack(track);
 
           void (async () => {
@@ -7300,10 +7311,10 @@ export function AudioProvider({ children }) {
         const wasPlaying =
           wasPlayingBeforeHideRef.current ||
           playbackIntentBeforeHideRef.current ||
-          (s.isPlaying && !userPausedRef.current);
+          (s.isPlaying && !userPausedRef.current && !userIntentPausedRef.current);
         wasPlayingBeforeHideRef.current = false;
         const resumeAfter =
-          wasPlaying && !userPausedRef.current && isEntitledFullPlaybackTrack(track);
+          wasPlaying && !userPausedRef.current && !userIntentPausedRef.current && isEntitledFullPlaybackTrack(track);
         const health = evaluateLifecyclePlaybackHealth({
           resumeAfter,
           lifecycleIntent: wasPlaying,
@@ -7435,6 +7446,7 @@ export function AudioProvider({ children }) {
       // Only auto-resume if the user hadn't manually paused and we were playing.
       if (
         !userPausedRef.current &&
+        !userIntentPausedRef.current &&
         track &&
         audio &&
         (stateRef.current.isPlaying || stateRef.current.error === "RECONNECTING")
