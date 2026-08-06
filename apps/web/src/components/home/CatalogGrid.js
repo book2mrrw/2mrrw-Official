@@ -25,6 +25,7 @@ function CatalogCardCoverSurface({ mediaItem, coverDisplay, hoverIn, hoverOut, o
           autoPlay muted loop playsInline preload="auto"
           webkit-playsinline="true"
           onError={() => setVideoFailed(true)}
+          onStalled={() => setVideoFailed(true)}
           style={{ backgroundColor: "#0a0a0a", width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block", transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s", pointerEvents: "none" }}
         />
       ) : (

@@ -38,16 +38,15 @@ export function useListeningHistory({ accountState, singles = [], albums = [], u
       if (!row?.slug) return null;
       const catalog = slugToItem.get(row.slug);
       return {
+        // Spread the full catalog item first so toPlaybackTrack receives every field it
+        // needs (type, albumSlug, trackSlug, metadata, price, releaseType, etc.).
+        // Progress-specific fields then overlay only the fields that belong to this row.
+        ...(catalog || {}),
         slug: row.slug,
-        title: catalog?.title || row.title || row.slug,
-        cover: catalog?.cover || catalog?.cover_art_url || row.cover || null,
         positionSeconds: row.positionSeconds ?? 0,
         durationSeconds: row.durationSeconds ?? 0,
         completed: Boolean(row.completed),
         lastPlayedAt: row.lastPlayedAt || row.addedAt || null,
-        preview: catalog?.preview,
-        audio: catalog?.audio || catalog?.full,
-        src: catalog?.src,
       };
     },
     [slugToItem]

@@ -58,8 +58,10 @@ export async function GET(req) {
       headers: {
         "Content-Type": "application/octet-stream",
         "Content-Length": "16",
-        // Keys should not be cached by proxies. Browser may cache briefly for the session.
-        "Cache-Control": "private, max-age=300, no-store",
+        // private: browser-only, no shared-proxy caching.
+        // max-age=300: browser may reuse the key for 5 min (covers all segments in a 4-min track).
+        // no-store was previously present but contradicts max-age and prevents caching entirely.
+        "Cache-Control": "private, max-age=300",
         "X-Content-Type-Options": "nosniff",
       },
     })

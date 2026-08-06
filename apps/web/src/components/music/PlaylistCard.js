@@ -53,6 +53,7 @@ export default function PlaylistCard({ playlist, trackCount, cover, onOpen, onPl
             fontWeight: 800,
             cursor: "pointer",
             letterSpacing: 0.5,
+            touchAction: "manipulation",
           }}
         >
           Play

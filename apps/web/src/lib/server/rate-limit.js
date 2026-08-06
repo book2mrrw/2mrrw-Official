@@ -43,8 +43,9 @@ async function checkWithRedis(key, windowSeconds) {
   // INCR is atomic — returns the new count after increment.
   const count = await redis.incr(key);
   if (count === 1) {
-    // New window — set TTL to 2× the window so the key self-expires.
-    await redis.expire(key, windowSeconds * 2);
+    // TTL = windowSeconds: the key is keyed by windowStartMs so it becomes
+    // irrelevant the moment the next window starts — one window lifetime is sufficient.
+    await redis.expire(key, windowSeconds);
   }
   return count;
 }

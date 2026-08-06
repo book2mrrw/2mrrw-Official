@@ -127,8 +127,9 @@ export async function GET(req) {
       status: 200,
       headers: {
         "Content-Type": "application/x-mpegURL",
-        // Segment URLs are stable CDN paths — cache variant playlist for key token lifetime
-        "Cache-Control": "private, max-age=3300",
+        // max-age=3000 (50 min): 5 min buffer before the embedded key token (55 min TTL) expires,
+        // preventing a race where a cached playlist references an already-expired key token.
+        "Cache-Control": "private, max-age=3000",
         "X-Content-Type-Options": "nosniff",
       },
     })

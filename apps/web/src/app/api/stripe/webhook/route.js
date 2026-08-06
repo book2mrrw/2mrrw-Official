@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 
-/** Legacy path — decommissioned. Configure Stripe Dashboard to use /api/webhook only. */
+/** Legacy path — forward to active endpoint so no Stripe events are silently dropped. */
 export const runtime = "nodejs";
 
-export async function POST() {
-  console.error("[stripe-webhook] /api/stripe/webhook is decommissioned — remove this endpoint from Stripe Dashboard");
-  return NextResponse.json(
-    { error: "This webhook endpoint is no longer active. Update Stripe Dashboard to POST to /api/webhook." },
-    { status: 410 }
-  );
+export async function POST(req) {
+  console.warn("[stripe-webhook] /api/stripe/webhook is a legacy path — update Stripe Dashboard to use /api/webhook");
+  const url = new URL("/api/webhook", req.url);
+  return NextResponse.redirect(url, { status: 308 });
 }

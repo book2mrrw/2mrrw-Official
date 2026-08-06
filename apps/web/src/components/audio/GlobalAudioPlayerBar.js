@@ -755,7 +755,7 @@ function GlobalAudioPlayerBar() {
     return Math.max(0, Math.min(100, (dockCurrentTime / dockDuration) * 100));
   }, [dockCurrentTime, dockDuration]);
 
-  const showCs = Boolean(dockCurrentTrack?.hasCs || dockCurrentTrack?.csAudio);
+  const showCs = hasCs; // hasCs = Boolean(csCover || csAudio), computed from dockCurrentTrack above
   const handleToggleCs = useCallback(() => void toggleCSMode?.(), [toggleCSMode]);
 
   const upNextCount = Math.max(0, (queue?.length ?? 0) - (queueIndex ?? 0) - 1);

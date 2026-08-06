@@ -251,6 +251,13 @@ export async function HEAD(req) {
   if (!user) {
     return applyMediaCors(req, new NextResponse(null, { status: 401 }));
   }
+  const rl = await checkRateLimit(req, {
+    routeKey: "library.stream",
+    limit: 120,
+    windowSeconds: 60,
+    identifier: user.id,
+  });
+  if (!rl.allowed) return applyMediaCors(req, rateLimitResponse(rl.retryAfterSeconds));
   return applyMediaCors(
     req,
     new NextResponse(null, {

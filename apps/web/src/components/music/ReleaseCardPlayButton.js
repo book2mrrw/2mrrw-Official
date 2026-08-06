@@ -84,7 +84,7 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         currentTrackId &&
         (currentTrackSlug === track.slug || currentTrackId === track.id);
       if (sameTrack) {
-        void bridge?.toggle?.();
+        void getPagePlaybackActionsBridge()?.toggle?.();
         return;
       }
       if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
@@ -104,9 +104,7 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
     [accountState, currentTrackId, currentTrackSlug, item, onPlayClick, source, userId]
   );
 
-  const sameTrack =
-    currentTrackId &&
-    (currentTrackSlug === item?.slug || currentTrackId === item?.slug);
+  const sameTrack = currentTrackId && currentTrackSlug === item?.slug;
   const showPause = sameTrack && isPlaying;
   const playAriaLabel = showPause
     ? "Pause"

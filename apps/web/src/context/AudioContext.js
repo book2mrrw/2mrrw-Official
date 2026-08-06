@@ -4337,7 +4337,10 @@ export function AudioProvider({ children }) {
             const fp3TrackSlug = parseStreamTrackSlugFromSrc(intentSrc);
             const fp3AlbumSlug = parseStreamSlugFromSrc(intentSrc);
             const fp3TrackMatch = fp1TrackSlug ? fp3TrackSlug === fp1TrackSlug : true;
-            const fp3AlbumMatch = fp3AlbumSlug ? fp3AlbumSlug === streamSlug : true;
+            // fp3AlbumSlug is null when intentSrc is a bare CDN URL (no ?slug= param),
+            // which means the intent prewarm was loaded for a different delivery path.
+            // An unknown album slug must reject, not accept, to prevent serving wrong-track audio.
+            const fp3AlbumMatch = fp3AlbumSlug ? fp3AlbumSlug === streamSlug : false;
             if (
               intentCdnUrl &&
               intentEl.readyState >= 2 &&
@@ -4420,6 +4423,7 @@ export function AudioProvider({ children }) {
         patchTransport({ playbackNetworkState: "loading_stream" });
       }
       await waitAudioSrcReady(audio, signedUrl, { signal: streamAbortController.signal, timeoutMs: 12000 });
+      let applySwapSeekTimeout = null;
       const applySwapSeek = () => {
         clearTimeout(applySwapSeekTimeout);
         if (resumeAt > 0 && isFinite(audio.duration)) {
@@ -4430,7 +4434,7 @@ export function AudioProvider({ children }) {
         applySwapSeek();
       } else {
         audio.addEventListener("loadedmetadata", applySwapSeek, { once: true });
-        setTimeout(
+        applySwapSeekTimeout = setTimeout(
           () => audio.removeEventListener("loadedmetadata", applySwapSeek),
           5000
         );
@@ -6567,6 +6571,7 @@ export function AudioProvider({ children }) {
     tracePlayback,
     logDirectInternalCallViolation,
     playTrackInternal,
+    attemptLightweightPlaybackResume,
   ]);
 
   const seekInternal = useCallback((time) => {

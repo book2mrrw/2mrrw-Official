@@ -34,17 +34,15 @@ export function useMusicLibrary({ singles = [], albums = [], mixtapesAndEps = []
       .filter((row) => row.mediaType === "audio" && row.slug)
       .map((row) => {
         const catalog = slugToItem.get(row.slug);
+        // Spread the full catalog item so downstream consumers (toPlaybackTrack,
+        // resolveTrackAccess) receive every field they need. Progress fields overlay last.
         return {
+          ...(catalog || {}),
           slug: row.slug,
-          title: catalog?.title || row.slug,
-          cover: catalog?.cover_art_url || catalog?.coverArtUrl || catalog?.cover || catalog?.coverArt,
           positionSeconds: row.positionSeconds,
           durationSeconds: row.durationSeconds,
           completed: row.completed,
           lastPlayedAt: row.lastPlayedAt,
-          preview: catalog?.preview,
-          audio: catalog?.audio || catalog?.full,
-          src: catalog?.src,
         };
       });
   }, [accountState?.mediaProgress, singles, albums, mixtapesAndEps, library]);

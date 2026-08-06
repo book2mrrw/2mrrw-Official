@@ -1,19 +1,16 @@
 "use client";
 
 import { useAudioPlayer } from "@/context/AudioContext";
-import { resolvePlaybackSrc } from "@/lib/music-access";
+import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
 
-export default function ContinueListening({ lastPlayed, access, isMobile }) {
+export default function ContinueListening({ lastPlayed, accountState, userId, isMobile }) {
   const { playTrack, hintUpcomingPlay } = useAudioPlayer();
   if (!lastPlayed?.slug) return null;
 
-  const track = {
-    slug: lastPlayed.slug,
-    title: lastPlayed.title,
-    cover: lastPlayed.cover,
-    src: resolvePlaybackSrc(lastPlayed, access),
-    source: "continue",
-  };
+  const track = toPlaybackTrack(lastPlayed, { ...accountState, userId }, "continue");
+  if (!track?.src) return null;
+  const { startTrack } = toInstantStartTrack(track);
+  if (!startTrack?.src) return null;
 
   return (
     <div
@@ -40,14 +37,7 @@ export default function ContinueListening({ lastPlayed, access, isMobile }) {
         </div>
         {lastPlayed.positionSeconds > 0 && lastPlayed.durationSeconds > 0 ? (
           <div style={{ marginTop: 8 }}>
-            <div
-              style={{
-                height: 3,
-                background: "#1a1a1a",
-                borderRadius: 2,
-                overflow: "hidden",
-              }}
-            >
+            <div style={{ height: 3, background: "#1a1a1a", borderRadius: 2, overflow: "hidden" }}>
               <div
                 style={{
                   width: `${Math.min(100, (lastPlayed.positionSeconds / lastPlayed.durationSeconds) * 100)}%`,
@@ -69,9 +59,9 @@ export default function ContinueListening({ lastPlayed, access, isMobile }) {
       </div>
       <button
         type="button"
-        onClick={() => playTrack(track, { resumeAt: lastPlayed.positionSeconds || 0 })}
-        onMouseEnter={() => void hintUpcomingPlay(track)}
-        onTouchStart={() => void hintUpcomingPlay(track)}
+        onClick={() => playTrack(startTrack, { resumeAt: lastPlayed.positionSeconds || 0 })}
+        onMouseEnter={() => void hintUpcomingPlay(startTrack)}
+        onTouchStart={() => void hintUpcomingPlay(startTrack)}
         style={{
           padding: "10px 18px",
           background: "#00ffff",
@@ -82,6 +72,7 @@ export default function ContinueListening({ lastPlayed, access, isMobile }) {
           fontSize: 12,
           cursor: "pointer",
           flexShrink: 0,
+          touchAction: "manipulation",
         }}
       >
         Play

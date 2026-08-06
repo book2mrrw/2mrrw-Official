@@ -2,15 +2,40 @@
 
 import { useMemo } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
+import { useAuth } from "@/context/AuthContext";
 import { resolvePlaylistTracks } from "@/lib/playlists";
+import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
 
 export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobile }) {
   const { playQueue, toggleShuffle, shuffle, toggleRepeat, repeatMode, hintUpcomingPlay } = useAudioPlayer();
+  const { user, accountState } = useAuth();
+  const userId = user?.id;
 
-  const tracks = useMemo(
+  const rawTracks = useMemo(
     () => resolvePlaylistTracks(playlist, catalogBySlug),
     [playlist, catalogBySlug]
   );
+
+  // Run every track through per-user entitlement resolution so preview-only users
+  // get preview URLs and entitled users get library stream redirect URLs.
+  const tracks = useMemo(
+    () => rawTracks
+      .map((track) => toPlaybackTrack(track, { ...accountState, userId }, "playlist"))
+      .filter((t) => t?.src),
+    [rawTracks, accountState, userId]
+  );
+
+  const playFrom = (startIndex) => {
+    if (!tracks.length) return;
+    const { startTrack } = toInstantStartTrack(tracks[startIndex] || tracks[0]);
+    if (!startTrack?.src) return;
+    const queue = [
+      ...tracks.slice(0, startIndex),
+      startTrack,
+      ...tracks.slice(startIndex + 1),
+    ];
+    void playQueue(queue, startIndex);
+  };
 
   return (
     <div>
@@ -25,7 +50,7 @@ export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobi
       <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
         <button
           type="button"
-          onClick={() => playQueue(tracks, 0)}
+          onClick={() => playFrom(0)}
           onMouseEnter={() => tracks[0] && void hintUpcomingPlay(tracks[0])}
           onTouchStart={() => tracks[0] && void hintUpcomingPlay(tracks[0])}
           style={{ padding: "10px 18px", background: "#00ffff", color: "#000", border: "none", borderRadius: 10, fontWeight: 900, fontSize: 12, cursor: "pointer" }}
@@ -68,10 +93,10 @@ export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobi
             </div>
             <button
               type="button"
-              onClick={() => playQueue(tracks, i)}
+              onClick={() => playFrom(i)}
               onMouseEnter={() => void hintUpcomingPlay(track)}
               onTouchStart={() => void hintUpcomingPlay(track)}
-              style={{ background: "none", border: "none", color: "#00ffff", cursor: "pointer", fontSize: 16 }}
+              style={{ background: "none", border: "none", color: "#00ffff", cursor: "pointer", fontSize: 16, touchAction: "manipulation" }}
               aria-label={`Play ${track.title}`}
             >
               ▶

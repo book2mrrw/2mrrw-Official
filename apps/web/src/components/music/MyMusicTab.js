@@ -216,7 +216,7 @@ function LibraryCarousel({
           width: "100%",
           minWidth: 0,
           maxWidth: "100%",
-          touchAction: "pan-x",
+          touchAction: "pan-x pan-y",
         }}
       >
         {items.map((item) => {
@@ -919,15 +919,7 @@ function MyMusicTab({
         })
         .filter((t) => t.src);
       if (!tracks.length) return;
-      if (playlist.shuffle) {
-        const arr = [...tracks];
-        for (let i = arr.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [arr[i], arr[j]] = [arr[j], arr[i]];
-        }
-        tracks = arr;
-        setShuffle(true);
-      }
+      if (playlist.shuffle) setShuffle(true);
       const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[0]);
       const instantTracks = needsUpgrade ? [startTrack, ...tracks.slice(1)] : tracks;
       void playQueue(instantTracks, 0);
@@ -944,35 +936,33 @@ function MyMusicTab({
 
   const resumeLast = useCallback(() => {
     if (!activeContinue) return;
-    const catalog = singles.find((s) => s.slug === activeContinue.slug) || activeContinue;
+    // Search all catalog sources so album and mixtape tracks resolve to their full
+    // catalog item — toPlaybackTrack needs type, albumSlug, trackSlug, metadata, etc.
+    const catalog =
+      singles.find((s) => s.slug === activeContinue.slug) ||
+      albums.find((a) => a.slug === activeContinue.slug) ||
+      mixtapesAndEps?.find((m) => m.slug === activeContinue.slug) ||
+      activeContinue;
     const access = resolveTrackAccess(catalog, accountState);
     playItem(catalog, access, activeContinue.completed ? 0 : Number(activeContinue.positionSeconds || 0));
-  }, [accountState, activeContinue, playItem, singles]);
+  }, [accountState, activeContinue, albums, mixtapesAndEps, playItem, singles]);
 
   const playAllSingles = useCallback((shuffle = false) => {
     const playable = mergedOwnedSingles
       .filter((item) => resolveTrackAccess(item, accountState).canStream)
       .map((item) => toPlaybackTrack(item, { ...accountState, userId: user?.id }, "my_music_all"));
     if (!playable.length) return;
-    let ordered = playable;
-    if (shuffle) {
-      ordered = [...playable];
-      for (let i = ordered.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [ordered[i], ordered[j]] = [ordered[j], ordered[i]];
-      }
-    }
     if (shuffle) setShuffle(true);
-    const { startTrack, needsUpgrade } = toInstantStartTrack(ordered[0]);
-    const instantOrdered = needsUpgrade ? [startTrack, ...ordered.slice(1)] : ordered;
-    void playQueue(instantOrdered, 0);
+    const { startTrack, needsUpgrade } = toInstantStartTrack(playable[0]);
+    const instantPlayable = needsUpgrade ? [startTrack, ...playable.slice(1)] : playable;
+    void playQueue(instantPlayable, 0);
     if (needsUpgrade) {
-        const upgradeSlug = startTrack.slug;
-        setTimeout(() => {
-          const b = getPagePlaybackActionsBridge();
-          if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
-        }, 2000);
-      }
+      const upgradeSlug = startTrack.slug;
+      setTimeout(() => {
+        const b = getPagePlaybackActionsBridge();
+        if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
+      }, 2000);
+    }
   }, [mergedOwnedSingles, accountState, dispatchPlaybackCommand, user?.id, playQueue, setShuffle]);
 
   const sortLabel = SORT_OPTIONS.find((o) => o.id === sortPref)?.label || "Recently Added";
