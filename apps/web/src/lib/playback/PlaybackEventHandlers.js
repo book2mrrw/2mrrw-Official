@@ -66,7 +66,8 @@ import {
   playbackStateMachine,
   PLAYBACK_ORCHESTRATION_EVENTS,
 } from "@/media/PlaybackStateMachine";
-import { classifySourceUrl, isDirectlyBufferable, normalizePlaybackSrc } from "@/lib/playback/audio-source-resolver";
+import { classifySourceUrl, isDirectlyBufferable } from "@/lib/playback/audio-source-resolver";
+import { normalizePlaybackSrc } from "@/lib/audio/audio-element-utils";
 
 // ── Exported constants ─────────────────────────────────────────────────────────
 // Defined here because handler logic is their primary consumer.
