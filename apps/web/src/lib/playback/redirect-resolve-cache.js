@@ -5,24 +5,46 @@
  */
 export const redirectResolveCache = {};
 
+// R2 pre-signed URLs expire after 60 min server-side. Cache entries older than
+// 50 min are treated as stale so playback never attempts a guaranteed-403 URL.
+// IMPORTANT: this declaration must come BEFORE registerCache() — ESM strict mode
+// enforces TDZ (Temporal Dead Zone) for const, so referencing CDN_URL_TTL_MS
+// inside the registerCache call before its declaration causes a ReferenceError.
+const CDN_URL_TTL_MS = 50 * 60 * 1000;
+
 import { registerCache } from "@/lib/playback/playback-cache-manager";
 registerCache("redirect-resolve", {
   maxEntries: 200,
-  ttlMs: 30_000,
+  ttlMs: CDN_URL_TTL_MS,
   getSize: () => Object.keys(redirectResolveCache).length,
   evict: () => {
-    const keys = Object.keys(redirectResolveCache);
-    const overage = keys.length - 150;
-    for (let i = 0; i < overage; i++) delete redirectResolveCache[keys[i]];
+    // Sort by age (oldest ts first) so we always evict the stalest entries,
+    // not just the ones that happen to be first in insertion order.
+    const entries = Object.entries(redirectResolveCache).sort(([, a], [, b]) => {
+      const tsA = typeof a === "object" && a !== null ? (a.ts ?? 0) : 0;
+      const tsB = typeof b === "object" && b !== null ? (b.ts ?? 0) : 0;
+      return tsA - tsB; // ascending = oldest first
+    });
+    const overage = entries.length - 150;
+    for (let i = 0; i < overage; i++) delete redirectResolveCache[entries[i][0]];
   },
 });
 
 export function setResolvedCdnUrl(slug, cdnUrl) {
-  if (slug && cdnUrl) redirectResolveCache[slug] = cdnUrl;
+  if (slug && cdnUrl) redirectResolveCache[slug] = { url: cdnUrl, ts: Date.now() };
 }
 
 export function getResolvedCdnUrl(slug) {
-  return slug ? (redirectResolveCache[slug] || null) : null;
+  if (!slug) return null;
+  const entry = redirectResolveCache[slug];
+  if (!entry) return null;
+  // Support legacy plain-string entries written before this TTL scheme.
+  if (typeof entry === "string") return entry;
+  if (Date.now() - entry.ts > CDN_URL_TTL_MS) {
+    delete redirectResolveCache[slug];
+    return null;
+  }
+  return entry.url;
 }
 
 let _activeProbes = 0;
@@ -60,7 +82,7 @@ export function probeRedirectUrl(slug, redirectUrl) {
   if (!slug || !redirectUrl) return;
   if (typeof window === "undefined") return;
   const cacheKey = redirectCacheKey(slug, redirectUrl);
-  if (redirectResolveCache[cacheKey]) return; // already resolved
+  if (getResolvedCdnUrl(cacheKey)) return; // already resolved and not expired
   if (_activeProbes >= MAX_ACTIVE_PROBES) return;
   if (isSlowConnection()) return;
 
@@ -111,7 +133,7 @@ export function eagerPrimeFirstCard(slug, redirectUrl) {
   _eagerSlug = slug;
 
   const cacheKey = redirectCacheKey(slug, redirectUrl);
-  if (redirectResolveCache[cacheKey]) return; // already resolved — fast-path 1 is ready
+  if (getResolvedCdnUrl(cacheKey)) return; // already resolved and not expired — fast-path 1 is ready
 
   if (_activeProbes >= MAX_ACTIVE_PROBES) return;
   _activeProbes++;
@@ -132,7 +154,13 @@ export function eagerPrimeFirstCard(slug, redirectUrl) {
     if (cdn && cdn !== redirectUrl) setResolvedCdnUrl(cacheKey, cdn);
     cleanup();
   }, { once: true });
-  probe.addEventListener("error", cleanup, { once: true });
+  probe.addEventListener("error", () => {
+    cleanup();
+    // CORS probe failed — the R2 bucket may lack Access-Control-Allow-Origin for
+    // this origin. Fall back to a non-CORS probe so fast-path 1 is still populated.
+    // probeRedirectUrl respects MAX_ACTIVE_PROBES and the TTL cache guard.
+    probeRedirectUrl(slug, redirectUrl);
+  }, { once: true });
   probe.addEventListener("abort", cleanup, { once: true });
 
   probe.src = redirectUrl;

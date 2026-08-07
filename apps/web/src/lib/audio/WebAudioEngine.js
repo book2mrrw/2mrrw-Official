@@ -13,13 +13,21 @@
  * crossfadeGain (caller-owned) wires into userGain so both the fading-out track and the
  * fading-in track pass through the same user-volume GainNode. Changing volume during a
  * crossfade affects both tracks equally.
+ *
+ * Implements AudioEngineBase (apps/web/src/lib/audio/AudioEngineInterface.js) so it
+ * satisfies the same contract as NativeAudioEngine on the mobile app, enabling
+ * PlaybackStateMachine to be shared across platforms.
  */
+
+import { AudioEngineBase, AUDIO_ENGINE_EVENTS } from "@/lib/audio/AudioEngineInterface";
 
 const MRRW_SOURCE_BOUND = Symbol.for("2mrrw.mediaElementSourceBound");
 const VOL_KEY = "2mrrw-vol";
 
-export class WebAudioEngine {
+export class WebAudioEngine extends AudioEngineBase {
   constructor() {
+    super();
+
     /** @type {AudioContext|null} */
     this.ctx = null;
     /** @type {MediaElementAudioSourceNode|null} */
@@ -41,6 +49,12 @@ export class WebAudioEngine {
     this._userVolume = this._readStoredVolume();
     /** @type {(() => void)|null} Fired when AudioContext transitions back to "running". */
     this._onContextRunning = null;
+
+    // Element event listener tracking for _attachAudioElementListeners / _detachAudioElementListeners
+    /** @type {Array<[string, Function]>|null} */
+    this._elListeners = null;
+    /** @type {HTMLAudioElement|null} The element whose events are currently forwarded. */
+    this._listenerElement = null;
   }
 
   // ── Volume ─────────────────────────────────────────────────────────────────
@@ -104,6 +118,16 @@ export class WebAudioEngine {
     if (!Ctx) return { ok: false };
 
     if (!this.ctx || this.ctx.state === "closed") {
+      // AudioContext was closed (recoverAudioHard → teardownWebAudioGraph). The old
+      // MediaElementSourceNode belongs to the dead context and cannot be wired into a
+      // new one. Clear source + MRRW_SOURCE_BOUND so the element can be re-bound to
+      // the fresh context — without this, MRRW_SOURCE_BOUND blocks re-creation and the
+      // engine returns {ok:false} permanently, causing permanent silence after recovery.
+      if (this._boundElement) {
+        try { this._boundElement[MRRW_SOURCE_BOUND] = false; } catch {}
+      }
+      this.source        = null;
+      this._boundElement = null;
       this.ctx = new Ctx();
       this._attachStateChange();
     }
@@ -114,6 +138,10 @@ export class WebAudioEngine {
         audioEl[MRRW_SOURCE_BOUND] = true;
         this._boundElement = audioEl;
       } else if (!this.source) {
+        // MRRW_SOURCE_BOUND is set but source is null — another engine instance
+        // previously owned this element and the reference was lost. Cannot recover
+        // without a page reload (browsers enforce one MediaElementSourceNode per element).
+        console.error("[WebAudioEngine] MRRW_SOURCE_BOUND set but source is null — permanent silence; reload required");
         return { ok: false };
       }
     }
@@ -238,6 +266,215 @@ export class WebAudioEngine {
     const ctx = this.ctx;
     if (!ctx || ctx.state === "running" || ctx.state === "closed") return;
     try { await ctx.resume(); } catch {}
+  }
+
+  // ── AudioEngineBase transport API ──────────────────────────────────────────
+  // Implements the platform-agnostic interface so PlaybackStateMachine can drive
+  // this engine and NativeAudioEngine with identical dispatch calls.
+
+  /**
+   * Load a track src into the bound audio element.
+   * Applies gain normalization and playback rate before the element begins fetching.
+   *
+   * @param {string} src
+   * @param {{ startTime?: number, gainDb?: number, playbackRate?: number }} [options]
+   * @returns {Promise<void>}
+   */
+  async load(src, options = {}) {
+    const el = this._boundElement;
+    if (!el) {
+      throw new Error("[WebAudioEngine] No audio element bound — call createContextAndSource() first");
+    }
+
+    // Apply per-track gain normalization via mainGain before buffering starts.
+    if (this.mainGain) {
+      const linearGain = options.gainDb != null
+        ? Math.max(0.01, Math.min(4, Math.pow(10, options.gainDb / 20)))
+        : 1;
+      this.mainGain.gain.value = linearGain;
+    }
+
+    if (options.playbackRate != null) {
+      el.playbackRate = options.playbackRate;
+    }
+
+    el.src = src;
+    el.load();
+
+    const startTime = options.startTime;
+    if (startTime != null && startTime > 0) {
+      // Seek once metadata is available — cannot seek before the browser knows the duration.
+      const applySeek = () => {
+        el.currentTime = startTime;
+        el.removeEventListener("loadedmetadata", applySeek);
+      };
+      el.addEventListener("loadedmetadata", applySeek);
+    }
+  }
+
+  /**
+   * Begin playback. Ensures AudioContext is running before attempting play()
+   * to avoid DOMException on iOS and Chrome autoplay-policy browsers.
+   * @returns {Promise<void>}
+   */
+  async play() {
+    const el = this._boundElement;
+    if (!el) return;
+    await this.resume();
+    await el.play();
+  }
+
+  /** Pause playback without unloading the track src. */
+  pause() {
+    this._boundElement?.pause();
+  }
+
+  /**
+   * Seek to an absolute position in seconds.
+   * @param {number} position
+   */
+  seek(position) {
+    const el = this._boundElement;
+    if (!el) return;
+    el.currentTime = position;
+  }
+
+  /** Stop playback and release the track src, freeing network resources. */
+  stop() {
+    const el = this._boundElement;
+    if (!el) return;
+    el.pause();
+    try { el.src = ""; el.load(); } catch {}
+  }
+
+  /**
+   * Apply per-track loudness normalization through mainGain.
+   * @param {number} gainDb — positive = louder, negative = quieter
+   */
+  setTrackGain(gainDb) {
+    if (!this.mainGain) return;
+    const linearGain = gainDb != null
+      ? Math.max(0.01, Math.min(4, Math.pow(10, gainDb / 20)))
+      : 1;
+    this.mainGain.gain.value = linearGain;
+  }
+
+  /**
+   * Set playback rate on the audio element.
+   * @param {number} rate — 0.25–4.0
+   */
+  setPlaybackRate(rate) {
+    const el = this._boundElement;
+    if (!el) return;
+    el.playbackRate = rate;
+  }
+
+  // ── DSP effects ────────────────────────────────────────────────────────────
+
+  /** @param {boolean} enabled */
+  setSpaceMode(enabled) {
+    if (this.stereoPanner) this.stereoPanner.pan.value = enabled ? 0.3 : 0;
+  }
+
+  /** @param {boolean} enabled */
+  setBassMode(enabled) {
+    if (this.bassFilter) this.bassFilter.gain.value = enabled ? 6 : 0;
+  }
+
+  /** @param {number} level — 0–5 */
+  setAtmosphereLevel(level) {
+    if (this.analyser) this.analyser.smoothingTimeConstant = Math.max(0, Math.min(1, level / 5));
+  }
+
+  // ── Diagnostics ────────────────────────────────────────────────────────────
+
+  /** @returns {number} */
+  getCurrentTime() {
+    return this._boundElement?.currentTime ?? 0;
+  }
+
+  /** @returns {number} */
+  getDuration() {
+    const d = this._boundElement?.duration;
+    return d != null && Number.isFinite(d) ? d : 0;
+  }
+
+  /** @returns {number} */
+  getBufferedEnd() {
+    const el = this._boundElement;
+    if (!el) return 0;
+    try {
+      const buf = el.buffered;
+      if (buf && buf.length > 0) return buf.end(buf.length - 1);
+    } catch {}
+    return 0;
+  }
+
+  /** @returns {boolean} */
+  isPlaying() {
+    const el = this._boundElement;
+    return Boolean(el && !el.paused && !el.ended && el.readyState >= 2);
+  }
+
+  /** @returns {boolean} */
+  isLoaded() {
+    return Boolean(this._boundElement?.src);
+  }
+
+  // ── Audio element event forwarding ─────────────────────────────────────────
+  // Attach these listeners to delegate audio element events to engine.on() subscribers.
+  // AudioContext.js calls _attachAudioElementListeners() during Phase B-2 migration,
+  // at which point it removes its own direct element event handlers and subscribes
+  // to the engine's event system instead.
+
+  /**
+   * Forward audio element DOM events to this engine's event emitter.
+   * Safe to call multiple times — detaches previous listeners first.
+   * @param {HTMLAudioElement} el
+   */
+  _attachAudioElementListeners(el) {
+    this._detachAudioElementListeners();
+    const E = AUDIO_ENGINE_EVENTS;
+
+    this._elListeners = [
+      ["play",           () => this._emit(E.PLAY,           { currentTime: el.currentTime })],
+      ["pause",          () => this._emit(E.PAUSE,          { currentTime: el.currentTime })],
+      ["ended",          () => this._emit(E.ENDED)],
+      ["waiting",        () => this._emit(E.BUFFERING)],
+      ["stalled",        () => this._emit(E.STALLED)],
+      ["playing",        () => this._emit(E.BUFFERED)],
+      ["canplay",        () => this._emit(E.CANPLAY)],
+      ["canplaythrough", () => this._emit(E.CANPLAYTHROUGH)],
+      ["seeked",         () => this._emit(E.SEEKED,         { currentTime: el.currentTime })],
+      ["timeupdate",     () => this._emit(E.TIMEUPDATE,     { currentTime: el.currentTime, duration: el.duration || 0 })],
+      ["durationchange", () => this._emit(E.DURATIONCHANGE, { duration: Number.isFinite(el.duration) ? el.duration : 0 })],
+      ["loadedmetadata", () => this._emit(E.LOADEDMETADATA, { duration: Number.isFinite(el.duration) ? el.duration : 0 })],
+      ["emptied",        () => this._emit(E.EMPTIED)],
+      ["error",          () => {
+        const err = el.error;
+        this._emit(E.ERROR, { code: err?.code ?? null, message: err?.message ?? null });
+      }],
+      ["volumechange",   () => this._emit(E.VOLUME,         { volume: el.volume })],
+      ["ratechange",     () => this._emit(E.RATE_CHANGE,    { playbackRate: el.playbackRate })],
+    ];
+
+    for (const [evt, fn] of this._elListeners) {
+      el.addEventListener(evt, fn);
+    }
+    this._listenerElement = el;
+  }
+
+  /**
+   * Remove all previously attached audio element event listeners.
+   * Safe to call even if no listeners are attached.
+   */
+  _detachAudioElementListeners() {
+    if (!this._listenerElement || !this._elListeners) return;
+    for (const [evt, fn] of this._elListeners) {
+      try { this._listenerElement.removeEventListener(evt, fn); } catch {}
+    }
+    this._elListeners = null;
+    this._listenerElement = null;
   }
 }
 

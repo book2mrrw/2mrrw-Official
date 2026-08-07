@@ -162,8 +162,13 @@ export function resolveTrackAccess(track, accountState = {}) {
 
   const subscriptionViaLibrary =
     subscriptionLibrary.has(slug) || subscriptionLibrary.has(albumSlug);
+  // Accept a valid Stripe membership record as sufficient evidence of subscription,
+  // even if the DB permissions.subscriber flag hasn't propagated yet (webhook lag).
+  // The permissions flag is still required when membership is unavailable (e.g., old
+  // session without membership hydration) to avoid false-positive access.
   const subscriptionGlobal =
-    subscriptionActive && Boolean(permissions.subscriber);
+    membershipHasPremiumAccess(membership) ||
+    (subscriptionActive && Boolean(permissions.subscriber));
   const subscription = subscriptionActive && (subscriptionViaLibrary || subscriptionGlobal);
 
   const collector =
@@ -381,6 +386,7 @@ export function resolveContentAccess(item, accountState = {}) {
   let tier = "discovery";
   if (trackAccess.collector) tier = "collector";
   else if (trackAccess.subscription && subscriptionActive) tier = "subscriber";
+  else if (trackAccess.owned) tier = "purchaser";
 
   const libraryMode = trackAccess.canStream;
   return {

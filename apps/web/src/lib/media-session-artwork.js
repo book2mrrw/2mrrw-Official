@@ -125,7 +125,7 @@ export function persistMediaSessionTrack(track, { playing, currentTime, duration
         slug: track.slug,
         title: track.title,
         artist: track.artist,
-        cover: track.cover,
+        cover: track.baseCover || track.cover,
         source: track.source,
         playing: Boolean(playing),
         currentTime: Number.isFinite(currentTime) ? currentTime : 0,

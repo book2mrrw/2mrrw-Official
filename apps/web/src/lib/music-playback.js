@@ -202,8 +202,9 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
   const coverRaw =
     normalized?.cover_art_url ||
     normalized?.coverArtUrl ||
-    normalized?.cover ||
+    normalized?.baseCover ||    // static image preserved by withR2CatalogMedia when visual is set
     normalized?.coverArt ||
+    normalized?.cover ||
     null;
   const videoRaw = motionRaw || visualRaw;
   const motionPath = videoRaw ? String(videoRaw).replace(/^\//, "") : "";
@@ -462,28 +463,28 @@ export function describeAlbumQueuePlaybackFailure(tracks = [], albumItem, accoun
 }
 
 /**
- * Stable playback identity — album tracks share release slug; id or album+index wins.
+ * Stable playback identity — album tracks share release slug; album+index always
+ * checked BEFORE id equality because string-title album tracks derive their id
+ * from albumSlug, making all tracks in the same album share a single id value.
  */
 export function isSamePlaybackTrack(a, b) {
   if (!a || !b) return false;
-  if (a.id && b.id && a.id === b.id) return true;
   const aAlbum = a.metadata?.albumSlug ?? a.albumSlug;
   const bAlbum = b.metadata?.albumSlug ?? b.albumSlug;
   const aIdx = a.metadata?.trackIndex ?? a.trackIndex;
   const bIdx = b.metadata?.trackIndex ?? b.trackIndex;
-  // Album tracks share the same album slug — must use trackIndex or trackSlug to distinguish them.
-  // Never fall through to slug comparison for album tracks (slug = albumSlug for all tracks).
+  // Album tracks: use album+index or album+trackSlug — never fall through to id
+  // equality, because id = albumSlug for string-title albums (all tracks share it).
   if (aAlbum && bAlbum && aAlbum === bAlbum) {
     if (Number.isFinite(aIdx) && Number.isFinite(bIdx)) return aIdx === bIdx;
-    // One side has an index but the other doesn't — cannot be the same positionally.
     if (Number.isFinite(aIdx) || Number.isFinite(bIdx)) return false;
-    // Neither has an index — compare by per-track slug if available.
     const aTSlug = a.metadata?.trackSlug ?? a.trackSlug;
     const bTSlug = b.metadata?.trackSlug ?? b.trackSlug;
     if (aTSlug && bTSlug) return aTSlug === bTSlug;
     return false;
   }
-  // Singles and features have unique per-track slugs; slug comparison is valid.
+  // Non-album tracks: id is genuinely unique, fall through to id then slug.
+  if (a.id && b.id && a.id === b.id) return true;
   if (!aAlbum && !bAlbum && a.slug && b.slug) return a.slug === b.slug;
   return false;
 }

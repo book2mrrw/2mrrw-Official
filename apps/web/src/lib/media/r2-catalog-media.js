@@ -8,7 +8,11 @@ import {
   catalogVisualMediaUrl,
 } from "@/lib/media-urls";
 
-const catalogMediaStableCache = new Map();
+// Bounded LRU-ish cache: evict oldest entries when limit is reached, and
+// expire entries after 60 minutes to pick up any metadata updates.
+const CATALOG_CACHE_MAX = 300;
+const CATALOG_CACHE_TTL_MS = 60 * 60 * 1000;
+const catalogMediaStableCache = new Map(); // slug → { sig, value, ts }
 
 /** Stable signature for cover/video/visual/preview — used to skip redundant state updates. */
 export function catalogMediaSignature(item) {
@@ -80,7 +84,10 @@ export function withR2CatalogMedia(item) {
   const sig = catalogMediaSignature(item);
   if (slug) {
     const cached = catalogMediaStableCache.get(slug);
-    if (cached?.sig === sig) return cached.value;
+    if (cached?.sig === sig && Date.now() - cached.ts < CATALOG_CACHE_TTL_MS) {
+      return cached.value;
+    }
+    if (cached) catalogMediaStableCache.delete(slug); // expired or stale sig
   }
 
   const next = mergeCanonicalMetadata({ ...item });
@@ -88,6 +95,11 @@ export function withR2CatalogMedia(item) {
     next.visual = resolveCatalogMediaField(next.visual, catalogVisualMediaUrl);
   }
   if (next.cover) {
+    if (next.visual && !next.baseCover) {
+      // Preserve the static image URL before cover is overwritten with the visual (video) URL.
+      // baseCover is the always-safe static image for <img> tags; cover becomes the video URL.
+      next.baseCover = resolveCatalogMediaField(next.cover, catalogCoverUrl);
+    }
     const coverRaw = next.visual || next.cover;
     next.cover = next.visual
       ? resolveCatalogMediaField(coverRaw, catalogVisualMediaUrl)
@@ -115,7 +127,18 @@ export function withR2CatalogMedia(item) {
   }
   next.coverArtType = next.video ? "video" : (next.coverArtType || "image");
 
-  if (slug) catalogMediaStableCache.set(slug, { sig, value: next });
+  if (slug) {
+    if (catalogMediaStableCache.size >= CATALOG_CACHE_MAX) {
+      // Evict the oldest 20% to amortize eviction cost across many calls.
+      const evictCount = Math.ceil(CATALOG_CACHE_MAX * 0.2);
+      const iter = catalogMediaStableCache.keys();
+      for (let i = 0; i < evictCount; i++) {
+        const k = iter.next().value;
+        if (k !== undefined) catalogMediaStableCache.delete(k);
+      }
+    }
+    catalogMediaStableCache.set(slug, { sig, value: next, ts: Date.now() });
+  }
   return next;
 }
 

@@ -11,8 +11,13 @@ const HEAD_VALIDATION_TTL_MS = 5 * 60 * 1000;
 /** @type {Map<string, { contentType: string, validatedAt: number }>} */
 const signedUrlHeadValidationCache = new Map();
 
-function headValidationCacheKey(slug, url, sessionId = null) {
-  return `${slug || ""}:${sessionId || ""}:${url}`;
+function headValidationCacheKey(slug, sessionId = null) {
+  // Cache by slug+sessionId, NOT by the full signed URL. R2 signed URLs include
+  // expiry tokens that rotate on every /api/library/stream fetch, which would
+  // cause a HEAD request on every signed-URL refresh (50–200 ms latency each time).
+  // The R2 object key (and therefore content-type) doesn't change between refreshes,
+  // so once-per-track-per-session validation is sufficient.
+  return `${slug || ""}:${sessionId || ""}`;
 }
 
 function createStreamClientError(message, details = {}) {
@@ -34,7 +39,7 @@ function assertJsonContentType(res, slug) {
 }
 
 async function assertSignedAudioUrl(url, { slug, signal, sessionId = null } = {}) {
-  const cacheKey = headValidationCacheKey(slug, url, sessionId);
+  const cacheKey = headValidationCacheKey(slug, sessionId);
   const cached = signedUrlHeadValidationCache.get(cacheKey);
   if (cached && Date.now() - cached.validatedAt < HEAD_VALIDATION_TTL_MS) {
     // Reinsert to move this entry to the tail so FIFO eviction keeps recently-used entries.

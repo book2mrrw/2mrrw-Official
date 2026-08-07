@@ -102,8 +102,11 @@ export class HLSEngine {
       maxBufferSize:              60 * 1000 * 1000, // 60 MB (3 × 20 MB per bitrate)
       backBufferLength:           30,
 
-      // ABR — start at highest quality; network-quality module may override
-      startLevel:                 0,          // 0 = first in master playlist (highest bitrate)
+      // ABR — let hls.js pick the starting level via its bandwidth estimate rather
+      // than assuming index 0 = highest bitrate. Master playlist ordering is not
+      // guaranteed; startLevel: -1 is ordering-independent. The MANIFEST_PARSED
+      // handler below remaps _currentLevel by actual bitrate after the manifest lands.
+      startLevel:                 -1,
       abrEwmaDefaultEstimate:     3_000_000,  // 3 Mbps initial estimate (generous for music)
       abrBandWidthFactor:         0.95,
       abrBandWidthUpFactor:       0.7,
@@ -123,47 +126,77 @@ export class HLSEngine {
       debug: process.env.NODE_ENV === "development",
     });
 
-    hls.on(Hls.Events.ERROR, (_, data) => {
-      if (!data.fatal) return;
+    // Wrap manifest load in a Promise — settle only when manifest is confirmed
+    // (MANIFEST_PARSED) or definitively failed (fatal error / 404). Returning
+    // true immediately after loadSource+attachMedia was a false signal: AudioContext
+    // would proceed as if HLS was ready before any bytes had arrived, and the 404
+    // path fired onFallback AFTER the caller had already committed to HLS playback.
+    return new Promise((resolve) => {
+      let settled = false;
+      const settle = (value) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
 
-      if (data.type === Hls.ErrorTypes.NETWORK_ERROR &&
-          data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR &&
-          data.response?.code === 404) {
-        // Track not yet transcoded — fall back to progressive download
+      hls.on(Hls.Events.ERROR, (_, data) => {
+        if (!data.fatal) return;
+
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR &&
+            data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR &&
+            data.response?.code === 404) {
+          // Track not yet transcoded — fall back to progressive download
+          this._destroyHls();
+          this.onFallback?.();
+          settle(false);
+          return;
+        }
+
+        if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+          // Transient network issue — attempt a single recovery; hls.js
+          // exhausts its own manifestLoadingMaxRetry before marking fatal,
+          // so this is genuinely a last-resort nudge, not an infinite loop.
+          hls.startLoad();
+          return;
+        }
+
+        // Fatal non-network error — report up
+        const err = new Error(
+          `hls.js fatal error: ${data.type} / ${data.details}`
+        );
         this._destroyHls();
-        this.onFallback?.();
-        return;
-      }
+        this.onError?.(err);
+        settle(false);
+      });
 
-      if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-        // Transient network issue — try to recover once
-        hls.startLoad();
-        return;
-      }
+      hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+        const levels = data.levels || [];
+        if (levels.length > 0 && this._currentLevel >= 0) {
+          // The master playlist does not guarantee a level ordering. Sort by
+          // descending bitrate to produce a stable tier index regardless of how
+          // the server emits the manifest. Tier 0 = highest bitrate, tier N-1 = lowest.
+          const byBitrate = levels
+            .map((lvl, i) => ({ bitrate: lvl.bitrate ?? 0, i }))
+            .sort((a, b) => b.bitrate - a.bitrate);
+          // Map the caller's quality tier index (0 = highest) to the manifest's
+          // actual hls.js level index so quality always corresponds to bitrate,
+          // not to manifest insertion order.
+          if (this._currentLevel < byBitrate.length) {
+            hls.currentLevel = byBitrate[this._currentLevel].i;
+          }
+          // If _currentLevel is out of range, leave ABR in control.
+        }
+        // _currentLevel < 0 means full auto — no override needed.
+        settle(true);
+      });
 
-      // Fatal non-network error — report up
-      const err = new Error(
-        `hls.js fatal error: ${data.type} / ${data.details}`
-      );
-      this._destroyHls();
-      this.onError?.(err);
+      hls.loadSource(manifestUrl);
+      hls.attachMedia(audioEl);
+
+      this._hls         = hls;
+      this._audioEl     = audioEl;
+      this._manifestUrl = manifestUrl;
     });
-
-    hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-      // Apply a network-quality override if one was set before load
-      if (this._currentLevel >= 0 && this._currentLevel < data.levels.length) {
-        hls.currentLevel = this._currentLevel;
-      }
-    });
-
-    hls.loadSource(manifestUrl);
-    hls.attachMedia(audioEl);
-
-    this._hls       = hls;
-    this._audioEl   = audioEl;
-    this._manifestUrl = manifestUrl;
-
-    return true;
   }
 
   /**
