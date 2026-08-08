@@ -239,12 +239,15 @@ export function resolvePlaybackSrc(track, access, { userId, accountState } = {})
     if (offline) return offline;
   }
   if (canRequestLibraryStream(access, { userId, accountState }) && track.slug) {
-    const trackSlug =
+    const rawTrackSlug =
       track.trackSlug ||
       track.track_slug ||
       track.metadata?.trackSlug ||
       track.metadata?.track_slug ||
       null;
+    // For singles, trackSlug is set to the product slug as a fallback (no real sub-track).
+    // Normalize: if trackSlug === product slug, there is no meaningful sub-track identifier.
+    const trackSlug = (rawTrackSlug && rawTrackSlug !== track.slug) ? rawTrackSlug : null;
     return libraryStreamRedirectSrc(track.slug, { trackSlug });
   }
   const previewPath = track.preview || track.preview_path || track.previewPath;

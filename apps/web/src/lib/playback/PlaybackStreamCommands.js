@@ -748,7 +748,10 @@ export function attachStreamCommands(self) {
         const isEntitledForHLS = Boolean(nextTrack.metadata?.access?.canStream) && usesLibraryStream && streamSlug;
         let hlsDidLoad = false;
         if (isEntitledForHLS && !streamAbortController.signal.aborted) {
-          const hlsTrackSlug = nextTrack.metadata?.trackSlug || parseStreamTrackSlugFromSrc(nextTrack.src) || null;
+          const hlsTrackSlugRaw = nextTrack.metadata?.trackSlug || parseStreamTrackSlugFromSrc(nextTrack.src) || null;
+          // For singles, trackSlug equals the product slug — no real sub-track identifier.
+          // Normalize to null so the HLS manifest query matches track_slug IS NULL in the DB.
+          const hlsTrackSlug = (hlsTrackSlugRaw && hlsTrackSlugRaw !== streamSlug) ? hlsTrackSlugRaw : null;
           const hlsParams = new URLSearchParams({ slug: streamSlug });
           if (hlsTrackSlug) hlsParams.set("trackSlug", hlsTrackSlug);
           const hlsManifestUrl = `/api/library/hls?${hlsParams}`;
