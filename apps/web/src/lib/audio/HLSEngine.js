@@ -111,11 +111,16 @@ export class HLSEngine {
       abrBandWidthFactor:         0.95,
       abrBandWidthUpFactor:       0.7,
 
-      // Retry policy
-      manifestLoadingMaxRetry:    3,
+      // Manifest loading — fail fast, zero retries.
+      // The manifest is ~200 bytes. Any failure (404 = not transcoded, 401, timeout,
+      // cold Vercel function) means fall back to progressive download immediately.
+      // Retrying the manifest just compounds latency: 3 retries × up to 10 s each
+      // was the root cause of 30-second first-play delays. Segment/level loading
+      // keeps its own retry budget because those fail for transient reasons mid-stream.
+      manifestLoadingMaxRetry:    0,
+      manifestLoadingTimeOut:     3000,       // 3 s max — manifests are tiny; slow = broken
       levelLoadingMaxRetry:       3,
       fragLoadingMaxRetry:        3,
-      manifestLoadingRetryDelay:  1000,
       levelLoadingRetryDelay:     1000,
       fragLoadingRetryDelay:      1000,
 
@@ -127,25 +132,36 @@ export class HLSEngine {
     });
 
     // Wrap manifest load in a Promise — settle only when manifest is confirmed
-    // (MANIFEST_PARSED) or definitively failed (fatal error / 404). Returning
-    // true immediately after loadSource+attachMedia was a false signal: AudioContext
-    // would proceed as if HLS was ready before any bytes had arrived, and the 404
-    // path fired onFallback AFTER the caller had already committed to HLS playback.
+    // (MANIFEST_PARSED) or definitively failed. A 5-second safety timeout is the
+    // last-resort guard: if hls.js events are suppressed (browser tab backgrounded,
+    // WebWorker suspended) the promise still settles and falls back to progressive.
     return new Promise((resolve) => {
       let settled = false;
+      let safetyTimerId = null;
+
       const settle = (value) => {
         if (settled) return;
         settled = true;
+        clearTimeout(safetyTimerId);
         resolve(value);
       };
+
+      // 5 s hard cap — belt-and-suspenders in case hls.js events are suppressed.
+      safetyTimerId = setTimeout(() => {
+        if (settled) return;
+        this._destroyHls();
+        this.onFallback?.();
+        settle(false);
+      }, 5000);
 
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (!data.fatal) return;
 
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR &&
-            data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR &&
-            data.response?.code === 404) {
-          // Track not yet transcoded — fall back to progressive download
+            data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
+          // Any manifest load failure (404 = not transcoded, 401 = auth, timeout, etc.)
+          // → fall back to progressive download immediately. manifestLoadingMaxRetry: 0
+          // ensures hls.js does not retry before marking fatal, so this fires in < 3 s.
           this._destroyHls();
           this.onFallback?.();
           settle(false);
@@ -153,14 +169,13 @@ export class HLSEngine {
         }
 
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          // Transient network issue — attempt a single recovery; hls.js
-          // exhausts its own manifestLoadingMaxRetry before marking fatal,
-          // so this is genuinely a last-resort nudge, not an infinite loop.
+          // Fatal network error during segment or level load (not manifest) — attempt
+          // a single recovery. These are transient issues mid-stream, not startup failures.
           hls.startLoad();
           return;
         }
 
-        // Fatal non-network error — report up
+        // Fatal non-network error (MSE, decode, etc.) — report up and fall back
         const err = new Error(
           `hls.js fatal error: ${data.type} / ${data.details}`
         );
