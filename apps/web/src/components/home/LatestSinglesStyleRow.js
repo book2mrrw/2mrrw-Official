@@ -240,6 +240,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
               item={playItemResolved}
               accountState={entitlementAccountState}
               userId={userId}
+              isAdmin={isAdminStable}
               source={source}
               onPlayClick={onPlayClick}
               showCart={Boolean(access?.showCart)}

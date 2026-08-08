@@ -652,8 +652,10 @@ export function createPlaybackEventHandlers({
     const cfDur = isFinite(audio.duration) ? audio.duration : 0;
     const cfRem = cfDur > 0 ? cfDur - audio.currentTime : 0;
 
-    // Preload safety-net: if within 30s of track end and the preload element hasn't
-    // started loading (readyState 0 = HAVE_NOTHING), kick scheduleNextTrackPreload again.
+    // Preload safety-net: if within 30s of track end and the preload element has no
+    // buffered audio data (readyState < 2 = HAVE_NOTHING or HAVE_METADATA only),
+    // kick scheduleNextTrackPreload again. readyState 1 means metadata arrived but
+    // no audio segments yet — insufficient for the crossfade bridge (requires >= 2).
     if (
       crossfadeStateRef.current === "idle" &&
       !previewOnly &&

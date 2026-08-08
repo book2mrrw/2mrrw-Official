@@ -48,7 +48,7 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
 
   const handleFeaturePlay = useCallback((e, clickedItem) => {
     e.stopPropagation();
-    const account = { ...entitlementAccountState, userId };
+    const account = { ...entitlementAccountState, userId, isAdmin: isAdminStable || entitlementAccountState?.isAdmin || Boolean(entitlementAccountState?.permissions?.admin) };
     const bridge = getPagePlaybackActionsBridge();
 
     const isSameTrack = bridge?.currentTrack?.slug === clickedItem.slug;
@@ -106,7 +106,7 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
         }, 2000);
       }
     }
-  }, [displayFeatures, entitlementAccountState, userId]);
+  }, [displayFeatures, entitlementAccountState, userId, isAdminStable]);
 
   const prevSingle = useCallback(
     () => goToSingle(singleIndex === 0 ? displaySingles.length - 1 : singleIndex - 1, "left"),

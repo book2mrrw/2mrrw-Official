@@ -37,6 +37,7 @@ const EMPTY_ACCOUNT_STATE = {
   vaultAccessDetail: null,
   user: null,
   isAdmin: false,
+  playbackPolicy: null,
 };
 
 const noop = () => {};
@@ -176,6 +177,7 @@ export function AuthProvider({ children }) {
         userEntitlements: data.userEntitlements || null,
         user: serverIsGuest && prev.user && !prev.user.isGuest ? prev.user : data.user || null,
         isAdmin: isAdminFlag,
+        playbackPolicy: data.playbackPolicy || null,
         syncedAt: data.syncedAt || null,
       };
       return accountStateShallowEqual(prev, next) ? prev : next;

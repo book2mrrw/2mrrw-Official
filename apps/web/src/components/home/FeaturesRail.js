@@ -9,6 +9,7 @@ import {
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
+import PlaybackPrewarmCardShell from "@/components/music/PlaybackPrewarmCardShell";
 import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
 import { catalogCoverDisplay, withR2CatalogMedia } from "@/components/home/catalogMedia";
 import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
@@ -36,7 +37,13 @@ const FeatureCard = memo(function FeatureCard({
   const { shouldAnimate } = useMountEnterAnimation();
 
   return (
-    <div
+    <PlaybackPrewarmCardShell
+      releaseItem={mediaItem}
+      playItem={mediaItem}
+      accountState={entitlementAccountState}
+      userId={userId}
+      source="home_feature_card"
+      enabled={showPlayActions}
       style={{
         flex: "0 0 auto",
         width: isMobile ? 160 : 220,
@@ -48,7 +55,6 @@ const FeatureCard = memo(function FeatureCard({
         animation: shouldAnimate ? `fadeInUp 0.5s ease ${index * 0.09}s forwards` : undefined,
         transition: "border-color 0.25s",
         position: "relative",
-        touchAction: "manipulation",
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.borderColor = "#a259ff55";
@@ -126,6 +132,7 @@ const FeatureCard = memo(function FeatureCard({
                 item={mediaItem}
                 accountState={entitlementAccountState}
                 userId={userId}
+                isAdmin={isAdminStable}
                 source="home_feature_card"
                 showCart={Boolean(access?.showCart)}
                 onLibraryChange={onLibraryChange}
@@ -145,7 +152,7 @@ const FeatureCard = memo(function FeatureCard({
           ) : null}
         </div>
       </div>
-    </div>
+    </PlaybackPrewarmCardShell>
   );
 });
 

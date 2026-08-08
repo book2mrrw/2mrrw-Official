@@ -26,7 +26,7 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
     currentLibraryItem?.gifted === true;
   const hintCurrentSingle = () => {
     if (!currentSingle) return;
-    const track = toPlaybackTrack(currentSingle, { ...accountState, userId }, "carousel");
+    const track = toPlaybackTrack(currentSingle, { ...accountState, userId, isAdmin }, "carousel");
     if (!track?.src) return;
     const { startTrack } = toInstantStartTrack(track);
     if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);

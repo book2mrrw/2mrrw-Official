@@ -3,11 +3,11 @@
 import { useAudioPlayer } from "@/context/AudioContext";
 import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
 
-export default function ContinueListening({ lastPlayed, accountState, userId, isMobile }) {
+export default function ContinueListening({ lastPlayed, accountState, userId, isAdmin = false, isMobile }) {
   const { playTrack, hintUpcomingPlay } = useAudioPlayer();
   if (!lastPlayed?.slug) return null;
 
-  const track = toPlaybackTrack(lastPlayed, { ...accountState, userId }, "continue");
+  const track = toPlaybackTrack(lastPlayed, { ...accountState, userId, isAdmin }, "continue");
   if (!track?.src) return null;
   const { startTrack } = toInstantStartTrack(track);
   if (!startTrack?.src) return null;

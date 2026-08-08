@@ -146,6 +146,7 @@ function LibraryCarousel({
   items,
   accountState,
   userId,
+  isAdmin = false,
   onPlay,
   onOpen,
   onEnqueue,
@@ -176,7 +177,7 @@ function LibraryCarousel({
                 onMouseEnter={() => {
                   const first = items[0];
                   if (!first) return;
-                  const track = toPlaybackTrack(first, { ...accountState, userId }, "library_all");
+                  const track = toPlaybackTrack(first, { ...accountState, userId, isAdmin }, "library_all");
                   if (track?.src) {
                     const { startTrack } = toInstantStartTrack(track);
                     if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);
@@ -185,7 +186,7 @@ function LibraryCarousel({
                 onTouchStart={() => {
                   const first = items[0];
                   if (!first) return;
-                  const track = toPlaybackTrack(first, { ...accountState, userId }, "library_all");
+                  const track = toPlaybackTrack(first, { ...accountState, userId, isAdmin }, "library_all");
                   if (track?.src) {
                     const { startTrack } = toInstantStartTrack(track);
                     if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);
@@ -347,7 +348,7 @@ function LibraryCarousel({
                     }}
                     onMouseEnter={() => {
                       if (!canPlay) return;
-                      const track = toPlaybackTrack(item, { ...accountState, userId }, "library_item");
+                      const track = toPlaybackTrack(item, { ...accountState, userId, isAdmin }, "library_item");
                       if (track?.src) {
                         const { startTrack } = toInstantStartTrack(track);
                         if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);
@@ -355,7 +356,7 @@ function LibraryCarousel({
                     }}
                     onTouchStart={() => {
                       if (!canPlay) return;
-                      const track = toPlaybackTrack(item, { ...accountState, userId }, "library_item");
+                      const track = toPlaybackTrack(item, { ...accountState, userId, isAdmin }, "library_item");
                       if (track?.src) {
                         const { startTrack } = toInstantStartTrack(track);
                         if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);
@@ -856,9 +857,9 @@ function MyMusicTab({
 
   const playItem = useCallback(
     (item, access, resumeAt) => {
-      const resolvedAccess = access || resolveTrackAccess(item, accountState);
+      const resolvedAccess = access || resolveTrackAccess(item, { ...accountState, isAdmin });
       if (!resolvedAccess?.canStream) return;
-      const track = toPlaybackTrack(item, { ...accountState, userId: user?.id }, "my_music");
+      const track = toPlaybackTrack(item, { ...accountState, userId: user?.id, isAdmin }, "my_music");
       const savedPosition = resumeAt !== undefined
         ? resumeAt
         : (() => {
@@ -879,15 +880,15 @@ function MyMusicTab({
         }, 2000);
       }
     },
-    [accountState, dispatchPlaybackCommand, playQueue, playTrack, user?.id, listeningMap]
+    [accountState, isAdmin, dispatchPlaybackCommand, playQueue, playTrack, user?.id, listeningMap]
   );
 
   const playAlbum = useCallback(
     (album) => {
-      const access = resolveTrackAccess(album, accountState);
+      const access = resolveTrackAccess(album, { ...accountState, isAdmin });
       if (!access.canStream) return;
-      const tracks = albumTracksForPlayback(album, { ...accountState, userId: user?.id }, "my_music_album");
-      const playable = playableReleaseQueue(tracks, { ...accountState, userId: user?.id });
+      const tracks = albumTracksForPlayback(album, { ...accountState, userId: user?.id, isAdmin }, "my_music_album");
+      const playable = playableReleaseQueue(tracks, { ...accountState, userId: user?.id, isAdmin });
       if (!playable.length) {
         playItem(album, access);
         return;
@@ -903,7 +904,7 @@ function MyMusicTab({
         }, 2000);
       }
     },
-    [accountState, dispatchPlaybackCommand, playItem, playQueue, user?.id]
+    [accountState, isAdmin, dispatchPlaybackCommand, playItem, playQueue, user?.id]
   );
 
   const playPlaylist = useCallback(
@@ -915,7 +916,7 @@ function MyMusicTab({
       let tracks = refs
         .map((item) => {
           const merged = { ...catalogBySlug.get(item.slug), ...item };
-          return toPlaybackTrack(merged, { ...accountState, userId: user?.id }, "playlist");
+          return toPlaybackTrack(merged, { ...accountState, userId: user?.id, isAdmin }, "playlist");
         })
         .filter((t) => t.src);
       if (!tracks.length) return;
@@ -931,7 +932,7 @@ function MyMusicTab({
         }, 2000);
       }
     },
-    [accountState, catalogTracks, dispatchPlaybackCommand, playQueue, setShuffle, user?.id]
+    [accountState, isAdmin, catalogTracks, dispatchPlaybackCommand, playQueue, setShuffle, user?.id]
   );
 
   const resumeLast = useCallback(() => {
@@ -943,14 +944,14 @@ function MyMusicTab({
       albums.find((a) => a.slug === activeContinue.slug) ||
       mixtapesAndEps?.find((m) => m.slug === activeContinue.slug) ||
       activeContinue;
-    const access = resolveTrackAccess(catalog, accountState);
+    const access = resolveTrackAccess(catalog, { ...accountState, isAdmin });
     playItem(catalog, access, activeContinue.completed ? 0 : Number(activeContinue.positionSeconds || 0));
-  }, [accountState, activeContinue, albums, mixtapesAndEps, playItem, singles]);
+  }, [accountState, isAdmin, activeContinue, albums, mixtapesAndEps, playItem, singles]);
 
   const playAllSingles = useCallback((shuffle = false) => {
     const playable = mergedOwnedSingles
-      .filter((item) => resolveTrackAccess(item, accountState).canStream)
-      .map((item) => toPlaybackTrack(item, { ...accountState, userId: user?.id }, "my_music_all"));
+      .filter((item) => resolveTrackAccess(item, { ...accountState, isAdmin }).canStream)
+      .map((item) => toPlaybackTrack(item, { ...accountState, userId: user?.id, isAdmin }, "my_music_all"));
     if (!playable.length) return;
     if (shuffle) setShuffle(true);
     const { startTrack, needsUpgrade } = toInstantStartTrack(playable[0]);
@@ -963,7 +964,7 @@ function MyMusicTab({
         if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
       }, 2000);
     }
-  }, [mergedOwnedSingles, accountState, dispatchPlaybackCommand, user?.id, playQueue, setShuffle]);
+  }, [mergedOwnedSingles, accountState, isAdmin, dispatchPlaybackCommand, user?.id, playQueue, setShuffle]);
 
   const sortLabel = SORT_OPTIONS.find((o) => o.id === sortPref)?.label || "Recently Added";
 
@@ -1139,10 +1140,11 @@ function MyMusicTab({
           items={activeRecentlyPlayed}
           accountState={accountState}
           userId={user?.id}
+          isAdmin={isAdmin}
           onPlay={(item, access) => {
             const queue = activeRecentlyPlayed
-              .filter((s) => resolveTrackAccess(s, accountState).canStream)
-              .map((s) => toPlaybackTrack({ ...s, ...(singles.find((x) => x.slug === s.slug) || {}) }, { ...accountState, userId: user?.id }, "my_music_recent"));
+              .filter((s) => resolveTrackAccess(s, { ...accountState, isAdmin }).canStream)
+              .map((s) => toPlaybackTrack({ ...s, ...(singles.find((x) => x.slug === s.slug) || {}) }, { ...accountState, userId: user?.id, isAdmin }, "my_music_recent"));
             const idx = queue.findIndex((t) => t.slug === item.slug);
             if (idx >= 0 && queue.length > 1) {
               void playQueue(queue, idx);
@@ -1167,7 +1169,7 @@ function MyMusicTab({
           items={recentlyAddedSingles.length ? recentlyAddedSingles : recentlyAddedRail}
           accountState={accountState}
           onPlay={(item) => {
-            const access = resolveTrackAccess(item, accountState);
+            const access = resolveTrackAccess(item, { ...accountState, isAdmin });
             playItem(item, access);
           }}
         />
@@ -1241,6 +1243,7 @@ function MyMusicTab({
             }))}
             accountState={accountState}
             userId={user?.id}
+            isAdmin={isAdmin}
             onPlay={playItem}
             onLibraryChange={refresh}
             isMobile={isMobile}
@@ -1265,10 +1268,11 @@ function MyMusicTab({
         items={mergedOwnedSingles}
         accountState={accountState}
         userId={user?.id}
+        isAdmin={isAdmin}
         onPlay={(item, access) => {
           const queue = mergedOwnedSingles
-            .filter((s) => resolveTrackAccess(s, accountState).canStream)
-            .map((s) => toPlaybackTrack(s, { ...accountState, userId: user?.id }, "my_music"));
+            .filter((s) => resolveTrackAccess(s, { ...accountState, isAdmin }).canStream)
+            .map((s) => toPlaybackTrack(s, { ...accountState, userId: user?.id, isAdmin }, "my_music"));
           const idx = queue.findIndex((t) => t.slug === item.slug);
           if (idx >= 0 && queue.length > 1) {
             void playQueue(queue, idx);
@@ -1277,7 +1281,7 @@ function MyMusicTab({
           }
         }}
         onEnqueue={(item) => {
-          const track = toPlaybackTrack(item, { ...accountState, userId: user?.id }, "my_music");
+          const track = toPlaybackTrack(item, { ...accountState, userId: user?.id, isAdmin }, "my_music");
           enqueueTrack(track);
         }}
         onOpen={(item) => onOpenSingle?.(singles.find((s) => s.slug === item.slug) || item)}
@@ -1362,6 +1366,7 @@ function MyMusicTab({
             items={collectorItems.map((item) => ({ ...item, ...(singles.find((s) => s.slug === item.slug) || {}) }))}
             accountState={accountState}
             userId={user?.id}
+            isAdmin={isAdmin}
             onPlay={playItem}
             onLibraryChange={refresh}
             isMobile={isMobile}

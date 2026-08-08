@@ -2428,6 +2428,7 @@ function PageStorefront({ initialEvents }) {
                 catalogPlaybackLookup={getCatalogSurfaceRef().catalogPlaybackLookup}
                 accountState={ent.entitlementAccountState}
                 userId={auth.userId}
+                isAdmin={auth.isAdmin}
                 isMobile={isMobile}
                 onClose={() => setAlbumTracklistRelease(null)}
                 onLibraryChange={auth.handleLibraryChange}

@@ -11,15 +11,15 @@ import { catalogPreviewAudioUrl } from "@/lib/media-urls";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 
-export default function ReleaseCardPlayButton({ item, accountState, userId, source = "home_card", onPlayClick }) {
+export default function ReleaseCardPlayButton({ item, accountState, userId, isAdmin = false, source = "home_card", onPlayClick }) {
   const { currentTrackId, currentTrackSlug, isPlaying } = usePlaybackIdentity();
   const upgradeTimerRef = useRef(null);
   const lastTapRef = useRef(0);
   const hoverProbeTimerRef = useRef(null);
 
   const access = useMemo(
-    () => resolveTrackAccess(item, { ...(accountState || {}), userId }),
-    [accountState, item, userId]
+    () => resolveTrackAccess(item, { ...(accountState || {}), userId, isAdmin }),
+    [accountState, item, userId, isAdmin]
   );
 
   useEffect(() => {
@@ -43,11 +43,11 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
     const prewarmKey = playbackPrewarmKeyForItem(item);
     const prewarmed = prewarmKey ? getPlaybackPrewarmEntry(prewarmKey) : null;
     const playbackItem = prewarmed?.normalizedFirst || item;
-    const track = toPlaybackTrack(playbackItem, { ...accountState, userId }, source);
+    const track = toPlaybackTrack(playbackItem, { ...accountState, userId, isAdmin }, source);
     if (!track?.src) return;
     const { startTrack } = toInstantStartTrack(track);
     if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);
-  }, [accountState, item, source, userId]);
+  }, [accountState, item, source, userId, isAdmin]);
 
   // Desktop: 150 ms debounce — fires before the user's finger lifts off the mouse button.
   const handleMouseEnter = useCallback(() => {
@@ -78,7 +78,7 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
       const prewarmKey = playbackPrewarmKeyForItem(item);
       const prewarmed = prewarmKey ? getPlaybackPrewarmEntry(prewarmKey) : null;
       const playbackItem = prewarmed?.normalizedFirst || item;
-      const track = toPlaybackTrack(playbackItem, { ...accountState, userId }, source);
+      const track = toPlaybackTrack(playbackItem, { ...accountState, userId, isAdmin }, source);
       if (!track.src) return;
       const sameTrack =
         currentTrackId &&
@@ -101,7 +101,7 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, sour
         }, 2000);
       }
     },
-    [accountState, currentTrackId, currentTrackSlug, item, onPlayClick, source, userId]
+    [accountState, isAdmin, currentTrackId, currentTrackSlug, item, onPlayClick, source, userId]
   );
 
   const sameTrack = currentTrackId && currentTrackSlug === item?.slug;
@@ -157,6 +157,7 @@ export function ReleaseCardActions({
   item,
   accountState,
   userId,
+  isAdmin = false,
   source,
   onAddToCart,
   onPlayClick,
@@ -166,13 +167,13 @@ export function ReleaseCardActions({
   showCart = true,
 }) {
   const access = useMemo(
-    () => resolveTrackAccess(item, { ...(accountState || {}), userId }),
-    [accountState, item, userId]
+    () => resolveTrackAccess(item, { ...(accountState || {}), userId, isAdmin }),
+    [accountState, item, userId, isAdmin]
   );
 
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <ReleaseCardPlayButton item={item} accountState={accountState} userId={userId} source={source} onPlayClick={onPlayClick} />
+      <ReleaseCardPlayButton item={item} accountState={accountState} userId={userId} isAdmin={isAdmin} source={source} onPlayClick={onPlayClick} />
       <span onClick={(e) => e.stopPropagation()}>
         <MusicPlusButton track={item} userId={userId} access={access} onLibraryChange={onLibraryChange} />
       </span>

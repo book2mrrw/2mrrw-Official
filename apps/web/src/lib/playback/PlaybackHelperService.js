@@ -742,9 +742,14 @@ export function createPlaybackHelpers(initialDeps) {
             isLibraryStreamRedirectSrc(trackSrc) ||
             isLibraryStreamSrc(trackSrc);
           if (isProxied) {
-            // Proxy path: a backward nudge forces the proxy to issue a fresh Range request,
-            // breaking stuck TCP connections that cause stalls on same-origin streams.
-            audio.currentTime = Math.max(0, audio.currentTime - 0.1);
+            // Proxy path: a tiny forward nudge forces the proxy to issue a fresh Range
+            // request, breaking stuck TCP connections. Forward (not backward) — a backward
+            // seek causes iOS to snap to the nearest buffered range which can be several
+            // seconds back, producing audible repetition the user hears as the song rewinding.
+            const fwdTarget = audio.currentTime + 0.05;
+            if (Number.isFinite(audio.duration) && fwdTarget < audio.duration - 1) {
+              audio.currentTime = fwdTarget;
+            }
           } else {
             // CDN direct (R2): a backward seek adds a redundant Range request that competes
             // with the in-flight buffer fill. Seek forward instead — skips past stuck bytes
@@ -1567,6 +1572,17 @@ export function createPlaybackHelpers(initialDeps) {
         const normalized = normalizePlaybackSrc(track.src);
         if (!normalized) return;
         if (kind === SOURCE_KIND.REDIRECT) {
+          if (track.metadata?.access?.canStream) {
+            // HLS-eligible tracks: pre-fetch the manifest (~200 bytes) into the
+            // HTTP cache so hls.js gets an instant cache hit on loadSource().
+            // Loading the redirect URL into intentPrewarmRef is wasted here —
+            // hls.js ignores it and loads the MSE manifest directly.
+            const slug = parseStreamSlugFromSrc(track.src) || track.slug;
+            if (slug) {
+              fetch(`/api/library/hls?slug=${encodeURIComponent(slug)}`, { priority: "low" }).catch(() => {});
+            }
+            return;
+          }
           const preloadSrc = normalized.includes("preload=1")
             ? normalized
             : `${normalized}&preload=1`;

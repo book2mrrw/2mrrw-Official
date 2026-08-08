@@ -119,6 +119,7 @@ function RadioCarousel({
               item={withR2CatalogMedia(currentSlide)}
               accountState={accountState}
               userId={currentUserId}
+              isAdmin={isAdmin}
               source="home_radio_carousel"
             />
             {radioAccess?.showCart ? (

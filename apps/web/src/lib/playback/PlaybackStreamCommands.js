@@ -100,16 +100,29 @@ export function attachStreamCommands(self) {
     const streamAbortController = new AbortController();
     activeStreamAbortRef.current = streamAbortController;
     const audioEl = audioRef.current;
-    // For redirect fast-path (same-origin proxy → S3), start the browser fetch
-    // immediately so network time overlaps with Web Audio setup.
-    // Also pauses the current track, which eliminates the 300ms fade-out below.
+    // For redirect fast-path (same-origin proxy → S3), pause immediately so
+    // the 300ms fade-out below is avoided.  For progressive-only users also
+    // assign src early so the browser fetch overlaps with Web Audio setup.
+    // HLS-eligible tracks skip the src/load — hls.js attaches via MSE and
+    // sets its own blob: src; an early redirect src causes double-init where
+    // the browser starts the redirect fetch then abandons it for MSE, producing
+    // the "plays → buffers → plays again" symptom.
+    // willAttemptHLS: HLS will set its own MSE blob: src via hls.attachMedia().
+    // Skipping audioEl.load() prevents the redirect URL from pre-buffering enough
+    // data to cause an audible "plays → silence → plays again" double-init on desktop.
+    // We still assign audioEl.src so unlockAudioFromGesture's play() has a valid
+    // src on iOS — play() with no src throws and leaves the audio context locked.
+    const willAttemptHLS = Boolean(track?.metadata?.access?.canStream) &&
+      isLibraryStreamRedirectSrc(track?.src || "");
     if (isLibraryStreamRedirectSrc(track?.src) && audioEl) {
       const earlyNorm = normalizePlaybackSrc(track.src);
       if (earlyNorm && normalizePlaybackSrc(audioEl.src || "") !== earlyNorm) {
         skipPauseInterruptionRef.current = true;
         audioEl.pause();
         audioEl.src = track.src;
-        audioEl.load();
+        if (!willAttemptHLS) {
+          audioEl.load();
+        }
       }
     } else if (track?.src && audioEl) {
       // CDN/Preview fast-path: early src assignment so the browser fetch overlaps
@@ -799,12 +812,14 @@ export function attachStreamCommands(self) {
         // buffer gate serves no purpose — it only lets the preload element's position
         // drift away from the main element's start position. Skip it; position is snapped.
         if (!isSameTrack && !streamAbortController.signal.aborted && crossfadeStateRef.current !== "bridging") {
-          // Spotify-standard buffer gate: require 1 s of buffered audio ahead of
-          // the current position at readyState >= 3 (HAVE_FUTURE_DATA). This is
-          // enough to avoid an immediate stall on play while keeping start latency
-          // under 300 ms on any reasonable connection. readyState >= 4 and MIN_BUF=5
-          // caused 5+ second delays before sound started.
-          const MIN_BUF = 1;
+          // Buffer gate: do not call play() until 3 s of decoded audio is ahead
+          // of currentTime at readyState >= 3 (HAVE_FUTURE_DATA). 3 s covers half
+          // an HLS segment (segments are ~6 s) — the decoder has a full segment's
+          // runway before needing the next one, eliminating the play→stall→resume
+          // double-play pattern caused by starting with only a partial segment
+          // in the buffer. On typical connections this gate clears in < 500 ms.
+          // readyState >= 4 + 5 s caused 5+ second start delays — not used.
+          const MIN_BUF = 3;
           const goodBuffer = () => {
             try {
               const buf = audio.buffered;

@@ -34,6 +34,7 @@ export default function AlbumTracklistSheet({
   catalogPlaybackLookup,
   accountState,
   userId,
+  isAdmin = false,
   isMobile = false,
   onClose,
   onLibraryChange,
@@ -74,18 +75,18 @@ export default function AlbumTracklistSheet({
       album
         ? albumTracksForPlayback(
             album,
-            { ...accountState, userId },
+            { ...accountState, userId, isAdmin },
             "album_tracklist",
             catalogPlaybackLookup
           )
         : [],
-    [album, accountState, catalogPlaybackLookup, userId]
+    [album, accountState, catalogPlaybackLookup, userId, isAdmin]
   );
 
   // Plays a specific track without closing the sheet — user can change tracks at will.
   const playTrackInSheet = useCallback(
     (releaseTrackIndex) => {
-      const playable = playableReleaseQueue(tracks, { ...accountState, userId });
+      const playable = playableReleaseQueue(tracks, { ...accountState, userId, isAdmin });
       if (!playable.length) return;
       setShuffle(false);
       const sourceTrack = tracks[releaseTrackIndex];
@@ -99,7 +100,7 @@ export default function AlbumTracklistSheet({
       void dispatchPlaybackCommand("playQueue", { tracks: instantQueue, startIndex: queueIndex });
       if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
     },
-    [tracks, accountState, userId, dispatchPlaybackCommand, setShuffle, scheduleInstantStreamUpgrade]
+    [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, scheduleInstantStreamUpgrade]
   );
 
   const isTrackActive = useCallback(
@@ -130,11 +131,11 @@ export default function AlbumTracklistSheet({
   // we never compete with the active track's bandwidth.
   useEffect(() => {
     if (!open || !tracks.length || isPlaying) return;
-    const playable = playableReleaseQueue(tracks, { ...accountState, userId });
+    const playable = playableReleaseQueue(tracks, { ...accountState, userId, isAdmin });
     if (!playable.length) return;
     const { startTrack } = toInstantStartTrack(playable[0]);
     if (startTrack?.src) void hintUpcomingPlay(startTrack);
-  }, [open, tracks, accountState, userId, isPlaying, hintUpcomingPlay]);
+  }, [open, tracks, accountState, userId, isAdmin, isPlaying, hintUpcomingPlay]);
 
   // Auto-play track 1 when sheet opens — only if nothing from this album is already playing.
   // autoPlayedRef blocks re-fire if deps change while the sheet stays open.
@@ -149,7 +150,7 @@ export default function AlbumTracklistSheet({
   // Play All / Shuffle close the sheet after queuing.
   const playAndClose = useCallback(
     (shuffle = false) => {
-      const playable = playableReleaseQueue(tracks, { ...accountState, userId });
+      const playable = playableReleaseQueue(tracks, { ...accountState, userId, isAdmin });
       if (!playable.length) return;
       if (shuffle) {
         setShuffle(true);
@@ -169,7 +170,7 @@ export default function AlbumTracklistSheet({
       }
       onClose?.();
     },
-    [tracks, accountState, userId, dispatchPlaybackCommand, setShuffle, onClose, scheduleInstantStreamUpgrade]
+    [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, onClose, scheduleInstantStreamUpgrade]
   );
 
   const handleDragEnd = useCallback(
@@ -369,10 +370,10 @@ export default function AlbumTracklistSheet({
               const trackCover = track.cover || album.cover;
               const trackCoverType = track.coverArtType || albumCoverType;
               const previewUnavailable = Boolean(track.metadata?.previewUnavailable);
-              const rowPlayState = getPlayButtonState(track, { ...accountState, userId });
+              const rowPlayState = getPlayButtonState(track, { ...accountState, userId, isAdmin });
               const trackAccess = resolveTrackAccess(
                 { ...track, slug: track.slug || album.slug, albumSlug: album.slug },
-                { ...accountState, userId }
+                { ...accountState, userId, isAdmin }
               );
               const plusTrack = {
                 ...track,

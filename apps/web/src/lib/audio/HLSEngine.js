@@ -275,3 +275,12 @@ export function replaceHLSEngine() {
   _activeEngine = new HLSEngine();
   return _activeEngine;
 }
+
+/**
+ * Fire-and-forget: import hls.js before the user taps play so there is no
+ * main-thread parse/compile freeze on the first HLS track.
+ * Safe to call many times — importHls() caches the module after first load.
+ */
+export function prewarmHLS() {
+  importHls().catch(() => {});
+}

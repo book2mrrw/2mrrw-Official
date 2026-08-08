@@ -155,7 +155,7 @@ function CatalogGrid({
             hoverOut={hoverOut}
             onCardClick={onCardClick}
             onHintPlay={() => {
-              const track = toPlaybackTrack(withR2CatalogMedia(playItem), { ...accountState, userId }, type === "albums" ? "home_album_card" : "home_card");
+              const track = toPlaybackTrack(withR2CatalogMedia(playItem), { ...accountState, userId, isAdmin }, type === "albums" ? "home_album_card" : "home_card");
               if (!track?.src) return;
               const { startTrack } = toInstantStartTrack(track);
               if (startTrack?.src) getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(startTrack);
@@ -198,6 +198,7 @@ function CatalogGrid({
                     item={withR2CatalogMedia(playItem)}
                     accountState={accountState}
                     userId={userId}
+                    isAdmin={isAdmin}
                     source="home_album_card"
                     showCart={Boolean(access?.showCart)}
                     onLibraryChange={onLibraryChange}

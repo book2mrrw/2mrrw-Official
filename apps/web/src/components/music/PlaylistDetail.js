@@ -8,7 +8,7 @@ import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
 
 export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobile }) {
   const { playQueue, toggleShuffle, shuffle, toggleRepeat, repeatMode, hintUpcomingPlay } = useAudioPlayer();
-  const { user, accountState } = useAuth();
+  const { user, accountState, isAdmin } = useAuth();
   const userId = user?.id;
 
   const rawTracks = useMemo(
@@ -20,9 +20,9 @@ export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobi
   // get preview URLs and entitled users get library stream redirect URLs.
   const tracks = useMemo(
     () => rawTracks
-      .map((track) => toPlaybackTrack(track, { ...accountState, userId }, "playlist"))
+      .map((track) => toPlaybackTrack(track, { ...accountState, userId, isAdmin }, "playlist"))
       .filter((t) => t?.src),
-    [rawTracks, accountState, userId]
+    [rawTracks, accountState, userId, isAdmin]
   );
 
   const playFrom = (startIndex) => {

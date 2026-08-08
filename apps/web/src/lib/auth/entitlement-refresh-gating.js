@@ -66,6 +66,7 @@ export function buildEntitlementSnapshot(data = {}, userId = null, prevVersion =
     ownedSlugs: Array.isArray(slugs) ? [...slugs] : [],
     permissions,
     vaultAccess,
+    playbackPolicy: data.playbackPolicy || null,
     lastUpdated: Date.now(),
     version: prevVersion + 1,
   };
@@ -86,6 +87,7 @@ export function snapshotToAccountPayload(snapshot, accountState = {}) {
     collectorCard: snapshot.collectorCard,
     vaultAccess: snapshot.vaultAccess,
     permissions: snapshot.permissions,
+    playbackPolicy: snapshot.playbackPolicy ?? accountState.playbackPolicy ?? null,
     membership: accountState.membership ?? null,
     collectorOwnerships: accountState.collectorOwnerships || [],
     mediaProgress: accountState.mediaProgress || [],

@@ -174,6 +174,10 @@ export function attachTransportCommands(self) {
               sessionId: data.sessionId || meta.sessionId,
             };
             const resumeAt = audio.currentTime || 0;
+            // Capture playing state BEFORE waitAudioSrcReady — that function calls
+            // audio.load() which pauses the element, so checking !audio.paused after
+            // the await always returns false and play() would never be called.
+            const wasPlaying = !audio.paused;
             self._deps.skipPauseInterruptionRef.current = true;
             await waitAudioSrcReady(audio, data.url, { signal: activeStreamAbortRef.current?.signal });
             // Check again after the async src-ready wait
@@ -190,7 +194,7 @@ export function attachTransportCommands(self) {
                 audio.addEventListener("loadedmetadata", seekAfterLoad, { once: true });
               }
             }
-            if (!audio.paused) await playAudioIfNotPaused(audio, stateRef.current.isPlaying);
+            if (wasPlaying || stateRef.current.isPlaying) await playAudioIfNotPaused(audio, stateRef.current.isPlaying);
           } catch (error) {
             reportPlaybackDiagnostic({
               level: "warn",

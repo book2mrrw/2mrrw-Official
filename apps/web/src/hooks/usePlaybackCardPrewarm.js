@@ -10,6 +10,7 @@ import {
   eagerPrimeFirstCard,
   cancelEagerPrime,
 } from "@/lib/playback/redirect-resolve-cache";
+import { prewarmHLS } from "@/lib/audio/HLSEngine";
 
 const DEFAULT_THRESHOLD = 0.15;
 const DEFAULT_ROOT_MARGIN = "80px 0px";
@@ -85,6 +86,9 @@ export function usePlaybackCardPrewarm(
           warmReleasePrewarmBundle(bundle);
           const { releaseSlug, urlDescriptor } = bundle;
           if (urlDescriptor?.streamPath && urlDescriptor.accessSnapshot?.canStream) {
+            // Warm hls.js module now so there is no parse/compile freeze when
+            // the user taps play. No-op after the first call (module is cached).
+            prewarmHLS();
             if (cfg.isFirstCard) {
               // First card: buffer audio bytes, not just the redirect URL.
               eagerPrimeFirstCard(releaseSlug, urlDescriptor.streamPath);
@@ -106,6 +110,7 @@ export function usePlaybackCardPrewarm(
             isAlbumCard: cfg.isAlbumCard,
           });
           if (bundle?.urlDescriptor?.streamPath && bundle.urlDescriptor.accessSnapshot?.canStream) {
+            prewarmHLS();
             eagerPrimeFirstCard(bundle.releaseSlug, bundle.urlDescriptor.streamPath);
             eagerPrimeSlugRef.current = bundle.releaseSlug;
           }
@@ -144,6 +149,7 @@ export function usePlaybackCardPrewarm(
       }
       const { releaseSlug, urlDescriptor } = bundle;
       if (urlDescriptor?.streamPath && urlDescriptor.accessSnapshot?.canStream) {
+        prewarmHLS();
         if (cfg.isFirstCard) {
           // Keep the eager-prime warm on interaction (deduped internally).
           eagerPrimeFirstCard(releaseSlug, urlDescriptor.streamPath);
