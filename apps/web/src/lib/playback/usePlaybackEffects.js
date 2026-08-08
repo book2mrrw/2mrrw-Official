@@ -609,11 +609,12 @@ export function usePlaybackEffects({
       if (!stateRef.current.isPlaying && !playbackIntentBeforeHideRef.current) return;
       if (isRecoveringRef.current) return;
       if (Date.now() < recoveryCooldownUntilRef.current) return;
-      // During track loading, isPlaying=true && audio.paused=true is the expected state —
-      // not a desync. playTrackInternal has its own timeout (12s). Triggering recovery
-      // here aborts playTrackInternal mid-flight and replaces it with the recovery path,
-      // adding 1.5-2.5s to every track switch and causing abort races on rapid switching.
-      if (stateRef.current.playbackState === "loading") return;
+      // Only fire recovery when audio is in the stable "playing" state but is actually
+      // paused. Every other state (idle, loading, ready, recovering) represents a
+      // transition — audio is expected to be paused. Checking only "loading" missed the
+      // "idle" state (first play before playTrackInternal dispatches "loading") and any
+      // tick whose 1250ms interval landed shortly after a state transition.
+      if (stateRef.current.playbackState !== "playing") return;
 
       const lifecycleTruth = computeLifecycleAudioTruthState();
       if (lifecycleTruth === LIFECYCLE_AUDIO_TRUTH_STATES.OS_SUSPENDED) {
