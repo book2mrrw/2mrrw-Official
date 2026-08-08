@@ -5,6 +5,7 @@
  */
 
 import { isSamePlaybackTrack } from "@/lib/music-playback";
+import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
 
 export const SLOWED_SUFFIX = " · Slowed";
 export const CS_PLAYBACK_RATE = 0.75;
@@ -148,7 +149,15 @@ const normalizeTrack = (track = {}) => {
     null;
   const id = track.id || track.trackId || slug || null;
   const baseTitle = stripSlowedSuffix(track.title || "Untitled");
-  const baseCover = track.baseCover || track.cover || track.coverArt || track.image || null;
+  const rawCover = track.baseCover || track.cover || track.coverArt || track.image || null;
+  // Bare filenames (no path separator, no protocol) are legacy DB data — resolveAbsoluteArtworkUrl
+  // would prepend the R2 CDN base and produce a 404. Fall back to the canonical legacy_cover
+  // (always a leading-slash /public dir path) when the raw value is not a routable URL.
+  const isValidCoverPath = rawCover &&
+    (String(rawCover).includes("/") || /^https?:\/\//i.test(rawCover));
+  const baseCover = isValidCoverPath
+    ? rawCover
+    : (getCanonicalReleaseBySlug(slug || id || "")?.legacy_cover ?? null);
   const csAudio = track.csAudio || track.cs_audio || null;
   const csCover = track.csCover || track.cs_cover || track.csCoverArt || null;
   const coverArtType = track.coverArtType || track.cover_art_type || (track.video ? "video" : "image");

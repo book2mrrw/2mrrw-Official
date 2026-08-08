@@ -322,8 +322,17 @@ export function usePlaybackEffects({
   useEffect(() => {
     if (typeof window === "undefined") return undefined;
 
+    // Guard against concurrent resume attempts — iOS ctx.resume() is async, so rapid
+    // touchstart/touchend events during scrolling all pass the needsUnlock check before
+    // the first resume() resolves, causing 18+ redundant resume calls.
+    let unlockPending = false;
+
     const unlockFromGesture = () => {
       const ctx = audioCtxRef.current;
+      // If a resume() is already in flight, skip — the in-flight call will set
+      // sessionUnlockedRef when it completes. Reset if ctx enters "interrupted"
+      // (iOS backgrounding) so the next tap re-unlocks correctly.
+      if (unlockPending && ctx?.state !== "interrupted") return;
       const needsUnlock =
         !refs.sessionUnlockedRef.current || ctx?.state === "suspended" || ctx?.state === "interrupted";
       if (!needsUnlock) return;
@@ -353,6 +362,7 @@ export function usePlaybackEffects({
       if (!newCtx || newCtx.state === "closed") return;
 
       const onRunning = () => {
+        unlockPending = false;
         recordAudioContextState(newCtx, "gesture-unlock");
         if (isPlaybackTraceEnabled()) {
           logPlaybackEvent({
@@ -373,7 +383,8 @@ export function usePlaybackEffects({
       if (newCtx.state === "running") {
         onRunning();
       } else {
-        void newCtx.resume().then(onRunning).catch(() => {});
+        unlockPending = true;
+        void newCtx.resume().then(onRunning).catch(() => { unlockPending = false; });
       }
     };
 

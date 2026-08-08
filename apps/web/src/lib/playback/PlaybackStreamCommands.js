@@ -160,9 +160,9 @@ export function attachStreamCommands(self) {
           slug: track?.slug,
           ctxState: audioCtxRef.current?.state ?? "none",
           sessionUnlocked: sessionUnlockedRef?.current,
-          audioSrc: audio?.src ? audio.src.slice(0, 80) : null,
-          readyState: audio?.readyState,
-          audioElement: Boolean(audio),
+          audioSrc: audioEl?.src ? audioEl.src.slice(0, 80) : null,
+          readyState: audioEl?.readyState,
+          audioElement: Boolean(audioEl),
         },
       });
     }
@@ -1074,8 +1074,9 @@ export function attachStreamCommands(self) {
 
       if (pendingSeekRef.current) {
         const pendingSnapshot = pendingSeekRef.current;
+        let pendingSeekTimeoutId = null;
         const applyPendingSeek = () => {
-          clearTimeout(pendingSeekTimeoutRef);
+          clearTimeout(pendingSeekTimeoutId);
           if (pendingSnapshot != null && isFinite(audio.duration) && audio.duration > 0) {
             const safe = clampRestorePosition(pendingSnapshot, audio.duration);
             if (safe != null) {
@@ -1088,7 +1089,7 @@ export function attachStreamCommands(self) {
           pendingSeekRef.current = null;
         };
         audio.addEventListener("loadedmetadata", applyPendingSeek, { once: true });
-        const pendingSeekTimeoutRef = setTimeout(
+        pendingSeekTimeoutId = setTimeout(
           () => audio.removeEventListener("loadedmetadata", applyPendingSeek),
           5000
         );
