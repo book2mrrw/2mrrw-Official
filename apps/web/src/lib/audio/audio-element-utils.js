@@ -5,7 +5,7 @@
  */
 
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
-import { logStreamLifecycle } from "@/lib/diagnostics/playback-trace";
+import { isPlaybackTraceEnabled, logStreamLifecycle } from "@/lib/diagnostics/playback-trace";
 import {
   parseStreamSlugFromSrc,
   isLibraryStreamSrc,
@@ -200,26 +200,76 @@ async function loadAudioSrcAndPlay(audio, src, { signal, command, requestId, sta
   }
 }
 
-async function playAudioIfNotPaused(audio, isPlaying, { command, requestId, state, context } = {}) {
+// On iOS Safari with ManagedMediaSource (hls.js), audio.play() can throw
+// AbortError when hls.js makes internal SourceBuffer operations that race
+// with the play() call. The element settles within ~300ms — retry resolves it.
+const ABORT_RETRY_DELAY_MS = 300;
+const ABORT_MAX_RETRIES = 2;
+
+async function playAudioIfNotPaused(audio, isPlaying, { command, requestId, state, context, signal } = {}) {
   if (!isPlaying) return true;
   if (!audio.paused) return true;
-  try {
-    perfMark(MARKS.PLAYBACK_AUDIO_PLAY_CALL);
-    await audio.play();
-    perfMark(MARKS.PLAYBACK_PLAY_PROMISE_RESOLVED);
-    return isAudioElementPlaying(audio);
-  } catch (e) {
-    reportPlaybackDiagnostic({
-      level: e?.name === "AbortError" ? "warn" : "error",
-      code: "AUDIO_RESUME_FAILED",
-      command: command || "PLAY",
-      requestId: requestId ?? null,
-      state,
-      error: e,
-      context,
+
+  if (isPlaybackTraceEnabled()) {
+    console.log("[PLAY-CHAIN] play() called", {
+      command, requestId,
+      readyState: audio.readyState,
+      networkState: audio.networkState,
+      src: audio.src ? audio.src.slice(0, 80) : null,
+      buffered: audio.buffered?.length ? `${audio.buffered.end(audio.buffered.length - 1).toFixed(1)}s` : "0",
+      currentTime: audio.currentTime,
     });
-    return false;
   }
+
+  for (let attempt = 0; attempt <= ABORT_MAX_RETRIES; attempt++) {
+    try {
+      perfMark(MARKS.PLAYBACK_AUDIO_PLAY_CALL);
+      await audio.play();
+      perfMark(MARKS.PLAYBACK_PLAY_PROMISE_RESOLVED);
+      if (isPlaybackTraceEnabled()) {
+        console.log("[PLAY-CHAIN] play() resolved OK", { command, requestId, attempt, paused: audio.paused });
+      }
+      return isAudioElementPlaying(audio);
+    } catch (e) {
+      const isAbort = e?.name === "AbortError";
+      if (isPlaybackTraceEnabled()) {
+        console.warn("[PLAY-CHAIN] play() rejected", {
+          command, requestId, attempt, error: e?.name, message: e?.message,
+          readyState: audio.readyState, signalAborted: signal?.aborted,
+          willRetry: isAbort && attempt < ABORT_MAX_RETRIES && !signal?.aborted,
+        });
+      }
+      if (isAbort && attempt < ABORT_MAX_RETRIES && !signal?.aborted) {
+        // iOS: play() aborted by ManagedMediaSource internal operation.
+        // Wait for canplay (element ready to play) then retry.
+        await new Promise((resolve) => {
+          const done = () => {
+            audio.removeEventListener("canplay", onCanPlay);
+            clearTimeout(tid);
+            signal?.removeEventListener("abort", done);
+            resolve();
+          };
+          const onCanPlay = () => done();
+          const tid = setTimeout(done, ABORT_RETRY_DELAY_MS);
+          audio.addEventListener("canplay", onCanPlay, { once: true });
+          signal?.addEventListener("abort", done, { once: true });
+        });
+        if (signal?.aborted) break;
+        continue;
+      }
+      reportPlaybackDiagnostic({
+        level: isAbort ? "warn" : "error",
+        code: "AUDIO_RESUME_FAILED",
+        command: command || "PLAY",
+        requestId: requestId ?? null,
+        state,
+        error: e,
+        context: { ...context, attempt },
+      });
+      return false;
+    }
+  }
+  return isAudioElementPlaying(audio);
 }
 
 function isFlatPreviewCdnSrc(src) {

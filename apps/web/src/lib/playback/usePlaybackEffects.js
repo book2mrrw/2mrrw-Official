@@ -328,6 +328,18 @@ export function usePlaybackEffects({
         !refs.sessionUnlockedRef.current || ctx?.state === "suspended" || ctx?.state === "interrupted";
       if (!needsUnlock) return;
 
+      if (isPlaybackTraceEnabled()) {
+        logPlaybackEvent({
+          type: "play-chain:gesture-unlock",
+          source: "unlockFromGesture",
+          extra: {
+            ctxState: ctx?.state ?? "none",
+            sessionUnlocked: refs.sessionUnlockedRef.current,
+            audioSrc: audioRef.current?.src ? audioRef.current.src.slice(0, 60) : null,
+          },
+        });
+      }
+
       const audio = audioRef.current;
       if (audio) {
         try {
@@ -342,11 +354,19 @@ export function usePlaybackEffects({
 
       const onRunning = () => {
         recordAudioContextState(newCtx, "gesture-unlock");
-        if (newCtx.state === "running" && !refs.sessionUnlockedRef.current) {
-          refs.sessionUnlockedRef.current = true;
-          GESTURE_UNLOCK_EVENTS.forEach((evt) => {
-            document.removeEventListener(evt, unlockFromGesture, true);
+        if (isPlaybackTraceEnabled()) {
+          logPlaybackEvent({
+            type: "play-chain:gesture-unlock-resolved",
+            source: "unlockFromGesture",
+            extra: { ctxState: newCtx.state, sessionUnlocked: refs.sessionUnlockedRef.current },
           });
+        }
+        if (newCtx.state === "running") {
+          refs.sessionUnlockedRef.current = true;
+          // Keep gesture listeners permanently — iOS AudioContext enters "interrupted"
+          // state after backgrounding (phone call, Siri, app switch). The onstatechange
+          // resume attempt is non-gesture and iOS rejects it; the next user tap here
+          // re-runs ctx.resume() in proper gesture context, unblocking audio.
         }
       };
 
@@ -589,6 +609,11 @@ export function usePlaybackEffects({
       if (!stateRef.current.isPlaying && !playbackIntentBeforeHideRef.current) return;
       if (isRecoveringRef.current) return;
       if (Date.now() < recoveryCooldownUntilRef.current) return;
+      // During track loading, isPlaying=true && audio.paused=true is the expected state —
+      // not a desync. playTrackInternal has its own timeout (12s). Triggering recovery
+      // here aborts playTrackInternal mid-flight and replaces it with the recovery path,
+      // adding 1.5-2.5s to every track switch and causing abort races on rapid switching.
+      if (stateRef.current.playbackState === "loading") return;
 
       const lifecycleTruth = computeLifecycleAudioTruthState();
       if (lifecycleTruth === LIFECYCLE_AUDIO_TRUTH_STATES.OS_SUSPENDED) {

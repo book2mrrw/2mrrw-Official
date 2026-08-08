@@ -37,7 +37,7 @@ import {
 import { isAdminAccount } from "@/lib/music-access";
 import { logPlayback } from "@/lib/observability/client-log";
 import { logStateChurn } from "@/lib/diagnostics/state-churn-log";
-import { isPlaybackTraceEnabled, logStreamLifecycle } from "@/lib/diagnostics/playback-trace";
+import { isPlaybackTraceEnabled, logStreamLifecycle, logPlaybackEvent } from "@/lib/diagnostics/playback-trace";
 import { isUiHydrationTraceEnabled, logUiHydrationTrace } from "@/lib/diagnostics/ui-hydration-trace";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
@@ -151,6 +151,21 @@ export function attachStreamCommands(self) {
     initWebAudio();
     await resumeWebAudioContextIfSuspended(audioCtxRef, "playTrack-entry");
     recordAudioContextState(audioCtxRef.current, "playTrack-resume");
+    if (isPlaybackTraceEnabled()) {
+      logPlaybackEvent({
+        type: "play-chain:ctx-entry",
+        source: "playTrackInternal",
+        extra: {
+          requestId,
+          slug: track?.slug,
+          ctxState: audioCtxRef.current?.state ?? "none",
+          sessionUnlocked: sessionUnlockedRef?.current,
+          audioSrc: audio?.src ? audio.src.slice(0, 80) : null,
+          readyState: audio?.readyState,
+          audioElement: Boolean(audio),
+        },
+      });
+    }
     if (!(await ensureWebAudioRunning(audioCtxRef))) {
       const lightOk = await attemptLightweightPlaybackResume("playTrack_ctx_suspended");
       await resumeWebAudioContextIfSuspended(audioCtxRef, "playTrack-after-light");
@@ -721,6 +736,25 @@ export function attachStreamCommands(self) {
     preloadCsAssets(normalized, { csImgRef, csVidRef, csAudioRef });
 
     try {
+      if (isPlaybackTraceEnabled()) {
+        logPlaybackEvent({
+          type: "play-chain:track-start",
+          source: "playTrackInternal",
+          extra: {
+            requestId,
+            slug: nextTrack.slug,
+            isSameTrack,
+            isReplay,
+            syncSrc: syncSrc ? syncSrc.slice(0, 80) : null,
+            prevSlug: prevTrack?.slug ?? null,
+            resumeAt,
+            ctxState: audioCtxRef.current?.state ?? "none",
+            audioReadyState: audio.readyState,
+            audioPaused: audio.paused,
+            audioCurrentTime: audio.currentTime,
+          },
+        });
+      }
       if (!isSameTrack) {
         // Only set the skip flag and pause if not already paused (e.g. from early fast-path
         // src assignment). audio.pause() on an already-paused element is a no-op and won't
@@ -746,6 +780,20 @@ export function attachStreamCommands(self) {
         // Falls back transparently to progressive download on 404 (not yet transcoded).
         // Preview users and non-stream paths always use progressive download.
         const isEntitledForHLS = Boolean(nextTrack.metadata?.access?.canStream) && usesLibraryStream && streamSlug;
+        if (isPlaybackTraceEnabled()) {
+          logPlaybackEvent({
+            type: "play-chain:hls-decision",
+            source: "playTrackInternal",
+            extra: {
+              requestId, slug: streamSlug,
+              isEntitledForHLS, usesLibraryStream,
+              canStream: Boolean(nextTrack.metadata?.access?.canStream),
+              ctxState: audioCtxRef.current?.state ?? "none",
+              audioSrc: audio.src ? audio.src.slice(0, 80) : null,
+              readyState: audio.readyState,
+            },
+          });
+        }
         let hlsDidLoad = false;
         if (isEntitledForHLS && !streamAbortController.signal.aborted) {
           const hlsTrackSlugRaw = nextTrack.metadata?.trackSlug || parseStreamTrackSlugFromSrc(nextTrack.src) || null;
@@ -771,6 +819,29 @@ export function attachStreamCommands(self) {
             };
             hlsEngine.onFallback = () => done(false); // 404 — not yet transcoded
             hlsEngine.onError    = () => done(false); // fatal error — fall back
+            hlsEngine.onSegmentFatalError = () => {
+              // Segments failed after manifest loaded (CORS, CDN, iOS network error).
+              // Detach HLS and fall back to progressive download mid-stream.
+              reportPlaybackDiagnostic({
+                level: "warn",
+                code: "HLS_SEGMENT_FATAL_FALLBACK",
+                command: PLAYBACK_COMMANDS.PLAY_TRACK,
+                requestId,
+                state: stateRef.current,
+                context: { slug: streamSlug },
+              });
+              hlsEngineRef.current = null;
+              if (isPlaybackTraceEnabled()) {
+                logPlaybackEvent({
+                  type: "play-chain:hls-segment-fatal-fallback",
+                  source: "playTrackInternal",
+                  extra: { requestId, slug: streamSlug },
+                });
+              }
+              const fallbackMs = isLibraryStreamRedirectSrc(syncSrc) ? 12000 : AUDIO_SRC_READY_TIMEOUT_MS;
+              waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: fallbackMs })
+                .catch(() => {});
+            };
 
             hlsEngine.loadTrack(hlsManifestUrl, audio, {
               startPosition: resumeAt || 0,
@@ -781,6 +852,17 @@ export function attachStreamCommands(self) {
           });
 
           hlsEngineRef.current = hlsDidLoad ? hlsEngine : null;
+          if (isPlaybackTraceEnabled()) {
+            logPlaybackEvent({
+              type: "play-chain:hls-result",
+              source: "playTrackInternal",
+              extra: {
+                requestId, slug: streamSlug, hlsDidLoad,
+                readyState: audio.readyState,
+                bufferedEnd: audio.buffered?.length ? audio.buffered.end(audio.buffered.length - 1).toFixed(2) : "0",
+              },
+            });
+          }
         } else {
           // No HLS for this track — detach any lingering engine from the previous track
           if (hlsEngineRef.current) {
@@ -867,6 +949,46 @@ export function attachStreamCommands(self) {
             });
           }
         }
+        // HLS stall fallback: manifest loaded but segments never arrived (CORS error, CDN failure,
+        // or ManagedMediaSource init race on iOS). readyState 0 = browser received zero bytes.
+        // Fall back to progressive download so iOS users get audio instead of silence.
+        if (hlsDidLoad && !streamAbortController.signal.aborted && audio.readyState < 2) {
+          const hlsEng = hlsEngineRef.current;
+          if (hlsEng) { hlsEng.detach(); hlsEngineRef.current = null; }
+          reportPlaybackDiagnostic({
+            level: "warn",
+            code: "HLS_SEGMENT_STALL_FALLBACK",
+            command: PLAYBACK_COMMANDS.PLAY_TRACK,
+            requestId,
+            state: stateRef.current,
+            context: { readyState: audio.readyState, slug: streamSlug },
+          });
+          if (isPlaybackTraceEnabled()) {
+            logPlaybackEvent({
+              type: "play-chain:hls-stall-fallback",
+              source: "playTrackInternal",
+              extra: { requestId, slug: streamSlug, readyState: audio.readyState },
+            });
+          }
+          const fallbackTimeoutMs = isLibraryStreamRedirectSrc(syncSrc) ? 12000 : AUDIO_SRC_READY_TIMEOUT_MS;
+          await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: fallbackTimeoutMs });
+        }
+
+        if (isPlaybackTraceEnabled()) {
+          logPlaybackEvent({
+            type: "play-chain:buffer-gate-done",
+            source: "playTrackInternal",
+            extra: {
+              requestId, slug: streamSlug,
+              readyState: audio.readyState,
+              bufferedEnd: audio.buffered?.length ? audio.buffered.end(audio.buffered.length - 1).toFixed(2) : "0",
+              currentTime: audio.currentTime,
+              hlsDidLoad,
+              signalAborted: streamAbortController.signal.aborted,
+            },
+          });
+        }
+
         // If a newer play request arrived while we were waiting (canplaythrough or buffer guard),
         // bail out cleanly — do NOT set error state, this track was intentionally superseded.
         // Always restore gain before returning so mainGainRef never stays at 0.
@@ -891,6 +1013,7 @@ export function attachStreamCommands(self) {
           requestId,
           state: stateRef.current,
           context: { source: nextTrack.source },
+          signal: streamAbortController.signal,
         });
         if (!startedPlay) {
           patchState({
@@ -990,6 +1113,7 @@ export function attachStreamCommands(self) {
           requestId,
           state: stateRef.current,
           context: { source: nextTrack.source, sameTrack: true },
+          signal: streamAbortController.signal,
         });
         if (!played) {
           patchState({

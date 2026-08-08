@@ -171,6 +171,7 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
 function MiniCoverHit({
   title,
   baseCoverUrl,
+  animatedCoverUrl,
   csCoverUrl,
   csMode,
   csOpacity,
@@ -183,17 +184,32 @@ function MiniCoverHit({
   onCoverTouchEnd,
 }) {
   const [baseFailed, setBaseFailed] = useState(false);
+  const [videoFailed, setVideoFailed] = useState(false);
   const [overlayFailed, setOverlayFailed] = useState(false);
+  const videoRef = useRef(null);
 
   useEffect(() => {
     setBaseFailed(false);
+    setVideoFailed(false);
     setOverlayFailed(false);
-  }, [baseCoverUrl, csCoverUrl]);
+  }, [baseCoverUrl, animatedCoverUrl, csCoverUrl]);
+
+  // Set video src imperatively to avoid re-mount flicker on track change.
+  useLayoutEffect(() => {
+    const el = videoRef.current;
+    if (!el || !animatedCoverUrl) return;
+    if (el.getAttribute("data-src") !== animatedCoverUrl) {
+      el.setAttribute("data-src", animatedCoverUrl);
+      el.src = animatedCoverUrl;
+      el.load();
+    }
+  }, [animatedCoverUrl]);
 
   const letter = (title && String(title).trim()[0]) || "♪";
-  const baseLayerUrl = baseCoverUrl || csCoverUrl || null;
+  const showVideo = Boolean(animatedCoverUrl) && !videoFailed;
+  const staticLayerUrl = showVideo ? null : (baseCoverUrl || csCoverUrl || null);
+  const showStaticLayer = !showVideo && Boolean(staticLayerUrl) && !baseFailed;
   const overlayUrl = baseCoverUrl && csCoverUrl && hasCs ? csCoverUrl : null;
-  const showBaseLayer = Boolean(baseLayerUrl) && !baseFailed;
   const showOverlay = Boolean(overlayUrl) && !overlayFailed && (csMode || isHoldAnimating);
 
   return (
@@ -207,10 +223,24 @@ function MiniCoverHit({
       onTouchEnd={(e) => onCoverTouchEnd(e, undefined)}
       onClick={(e) => e.preventDefault()}
     >
-      {!showBaseLayer && !showOverlay ? <div className="player-bar-cover-fallback">{letter}</div> : null}
-      {showBaseLayer ? (
+      {!showVideo && !showStaticLayer && !showOverlay ? (
+        <div className="player-bar-cover-fallback">{letter}</div>
+      ) : null}
+      {showVideo ? (
+        <video
+          ref={videoRef}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          className="player-bar-cover-img player-bar-cover-img--base"
+          onError={() => setVideoFailed(true)}
+        />
+      ) : null}
+      {showStaticLayer ? (
         <img
-          src={baseLayerUrl}
+          src={staticLayerUrl}
           alt=""
           className="player-bar-cover-img player-bar-cover-img--base"
           data-playing={isPlaying ? "1" : undefined}
@@ -342,6 +372,7 @@ function MiniPlayerDock({
   isHoldAnimating,
   csImgRef,
   baseCoverUrl,
+  animatedCoverUrl,
   csCoverUrl,
   hasCs,
   handlePlayToggle,
@@ -393,6 +424,7 @@ function MiniPlayerDock({
           <MiniCoverHit
             title={displayTitle}
             baseCoverUrl={baseCoverUrl}
+            animatedCoverUrl={animatedCoverUrl}
             csCoverUrl={csCoverUrl}
             csMode={csMode}
             csOpacity={csOpacity}
@@ -562,6 +594,13 @@ function GlobalAudioPlayerBar() {
   }, [dockCurrentTrack?.slug]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const baseCover = dockCurrentTrack?.baseCover || dockCurrentTrack?.cover;
+  // Animated (MP4) cover: only when cover is a genuinely different URL from baseCover.
+  // Guards against continuity-freeze where cover is already snapped to the static base image.
+  const dockCover = dockCurrentTrack?.cover;
+  const animatedCover =
+    dockCurrentTrack?.coverArtType === "video" && dockCover && dockCover !== baseCover
+      ? dockCover
+      : null;
   const csCover = dockCurrentTrack?.csCover || null;
   const csAudio = dockCurrentTrack?.csAudio || null;
   const hasCs = Boolean(csCover || csAudio);
@@ -815,6 +854,7 @@ function GlobalAudioPlayerBar() {
 
   const csOpacity = csMode ? 1 : 0;
   const baseCoverUrl = resolveAbsoluteArtworkUrl(baseCover);
+  const animatedCoverUrl = animatedCover ? resolveAbsoluteArtworkUrl(animatedCover) : null;
   const csCoverUrl = csCover ? resolveAbsoluteArtworkUrl(csCover) : null;
   const entitlementAccountState = useEntitlementAccountState();
   const showSubscribeCta = useMemo(
@@ -1088,6 +1128,7 @@ function GlobalAudioPlayerBar() {
         isHoldAnimating={isHoldAnimating}
         csImgRef={csOverlayImgRef}
         baseCoverUrl={baseCoverUrl}
+        animatedCoverUrl={animatedCoverUrl}
         csCoverUrl={csCoverUrl}
         hasCs={hasCs}
         handlePlayToggle={handlePlayToggle}

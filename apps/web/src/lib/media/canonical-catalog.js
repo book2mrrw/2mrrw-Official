@@ -71,6 +71,7 @@ export const CANONICAL_SINGLES = [
     price_cents: 299,
     preview_ext: "mp3",
     legacy_cover_stem: "hourglass",
+    legacy_cover: "/images/singles/hourglass.jpg",
     legacy_video_stem: "hourglass",
     preview_legacy: "previews/singles/hour-glass/hourglass-preview.mp3",
   },
@@ -82,6 +83,7 @@ export const CANONICAL_SINGLES = [
     price_cents: 299,
     preview_ext: "mp3",
     legacy_cover_stem: "turnt",
+    legacy_cover: "/images/singles/turnt.jpg",
     legacy_video_stem: "turntme2dis",
     preview_legacy: "previews/singles/turnt-me-2-dis/turntme2dis-preview.mp3",
   },
@@ -92,6 +94,7 @@ export const CANONICAL_SINGLES = [
     release_date: "2024-06-01",
     price_cents: 299,
     preview_ext: "mp3",
+    legacy_cover: "/images/singles/w2d.jpg",
     preview_legacy: "previews/singles/w2d/w2d-preview.mp3",
   },
   {
@@ -101,6 +104,7 @@ export const CANONICAL_SINGLES = [
     release_date: "2022-07-07",
     price_cents: 299,
     preview_ext: "mp3",
+    legacy_cover: "/images/singles/artificial.jpg",
     preview_legacy: "previews/singles/artificial/artificial-preview.mp3",
   },
 ];
@@ -550,7 +554,13 @@ export function mergeCanonicalMetadata(item) {
     artwork_path: release.artwork_path || item.artwork_path,
     preview_path: release.preview_path || item.preview_path,
     preview: item.preview || release.preview,
-    cover: item.cover || release.cover || release.legacy_cover,
+    // A bare filename from the DB (no path separator, no protocol) is legacy data that
+    // cannot be resolved to a valid URL. Prefer the canonical release cover/visual in
+    // that case. Well-formed paths (starting with "/" or containing "://") are kept.
+    cover: (item.cover && (String(item.cover).includes("/") || /^https?:\/\//i.test(item.cover)))
+      ? item.cover
+      : (release.cover || release.legacy_cover || item.cover),
+    baseCover: item.baseCover || release.legacy_cover || null,
     visual: item.visual || release.visual,
     video: item.video || release.video,
     coverArtType: release.coverArtType || item.coverArtType,

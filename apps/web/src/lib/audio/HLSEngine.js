@@ -25,6 +25,8 @@ let _Hls = null;
  * Lazy-load hls.js (client-only). Safe to call multiple times.
  * Returns null in SSR, null if native HLS is sufficient (Safari).
  */
+import { isPlaybackTraceEnabled } from "@/lib/diagnostics/playback-trace";
+
 async function importHls() {
   if (typeof window === "undefined") return null;
   if (_Hls) return _Hls;
@@ -52,6 +54,8 @@ export class HLSEngine {
     this.onFallback = null;
     /** @type {((err: Error) => void)|null} Called on fatal hls.js errors */
     this.onError = null;
+    /** @type {(() => void)|null} Called on fatal segment error after manifest loaded (post-settle) */
+    this.onSegmentFatalError = null;
     /** @type {number} Current bitrate index (0 = auto) */
     this._currentLevel = -1;
   }
@@ -138,6 +142,7 @@ export class HLSEngine {
     return new Promise((resolve) => {
       let settled = false;
       let safetyTimerId = null;
+      let networkRecoveryAttempted = false;
 
       const settle = (value) => {
         if (settled) return;
@@ -155,6 +160,16 @@ export class HLSEngine {
       }, 5000);
 
       hls.on(Hls.Events.ERROR, (_, data) => {
+        if (isPlaybackTraceEnabled()) {
+          console.log("[PLAY-CHAIN] hls.js error", {
+            fatal: data.fatal,
+            type: data.type,
+            details: data.details,
+            settled,
+            url: data.url ? data.url.slice(0, 100) : null,
+            response: data.response ? { code: data.response.code, text: data.response.text } : null,
+          });
+        }
         if (!data.fatal) return;
 
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR &&
@@ -169,9 +184,22 @@ export class HLSEngine {
         }
 
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-          // Fatal network error during segment or level load (not manifest) — attempt
-          // a single recovery. These are transient issues mid-stream, not startup failures.
-          hls.startLoad();
+          if (!settled) {
+            // Fatal segment/level error before manifest resolved — fall back.
+            this._destroyHls();
+            this.onFallback?.();
+            settle(false);
+          } else if (!networkRecoveryAttempted) {
+            // Manifest loaded, first mid-stream segment failure — attempt one recovery.
+            // This handles transient CDN hiccups without falling back unnecessarily.
+            networkRecoveryAttempted = true;
+            hls.startLoad();
+          } else {
+            // Second fatal segment failure after recovery — segments are not recoverable
+            // (likely CORS, auth, or CDN failure on iOS). Notify for progressive fallback.
+            this._destroyHls();
+            this.onSegmentFatalError?.();
+          }
           return;
         }
 
@@ -186,6 +214,12 @@ export class HLSEngine {
 
       hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
         const levels = data.levels || [];
+        if (isPlaybackTraceEnabled()) {
+          console.log("[PLAY-CHAIN] hls.js MANIFEST_PARSED", {
+            levels: levels.map((l) => ({ bitrate: l.bitrate, audioCodec: l.audioCodec })),
+            startPosition,
+          });
+        }
         if (levels.length > 0 && this._currentLevel >= 0) {
           // The master playlist does not guarantee a level ordering. Sort by
           // descending bitrate to produce a stable tier index regardless of how
@@ -204,6 +238,32 @@ export class HLSEngine {
         // _currentLevel < 0 means full auto — no override needed.
         settle(true);
       });
+
+      if (isPlaybackTraceEnabled()) {
+        hls.on(Hls.Events.FRAG_LOADED, (_, data) => {
+          console.log("[PLAY-CHAIN] hls.js FRAG_LOADED", {
+            sn: data.frag?.sn,
+            duration: data.frag?.duration,
+            byteLength: data.networkDetails?.responseURL ? "ok" : "?",
+            level: data.frag?.level,
+          });
+        });
+        hls.on(Hls.Events.BUFFER_APPENDED, (_, data) => {
+          const buf = audioEl.buffered;
+          const bufferedEnd = buf?.length ? buf.end(buf.length - 1).toFixed(2) : "0";
+          console.log("[PLAY-CHAIN] hls.js BUFFER_APPENDED", {
+            type: data.type,
+            readyState: audioEl.readyState,
+            bufferedEnd,
+          });
+        });
+        hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+          console.log("[PLAY-CHAIN] hls.js MEDIA_ATTACHED", {
+            readyState: audioEl.readyState,
+            src: audioEl.src ? audioEl.src.slice(0, 60) : null,
+          });
+        });
+      }
 
       hls.loadSource(manifestUrl);
       hls.attachMedia(audioEl);
@@ -255,10 +315,11 @@ export class HLSEngine {
   destroy() {
     this._destroyed = true;
     this._destroyHls();
-    this._audioEl     = null;
-    this._manifestUrl = null;
-    this.onFallback   = null;
-    this.onError      = null;
+    this._audioEl          = null;
+    this._manifestUrl      = null;
+    this.onFallback        = null;
+    this.onError           = null;
+    this.onSegmentFatalError = null;
   }
 }
 
