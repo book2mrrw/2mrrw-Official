@@ -140,12 +140,23 @@ export function attachStreamCommands(self) {
         }
       }
     }
-    if (audioEl?.paused && !sessionUnlockedRef.current) {
+    // Always unlock the audio element when paused at play-command time.
+    // sessionUnlockedRef tracks AudioContext unlock (ctx.resume()) — a separate iOS
+    // requirement from audio element gesture permission (audio.play()). The AudioContext
+    // can unlock (ctx.state → "running") before this line executes, setting
+    // sessionUnlockedRef.current = true, which would skip this block and leave the
+    // audio element un-unlocked. Any audio.play() call later in the async chain (after
+    // HLS loading, stream URL resolution, etc.) then fails with NotAllowedError because
+    // iOS Safari's gesture activation token has expired by then. Un-gating from
+    // sessionUnlockedRef ensures the audio element is always unlocked here — in the
+    // microtask chain that originated from the user's gesture — before the gesture
+    // activation token can expire.
+    if (audioEl?.paused) {
       await unlockAudioFromGesture(audioEl);
       // Unlock the crossfade pre-buffer element at the same time so iOS allows
       // play() on it when the crossfade triggers (no second user gesture available).
       const nextEl = nextTrackPreloadRef.current;
-      if (nextEl) await unlockAudioFromGesture(nextEl);
+      if (nextEl && nextEl.paused) await unlockAudioFromGesture(nextEl);
     }
 
     initWebAudio();
