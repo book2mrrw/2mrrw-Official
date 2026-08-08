@@ -69,13 +69,16 @@ export async function GET(req) {
     }
   }
 
-  // Look up completed HLS manifest
+  // Look up completed HLS manifest.
+  // Normalize trackSlug: singles have track_slug IS NULL in the DB. Some callers pass
+  // trackSlug === slug as a fallback (no real sub-track identifier) — treat that as null.
+  const effectiveTrackSlug = (trackSlug && trackSlug !== slug) ? trackSlug : null;
   const admin = createAdminClient();
   let manifestQ = admin
     .from("hls_manifests")
     .select("bitrates, segment_duration_secs, duration_seconds")
     .eq("slug", slug);
-  manifestQ = trackSlug ? manifestQ.eq("track_slug", trackSlug) : manifestQ.is("track_slug", null);
+  manifestQ = effectiveTrackSlug ? manifestQ.eq("track_slug", effectiveTrackSlug) : manifestQ.is("track_slug", null);
   const { data: manifest, error } = await manifestQ.maybeSingle();
 
   if (error) {
@@ -94,7 +97,7 @@ export async function GET(req) {
   // Sign variant tokens concurrently
   const variantTokens = await Promise.all(
     bitrates.map((br) =>
-      signVariantToken({ slug, trackSlug, userId: user.id, bitrate: br })
+      signVariantToken({ slug, trackSlug: effectiveTrackSlug, userId: user.id, bitrate: br })
     )
   );
 
@@ -110,7 +113,7 @@ export async function GET(req) {
     const bandwidth = BITRATE_BANDWIDTH[br] ?? 160_000;
     const token     = variantTokens[i];
     const params    = new URLSearchParams({ slug, bitrate: br, token });
-    if (trackSlug) params.set("trackSlug", trackSlug);
+    if (effectiveTrackSlug) params.set("trackSlug", effectiveTrackSlug);
     const variantUrl = `${origin}/api/library/hls/variant?${params}`;
 
     lines.push(

@@ -61,13 +61,15 @@ export async function GET(req) {
   });
   if (!rl.allowed) return cors(req, rateLimitResponse(rl.retryAfterSeconds));
 
-  // Fetch manifest metadata from DB — single query, no presigning needed
+  // Fetch manifest metadata from DB — single query, no presigning needed.
+  // Normalize trackSlug: singles have track_slug IS NULL; treat trackSlug === slug as null.
+  const effectiveTrackSlug = (trackSlug && trackSlug !== slug) ? trackSlug : null;
   const admin = createAdminClient();
   let manifestQ = admin
     .from("hls_manifests")
     .select("hls_prefix, segment_duration_secs, duration_seconds, segment_counts")
     .eq("slug", slug);
-  manifestQ = trackSlug ? manifestQ.eq("track_slug", trackSlug) : manifestQ.is("track_slug", null);
+  manifestQ = effectiveTrackSlug ? manifestQ.eq("track_slug", effectiveTrackSlug) : manifestQ.is("track_slug", null);
   const { data: manifest, error } = await manifestQ.maybeSingle();
 
   if (error) {
