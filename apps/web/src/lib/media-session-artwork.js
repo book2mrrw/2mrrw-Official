@@ -56,7 +56,9 @@ export function resolveAbsoluteArtworkUrl(cover) {
 
   const withoutLeading = raw.replace(/^\//, "");
   const r2 = r2PublicBase();
-  if (r2 && !raw.includes("://") && !isSiteApiMediaPath(withoutLeading)) {
+  // Only prepend R2 for paths that are NOT leading-slash (those are Next.js public dir assets).
+  // R2 object keys are always relative (no leading /); e.g. "images/singles/w2d/cover.jpeg".
+  if (r2 && !raw.startsWith("/") && !raw.includes("://") && !isSiteApiMediaPath(withoutLeading)) {
     return `${r2}/${withoutLeading}`;
   }
 
