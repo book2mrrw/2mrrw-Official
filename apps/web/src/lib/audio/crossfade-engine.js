@@ -193,6 +193,73 @@ export function completeCrossfadeBridge(refs, { nextTrackGainLinear }) {
 }
 
 /**
+ * Schedule a smooth gain handoff from the crossfade bridge to the main element.
+ *
+ * Call this immediately after the main audio element has successfully started playing
+ * in "bridging" state. Ramps mainGain from 0 → gainLinear and cfGain from its current
+ * value → 0 over rampSec seconds, then pauses the preload element and resets state to
+ * "idle". No-ops if state has already left "bridging" (e.g. user tapped a new track
+ * and cancelCrossfadeEngine ran first).
+ *
+ * @param {object} refs  Same refs bag as cancelCrossfadeEngine.
+ * @param {object} opts
+ * @param {number} opts.gainLinear  Loudness-normalised target gain for the main element.
+ * @param {number} [opts.rampSec=0.35]  Crossover ramp duration in seconds.
+ */
+export function scheduleGainHandoff(refs, { gainLinear, rampSec = 0.35 }) {
+  const { crossfadeStateRef, nextTrackPreloadRef, audioCtxRef, mainGainRef, crossfadeGainRef, trackGainRef } = refs;
+  if (crossfadeStateRef.current !== "bridging") return;
+
+  const ctx = audioCtxRef.current;
+  if (!ctx || ctx.state !== "running") {
+    // AudioContext not running — do an instant restore so mainGain never stays silent.
+    cancelCrossfadeEngine(refs);
+    return;
+  }
+
+  const targetGain = gainLinear ?? trackGainRef.current ?? 1;
+  const now = ctx.currentTime;
+  const rampEnd = now + rampSec;
+
+  // Ramp mainGain from 0 → targetGain (main element becomes audible)
+  try {
+    mainGainRef.current?.gain.cancelScheduledValues(now);
+    mainGainRef.current?.gain.setValueAtTime(0, now);
+    mainGainRef.current?.gain.linearRampToValueAtTime(targetGain, rampEnd);
+  } catch {}
+
+  // Ramp cfGain from its current level → 0 (preload element fades out)
+  try {
+    const cfNode = crossfadeGainRef.current;
+    if (cfNode) {
+      const cfNow = Math.min(1.5, Math.max(0, cfNode.gain.value));
+      cfNode.gain.cancelScheduledValues(now);
+      cfNode.gain.setValueAtTime(cfNow, now);
+      cfNode.gain.linearRampToValueAtTime(0, rampEnd);
+    }
+  } catch {}
+
+  // After the ramp, clean up: stop the preload element and mark bridge complete.
+  const cleanupMs = Math.ceil(rampSec * 1000) + 60;
+  setTimeout(() => {
+    if (crossfadeStateRef.current !== "bridging") return; // already cancelled externally
+    crossfadeStateRef.current = "idle";
+    const nextEl = nextTrackPreloadRef.current;
+    if (nextEl) {
+      try { if (!nextEl.paused) nextEl.pause(); } catch {}
+      try { nextEl.currentTime = 0; } catch {}
+    }
+    // Pin gains to exact values (ramp may leave tiny float error).
+    const endCtx = audioCtxRef.current;
+    if (endCtx && endCtx.state !== "closed") {
+      const t = endCtx.currentTime;
+      try { mainGainRef.current?.gain.cancelScheduledValues(t); mainGainRef.current?.gain.setValueAtTime(targetGain, t); } catch {}
+      try { crossfadeGainRef.current?.gain.cancelScheduledValues(t); crossfadeGainRef.current?.gain.setValueAtTime(0, t); } catch {}
+    }
+  }, cleanupMs);
+}
+
+/**
  * True if a crossfade is in any active (non-idle) state.
  * @param {import("react").MutableRefObject<string>} crossfadeStateRef
  */

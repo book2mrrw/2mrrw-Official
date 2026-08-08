@@ -890,10 +890,15 @@ export function createPlaybackEventHandlers({
               patchState({ isBuffering: true, playbackNetworkState: "loading" });
             }
           }
-          const cfResumeAt = crossfadeStateRef.current === "bridging"
+          const isBridgeAdvance = crossfadeStateRef.current === "bridging";
+          const cfResumeAt = isBridgeAdvance
             ? Math.max(0, nextTrackPreloadRef.current?.currentTime ?? 0)
             : 0;
-          void playTrackRef.current?.(nextTrack, { resumeAt: cfResumeAt, playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE }).then((ok) => {
+          void playTrackRef.current?.(nextTrack, {
+            resumeAt: cfResumeAt,
+            isBridgeAdvance,
+            playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE,
+          }).then((ok) => {
             if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
           });
           return;

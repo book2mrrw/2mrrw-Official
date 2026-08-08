@@ -9,7 +9,7 @@ import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
 import { LIFECYCLE_AUDIO_TRUTH_STATES } from "@/lib/playback/PlaybackEventHandlers";
 import { notifyMediaEngineBridge } from "@/media/mediaEngineBridge";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
-import { cancelCrossfadeEngine } from "@/lib/audio/crossfade-engine";
+import { cancelCrossfadeEngine, scheduleGainHandoff } from "@/lib/audio/crossfade-engine";
 import {
   resumeWebAudioContextIfSuspended,
   ensureWebAudioRunning,
@@ -1648,6 +1648,17 @@ export function createPlaybackHelpers(initialDeps) {
         crossfadeGainRef: self._deps.crossfadeGainRef,
         trackGainRef: self._deps.trackGainRef,
       });
+    },
+
+    scheduleCrossfadeHandoff(gainLinear) {
+      scheduleGainHandoff({
+        crossfadeStateRef: self._deps.crossfadeStateRef,
+        nextTrackPreloadRef: self._deps.nextTrackPreloadRef,
+        audioCtxRef: self._deps.audioCtxRef,
+        mainGainRef: self._deps.mainGainRef,
+        crossfadeGainRef: self._deps.crossfadeGainRef,
+        trackGainRef: self._deps.trackGainRef,
+      }, { gainLinear });
     },
 
     setUserVolume(level) {

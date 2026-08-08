@@ -64,7 +64,7 @@ export function attachStreamCommands(self) {
     const {
       patchState, patchTransport, updateMediaSession, applyCsToElement,
       recordLocalListening, resolveLibraryStreamForTrack, finalizeStreamSession,
-      initWebAudio, unlockAudioFromGesture, cancelCrossfade, tracePlayback,
+      initWebAudio, unlockAudioFromGesture, cancelCrossfade, scheduleCrossfadeHandoff, tracePlayback,
       logDirectInternalCallViolation, attemptLightweightPlaybackResume,
       getPlaybackTransportHealth, isLifecycleRecoverySuppressed, clearContinuityFreeze,
       syncProgressTime,
@@ -85,7 +85,14 @@ export function attachStreamCommands(self) {
     userIntentPausedRef.current = false;
     const requestId = playRequestIdRef.current + 1;
     playRequestIdRef.current = requestId;
-    if (crossfadeStateRef.current !== "bridging") cancelCrossfade();
+    // Cancel any active crossfade state UNLESS this is the auto-advance that created the
+    // bridge — in that case the preload element is already audible and we must keep the
+    // bridge alive until the main element is loaded and the gain handoff completes.
+    // For all user-initiated plays we always cancel immediately so mainGain is restored.
+    if (crossfadeStateRef.current !== "idle" &&
+        (crossfadeStateRef.current !== "bridging" || !options.isBridgeAdvance)) {
+      cancelCrossfade();
+    }
     if (!options.preserveActiveStream && activeStreamAbortRef.current) {
       logStreamLifecycle("abort", { source: "playTrackInternal", slug: track?.slug });
       activeStreamAbortRef.current.abort();
@@ -877,6 +884,14 @@ export function attachStreamCommands(self) {
           });
           void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: false });
           return false;
+        }
+        // Main element is now playing. If we were in crossfade bridge mode (mainGain=0,
+        // cfGain=1, preload element audible), schedule a 350ms ramp to hand off audio
+        // from the preload element to the main element. Without this, mainGain stays at 0
+        // forever and all subsequent playback (including user taps) is silent.
+        if (crossfadeStateRef.current === "bridging") {
+          const nextGainLinear = Math.pow(10, (nextTrack.gainDb || 0) / 20);
+          scheduleCrossfadeHandoff(nextGainLinear);
         }
         // Entitled users (canStream) start on the full library stream directly — they never
         // enter the preview path. Non-entitled users who gain access mid-session are upgraded
