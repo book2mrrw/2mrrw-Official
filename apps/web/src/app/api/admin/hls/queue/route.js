@@ -106,10 +106,51 @@ export async function POST(req) {
 
     const hlsPrefix = buildHLSPrefix(slug, trackSlug, releaseType);
 
-    const { data, error } = await admin
+    // PostgREST upsert onConflict does not accept SQL expressions (e.g. COALESCE).
+    // Use explicit select → insert/update so NULL track_slug is handled correctly
+    // via .is("track_slug", null) and all job states are managed precisely.
+    let existingQuery = admin
       .from("hls_transcode_jobs")
-      .upsert(
-        {
+      .select("id, status")
+      .eq("slug", slug);
+    existingQuery = trackSlug
+      ? existingQuery.eq("track_slug", trackSlug)
+      : existingQuery.is("track_slug", null);
+    const { data: existing } = await existingQuery.maybeSingle();
+
+    let data, error;
+
+    if (existing) {
+      if (existing.status === "pending" || existing.status === "processing") {
+        // Already in-flight — return current state, don't reset
+        results.push({ slug, trackSlug, jobId: existing.id, status: existing.status });
+        continue;
+      }
+      // Re-queue completed/failed/cancelled jobs with fresh state
+      ({ data, error } = await admin
+        .from("hls_transcode_jobs")
+        .update({
+          source_key:            sourceKey,
+          hls_prefix:            hlsPrefix,
+          release_type:          releaseType,
+          status:                "pending",
+          priority,
+          bitrates,
+          segment_duration_secs: segmentDuration,
+          attempt_count:         0,
+          error_message:         null,
+          worker_id:             null,
+          queued_by:             user.id,
+          started_at:            null,
+          completed_at:          null,
+        })
+        .eq("id", existing.id)
+        .select("id, status")
+        .single());
+    } else {
+      ({ data, error } = await admin
+        .from("hls_transcode_jobs")
+        .insert({
           slug,
           track_slug:            trackSlug,
           release_type:          releaseType,
@@ -125,15 +166,10 @@ export async function POST(req) {
           queued_by:             user.id,
           started_at:            null,
           completed_at:          null,
-        },
-        {
-          onConflict: "slug, COALESCE(track_slug, '')",
-          // Re-queue failed/cancelled jobs; ignore if already pending/processing/complete
-          ignoreDuplicates: false,
-        }
-      )
-      .select("id, status")
-      .single();
+        })
+        .select("id, status")
+        .single());
+    }
 
     if (error) {
       errors.push({ slug, trackSlug, error: error.message });
