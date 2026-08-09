@@ -71,7 +71,7 @@ export function attachTransportCommands(self) {
   self.resumeInternal = async function resumeInternal() {
     const {
       patchState, updateMediaSession, finalizeStreamSession, initWebAudio,
-      unlockAudioFromGesture, tracePlayback, logDirectInternalCallViolation,
+      tracePlayback, logDirectInternalCallViolation,
       attemptLightweightPlaybackResume,
       stateRef, audioRef, audioCtxRef, audibilitySampleRef, activeCommandRef,
       userPausedRef, userIntentPausedRef, pausedDuringCurrentLoadRef,
@@ -99,21 +99,16 @@ export function attachTransportCommands(self) {
     pausedDuringCurrentLoadRef.current = false;
 
     try {
-      // iOS gesture trust fix: initWebAudio + ctx.resume() MUST run synchronously in the
-      // gesture call stack — before any await. iOS Safari captures the "user activation"
-      // grant from synchronous AudioContext.resume() calls. Once the AudioContext has user
-      // activation, audio.play() succeeds after subsequent async awaits. Without this,
-      // the 3 awaits below break the gesture chain and play() throws NotAllowedError on iOS
-      // after lock-screen or phone-call interruptions.
+      // dispatchPlaybackCommand plays a silent WAV element synchronously before any await,
+      // granting page-wide iOS media autoplay permission that persists for all subsequent
+      // audio.play() calls — so no play-then-pause unlock cycle is needed here.
+      // initWebAudio + ctx.resume() complete the AudioContext (Web Audio graph) unlock path,
+      // which is separate from the HTMLMediaElement permission on iOS Safari.
       initWebAudio();
       const iosGestureCtx = audioCtxRef.current;
       if (iosGestureCtx && iosGestureCtx.state !== "running") {
         iosGestureCtx.resume().catch(() => {}); // fire-and-forget: iOS gesture captured here
       }
-      // Android + older iOS: play-then-pause to unlock the element itself.
-      // On iOS 14+, the ctx.resume() above already propagates to element play permission,
-      // so this becomes a no-op (audio.paused is checked inside unlockAudioFromGesture).
-      await unlockAudioFromGesture(audio);
       await resumeWebAudioContextIfSuspended(audioCtxRef);
       if (!(await ensureWebAudioRunning(audioCtxRef))) {
         const lightOk = await attemptLightweightPlaybackResume("resume_ctx_suspended");

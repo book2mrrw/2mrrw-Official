@@ -848,9 +848,9 @@ export function createPlaybackEventHandlers({
             // Crossfade window missed — hard-cut from preload element to eliminate silence.
             // If the preload element has any buffered data, route its audio to the output
             // immediately so the gap is imperceptible while the main element loads.
-            // iOS is no longer excluded: unlockAudioFromGesture() runs on nextEl during the
-            // first user gesture (playTrackInternal lines ~3803-3806), so play() succeeds
-            // without a second gesture. The .catch() below rolls back gracefully on any failure.
+            // iOS: page-wide media autoplay permission is granted by the silent WAV element
+            // played in dispatchPlaybackCommand before any await, so play() on nextEl
+            // succeeds here. The .catch() below rolls back gracefully on any failure.
             const nextEl = nextTrackPreloadRef.current;
             const ctx = audioCtxRef.current;
             const mGain = mainGainRef.current;
