@@ -20,12 +20,14 @@
  */
 
 let _Hls = null;
+let _prefetchLoaderClass = null;
 
 /**
  * Lazy-load hls.js (client-only). Safe to call multiple times.
  * Returns null in SSR, null if native HLS is sufficient (Safari).
  */
 import { isPlaybackTraceEnabled } from "@/lib/diagnostics/playback-trace";
+import { createPrefetchLoaderClass } from "./hls-prefetch-loader";
 
 async function importHls() {
   if (typeof window === "undefined") return null;
@@ -38,6 +40,20 @@ async function importHls() {
     console.error("[HLSEngine] hls.js import failed", err);
     return null;
   }
+}
+
+/**
+ * Returns a singleton fLoader class (checked once after hls.js is loaded).
+ * Falls back to null on any error — hls.js uses its default XHR loader.
+ */
+function _getPrefetchLoaderClass(Hls) {
+  if (_prefetchLoaderClass) return _prefetchLoaderClass;
+  try {
+    _prefetchLoaderClass = createPrefetchLoaderClass(Hls.DefaultConfig.loader);
+  } catch {
+    return null;
+  }
+  return _prefetchLoaderClass;
 }
 
 export class HLSEngine {
@@ -95,6 +111,11 @@ export class HLSEngine {
     // Tear down any existing instance before reusing
     this._destroyHls();
 
+    // Fragment loader: serves pre-fetched segment bytes from the in-memory cache
+    // (hls-segment-cache) with zero CDN latency. Falls through to the default
+    // XHR loader on cache miss — no behavioral change for uncached segments.
+    const fLoader = _getPrefetchLoaderClass(Hls) ?? undefined;
+
     const hls = new Hls({
       // Playback robustness
       enableWorker:               true,
@@ -130,6 +151,10 @@ export class HLSEngine {
 
       // Seek position for resume / direct-play-at-offset
       startPosition,
+
+      // Custom fragment loader: serves pre-fetched segment bytes from memory.
+      // undefined = default XHR loader (when createPrefetchLoaderClass fails or SSR).
+      fLoader,
 
       // Debug (disable in production)
       debug: process.env.NODE_ENV === "development",
@@ -239,6 +264,27 @@ export class HLSEngine {
         settle(true);
       });
 
+      // Production: observe ABR quality switches for observability. hls.js handles
+      // the actual adaptation automatically (abrBandWidthFactor: 0.95); this listener
+      // logs the event so bandwidth degradation is visible in production diagnostics.
+      hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+        const levels = hls.levels || [];
+        const level = levels[data.level];
+        const bitrateKbps = level ? Math.round(level.bitrate / 1000) : null;
+        if (bitrateKbps !== null && bitrateKbps < 192) {
+          console.warn("[HLSEngine] ABR downgraded to low bitrate", {
+            level: data.level,
+            bitrateKbps,
+            levels: levels.length,
+          });
+        } else if (isPlaybackTraceEnabled()) {
+          console.log("[PLAY-CHAIN] hls.js LEVEL_SWITCHED", {
+            level: data.level,
+            bitrateKbps,
+          });
+        }
+      });
+
       if (isPlaybackTraceEnabled()) {
         hls.on(Hls.Events.FRAG_LOADED, (_, data) => {
           console.log("[PLAY-CHAIN] hls.js FRAG_LOADED", {
@@ -335,6 +381,22 @@ export function replaceHLSEngine() {
   if (_activeEngine) _activeEngine.destroy();
   _activeEngine = new HLSEngine();
   return _activeEngine;
+}
+
+/**
+ * Returns true when hls.js is the active decoder for this browser session.
+ *
+ * Safari uses native HLS (AVPlayer via src= assignment) even when MSE is
+ * present. On Safari, hls.js is never constructed and the in-memory segment
+ * cache / fLoader pipeline is never consulted — calling prefetchHlsSegments
+ * on Safari wastes one authenticated API call, two playlist fetches, and
+ * ~500 KB of CDN bandwidth per queued track with zero latency benefit.
+ *
+ * Returns false until importHls() has resolved (safe to call before prewarm).
+ * Returns false on Safari (Hls.isSupported() = false due to native HLS).
+ */
+export function isHlsJsActive() {
+  return Boolean(_Hls && _Hls.isSupported());
 }
 
 /**

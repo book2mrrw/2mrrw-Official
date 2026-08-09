@@ -138,11 +138,20 @@ export class WebAudioEngine extends AudioEngineBase {
         audioEl[MRRW_SOURCE_BOUND] = true;
         this._boundElement = audioEl;
       } else if (!this.source) {
-        // MRRW_SOURCE_BOUND is set but source is null — another engine instance
-        // previously owned this element and the reference was lost. Cannot recover
-        // without a page reload (browsers enforce one MediaElementSourceNode per element).
-        console.error("[WebAudioEngine] MRRW_SOURCE_BOUND set but source is null — permanent silence; reload required");
-        return { ok: false };
+        // MRRW_SOURCE_BOUND is set but source is null — the symbol is stale from a
+        // previous engine instance whose source was GC'd. Clear the flag and retry;
+        // the browser releases the internal binding once the old MediaElementSourceNode
+        // is no longer referenced. A try/catch guards the one case where the browser
+        // still refuses (element genuinely has a live source in another context).
+        try {
+          audioEl[MRRW_SOURCE_BOUND] = false;
+          this.source = this.ctx.createMediaElementSource(audioEl);
+          audioEl[MRRW_SOURCE_BOUND] = true;
+          this._boundElement = audioEl;
+        } catch (e) {
+          console.error("[WebAudioEngine] Stale bind recovery failed — audio element has a live source in another context", e);
+          return { ok: false };
+        }
       }
     }
 

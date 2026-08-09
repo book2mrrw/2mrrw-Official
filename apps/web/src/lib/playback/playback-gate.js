@@ -27,12 +27,18 @@ export function catalogItemAllowsFullPlayback(item, track, accountState = {}) {
   }
 
   const membership = accountState?.membership || null;
-  const subscriptionActive =
-    Boolean(accountState?.subscriberActive) || membershipHasPremiumAccess(membership);
-  if (!subscriptionActive) return false;
-
   const permissions = accountState?.permissions || {};
-  if (permissions.subscriber || accountState?.subscriberActive) return true;
+
+  // Single derived subscription check — all three signals fold into one truth:
+  // subscriberActive (JWT claim), permissions.subscriber (RBAC flag), or
+  // membershipHasPremiumAccess (membership-based entitlement). Previously the
+  // first check included membershipHasPremiumAccess but the second check omitted
+  // it, silently denying full playback to membership-only subscribers.
+  const subscriptionActive =
+    Boolean(accountState?.subscriberActive) ||
+    Boolean(permissions.subscriber) ||
+    membershipHasPremiumAccess(membership);
+  if (subscriptionActive) return true;
 
   const collectorRecords = accountState?.collectorOwnerships || [];
   if (permissions.collectorAccess || permissions.collector) {

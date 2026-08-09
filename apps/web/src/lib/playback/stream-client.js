@@ -39,13 +39,18 @@ function assertJsonContentType(res, slug) {
 }
 
 async function assertSignedAudioUrl(url, { slug, signal, sessionId = null } = {}) {
-  const cacheKey = headValidationCacheKey(slug, sessionId);
-  const cached = signedUrlHeadValidationCache.get(cacheKey);
-  if (cached && Date.now() - cached.validatedAt < HEAD_VALIDATION_TTL_MS) {
-    // Reinsert to move this entry to the tail so FIFO eviction keeps recently-used entries.
-    signedUrlHeadValidationCache.delete(cacheKey);
-    signedUrlHeadValidationCache.set(cacheKey, cached);
-    return cached.contentType;
+  // When sessionId is null the session context is unknown — skip the cache and always
+  // do a live HEAD request. This prevents a null-session entry from masking a later
+  // validation with a real sessionId and avoids stale cache hits across session boundaries.
+  const cacheKey = sessionId ? headValidationCacheKey(slug, sessionId) : null;
+  if (cacheKey) {
+    const cached = signedUrlHeadValidationCache.get(cacheKey);
+    if (cached && Date.now() - cached.validatedAt < HEAD_VALIDATION_TTL_MS) {
+      // Reinsert to move this entry to the tail so FIFO eviction keeps recently-used entries.
+      signedUrlHeadValidationCache.delete(cacheKey);
+      signedUrlHeadValidationCache.set(cacheKey, cached);
+      return cached.contentType;
+    }
   }
 
   const res = await fetch(url, {
@@ -69,7 +74,9 @@ async function assertSignedAudioUrl(url, { slug, signal, sessionId = null } = {}
       contentType: type || null,
     });
   }
-  signedUrlHeadValidationCache.set(cacheKey, { contentType: type, validatedAt: Date.now() });
+  if (cacheKey) {
+    signedUrlHeadValidationCache.set(cacheKey, { contentType: type, validatedAt: Date.now() });
+  }
   while (signedUrlHeadValidationCache.size > 128) {
     const oldest = signedUrlHeadValidationCache.keys().next().value;
     if (oldest) signedUrlHeadValidationCache.delete(oldest);

@@ -452,7 +452,19 @@ export function createPlaybackEventHandlers({
       });
       if (audio.paused) {
         setTimeout(() => {
-          if (!userPausedRef.current && !userIntentPausedRef.current) {
+          // Do not auto-resume during an intentional track-change load.
+          // "loading_stream" means playTrackInternal is setting up a new src and will
+          // call play() once the buffer gate clears. Resuming here bypasses the gate,
+          // triggering an immediate buffer underrun — the modal auto-play starts-then-
+          // stops bug: audio plays for <1 s, stalls, then appears to have stopped.
+          // Spurious double-pause events (audio.load() on an already-paused element on
+          // iOS Safari / Chrome mobile) trigger this onPause path — this guard ensures
+          // those spurious events never race against playTrackInternal's buffer gate.
+          if (
+            !userPausedRef.current &&
+            !userIntentPausedRef.current &&
+            stateRef.current.playbackNetworkState !== "loading_stream"
+          ) {
             void playAudioIfNotPaused(audio, true, {
               command: PLAYBACK_COMMANDS.RECOVER,
               requestId: activeCommandRef.current?.requestId || null,
@@ -664,7 +676,14 @@ export function createPlaybackEventHandlers({
       cfRem <= PRELOAD_LEAD_SEC
     ) {
       const preloadEl = nextTrackPreloadRef.current;
-      if (preloadEl && preloadEl.readyState === 0) {
+      // readyState < 2 (HAVE_NOTHING or HAVE_METADATA): no decoded audio bytes yet.
+      // readyState 0 = no data at all. readyState 1 = container header parsed but
+      // no audio segments — equally useless for the crossfade bridge which requires
+      // at least HAVE_CURRENT_DATA (readyState 2) to avoid an immediate stall.
+      // Previously guarded only on === 0, leaving the readyState 1 stuck-at-metadata
+      // case undetected on iOS network throttle, causing crossfades to start with an
+      // empty preload element and immediately fall through to the hard-cut path.
+      if (preloadEl && preloadEl.readyState < 2) {
         void scheduleNextTrackPreload();
       }
     }
@@ -861,10 +880,13 @@ export function createPlaybackEventHandlers({
             ) {
               crossfadeStateRef.current = "bridging";
               const t = ctx.currentTime;
+              const rampEnd = t + 0.010; // 10ms ramp — eliminates click/pop on hard-cut bridge
               mGain.gain.cancelScheduledValues(t);
-              mGain.gain.setValueAtTime(0, t);
+              mGain.gain.setValueAtTime(mGain.gain.value, t);
+              mGain.gain.linearRampToValueAtTime(0, rampEnd);
               cfGain.gain.cancelScheduledValues(t);
-              cfGain.gain.setValueAtTime(1, t);
+              cfGain.gain.setValueAtTime(cfGain.gain.value, t);
+              cfGain.gain.linearRampToValueAtTime(1, rampEnd);
               nextEl.currentTime = 0;
               nextEl.play().catch(() => {
                 // Preload element blocked — roll back so main element plays normally.

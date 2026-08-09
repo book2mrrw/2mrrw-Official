@@ -360,6 +360,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
       }
       audio.playbackRate = 1;
       if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+      if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
       if (csHoldSavedRef.current?.wasPlaying) {
         await playAudioIfNotPaused(audio, true, {
           command: "CS_HOLD_PREVIEW",
@@ -386,6 +387,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     if (!audio || csModeRef.current || csHoldActiveRef.current) return;
     audio.playbackRate = 1 - (1 - CS_PLAYBACK_RATE) * progress;
     if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+    if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
   }, []);
 
   const endCsHoldPreview = useCallback(() => {
@@ -422,6 +424,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
         }
         audio.playbackRate = saved.playbackRate ?? 1;
         if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+        if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
         if (saved.wasPlaying && audio.paused) {
           await playAudioIfNotPaused(audio, true, {
             command: "CS_HOLD_END",
@@ -443,6 +446,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     } else if (audio) {
       audio.playbackRate = 1;
       if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+      if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
     }
 
     csHoldActiveRef.current = false;

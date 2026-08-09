@@ -173,7 +173,13 @@ export function attachTransportCommands(self) {
             // audio.load() which pauses the element, so checking !audio.paused after
             // the await always returns false and play() would never be called.
             const wasPlaying = !audio.paused;
-            self._deps.skipPauseInterruptionRef.current = true;
+            // Guard: only set skipPauseInterruptionRef when the element is currently
+            // playing. audio.load() fires a "pause" event ONLY when transitioning from
+            // non-paused → paused. If the element is already paused, no "pause" event
+            // fires and the flag is never consumed, leaking into the next user tap —
+            // silently swallowing it (the modal auto-play starts-then-stops bug).
+            // Pattern mirrors FIX 2 (PlaybackStreamCommands.js:122) and FIX 15 (line 513).
+            if (!audio.paused) self._deps.skipPauseInterruptionRef.current = true;
             await waitAudioSrcReady(audio, data.url, { signal: activeStreamAbortRef.current?.signal });
             // Check again after the async src-ready wait
             if (stateRef.current.currentTrack?.slug !== refreshTrackSlug) return;
@@ -279,6 +285,7 @@ export function attachTransportCommands(self) {
     tracePlayback("setPlaybackRateInternal", "setPlaybackRateInternal", { rate });
     audio.playbackRate = rate;
     if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+    if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
   };
 
   self.resumeTrackAtPosition = async function resumeTrackAtPosition(trackId, position) {

@@ -47,7 +47,7 @@ import { notifyMediaEngineBridge } from "@/media/mediaEngineBridge";
 import { preloadCoverImage } from "@/lib/media/preload";
 import { getHLSEngine } from "@/lib/audio/HLSEngine";
 import { getQualityLevel as getHLSQualityLevel } from "@/lib/audio/network-quality";
-import { getResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
+import { getResolvedCdnUrl, setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
 import { preloadCsAssets } from "@/lib/audio/cs-assets";
 import { isSamePlaybackTrack } from "@/lib/music-playback";
 import {
@@ -505,7 +505,13 @@ export function attachStreamCommands(self) {
       if (!signedUrl || signedUrl === syncSrc) return;
       const resumeAt = audio.currentTime || 0;
       const wasPlaying = stateRef.current.isPlaying && !audio.paused;
-      skipPauseInterruptionRef.current = true;
+      // Guard: only set the skip flag when audio is actually playing.
+      // audio.load() inside waitAudioSrcReady only fires `pause` if the element
+      // is NOT already paused — on a paused element no event fires, so an
+      // unconditional true here leaks into the user's next real pause tap.
+      if (!audio.paused) {
+        skipPauseInterruptionRef.current = true;
+      }
       if (isPlaybackTraceEnabled()) {
         logStreamLifecycle("signed-swap-start", {
           source: "swapToSignedStream",
@@ -564,6 +570,14 @@ export function attachStreamCommands(self) {
         swapGain.gain.cancelScheduledValues(swapNow);
         swapGain.gain.setValueAtTime(self._deps.userVolumeRef.current, swapNow);
       }
+
+      // Warm the CDN URL cache so the next play of this track uses the fast-path
+      // (skipping the proxy round-trip) with a freshly-signed URL and a reset TTL.
+      // Use the same compound key (albumSlug:trackSlug) that fast-path 1 reads.
+      const swapTrackSlug =
+        parseStreamTrackSlugFromSrc(nextTrack.src) || nextTrack.metadata?.trackSlug || null;
+      const swapCacheKey = swapTrackSlug ? `${streamSlug}:${swapTrackSlug}` : streamSlug;
+      setResolvedCdnUrl(swapCacheKey, signedUrl);
 
       // Propagate access upgrade into React state so the UI (scrubber cap,
       // preview badge, onTime guard) reflects the full-stream entitlement.
@@ -937,15 +951,35 @@ export function attachStreamCommands(self) {
               const onCanPlay = () => { if (isReady()) done(); };
               const onProgress = () => { if (isReady()) done(); };
               pollId = setInterval(() => { if (isReady() || streamAbortController.signal.aborted) done(); }, 100);
-              // 4 s primary cap. On HAVE_NOTHING (zero bytes after 4 s), extend 2 s
-              // before giving up — covers genuinely slow or cold CDN connections.
+              // 4 s primary cap — three distinct extension paths:
+              //
+              //   readyState 0 (HAVE_NOTHING): zero bytes after 4 s. Allow 2 more seconds
+              //   for cold CDN / Vercel function warm-up before starting into silence.
+              //
+              //   readyState 1–2 (HAVE_METADATA / HAVE_CURRENT_DATA): some bytes arrived
+              //   but the goodBuffer() gate is not satisfied. readyState 2 = only the
+              //   current frame decoded, zero lookahead — starting here guarantees an
+              //   immediate buffer underrun → the stop/load/play rebuffering cascade the
+              //   user experiences as the song stalling every few seconds. Wait up to 2
+              //   more seconds for canplaythrough (browser confirms stall-free playback),
+              //   then start regardless as a graceful-degradation last resort.
+              //
+              //   isReady() (readyState ≥ 3 AND ≥ 3 s buffered): gate satisfied — fire now.
               const capId = setTimeout(() => {
-                if (audio.readyState === 0 && !streamAbortController.signal.aborted) {
+                if (streamAbortController.signal.aborted) { done(); return; }
+                if (isReady()) { done(); return; }
+                if (audio.readyState === 0) {
+                  // HAVE_NOTHING — 2 s cold-CDN extension.
                   const extId = setTimeout(done, 2000);
                   streamAbortController.signal.addEventListener("abort", () => { clearTimeout(extId); done(); }, { once: true });
-                } else {
-                  done();
+                  return;
                 }
+                // readyState 1 or 2 — data arrived but buffer too shallow.
+                // canplaythrough = browser reports enough data to play without stalling.
+                // Hard cap after 2 s so we never spin forever on a slow connection.
+                const extId = setTimeout(done, 2000);
+                audio.addEventListener("canplaythrough", () => { clearTimeout(extId); done(); }, { once: true });
+                streamAbortController.signal.addEventListener("abort", () => { clearTimeout(extId); done(); }, { once: true });
               }, 4000);
               audio.addEventListener("canplay", onCanPlay, { once: true });
               audio.addEventListener("progress", onProgress);
@@ -1338,7 +1372,11 @@ export function attachStreamCommands(self) {
         await warmupSignedStreamPreload(preloadEl, resolved.track.src, { timeoutMs: 2500 });
       }
       const resumeAt = audio.currentTime || 0;
-      skipPauseInterruptionRef.current = true;
+      // Same guard as swapToSignedStream — audio.load() only fires `pause` when
+      // the element is not already paused, so an unconditional true here leaks.
+      if (!audio.paused) {
+        skipPauseInterruptionRef.current = true;
+      }
       patchState({ playbackNetworkState: "loading_stream" });
       await waitAudioSrcReady(audio, resolved.track.src, { signal: activeStreamAbortRef.current?.signal });
       if (resumeAt > 0) {

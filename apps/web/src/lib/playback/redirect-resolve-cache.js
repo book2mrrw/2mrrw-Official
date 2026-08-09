@@ -18,12 +18,13 @@ registerCache("redirect-resolve", {
   ttlMs: CDN_URL_TTL_MS,
   getSize: () => Object.keys(redirectResolveCache).length,
   evict: () => {
-    // Sort by age (oldest ts first) so we always evict the stalest entries,
-    // not just the ones that happen to be first in insertion order.
+    // Sort by last-used timestamp (LRU) so recently-accessed entries survive
+    // eviction regardless of when they were first written. Legacy plain-string
+    // entries (no lastUsed) fall back to their write time (ts).
     const entries = Object.entries(redirectResolveCache).sort(([, a], [, b]) => {
-      const tsA = typeof a === "object" && a !== null ? (a.ts ?? 0) : 0;
-      const tsB = typeof b === "object" && b !== null ? (b.ts ?? 0) : 0;
-      return tsA - tsB; // ascending = oldest first
+      const tsA = typeof a === "object" && a !== null ? (a.lastUsed ?? a.ts ?? 0) : 0;
+      const tsB = typeof b === "object" && b !== null ? (b.lastUsed ?? b.ts ?? 0) : 0;
+      return tsA - tsB; // ascending = least recently used first
     });
     const overage = entries.length - 150;
     for (let i = 0; i < overage; i++) delete redirectResolveCache[entries[i][0]];
@@ -31,7 +32,10 @@ registerCache("redirect-resolve", {
 });
 
 export function setResolvedCdnUrl(slug, cdnUrl) {
-  if (slug && cdnUrl) redirectResolveCache[slug] = { url: cdnUrl, ts: Date.now() };
+  if (slug && cdnUrl) {
+    const now = Date.now();
+    redirectResolveCache[slug] = { url: cdnUrl, ts: now, lastUsed: now };
+  }
 }
 
 export function getResolvedCdnUrl(slug) {
@@ -44,6 +48,8 @@ export function getResolvedCdnUrl(slug) {
     delete redirectResolveCache[slug];
     return null;
   }
+  // Update last-used for LRU eviction ordering.
+  entry.lastUsed = Date.now();
   return entry.url;
 }
 

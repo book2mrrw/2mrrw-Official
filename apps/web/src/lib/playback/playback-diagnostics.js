@@ -38,4 +38,24 @@ export function reportPlaybackDiagnostic({
   }
   const writer = level === "warn" ? console.warn : console.error;
   writer("[playback-diagnostic]", payload);
+
+  // Route error-level events to the remote telemetry sink so production issues
+  // are observable without requiring a browser console session. Fire-and-forget:
+  // a missing or slow telemetry module never blocks playback.
+  if (level === "error") {
+    import("@/system/telemetry")
+      .then(({ telemetry }) => {
+        telemetry.log({
+          type: "playback.diagnostic",
+          code: payload.code,
+          command: payload.command,
+          trackSlug: payload.trackSlug,
+          errorCode: payload.errorCode,
+          errorStatus: payload.errorStatus,
+          at: payload.at,
+          context: "playback_pipeline",
+        });
+      })
+      .catch(() => {});
+  }
 }

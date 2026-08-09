@@ -60,6 +60,8 @@ import {
   persistMediaSessionTrack,
 } from "@/lib/media-session-artwork";
 import { recordAudioContextState } from "@/lib/dev/performanceMarks";
+import { prefetchHlsSegmentsForTrack } from "@/lib/audio/hls-segment-prefetcher";
+import { getHLSEngine, isHlsJsActive } from "@/lib/audio/HLSEngine";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 import {
@@ -726,6 +728,10 @@ export function createPlaybackHelpers(initialDeps) {
         const audio = self._deps.audioRef.current;
         if (!audio || audio.paused || !self._deps.stateRef.current.isPlaying) return;
         if (!self._deps.stateRef.current.isBuffering) return;
+        // HLS tracks: hls.js manages its own buffer recovery via segment retry and ABR.
+        // A currentTime seek disrupts the sequential segment pipeline and triggers more
+        // onWaiting events → stall cascade → pitch distortion from buffer underruns.
+        if (getHLSEngine().isLoaded) return;
         self.tracePlayback("recovery", "stallSoftRecovery", {
           slug: track.slug,
           currentTime: audio.currentTime,
@@ -882,6 +888,13 @@ export function createPlaybackHelpers(initialDeps) {
       const networkState = next.playbackNetworkState;
       const refNetworkState = self._deps.stateRef.current?.playbackNetworkState;
       if (networkState === "loading_stream" || refNetworkState === "loading_stream") return next;
+      // Also suppress during active buffering. During a track-change: audio.pause() sets
+      // el.paused=true while skipPauseInterruptionRef suppresses onPause. A concurrent
+      // onWaiting debounce then patches playbackNetworkState to "buffering" via patchTransport.
+      // Any subsequent transport patch would incorrectly flip isPlaying→false here because
+      // the element is paused AND networkState is no longer "loading_stream". The user
+      // experiences a flash of paused UI mid-load and must re-tap play.
+      if (next.isBuffering || networkState === "buffering" || refNetworkState === "buffering") return next;
       self.logPlaybackDesyncIfNeeded(prev, next);
       return {
         ...next,
@@ -960,7 +973,18 @@ export function createPlaybackHelpers(initialDeps) {
       }
 
       // FATAL_AUDIO_DESYNC guard: state claims playing but audio isn't audible — trigger recovery.
-      if (next.isPlaying && next.playbackState === "playing" && !self._deps.isRecoveringRef.current) {
+      // Suppressed when isBuffering=true or playbackNetworkState="buffering": silence during a
+      // network stall is expected and correct — the desync detector must not misread a transient
+      // underrun as a permanent engine crash. isBuffering is a transport-only key that can be
+      // set via patchTransport without flowing through this code path, so both the direct value
+      // (next.isBuffering from SM context) and the network state string are checked.
+      if (
+        next.isPlaying &&
+        next.playbackState === "playing" &&
+        !next.isBuffering &&
+        next.playbackNetworkState !== "buffering" &&
+        !self._deps.isRecoveringRef.current
+      ) {
         const audio = self._deps.audioRef.current;
         const ctx = self._deps.audioCtxRef.current;
         if (
@@ -1387,9 +1411,8 @@ export function createPlaybackHelpers(initialDeps) {
     applyCsToElement(audio, presentation, resumeAt = null) {
       if (!audio || !presentation) return;
       audio.playbackRate = presentation.playbackRate ?? 1;
-      if (typeof audio.preservesPitch !== "undefined") {
-        audio.preservesPitch = true;
-      }
+      if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
+      if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
       self._deps.csUsingAlternateSrcRef.current = Boolean(presentation.useCsSrc);
       if (resumeAt != null && resumeAt > 0) {
         const applySeek = () => {
@@ -1479,6 +1502,21 @@ export function createPlaybackHelpers(initialDeps) {
             preloadEl.src = preloadSrc;
             preloadEl.load();
           }
+
+          // For HLS-eligible tracks (Subscriber / Collector / Admin), also pre-fetch
+          // the first segments into the in-memory segment cache. hls-prefetch-loader
+          // serves them to hls.js at zero CDN latency, satisfying the buffer gate
+          // in < 50 ms instead of 2–5 s (Spotify-level next-track start latency).
+          // isHlsJsActive() guards against running this on Safari: Safari uses native
+          // HLS (AVPlayer) and never consults the in-memory segment cache, so the
+          // prefetch would waste ~500 KB of CDN bandwidth and one auth API call per
+          // queued track with zero latency benefit for the user.
+          if (next.metadata?.access?.canStream && isHlsJsActive()) {
+            const hlsSlug = parseStreamSlugFromSrc(next.src) || next.slug;
+            const hlsTrackSlug =
+              parseStreamTrackSlugFromSrc(next.src) || next.metadata?.trackSlug || null;
+            if (hlsSlug) void prefetchHlsSegmentsForTrack(hlsSlug, hlsTrackSlug);
+          }
           return;
         }
         const normalized = normalizePlaybackSrc(next.src);
@@ -1527,6 +1565,12 @@ export function createPlaybackHelpers(initialDeps) {
             if (normalized && preloadEl.src !== normalized) {
               preloadEl.src = normalized;
               preloadEl.load();
+            }
+
+            // For HLS-eligible tracks, also pre-fetch segments into the cache.
+            // isHlsJsActive() prevents wasteful CDN fetches on Safari native HLS.
+            if (next.metadata?.access?.canStream && isHlsJsActive()) {
+              void prefetchHlsSegmentsForTrack(slug, trackSlug);
             }
           }
         } catch {

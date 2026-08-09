@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+
+// Tracks which AudioContext objects already have a one-shot OS_SUSPENDED recovery
+// listener armed so the watchdog never stacks duplicate statechange handlers.
+const _osSuspendedRearmContexts = new WeakSet();
 import {
   playbackStateMachine,
   PLAYBACK_ORCHESTRATION_EVENTS,
@@ -634,6 +638,26 @@ export function usePlaybackEffects({
           source: "audibility_watchdog",
           slug: stateRef.current.currentTrack?.slug ?? null,
         });
+        // Arm a one-shot statechange listener so recovery fires automatically when
+        // iOS lifts the AudioContext suspension — no user tap required.
+        const osSuspCtx = audioCtxRef.current;
+        if (osSuspCtx && osSuspCtx.state !== "running" && !_osSuspendedRearmContexts.has(osSuspCtx)) {
+          _osSuspendedRearmContexts.add(osSuspCtx);
+          const onCtxStateChange = () => {
+            if (osSuspCtx.state === "running") {
+              osSuspCtx.removeEventListener("statechange", onCtxStateChange);
+              _osSuspendedRearmContexts.delete(osSuspCtx);
+              if (
+                stateRef.current.isPlaying &&
+                !userPausedRef.current &&
+                !userIntentPausedRef.current
+              ) {
+                void attemptLightweightPlaybackResume("os_suspended_recovery");
+              }
+            }
+          };
+          osSuspCtx.addEventListener("statechange", onCtxStateChange);
+        }
         return;
       }
 
@@ -739,6 +763,7 @@ export function usePlaybackEffects({
     }, AUDIBILITY_WATCHDOG_MS);
     return () => clearInterval(intervalId);
   }, [
+    attemptLightweightPlaybackResume,
     computeLifecycleAudioTruthState,
     getAudibilityParams,
     getPlaybackTransportHealth,
