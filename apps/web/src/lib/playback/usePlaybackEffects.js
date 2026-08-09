@@ -114,7 +114,7 @@ export function usePlaybackEffects({
     bfcacheRecoveryTimeoutRef, recoveryCooldownUntilRef, isRecoveringRef,
     wasPlayingBeforeHideRef, wasPlayingBeforeViewportPauseRef,
     streamMetaRef, activeCommandRef, activeStreamAbortRef,
-    stallHardAttemptRef, streamErrorRetriedRef, nextTrackPreloadRef,
+    streamErrorRetriedRef, nextTrackPreloadRef,
     streamSwapPreloadRef, nextNextTrackPreloadRef, prevTrackPreloadRef,
     intentPrewarmRef, csAudioRef, csVidRef, queueWatchdogRef,
     bufferShowTimerRef, listeningUserIdRef, playTrackRef, applyCSModeToTrackRef,
@@ -478,7 +478,7 @@ export function usePlaybackEffects({
       crossfadeGainRef: refs.crossfadeGainRef, trackGainRef: refs.trackGainRef,
       userGainRef: refs.userGainRef, crossfadeStateRef: refs.crossfadeStateRef,
       crossfadeEnabledRef: refs.crossfadeEnabledRef, activeCommandRef, activeStreamAbortRef,
-      streamMetaRef, streamErrorRetriedRef, stallHardAttemptRef,
+      streamMetaRef, streamErrorRetriedRef,
       previewFadeInitRef: refs.previewFadeInitRef, userPausedRef, userIntentPausedRef,
       skipPauseInterruptionRef,
       pendingResumeAfterInterruptRef: refs.pendingResumeAfterInterruptRef,
@@ -1310,7 +1310,6 @@ export function usePlaybackEffects({
         audio &&
         (stateRef.current.isPlaying || stateRef.current.error === "RECONNECTING")
       ) {
-        stallHardAttemptRef.current = 0;
         streamErrorRetriedRef.current = 0;
         patchState({ error: null, isBuffering: true });
         void playTrackRef.current?.(track, {

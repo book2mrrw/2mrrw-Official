@@ -71,7 +71,7 @@ export function attachStreamCommands(self) {
       syncProgressTime,
       stateRef, audioRef, audioCtxRef, mainGainRef, userGainRef, crossfadeStateRef,
       activeCommandRef, activeStreamAbortRef, streamMetaRef, streamErrorRetriedRef,
-      stallHardAttemptRef, previewFadeInitRef, userPausedRef, userIntentPausedRef,
+      previewFadeInitRef, userPausedRef, userIntentPausedRef,
       skipPauseInterruptionRef, lifecycleRecoveryLockRef, queueRef, queueIndexRef,
       csModeRef, csUsingAlternateSrcRef, audibilitySampleRef, playRequestIdRef,
       nextTrackPreloadRef, streamSwapPreloadRef, intentPrewarmRef,
@@ -283,7 +283,6 @@ export function attachStreamCommands(self) {
       audio.addEventListener("canplay", scheduleCoverPreload, { once: true });
     }
 
-    stallHardAttemptRef.current = 0;
     streamErrorRetriedRef.current = 0;
     recoveryCoordinator.resetForNewTrack();
 
@@ -340,7 +339,6 @@ export function attachStreamCommands(self) {
       if (err?.code === "ACCESS_DENIED") {
         const prevMeta = streamMetaRef.current;
         if (prevMeta) finalizeStreamSession(prevMeta, { completed: false, durationSeconds: audio.currentTime || 0 });
-        stallHardAttemptRef.current = 0;
         streamErrorRetriedRef.current = 0;
         skipPauseInterruptionRef.current = true;
         audio.pause();
@@ -1466,10 +1464,9 @@ export function attachStreamCommands(self) {
   };
 
   self.retryStreamPlayback = async function retryStreamPlayback() {
-    const { patchState, stateRef, audioRef, stallHardAttemptRef, streamErrorRetriedRef, playTrackRef } = self._deps;
+    const { patchState, stateRef, audioRef, streamErrorRetriedRef, playTrackRef } = self._deps;
     const track = stateRef.current.currentTrack;
     if (!track) return false;
-    stallHardAttemptRef.current = 0;
     streamErrorRetriedRef.current = 0;
     patchState({ error: null, streamRetryable: false, accessDenied: false });
     const resumeAt = audioRef.current?.currentTime || stateRef.current.currentTime || 0;

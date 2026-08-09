@@ -112,7 +112,6 @@ export function createPlaybackEventHandlers({
   activeStreamAbortRef,
   streamMetaRef,
   streamErrorRetriedRef,
-  stallHardAttemptRef,
   previewFadeInitRef,
   userPausedRef,
   userIntentPausedRef,
@@ -973,7 +972,6 @@ export function createPlaybackEventHandlers({
         window.removeEventListener("online", onOnline);
         const current = stateRef.current.currentTrack;
         if (current) {
-          stallHardAttemptRef.current = 0;
           streamErrorRetriedRef.current = 0;
           void playTrackRef.current?.(current, {
             resumeAt: audio.currentTime || 0,
@@ -1106,7 +1104,6 @@ export function createPlaybackEventHandlers({
         }
         if (retryErr?.code === "ACCESS_DENIED") {
           finalizeStreamSession(meta, { durationSeconds: resumeAt, completed: false });
-          stallHardAttemptRef.current = 0;
           streamErrorRetriedRef.current = 0;
           skipPauseInterruptionRef.current = true;
           audio.pause();

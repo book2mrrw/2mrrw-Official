@@ -38,7 +38,6 @@ import {
 import {
   endStreamAnalytics,
   fetchLibraryStream,
-  isLibraryStreamRedirectSrc,
   isLibraryStreamSrc,
   parseStreamSlugFromSrc,
   parseStreamTrackSlugFromSrc,
@@ -62,7 +61,7 @@ import {
 } from "@/lib/media-session-artwork";
 import { recordAudioContextState } from "@/lib/dev/performanceMarks";
 import { prefetchHlsSegmentsForTrack } from "@/lib/audio/hls-segment-prefetcher";
-import { getHLSEngine, isHlsJsActive } from "@/lib/audio/HLSEngine";
+import { isHlsJsActive } from "@/lib/audio/HLSEngine";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 import {
@@ -92,8 +91,6 @@ import {
 const POSITION_STATE_THROTTLE_MS = 1000;
 const POSITION_SAVE_INTERVAL_MS = 15000;
 const KEEP_ALIVE_INTERVAL_MS = 20000;
-const STALL_SOFT_RECOVERY_MS = 2500;
-const STALL_HARD_RECOVERY_MS = 7000;
 const LIFECYCLE_RECOVERY_SUPPRESSION_MS = 2500;
 const SIGNED_URL_CACHE_MAX_AGE_MS = 50 * 60 * 1000;
 const MRRW_MEDIA_SOURCE_BOUND = Symbol.for("2mrrw.mediaElementSourceBound");

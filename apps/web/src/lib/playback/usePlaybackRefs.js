@@ -76,7 +76,6 @@ export function usePlaybackRefs() {
   const streamMetaRef = useRef(null);
   const streamSwapPreloadRef = useRef(null);
   const streamErrorRetriedRef = useRef(0);
-  const stallHardAttemptRef = useRef(0);
   const previewFadeInitRef = useRef(false);
   const lastPlayedSlugRef = useRef(null);
   const pendingSessionUpgradeRef = useRef(null);
@@ -143,8 +142,6 @@ export function usePlaybackRefs() {
   const keepAliveIntervalRef = useRef(null);
   const positionSaveTimerRef = useRef(null);
   const progressRafRef = useRef(null);
-  const stallSoftTimerRef = useRef(null);
-  const stallRecoveryTimerRef = useRef(null);
   const sleepTimerRef = useRef({ endsAt: null, afterCurrentTrack: false });
   const bufferShowTimerRef = useRef(null);
   const recentStallTimeRef = useRef(0);
@@ -206,7 +203,7 @@ export function usePlaybackRefs() {
     csImgRef, csVidRef, csAudioRef, csHoldSavedRef, csHoldActiveRef, csUsingAlternateSrcRef,
     // Stream/session refs
     lastPersistRef, pendingSeekRef, streamMetaRef, streamSwapPreloadRef,
-    streamErrorRetriedRef, stallHardAttemptRef, previewFadeInitRef,
+    streamErrorRetriedRef, previewFadeInitRef,
     lastPlayedSlugRef, pendingSessionUpgradeRef, nextTrackSignedUrlCacheRef,
     sessionRestoredRef, sessionSaveTimerRef, sessionUnlockedRef,
     listeningUserIdRef, listeningProgressRef,
@@ -231,7 +228,7 @@ export function usePlaybackRefs() {
     continuitySnapshotRef, continuityFrozenRef, forceProgressNotifyRef,
     // Timer refs
     keepAliveIntervalRef, positionSaveTimerRef, progressRafRef,
-    stallSoftTimerRef, stallRecoveryTimerRef, sleepTimerRef,
+    sleepTimerRef,
     bufferShowTimerRef, recentStallTimeRef, lastPositionStateAtRef, wakeLockRef,
     // Preload refs
     nextTrackPreloadRef, nextNextTrackPreloadRef, prevTrackPreloadRef, intentPrewarmRef,
