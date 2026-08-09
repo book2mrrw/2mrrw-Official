@@ -1632,26 +1632,6 @@ export function createPlaybackHelpers(initialDeps) {
       }
     },
 
-    // ─── Audio Element Utilities ─────────────────────────────────────────────
-
-    async unlockAudioFromGesture(audioEl) {
-      if (!audioEl || !audioEl.paused) return;
-      const gain = self._deps.userGainRef.current;
-      const ctx = self._deps.audioCtxRef.current;
-      if (gain && ctx) {
-        gain.gain.setValueAtTime(0, ctx.currentTime);
-      }
-      try {
-        await audioEl.play();
-        audioEl.pause();
-      } catch {
-        // play() failed — non-fatal; caller will handle.
-      }
-      if (gain && ctx) {
-        gain.gain.setValueAtTime(self._deps.userVolumeRef.current, ctx.currentTime);
-      }
-    },
-
     cancelCrossfade() {
       cancelCrossfadeEngine({
         crossfadeStateRef: self._deps.crossfadeStateRef,
