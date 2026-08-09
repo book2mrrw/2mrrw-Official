@@ -1636,36 +1636,17 @@ export function createPlaybackHelpers(initialDeps) {
 
     async unlockAudioFromGesture(audioEl) {
       if (!audioEl || !audioEl.paused) return;
-      // Silence via GainNode before the unlock play/pause cycle to prevent audio pops.
       const gain = self._deps.userGainRef.current;
       const ctx = self._deps.audioCtxRef.current;
       if (gain && ctx) {
         gain.gain.setValueAtTime(0, ctx.currentTime);
       }
-      // Gate all audio element event handlers for the duration of the unlock cycle.
-      // The play event fires synchronously when play() is called (HTML spec), so
-      // isGestureUnlockCycleRef must be set BEFORE the play() call. Without this
-      // gate, onPlay fires and mutates SM state (isPlaying:true, starts RAF/timers/
-      // keep-alive pings) for the unlock's silent play — not the user's intent.
-      // That spurious mutation causes reconcileIsPlayingWithElement to fire when the
-      // next patchState runs, seeing isPlaying:true + el.paused:true → DESYNC →
-      // isPlaying:false, corrupting wasPlaying for the same-track resume path and
-      // silencing playback entirely.
-      self._deps.isGestureUnlockCycleRef.current = true;
       try {
         await audioEl.play();
         audioEl.pause();
       } catch {
-        // play() failed — element may still be unlocked at the OS level from the
-        // attempt; the catch is here to prevent unhandled rejection, not to signal
-        // a hard failure. The caller (playTrackInternal) will detect any remaining
-        // gesture lock when the real audio.play() runs.
-      } finally {
-        // Always clear the gate — onPause fires synchronously during audioEl.pause()
-        // above, so this finally block runs after onPause returns.
-        self._deps.isGestureUnlockCycleRef.current = false;
+        // play() failed — non-fatal; caller will handle.
       }
-      // Restore user volume through the GainNode.
       if (gain && ctx) {
         gain.gain.setValueAtTime(self._deps.userVolumeRef.current, ctx.currentTime);
       }

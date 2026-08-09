@@ -100,11 +100,6 @@ export function usePlaybackRefs() {
   const userIntentPausedRef = useRef(false);
   const pausedDuringCurrentLoadRef = useRef(false);
   const skipPauseInterruptionRef = useRef(false);
-  // Suppresses all audio element event handlers during the silent play/pause
-  // gesture-unlock cycle in unlockAudioFromGesture. Prevents spurious onPlay
-  // state mutations (isPlaying:true, RAF start, keep-alive pings) from firing
-  // during the unlock trick — those events belong to the real play, not the unlock.
-  const isGestureUnlockCycleRef = useRef(false);
   const pendingResumeAfterInterruptRef = useRef(null);
   const onPreviewEndedRef = useRef(null);
   const spuriousEndedGuardRef = useRef(0);
@@ -220,7 +215,7 @@ export function usePlaybackRefs() {
     stopAfterEachTrackRef,
     // User intent/pause refs
     userPausedRef, userIntentPausedRef, pausedDuringCurrentLoadRef,
-    skipPauseInterruptionRef, isGestureUnlockCycleRef, pendingResumeAfterInterruptRef, onPreviewEndedRef,
+    skipPauseInterruptionRef, pendingResumeAfterInterruptRef, onPreviewEndedRef,
     spuriousEndedGuardRef, playRequestIdRef, internalPlaybackAuthorityRef, userVolumeRef,
     // Viewport refs
     isInAudioVisualViewportRef, wasPlayingBeforeViewportPauseRef, viewportPauseRef,

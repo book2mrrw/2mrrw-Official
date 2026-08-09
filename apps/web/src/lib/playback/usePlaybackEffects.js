@@ -475,7 +475,7 @@ export function usePlaybackEffects({
       crossfadeEnabledRef: refs.crossfadeEnabledRef, activeCommandRef, activeStreamAbortRef,
       streamMetaRef, streamErrorRetriedRef, stallHardAttemptRef,
       previewFadeInitRef: refs.previewFadeInitRef, userPausedRef, userIntentPausedRef,
-      skipPauseInterruptionRef, isGestureUnlockCycleRef: refs.isGestureUnlockCycleRef,
+      skipPauseInterruptionRef,
       pendingResumeAfterInterruptRef: refs.pendingResumeAfterInterruptRef,
       viewportPauseRef: refs.viewportPauseRef, playbackIntentBeforeHideRef,
       listeningProgressRef: refs.listeningProgressRef, lifecycleAudioTruthStateRef: refs.lifecycleAudioTruthStateRef,

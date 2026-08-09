@@ -117,7 +117,6 @@ export function createPlaybackEventHandlers({
   userPausedRef,
   userIntentPausedRef,
   skipPauseInterruptionRef,
-  isGestureUnlockCycleRef,
   pendingResumeAfterInterruptRef,
   viewportPauseRef,
   playbackIntentBeforeHideRef,
@@ -220,7 +219,6 @@ export function createPlaybackEventHandlers({
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   const onWaiting = () => {
-    if (isGestureUnlockCycleRef.current) return;
     recentStallTimeRef.current = Date.now();
     startStallRecovery();
     if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
@@ -234,7 +232,6 @@ export function createPlaybackEventHandlers({
   };
 
   const onStalled = () => {
-    if (isGestureUnlockCycleRef.current) return;
     recentStallTimeRef.current = Date.now();
     startStallRecovery();
     if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
@@ -248,7 +245,6 @@ export function createPlaybackEventHandlers({
   };
 
   const onPlaying = () => {
-    if (isGestureUnlockCycleRef.current) return;
     if (bufferShowTimerRef.current) {
       clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = null;
@@ -262,7 +258,6 @@ export function createPlaybackEventHandlers({
   };
 
   const onCanPlayThrough = () => {
-    if (isGestureUnlockCycleRef.current) return;
     if (bufferShowTimerRef.current) {
       clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = null;
@@ -274,15 +269,6 @@ export function createPlaybackEventHandlers({
   };
 
   const onPlay = () => {
-    // The HTML spec dispatches the `play` event synchronously during audio.play(),
-    // before the returned Promise resolves. During the gesture-unlock cycle
-    // (unlockAudioFromGesture), this fires for the silent unlock play — not the
-    // user's intended play. Suppress all side-effects here so the SM never sees
-    // isPlaying:true from the unlock, which would cause reconcileIsPlayingWithElement
-    // to fire a spurious DESYNC when the next patchState runs (el.paused:true but
-    // isPlaying:true → DESYNC → isPlaying:false → breaks same-track resume path).
-    if (isGestureUnlockCycleRef.current) return;
-
     userPausedRef.current = false;
 
     if (stateRef.current.source === "library_stream") {
@@ -386,14 +372,6 @@ export function createPlaybackEventHandlers({
   };
 
   const onPause = () => {
-    // During the gesture-unlock play/pause cycle, suppress all pause-side-effects.
-    // isGestureUnlockCycleRef is cleared in the finally block of unlockAudioFromGesture
-    // AFTER this handler returns (audioEl.pause() dispatches the pause event
-    // synchronously, so this handler runs before the finally block executes).
-    if (isGestureUnlockCycleRef.current) {
-      stopStallRecovery();
-      return;
-    }
     stopStallRecovery();
     if (previewFadeInitRef.current) {
       const gain = userGainRef.current;

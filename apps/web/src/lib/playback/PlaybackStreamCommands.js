@@ -64,7 +64,7 @@ export function attachStreamCommands(self) {
     const {
       patchState, patchTransport, updateMediaSession, applyCsToElement,
       recordLocalListening, resolveLibraryStreamForTrack, finalizeStreamSession,
-      initWebAudio, unlockAudioFromGesture, cancelCrossfade, scheduleCrossfadeHandoff, tracePlayback,
+      initWebAudio, cancelCrossfade, scheduleCrossfadeHandoff, tracePlayback,
       logDirectInternalCallViolation, attemptLightweightPlaybackResume,
       getPlaybackTransportHealth, isLifecycleRecoverySuppressed, clearContinuityFreeze,
       syncProgressTime,
@@ -110,15 +110,18 @@ export function attachStreamCommands(self) {
     // willAttemptHLS: HLS will set its own MSE blob: src via hls.attachMedia().
     // Skipping audioEl.load() prevents the redirect URL from pre-buffering enough
     // data to cause an audible "plays → silence → plays again" double-init on desktop.
-    // We still assign audioEl.src so unlockAudioFromGesture's play() has a valid
-    // src on iOS — play() with no src throws and leaves the audio context locked.
     const willAttemptHLS = Boolean(track?.metadata?.access?.canStream) &&
       isLibraryStreamRedirectSrc(track?.src || "");
     if (isLibraryStreamRedirectSrc(track?.src) && audioEl) {
       const earlyNorm = normalizePlaybackSrc(track.src);
       if (earlyNorm && normalizePlaybackSrc(audioEl.src || "") !== earlyNorm) {
-        skipPauseInterruptionRef.current = true;
-        audioEl.pause();
+        // Guard: only pause if actually playing. audio.pause() on an already-paused
+        // element is a no-op (no onPause fires), so setting skipPauseInterruptionRef
+        // here would leave a stale true that silences the first real user pause.
+        if (!audioEl.paused) {
+          skipPauseInterruptionRef.current = true;
+          audioEl.pause();
+        }
         audioEl.src = track.src;
         if (!willAttemptHLS) {
           audioEl.load();
@@ -140,24 +143,10 @@ export function attachStreamCommands(self) {
         }
       }
     }
-    // Always unlock the audio element when paused at play-command time.
-    // sessionUnlockedRef tracks AudioContext unlock (ctx.resume()) — a separate iOS
-    // requirement from audio element gesture permission (audio.play()). The AudioContext
-    // can unlock (ctx.state → "running") before this line executes, setting
-    // sessionUnlockedRef.current = true, which would skip this block and leave the
-    // audio element un-unlocked. Any audio.play() call later in the async chain (after
-    // HLS loading, stream URL resolution, etc.) then fails with NotAllowedError because
-    // iOS Safari's gesture activation token has expired by then. Un-gating from
-    // sessionUnlockedRef ensures the audio element is always unlocked here — in the
-    // microtask chain that originated from the user's gesture — before the gesture
-    // activation token can expire.
-    if (audioEl?.paused) {
-      await unlockAudioFromGesture(audioEl);
-      // Unlock the crossfade pre-buffer element at the same time so iOS allows
-      // play() on it when the crossfade triggers (no second user gesture available).
-      const nextEl = nextTrackPreloadRef.current;
-      if (nextEl && nextEl.paused) await unlockAudioFromGesture(nextEl);
-    }
+    // iOS gesture unlock is handled synchronously in dispatchPlaybackCommand via a
+    // dedicated silent audio element — before any await, before any HLS src is assigned.
+    // This grants page-wide media autoplay permission on iOS 18 without triggering
+    // native HLS buffering on the main element. No async unlock cycle needed here.
 
     initWebAudio();
     await resumeWebAudioContextIfSuspended(audioCtxRef, "playTrack-entry");
