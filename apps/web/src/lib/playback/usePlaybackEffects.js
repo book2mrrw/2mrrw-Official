@@ -72,6 +72,7 @@ import {
   noteAudioProviderMount,
   noteAudioProviderUnmount,
 } from "@/lib/playback/audio-engine-runtime";
+import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 import { registerPlaybackKeyboardShortcuts } from "@/lib/playback/keyboard-shortcuts";
 
 const GESTURE_UNLOCK_EVENTS = ["touchstart", "touchend", "click", "keydown"];
@@ -681,6 +682,10 @@ export function usePlaybackEffects({
       }
 
       if (truth.violation === PLAYBACK_TRUTH_VIOLATION) {
+        // Defer if the Recovery Coordinator is already handling a stall —
+        // firing a second hard recovery on top of an in-flight one resets the
+        // buffer twice and is the root cause of the continuous stop-start cycle.
+        if (recoveryCoordinator.isActive()) return;
         logPlaybackResilience("truth-violation", {
           source: "AudioContext",
           code: PLAYBACK_TRUTH_VIOLATION,
@@ -712,6 +717,10 @@ export function usePlaybackEffects({
       }
 
       if (isAudioActuallyAudible(audibilityParams)) return;
+
+      // Recovery Coordinator is handling a buffer stall — defer hard recovery.
+      // Silent audio during a coordinator-managed stall is expected and correct.
+      if (recoveryCoordinator.isActive()) return;
 
       if (
         isLifecycleRecoverySuppressed("silent_desync_detected") &&

@@ -44,6 +44,7 @@ import {
   parseStreamTrackSlugFromSrc,
   streamUrlNeedsRefresh,
 } from "@/lib/playback/stream-client";
+import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 import {
   isEntitledFullPlaybackTrack,
   isTransportOnlyPatch,
@@ -704,110 +705,21 @@ export function createPlaybackHelpers(initialDeps) {
     },
 
     stopStallRecovery() {
-      if (self._deps.stallSoftTimerRef.current) {
-        clearTimeout(self._deps.stallSoftTimerRef.current);
-        self._deps.stallSoftTimerRef.current = null;
-      }
-      if (self._deps.stallRecoveryTimerRef.current) {
-        clearTimeout(self._deps.stallRecoveryTimerRef.current);
-        self._deps.stallRecoveryTimerRef.current = null;
-      }
+      // Notify coordinator that playback resumed — it clears its grace timer
+      // and releases its lock. Cooldown stays to let the buffer refill.
+      recoveryCoordinator.onPlaybackResumed();
     },
 
     startStallRecovery() {
-      self.stopStallRecovery();
-      const track = self._deps.stateRef.current.currentTrack;
-      if (!track || !self._deps.stateRef.current.isPlaying) return;
-
-      // Stage 1 — soft recovery (2.5s): a tiny backward seek forces the browser to
-      // abort the stalled Range request and issue a fresh one from the same position.
-      // Resolves ~80% of mobile stalls (dropped packet, iOS network throttle) without
-      // re-fetching a signed URL or restarting the audio element.
-      self._deps.stallSoftTimerRef.current = setTimeout(() => {
-        self._deps.stallSoftTimerRef.current = null;
-        const audio = self._deps.audioRef.current;
-        if (!audio || audio.paused || !self._deps.stateRef.current.isPlaying) return;
-        if (!self._deps.stateRef.current.isBuffering) return;
-        // HLS tracks: hls.js manages its own buffer recovery via segment retry and ABR.
-        // A currentTime seek disrupts the sequential segment pipeline and triggers more
-        // onWaiting events → stall cascade → pitch distortion from buffer underruns.
-        if (getHLSEngine().isLoaded) return;
-        self.tracePlayback("recovery", "stallSoftRecovery", {
-          slug: track.slug,
-          currentTime: audio.currentTime,
-        });
-        try {
-          // After a 302 redirect, audio.currentSrc is the bare R2 CDN URL — not the
-          // redirect path — so isLibraryStreamRedirectSrc returns false. Check both the
-          // live currentSrc (may be resolved CDN) and the track's original src (proxy path).
-          const currentSrc = audio.currentSrc || audio.src || "";
-          const trackSrc = self._deps.stateRef.current.currentTrack?.src || "";
-          const isProxied =
-            isLibraryStreamRedirectSrc(currentSrc) ||
-            isLibraryStreamSrc(currentSrc) ||
-            isLibraryStreamRedirectSrc(trackSrc) ||
-            isLibraryStreamSrc(trackSrc);
-          if (isProxied) {
-            // Proxy path: a tiny forward nudge forces the proxy to issue a fresh Range
-            // request, breaking stuck TCP connections. Forward (not backward) — a backward
-            // seek causes iOS to snap to the nearest buffered range which can be several
-            // seconds back, producing audible repetition the user hears as the song rewinding.
-            const fwdTarget = audio.currentTime + 0.05;
-            if (Number.isFinite(audio.duration) && fwdTarget < audio.duration - 1) {
-              audio.currentTime = fwdTarget;
-            }
-          } else {
-            // CDN direct (R2): a backward seek adds a redundant Range request that competes
-            // with the in-flight buffer fill. Seek forward instead — skips past stuck bytes
-            // and forces a new Range starting from unbuffered territory.
-            const fwdTarget = audio.currentTime + 0.5;
-            if (Number.isFinite(audio.duration) && fwdTarget < audio.duration - 1) {
-              audio.currentTime = fwdTarget;
-            }
-          }
-          // Guard: only call play() if the element is actually paused — a concurrent play()
-          // promise may already be in flight (e.g. from waitAudioSrcReady), and a second
-          // play() call while one is pending triggers an AbortError on most browsers.
-          if (audio.paused) audio.play().catch(() => {});
-        } catch {
-          /* soft recovery is best-effort */
-        }
-      }, STALL_SOFT_RECOVERY_MS);
-
-      // Stage 2 — hard recovery (7s): full signed-URL refresh + replay from position.
-      // Only for entitled full-playback tracks (preview URLs never expire and don't need it).
-      if (!isEntitledFullPlaybackTrack(track)) return;
-      self._deps.stallRecoveryTimerRef.current = setTimeout(() => {
-        self._deps.stallRecoveryTimerRef.current = null;
-        const audio = self._deps.audioRef.current;
-        if (!audio || audio.paused || !self._deps.stateRef.current.isPlaying) return;
-        if (!self._deps.stateRef.current.isBuffering) return;
-        const MAX_STALL_HARD_RETRIES = 3;
-        self._deps.stallHardAttemptRef.current += 1;
-        logPlaybackResilience("stall-recovery", {
-          source: "AudioContext",
-          code: "STALL_RECOVERY_RETRY",
-          slug: track.slug,
-          currentTime: audio.currentTime,
-          attempt: self._deps.stallHardAttemptRef.current,
-        });
-        self.tracePlayback("recovery", "stallHardRecovery", {
-          slug: track.slug,
-          currentTime: audio.currentTime,
-          attempt: self._deps.stallHardAttemptRef.current,
-        });
-        if (self._deps.stallHardAttemptRef.current > MAX_STALL_HARD_RETRIES) {
-          self.patchState({
-            error: "Connection lost. Check your internet and tap to retry.",
-            streamRetryable: true,
-            isBuffering: false,
-            playbackNetworkState: "error_stream",
-          });
-          return;
-        }
-        self._deps.streamErrorRetriedRef.current = 0;
-        void self._deps.retryStreamPlaybackRef.current?.();
-      }, STALL_HARD_RECOVERY_MS);
+      // All recovery logic lives in the Recovery Coordinator.
+      // It handles: buffer health check, grace period, lock, HLS vs progressive
+      // strategy, cooldown, and escalation to hard reload. Nothing here.
+      recoveryCoordinator.report({
+        audioRef:               self._deps.audioRef,
+        stateRef:               self._deps.stateRef,
+        retryStreamPlaybackRef: self._deps.retryStreamPlaybackRef,
+        patchState:             self.patchState.bind(self),
+      });
     },
 
     startPositionSaveTimer() {
@@ -978,12 +890,16 @@ export function createPlaybackHelpers(initialDeps) {
       // underrun as a permanent engine crash. isBuffering is a transport-only key that can be
       // set via patchTransport without flowing through this code path, so both the direct value
       // (next.isBuffering from SM context) and the network state string are checked.
+      // Also suppressed when the Recovery Coordinator is active (grace period, lock, or cooldown):
+      // the coordinator already owns the recovery path and a concurrent DESYNC transition would
+      // double-reset the buffer on top of an in-flight seek or reload.
       if (
         next.isPlaying &&
         next.playbackState === "playing" &&
         !next.isBuffering &&
         next.playbackNetworkState !== "buffering" &&
-        !self._deps.isRecoveringRef.current
+        !self._deps.isRecoveringRef.current &&
+        !recoveryCoordinator.isActive()
       ) {
         const audio = self._deps.audioRef.current;
         const ctx = self._deps.audioCtxRef.current;

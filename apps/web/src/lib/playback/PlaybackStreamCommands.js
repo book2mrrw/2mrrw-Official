@@ -46,6 +46,7 @@ import { clearPlaybackPosition, getSavedPlaybackPosition } from "@/lib/playback/
 import { notifyMediaEngineBridge } from "@/media/mediaEngineBridge";
 import { preloadCoverImage } from "@/lib/media/preload";
 import { getHLSEngine } from "@/lib/audio/HLSEngine";
+import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 import { getQualityLevel as getHLSQualityLevel } from "@/lib/audio/network-quality";
 import { getResolvedCdnUrl, setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
 import { preloadCsAssets } from "@/lib/audio/cs-assets";
@@ -284,6 +285,7 @@ export function attachStreamCommands(self) {
 
     stallHardAttemptRef.current = 0;
     streamErrorRetriedRef.current = 0;
+    recoveryCoordinator.resetForNewTrack();
 
     const streamSlug = parseStreamSlugFromSrc(nextTrack.src) || nextTrack.slug;
     const usesLibraryStream = isLibraryStreamSrc(nextTrack.src);
