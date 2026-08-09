@@ -673,7 +673,11 @@ export function attachStreamCommands(self) {
 
     const prevTrack = stateRef.current.currentTrack;
     const sameIdentity = isSamePlaybackTrack(prevTrack, nextTrack);
-    const isSameTrack = sameIdentity;
+    // Fast-path only when the audio element has actual decoded data for this track.
+    // readyState 0/1 means no usable buffer (e.g. fresh page) — route through the full
+    // hls.js path so the buffer gate runs and play() resolves instantly rather than
+    // after 10–15 s of iOS-native HLS manifest+segment loading.
+    const isSameTrack = sameIdentity && audio.readyState >= 2;
     const isReplay = isSameTrack && audio.ended;
     const previousTrack = stateRef.current.currentTrack;
 
