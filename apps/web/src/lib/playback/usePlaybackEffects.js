@@ -175,14 +175,14 @@ export function usePlaybackEffects({
       queueRef.current = valid;
       queueIndexRef.current = idx;
       shuffleRef.current = Boolean(session.shuffle);
-      repeatModeRef.current = session.repeatMode || "off";
+      repeatModeRef.current = "off";
       const restoredTrack = valid[idx] || null;
       patchState({
         queue: valid,
         queueIndex: idx,
         currentTrack: restoredTrack,
         shuffle: Boolean(session.shuffle),
-        repeatMode: session.repeatMode || "off",
+        repeatMode: "off",
         isPlaying: false,
         playbackState: "idle",
       });

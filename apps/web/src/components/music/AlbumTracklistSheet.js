@@ -156,11 +156,11 @@ export default function AlbumTracklistSheet({
   // autoPlayedRef blocks re-fire if deps change while the sheet stays open.
   useEffect(() => {
     if (!open || autoPlayedRef.current || !tracks.length) return;
-    const alreadyPlayingThisAlbum = tracks.some((t) => isTrackActive(t));
+    const alreadyPlayingThisAlbum = isPlaying && tracks.some((t) => isTrackActive(t));
     if (alreadyPlayingThisAlbum) return;
     autoPlayedRef.current = true;
     playTrackInSheet(0);
-  }, [open, tracks, isTrackActive, playTrackInSheet]);
+  }, [open, tracks, isTrackActive, isPlaying, playTrackInSheet]);
 
   // Play All / Shuffle close the sheet after queuing.
   const playAndClose = useCallback(
@@ -204,6 +204,7 @@ export default function AlbumTracklistSheet({
   );
 
   if (!open || !album) return null;
+  const pendingAutoPlay = !hasStarted && !isPlaying;
 
   const trackCount = tracks.length || album.tracks?.length || album.trackTitles?.length || 0;
   const albumCoverType = album.coverArtType || "image";
@@ -376,7 +377,7 @@ export default function AlbumTracklistSheet({
               title: typeof t === "string" ? t : t?.title || `Track ${i + 1}`,
               metadata: { durationSeconds: null },
             }))).map((track, index) => {
-              const active = isTrackActive(track);
+              const active = isTrackActive(track) || (pendingAutoPlay && index === 0);
               const duration =
                 track.metadata?.durationSeconds ||
                 track.durationSeconds ||
