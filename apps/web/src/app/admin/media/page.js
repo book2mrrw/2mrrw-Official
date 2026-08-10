@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 
@@ -17,8 +17,7 @@ export default function AdminMediaPage() {
   const [session, setSession] = useState(null);
   const [checked, setChecked] = useState(false);
 
-  // Auth check
-  useState(() => {
+  useEffect(() => {
     const sb = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -28,7 +27,7 @@ export default function AdminMediaPage() {
       setSession(data.session);
       setChecked(true);
     });
-  });
+  }, [router]);
 
   if (!checked) return <div style={styles.page}><div style={styles.spinner} /></div>;
 
