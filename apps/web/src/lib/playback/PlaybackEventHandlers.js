@@ -68,6 +68,7 @@ import {
 } from "@/media/PlaybackStateMachine";
 import { classifySourceUrl, isDirectlyBufferable } from "@/lib/playback/audio-source-resolver";
 import { normalizePlaybackSrc } from "@/lib/audio/audio-element-utils";
+import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 
 // ── Exported constants ─────────────────────────────────────────────────────────
 // Defined here because handler logic is their primary consumer.
@@ -520,7 +521,13 @@ export function createPlaybackEventHandlers({
     stopKeepAlivePing();
     stopProgressRaf();
     stopPositionSaveTimer();
-    patchState({ isPlaying: false, playbackNetworkState: "idle" });
+    // If the Recovery Coordinator is managing an active transition — stall recovery,
+    // stream upgrade, or signed-URL swap — this pause is part of a controlled handoff.
+    // Setting isPlaying:false here destroys the play intent that coordinator-managed
+    // resume depends on. The coordinator signals completion via onPlaybackResumed().
+    if (!recoveryCoordinator.isActive()) {
+      patchState({ isPlaying: false, playbackNetworkState: "idle" });
+    }
     persistPlayback("pause");
 
     const track = stateRef.current.currentTrack;

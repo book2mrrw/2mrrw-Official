@@ -1302,6 +1302,24 @@ export function attachStreamCommands(self) {
     const audio = audioRef.current;
     const track = stateRef.current.currentTrack;
     if (!audio || !track?.slug) return false;
+    // When hls.js is actively streaming this entitled track, the MSE blob URL it
+    // manages IS the full stream. A src-swap here would interrupt healthy HLS
+    // playback for no benefit — it causes the pause-and-reload cycle that returns
+    // the play button to idle state. hls.js is only loaded for canStream=true tracks,
+    // so isLoaded is a reliable signal that we are already on the full stream.
+    if (getHLSEngine().isLoaded && track.metadata?.access?.canStream) {
+      if (track.metadata?.access?.previewOnly) {
+        patchState({
+          currentTrack: {
+            ...track,
+            metadata: { ...track.metadata, access: { ...track.metadata.access, previewOnly: false } },
+          },
+          error: null,
+          accessDenied: false,
+        });
+      }
+      return true;
+    }
     const serverUserId = entitlementAccountStateRef.current?.user?.id;
     const clientUserId = listeningUserIdRef.current;
     if (!serverUserId || !clientUserId || serverUserId !== clientUserId) {

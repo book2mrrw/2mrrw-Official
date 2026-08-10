@@ -821,16 +821,13 @@ export function createPlaybackHelpers(initialDeps) {
 
     patchTransport(patch) {
       const prev = playbackStateMachine.getContext();
-      let next = { ...prev, ...patch };
-      next = self.reconcileIsPlayingWithElement(prev, next);
+      const next = { ...prev, ...patch };
       // Route through SM — fires transport/progress/identity channels as needed.
       // SM value-checking prevents spurious notifications when values haven't changed.
-      playbackStateMachine.updateContext({
-        ...patch,
-        // Reconciled fields may differ from raw patch (isPlaying corrected from element state).
-        isPlaying: next.isPlaying,
-        playbackState: next.playbackState,
-      });
+      // Transport patches never read element state to correct isPlaying — the SM is
+      // the authority; the element is the executor. onPause is the event-driven
+      // mechanism for correcting isPlaying when audio unexpectedly pauses.
+      playbackStateMachine.updateContext(patch);
       // Fire window event for external consumers when isPlaying changes.
       const prevIsPlaying = prev.isPlaying;
       const nextIsPlaying = Boolean(next.isPlaying);
