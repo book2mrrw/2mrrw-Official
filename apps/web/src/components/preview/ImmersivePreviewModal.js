@@ -554,7 +554,7 @@ function FloatingPlayer({
       }}
     >
       <Waveform playing={playing} t={t} bars={26} />
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, paddingRight: 18 }}>
         <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "rgba(255,255,255,.38)", flexShrink: 0, minWidth: 28 }}>
           {fmt(current)}
         </span>

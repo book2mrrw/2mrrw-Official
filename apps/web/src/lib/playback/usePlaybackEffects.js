@@ -130,7 +130,7 @@ export function usePlaybackEffects({
     startProgressRaf, stopProgressRaf, startKeepAlivePing, stopKeepAlivePing,
     startPositionSaveTimer, stopPositionSaveTimer, startStallRecovery, stopStallRecovery,
     emitBackgroundPlaybackDiagnostics, emitPhase21AudibleSnapshot,
-    scheduleNextTrackPreload, cancelCrossfade, advanceShuffleOrder,
+    scheduleNextTrackPreload, advanceShuffleOrder,
     armLifecycleRecoverySuppression, evaluateLifecyclePlaybackHealth,
     attemptLightweightPlaybackResume, readIsAudiblyPlaying,
     computeLifecycleAudioTruthState, getAudibilityParams, getPlaybackTransportHealth,
@@ -485,9 +485,8 @@ export function usePlaybackEffects({
       audio,
       // Refs
       stateRef, audioRef, audioCtxRef, mainGainRef: refs.mainGainRef,
-      crossfadeGainRef: refs.crossfadeGainRef, trackGainRef: refs.trackGainRef,
-      userGainRef: refs.userGainRef, crossfadeStateRef: refs.crossfadeStateRef,
-      crossfadeEnabledRef: refs.crossfadeEnabledRef, activeCommandRef, activeStreamAbortRef,
+      trackGainRef: refs.trackGainRef,
+      userGainRef: refs.userGainRef, activeCommandRef, activeStreamAbortRef,
       streamMetaRef, streamErrorRetriedRef,
       previewFadeInitRef: refs.previewFadeInitRef, userPausedRef, userIntentPausedRef,
       skipPauseInterruptionRef,
@@ -509,7 +508,7 @@ export function usePlaybackEffects({
       startPositionSaveTimer, stopPositionSaveTimer, startStallRecovery, stopStallRecovery,
       updateMediaSession, finalizeStreamSession, recordLocalListening,
       tracePlayback, emitPhase21AudibleSnapshot, emitBackgroundPlaybackDiagnostics,
-      scheduleNextTrackPreload, cancelCrossfade, advanceShuffleOrder,
+      scheduleNextTrackPreload, advanceShuffleOrder,
       // SM UI channel write path
       patchUI,
     });

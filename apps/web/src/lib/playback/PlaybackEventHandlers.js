@@ -106,11 +106,8 @@ export function createPlaybackEventHandlers({
   audioRef,
   audioCtxRef,
   mainGainRef,
-  crossfadeGainRef,
   trackGainRef,
   userGainRef,
-  crossfadeStateRef,
-  crossfadeEnabledRef,
   activeCommandRef,
   activeStreamAbortRef,
   streamMetaRef,
@@ -167,7 +164,6 @@ export function createPlaybackEventHandlers({
   emitPhase21AudibleSnapshot,
   emitBackgroundPlaybackDiagnostics,
   scheduleNextTrackPreload,
-  cancelCrossfade,
 
   // SM UI channel write — replaces individual React state setters
   patchUI,
@@ -885,7 +881,6 @@ export function createPlaybackEventHandlers({
 
   const onError = async () => {
     stopStallRecovery();
-    if (crossfadeStateRef.current !== "idle") cancelCrossfade();
     const track = stateRef.current.currentTrack;
     const slug = track?.slug || streamMetaRef.current?.slug;
     const at = new Date().toISOString();

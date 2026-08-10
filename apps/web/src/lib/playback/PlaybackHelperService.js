@@ -9,7 +9,6 @@ import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
 import { LIFECYCLE_AUDIO_TRUTH_STATES } from "@/lib/playback/PlaybackEventHandlers";
 import { notifyMediaEngineBridge } from "@/media/mediaEngineBridge";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
-import { cancelCrossfadeEngine, scheduleGainHandoff } from "@/lib/audio/crossfade-engine";
 import {
   resumeWebAudioContextIfSuspended,
   ensureWebAudioRunning,
@@ -94,7 +93,6 @@ const POSITION_SAVE_INTERVAL_MS = 15000;
 const KEEP_ALIVE_INTERVAL_MS = 20000;
 const LIFECYCLE_RECOVERY_SUPPRESSION_MS = 2500;
 const SIGNED_URL_CACHE_MAX_AGE_MS = 50 * 60 * 1000;
-const MRRW_MEDIA_SOURCE_BOUND = Symbol.for("2mrrw.mediaElementSourceBound");
 const AUDIO_CONTENT_TYPE_RE = /^(audio\/|application\/octet-stream)/i;
 
 /**
@@ -1153,7 +1151,7 @@ export function createPlaybackHelpers(initialDeps) {
 
     connectWebAudioDownstream() {
       const engine = getWebAudioEngine();
-      engine.buildGraph(self._deps.crossfadeGainRef.current);
+      engine.buildGraph();
       self._deps.mainGainRef.current = engine.mainGain;
       self._deps.userGainRef.current = engine.userGain;
       self._deps.analyserRef.current = engine.analyser;
@@ -1189,31 +1187,6 @@ export function createPlaybackHelpers(initialDeps) {
 
         self.connectWebAudioDownstream();
 
-        // Wire the next-track pre-buffer into a crossfade gain channel (one-time per AudioContext).
-        if (!self._deps.crossfadeSourceRef.current) {
-          const ctx = engine.ctx;
-          const nextEl = self._deps.nextTrackPreloadRef.current;
-          if (nextEl && !nextEl[MRRW_MEDIA_SOURCE_BOUND]) {
-            try {
-              const cfSrc = ctx.createMediaElementSource(nextEl);
-              nextEl[MRRW_MEDIA_SOURCE_BOUND] = true;
-              const cfGain = ctx.createGain();
-              cfGain.gain.value = 0;
-              cfSrc.connect(cfGain);
-              // Route crossfade through userGain so user volume applies equally to both tracks.
-              cfGain.connect(
-                self._deps.userGainRef.current ??
-                  self._deps.analyserRef.current ??
-                  self._deps.limiterRef.current ??
-                  ctx.destination
-              );
-              self._deps.crossfadeSourceRef.current = cfSrc;
-              self._deps.crossfadeGainRef.current = cfGain;
-            } catch {
-              /* crossfade channel unavailable — graceful no-op */
-            }
-          }
-        }
         recordAudioContextState(engine.ctx, "initWebAudio");
 
         // Bluetooth / headphone reconnect recovery.
@@ -1618,28 +1591,6 @@ export function createPlaybackHelpers(initialDeps) {
           // Non-fatal — play fetches fresh on demand
         }
       }
-    },
-
-    cancelCrossfade() {
-      cancelCrossfadeEngine({
-        crossfadeStateRef: self._deps.crossfadeStateRef,
-        nextTrackPreloadRef: self._deps.nextTrackPreloadRef,
-        audioCtxRef: self._deps.audioCtxRef,
-        mainGainRef: self._deps.mainGainRef,
-        crossfadeGainRef: self._deps.crossfadeGainRef,
-        trackGainRef: self._deps.trackGainRef,
-      });
-    },
-
-    scheduleCrossfadeHandoff(gainLinear) {
-      scheduleGainHandoff({
-        crossfadeStateRef: self._deps.crossfadeStateRef,
-        nextTrackPreloadRef: self._deps.nextTrackPreloadRef,
-        audioCtxRef: self._deps.audioCtxRef,
-        mainGainRef: self._deps.mainGainRef,
-        crossfadeGainRef: self._deps.crossfadeGainRef,
-        trackGainRef: self._deps.trackGainRef,
-      }, { gainLinear });
     },
 
     setUserVolume(level) {

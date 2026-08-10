@@ -233,14 +233,13 @@ export function attachTransportCommands(self) {
 
   self.seekInternal = function seekInternal(time) {
     const {
-      syncProgressTime, syncPositionState, tracePlayback, logDirectInternalCallViolation, cancelCrossfade,
+      syncProgressTime, syncPositionState, tracePlayback, logDirectInternalCallViolation,
       stateRef, audioRef, pendingSeekRef,
     } = self._deps;
 
     logDirectInternalCallViolation("seekInternal");
     const audio = audioRef.current;
     if (!audio || !Number.isFinite(time)) return;
-    cancelCrossfade();
     tracePlayback("seekInternal", "seekInternal", { time });
     const track = stateRef.current.currentTrack;
     let capped = time;

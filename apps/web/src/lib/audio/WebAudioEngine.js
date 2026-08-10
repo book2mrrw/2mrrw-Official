@@ -6,13 +6,9 @@
  * Signal chain (Spotify-architecture):
  *   source → mainGain → userGain → analyser → stereoPanner → bassFilter → limiter → destination
  *
- * mainGain  — per-track loudness normalization + crossfade amplitude (managed by crossfade engine)
+ * mainGain  — per-track loudness normalization (gain.value = loudness-normalized linear gain)
  * userGain  — user volume preference (0–1, persisted to localStorage)
  *             This is the single volume authority. HTMLAudioElement.volume is locked at 1.0.
- *
- * crossfadeGain (caller-owned) wires into userGain so both the fading-out track and the
- * fading-in track pass through the same user-volume GainNode. Changing volume during a
- * crossfade affects both tracks equally.
  *
  * Implements AudioEngineBase (apps/web/src/lib/audio/AudioEngineInterface.js) so it
  * satisfies the same contract as NativeAudioEngine on the mobile app, enabling
@@ -164,10 +160,8 @@ export class WebAudioEngine extends AudioEngineBase {
    * Build or rebuild the downstream processing chain.
    * Disconnects stale nodes before connecting fresh ones to prevent fan-out accumulation.
    * After this call, HTMLAudioElement.volume is locked at 1.0.
-   *
-   * @param {GainNode|null} crossfadeGain  Existing crossfade gain to re-wire through userGain.
    */
-  buildGraph(crossfadeGain = null) {
+  buildGraph() {
     const ctx = this.ctx;
     const source = this.source;
     if (!ctx || !source) return;
@@ -205,7 +199,6 @@ export class WebAudioEngine extends AudioEngineBase {
     try { this.stereoPanner?.disconnect(); } catch {}
     try { this.bassFilter?.disconnect(); } catch {}
     try { this.limiter?.disconnect(); } catch {}
-    try { crossfadeGain?.disconnect(); } catch {}
     try { source.disconnect(this.mainGain); } catch {}
 
     // Primary chain: source → mainGain → userGain → analyser → stereoPanner → bassFilter → limiter → destination
@@ -216,11 +209,6 @@ export class WebAudioEngine extends AudioEngineBase {
     stereoPanner.connect(bassFilter);
     bassFilter.connect(limiter);
     limiter.connect(ctx.destination);
-
-    // Crossfade channel routes through userGain so both tracks respect user volume equally.
-    if (crossfadeGain) {
-      try { crossfadeGain.connect(userGain); } catch {}
-    }
 
     this.mainGain = mainGain;
     this.userGain = userGain;

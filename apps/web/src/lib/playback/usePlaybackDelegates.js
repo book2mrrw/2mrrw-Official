@@ -89,8 +89,6 @@ export function usePlaybackDelegates(helperServiceRef, commandServiceRef) {
   const resolveLibraryStreamForTrack     = useCallback((track, opts) => helperServiceRef.current.resolveLibraryStreamForTrack(track, opts), []);
   const scheduleNextTrackPreload         = useCallback(() => helperServiceRef.current.scheduleNextTrackPreload(), []);
   const hintUpcomingPlay                 = useCallback((track) => helperServiceRef.current.hintUpcomingPlay(track), []);
-  const cancelCrossfade                  = useCallback(() => helperServiceRef.current.cancelCrossfade(), []);
-  const scheduleCrossfadeHandoff         = useCallback((gainLinear) => helperServiceRef.current.scheduleCrossfadeHandoff(gainLinear), []);
   const setUserVolume                    = useCallback((level) => helperServiceRef.current.setUserVolume(level), []);
 
   // ─── Command Service Delegates ───────────────────────────────────────────────
@@ -150,7 +148,7 @@ export function usePlaybackDelegates(helperServiceRef, commandServiceRef) {
     syncPositionState, updateMediaSession, rehydrateMediaSession, syncMediaSessionAfterLifecycle,
     connectWebAudioDownstream, initWebAudio, attemptLightweightPlaybackResume,
     applyCsToElement, resolveLibraryStreamForTrack, scheduleNextTrackPreload,
-    hintUpcomingPlay, cancelCrossfade, scheduleCrossfadeHandoff, setUserVolume,
+    hintUpcomingPlay, setUserVolume,
     // Command delegates
     playTrackInternal, upgradeToFullStream, setOnPreviewEnded,
     overrideConcurrentStream, dismissStreamConflict, retryStreamPlayback, recoverAudioHard,

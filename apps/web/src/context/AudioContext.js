@@ -104,7 +104,6 @@ export function AudioProvider({ children }) {
       storeLinkHref: STORE_LINK_HREF,
       // SM UI channel state
       previewEnded:          uiState.previewEnded,
-      crossfadeEnabled:      uiState.crossfadeEnabled,
       sleepTimerEndsAt:      uiState.sleepTimerEndsAt,
       sleepAfterCurrentTrack: uiState.sleepAfterCurrentTrack,
       continuityFrozen:      uiState.continuityFrozen,

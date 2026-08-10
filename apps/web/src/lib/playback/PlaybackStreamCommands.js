@@ -65,11 +65,11 @@ export function attachStreamCommands(self) {
     const {
       patchState, patchTransport, updateMediaSession, applyCsToElement,
       recordLocalListening, resolveLibraryStreamForTrack, finalizeStreamSession,
-      initWebAudio, cancelCrossfade, scheduleCrossfadeHandoff, tracePlayback,
+      initWebAudio, tracePlayback,
       logDirectInternalCallViolation, attemptLightweightPlaybackResume,
       getPlaybackTransportHealth, isLifecycleRecoverySuppressed, clearContinuityFreeze,
       syncProgressTime,
-      stateRef, audioRef, audioCtxRef, mainGainRef, userGainRef, crossfadeStateRef,
+      stateRef, audioRef, audioCtxRef, mainGainRef, userGainRef,
       activeCommandRef, activeStreamAbortRef, streamMetaRef, streamErrorRetriedRef,
       previewFadeInitRef, userPausedRef, userIntentPausedRef,
       skipPauseInterruptionRef, lifecycleRecoveryLockRef, queueRef, queueIndexRef,
@@ -86,9 +86,6 @@ export function attachStreamCommands(self) {
     userIntentPausedRef.current = false;
     const requestId = playRequestIdRef.current + 1;
     playRequestIdRef.current = requestId;
-    if (crossfadeStateRef.current !== "idle") {
-      cancelCrossfade();
-    }
     if (!options.preserveActiveStream && activeStreamAbortRef.current) {
       logStreamLifecycle("abort", { source: "playTrackInternal", slug: track?.slug });
       activeStreamAbortRef.current.abort();
@@ -192,7 +189,6 @@ export function attachStreamCommands(self) {
           playbackState: "paused",
           playbackNetworkState: transportIntact ? "idle" : "recovering",
         });
-        cancelCrossfade();
         return false;
       }
     }
@@ -510,7 +506,6 @@ export function attachStreamCommands(self) {
 
     const swapToSignedStream = async (resolved) => {
       if (requestId !== playRequestIdRef.current) return;
-      if (crossfadeStateRef.current !== "idle") cancelCrossfade();
       const signedUrl = resolved.track?.src;
       if (!signedUrl || signedUrl === syncSrc) return;
       const resumeAt = audio.currentTime || 0;
@@ -922,9 +917,6 @@ export function attachStreamCommands(self) {
         //     browser has literally no data yet (readyState 0) — it extends up to 12 s
         //     in that case to avoid starting into guaranteed silence.
         //   • Cache-warm preloaded streams pass both conditions in < 5 ms.
-        // During a crossfade bridge the preload element is already audible, so the
-        // buffer gate serves no purpose — it only lets the preload element's position
-        // drift away from the main element's start position. Skip it; position is snapped.
         if (!isSameTrack && !streamAbortController.signal.aborted) {
           // Buffer gate: do not call play() until 3 s of decoded audio is ahead
           // of currentTime at readyState >= 3 (HAVE_FUTURE_DATA). 3 s covers half
@@ -1042,7 +1034,6 @@ export function attachStreamCommands(self) {
         // bail out cleanly — do NOT set error state, this track was intentionally superseded.
         // Always restore gain before returning so mainGainRef never stays at 0.
         if (requestId !== playRequestIdRef.current || streamAbortController.signal.aborted) {
-          cancelCrossfade();
           return false;
         }
         patchState({ hasStarted: true, playbackState: "ready" });
@@ -1176,7 +1167,6 @@ export function attachStreamCommands(self) {
       // Superseded by a newer navigation command — the stream abort is intentional,
       // not an error. Exit silently so the new command can start without any error state.
       if (err?.code === "AUDIO_SRC_ABORTED") {
-        if (crossfadeStateRef.current !== "idle") cancelCrossfade();
         patchTransport({ isBuffering: false, playbackNetworkState: "idle" });
         return false;
       }
@@ -1223,9 +1213,6 @@ export function attachStreamCommands(self) {
           });
           return played;
         } catch (previewErr) {
-          // Both primary stream and preview failed. cancelCrossfade restores mainGain from
-          // any stuck "bridging" state — without this, the next track starts silently.
-          cancelCrossfade();
           console.error("[AudioContext] preview fallback failed", {
             slug: nextTrack?.slug,
             message: previewErr?.message || String(previewErr),
@@ -1253,10 +1240,6 @@ export function attachStreamCommands(self) {
           return false;
         }
       }
-      // Always cancel crossfade on failure — if we were in "bridging" state,
-      // mainGainRef.gain was set to 0 to hide the gap; leaving it there makes
-      // subsequent tracks inaudible until the user seeks or seeks manually.
-      cancelCrossfade();
       console.error("[AudioContext] playTrack failed", {
         message: err?.message || String(err),
         code: err?.code || null,

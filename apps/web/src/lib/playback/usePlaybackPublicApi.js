@@ -17,7 +17,6 @@ import {
   PLAYBACK_SCENARIOS,
 } from "@/lib/dev/performanceMarks";
 import { resumeWebAudioContextFromUserGesture } from "@/lib/audio/web-audio-context-utils";
-import { cancelCrossfadeEngine } from "@/lib/audio/crossfade-engine";
 import { playbackStateMachine } from "@/media/PlaybackStateMachine";
 import { savePlaybackSession } from "@/lib/playback/session-memory";
 import { isAudioActuallyAudible } from "@/lib/playback/audibility";
@@ -41,8 +40,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
   const {
     stateRef, audioRef, audioCtxRef,
     queueRef, queueIndexRef, repeatModeRef, shuffleRef, csModeRef,
-    userPausedRef, userIntentPausedRef, crossfadeEnabledRef,
-    crossfadeStateRef, nextTrackPreloadRef, mainGainRef, crossfadeGainRef, trackGainRef,
+    userPausedRef, userIntentPausedRef,
     skipPauseInterruptionRef, activeStreamAbortRef, activeCommandRef,
     wasPlayingBeforeViewportPauseRef, resumeEligibleRef, lastTrackIdRef,
     lastUserActionRef, isInAudioVisualViewportRef,
@@ -53,7 +51,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
 
   const {
     getCurrentTrackId, clearViewportResume, patchState,
-    initWebAudio, cancelCrossfade: cancelCrossfadeDelegate, pauseForViewport,
+    initWebAudio, pauseForViewport,
   } = delegates;
 
   // ─── Repeat / Shuffle ────────────────────────────────────────────────────────
@@ -61,9 +59,6 @@ export function usePlaybackPublicApi({ refs, delegates }) {
   const setRepeatMode = useCallback((mode) => {
     const next = REPEAT_MODES.includes(mode) ? mode : "off";
     repeatModeRef.current = next;
-    if (next === "one") {
-      cancelCrossfadeEngine({ crossfadeStateRef, nextTrackPreloadRef, audioCtxRef, mainGainRef, crossfadeGainRef, trackGainRef });
-    }
     patchState({ repeatMode: next });
     const userId = listeningUserIdRef.current;
     if (userId && queueRef.current.length) {
@@ -107,21 +102,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     return shuffleRef.current;
   }, [setShuffle]);
 
-  // ─── Crossfade / Sound Modes ─────────────────────────────────────────────────
-
-  const toggleCrossfade = useCallback(() => {
-    const next = !crossfadeEnabledRef.current;
-    crossfadeEnabledRef.current = next;
-    playbackStateMachine.updateContext({ crossfadeEnabled: next });
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem("2mrrw_crossfade", next ? "1" : "0");
-      }
-    } catch {}
-    if (!next) {
-      cancelCrossfadeEngine({ crossfadeStateRef, nextTrackPreloadRef, audioCtxRef, mainGainRef, crossfadeGainRef, trackGainRef });
-    }
-  }, []);
+  // ─── Sound Modes ─────────────────────────────────────────────────────────────
 
   const toggleSpaceMode = useCallback(() => {
     patchState({ spaceMode: !stateRef.current.spaceMode });
@@ -540,7 +521,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => ({
     setRepeatMode, toggleRepeat, setShuffle, toggleShuffle,
-    toggleCrossfade, toggleSpaceMode, toggleBassBoost, cycleAtmosphere,
+    toggleSpaceMode, toggleBassBoost, cycleAtmosphere,
     setSleepTimer,
     setQueue, pause, resume, seek, playPrevious, stop, toggle, playNext,
     playTrack, playQueue,

@@ -48,7 +48,6 @@ const RECOVERY_COOLDOWN_MS = 6000;
 const LIFECYCLE_RECOVERY_LOCK_MS = 4000;
 const BFCACHE_RECOVERY_TIMEOUT_MS = 5000;
 // Global symbol shared with WebAudioEngine — preserves the bound-source flag across recovery.
-const MRRW_MEDIA_SOURCE_BOUND = Symbol.for("2mrrw.mediaElementSourceBound");
 
 /**
  * Attaches Group 2 (recovery) commands to the shared `self` service object.
@@ -62,10 +61,10 @@ export function attachRecoveryCommands(self) {
       armLifecycleRecoverySuppression, blockRecoveryForLifecycleOsSuspended,
       isLifecycleRecoverySuppressed,
       stateRef, audioRef, audioCtxRef,
-      mainGainRef, crossfadeGainRef, trackGainRef, userGainRef,
-      crossfadeStateRef, activeCommandRef, activeStreamAbortRef, streamMetaRef,
+      mainGainRef, trackGainRef, userGainRef,
+      activeCommandRef, activeStreamAbortRef, streamMetaRef,
       skipPauseInterruptionRef, sourceRef, analyserRef, stereoPannerRef, bassFilterRef,
-      webAudioInitializedRef, webAudioAvailableRef, crossfadeSourceRef,
+      webAudioInitializedRef, webAudioAvailableRef,
       nextTrackPreloadRef, audibilitySampleRef,
       isRecoveringRef, recoveryCooldownUntilRef, internalPlaybackAuthorityRef,
     } = self._deps;
@@ -117,24 +116,6 @@ export function attachRecoveryCommands(self) {
         webAudioAvailableRef,
         preserveMediaElementSource: true,
       });
-
-      // After context teardown, the crossfade preload element's MediaElementSourceNode
-      // belongs to the now-closed context and can never be rewired into the fresh one.
-      // Clear MRRW_MEDIA_SOURCE_BOUND on the preload element so initWebAudio() can
-      // create a new MediaElementSourceNode for it. Without this, the flag is permanently
-      // set, blocking all future crossfades with a "source is null" error after recovery.
-      const cfPreloadEl = nextTrackPreloadRef.current;
-      if (cfPreloadEl) {
-        try { cfPreloadEl[MRRW_MEDIA_SOURCE_BOUND] = false; } catch {}
-      }
-      if (crossfadeSourceRef.current) {
-        try { crossfadeSourceRef.current.disconnect(); } catch {}
-        crossfadeSourceRef.current = null;
-      }
-      if (crossfadeGainRef.current) {
-        try { crossfadeGainRef.current.disconnect(); } catch {}
-        crossfadeGainRef.current = null;
-      }
 
       resetAudibilitySample(audibilitySampleRef);
 

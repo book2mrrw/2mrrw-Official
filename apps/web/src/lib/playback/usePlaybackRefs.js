@@ -37,8 +37,6 @@ export function usePlaybackRefs() {
     mainGainRef,
     userGainRef,
     limiterRef,
-    crossfadeGainRef,
-    crossfadeSourceRef,
     mediaElementSourceElementRef,
     webAudioInitializedRef,
     webAudioAvailableRef,
@@ -156,11 +154,6 @@ export function usePlaybackRefs() {
 
   // ─── Web Audio / Engine Refs ─────────────────────────────────────────────────
   const trackGainRef = useRef(1);
-  const crossfadeStateRef = useRef("idle");
-  const crossfadeEnabledRef = useRef(
-    typeof window !== "undefined" && window.localStorage.getItem("2mrrw_crossfade") === "1"
-  );
-
   // ─── Other Refs ──────────────────────────────────────────────────────────────
   const playTrackRef = useRef(null);
   const applyCSModeToTrackRef = useRef(null);
@@ -192,7 +185,7 @@ export function usePlaybackRefs() {
     audioRef, queueRef, queueIndexRef, commandExecutionDepthRef, activeCommandRef,
     queueWatchdogRef, activeStreamAbortRef, audioCtxRef, sourceRef, analyserRef,
     stereoPannerRef, bassFilterRef, mainGainRef, userGainRef, limiterRef,
-    crossfadeGainRef, crossfadeSourceRef, mediaElementSourceElementRef,
+    mediaElementSourceElementRef,
     webAudioInitializedRef, webAudioAvailableRef, dispatchPlaybackCommandRef,
     initWebAudioRef, stateGetterRef, tracePlaybackRef, commandHandlersRef, hlsEngineRef,
     // SM proxy
@@ -233,7 +226,7 @@ export function usePlaybackRefs() {
     // Preload refs
     nextTrackPreloadRef, nextNextTrackPreloadRef, prevTrackPreloadRef, intentPrewarmRef,
     // Web audio refs
-    trackGainRef, crossfadeStateRef, crossfadeEnabledRef,
+    trackGainRef,
     // Other refs
     playTrackRef, applyCSModeToTrackRef, entitlementAccountStateRef, authLoadingRef,
     tabIdRef, broadcastChannelRef, audibilitySampleRef, redirectResolveCacheRef,
@@ -242,7 +235,6 @@ export function usePlaybackRefs() {
     uiState,
     sleepTimerEndsAt:      uiState.sleepTimerEndsAt,
     sleepAfterCurrentTrack: uiState.sleepAfterCurrentTrack,
-    crossfadeEnabled:      uiState.crossfadeEnabled,
     previewEnded:          uiState.previewEnded,
     continuityFrozen:      uiState.continuityFrozen,
   };
