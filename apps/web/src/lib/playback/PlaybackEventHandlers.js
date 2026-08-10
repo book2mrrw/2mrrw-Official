@@ -799,13 +799,25 @@ export function createPlaybackEventHandlers({
         } else if (nextIndex >= queue.length) {
           if (repeatMode === "all") nextIndex = 0;
           else {
-            patchState({ isPlaying: false, playbackState: "idle" });
+            // End of queue, no repeat: wrap silently to track 1, stay paused
+            const firstTrack = queue[0];
+            queueIndexRef.current = 0;
+            skipPauseInterruptionRef.current = true;
+            audio.removeAttribute("src");
+            audio.load();
+            patchState({
+              isPlaying: false,
+              playbackState: "paused",
+              queueIndex: 0,
+              currentTrack: firstTrack || track,
+              currentTrackId: firstTrack?.id || firstTrack?.trackId || null,
+            });
             syncProgressTime(0);
             patchUI({ previewEnded: false });
             if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
-              navigator.mediaSession.playbackState = "none";
+              navigator.mediaSession.playbackState = "paused";
             }
-            if (track) void updateMediaSession(track, { playing: false });
+            void updateMediaSession(firstTrack || track, { playing: false });
             return;
           }
         }
@@ -817,13 +829,24 @@ export function createPlaybackEventHandlers({
             if (nextIndex >= queue.length) {
               if (repeatMode === "all") nextIndex = 0;
               else {
-                patchState({ isPlaying: false, playbackState: "idle" });
+                const firstTrack = queue[0];
+                queueIndexRef.current = 0;
+                skipPauseInterruptionRef.current = true;
+                audio.removeAttribute("src");
+                audio.load();
+                patchState({
+                  isPlaying: false,
+                  playbackState: "paused",
+                  queueIndex: 0,
+                  currentTrack: firstTrack || track,
+                  currentTrackId: firstTrack?.id || firstTrack?.trackId || null,
+                });
                 syncProgressTime(0);
                 patchUI({ previewEnded: false });
                 if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
-                  navigator.mediaSession.playbackState = "none";
+                  navigator.mediaSession.playbackState = "paused";
                 }
-                if (track) void updateMediaSession(track, { playing: false });
+                void updateMediaSession(firstTrack || track, { playing: false });
                 return;
               }
             }
