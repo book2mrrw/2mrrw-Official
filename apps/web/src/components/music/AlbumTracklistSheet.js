@@ -18,6 +18,7 @@ import CSModeButton from "@/components/audio/CSModeButton";
 import CoverArt from "@/components/ui/CoverArt";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { ModalErrorBoundary } from "@/system/errors";
+import { isPlaybackTraceEnabled, logPlaybackEvent } from "@/lib/diagnostics/playback-trace";
 
 const formatDuration = (seconds) => {
   if (!seconds || !isFinite(seconds)) return "";
@@ -97,10 +98,24 @@ export default function AlbumTracklistSheet({
       const instantQueue = needsUpgrade
         ? playable.map((t, i) => (i === queueIndex ? startTrack : t))
         : playable;
+      if (isPlaybackTraceEnabled()) {
+        logPlaybackEvent({
+          type: "tracklist:play-requested",
+          source: "AlbumTracklistSheet.playTrackInSheet",
+          trackId: instantQueue[queueIndex]?.slug,
+          extra: {
+            releaseTrackIndex,
+            queueIndex,
+            queueLength: instantQueue.length,
+            queueSlugs: instantQueue.map((t) => t.slug),
+            albumSlug: album?.slug,
+          },
+        });
+      }
       void dispatchPlaybackCommand("playQueue", { tracks: instantQueue, startIndex: queueIndex });
       if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
     },
-    [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, scheduleInstantStreamUpgrade]
+    [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, scheduleInstantStreamUpgrade, album]
   );
 
   const isTrackActive = useCallback(

@@ -416,15 +416,30 @@ export function attachStreamCommands(self) {
           // Default false when album slug unknown — ambiguous src must not be reused
           // as a different album's preload and corrupt playback with the wrong track bytes.
           const fp2AlbumMatch = fp2AlbumSlug ? fp2AlbumSlug === streamSlug : false;
-          if (
+          const fp2Pass = Boolean(
             preloadCdnUrl &&
-            preloadElForRedirect.readyState >= 2 &&
+            preloadElForRedirect?.readyState >= 2 &&
             !isLibraryStreamSrc(preloadCdnUrl) &&
             fp2TrackMatch &&
             fp2AlbumMatch
-          ) {
+          );
+          if (fp2Pass) {
             syncSrc = preloadCdnUrl;
             backgroundStreamResolve = false;
+          }
+          if (isPlaybackTraceEnabled()) {
+            logPlaybackEvent({
+              type: fp2Pass ? "preload:fp2-hit" : "preload:fp2-miss",
+              source: "playTrackInternal",
+              trackId: fp1TrackSlug || streamSlug,
+              extra: {
+                streamSlug, fp1TrackSlug,
+                fp2TrackSlug, fp2AlbumSlug,
+                fp2TrackMatch, fp2AlbumMatch,
+                preloadReadyState: preloadElForRedirect?.readyState ?? -1,
+                hasPreloadCdnUrl: Boolean(preloadCdnUrl),
+              },
+            });
           }
           // Fast-path 3: intent prewarm element has CDN bytes from a hover/touchstart
           // gesture (intentPrewarmRef). Same slug-match validation as fast-path 2.

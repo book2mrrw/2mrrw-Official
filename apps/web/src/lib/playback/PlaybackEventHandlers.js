@@ -41,6 +41,8 @@ import {
   classifyAudioOutputSilence,
   capturePlaybackSnapshotOnPause,
   classifyPlaybackInterruption,
+  isPlaybackTraceEnabled,
+  logPlaybackEvent,
 } from "@/lib/diagnostics/playback-trace";
 import {
   logLifecycleAudioStateTransition,
@@ -842,6 +844,23 @@ export function createPlaybackEventHandlers({
           // endedTrackSlug and calls playTrackRef a second time.
           spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
           perfMark(MARKS.PLAYBACK_TAP);
+          if (isPlaybackTraceEnabled()) {
+            const preloadEl = nextTrackPreloadRef.current;
+            logPlaybackEvent({
+              type: "tracklist:auto-advance",
+              source: "onEnded",
+              trackId: nextTrack.slug,
+              extra: {
+                endedSlug: endedTrackSlug,
+                nextSlug: nextTrack.slug,
+                nextIndex,
+                queueLength: queue.length,
+                preloadReadyState: preloadEl?.readyState ?? -1,
+                preloadSrcTail: preloadEl?.src ? preloadEl.src.slice(-80) : null,
+                preloadCurrentSrcTail: preloadEl?.currentSrc ? preloadEl.currentSrc.slice(-80) : null,
+              },
+            });
+          }
           void playTrackRef.current?.(nextTrack, {
             resumeAt: 0,
             playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE,

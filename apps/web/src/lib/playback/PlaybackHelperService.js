@@ -1404,6 +1404,14 @@ export function createPlaybackHelpers(initialDeps) {
       if (!preloadEl) return;
 
       const kind = classifySourceUrl(next.src);
+      if (isPlaybackTraceEnabled()) {
+        logPlaybackEvent({
+          type: "preload:schedule",
+          source: "scheduleNextTrackPreload",
+          trackId: next.slug,
+          extra: { nextSlug: next.slug, nextIdx, kind, queueLength: queue.length },
+        });
+      }
 
       if (isDirectlyBufferable(kind)) {
         if (kind === SOURCE_KIND.REDIRECT) {
