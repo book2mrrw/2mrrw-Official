@@ -7,7 +7,7 @@ import { resolvePlaylistTracks } from "@/lib/playlists";
 import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
 
 export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobile }) {
-  const { playQueue, toggleShuffle, shuffle, toggleRepeat, repeatMode, hintUpcomingPlay } = useAudioPlayer();
+  const { playQueue, toggleShuffle, shuffle, toggleRepeat, repeatMode, setRepeatMode, hintUpcomingPlay } = useAudioPlayer();
   const { user, accountState, isAdmin } = useAuth();
   const userId = user?.id;
 
@@ -34,6 +34,7 @@ export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobi
       startTrack,
       ...tracks.slice(startIndex + 1),
     ];
+    setRepeatMode("all");
     void playQueue(queue, startIndex);
   };
 

@@ -734,7 +734,7 @@ function MyMusicTab({
   const activeContinue = continueListening || lastPlayed;
   const activeRecentlyPlayed = recentlyPlayedRail.length ? recentlyPlayedRail : recentlyPlayed;
 
-  const { playTrack, playQueue, resume, setShuffle, currentTrack, isPlaying, toggle, enqueueTrack, dispatchPlaybackCommand } = useAudioPlayer();
+  const { playTrack, playQueue, resume, setShuffle, setRepeatMode, currentTrack, isPlaying, toggle, enqueueTrack, dispatchPlaybackCommand } = useAudioPlayer();
   const membershipActive =
     Boolean(accountState?.subscriberActive) || membershipHasPremiumAccess(accountState?.membership);
   const subscriptionLocked = Boolean(accountState?.membership && !membershipActive);
@@ -895,6 +895,7 @@ function MyMusicTab({
       }
       const { startTrack, needsUpgrade } = toInstantStartTrack(playable[0]);
       const instantPlayable = needsUpgrade ? [startTrack, ...playable.slice(1)] : playable;
+      setRepeatMode("all");
       void playQueue(instantPlayable, 0);
       if (needsUpgrade) {
         const upgradeSlug = startTrack.slug;
@@ -904,7 +905,7 @@ function MyMusicTab({
         }, 2000);
       }
     },
-    [accountState, isAdmin, dispatchPlaybackCommand, playItem, playQueue, user?.id]
+    [accountState, isAdmin, dispatchPlaybackCommand, playItem, playQueue, setRepeatMode, user?.id]
   );
 
   const playPlaylist = useCallback(
@@ -923,6 +924,7 @@ function MyMusicTab({
       if (playlist.shuffle) setShuffle(true);
       const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[0]);
       const instantTracks = needsUpgrade ? [startTrack, ...tracks.slice(1)] : tracks;
+      setRepeatMode("all");
       void playQueue(instantTracks, 0);
       if (needsUpgrade) {
         const upgradeSlug = startTrack.slug;
@@ -932,7 +934,7 @@ function MyMusicTab({
         }, 2000);
       }
     },
-    [accountState, isAdmin, catalogTracks, dispatchPlaybackCommand, playQueue, setShuffle, user?.id]
+    [accountState, isAdmin, catalogTracks, dispatchPlaybackCommand, playQueue, setRepeatMode, setShuffle, user?.id]
   );
 
   const resumeLast = useCallback(() => {

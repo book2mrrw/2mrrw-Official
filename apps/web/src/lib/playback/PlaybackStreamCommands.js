@@ -78,7 +78,7 @@ export function attachStreamCommands(self) {
       nextTrackSignedUrlCacheRef, sessionUnlockedRef, entitlementAccountStateRef,
       listeningUserIdRef, lastPlayedSlugRef, pendingSeekRef, hlsEngineRef,
       authLoadingRef, csImgRef, csVidRef, csAudioRef, pausedDuringCurrentLoadRef,
-      spuriousEndedGuardRef, lastUserActionRef,
+      spuriousEndedGuardRef, lastUserActionRef, bufferShowTimerRef,
     } = self._deps;
 
     logDirectInternalCallViolation("playTrackInternal");
@@ -89,6 +89,13 @@ export function attachStreamCommands(self) {
     if (!options.preserveActiveStream && activeStreamAbortRef.current) {
       logStreamLifecycle("abort", { source: "playTrackInternal", slug: track?.slug });
       activeStreamAbortRef.current.abort();
+      // Kill any pending "show buffering" debounce from the superseded track so it
+      // can't fire isBuffering: true AFTER the new track's onPlaying clears it.
+      if (bufferShowTimerRef?.current) {
+        clearTimeout(bufferShowTimerRef.current);
+        bufferShowTimerRef.current = null;
+      }
+      patchTransport({ isBuffering: false });
     }
     const streamAbortController = new AbortController();
     activeStreamAbortRef.current = streamAbortController;
@@ -505,7 +512,10 @@ export function attachStreamCommands(self) {
     }
 
     const swapToSignedStream = async (resolved) => {
-      if (requestId !== playRequestIdRef.current) return;
+      if (requestId !== playRequestIdRef.current) {
+        patchTransport({ isBuffering: false });
+        return;
+      }
       const signedUrl = resolved.track?.src;
       if (!signedUrl || signedUrl === syncSrc) return;
       const resumeAt = audio.currentTime || 0;
@@ -1034,6 +1044,7 @@ export function attachStreamCommands(self) {
         // bail out cleanly — do NOT set error state, this track was intentionally superseded.
         // Always restore gain before returning so mainGainRef never stays at 0.
         if (requestId !== playRequestIdRef.current || streamAbortController.signal.aborted) {
+          patchTransport({ isBuffering: false });
           return false;
         }
         patchState({ hasStarted: true, playbackState: "ready" });

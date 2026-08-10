@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import { motion } from "framer-motion";
 import { catalogMotionVideoUrl } from "@/lib/media-urls";
 
@@ -28,6 +28,19 @@ const HeroSection = memo(function HeroSection({
   heroTextRef,
   heroSocialsRef,
 }) {
+  useEffect(() => {
+    const handler = () => {
+      const el = heroVideoRef?.current;
+      if (!el) return;
+      const base = catalogMotionVideoUrl("videos/A2B.mp4");
+      el.src = `${base}?v=${Date.now()}`;
+      el.load();
+      el.play().catch(() => {});
+    };
+    window.addEventListener("2mrrw-hero-refresh", handler);
+    return () => window.removeEventListener("2mrrw-hero-refresh", handler);
+  }, [heroVideoRef]);
+
   return (
     <motion.div
       ref={heroContainerRef}

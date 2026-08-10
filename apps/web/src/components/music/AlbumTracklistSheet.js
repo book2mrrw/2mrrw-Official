@@ -47,6 +47,7 @@ export default function AlbumTracklistSheet({
     isPlaying,
     hasStarted,
     setShuffle,
+    setRepeatMode,
     seekBack,
     seekForward,
     error,
@@ -112,10 +113,11 @@ export default function AlbumTracklistSheet({
           },
         });
       }
+      setRepeatMode("all");
       void dispatchPlaybackCommand("playQueue", { tracks: instantQueue, startIndex: queueIndex });
       if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
     },
-    [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, scheduleInstantStreamUpgrade, album]
+    [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, setRepeatMode, scheduleInstantStreamUpgrade, album]
   );
 
   const isTrackActive = useCallback(
@@ -131,8 +133,9 @@ export default function AlbumTracklistSheet({
       dragY.set(0);
       dismissTriggered.current = false;
       autoPlayedRef.current = false;
+      setRepeatMode("all");
     }
-  }, [open, dragY]);
+  }, [open, dragY, setRepeatMode]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -174,18 +177,20 @@ export default function AlbumTracklistSheet({
         const instantPlayable = needsUpgrade
           ? playable.map((t, i) => (i === randomIdx ? startTrack : t))
           : playable;
+        setRepeatMode("all");
         void dispatchPlaybackCommand("playQueue", { tracks: instantPlayable, startIndex: randomIdx });
         if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
       } else {
         setShuffle(false);
         const { startTrack, needsUpgrade } = toInstantStartTrack(playable[0]);
         const instantPlayable = needsUpgrade ? [startTrack, ...playable.slice(1)] : playable;
+        setRepeatMode("all");
         void dispatchPlaybackCommand("playQueue", { tracks: instantPlayable, startIndex: 0 });
         if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
       }
       onClose?.();
     },
-    [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, onClose, scheduleInstantStreamUpgrade]
+    [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, setRepeatMode, onClose, scheduleInstantStreamUpgrade]
   );
 
   const handleDragEnd = useCallback(

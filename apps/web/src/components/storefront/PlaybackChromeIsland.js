@@ -35,6 +35,7 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
     toggle,
     seek,
     pause,
+    setRepeatMode,
   } = useAudioPlayer();
 
   // Refs for state fields read imperatively via bridge — avoids bridge cleanup/setup on every track switch.
@@ -59,6 +60,7 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
       pause,
       toggle,
       seek,
+      setRepeatMode,
       enterAudioVisualViewport,
       exitAudioVisualViewport,
       get currentTrack() { return currentTrackRef.current; },
@@ -76,6 +78,7 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
     pause,
     toggle,
     seek,
+    setRepeatMode,
     enterAudioVisualViewport,
     exitAudioVisualViewport,
   ]);

@@ -312,6 +312,149 @@ const blogPosts = [
   { id:"post-3", title:"Tour Prep: What Goes Into a Live Show", date:"February 28, 2026", author:"2MRRW", body:"People see the 90-minute set. They don't see the weeks of rehearsal, the production calls, the logistics of moving equipment across state lines. A live 2MRRW show is designed from the ground up — the lighting, the setlist order, the energy arc from opener to closer.\n\nWe treat every city like it's the only city. Dallas gets the same energy as NYC. That's the standard we hold ourselves to and always will." },
 ];
 
+// ── Admin catalog refresh FAB (home page, admin-only) ────────────────────────
+// Uses getPageAuthRef() — zero new context subscriptions, zero extra re-renders
+function AdminRefreshFab() {
+  const [show, setShow] = useState(false);
+  const [phase, setPhase] = useState(null);
+  const intervalRef = useRef(null);
+
+  useEffect(() => {
+    const check = () => {
+      const auth = getPageAuthRef();
+      const isAdmin = Boolean(auth.sessionHydrated && auth.isAdmin);
+      setShow(isAdmin);
+      // Once confirmed admin, stop polling — no need to check every 600ms
+      if (isAdmin && intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+    check();
+    intervalRef.current = setInterval(check, 600);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, []);
+
+  const run = useCallback(async () => {
+    if (phase?.running) return;
+
+    // Immediately show "working" state before any async ops — user sees feedback instantly
+    setPhase({ running: true, total: 0, done: 0, failed: 0, starting: true });
+
+    let releases = [];
+    try {
+      const res = await fetch("/api/catalog/releases?limit=50");
+      const data = await res.json();
+      releases = data.tracks || [];
+    } catch {
+      setPhase({ running: false, total: 0, done: 0, failed: 1 });
+      setTimeout(() => setPhase(null), 4000);
+      return;
+    }
+
+    const tasks = [];
+    for (const release of releases) {
+      const slug = release.slug || release.productSlug;
+      const type = (() => {
+        if (!release.type) return "singles";
+        const t = String(release.type).toLowerCase();
+        if (t.includes("album")) return "albums";
+        if (t.includes("ep") || t.includes("mixtape")) return "mixtapes-and-eps";
+        if (t.includes("feature")) return "features";
+        return "singles";
+      })();
+      const tracks = Array.isArray(release.tracks) && release.tracks.length > 1 ? release.tracks : null;
+      if (tracks) {
+        for (const track of tracks) tasks.push({ slug, trackSlug: track.slug || null, releaseType: type });
+      } else {
+        tasks.push({ slug, trackSlug: null, releaseType: type });
+      }
+    }
+    // Always include hero video refresh as last task
+    tasks.push({ heroVideo: true });
+
+    if (!tasks.length) {
+      setPhase(null);
+      return;
+    }
+
+    setPhase({ running: true, total: tasks.length, done: 0, failed: 0 });
+    let done = 0, failed = 0;
+    for (const task of tasks) {
+      try {
+        if (task.heroVideo) {
+          await fetch("/api/admin/media/refresh-hero", { method: "POST" });
+          window.dispatchEvent(new Event("2mrrw-hero-refresh"));
+        } else {
+          await fetch("/api/admin/media/refresh-track", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(task),
+          });
+        }
+      } catch { failed++; }
+      done++;
+      setPhase({ running: done < tasks.length, total: tasks.length, done, failed });
+    }
+    setPhase({ running: false, total: tasks.length, done, failed });
+    setTimeout(() => setPhase(null), 6000);
+  }, [phase]);
+
+  if (!show) return null;
+
+  const isStarting = phase?.starting;
+  const isRunning = phase?.running;
+  const isDone = phase && !phase.running;
+  const hasFailed = isDone && phase.failed > 0;
+
+  const label = !phase
+    ? "⟳  Refresh"
+    : isStarting
+    ? "⟳  Starting…"
+    : isRunning
+    ? `${phase.done}/${phase.total}`
+    : hasFailed
+    ? `⚠ ${phase.done - phase.failed}/${phase.total}`
+    : `✓ ${phase.done}/${phase.total}`;
+
+  const color = hasFailed ? "#f59e0b" : isRunning || isStarting ? "#ffaa55" : isDone ? "#22c55e" : "#ff6400";
+  const border = hasFailed ? "rgba(245,158,11,.45)" : isRunning || isStarting ? "rgba(255,170,85,.45)" : isDone ? "rgba(34,197,94,.45)" : "rgba(255,100,0,.45)";
+  const bg = hasFailed ? "rgba(245,158,11,.12)" : isRunning || isStarting ? "rgba(255,170,85,.1)" : isDone ? "rgba(34,197,94,.1)" : "rgba(255,100,0,.12)";
+
+  return (
+    <button
+      type="button"
+      onClick={run}
+      disabled={isRunning || isStarting}
+      style={{
+        position: "fixed",
+        top: 16,
+        right: 16,
+        zIndex: 7900,
+        background: bg,
+        border: `1px solid ${border}`,
+        borderRadius: 20,
+        padding: "8px 16px",
+        fontSize: 11,
+        fontFamily: "'DM Mono',monospace",
+        letterSpacing: ".1em",
+        color,
+        cursor: (isRunning || isStarting) ? "default" : "pointer",
+        opacity: (isRunning || isStarting) ? 0.8 : 1,
+        transition: "all .2s",
+        whiteSpace: "nowrap",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        boxShadow: `0 0 12px ${color}33`,
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 export default function HomeClient({ initialEvents }) {
   return (
@@ -2406,6 +2549,10 @@ function PageStorefront({ initialEvents }) {
       <Suspense fallback={null}>
         <DonateModal open={donateOpen} onClose={()=>setDonateOpen(false)} isMobile={isMobile}/>
       </Suspense>
+
+      {/* ── ADMIN REFRESH FAB ── */}
+      <AdminRefreshFab />
+
       <AuthSurfaceIsland islandId="gift-sheet" onGiftRequest={setGiftSheetRelease}>
         {(auth) => (
           <GiftBottomSheet
