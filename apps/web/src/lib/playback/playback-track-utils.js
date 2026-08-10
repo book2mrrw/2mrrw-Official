@@ -11,7 +11,10 @@ export const SLOWED_SUFFIX = " · Slowed";
 export const CS_PLAYBACK_RATE = 0.75;
 export const TRANSPORT_ONLY_STATE_KEYS = new Set([
   "playbackNetworkState",
-  "isBuffering",
+  // isBuffering is intentionally NOT transport-only: changes to it must emit a full
+  // context notification so useSyncExternalStore subscribers (the spinner UI) re-render.
+  // Transport-only patches only trigger the transport channel, not _emitContext(), so
+  // isBuffering:false would never reach the spinner if it lived here.
   "currentTime",
   "duration",
 ]);

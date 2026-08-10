@@ -15,6 +15,14 @@
 
 const CROSSFADE_SEC = 5;
 
+// Monotonically-increasing counter. Each scheduleGainHandoff call captures the
+// value at the time of the call; its cleanup setTimeout checks that the counter
+// has not advanced (i.e. no newer handoff or cancel has superseded it).
+// Without this, rapid back-to-back bridge advances within the 410ms cleanup window
+// cause stale timers to fire against the NEW bridge's state — pinning mainGain to
+// the wrong level and silencing audio by the 3rd–5th track.
+let _gainHandoffGen = 0;
+
 // Equal-power crossfade curves — precomputed once at module load.
 // Linear amplitude ramps produce a −3 dB perceived loudness dip at the midpoint
 // because RMS power is not preserved. Equal-power crossfade uses cosine² curves
@@ -58,6 +66,7 @@ export function cancelCrossfadeEngine(refs) {
   const { crossfadeStateRef, nextTrackPreloadRef, audioCtxRef, mainGainRef, crossfadeGainRef, trackGainRef } = refs;
   if (crossfadeStateRef.current === "idle") return;
   crossfadeStateRef.current = "idle";
+  _gainHandoffGen++; // invalidate any pending scheduleGainHandoff cleanup timer
 
   const nextEl = nextTrackPreloadRef.current;
   try { if (nextEl && !nextEl.paused) nextEl.pause(); } catch {}
@@ -217,6 +226,11 @@ export function scheduleGainHandoff(refs, { gainLinear, rampSec = 0.35 }) {
     return;
   }
 
+  // Capture this handoff's generation before any await or async gap.
+  // The cleanup setTimeout below checks that the counter hasn't advanced, which
+  // would mean a newer bridge advance or cancelCrossfadeEngine has superseded us.
+  const myGen = ++_gainHandoffGen;
+
   const targetGain = gainLinear ?? trackGainRef.current ?? 1;
   const now = ctx.currentTime;
   const rampEnd = now + rampSec;
@@ -242,6 +256,9 @@ export function scheduleGainHandoff(refs, { gainLinear, rampSec = 0.35 }) {
   // After the ramp, clean up: stop the preload element and mark bridge complete.
   const cleanupMs = Math.ceil(rampSec * 1000) + 60;
   setTimeout(() => {
+    // Generation check: if _gainHandoffGen advanced past myGen, a newer handoff or
+    // cancelCrossfadeEngine ran after us. Do nothing — the newer call owns the state.
+    if (_gainHandoffGen !== myGen) return;
     if (crossfadeStateRef.current !== "bridging") return; // already cancelled externally
     crossfadeStateRef.current = "idle";
     const nextEl = nextTrackPreloadRef.current;

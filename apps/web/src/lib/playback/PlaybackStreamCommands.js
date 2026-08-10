@@ -340,7 +340,7 @@ export function attachStreamCommands(self) {
         const prevMeta = streamMetaRef.current;
         if (prevMeta) finalizeStreamSession(prevMeta, { completed: false, durationSeconds: audio.currentTime || 0 });
         streamErrorRetriedRef.current = 0;
-        skipPauseInterruptionRef.current = true;
+        if (!audio.paused) skipPauseInterruptionRef.current = true;
         audio.pause();
         patchState({
           isPlaying: false,
@@ -1206,7 +1206,7 @@ export function attachStreamCommands(self) {
           slug: nextTrack?.slug,
         });
         try {
-          skipPauseInterruptionRef.current = true;
+          if (!audio.paused) skipPauseInterruptionRef.current = true;
           const played = await loadAudioSrcAndPlay(audio, previewFallbackSrc, {
             signal: streamAbortController.signal,
           });

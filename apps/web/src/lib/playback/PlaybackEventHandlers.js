@@ -1085,7 +1085,7 @@ export function createPlaybackEventHandlers({
             track?.previewUrl ||
             null;
           if (previewFallbackSrc) {
-            skipPauseInterruptionRef.current = true;
+            if (!audio.paused) skipPauseInterruptionRef.current = true;
             const played = await loadAudioSrcAndPlay(audio, previewFallbackSrc);
             patchState({
               isPlaying: false,
@@ -1112,7 +1112,7 @@ export function createPlaybackEventHandlers({
         if (retryErr?.code === "ACCESS_DENIED") {
           finalizeStreamSession(meta, { durationSeconds: resumeAt, completed: false });
           streamErrorRetriedRef.current = 0;
-          skipPauseInterruptionRef.current = true;
+          if (!audio.paused) skipPauseInterruptionRef.current = true;
           audio.pause();
           patchState({
             isPlaying: false,
