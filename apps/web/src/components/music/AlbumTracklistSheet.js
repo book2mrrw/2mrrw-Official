@@ -158,6 +158,8 @@ export default function AlbumTracklistSheet({
     if (!open || autoPlayedRef.current || !tracks.length) return;
     const alreadyPlayingThisAlbum = isPlaying && tracks.some((t) => isTrackActive(t));
     if (alreadyPlayingThisAlbum) return;
+    const hasPlayable = tracks.some((t) => Boolean(t.src));
+    if (!hasPlayable) return;
     autoPlayedRef.current = true;
     playTrackInSheet(0);
   }, [open, tracks, isTrackActive, isPlaying, playTrackInSheet]);
