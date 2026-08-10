@@ -98,7 +98,13 @@ export function probeRedirectUrl(slug, redirectUrl) {
   probe.muted = true;
   probe.volume = 0;
 
+  // One-shot guard: setting probe.src="" in cleanup fires an "abort" event, which
+  // would call cleanup() a second time and decrement _activeProbes twice. Over many
+  // network errors this drives _activeProbes negative, breaking the concurrency cap.
+  let _cleanedUp = false;
   const cleanup = () => {
+    if (_cleanedUp) return;
+    _cleanedUp = true;
     _activeProbes--;
     try { probe.src = ""; probe.load(); } catch {}
   };
@@ -150,7 +156,10 @@ export function eagerPrimeFirstCard(slug, redirectUrl) {
   probe.volume = 0;
   probe.crossOrigin = "anonymous";
 
+  let _cleanedUp = false;
   const cleanup = () => {
+    if (_cleanedUp) return;
+    _cleanedUp = true;
     _activeProbes--;
     try { probe.src = ""; probe.load(); } catch {}
   };
@@ -162,9 +171,6 @@ export function eagerPrimeFirstCard(slug, redirectUrl) {
   }, { once: true });
   probe.addEventListener("error", () => {
     cleanup();
-    // CORS probe failed — the R2 bucket may lack Access-Control-Allow-Origin for
-    // this origin. Fall back to a non-CORS probe so fast-path 1 is still populated.
-    // probeRedirectUrl respects MAX_ACTIVE_PROBES and the TTL cache guard.
     probeRedirectUrl(slug, redirectUrl);
   }, { once: true });
   probe.addEventListener("abort", cleanup, { once: true });

@@ -1,9 +1,25 @@
 const CACHE_TTL_MS = 60_000;
+const CACHE_MAX_ENTRIES = 100;
 
 /** @type {Map<string, { key: string, source: string, expiresAt: number }>} */
 const cache = new Map();
 /** @type {Map<string, Promise<{ key: string, source: string } | null>>} */
 const inflight = new Map();
+
+function trimPreviewCache() {
+  if (cache.size <= CACHE_MAX_ENTRIES) return;
+  const now = Date.now();
+  // First pass: evict expired entries
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt <= now) cache.delete(key);
+    if (cache.size <= CACHE_MAX_ENTRIES) return;
+  }
+  // Second pass: evict by insertion order (Map preserves it — oldest first)
+  for (const key of cache.keys()) {
+    cache.delete(key);
+    if (cache.size <= CACHE_MAX_ENTRIES) return;
+  }
+}
 
 export function previewCacheKey(folder, type, legacy) {
   const legacyKey = Array.isArray(legacy) ? legacy.join("|") : legacy || "";
@@ -36,6 +52,7 @@ export async function getOrResolvePreviewMedia(cacheKey, factory) {
           source: resolved.source,
           expiresAt: now + CACHE_TTL_MS,
         });
+        trimPreviewCache();
       }
       return resolved;
     })

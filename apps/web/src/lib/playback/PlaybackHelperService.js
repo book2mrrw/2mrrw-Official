@@ -61,6 +61,7 @@ import {
 } from "@/lib/media-session-artwork";
 import { recordAudioContextState } from "@/lib/dev/performanceMarks";
 import { prefetchHlsSegmentsForTrack } from "@/lib/audio/hls-segment-prefetcher";
+import { evictOverflowingCaches } from "@/lib/playback/playback-cache-manager";
 import { isHlsJsActive } from "@/lib/audio/HLSEngine";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
@@ -1394,6 +1395,10 @@ export function createPlaybackHelpers(initialDeps) {
       // starting any preload that would compete with its recovery download.
       if (Date.now() - self._deps.recentStallTimeRef.current < 15_000) return;
 
+      // Opportunistic sweep: any registered cache over its maxEntries limit is trimmed
+      // here since scheduleNextTrackPreload runs as a natural playback-time background job.
+      evictOverflowingCaches();
+
       const queue = self._deps.queueRef.current;
       const idx = self._deps.queueIndexRef.current;
       const nextIdx = idx + 1;
@@ -1585,6 +1590,21 @@ export function createPlaybackHelpers(initialDeps) {
               fetchedAt: Date.now(),
               expiresIn: data.expiresIn ?? 3600,
             };
+            // Evict oldest when cache exceeds 20 entries — mirrors scheduleNextTrackPreload.
+            // hintUpcomingPlay is called on hover/touchstart for every visible card, so
+            // without this guard the cache grows to the full catalog size.
+            const hintEntries = Object.entries(self._deps.nextTrackSignedUrlCacheRef.current);
+            if (hintEntries.length > 20) {
+              let oldestKey = hintEntries[0][0];
+              let oldestAt = hintEntries[0][1].fetchedAt;
+              for (let i = 1; i < hintEntries.length; i++) {
+                if (hintEntries[i][1].fetchedAt < oldestAt) {
+                  oldestAt = hintEntries[i][1].fetchedAt;
+                  oldestKey = hintEntries[i][0];
+                }
+              }
+              delete self._deps.nextTrackSignedUrlCacheRef.current[oldestKey];
+            }
             const isHlsEligible = Boolean(track.metadata?.access?.canStream);
             if (!isHlsEligible) {
               const normalized = normalizePlaybackSrc(data.url);
