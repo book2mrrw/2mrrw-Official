@@ -10,12 +10,20 @@ function isAdmin(session) {
   return (session?.user?.email?.toLowerCase() || "") === ADMIN_EMAIL;
 }
 
-const RELEASE_TYPES = ["singles", "albums", "features", "mixtapes-and-eps", "eps"];
+function releaseTypeSlug(type) {
+  if (!type) return "singles";
+  const t = String(type).toLowerCase();
+  if (t.includes("album")) return "albums";
+  if (t.includes("ep") || t.includes("mixtape")) return "mixtapes-and-eps";
+  if (t.includes("feature")) return "features";
+  return "singles";
+}
 
 export default function AdminMediaPage() {
   const router = useRouter();
-  const [session, setSession] = useState(null);
-  const [checked, setChecked] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [releases, setReleases] = useState([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
 
   useEffect(() => {
     const sb = createBrowserClient(
@@ -24,153 +32,208 @@ export default function AdminMediaPage() {
     );
     sb.auth.getSession().then(({ data }) => {
       if (!isAdmin(data.session)) { router.replace("/"); return; }
-      setSession(data.session);
-      setChecked(true);
+      setReady(true);
+      loadCatalog();
     });
   }, [router]);
 
-  if (!checked) return <div style={styles.page}><div style={styles.spinner} /></div>;
+  const loadCatalog = useCallback(async () => {
+    setLoadingCatalog(true);
+    try {
+      const res = await fetch("/api/catalog/releases?limit=50");
+      const data = await res.json();
+      setReleases(data.tracks || []);
+    } catch {
+      // silently keep empty
+    } finally {
+      setLoadingCatalog(false);
+    }
+  }, []);
+
+  if (!ready) return <div style={s.page}><div style={s.spinner} /></div>;
 
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <div style={styles.header}>
-          <div style={styles.logo}>2MRRW</div>
-          <div style={styles.title}>Audio Refresh</div>
-          <div style={styles.sub}>
-            Use this after uploading a new audio file to R2. Clears old HLS segments,
-            invalidates all caches, and re-queues transcoding.
+    <div style={s.page}>
+      <div style={s.card}>
+        <div style={s.header}>
+          <div style={s.logo}>2MRRW ADMIN</div>
+          <div style={s.title}>Audio Refresh</div>
+          <div style={s.sub}>
+            Upload a new file to R2, then tap the track below to clear old HLS segments and re-transcode.
           </div>
         </div>
-        <RefreshForm />
+
+        {loadingCatalog ? (
+          <div style={{ display: "flex", justifyContent: "center", padding: 40 }}>
+            <div style={s.spinner} />
+          </div>
+        ) : releases.length === 0 ? (
+          <div style={{ padding: "32px 28px", color: "rgba(255,255,255,.3)", fontSize: 13, textAlign: "center" }}>
+            No releases found
+          </div>
+        ) : (
+          <div style={s.list}>
+            {releases.map((release) => (
+              <ReleaseRow key={release.slug || release.id} release={release} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function RefreshForm() {
-  const [slug, setSlug] = useState("");
-  const [trackSlug, setTrackSlug] = useState("");
-  const [releaseType, setReleaseType] = useState("singles");
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
+function ReleaseRow({ release }) {
+  const slug = release.slug || release.productSlug;
+  const title = release.title || slug;
+  const type = releaseTypeSlug(release.type);
+  const tracks = Array.isArray(release.tracks) && release.tracks.length > 1 ? release.tracks : null;
 
-  const submit = useCallback(async (e) => {
-    e.preventDefault();
-    if (!slug.trim()) return;
-    setLoading(true);
-    setResult(null);
-    setError(null);
+  const [expanded, setExpanded] = useState(false);
+  const [state, setState] = useState(null); // null | "loading" | result | "error"
+
+  const refresh = useCallback(async (trackSlug) => {
+    setState("loading");
     try {
       const res = await fetch("/api/admin/media/refresh-track", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          slug: slug.trim(),
-          trackSlug: trackSlug.trim() || null,
-          releaseType,
-        }),
+        body: JSON.stringify({ slug, trackSlug: trackSlug || null, releaseType: type }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || "Request failed"); return; }
-      setResult(data);
+      setState(res.ok ? data : { error: data.error || "Failed" });
     } catch (err) {
-      setError(err.message || "Network error");
-    } finally {
-      setLoading(false);
+      setState({ error: err.message || "Network error" });
     }
-  }, [slug, trackSlug, releaseType]);
+  }, [slug, type]);
 
-  const allGreen = result && Object.values(result.steps || {}).every((v) => v === true || (typeof v === "number" && v >= 0));
+  const isLoading = state === "loading";
+  const result = state && state !== "loading" ? state : null;
+  const allGreen = result && !result.error && Object.values(result.steps || {}).every((v) => v === true || (typeof v === "number" && v >= 0));
 
   return (
-    <form onSubmit={submit} style={styles.form}>
-      <label style={styles.label}>
-        Slug <span style={styles.required}>*</span>
-        <input
-          style={styles.input}
-          placeholder="e.g. my-track-slug"
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
-          required
-        />
-        <span style={styles.hint}>The slug of the album or single you uploaded audio for</span>
-      </label>
+    <div style={s.releaseRow}>
+      <div style={s.releaseTop}>
+        <div style={s.releaseMeta}>
+          <div style={s.releaseTitle}>{title}</div>
+          <div style={s.releaseSlug}>{slug} · {type}</div>
+        </div>
+        <div style={s.releaseActions}>
+          {tracks ? (
+            <button
+              type="button"
+              style={s.expandBtn}
+              onClick={() => { setExpanded((e) => !e); setState(null); }}
+            >
+              {expanded ? "▲ tracks" : "▼ tracks"}
+            </button>
+          ) : (
+            <RefreshButton loading={isLoading} onClick={() => refresh(null)} result={result} allGreen={allGreen} />
+          )}
+        </div>
+      </div>
 
-      <label style={styles.label}>
-        Track Slug <span style={styles.optional}>(optional)</span>
-        <input
-          style={styles.input}
-          placeholder="e.g. track-title-slug — leave blank for single-track releases"
-          value={trackSlug}
-          onChange={(e) => setTrackSlug(e.target.value)}
-        />
-        <span style={styles.hint}>Only needed for multi-track albums — the specific track within the release</span>
-      </label>
-
-      <label style={styles.label}>
-        Release Type
-        <select
-          style={{ ...styles.input, cursor: "pointer" }}
-          value={releaseType}
-          onChange={(e) => setReleaseType(e.target.value)}
-        >
-          {RELEASE_TYPES.map((t) => (
-            <option key={t} value={t}>{t}</option>
+      {tracks && expanded ? (
+        <div style={s.trackList}>
+          {tracks.map((track, i) => (
+            <TrackRefreshRow
+              key={track.slug || track.id || i}
+              track={track}
+              onRefresh={() => refresh(track.slug || null)}
+            />
           ))}
-        </select>
-      </label>
-
-      <button type="submit" style={{ ...styles.btn, opacity: loading ? 0.6 : 1 }} disabled={loading}>
-        {loading ? "Refreshing…" : "Refresh Audio"}
-      </button>
-
-      {error ? (
-        <div style={styles.errorBox}>{error}</div>
-      ) : null}
-
-      {result ? (
-        <div style={{ ...styles.resultBox, borderColor: allGreen ? "#22c55e44" : "#f59e0b44" }}>
-          <div style={{ ...styles.resultTitle, color: allGreen ? "#22c55e" : "#f59e0b" }}>
-            {allGreen ? "Refresh complete" : "Partial refresh — check steps below"}
-          </div>
-          <div style={styles.stepGrid}>
-            <StepRow label="Job cancelled" value={result.steps?.jobCancelled} />
-            <StepRow label="Manifest deleted" value={result.steps?.manifestDeleted} />
-            <StepRow label="HLS segments deleted" value={result.steps?.segmentsDeleted} numeric suffix={`(${result.steps?.segmentsFailed ?? 0} failed)`} />
-            <StepRow label="Caches invalidated" value={result.steps?.cacheInvalidated} />
-            <StepRow label="Transcode re-queued" value={result.steps?.jobQueued} />
-          </div>
-          {result.steps?.jobQueued ? (
-            <div style={styles.notice}>
-              New transcode job queued. Audio will update in a few minutes once the HLS worker finishes.
-            </div>
-          ) : result.steps?.cacheInvalidated && !result.steps?.jobQueued ? (
-            <div style={{ ...styles.notice, color: "#f59e0b" }}>
-              Caches cleared but no source audio key found — check that the R2 key matches what&apos;s in Supabase.
-            </div>
-          ) : null}
         </div>
       ) : null}
-    </form>
-  );
-}
 
-function StepRow({ label, value, numeric, suffix }) {
-  const ok = numeric ? value > 0 : value === true;
-  const icon = ok ? "✓" : numeric && value === 0 ? "—" : "✗";
-  const color = ok ? "#22c55e" : numeric && value === 0 ? "#555" : "#ef4444";
-  return (
-    <div style={styles.stepRow}>
-      <span style={{ color, fontWeight: 700, minWidth: 16 }}>{icon}</span>
-      <span style={styles.stepLabel}>{label}</span>
-      {numeric ? <span style={{ color: "#555", fontSize: 11 }}>{value} {suffix}</span> : null}
+      {result && !tracks ? (
+        <ResultBar result={result} allGreen={allGreen} />
+      ) : null}
     </div>
   );
 }
 
-const styles = {
+function TrackRefreshRow({ track, onRefresh }) {
+  const [state, setState] = useState(null);
+  const isLoading = state === "loading";
+  const result = state && state !== "loading" ? state : null;
+  const allGreen = result && !result.error && Object.values(result.steps || {}).every((v) => v === true || (typeof v === "number" && v >= 0));
+
+  const go = useCallback(async () => {
+    setState("loading");
+    try {
+      const r = await onRefresh();
+      setState(r);
+    } catch (err) {
+      setState({ error: err?.message || "Error" });
+    }
+  }, [onRefresh]);
+
+  return (
+    <div style={s.trackRow}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={s.trackTitle}>{track.position ? `${track.position}. ` : ""}{track.title || track.slug}</div>
+        {result ? <ResultBar result={result} allGreen={allGreen} compact /> : null}
+      </div>
+      <RefreshButton loading={isLoading} onClick={go} result={result} allGreen={allGreen} small />
+    </div>
+  );
+}
+
+function RefreshButton({ loading, onClick, result, allGreen, small }) {
+  const done = result && !result.error;
+  const failed = result?.error;
+  const bg = done ? (allGreen ? "#22c55e22" : "#f59e0b22") : "#9b5de522";
+  const border = done ? (allGreen ? "#22c55e55" : "#f59e0b55") : "#9b5de555";
+  const color = done ? (allGreen ? "#22c55e" : "#f59e0b") : "#c77dff";
+  const label = loading ? "…" : done ? (allGreen ? "✓ Done" : "⚠ Partial") : failed ? "✗ Error" : "Refresh";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={loading}
+      style={{
+        background: bg,
+        border: `1px solid ${border}`,
+        borderRadius: small ? 8 : 10,
+        padding: small ? "5px 12px" : "8px 18px",
+        fontSize: small ? 10 : 11,
+        fontFamily: "'DM Mono',monospace",
+        letterSpacing: ".12em",
+        color,
+        cursor: loading ? "default" : "pointer",
+        flexShrink: 0,
+        opacity: loading ? 0.65 : 1,
+        transition: "all .15s",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function ResultBar({ result, allGreen, compact }) {
+  if (!result) return null;
+  if (result.error) {
+    return <div style={{ ...s.resultNote, color: "#ef4444" }}>{result.error}</div>;
+  }
+  const { steps } = result;
+  return (
+    <div style={s.resultNote}>
+      {allGreen ? (
+        <span style={{ color: "#22c55e" }}>Refreshed — new transcode queued. Audio updates in ~2 min.</span>
+      ) : (
+        <>
+          {!steps?.jobQueued && <span style={{ color: "#f59e0b" }}>No source key found in R2 — check the bucket. </span>}
+          {steps?.segmentsFailed > 0 && <span style={{ color: "#f59e0b" }}>{steps.segmentsFailed} segment delete(s) failed. </span>}
+          {steps?.cacheInvalidated && <span style={{ color: "#22c55e" }}>Caches cleared.</span>}
+        </>
+      )}
+    </div>
+  );
+}
+
+const s = {
   page: {
     minHeight: "100dvh",
     background: "#0a0a0a",
@@ -181,135 +244,111 @@ const styles = {
   },
   card: {
     width: "100%",
-    maxWidth: 520,
+    maxWidth: 560,
     background: "#111",
     borderRadius: 18,
     border: "1px solid rgba(255,255,255,.08)",
     overflow: "hidden",
   },
   header: {
-    padding: "32px 32px 24px",
+    padding: "28px 28px 22px",
     borderBottom: "1px solid rgba(255,255,255,.06)",
   },
   logo: {
     fontFamily: "'DM Mono',monospace",
-    fontSize: 9,
+    fontSize: 8,
     letterSpacing: ".3em",
     color: "#9b5de5",
-    marginBottom: 10,
+    marginBottom: 8,
   },
   title: {
     fontFamily: "'Cormorant Garamond',serif",
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: 500,
     color: "white",
-    lineHeight: 1.15,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   sub: {
-    fontSize: 13,
-    color: "rgba(255,255,255,.42)",
+    fontSize: 12,
+    color: "rgba(255,255,255,.38)",
     lineHeight: 1.6,
   },
-  form: {
-    padding: "28px 32px 36px",
+  list: {
     display: "flex",
     flexDirection: "column",
-    gap: 22,
   },
-  label: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-    fontFamily: "'DM Mono',monospace",
-    fontSize: 9,
-    letterSpacing: ".18em",
-    color: "rgba(255,255,255,.5)",
+  releaseRow: {
+    borderBottom: "1px solid rgba(255,255,255,.05)",
   },
-  required: { color: "#9b5de5" },
-  optional: { color: "rgba(255,255,255,.25)", fontWeight: 400 },
-  input: {
-    background: "rgba(255,255,255,.05)",
-    border: "1px solid rgba(255,255,255,.1)",
-    borderRadius: 10,
-    padding: "12px 14px",
-    fontSize: 13,
-    color: "white",
-    fontFamily: "inherit",
-    outline: "none",
-    transition: "border-color .15s",
-  },
-  hint: {
-    fontSize: 10,
-    color: "rgba(255,255,255,.22)",
-    letterSpacing: ".05em",
-    lineHeight: 1.5,
-  },
-  btn: {
-    background: "#9b5de5",
-    border: "none",
-    borderRadius: 12,
-    padding: "14px 24px",
-    fontSize: 12,
-    fontWeight: 700,
-    fontFamily: "'DM Mono',monospace",
-    letterSpacing: ".12em",
-    color: "white",
-    cursor: "pointer",
-    transition: "opacity .15s",
-    marginTop: 4,
-  },
-  errorBox: {
-    background: "rgba(239,68,68,.08)",
-    border: "1px solid rgba(239,68,68,.25)",
-    borderRadius: 10,
-    padding: "12px 14px",
-    fontSize: 13,
-    color: "#ef4444",
-  },
-  resultBox: {
-    background: "rgba(255,255,255,.03)",
-    border: "1px solid",
-    borderRadius: 12,
-    padding: "18px 20px",
-    display: "flex",
-    flexDirection: "column",
-    gap: 14,
-  },
-  resultTitle: {
-    fontFamily: "'DM Mono',monospace",
-    fontSize: 9,
-    letterSpacing: ".2em",
-    fontWeight: 700,
-  },
-  stepGrid: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 8,
-  },
-  stepRow: {
+  releaseTop: {
     display: "flex",
     alignItems: "center",
-    gap: 10,
-    fontSize: 12,
-    color: "rgba(255,255,255,.65)",
+    gap: 12,
+    padding: "14px 20px",
   },
-  stepLabel: {
+  releaseMeta: {
     flex: 1,
+    minWidth: 0,
   },
-  notice: {
-    fontSize: 12,
+  releaseTitle: {
+    fontSize: 13,
+    color: "rgba(255,255,255,.82)",
+    fontWeight: 500,
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
+  releaseSlug: {
+    fontFamily: "'DM Mono',monospace",
+    fontSize: 9,
+    color: "rgba(255,255,255,.25)",
+    marginTop: 2,
+    letterSpacing: ".06em",
+  },
+  releaseActions: {
+    flexShrink: 0,
+  },
+  expandBtn: {
+    background: "transparent",
+    border: "1px solid rgba(255,255,255,.12)",
+    borderRadius: 8,
+    padding: "5px 12px",
+    fontSize: 9,
+    fontFamily: "'DM Mono',monospace",
+    letterSpacing: ".1em",
     color: "rgba(255,255,255,.4)",
-    lineHeight: 1.55,
-    borderTop: "1px solid rgba(255,255,255,.06)",
-    paddingTop: 12,
+    cursor: "pointer",
+  },
+  trackList: {
+    borderTop: "1px solid rgba(255,255,255,.04)",
+    background: "rgba(0,0,0,.2)",
+    padding: "4px 0 8px",
+  },
+  trackRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    padding: "8px 20px 8px 28px",
+  },
+  trackTitle: {
+    fontSize: 12,
+    color: "rgba(255,255,255,.6)",
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    marginBottom: 2,
+  },
+  resultNote: {
+    fontSize: 11,
+    color: "rgba(255,255,255,.38)",
+    lineHeight: 1.5,
+    padding: "0 20px 10px",
   },
   spinner: {
-    width: 24,
-    height: 24,
+    width: 20,
+    height: 20,
     border: "2px solid rgba(155,93,229,.2)",
     borderTop: "2px solid #9b5de5",
     borderRadius: "50%",
-    animation: "spin 0.8s linear infinite",
   },
 };
