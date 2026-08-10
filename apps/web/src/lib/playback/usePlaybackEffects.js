@@ -682,6 +682,11 @@ export function usePlaybackEffects({
       }
 
       if (truth.violation === PLAYBACK_TRUTH_VIOLATION) {
+        console.warn('[2MRRW-TRACE] watchdog TRUTH_VIOLATION', {
+          reason: truth.reason, slug: stateRef.current.currentTrack?.slug,
+          coordinatorActive: recoveryCoordinator.isActive(),
+          audio_paused: audio?.paused, audio_t: audio?.currentTime?.toFixed(2),
+        });
         // Defer if the Recovery Coordinator is already handling a stall —
         // firing a second hard recovery on top of an in-flight one resets the
         // buffer twice and is the root cause of the continuous stop-start cycle.
@@ -744,6 +749,12 @@ export function usePlaybackEffects({
         return;
       }
 
+      console.warn('[2MRRW-TRACE] watchdog SILENT_DESYNC → recovery', {
+        slug: stateRef.current.currentTrack?.slug,
+        coordinatorActive: recoveryCoordinator.isActive(),
+        audio_paused: audio?.paused, audio_t: audio?.currentTime?.toFixed(2),
+        isPlaying: stateRef.current.isPlaying,
+      });
       logPlaybackResilience("silent-desync", {
         source: "AudioContext",
         code: "AUDIO_SILENT_DESYNC",

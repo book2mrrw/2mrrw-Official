@@ -88,6 +88,9 @@ class RecoveryCoordinator {
     if (!this._stallSince) {
       this._stallSince = Date.now();
       this._lastCtx    = ctx;
+      console.warn('[2MRRW-TRACE] RC.report → grace started', {
+        slug: state.currentTrack?.slug, ahead, t: audio.currentTime.toFixed(2),
+      });
       this._graceTimer = setTimeout(() => {
         this._graceTimer = null;
         this._actIfStillStalled();
@@ -106,6 +109,7 @@ class RecoveryCoordinator {
    * and releases the lock. Cooldown stays active — buffer still needs time.
    */
   onPlaybackResumed() {
+    console.warn('[2MRRW-TRACE] RC.onPlaybackResumed', { wasActive: this.isActive() });
     this._clearGrace();
     this._locked     = false;
     this._stallSince = null;
@@ -152,6 +156,17 @@ class RecoveryCoordinator {
     const audio = ctx?.audioRef?.current;
     const state = ctx?.stateRef?.current;
 
+    const ahead = audio ? getBufferedAheadSeconds(audio) : -1;
+    console.warn('[2MRRW-TRACE] RC._actIfStillStalled', {
+      slug: state?.currentTrack?.slug,
+      isPlaying: state?.isPlaying,
+      audio_paused: audio?.paused,
+      ahead: ahead.toFixed(2),
+      t: audio?.currentTime?.toFixed(2),
+      locked: this._locked,
+      cooldownMs: Math.max(0, this._cooldownUntil - Date.now()),
+    });
+
     // Validate conditions are still true after grace period
     if (!state?.isPlaying || !state?.currentTrack) { this._stallSince = null; return; }
     if (!audio || audio.paused)                     { this._stallSince = null; return; }
@@ -159,7 +174,6 @@ class RecoveryCoordinator {
     if (this._locked)                               { this._stallSince = null; return; }
 
     // Re-check buffer — may have filled during grace period
-    const ahead = getBufferedAheadSeconds(audio);
     if (ahead > BUFFER_OK_THRESHOLD_S) {
       this._stallSince = null;
       return;
