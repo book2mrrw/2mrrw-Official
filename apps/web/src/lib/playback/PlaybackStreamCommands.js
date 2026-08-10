@@ -86,12 +86,7 @@ export function attachStreamCommands(self) {
     userIntentPausedRef.current = false;
     const requestId = playRequestIdRef.current + 1;
     playRequestIdRef.current = requestId;
-    // Cancel any active crossfade state UNLESS this is the auto-advance that created the
-    // bridge — in that case the preload element is already audible and we must keep the
-    // bridge alive until the main element is loaded and the gain handoff completes.
-    // For all user-initiated plays we always cancel immediately so mainGain is restored.
-    if (crossfadeStateRef.current !== "idle" &&
-        (crossfadeStateRef.current !== "bridging" || !options.isBridgeAdvance)) {
+    if (crossfadeStateRef.current !== "idle") {
       cancelCrossfade();
     }
     if (!options.preserveActiveStream && activeStreamAbortRef.current) {
@@ -915,7 +910,7 @@ export function attachStreamCommands(self) {
         // During a crossfade bridge the preload element is already audible, so the
         // buffer gate serves no purpose — it only lets the preload element's position
         // drift away from the main element's start position. Skip it; position is snapped.
-        if (!isSameTrack && !streamAbortController.signal.aborted && crossfadeStateRef.current !== "bridging") {
+        if (!isSameTrack && !streamAbortController.signal.aborted) {
           // Buffer gate: do not call play() until 3 s of decoded audio is ahead
           // of currentTime at readyState >= 3 (HAVE_FUTURE_DATA). 3 s covers half
           // an HLS segment (segments are ~6 s) — the decoder has a full segment's
@@ -1035,17 +1030,6 @@ export function attachStreamCommands(self) {
           cancelCrossfade();
           return false;
         }
-        // Crossfade bridging: snap main element to preload element's current position
-        // so the 0.35s gain handoff crosses two streams at the same playhead. Without
-        // this, the main element starts at cfResumeAt while the preload element has
-        // drifted forward by the HLS manifest negotiation time, producing an audible
-        // position jump when mainGain ramps up and cfGain ramps down simultaneously.
-        if (crossfadeStateRef.current === "bridging") {
-          const preloadEl = nextTrackPreloadRef.current;
-          if (preloadEl && isFinite(preloadEl.currentTime) && preloadEl.currentTime > 0.05) {
-            try { audio.currentTime = preloadEl.currentTime; } catch {}
-          }
-        }
         patchState({ hasStarted: true, playbackState: "ready" });
         const startedPlay = await playAudioIfNotPaused(audio, !pausedDuringCurrentLoadRef.current, {
           command: PLAYBACK_COMMANDS.PLAY_TRACK,
@@ -1064,14 +1048,6 @@ export function attachStreamCommands(self) {
           });
           void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: false });
           return false;
-        }
-        // Main element is now playing. If we were in crossfade bridge mode (mainGain=0,
-        // cfGain=1, preload element audible), schedule a 350ms ramp to hand off audio
-        // from the preload element to the main element. Without this, mainGain stays at 0
-        // forever and all subsequent playback (including user taps) is silent.
-        if (crossfadeStateRef.current === "bridging") {
-          const nextGainLinear = Math.pow(10, (nextTrack.gainDb || 0) / 20);
-          scheduleCrossfadeHandoff(nextGainLinear);
         }
         // Entitled users (canStream) start on the full library stream directly — they never
         // enter the preview path. Non-entitled users who gain access mid-session are upgraded

@@ -33,7 +33,7 @@ import {
   RESTORE_NEAR_END_BUFFER_SEC,
 } from "@/lib/audio/audio-element-utils";
 import { updateAudibilitySample } from "@/lib/playback/audibility";
-import { triggerCrossfadeIfReady, CROSSFADE_WINDOW_SEC } from "@/lib/audio/crossfade-engine";
+
 import { canFallbackStreamToPreview, dispatchPreviewEnded } from "@/lib/playback/playback-track-utils";
 import { setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
 import { isDocumentPlaybackHidden } from "@/lib/playback/playback-transport-utils";
@@ -665,45 +665,20 @@ export function createPlaybackEventHandlers({
       patchState({ isPlaying: false, playbackState: "paused" });
     }
 
-    // Compute duration/remaining once — shared by preload safety-net and crossfade trigger.
+    // Preload safety-net: if within 30s of track end and the preload element has no
+    // buffered audio data (readyState < 2), retrigger preload to ensure gapless bytes.
     const PRELOAD_LEAD_SEC = 30;
     const cfDur = isFinite(audio.duration) ? audio.duration : 0;
     const cfRem = cfDur > 0 ? cfDur - audio.currentTime : 0;
-
-    // Preload safety-net: if within 30s of track end and the preload element has no
-    // buffered audio data (readyState < 2 = HAVE_NOTHING or HAVE_METADATA only),
-    // kick scheduleNextTrackPreload again. readyState 1 means metadata arrived but
-    // no audio segments yet — insufficient for the crossfade bridge (requires >= 2).
     if (
-      crossfadeStateRef.current === "idle" &&
       !previewOnly &&
-      cfDur > CROSSFADE_WINDOW_SEC * 2 &&
-      cfRem > CROSSFADE_WINDOW_SEC &&
+      cfDur > 10 &&
+      cfRem > 5 &&
       cfRem <= PRELOAD_LEAD_SEC
     ) {
       const preloadEl = nextTrackPreloadRef.current;
-      // readyState < 2 (HAVE_NOTHING or HAVE_METADATA): no decoded audio bytes yet.
-      // readyState 0 = no data at all. readyState 1 = container header parsed but
-      // no audio segments — equally useless for the crossfade bridge which requires
-      // at least HAVE_CURRENT_DATA (readyState 2) to avoid an immediate stall.
-      // Previously guarded only on === 0, leaving the readyState 1 stuck-at-metadata
-      // case undetected on iOS network throttle, causing crossfades to start with an
-      // empty preload element and immediately fall through to the hard-cut path.
       if (preloadEl && preloadEl.readyState < 2) {
         void scheduleNextTrackPreload();
-      }
-    }
-
-    // Crossfade trigger — gated by user preference (default OFF).
-    if (crossfadeEnabledRef.current) {
-      const q = queueRef.current;
-      const qi = queueIndexRef.current;
-      const didStartCrossfade = triggerCrossfadeIfReady(
-        { crossfadeStateRef, nextTrackPreloadRef, audioCtxRef, mainGainRef, crossfadeGainRef, trackGainRef },
-        { rem: cfRem, dur: cfDur, nextTrack: q[qi + 1] ?? null, previewOnly, repeatMode: repeatModeRef.current }
-      );
-      if (didStartCrossfade) {
-        playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.CROSSFADE_START);
       }
     }
   };
@@ -867,66 +842,8 @@ export function createPlaybackEventHandlers({
           // endedTrackSlug and calls playTrackRef a second time.
           spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
           perfMark(MARKS.PLAYBACK_TAP);
-          if (crossfadeStateRef.current === "fading") {
-            crossfadeStateRef.current = "bridging";
-          } else {
-            // Crossfade window missed — hard-cut from preload element to eliminate silence.
-            // If the preload element has any buffered data, route its audio to the output
-            // immediately so the gap is imperceptible while the main element loads.
-            // iOS: page-wide media autoplay permission is granted by the silent WAV element
-            // played in dispatchPlaybackCommand before any await, so play() on nextEl
-            // succeeds here. The .catch() below rolls back gracefully on any failure.
-            const nextEl = nextTrackPreloadRef.current;
-            const ctx = audioCtxRef.current;
-            const mGain = mainGainRef.current;
-            const cfGain = crossfadeGainRef.current;
-            if (
-              nextEl && nextEl.src && nextEl.readyState >= 2 &&
-              mGain && cfGain && ctx?.state === "running"
-            ) {
-              crossfadeStateRef.current = "bridging";
-              const t = ctx.currentTime;
-              const rampEnd = t + 0.010; // 10ms ramp — eliminates click/pop on hard-cut bridge
-              mGain.gain.cancelScheduledValues(t);
-              mGain.gain.setValueAtTime(mGain.gain.value, t);
-              mGain.gain.linearRampToValueAtTime(0, rampEnd);
-              cfGain.gain.cancelScheduledValues(t);
-              cfGain.gain.setValueAtTime(cfGain.gain.value, t);
-              cfGain.gain.linearRampToValueAtTime(1, rampEnd);
-              nextEl.currentTime = 0;
-              nextEl.play().catch(() => {
-                // Preload element blocked — roll back so main element plays normally.
-                // Use a 15ms ramp instead of an instant step to avoid a click/pop on rollback.
-                crossfadeStateRef.current = "idle";
-                const now = audioCtxRef.current?.currentTime ?? 0;
-                const rampEnd = now + 0.015;
-                try {
-                  mGain.gain.cancelScheduledValues(now);
-                  mGain.gain.setValueAtTime(mGain.gain.value, now);
-                  mGain.gain.linearRampToValueAtTime(trackGainRef.current, rampEnd);
-                } catch {}
-                try {
-                  cfGain.gain.cancelScheduledValues(now);
-                  cfGain.gain.setValueAtTime(cfGain.gain.value, now);
-                  cfGain.gain.linearRampToValueAtTime(0, rampEnd);
-                } catch {}
-              });
-            } else {
-              // Crossfade window was missed and the preload element has no buffered data.
-              // The gap between track A ending and track B starting is real and audible.
-              // Show the buffering indicator immediately — playTrackInternal will clear it
-              // once audio is flowing again. Without this, the UI shows a playing state
-              // during a silent gap, which is worse than showing a spinner.
-              patchState({ isBuffering: true, playbackNetworkState: "loading" });
-            }
-          }
-          const isBridgeAdvance = crossfadeStateRef.current === "bridging";
-          const cfResumeAt = isBridgeAdvance
-            ? Math.max(0, nextTrackPreloadRef.current?.currentTime ?? 0)
-            : 0;
           void playTrackRef.current?.(nextTrack, {
-            resumeAt: cfResumeAt,
-            isBridgeAdvance,
+            resumeAt: 0,
             playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE,
           }).then((ok) => {
             if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
