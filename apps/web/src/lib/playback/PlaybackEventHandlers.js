@@ -218,7 +218,6 @@ export function createPlaybackEventHandlers({
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   const onWaiting = () => {
-    console.warn('[2MRRW-TRACE] onWaiting', { t: audio.currentTime?.toFixed(2), paused: audio.paused, readyState: audio.readyState });
     recentStallTimeRef.current = Date.now();
     startStallRecovery();
     if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
@@ -245,7 +244,6 @@ export function createPlaybackEventHandlers({
   };
 
   const onPlaying = () => {
-    console.warn('[2MRRW-TRACE] onPlaying', { t: audio.currentTime?.toFixed(2), paused: audio.paused, readyState: audio.readyState });
     if (bufferShowTimerRef.current) {
       clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = null;
@@ -373,7 +371,6 @@ export function createPlaybackEventHandlers({
   };
 
   const onPause = () => {
-    console.warn('[2MRRW-TRACE] onPause', { t: audio.currentTime?.toFixed(2), userPaused: userPausedRef.current, isPlaying: stateRef.current.isPlaying, networkState: stateRef.current.playbackNetworkState });
     stopStallRecovery();
     if (previewFadeInitRef.current) {
       const gain = userGainRef.current;

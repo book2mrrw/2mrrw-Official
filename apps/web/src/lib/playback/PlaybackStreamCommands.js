@@ -531,6 +531,7 @@ export function attachStreamCommands(self) {
       } else {
         patchTransport({ playbackNetworkState: "loading_stream" });
       }
+      recoveryCoordinator.notifyStreamUpgrade();
       await waitAudioSrcReady(audio, signedUrl, { signal: streamAbortController.signal, timeoutMs: 12000 });
       let applySwapSeekTimeout = null;
       const applySwapSeek = () => {
@@ -1378,6 +1379,7 @@ export function attachStreamCommands(self) {
         skipPauseInterruptionRef.current = true;
       }
       patchState({ playbackNetworkState: "loading_stream" });
+      recoveryCoordinator.notifyStreamUpgrade();
       await waitAudioSrcReady(audio, resolved.track.src, { signal: activeStreamAbortRef.current?.signal });
       if (resumeAt > 0) {
         const applyUpgradeSeek = () => {

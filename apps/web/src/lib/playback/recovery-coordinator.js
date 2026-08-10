@@ -88,9 +88,6 @@ class RecoveryCoordinator {
     if (!this._stallSince) {
       this._stallSince = Date.now();
       this._lastCtx    = ctx;
-      console.warn('[2MRRW-TRACE] RC.report → grace started', {
-        slug: state.currentTrack?.slug, ahead, t: audio.currentTime.toFixed(2),
-      });
       this._graceTimer = setTimeout(() => {
         this._graceTimer = null;
         this._actIfStillStalled();
@@ -109,11 +106,32 @@ class RecoveryCoordinator {
    * and releases the lock. Cooldown stays active — buffer still needs time.
    */
   onPlaybackResumed() {
-    console.warn('[2MRRW-TRACE] RC.onPlaybackResumed', { wasActive: this.isActive() });
     this._clearGrace();
     this._locked     = false;
     this._stallSince = null;
     this._softAttempts = 0;
+  }
+
+  // ── Public: intentional src-swap (stream upgrade / signed-URL swap) ───────
+
+  /**
+   * Called immediately before audio.src is replaced during an intentional
+   * stream upgrade (upgradeToFullStream, swapToSignedStream, or any future
+   * path that deliberately changes the media source mid-session).
+   *
+   * The audio element pauses for the duration of the swap. Without this signal,
+   * reconcileIsPlayingWithElement — which fires from every patchTransport call —
+   * cannot distinguish that pause from a real user-pause and kills isPlaying.
+   *
+   * Entering a cooldown (isActive() → true) suppresses that kill for the entire
+   * swap window. The coordinator is therefore the single authority for every
+   * intentional audio state transition: stall recovery AND src-swaps.
+   */
+  notifyStreamUpgrade() {
+    this._clearGrace();
+    this._locked     = false;
+    this._stallSince = null;
+    this._cooldownUntil = Date.now() + COOLDOWN_SOFT_MS;
   }
 
   // ── Public: new track started ─────────────────────────────────────────────
@@ -157,15 +175,6 @@ class RecoveryCoordinator {
     const state = ctx?.stateRef?.current;
 
     const ahead = audio ? getBufferedAheadSeconds(audio) : -1;
-    console.warn('[2MRRW-TRACE] RC._actIfStillStalled', {
-      slug: state?.currentTrack?.slug,
-      isPlaying: state?.isPlaying,
-      audio_paused: audio?.paused,
-      ahead: ahead.toFixed(2),
-      t: audio?.currentTime?.toFixed(2),
-      locked: this._locked,
-      cooldownMs: Math.max(0, this._cooldownUntil - Date.now()),
-    });
 
     // Validate conditions are still true after grace period
     if (!state?.isPlaying || !state?.currentTrack) { this._stallSince = null; return; }

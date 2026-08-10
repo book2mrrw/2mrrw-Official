@@ -804,13 +804,13 @@ export function createPlaybackHelpers(initialDeps) {
       // the element is paused AND networkState is no longer "loading_stream". The user
       // experiences a flash of paused UI mid-load and must re-tap play.
       if (next.isBuffering || networkState === "buffering" || refNetworkState === "buffering") return next;
+      // The coordinator holds authority over every intentional audio transition:
+      // stall recovery, stream upgrades, and signed-URL src-swaps. During any of
+      // these, audio.paused=true is expected and must not be read as a user pause.
+      // notifyStreamUpgrade() and the stall recovery path both enter a cooldown so
+      // isActive() returns true here for the full transition window.
+      if (recoveryCoordinator.isActive()) return next;
       self.logPlaybackDesyncIfNeeded(prev, next);
-      console.warn('[2MRRW-TRACE] reconcileIsPlayingWithElement → isPlaying:false', {
-        audio_paused: el?.paused, networkState, refNetworkState,
-        isBuffering: next.isBuffering, playbackState: next.playbackState,
-        coordinatorActive: recoveryCoordinator.isActive(),
-        stack: new Error().stack?.split('\n').slice(1, 5).join(' | '),
-      });
       return {
         ...next,
         isPlaying: false,
@@ -941,14 +941,6 @@ export function createPlaybackHelpers(initialDeps) {
             source: "AudioContext",
             code: "FATAL_AUDIO_DESYNC",
             slug: next.currentTrack?.slug ?? null,
-          });
-          console.warn('[2MRRW-TRACE] FATAL_AUDIO_DESYNC fired → isPlaying:false', {
-            slug: next.currentTrack?.slug,
-            playbackState: next.playbackState,
-            isBuffering: next.isBuffering,
-            coordinatorActive: recoveryCoordinator.isActive(),
-            audio_paused: self._deps.audioRef.current?.paused,
-            audio_t: self._deps.audioRef.current?.currentTime?.toFixed(2),
           });
           next = {
             ...next,
