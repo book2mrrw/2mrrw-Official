@@ -176,19 +176,30 @@ class RecoveryCoordinator {
     const hlsEngine = getHLSEngine();
 
     // ── HLS path ──────────────────────────────────────────────────────────
-    // hls.js owns the MSE SourceBuffer. Never seek or reload the audio element.
-    // hls.startLoad() resumes segment downloads from the current position.
+    // hls.js IS the buffer intelligence for HLS tracks — it owns the MSE
+    // SourceBuffer, manages ABR, retries failed fragments (fragLoadingMaxRetry:3),
+    // and calls startLoad() internally on its first fatal network error.
+    //
+    // onWaiting fires during normal hls.js buffering: the audio element has
+    // consumed its decoded data while hls.js downloads the next segment. hls.js
+    // is already loading — calling startLoad(-1) here restarts its entire
+    // segment download queue, briefly invalidates the SourceBuffer, and forces
+    // the audio element to pause. That is the 3-second stop symptom.
+    //
+    // The coordinator's role for HLS is to not interfere. Fatal HLS errors are
+    // surfaced via HLSEngine.onError / onSegmentFatalError, which trigger the
+    // retryStreamPlayback escalation path independently of onWaiting.
     if (hlsEngine.isLoaded) {
       logPlaybackResilience("stall-recovery", {
         source: "RecoveryCoordinator",
-        code: "HLS_STARTLOAD",
+        code: "HLS_DEFERRED",
         slug: state.currentTrack?.slug ?? null,
         currentTime: audio.currentTime,
       });
-      try {
-        hlsEngine._hls?.startLoad(-1);
-      } catch {}
-      this._release(COOLDOWN_SOFT_MS);
+      // Release lock without cooldown. hls.js delivers the next segment and
+      // onPlaying fires — the coordinator clears _stallSince in onPlaybackResumed.
+      this._locked     = false;
+      this._stallSince = null;
       return;
     }
 
