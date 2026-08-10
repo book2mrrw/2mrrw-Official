@@ -196,10 +196,12 @@ class RecoveryCoordinator {
         slug: state.currentTrack?.slug ?? null,
         currentTime: audio.currentTime,
       });
-      // Release lock without cooldown. hls.js delivers the next segment and
-      // onPlaying fires — the coordinator clears _stallSince in onPlaybackResumed.
-      this._locked     = false;
-      this._stallSince = null;
+      // The cooldown is essential: it keeps FATAL_AUDIO_DESYNC guard and the
+      // audibility watchdog suppressed (via isActive()) while hls.js delivers
+      // the next segment. Without it, those systems see a briefly-inaudible
+      // audio element and set isPlaying:false — the "button returns to play" symptom.
+      // The action (startLoad) was wrong. The cooldown was always right.
+      this._release(COOLDOWN_SOFT_MS);
       return;
     }
 
