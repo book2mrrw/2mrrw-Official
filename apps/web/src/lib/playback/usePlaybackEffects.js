@@ -268,12 +268,22 @@ export function usePlaybackEffects({
       const wasPreviewOnly = currentTrack.metadata?.access?.previewOnly;
       const updatedCurrent = updated.find((t) => t.slug === currentTrack.slug);
       if (wasPreviewOnly && updatedCurrent?.metadata?.access?.canStream) {
-        const upgradeSlug = currentTrack.slug;
-        setTimeout(() => {
-          if (stateRef.current.currentTrack?.slug === upgradeSlug) {
-            void dispatchPlaybackCommandRef.current?.("upgradeStream");
-          }
-        }, 500);
+        const policy = entitlementAccountState?.playbackPolicy;
+        if (!policy || policy === "PURCHASE_LIBRARY") {
+          // Purchaser tier: the audio element is on the preview URL and needs a full
+          // stream src-swap. upgradeToFullStream handles the handoff correctly.
+          const upgradeSlug = currentTrack.slug;
+          setTimeout(() => {
+            if (stateRef.current.currentTrack?.slug === upgradeSlug) {
+              void dispatchPlaybackCommandRef.current?.("upgradeStream");
+            }
+          }, 500);
+        } else {
+          // FULL_CATALOG / UNRESTRICTED (Subscriber, Collector, Admin): the queue
+          // src was already corrected to libraryStreamRedirectSrc above. Patch
+          // currentTrack directly — no audio element src-swap needed or wanted.
+          patchState({ currentTrack: updatedCurrent });
+        }
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -817,7 +827,12 @@ export function usePlaybackEffects({
       }
       const track = stateRef.current.currentTrack;
       const meta = track?.metadata?.access;
-      if (meta?.previewOnly && stateRef.current.isPlaying) {
+      const policy = entitlementAccountStateRef.current?.playbackPolicy;
+      if (meta?.previewOnly && stateRef.current.isPlaying &&
+          (!policy || policy === "PURCHASE_LIBRARY")) {
+        // Only Purchaser tier needs a stream src-swap after a purchase event.
+        // Admin/Subscriber/Collector are always entitled — this event firing for them
+        // would mean a race with session hydration, which Effect 5 already handles.
         logStateChurn("upgradeToFullStream", {
           source: "AudioContext",
           reason: "entitlements-updated",
