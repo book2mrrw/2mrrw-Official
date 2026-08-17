@@ -154,9 +154,11 @@ export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurch
                   muted
                   loop
                   playsInline
+                  preload="auto"
                   data-cinematic-video="true"
                   src={card.videoSrc}
                   poster={card.artwork}
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
                   style={{
                     width: "100%",
                     height: 220,

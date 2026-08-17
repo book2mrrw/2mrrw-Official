@@ -1,0 +1,3 @@
+{
+  "/api/gifts/preview/[token]/route": "app/api/gifts/preview/[token]/route.js"
+}

@@ -59,9 +59,11 @@ export async function GET(req) {
         "Content-Type": "application/octet-stream",
         "Content-Length": "16",
         // private: browser-only, no shared-proxy caching.
-        // max-age=300: browser may reuse the key for 5 min (covers all segments in a 4-min track).
-        // no-store was previously present but contradicts max-age and prevents caching entirely.
-        "Cache-Control": "private, max-age=300",
+        // max-age=27900 (7.75 h): aligns with KEY_TTL_SECONDS so the browser cache
+        // expires at the same moment the token does — hls.js never attempts to reuse
+        // a cached key response after the token has expired, eliminating the 403 that
+        // previously terminated sessions open longer than 55 minutes.
+        "Cache-Control": "private, max-age=27900",
         "X-Content-Type-Options": "nosniff",
       },
     })

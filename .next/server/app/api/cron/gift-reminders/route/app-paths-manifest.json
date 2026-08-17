@@ -1,0 +1,3 @@
+{
+  "/api/cron/gift-reminders/route": "app/api/cron/gift-reminders/route.js"
+}

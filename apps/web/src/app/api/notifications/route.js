@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getGuestUser } from "@/lib/guest-session";
 import {
   getNotificationState,
@@ -23,7 +23,7 @@ export async function GET(req) {
       });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const state = await getNotificationState(admin, user.id);
     return NextResponse.json({ ...state, syncedAt: new Date().toISOString() });
   } catch (err) {
@@ -43,7 +43,7 @@ export async function PATCH(req) {
     }
 
     const body = await req.json();
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const preferences = await updateNotificationPreferences(admin, user.id, body.preferences || body);
     const state = await getNotificationState(admin, user.id);
 
@@ -73,7 +73,7 @@ export async function POST(req) {
     }
 
     const { action, ids = [] } = await req.json();
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     let query = admin
       .from("notification_inbox")
       .update(action === "archive" ? { archived_at: new Date().toISOString() } : { read_at: new Date().toISOString() })

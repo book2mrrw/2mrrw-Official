@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getGuestUser } from "@/lib/guest-session";
 import { getDeliverableSignal, isMissingSignalTable } from "@/lib/signals";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
@@ -22,7 +22,7 @@ export async function GET(req) {
       return NextResponse.json({ signal: null, reason: "no_user", syncedAt: new Date().toISOString() });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const signal = await getDeliverableSignal(admin, user.id);
     return NextResponse.json({ signal, syncedAt: new Date().toISOString() });
   } catch (err) {

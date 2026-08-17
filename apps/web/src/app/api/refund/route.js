@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { getStripe } from "@/lib/commerce/stripe";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
@@ -26,7 +26,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "purchase_id is required" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
 
     const { data: purchase, error: fetchError } = await admin
       .from("purchases")

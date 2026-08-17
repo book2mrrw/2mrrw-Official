@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { buildReleaseDiagnostics } from "@/lib/media/admin-media-diagnostics";
@@ -21,7 +21,7 @@ export async function GET(req) {
   }
 
   const canonical = getCanonicalReleaseBySlug(slug);
-  const admin = createAdminClient();
+  const admin = getAdminClient();
 
   try {
     const diagnostics = await buildReleaseDiagnostics(

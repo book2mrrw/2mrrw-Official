@@ -1,6 +1,7 @@
 const LIMITS = {
-  audio: 3,
-  artwork: 6,
+  audio:        3,
+  artwork:      6,
+  visual:       2,   // concurrent visual moment preloads (MP4/WebM)
   totalBytes: 50 * 1024 * 1024,
 };
 
@@ -46,6 +47,7 @@ export function canPreload(type) {
   } else {
     const count = [...active.values()].filter((e) => e.type === type).length;
     if (type === "artwork" && count >= LIMITS.artwork) return false;
+    if (type === "visual"  && count >= LIMITS.visual)  return false;
   }
   if (totalBytes >= LIMITS.totalBytes) return false;
   return true;

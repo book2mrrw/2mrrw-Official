@@ -1,12 +1,12 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getCollectorAccessRecords } from "@/lib/collector-cards";
-import { getGuestUser } from "@/lib/guest-session";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getRequestUser } from "@/lib/guest-session";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export async function GET(req) {
   try {
-    const user = await getGuestUser();
+    const user = await getRequestUser();
 
     const rl = await checkRateLimit(req, {
       routeKey: "collector.cards.get",
@@ -19,7 +19,7 @@ export async function GET(req) {
       return NextResponse.json({ collectorCards: [], collectorStatus: null, access: null });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const records = await getCollectorAccessRecords(admin, user.id);
     const hasCollector = records.length > 0;
 

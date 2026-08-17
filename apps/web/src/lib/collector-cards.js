@@ -1,5 +1,5 @@
-import crypto from "crypto";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import crypto from "crypto";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { isMissingSupabaseTable, isSchemaUnavailableError } from "@/lib/commerce/entitlements";
 import { grantEntitlementFlag } from "@/lib/entitlements";
 
@@ -197,7 +197,7 @@ export async function claimCollectorCard({ userId, token, deviceInfo = {}, ipHas
     return { ok: false, status: 400, reason: "invalid_token" };
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data: card, error } = await admin
     .from("collector_cards")
     .select("*")
@@ -362,7 +362,7 @@ export async function activateCollectorCardBySerial({
   if (!serial || serial.length < 4) return { ok: false, status: 400, reason: "invalid_serial" };
   if (!name || name.length < 2) return { ok: false, status: 400, reason: "legal_name_required" };
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data: card, error } = await admin
     .from("collector_cards")
     .select("*")
@@ -519,7 +519,7 @@ export async function verifyCollectorCardToken({ token, userId = null, deviceInf
     return { ok: false, status: 400, reason: "invalid_token" };
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data: card, error } = await admin
     .from("collector_cards")
     .select("id, visible_serial, release_title, access_tier, claimed, claimed_by_user_id, verification_status, revoked_at")

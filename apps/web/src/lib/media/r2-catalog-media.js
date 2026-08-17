@@ -94,12 +94,13 @@ export function withR2CatalogMedia(item) {
   if (next.visual) {
     next.visual = resolveCatalogMediaField(next.visual, catalogVisualMediaUrl);
   }
+  // Preserve static image BEFORE cover is overwritten with the visual (video) URL.
+  // baseCover is the always-safe static image for <img> tags and system artwork.
+  // This must run before the cover field is mutated so we capture the original value.
+  if (next.visual && !next.baseCover && next.cover) {
+    next.baseCover = resolveCatalogMediaField(next.cover, catalogCoverUrl);
+  }
   if (next.cover) {
-    if (next.visual && !next.baseCover) {
-      // Preserve the static image URL before cover is overwritten with the visual (video) URL.
-      // baseCover is the always-safe static image for <img> tags; cover becomes the video URL.
-      next.baseCover = resolveCatalogMediaField(next.cover, catalogCoverUrl);
-    }
     const coverRaw = next.visual || next.cover;
     next.cover = next.visual
       ? resolveCatalogMediaField(coverRaw, catalogVisualMediaUrl)
@@ -126,6 +127,10 @@ export function withR2CatalogMedia(item) {
     next.csCover = resolveCatalogMediaField(next.csCover, catalogCoverUrl);
   }
   next.coverArtType = next.video ? "video" : (next.coverArtType || "image");
+  // Ensure baseCover is always a resolved URL (never a bare relative path used as <img src>).
+  if (next.baseCover && !isResolvedCatalogMediaUrl(next.baseCover) && !isStorefrontInlineMediaPath(next.baseCover)) {
+    next.baseCover = resolveCatalogMediaField(String(next.baseCover).replace(/^\//, ""), catalogCoverUrl);
+  }
 
   if (slug) {
     if (catalogMediaStableCache.size >= CATALOG_CACHE_MAX) {

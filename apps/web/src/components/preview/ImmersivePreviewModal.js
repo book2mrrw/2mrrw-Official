@@ -22,6 +22,7 @@ import { postLibraryAdd } from "@/lib/library-client";
 import { queueOfflineDownload, isOfflineCached, removeOfflineCache } from "@/lib/offline-cache";
 import { loadPlaylists, addTrackToPlaylist, createPlaylist } from "@/lib/playlists";
 import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
+import { useArtworkGesture } from "@/hooks/useArtworkGesture";
 
 const PREVIEW_CAP_SEC = 30;
 
@@ -344,18 +345,17 @@ function useModalAnim() {
 }
 
 function Scene({ coverUrl, t }) {
-  const [loaded, setLoaded] = useState(false);
+  // loadedUrl tracks which URL actually resolved. `loaded` is derived:
+  // true only when the resolved URL matches the current prop — auto-false on URL change
+  // without any synchronous setState in the effect body.
+  const [loadedUrl, setLoadedUrl] = useState(null);
+  const loaded = loadedUrl === coverUrl && Boolean(coverUrl);
   useEffect(() => {
-    if (!coverUrl) {
-      setLoaded(false);
-      return undefined;
-    }
-    setLoaded(false);
+    if (!coverUrl) return;
     const img = new Image();
     img.src = coverUrl;
-    img.onload = () => setLoaded(true);
-    img.onerror = () => setLoaded(false);
-    return undefined;
+    img.onload  = () => setLoadedUrl(coverUrl);
+    img.onerror = () => setLoadedUrl(null);
   }, [coverUrl]);
 
   return (
@@ -396,11 +396,10 @@ function Scene({ coverUrl, t }) {
 function Waveform({ playing, t, bars = 26 }) {
   const [sc, setSc] = useState(() => Array(bars).fill(0.15));
   const ref = useRef(null);
+  // Derived: idle bars when not playing — avoids synchronous setState in the effect body.
+  const displayedSc = playing ? sc : Array(bars).fill(0.15);
   useEffect(() => {
-    if (!playing) {
-      setSc(Array(bars).fill(0.15));
-      return undefined;
-    }
+    if (!playing) return undefined;
     const tick = () => {
       setSc(
         Array(bars)
@@ -418,7 +417,7 @@ function Waveform({ playing, t, bars = 26 }) {
   }, [playing, bars]);
   return (
     <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 18, justifyContent: "center", marginBottom: 8 }}>
-      {sc.map((s, i) => (
+      {displayedSc.map((s, i) => (
         <div
           key={i}
           style={{
@@ -1059,6 +1058,7 @@ export function SingleModal({
   const beat = useBeat(isPlaying);
   const [sheet, setSheet] = useState(null);
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [coverVideoFailed, setCoverVideoFailed] = useState(false);
 
   usePlayerBodyState({ modalOpen: true });
 
@@ -1098,6 +1098,12 @@ export function SingleModal({
     setClosing(true);
     setTimeout(onClose, 340);
   }, [onClose, setClosing]);
+
+  const singleCoverRef = useRef(null);
+  const { handlers: singleCoverGesture } = useArtworkGesture({
+    slug: track?.slug || "",
+    elementRef: singleCoverRef,
+  });
 
   const isVisible = mounted && !closing;
   const priceLabel = track?.price || track?.priceLabel || "";
@@ -1144,15 +1150,25 @@ export function SingleModal({
           ...vars,
         }}
       >
-        <div style={{ flex: "0 0 65%", position: "relative", overflow: "hidden" }}>
+        <div
+          ref={singleCoverRef}
+          style={{ flex: "0 0 65%", position: "relative", overflow: "hidden" }}
+          onPointerDown={singleCoverGesture.onPointerDown}
+          onPointerMove={singleCoverGesture.onPointerMove}
+          onPointerUp={singleCoverGesture.onPointerUp}
+          onPointerCancel={singleCoverGesture.onPointerCancel}
+          onLostPointerCapture={singleCoverGesture.onLostPointerCapture}
+        >
           {/* Full-bleed cover art — jpg or mp4 loop */}
-          {isVideo ? (
+          {isVideo && !coverVideoFailed ? (
             <video
               src={coverSrc}
               autoPlay
               loop
               muted
               playsInline
+              preload="auto"
+              onError={() => setCoverVideoFailed(true)}
               style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
             />
           ) : coverSrc ? (
@@ -1177,7 +1193,7 @@ export function SingleModal({
             }}
           />
           <div style={{ position: "absolute", top: 14, left: 0, right: 0, zIndex: 30, display: "flex", justifyContent: "center" }}>
-            <div className="drag-pill" onClick={close} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && close()} />
+            <div className="drag-pill" onClick={close} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && close()} onPointerDown={(e) => e.stopPropagation()} />
           </div>
           <div style={{ position: "absolute", top: 12, right: 14, zIndex: 30 }}>
             <Badge access={access} t={t} />
@@ -1421,7 +1437,12 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const vars = useMemo(() => themeVars(t), [t]);
   const entitlementAccountState = useEntitlementAccountState();
 
-  const tracks = Array.isArray(album?.tracks) ? album.tracks.filter(Boolean) : [];
+  // Memoized so `tracks` is referentially stable between renders when the album data hasn't changed.
+  // Without this, a new array is created on every render, causing dependents to fire unnecessarily.
+  const tracks = useMemo(
+    () => (Array.isArray(album?.tracks) ? album.tracks.filter(Boolean) : []),
+    [album]
+  );
   const totalRuntimeSec = useMemo(() => tracks.reduce((sum, tr) => sum + parseDurSec(tr), 0), [tracks]);
   const totalRuntimeLabel = useMemo(() => {
     if (!totalRuntimeSec) return "";
@@ -1430,10 +1451,36 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     return h > 0 ? `${h}h ${m % 60}m` : `${m}m`;
   }, [totalRuntimeSec]);
   const { mounted, closing, setClosing } = useModalAnim();
-  const [activeTrack, setActiveTrack] = useState(() => tracks[0] || null);
+  // Store only the ID — derive the full track object. This decouples selection identity
+  // from list referencing and eliminates the need for an effect to sync selection when tracks changes.
+  const [activeTrackId, setActiveTrackId] = useState(() => tracks[0]?.id ?? null);
+  const activeTrack = useMemo(() => {
+    if (!tracks.length) return null;
+    if (activeTrackId != null) {
+      const found = tracks.find((tr) => tr?.id === activeTrackId);
+      if (found) return found;
+    }
+    return tracks[0] ?? null;
+  }, [tracks, activeTrackId]);
+  // Adjust selection when tracks list changes — React "adjust state when prop changes" pattern.
+  // Runs during render (not in an effect), causes one extra synchronous re-render of this
+  // component only, no cascading renders. `tracks` is stable (useMemo above), so this fires
+  // only when the album's track list genuinely changes.
+  const [syncedTracks, setSyncedTracks] = useState(tracks);
+  if (syncedTracks !== tracks) {
+    setSyncedTracks(tracks);
+    setActiveTrackId(
+      !tracks.length
+        ? null
+        : (activeTrackId != null && tracks.some((tr) => tr?.id === activeTrackId))
+          ? activeTrackId
+          : (tracks[0]?.id ?? null)
+    );
+  }
   const [sheet, setSheet] = useState(null);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [lyricsFullscreen, setLyricsFullscreen] = useState(false);
+  const [albumCoverVideoFailed, setAlbumCoverVideoFailed] = useState(false);
   const [playbackNotice, setPlaybackNotice] = useState(null);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
   const [downloadStates, setDownloadStates] = useState({});
@@ -1441,6 +1488,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const [trackMenu, setTrackMenu] = useState(null);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const swipeRef = useRef({});
+  const albumCoverRef = useRef(null);
 
   const {
     state: { isPlaying, currentTime, duration: engineDuration, currentTrack: engineTrack, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack, queue: engineQueue, queueIndex: engineQueueIndex },
@@ -1468,27 +1516,28 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     return () => unregisterModal("immersive-album-modal");
   }, []);
 
-  useEffect(() => {
-    if (!tracks.length) {
-      setActiveTrack(null);
-      return;
-    }
-    setActiveTrack((prev) => {
-      if (prev && tracks.some((tr) => tr?.id === prev?.id)) return prev;
-      return tracks[0];
-    });
-  }, [tracks]);
+  // Sync tracklist highlight when the engine auto-advances to the next track.
+  // "adjust state when external source changes" render-time pattern — causes one extra
+  // synchronous re-render of this component only; no cascading renders, no stale effect.
+  // Guards: only fires when engine is on this album and index is valid and changed.
+  const engineIsOnThisAlbum = engineTrack?.metadata?.albumSlug === album?.slug;
+  const engineTIdx =
+    engineIsOnThisAlbum && Number.isFinite(engineTrack?.metadata?.trackIndex)
+      ? engineTrack.metadata.trackIndex
+      : -1;
+  const engineActiveId =
+    engineTIdx >= 0 && engineTIdx < tracks.length ? (tracks[engineTIdx]?.id ?? null) : null;
+  const [prevEngineActiveId, setPrevEngineActiveId] = useState(engineActiveId);
+  if (prevEngineActiveId !== engineActiveId && engineActiveId != null) {
+    setPrevEngineActiveId(engineActiveId);
+    setActiveTrackId(engineActiveId);
+  }
 
-  // Sync tracklist highlight when AudioContext auto-advances to next track.
-  // engineTrack.metadata.trackIndex is the authoritative position in the queue.
-  useEffect(() => {
-    if (!engineTrack?.metadata?.albumSlug || engineTrack.metadata.albumSlug !== album?.slug) return;
-    const tIdx = engineTrack.metadata.trackIndex;
-    if (!Number.isFinite(tIdx) || tIdx < 0) return;
-    const rawTracks = Array.isArray(album?.tracks) ? album.tracks.filter(Boolean) : [];
-    if (tIdx >= rawTracks.length) return;
-    setActiveTrack(rawTracks[tIdx]);
-  }, [engineTrack?.id, engineTrack?.metadata?.trackIndex, engineTrack?.metadata?.albumSlug, album?.slug, album?.tracks]);
+  const { handlers: albumCoverGesture } = useArtworkGesture({
+    slug: engineTrack?.slug || "",
+    elementRef: albumCoverRef,
+    disabled: !engineTrack || engineTrack?.metadata?.albumSlug !== album?.slug,
+  });
 
   const isPreview = access !== "full";
   const trackLocked = useCallback((tr) => isPreview && !tr?.free, [isPreview]);
@@ -1553,15 +1602,15 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
       setShuffle(false);
 
       // Optimistic UI: highlight the tapped track immediately.
-      const prevActiveTrack = activeTrack;
-      setActiveTrack(tr);
+      const prevActiveTrackId = activeTrackId;
+      setActiveTrackId(tr?.id ?? null);
 
       if (idx >= 0) {
         // Pass the live React entitlement state so the bridge uses the freshest permissions,
         // not the potentially-stale page auth ref snapshot.
         const ok = await onPlayTrackAtIndex?.(idx, entitlementAccountState);
         if (ok === false) {
-          setActiveTrack(prevActiveTrack); // revert optimistic highlight on failure
+          setActiveTrackId(prevActiveTrackId); // revert optimistic highlight on failure
           const queueTracks = albumTracksForPlayback(album, entitlementAccountState, "album_modal");
           const blocked =
             getPagePlaybackActionsBridge()?.error ||
@@ -1574,7 +1623,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
       showPlaybackNotice("This track isn't in the playback queue yet.");
     },
     [
-      activeTrack,
+      activeTrackId,
       album,
       engineTrack,
       entitlementAccountState,
@@ -1589,10 +1638,10 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const handlePlayAll = useCallback(async () => {
     if (!tracks.length) return;
     setShuffle(false);
-    setActiveTrack(tracks[0]);
+    setActiveTrackId(tracks[0]?.id ?? null);
     const ok = await onPlayTrackAtIndex?.(0, entitlementAccountState);
     if (ok === false) {
-      setActiveTrack(null);
+      setActiveTrackId(null);
       const playbackTracks = albumTracksForPlayback(album, entitlementAccountState, "album_modal");
       showPlaybackNotice(
         describeAlbumQueuePlaybackFailure(playbackTracks, album, entitlementAccountState) ||
@@ -1771,15 +1820,25 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
           ...vars,
         }}
       >
-        <div style={{ flex: "0 0 65%", position: "relative", overflow: "hidden" }}>
+        <div
+          ref={albumCoverRef}
+          style={{ flex: "0 0 65%", position: "relative", overflow: "hidden" }}
+          onPointerDown={albumCoverGesture.onPointerDown}
+          onPointerMove={albumCoverGesture.onPointerMove}
+          onPointerUp={albumCoverGesture.onPointerUp}
+          onPointerCancel={albumCoverGesture.onPointerCancel}
+          onLostPointerCapture={albumCoverGesture.onLostPointerCapture}
+        >
           {/* Full-bleed cover art */}
-          {isVideo ? (
+          {isVideo && !albumCoverVideoFailed ? (
             <video
               src={coverSrc}
               autoPlay
               loop
               muted
               playsInline
+              preload="auto"
+              onError={() => setAlbumCoverVideoFailed(true)}
               style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
             />
           ) : coverSrc ? (
@@ -1796,7 +1855,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
           {/* Bottom fade */}
           <div style={{ position: "absolute", inset: 0, zIndex: 2, pointerEvents: "none", background: "linear-gradient(to top,rgba(0,0,0,.97) 0%,rgba(0,0,0,.15) 42%,transparent 62%)" }} />
           <div style={{ position: "absolute", top: 14, left: 0, right: 0, zIndex: 30, display: "flex", justifyContent: "center" }}>
-            <div className="drag-pill" onClick={close} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && close()} />
+            <div className="drag-pill" onClick={close} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && close()} onPointerDown={(e) => e.stopPropagation()} />
           </div>
           <div style={{ position: "absolute", top: 12, right: 14, zIndex: 30 }}>
             <Badge access={access} t={t} />

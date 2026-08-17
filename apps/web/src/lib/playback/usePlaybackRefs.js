@@ -50,7 +50,6 @@ export function usePlaybackRefs() {
 
   // ─── SM Context Getter Proxy ─────────────────────────────────────────────────
   // Always-live, never stale — replaces useRef(EMPTY_STATE) + sync useEffect.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const stateRef = useMemo(() => ({ get current() { return playbackStateMachine.getContext(); } }), []);
 
   // ─── Playback Services ───────────────────────────────────────────────────────

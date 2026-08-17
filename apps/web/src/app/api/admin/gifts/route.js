@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ||
@@ -23,7 +23,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "slugs required" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const { data: products, error: productError } = await admin
       .from("products")
       .select("id, slug")

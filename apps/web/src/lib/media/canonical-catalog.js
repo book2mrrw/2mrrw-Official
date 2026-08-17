@@ -94,6 +94,8 @@ export const CANONICAL_SINGLES = [
     release_date: "2024-06-01",
     price_cents: 299,
     preview_ext: "mp3",
+    legacy_cover_stem: "w2d",
+    legacy_video_stem: "w2d",
     legacy_cover: "/images/singles/w2d.jpg",
     preview_legacy: "previews/singles/w2d/w2d-preview.mp3",
   },
@@ -104,6 +106,8 @@ export const CANONICAL_SINGLES = [
     release_date: "2022-07-07",
     price_cents: 299,
     preview_ext: "mp3",
+    legacy_cover_stem: "artificial",
+    legacy_video_stem: "artificial",
     legacy_cover: "/images/singles/artificial.jpg",
     preview_legacy: "previews/singles/artificial/artificial-preview.mp3",
   },
@@ -118,6 +122,8 @@ export const CANONICAL_FEATURES = [
     release_date: "2024-01-15",
     price_cents: 299,
     preview_ext: "wav",
+    legacy_cover_stem: "idbu",
+    legacy_cover: "/images/features/idbu.jpg",
     legacy_preview_stem: "i-dont-believe-you",
     preview_legacy: "previews/features/i-dont-believe-you/i-dont-believe-you-preview.wav",
   },
@@ -128,6 +134,8 @@ export const CANONICAL_FEATURES = [
     release_date: "2024-02-01",
     price_cents: 299,
     preview_ext: "wav",
+    legacy_cover_stem: "2heavy",
+    legacy_cover: "/images/features/2heavy.jpg",
     legacy_preview_stem: "2-heavy",
     preview_legacy: "previews/features/2-heavy/2-heavy-preview.wav",
   },
@@ -146,7 +154,7 @@ export const CANONICAL_MIXTAPES_AND_EPS = [
     release_date: "2026-08-01",
     price_cents: 1299,
     legacy_cover_stem: "lovehz",
-    legacy_cover: "images/mixtapes-and-eps/love-hz-vol-1/lovehz.jpg",
+    legacy_cover: "/images/albums/lovehz.jpg",
     video: "videos/mixtapes-and-eps/love-hz-vol-1/love-hz-vol-1.mp4",
   },
   {
@@ -157,7 +165,7 @@ export const CANONICAL_MIXTAPES_AND_EPS = [
     release_date: "2024-03-24",
     price_cents: 999,
     legacy_cover_stem: "ad",
-    legacy_cover: "images/mixtapes-and-eps/ad/ad.jpg",
+    legacy_cover: "/images/albums/ad.JPG",
   },
   {
     slug: "tbh",
@@ -167,7 +175,7 @@ export const CANONICAL_MIXTAPES_AND_EPS = [
     release_date: "2022-07-07",
     price_cents: 999,
     legacy_cover_stem: "tbh",
-    legacy_cover: "images/mixtapes-and-eps/tbh/tbh.jpg",
+    legacy_cover: "/images/albums/tbh.jpg",
   },
 ];
 
@@ -242,10 +250,14 @@ function enrichRelease(raw) {
       ? raw.legacy_video ||
         legacyVideoPublicPath(releaseType, raw.slug, raw.legacy_video_stem)
       : undefined;
-  const visual = visualDiscoveryUrl(releaseType, raw.slug, {
-    legacyVideo,
-    legacyImage,
-  });
+  // For releases with video (singles always, others when video field is set), use the
+  // discovery URL so R2 can resolve the correct asset. For static-image-only releases
+  // (non-single, no video), use legacyImage directly — it lives in public/ and must
+  // be served same-origin, not CDN-prefixed to an R2 path that doesn't exist.
+  const hasVideo = releaseType === "single" || legacyVideo || raw.video;
+  const visual = hasVideo
+    ? visualDiscoveryUrl(releaseType, raw.slug, { legacyVideo, legacyImage })
+    : (legacyImage || "");
 
   return {
     ...raw,
@@ -256,7 +268,7 @@ function enrichRelease(raw) {
     preview_legacy,
     video_path,
     visual,
-    cover: visual,
+    cover: visual || legacyImage || "",
     preview: previewDiscoveryUrl(preview_path, preview_legacy),
     video: releaseType === "single" ? visual : (raw.video || undefined),
     coverArtType: releaseType === "single" ? "video" : (raw.video ? "video" : "image"),

@@ -144,7 +144,6 @@ export function logPlaybackEvent({
   while (playbackEventRing.length > RING_SIZE) {
     playbackEventRing.shift();
   }
-  // eslint-disable-next-line no-console
   console.debug("[playback-event]", entry);
 }
 
@@ -166,7 +165,6 @@ export function getLastPlaybackEvents(count = 5) {
 export function logPlaybackSourceTrace(meta = {}) {
   if (!isPlaybackTraceEnabled()) return;
   const { module = "unknown", action = "unknown", reason = "unspecified", fn, ...rest } = meta;
-  // eslint-disable-next-line no-console
   console.debug("[PLAYBACK-SOURCE-TRACE]", {
     module,
     action,
@@ -191,23 +189,22 @@ export function logPlaybackAuthViolation(internalFn, extra = {}) {
     extra.module && extra.action
       ? { module: String(extra.module), action: String(extra.action) }
       : parsePlaybackCallerFromStack(stack);
-  const module = extra.module ?? parsed.module;
+  const moduleName = extra.module ?? parsed.module;
   const action = extra.action ?? parsed.action;
   const reason =
     extra.reason ?? "direct_internal_call_outside_command_executor";
   const payload = {
     fn: internalFn,
-    module,
+    module: moduleName,
     action,
     reason,
     stack,
     timestamp: Date.now(),
     ...extra,
   };
-  // eslint-disable-next-line no-console
   console.warn("[PLAYBACK-AUTH-VIOLATION]", payload);
   logPlaybackSourceTrace({
-    module,
+    module: moduleName,
     action,
     reason,
     fn: internalFn,
@@ -248,7 +245,6 @@ export function capturePlaybackSnapshotOnPause(snapshot = {}) {
       typeof window !== "undefined" ? window.location?.pathname ?? null : null,
     ts: Date.now(),
   };
-  // eslint-disable-next-line no-console
   console.debug("[playback-stop-snapshot]", payload);
   return payload;
 }
@@ -320,7 +316,6 @@ export function classifyPlaybackInterruption(evidence = {}) {
     topScore === 0 ? "low" : topScore - secondScore >= 2 ? "high" : topScore > 0 ? "medium" : "low";
 
   const result = { likelyCause, confidence, evidence: ev, scores };
-  // eslint-disable-next-line no-console
   console.debug("PLAYBACK INTERRUPTION CLASSIFICATION:", result);
   return result;
 }
@@ -335,7 +330,6 @@ export function classifyPlaybackInterruption(evidence = {}) {
  */
 export function logAudioProviderRender(meta = {}) {
   if (!isPlaybackTraceEnabled()) return;
-  // eslint-disable-next-line no-console
   console.debug("[render-churn]", {
     scope: "AudioProvider",
     ts: Date.now(),
@@ -349,7 +343,6 @@ export function logAudioProviderRender(meta = {}) {
  */
 export function logPlaybackEngineLifecycle(meta = {}) {
   if (!isPlaybackTraceEnabled()) return;
-  // eslint-disable-next-line no-console
   console.debug("[PLAYBACK-ENGINE-LIFECYCLE]", {
     ts: Date.now(),
     ...meta,
@@ -362,7 +355,6 @@ export function logPlaybackEngineLifecycle(meta = {}) {
  */
 export function logPlaybackRenderNoImpact(meta = {}) {
   if (!isPlaybackTraceEnabled()) return;
-  // eslint-disable-next-line no-console
   console.debug("[PLAYBACK-RENDER-NO-IMPACT]", {
     scope: "AudioProvider",
     ts: Date.now(),
@@ -376,7 +368,6 @@ export function logPlaybackRenderNoImpact(meta = {}) {
  */
 export function logUiChurn(kind, meta = {}) {
   if (!isPlaybackTraceEnabled()) return;
-  // eslint-disable-next-line no-console
   console.debug("[ui-churn]", { kind, ts: Date.now(), ...meta });
 }
 
@@ -386,7 +377,6 @@ export function logUiChurn(kind, meta = {}) {
  */
 export function logStreamLifecycle(phase, meta = {}) {
   if (!isPlaybackTraceEnabled()) return;
-  // eslint-disable-next-line no-console
   console.debug("[stream-lifecycle]", { phase, ts: Date.now(), ...meta });
   logPlaybackEvent({
     type: `stream:${phase}`,

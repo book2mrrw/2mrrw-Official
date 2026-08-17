@@ -12,13 +12,16 @@ import {
 } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/normalize-release-type";
 import { catalogCoverUrl } from "@/lib/media-urls";
+import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
+import { resolveConcreteVideoR2Key } from "@/lib/media/resolve-concrete-video-key";
 
 export const AUDIO_EXTENSIONS = [".wav", ".flac", ".m4a", ".mp3"];
 export const ARTWORK_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"];
 export const VIDEO_EXTENSIONS = [".mp4", ".webm", ".mov"];
 export const WAVEFORM_EXTENSIONS = [".json", ".dat", ".peak"];
 
-const CACHE_TTL_MS = 60_000;
+// Visual media keys are stable; 5-minute TTL reduces ListObjects calls across cold-start instances.
+const CACHE_TTL_MS = 300_000;
 /** @type {Map<string, { expiresAt: number, value: string | null }>} */
 const discoveryCache = new Map();
 /** @type {Map<string, Promise<string | null>>} */
@@ -246,6 +249,44 @@ export async function resolveVisualMedia(releaseType, slug, trackSlug, options =
   const normalizedType = normalizeReleaseType(releaseType);
   if (!normalizedType) {
     return { type: "image", key: null, url: getArtworkPlaceholderUrl("single", slug || "placeholder"), source: "placeholder" };
+  }
+
+  // Canonical fast-path: known releases have deterministic R2 keys — zero ListObjectsV2 calls.
+  // Falls through to discovery only when slug is unknown or no concrete key is derivable.
+  if (slug && !trackSlug && !videoFolder && !imageFolder) {
+    const canonical = getCanonicalReleaseBySlug(slug);
+    if (canonical) {
+      const rType = normalizeReleaseType(canonical.release_type || "single") || normalizedType;
+      // Build the expected nested video key from legacy stem or explicit video field.
+      const legacyVideoKey = canonical.legacy_video_stem
+        ? `videos/${rType}/${canonical.slug}/${canonical.legacy_video_stem}.mp4`
+        : canonical.video
+          ? String(canonical.video).replace(/^\//, "")
+          : null;
+      if (legacyVideoKey) {
+        const concreteKey = resolveConcreteVideoR2Key({ videoPath: legacyVideoKey, slug: canonical.slug });
+        if (concreteKey) {
+          const url = getPublicR2Url(concreteKey);
+          if (url) return { type: "video", key: concreteKey, url, source: "canonical_direct" };
+        }
+      }
+      // No video for this release — resolve cover image.
+      // If legacy_cover (a public/ path) is set, use it directly — the JPEG has not yet been
+      // uploaded to R2 at the entity-folder key. Once uploaded, remove legacy_cover from the
+      // catalog entry and R2 takes over via legacy_cover_stem.
+      if (canonical.legacy_cover) {
+        const publicUrl = String(canonical.legacy_cover).startsWith("/")
+          ? canonical.legacy_cover
+          : `/${canonical.legacy_cover}`;
+        return { type: "image", key: null, url: publicUrl, source: "canonical_public_fallback" };
+      }
+      if (canonical.legacy_cover_stem) {
+        const imageKey = `images/${rType}/${canonical.slug}/${canonical.legacy_cover_stem}.jpeg`;
+        const url = getPublicR2Url(imageKey);
+        if (url) return { type: "image", key: imageKey, url, source: "canonical_direct" };
+      }
+      // Slug is known but has no concrete keys derivable — fall through to discovery.
+    }
   }
 
   const videoEntity =

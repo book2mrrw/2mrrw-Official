@@ -1,6 +1,7 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
@@ -13,11 +14,151 @@ import { albumCardPlaybackItem, toPlaybackTrack, toInstantStartTrack } from "@/l
 import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 import { withR2CatalogMedia, isUpcomingReleaseDate, catalogCoverDisplay } from "@/components/home/catalogMedia";
 import { CountdownTimer } from "@/components/music/CountdownTimer";
+import { useArtworkGesture }       from "@/hooks/useArtworkGesture";
+import { useVisualAssets } from "@/hooks/useVisualAssets";
+import { globalMediaController } from "@/media/visualEngine/GlobalMediaController";
 
-function CatalogCardCoverSurface({ mediaItem, coverDisplay, hoverIn, hoverOut, onCardClick, onHintPlay }) {
-  const [videoFailed, setVideoFailed] = useState(false);
+const VisualMomentOverlay  = dynamic(() => import("@/components/music/VisualMomentOverlay"),  { ssr: false });
+const FullVisualExperience = dynamic(() => import("@/components/music/FullVisualExperience"), { ssr: false });
+
+/**
+ * Release card cover surface with Visual Moment gesture support.
+ *
+ * Tap  → onCardClick (open release modal)
+ * Hold → Visual Moment activates (if asset available)
+ * Hold + swipe up → FullVisualExperience
+ */
+function CatalogCardCoverSurface({
+  mediaItem,
+  coverDisplay,
+  hoverIn,
+  hoverOut,
+  onCardClick,
+  onHintPlay,
+  accountState,
+}) {
+  const [videoFailed,      setVideoFailed]      = useState(false);
+  const [momentActive,     setMomentActive]     = useState(false);
+  const [fullVisualOpen,   setFullVisualOpen]   = useState(false);
+  const [momentScale,      setMomentScale]      = useState(1);
+  const suppressNextClick  = useRef(false);
+  const coverRef           = useRef(null);
+  const dwellTimerRef      = useRef(null);
+
+  const { assets, primaryAsset } = useVisualAssets(mediaItem?.slug, accountState);
+  const hasVisualMoment = Boolean(primaryAsset);
+
+  // Stable refs to avoid stale closures in IntersectionObserver / timer callbacks
+  const primaryAssetRef   = useRef(primaryAsset);
+  const fullVisualOpenRef = useRef(fullVisualOpen);
+  const mediaSlugRef      = useRef(mediaItem?.slug);
+  useEffect(() => { primaryAssetRef.current   = primaryAsset;    }, [primaryAsset]);
+  useEffect(() => { fullVisualOpenRef.current = fullVisualOpen;  }, [fullVisualOpen]);
+  useEffect(() => { mediaSlugRef.current      = mediaItem?.slug; }, [mediaItem?.slug]);
+
+  // ── Visual Moment passive dwell — HOLD GESTURE IS EXCLUSIVELY SCREW ────────
+  // VisualMoment is no longer hold-triggered. Gesture conflict eliminated.
+  // Desktop: mouse-hover dwell (600ms). Mobile/touch: IntersectionObserver (2s).
+
+  const _activateDwell = useCallback(() => {
+    const asset = primaryAssetRef.current;
+    const slug  = mediaSlugRef.current;
+    if (!asset || !slug) return;
+    suppressNextClick.current = true;
+    setMomentScale(1.025);
+    setMomentActive(true);
+    globalMediaController.activateMoment(slug, asset);
+  }, []);
+
+  const _deactivateDwell = useCallback(() => {
+    clearTimeout(dwellTimerRef.current);
+    dwellTimerRef.current = null;
+    setMomentScale(1);
+    setMomentActive(false);
+    if (!fullVisualOpenRef.current) globalMediaController.deactivateMoment();
+  }, []);
+
+  // IntersectionObserver dwell — touch/mobile primary (only on non-hover devices)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!hasVisualMoment) return;
+    if (window.matchMedia("(hover: hover)").matches) return; // desktop uses mouse-enter dwell
+    const el = coverRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      clearTimeout(dwellTimerRef.current);
+      dwellTimerRef.current = null;
+      if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+        dwellTimerRef.current = setTimeout(_activateDwell, 2000);
+      } else {
+        _deactivateDwell();
+      }
+    }, { threshold: 0.5 });
+    obs.observe(el);
+    return () => { obs.disconnect(); clearTimeout(dwellTimerRef.current); };
+  }, [hasVisualMoment, _activateDwell, _deactivateDwell]);
+
+  // Desktop mouse-hover dwell handlers
+  const handleMouseEnter = useCallback(() => {
+    hoverIn?.();
+    onHintPlay?.();
+    if (!primaryAssetRef.current) return;
+    clearTimeout(dwellTimerRef.current);
+    dwellTimerRef.current = setTimeout(_activateDwell, 600);
+  }, [hoverIn, onHintPlay, _activateDwell]);
+
+  const handleMouseLeave = useCallback(() => {
+    hoverOut?.();
+    _deactivateDwell();
+  }, [hoverOut, _deactivateDwell]);
+
+  const onSwipeUp = useCallback(() => {
+    const asset = primaryAssetRef.current;
+    const slug  = mediaSlugRef.current;
+    if (!asset || !slug) return;
+    setMomentActive(false);
+    setFullVisualOpen(true);
+    globalMediaController.expandToFull(slug, asset);
+  }, []);
+
+  // Artwork gesture — HOLD is now exclusively Screw. No VisualMoment conflict.
+  const { handlers: artHandlers } = useArtworkGesture({
+    slug:       mediaItem?.slug || "",
+    elementRef: coverRef,
+    disabled:   false,
+  });
+
+  const handleClick = useCallback((e) => {
+    if (suppressNextClick.current) {
+      suppressNextClick.current = false;
+      return;
+    }
+    onCardClick?.(mediaItem);
+  }, [onCardClick, mediaItem]);
+
+  const handleFullClose = useCallback(() => {
+    setFullVisualOpen(false);
+    setMomentActive(false);
+    globalMediaController.exitFull();
+  }, []);
+
   return (
-    <div onMouseEnter={() => { hoverIn?.(); onHintPlay?.(); }} onMouseLeave={hoverOut} onTouchStart={onHintPlay} onClick={() => onCardClick?.(mediaItem)} style={{ cursor: "pointer" }}>
+    <div
+      ref={coverRef}
+      style={{
+        position:   "relative",
+        cursor:     "pointer",
+        transform:  `scale(${momentScale})`,
+        transition: momentActive ? "transform 0.25s cubic-bezier(0.34,1.56,0.64,1)" : "transform 0.2s ease",
+        userSelect: "none",
+      }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onTouchStart={onHintPlay}
+      onClick={handleClick}
+      {...artHandlers}
+    >
+      {/* Animated cover art / static cover */}
       {!videoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video" ? (
         <video
           src={mediaItem?.video || mediaItem?.visual || undefined}
@@ -34,6 +175,44 @@ function CatalogCardCoverSurface({ mediaItem, coverDisplay, hoverIn, hoverOut, o
           type={coverDisplay.type || mediaItem.coverArtType}
           alt="" width="100%" height="auto"
           style={{ aspectRatio: "1/1", transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s", display: "block" }}
+        />
+      )}
+
+      {/* Visual Moment overlay — renders over cover during hold */}
+      {hasVisualMoment && primaryAsset && (
+        <VisualMomentOverlay
+          active={momentActive}
+          asset={primaryAsset}
+          releaseSlug={mediaItem.slug}
+          onSwipeUp={onSwipeUp}
+          onVideoError={() => setMomentActive(false)}
+        />
+      )}
+
+      {/* Hold indicator badge — visible after a brief hold begins */}
+      {hasVisualMoment && !momentActive && (
+        <div
+          aria-hidden
+          style={{
+            position:      "absolute",
+            bottom:        8,
+            right:         8,
+            width:         6,
+            height:        6,
+            borderRadius:  "50%",
+            background:    "rgba(0,191,255,0.7)",
+            pointerEvents: "none",
+          }}
+        />
+      )}
+
+      {/* Full visual experience portal */}
+      {fullVisualOpen && primaryAsset && (
+        <FullVisualExperience
+          asset={primaryAsset}
+          releaseSlug={mediaItem.slug}
+          coverUrl={mediaItem.cover || mediaItem.baseCover}
+          onClose={handleFullClose}
         />
       )}
     </div>
@@ -154,6 +333,7 @@ function CatalogGrid({
             hoverIn={hoverIn}
             hoverOut={hoverOut}
             onCardClick={onCardClick}
+            accountState={accountState}
             onHintPlay={() => {
               const track = toPlaybackTrack(withR2CatalogMedia(playItem), { ...accountState, userId, isAdmin }, type === "albums" ? "home_album_card" : "home_card");
               if (!track?.src) return;

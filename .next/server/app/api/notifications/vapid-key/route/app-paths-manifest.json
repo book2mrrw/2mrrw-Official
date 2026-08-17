@@ -1,0 +1,3 @@
+{
+  "/api/notifications/vapid-key/route": "app/api/notifications/vapid-key/route.js"
+}

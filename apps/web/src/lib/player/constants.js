@@ -9,10 +9,14 @@ export const DOUBLE_TAP_MS = 300;
 export const HOLD_FADE_MS = 300;
 export const RELEASE_FADE_MS = 200;
 export const MOVE_CANCEL_PX = 10;
+export const HOLD_THRESHOLD_MS = 420;
+export const LOCK_SLIDE_PX_RATIO = 0.30;
 export const SWIPE_DISMISS_PX = 80;
 export const EXPAND_SWIPE_CLOSE_MS = 220;
 
 export const CS_PLAYBACK_RATE = 0.75;
+
+export const UNLOCK_HOLD_MS = 1000;
 
 export const PLAYER_BODY_CLASS = {
   active: "is-player-active",

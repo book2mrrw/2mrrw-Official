@@ -1,5 +1,5 @@
-import DeepLinkRedirect from "@/components/music/DeepLinkRedirect";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import DeepLinkRedirect from "@/components/music/DeepLinkRedirect";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 export const revalidate = 3600;
 
@@ -9,7 +9,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://2mrrw.com";
 export async function generateMetadata({ params }) {
   const { slug } = await params;
   try {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const { data } = await admin
       .from("products")
       .select("title, cover_url, slug")

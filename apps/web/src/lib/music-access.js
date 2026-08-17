@@ -2,7 +2,6 @@ import { membershipHasPremiumAccess } from "@/lib/commerce/entitlements";
 import { isAdminUser } from "@/lib/auth/constants";
 import { permanentOwnedSlugsFromState } from "@/lib/library-ownership";
 import { getOfflinePlaybackUrl } from "@/lib/offline-cache";
-import { catalogPreviewAudioUrl } from "@/lib/media-urls";
 
 const ACTIVE_COLLECTOR_STATUSES = new Set(["active", "verified", "granted"]);
 
@@ -221,11 +220,11 @@ export function libraryStreamRedirectSrc(slug, { trackSlug = null } = {}) {
  */
 /** Full stream only when client user matches server account/state user (cookie session aligned). */
 export function canRequestLibraryStream(access, { userId, accountState } = {}) {
-  if (!access?.canStream) return false;
-  // Admin identity is confirmed synchronously from the Supabase session (build-time
-  // baked-in email/id constants). The server enforces access independently on every
-  // /api/library/stream request, so bypassing the client userId guard here is safe.
+  // Admin always streams directly.
   if (accountState?.isAdmin) return true;
+  // Every logged-in user routes through the library stream endpoint — the server
+  // enforces entitlement and serves preview audio for non-entitled tiers. This gives
+  // all users the same authenticated pipeline (no public CDN preview URLs).
   if (!userId) return false;
   const serverUserId = accountState?.user?.id || accountState?.userId;
   if (!serverUserId) return false;
@@ -250,11 +249,7 @@ export function resolvePlaybackSrc(track, access, { userId, accountState } = {})
     const trackSlug = (rawTrackSlug && rawTrackSlug !== track.slug) ? rawTrackSlug : null;
     return libraryStreamRedirectSrc(track.slug, { trackSlug });
   }
-  const previewPath = track.preview || track.preview_path || track.previewPath;
-  if (previewPath) {
-    return catalogPreviewAudioUrl(previewPath);
-  }
-  return track.preview || track.src || track.audio || "";
+  return "";
 }
 
 export function partitionLibraryByType(

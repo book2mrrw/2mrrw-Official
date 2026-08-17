@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getProductCatalog } from "@/lib/commerce/catalog";
 
 export async function POST(req) {
@@ -8,7 +8,7 @@ export async function POST(req) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const rows = getProductCatalog().map((p) => ({
     slug: p.slug,
     title: p.title,

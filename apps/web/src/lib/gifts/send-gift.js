@@ -1,24 +1,33 @@
-import { createAdminClient } from "@/lib/supabase/admin";
-import { grantLibraryItems } from "@/lib/commerce/entitlements";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 import {
   releaseTypeToGiftItemType,
   resolveGiftProduct,
 } from "@/lib/commerce/resolve-storefront-product";
 import { isAdminUser } from "@/lib/auth/constants";
 import { buildGiftLink, sendGiftEmail } from "@/lib/gifts/email";
-import { claimGiftForUser } from "@/lib/gifts/helpers";
 import { createGiftLinkToken } from "@/lib/gifts/token-hash";
+import { sendSMS } from "@/lib/server/twilio";
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
 async function findRecipientProfile(email) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data: profile } = await admin
     .from("profiles")
     .select("id, email, full_name")
     .ilike("email", email)
+    .maybeSingle();
+  return profile;
+}
+
+async function findRecipientProfileByPhone(phone) {
+  const admin = getAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id, email, full_name")
+    .eq("phone", phone)
     .maybeSingle();
   return profile;
 }
@@ -57,11 +66,13 @@ export async function sendStorefrontGift({
   }
 
   const email = normalizeEmail(recipientEmail);
-  if (!email) {
-    throw new GiftSendError("Recipient email is required", { code: "RECIPIENT_EMAIL_REQUIRED", status: 400 });
+  const phone = recipientPhone?.trim() || null;
+
+  if (!email && !phone) {
+    throw new GiftSendError("Recipient email or phone number is required", { code: "RECIPIENT_CONTACT_REQUIRED", status: 400 });
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { product, steps } = await resolveGiftProduct(admin, {
     slug: logCtx.releaseSlug,
     productId,
@@ -79,7 +90,11 @@ export async function sendStorefrontGift({
     });
   }
 
-  const recipientProfile = await findRecipientProfile(email);
+  // Look up existing account by email first, then phone as fallback
+  const recipientProfile = email
+    ? await findRecipientProfile(email)
+    : await findRecipientProfileByPhone(phone);
+
   const itemType = releaseTypeToGiftItemType(releaseType, product.product_type);
   const expiresAt = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString();
 
@@ -90,8 +105,8 @@ export async function sendStorefrontGift({
     .insert({
       sender_id: senderUser.id,
       recipient_id: recipientProfile?.id ?? null,
-      recipient_email: email,
-      recipient_phone: recipientPhone?.trim() || null,
+      recipient_email: email || null,
+      recipient_phone: phone,
       item_type: itemType,
       item_id: product.id,
       item_title: releaseTitle || product.title,
@@ -113,56 +128,67 @@ export async function sendStorefrontGift({
     giftId: gift.id,
     productSlug: product.slug,
     itemType,
-    recipientEmail: email,
+    recipientEmail: email || null,
+    recipientPhone: phone || null,
     deliveredToExistingUser: Boolean(recipientProfile?.id),
   });
 
   const giftLink = buildGiftLink(giftTokenRaw);
-  await sendGiftEmail({
-    to: email,
-    itemTitle: gift.item_title || product.title,
-    message,
-    giftLink,
-    expiresAt: gift.expires_at,
-    coverUrl: product.cover_url || null,
-  });
+  let smsSent = false;
+  let emailSent = false;
 
-  let delivered = false;
-  if (recipientProfile?.id) {
-    const recipientUser = {
-      id: recipientProfile.id,
-      email: recipientProfile.email || email,
-      name: recipientName?.trim() || recipientProfile.full_name || "",
-    };
-    try {
-      await claimGiftForUser(gift, recipientUser);
-      delivered = true;
-      console.info("[gift-send] auto-claimed for recipient", { giftId: gift.id, userId: recipientProfile.id });
-    } catch (claimErr) {
-      console.warn("[gift-send] claim fallback to grantLibraryItems", {
+  if (email) {
+    const emailResult = await sendGiftEmail({
+      to: email,
+      itemTitle: gift.item_title || product.title,
+      message,
+      giftLink,
+      expiresAt: gift.expires_at,
+      coverUrl: product.cover_url || null,
+    });
+    emailSent = Boolean(emailResult.sent);
+    if (!emailSent) {
+      console.error("[gift-send] gift email NOT delivered", {
         giftId: gift.id,
-        error: claimErr?.message,
+        to: email,
+        loggedOnly: emailResult.loggedOnly,
+        resendError: emailResult.resendError,
+        httpStatus: emailResult.status,
       });
-      await grantLibraryItems({
-        userId: recipientProfile.id,
-        purchaseId: null,
-        slugs: [product.slug],
-        source: "gift",
-      });
-      await admin
-        .from("library_items")
-        .update({ gifted_by: senderUser.id, gift_id: gift.id, source: "gift" })
-        .eq("user_id", recipientProfile.id)
-        .eq("product_id", product.id);
-      delivered = true;
+    } else {
+      console.info("[gift-send] gift email delivered", { giftId: gift.id, to: email });
     }
   }
+
+  if (phone) {
+    const title = gift.item_title || product.title;
+    const smsBody = [
+      `🎁 You have a gift from 2MRRW${title ? `: ${title}` : ""}!`,
+      message?.trim() ? `"${message.trim()}"` : null,
+      `Claim it here: ${giftLink}`,
+    ].filter(Boolean).join("\n");
+
+    const smsResult = await sendSMS({ to: phone, body: smsBody });
+    smsSent = Boolean(smsResult.ok);
+    if (!smsSent) {
+      console.error("[gift-send] gift SMS NOT delivered", { giftId: gift.id, to: phone });
+    } else {
+      console.info("[gift-send] gift SMS delivered", { giftId: gift.id, to: phone });
+    }
+  }
+
+  // Never auto-claim on send — recipient must click their link and claim it themselves.
+  // Marking the gift as claimed at send time prevents the recipient from ever claiming it.
+  const delivered = false;
 
   return {
     gift,
     giftLink,
     delivered,
-    recipientEmail: email,
+    emailSent,
+    smsSent,
+    recipientEmail: email || null,
+    recipientPhone: phone || null,
     recipientName: recipientName?.trim() || null,
   };
 }

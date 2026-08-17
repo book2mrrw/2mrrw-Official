@@ -16,9 +16,10 @@ import { getFanSessionUser } from "@/lib/auth/session-user";
 import { getGuestUser } from "@/lib/guest-session";
 import { userCanStreamProduct } from "@/lib/commerce/entitlements";
 import { isAdminUser } from "@/lib/auth/constants";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { signVariantToken } from "@/lib/hls/token";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { getOrFetchManifest } from "@/lib/server/hls-manifest-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -69,20 +70,26 @@ export async function GET(req) {
     }
   }
 
-  // Look up completed HLS manifest.
+  // Look up completed HLS manifest — served from L1/L2 cache on all warm requests.
   // Normalize trackSlug: singles have track_slug IS NULL in the DB. Some callers pass
   // trackSlug === slug as a fallback (no real sub-track identifier) — treat that as null.
   const effectiveTrackSlug = (trackSlug && trackSlug !== slug) ? trackSlug : null;
-  const admin = createAdminClient();
-  let manifestQ = admin
-    .from("hls_manifests")
-    .select("bitrates, segment_duration_secs, duration_seconds")
-    .eq("slug", slug);
-  manifestQ = effectiveTrackSlug ? manifestQ.eq("track_slug", effectiveTrackSlug) : manifestQ.is("track_slug", null);
-  const { data: manifest, error } = await manifestQ.maybeSingle();
 
-  if (error) {
-    console.error("[hls/manifest] DB error", { slug, trackSlug, message: error.message });
+  let manifest;
+  try {
+    manifest = await getOrFetchManifest(slug, effectiveTrackSlug, async () => {
+      const admin = getAdminClient();
+      let q = admin
+        .from("hls_manifests")
+        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts")
+        .eq("slug", slug);
+      q = effectiveTrackSlug ? q.eq("track_slug", effectiveTrackSlug) : q.is("track_slug", null);
+      const { data, error } = await q.maybeSingle();
+      if (error) throw error;
+      return data ?? null;
+    });
+  } catch (err) {
+    console.error("[hls/manifest] DB error", { slug, trackSlug, message: err.message });
     return cors(req, NextResponse.json({ error: "Internal error" }, { status: 500 }));
   }
 

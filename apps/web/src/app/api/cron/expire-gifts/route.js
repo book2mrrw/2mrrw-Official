@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 function authorizeCron(request) {
   const secret = process.env.CRON_SECRET;
@@ -15,7 +15,7 @@ export async function GET(request) {
   }
 
   try {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const now = new Date().toISOString();
     const { data, error } = await admin
       .from("gifts")

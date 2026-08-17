@@ -31,13 +31,20 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
+function absoluteUrl(url) {
+  if (!url) return null;
+  if (url.startsWith("http://") || url.startsWith("https://")) return url;
+  return `${storefrontBaseUrl()}${url.startsWith("/") ? "" : "/"}${url}`;
+}
+
 function buildGiftEmailHtml({ itemTitle, message, giftLink, expiresAt, coverUrl }) {
   const expiryLine = formatExpiry(expiresAt);
   const messageHtml = message?.trim()
     ? `<p style="margin:20px 0 0;font-size:15px;line-height:1.7;color:#d4c4ff;font-style:italic;">&ldquo;${escapeHtml(message.trim())}&rdquo;</p>`
     : "";
-  const artBlock = coverUrl
-    ? `<img src="${escapeHtml(coverUrl)}" alt="" width="280" height="280" style="display:block;width:min(280px,88vw);height:auto;aspect-ratio:1;border-radius:16px;margin:0 auto 24px;border:1px solid rgba(162,89,255,0.35);box-shadow:0 24px 60px rgba(0,0,0,0.55);" />`
+  const absoluteCover = absoluteUrl(coverUrl);
+  const artBlock = absoluteCover
+    ? `<img src="${escapeHtml(absoluteCover)}" alt="" width="280" height="280" style="display:block;width:min(280px,88vw);height:auto;aspect-ratio:1;border-radius:16px;margin:0 auto 24px;border:1px solid rgba(162,89,255,0.35);box-shadow:0 24px 60px rgba(0,0,0,0.55);" />`
     : `<div style="width:200px;height:200px;margin:0 auto 24px;border-radius:16px;background:linear-gradient(135deg,#1a1030,#0a0a12);border:1px solid rgba(162,89,255,0.35);"></div>`;
 
   return `<!DOCTYPE html>
@@ -79,6 +86,8 @@ export async function sendGiftEmail({
   expiresAt,
   coverUrl,
 }) {
+  const { sendTransactionalEmail } = await import("@/lib/server/email");
+
   const subject = `${BRAND} gifted you something special`;
   const expiryLine = formatExpiry(expiresAt);
   const messageBlock = message?.trim() ? `\n\n"${message.trim()}"\n` : "";
@@ -93,33 +102,22 @@ This gift expires in 15 days${expiryLine ? ` on ${expiryLine}` : ""}.
 
   const html = buildGiftEmailHtml({ itemTitle, message, giftLink, expiresAt, coverUrl });
 
-  const resendKey = process.env.RESEND_API_KEY;
-  if (resendKey) {
-    const from = process.env.GIFT_EMAIL_FROM || "2MRRW <gifts@2mrrw.com>";
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to: [to],
-        subject,
-        text,
-        html,
-      }),
+  const from = process.env.GIFT_EMAIL_FROM || process.env.TRANSACTIONAL_EMAIL_FROM || `${BRAND} <no-reply@2mrrw.com>`;
+
+  const result = await sendTransactionalEmail({ to, subject, html, text, from });
+
+  if (!result.sent) {
+    console.error("[gift-email] delivery failed", {
+      to,
+      subject,
+      from,
+      loggedOnly: result.loggedOnly,
+      resendError: result.resendError,
+      status: result.status,
     });
-    if (!response.ok) {
-      const body = await response.text().catch(() => "");
-      console.warn("gift email send failed:", response.status, body);
-      return { sent: false, subject, text };
-    }
-    return { sent: true, subject, text };
   }
 
-  console.info("[gift-email]", { to, subject, giftLink });
-  return { sent: false, subject, text, loggedOnly: true };
+  return { ...result, subject, text };
 }
 
 export async function sendGiftReminderEmail({
@@ -129,6 +127,8 @@ export async function sendGiftReminderEmail({
   expiresAt,
   coverUrl,
 }) {
+  const { sendTransactionalEmail } = await import("@/lib/server/email");
+
   const subject = `Your gift from ${BRAND} expires in 5 days`;
   const text = `You have an unclaimed gift: ${itemTitle}
 
@@ -147,24 +147,18 @@ Expires: ${formatExpiry(expiresAt)}
     coverUrl,
   });
 
-  const resendKey = process.env.RESEND_API_KEY;
-  if (resendKey) {
-    const from = process.env.GIFT_EMAIL_FROM || "2MRRW <gifts@2mrrw.com>";
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${resendKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ from, to: [to], subject, text, html }),
+  const from = process.env.GIFT_EMAIL_FROM || process.env.TRANSACTIONAL_EMAIL_FROM || `${BRAND} <no-reply@2mrrw.com>`;
+
+  const result = await sendTransactionalEmail({ to, subject, html, text, from });
+
+  if (!result.sent) {
+    console.error("[gift-reminder-email] delivery failed", {
+      to,
+      loggedOnly: result.loggedOnly,
+      resendError: result.resendError,
+      status: result.status,
     });
-    if (!response.ok) {
-      console.warn("gift reminder email failed:", response.status);
-      return { sent: false };
-    }
-    return { sent: true };
   }
 
-  console.info("[gift-reminder-email]", { to, subject, giftLink });
-  return { sent: false, loggedOnly: true };
+  return result;
 }

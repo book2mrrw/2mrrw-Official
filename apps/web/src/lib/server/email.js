@@ -48,14 +48,16 @@ function emailShell(content) {
 /**
  * Send a transactional email via Resend.
  * Non-fatal: if RESEND_API_KEY is absent or the request fails, logs and returns { sent: false }.
+ * @param {{ to: string, subject: string, html: string, text?: string, from?: string }} opts
  */
-export async function sendTransactionalEmail({ to, subject, html, text }) {
+export async function sendTransactionalEmail({ to, subject, html, text, from }) {
   if (!to) return { sent: false };
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) {
     console.info("[email] no RESEND_API_KEY — logged only", { to, subject });
     return { sent: false, loggedOnly: true };
   }
+  const sender = from || transactionalFrom();
   try {
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -64,7 +66,7 @@ export async function sendTransactionalEmail({ to, subject, html, text }) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: transactionalFrom(),
+        from: sender,
         to: [to],
         subject,
         text: text || subject,
@@ -73,12 +75,12 @@ export async function sendTransactionalEmail({ to, subject, html, text }) {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      console.warn("[email] send failed", res.status, body.slice(0, 200), { to, subject });
-      return { sent: false };
+      console.error("[email] send failed", res.status, body.slice(0, 400), { to, subject, from: sender });
+      return { sent: false, status: res.status, resendError: body.slice(0, 400) };
     }
     return { sent: true };
   } catch (err) {
-    console.warn("[email] send error", err?.message, { to, subject });
+    console.error("[email] send error", err?.message, { to, subject });
     return { sent: false };
   }
 }
@@ -168,6 +170,48 @@ export function buildMembershipWelcomeEmail({ name }) {
   ].join("\n");
 
   return { subject: `Welcome to the 2MRRW Inner Circle`, html, text };
+}
+
+export function buildLivestreamEmail({ title, channel, type }) {
+  const base = storefrontBaseUrl();
+  const twitchUrl = `https://twitch.tv/${channel || "callme2mrrw"}`;
+  const liveTabUrl = `${base}/#live`;
+
+  const headlineMap = {
+    "24h":   `${title || "2MRRW Live"} — Tomorrow on Twitch`,
+    prelive: `${title || "2MRRW Live"} — Starting in 15 Minutes`,
+    live:    `${title || "2MRRW Live"} — LIVE RIGHT NOW`,
+  };
+  const subMap = {
+    "24h":   "Catch the stream on Twitch or right here on the platform — tomorrow.",
+    prelive: "Going live in about 15 minutes. Get in early.",
+    live:    "2MRRW is streaming right now. Watch on the platform or directly on Twitch.",
+  };
+
+  const headline = escapeHtml(headlineMap[type] || headlineMap.live);
+  const sub      = subMap[type] || subMap.live;
+
+  const html = emailShell(`
+    <tr><td style="text-align:center;padding-bottom:28px;">
+      <h1 style="margin:0;font-size:24px;font-weight:900;color:#ffffff;line-height:1.25;">${headline}</h1>
+      <p style="margin:10px 0 0;font-size:14px;color:#888;">${sub}</p>
+    </td></tr>
+    <tr><td style="background:linear-gradient(180deg,#0d0d14,#080808);border:1px solid rgba(0,255,255,0.15);border-radius:20px;padding:28px 24px;text-align:center;">
+      <div style="width:12px;height:12px;border-radius:50%;background:#00ffff;margin:0 auto 16px;box-shadow:0 0 14px rgba(0,255,255,0.8);"></div>
+      <p style="margin:0 0 24px;font-size:15px;color:#d4c4ff;line-height:1.7;">Watch on the 2MRRW platform or join directly on Twitch.</p>
+      <a href="${liveTabUrl}" style="display:inline-block;padding:14px 32px;background:#00ffff;color:#000000;font-size:12px;font-weight:900;text-decoration:none;border-radius:10px;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;">Watch on 2MRRW</a>
+      <br/>
+      <a href="${escapeHtml(twitchUrl)}" style="display:inline-block;margin-top:10px;font-size:12px;color:#9146ff;text-decoration:none;">Also on Twitch →</a>
+    </td></tr>
+  `);
+
+  const textMap = {
+    "24h":   `${title || "2MRRW Live"} is happening tomorrow on Twitch.\n\nWatch on the platform: ${liveTabUrl}\nOr on Twitch: ${twitchUrl}\n\n— 2MRRW`,
+    prelive: `${title || "2MRRW Live"} starts in ~15 minutes.\n\nWatch: ${liveTabUrl}\nTwitch: ${twitchUrl}\n\n— 2MRRW`,
+    live:    `2MRRW is LIVE right now.\n\nWatch: ${liveTabUrl}\nTwitch: ${twitchUrl}\n\n— 2MRRW`,
+  };
+
+  return { html, text: textMap[type] || textMap.live };
 }
 
 export function buildWelcomeEmail({ name }) {

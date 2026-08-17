@@ -28,13 +28,11 @@ import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 import {
   waitAudioSrcReady,
   playAudioIfNotPaused,
-  loadAudioSrcAndPlay,
-  getTrackPreviewSrc,
   RESTORE_NEAR_END_BUFFER_SEC,
 } from "@/lib/audio/audio-element-utils";
 import { updateAudibilitySample } from "@/lib/playback/audibility";
 
-import { canFallbackStreamToPreview, dispatchPreviewEnded } from "@/lib/playback/playback-track-utils";
+import { dispatchPreviewEnded } from "@/lib/playback/playback-track-utils";
 import { setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
 import { isDocumentPlaybackHidden } from "@/lib/playback/playback-transport-utils";
 import {
@@ -83,7 +81,42 @@ export const LIFECYCLE_AUDIO_TRUTH_STATES = Object.freeze({
   RECOVERING:   "RECOVERING",
 });
 
-export const PREVIEW_HARD_CAP_SEC = 30;
+// ── Audibility watchdog ────────────────────────────────────────────────────────
+// Some browsers (iOS Safari) do not reliably fire the 'playing' event after an
+// HLS source swap, leaving isBuffering permanently true while audio is audible.
+// This singleton polls at 150ms to detect that currentTime is advancing and
+// clears the spinner exactly as onPlaying would. Module-level is safe because
+// there is only one HTMLAudioElement / one active handler set at any time.
+let _audWatchdogId = null;
+let _audWatchdogLastTime = 0;
+
+function _clearAudibilityWatchdog() {
+  if (_audWatchdogId !== null) {
+    clearInterval(_audWatchdogId);
+    _audWatchdogId = null;
+  }
+}
+
+function _startAudibilityWatchdog(audioRef, stateRef, patchState) {
+  _clearAudibilityWatchdog();
+  _audWatchdogLastTime = audioRef.current?.currentTime ?? 0;
+  _audWatchdogId = setInterval(() => {
+    const el = audioRef.current;
+    if (!el || el.paused) { _clearAudibilityWatchdog(); return; }
+    const t = el.currentTime;
+    // Confirm audibility: time is advancing AND buffer is ready.
+    if (t !== _audWatchdogLastTime && el.readyState >= 3) {
+      _clearAudibilityWatchdog();
+      if (stateRef.current?.isBuffering) {
+        patchState({ isBuffering: false, playbackNetworkState: "playing" });
+        playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_END);
+      }
+    }
+    _audWatchdogLastTime = t;
+  }, 150);
+}
+
+export const PREVIEW_HARD_CAP_SEC = 15;
 export const SPURIOUS_ENDED_GUARD_MS = 1200;
 
 // ── Factory ────────────────────────────────────────────────────────────────────
@@ -226,6 +259,10 @@ export function createPlaybackEventHandlers({
       const networkState = el && !el.played?.length ? "loading_stream" : "buffering";
       patchState({ isBuffering: true, playbackNetworkState: networkState });
       playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_START);
+      // Start the audibility watchdog. If the browser fails to fire 'playing' (iOS
+      // Safari after an HLS source swap), the watchdog detects currentTime advancing
+      // and clears isBuffering exactly as onPlaying would.
+      _startAudibilityWatchdog(audioRef, stateRef, patchState);
     }, 500);
   };
 
@@ -247,6 +284,7 @@ export function createPlaybackEventHandlers({
       clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = null;
     }
+    _clearAudibilityWatchdog();
     stopStallRecovery();
     patchState({ isBuffering: false, playbackNetworkState: "playing" });
     playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_END);
@@ -260,6 +298,7 @@ export function createPlaybackEventHandlers({
       clearTimeout(bufferShowTimerRef.current);
       bufferShowTimerRef.current = null;
     }
+    _clearAudibilityWatchdog();
     stopStallRecovery();
     perfMark(MARKS.PLAYBACK_CANPLAYTHROUGH);
     patchState({ isBuffering: false, playbackNetworkState: "playing" });
@@ -267,6 +306,16 @@ export function createPlaybackEventHandlers({
   };
 
   const onPlay = () => {
+    // Cancel any pending buffer-show timer: onPlay means the element has started (or
+    // resumed) playing, so isBuffering must not be set true by a stale 500ms timer that
+    // fired after the element already began playing. Without this clear, the timer fires
+    // after onPlay, sets isBuffering:true silently in transport, and the next context
+    // emission (e.g. identity change) reads the stale true value — locking the spinner.
+    if (bufferShowTimerRef.current) {
+      clearTimeout(bufferShowTimerRef.current);
+      bufferShowTimerRef.current = null;
+    }
+    _clearAudibilityWatchdog();
     userPausedRef.current = false;
 
     if (stateRef.current.source === "library_stream") {
@@ -282,7 +331,13 @@ export function createPlaybackEventHandlers({
       hasStarted: true,
       isBuffering: false,
       playbackNetworkState: "playing",
+      osInterrupted: false,
     });
+    // Advance SM to PLAYING so BUFFER_START/BUFFER_END transitions are live. Without this,
+    // the SM stays in IDLE (LOAD_START/PLAY_SUCCESS were never dispatched previously) and
+    // BUFFER_START is silently rejected, meaning the orchestration channel never fires to
+    // clear the spinner when BUFFER_END arrives.
+    playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.PLAY_SUCCESS);
     startKeepAlivePing();
     startProgressRaf();
     startPositionSaveTimer();
@@ -370,6 +425,13 @@ export function createPlaybackEventHandlers({
   };
 
   const onPause = () => {
+    // Cancel any pending buffer-show timer so a user or OS pause doesn't end up
+    // showing the spinner after the element is already paused.
+    if (bufferShowTimerRef.current) {
+      clearTimeout(bufferShowTimerRef.current);
+      bufferShowTimerRef.current = null;
+    }
+    _clearAudibilityWatchdog();
     stopStallRecovery();
     if (previewFadeInitRef.current) {
       const gain = userGainRef.current;
@@ -523,8 +585,11 @@ export function createPlaybackEventHandlers({
     // stream upgrade, or signed-URL swap — this pause is part of a controlled handoff.
     // Setting isPlaying:false here destroys the play intent that coordinator-managed
     // resume depends on. The coordinator signals completion via onPlaybackResumed().
-    if (!recoveryCoordinator.isActive()) {
-      patchState({ isPlaying: false, playbackNetworkState: "idle" });
+    // Exception: a user-initiated pause ALWAYS wins — the user's intent supersedes
+    // any in-flight recovery, and the button must immediately reflect paused state.
+    if (userInitiated || !recoveryCoordinator.isActive()) {
+      patchState({ isPlaying: false, playbackNetworkState: "idle", isBuffering: false });
+      playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.PLAY_PAUSE);
     }
     persistPlayback("pause");
 
@@ -583,6 +648,9 @@ export function createPlaybackEventHandlers({
         };
         pendingResumeAfterInterruptRef.current = resumeAfterInterrupt;
         audio.addEventListener("canplay", resumeAfterInterrupt, { once: true });
+        // Mark state as OS-interrupted so the player button shows buffering/loading
+        // instead of ▶ Play. Cleared on the next onPlay event.
+        patchState({ osInterrupted: true });
       }
     }
     emitPhase21AudibleSnapshot("onPause");
@@ -616,7 +684,11 @@ export function createPlaybackEventHandlers({
       }
 
       if (audio.currentTime >= PREVIEW_HARD_CAP_SEC) {
-        // Restore gain immediately so the next track starts at full user volume.
+        previewFadeInitRef.current = false;
+        skipPauseInterruptionRef.current = true;
+        audio.pause();
+        // Restore gain after pause — gain is at 0 from the ramp at this point;
+        // restoring before pause would snap volume back up and cause a click.
         const gain = userGainRef.current;
         const ctx = audioCtxRef.current;
         if (gain && ctx) {
@@ -624,11 +696,7 @@ export function createPlaybackEventHandlers({
           gain.gain.cancelScheduledValues(now);
           gain.gain.setValueAtTime(userVolumeRef.current, now);
         }
-        previewFadeInitRef.current = false;
-        skipPauseInterruptionRef.current = true;
-        audio.pause();
-        audio.currentTime = PREVIEW_HARD_CAP_SEC;
-        syncProgressTime(PREVIEW_HARD_CAP_SEC);
+        syncProgressTime(0);
         patchState({
           isPlaying: false,
           playbackState: "ended_preview",
@@ -716,8 +784,9 @@ export function createPlaybackEventHandlers({
       }
       stopProgressRaf();
       stopPositionSaveTimer();
+      audio.currentTime = 0;
       patchState({ isPlaying: false, playbackState: "ended_preview" });
-      syncProgressTime(PREVIEW_HARD_CAP_SEC);
+      syncProgressTime(0);
       patchUI({ previewEnded: true });
       onPreviewEndedRef.current?.(track);
       dispatchPreviewEnded(track?.slug);
@@ -1026,43 +1095,6 @@ export function createPlaybackEventHandlers({
         });
         return;
       } catch (retryErr) {
-        const canFallbackToPreview = canFallbackStreamToPreview(retryErr, track);
-        if (canFallbackToPreview) {
-          console.warn("[AudioContext] stream retry denied; falling back to preview", {
-            slug: track?.slug || slug,
-            trackId: track?.id || slug,
-            status: retryErr?.status,
-          });
-          const previewFallbackSrc =
-            getTrackPreviewSrc(track) ||
-            track?.metadata?.previewSrc ||
-            track?.previewUrl ||
-            null;
-          if (previewFallbackSrc) {
-            if (!audio.paused) skipPauseInterruptionRef.current = true;
-            const played = await loadAudioSrcAndPlay(audio, previewFallbackSrc);
-            patchState({
-              isPlaying: false,
-              error: played ? null : "Preview unavailable",
-              source: "preview",
-              playbackState: played ? "preview_fallback" : "idle",
-              playbackNetworkState: played ? "playing" : "error_stream",
-              hasStarted: played,
-              currentTrack: {
-                ...track,
-                src: previewFallbackSrc,
-                metadata: {
-                  ...(track.metadata || {}),
-                  access: {
-                    ...(track.metadata?.access || {}),
-                    previewOnly: true,
-                  },
-                },
-              },
-            });
-            return;
-          }
-        }
         if (retryErr?.code === "ACCESS_DENIED") {
           finalizeStreamSession(meta, { durationSeconds: resumeAt, completed: false });
           streamErrorRetriedRef.current = 0;
@@ -1081,36 +1113,6 @@ export function createPlaybackEventHandlers({
           return;
         }
       }
-    }
-
-    const previewFallbackSrc =
-      getTrackPreviewSrc(track) ||
-      track?.metadata?.previewSrc ||
-      track?.previewUrl ||
-      null;
-    const onPreviewPlayback =
-      Boolean(previewFallbackSrc) &&
-      (!track?.metadata?.access?.canStream ||
-        stateRef.current.source === "preview" ||
-        stateRef.current.playbackState === "preview_fallback" ||
-        (audio.currentSrc || audio.src || "").includes("/api/media/preview"));
-
-    if (onPreviewPlayback) {
-      if (track?.slug) {
-        writeAvailabilityCache(
-          { slug: track.slug, trackSlug: track.metadata?.trackSlug, albumSlug: track.metadata?.albumSlug },
-          { status: "unavailable", reasons: ["missing_preview"], audioKey: null, previewKey: null }
-        );
-      }
-      patchState({
-        isPlaying: false,
-        error: "Preview unavailable",
-        streamRetryable: false,
-        isBuffering: false,
-        playbackState: "idle",
-        playbackNetworkState: "error_stream",
-      });
-      return;
     }
 
     if (meta) {

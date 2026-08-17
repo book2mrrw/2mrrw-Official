@@ -13,9 +13,13 @@
 
 import os from "os";
 import crypto from "crypto";
-import { logger }                                    from "./logger.js";
-import { claimNextJob, markJobComplete, markJobFailed } from "./db.js";
-import { transcode }                                 from "./transcoder.js";
+import { logger }                                              from "./logger.js";
+import { claimNextJob, markJobComplete, markJobFailed, updatePosterKey } from "./db.js";
+import { transcode }                                           from "./transcoder.js";
+import { extractPoster }                                       from "./poster.js";
+
+// Bitrates that indicate a video job (not audio-only)
+const VIDEO_BITRATES = new Set(["4000k", "2000k", "1000k", "720k"]);
 
 // Unique worker ID per process — shown in hls_transcode_jobs.worker_id
 const WORKER_ID = `fly-${os.hostname()}-${crypto.randomBytes(4).toString("hex")}`;
@@ -49,6 +53,28 @@ async function processJob(job) {
     const manifest = await transcode({ job });
     await markJobComplete(job.id, manifest);
     logger.info("job complete", { jobId: job.id, slug: job.slug, trackSlug: job.track_slug });
+
+    // Poster extraction — only for video jobs, non-fatal
+    const isVideoJob = job.bitrates?.some((b) => VIDEO_BITRATES.has(b));
+    if (isVideoJob && !job.track_slug) {
+      try {
+        const posterKey = await extractPoster({
+          sourceKey:       job.source_key,
+          slug:            job.slug,
+          releaseType:     job.release_type,
+          durationSeconds: manifest.duration_seconds,
+        });
+        await updatePosterKey(job.slug, null, posterKey, "ready");
+        logger.info("poster ready", { jobId: job.id, slug: job.slug, posterKey });
+      } catch (posterErr) {
+        logger.warn("poster extraction failed (non-fatal)", {
+          jobId:   job.id,
+          slug:    job.slug,
+          message: posterErr?.message,
+        });
+        await updatePosterKey(job.slug, null, null, "needs_poster").catch(() => {});
+      }
+    }
   } catch (err) {
     const message = err?.message ?? String(err);
     logger.error("job failed", { jobId: job.id, slug: job.slug, message });

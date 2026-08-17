@@ -51,7 +51,6 @@ function ts() {
 }
 
 function prefixLog(prefix, payload) {
-  // eslint-disable-next-line no-console
   console.log(prefix, payload);
 }
 

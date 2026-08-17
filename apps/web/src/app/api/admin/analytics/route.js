@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
@@ -20,7 +20,7 @@ export async function GET(req) {
   });
   if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
 
   // Bound purchase queries to the last 90 days so the payload stays manageable.
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();

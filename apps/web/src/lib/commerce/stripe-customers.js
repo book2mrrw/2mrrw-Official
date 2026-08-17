@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 
 const STRIPE_CUSTOMERS_TABLE = "stripe_customers";
 
@@ -61,7 +61,7 @@ async function retrieveActiveCustomer(stripe, customerId) {
   }
 }
 
-export async function rememberStripeCustomer({ admin = createAdminClient(), userId, stripeCustomerId, email, phone }) {
+export async function rememberStripeCustomer({ admin = getAdminClient(), userId, stripeCustomerId, email, phone }) {
   if (!userId || !stripeCustomerId) return;
 
   const { error } = await admin
@@ -86,7 +86,7 @@ export async function rememberStripeCustomer({ admin = createAdminClient(), user
 export async function getOrCreateStripeCustomerForUser(stripe, user) {
   if (!user?.id) return null;
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const mappedCustomerId = await readMappedCustomerId(admin, user.id);
   const membershipCustomerId = mappedCustomerId || await readMembershipCustomerId(admin, user.id);
   const existingCustomer = await retrieveActiveCustomer(stripe, membershipCustomerId);

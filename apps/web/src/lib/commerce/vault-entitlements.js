@@ -1,10 +1,10 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 import { isMissingSupabaseTable, isVaultPassSlug } from "@/lib/commerce/entitlements";
 
 export async function grantVaultPassEntitlement({ userId, purchaseId, slugs, items = [], payment }) {
   if (!(slugs || []).some(isVaultPassSlug)) return null;
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const item = (items || []).find((line) => isVaultPassSlug(line.slug)) || {};
   const { data: product, error: productError } = await admin
     .from("products")

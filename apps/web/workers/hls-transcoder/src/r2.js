@@ -37,15 +37,33 @@ export async function downloadStream(key) {
 
 /**
  * Upload a Buffer or Readable stream to R2.
- * Used for init.mp4, seg_XXXXX.m4s, and AES key file uploads.
+ * Used for init.mp4, seg_XXXXX.m4s, AES key files, and poster JPEGs.
  */
-export async function upload(key, body, contentType = "application/octet-stream") {
+export async function upload(key, body, contentType = "application/octet-stream", extra = {}) {
   await s3.send(
     new PutObjectCommand({
       Bucket:      R2_BUCKET_NAME,
       Key:         key,
       Body:        body,
       ContentType: contentType,
+      ...extra,
     })
   );
+}
+
+/**
+ * Download the first maxBytes of an R2 object as a Buffer.
+ * Used by poster extraction to avoid fetching full multi-GB video files.
+ */
+export async function downloadPartialBuffer(key, maxBytes) {
+  const res = await s3.send(new GetObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key:    key,
+    Range:  `bytes=0-${maxBytes - 1}`,
+  }));
+  const chunks = [];
+  for await (const chunk of res.Body) {
+    chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+  }
+  return Buffer.concat(chunks);
 }

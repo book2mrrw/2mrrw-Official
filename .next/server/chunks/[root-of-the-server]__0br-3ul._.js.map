@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "debugId": "eee234ff-2f8d-7d75-293b-8da9ae138af6",
+  "sections": [
+    {"offset": {"line": 1, "column": 0}, "map": {"version":3,"sources":["../../../src/lib/supabase/admin.js"],"sourcesContent":["import { createClient } from \"@supabase/supabase-js\";\n\n/** Service-role client — server-only (webhooks, entitlements). Never expose to browser. */\nexport function createAdminClient() {\n  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;\n  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;\n  if (!url || !key) {\n    throw new Error(\"Missing Supabase admin credentials\");\n  }\n  return createClient(url, key, {\n    auth: { autoRefreshToken: false, persistSession: false },\n  });\n}\n"],"names":["createAdminClient","url","key","process","env","SUPABASE_SERVICE_ROLE_KEY","Error","auth","autoRefreshToken","persistSession"],"mappings":"43BAAA,IAAA,EAAA,EAAA,CAAA,CAAA,mCAGO,SAASA,EACd,IAAMC,EAAAA,2CACAC,EAAMC,QAAQC,GAAG,CAACC,yBAAyB,CACjD,GAAI,CAACJ,GAAO,CAACC,EACX,GADgB,GACV,AAAII,MAAM,sCAElB,MAAO,CAAA,EAAA,EAAA,YAAA,AAAY,EAACL,EAAKC,EAAK,CAC5BK,KAAM,CAAEC,kBAAkB,EAAOC,eAAgB,EAAM,CACzD,EACF"}}]
+}

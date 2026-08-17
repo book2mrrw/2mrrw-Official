@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { normalizeStoragePathForStorefront } from "@/lib/sync/normalize-storage-path";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { isAutoGenerateStreamAssetsEnabled } from "@/lib/feature-flags";
@@ -28,7 +28,7 @@ export async function POST(req) {
     const body = await req.json();
     const vaultRows = Array.isArray(body.vaultContent) ? body.vaultContent : [];
     const productRows = Array.isArray(body.products) ? body.products : [];
-    const admin = createAdminClient();
+    const admin = getAdminClient();
 
     const failed = [];
     let vaultUpserted = 0;

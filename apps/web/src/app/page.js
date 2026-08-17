@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 import HomeClient from "./HomeClient";
 
 // Revalidate the page every hour so events stay fresh without a full rebuild.
@@ -14,7 +14,7 @@ const FALLBACK_EVENTS = [
 
 async function fetchEvents() {
   try {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const today = new Date().toISOString().slice(0, 10);
     const { data, error } = await admin
       .from("shows_events")

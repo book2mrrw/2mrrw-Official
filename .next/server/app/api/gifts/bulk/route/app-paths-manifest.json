@@ -1,0 +1,3 @@
+{
+  "/api/gifts/bulk/route": "app/api/gifts/bulk/route.js"
+}

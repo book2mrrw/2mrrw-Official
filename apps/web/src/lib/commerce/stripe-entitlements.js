@@ -1,6 +1,10 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 import { isCollectorAccessSlug, isVaultPassSlug } from "@/lib/commerce/entitlements";
 import { grantEntitlementFlag, revokeAllUserEntitlements, revokeEntitlementFlag } from "@/lib/entitlements";
+import {
+  invalidateEntitlementTierCache,
+  invalidateUserEntitlementCache,
+} from "@/lib/server/entitlement-cache";
 
 const LOG_PREFIX = "[stripe-webhook-entitlements]";
 
@@ -17,6 +21,9 @@ async function grantCollectorAccessForCard(admin, { userId, card }) {
     revoked_at: null,
   }, { onConflict: "user_id,collector_card_id" });
   if (error) throw error;
+  // Collector status change → tier cache must be invalidated immediately so the
+  // next play event reflects full catalog access rather than serving a stale entry.
+  invalidateEntitlementTierCache(userId).catch(() => {});
 }
 
 export async function upsertMembershipFromSubscription(subscription) {
@@ -26,7 +33,7 @@ export async function upsertMembershipFromSubscription(subscription) {
     return null;
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const status = String(subscription.status || "").toLowerCase();
   const active = status === "active" || status === "trialing";
   const revokeSubscriber = !active || status === "past_due" || status === "canceled" || status === "unpaid";
@@ -60,14 +67,34 @@ export async function upsertMembershipFromSubscription(subscription) {
     console.log(`${LOG_PREFIX} subscriber revoked`, userId, subscription.id, status);
   }
 
+  // Membership status changed → tier cache must be invalidated so the next play event
+  // re-derives subscriber status from DB rather than serving a stale canStreamAll=true entry.
+  // grantEntitlementFlag / revokeEntitlementFlag already invalidate user_entitlements-derived
+  // tier cache; this invalidation covers the memberships table path in userCanStreamProduct().
+  invalidateEntitlementTierCache(userId).catch(() => {});
+
   return { userId, active };
 }
 
 export async function assignCollectorCardFromPurchase({ userId, slugs = [], purchaseId = null }) {
-  const collectorSlugs = [...new Set((slugs || []).filter(isCollectorAccessSlug))];
-  if (!collectorSlugs.length || !userId) return null;
+  if (!slugs?.length || !userId) return null;
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
+
+  // Resolve collector products via DB column (authoritative) rather than slug pattern.
+  // is_collector_product == null means the column doesn't exist yet (migration pending):
+  // fall back to slug-pattern check so existing behaviour is preserved during transition.
+  const { data: slugRows } = await admin
+    .from("products")
+    .select("slug, is_collector_product")
+    .in("slug", slugs);
+
+  const collectorSlugs = (slugRows || [])
+    .filter((p) => p.is_collector_product === true || (p.is_collector_product == null && isCollectorAccessSlug(p.slug)))
+    .map((p) => p.slug);
+
+  if (!collectorSlugs.length) return null;
+
   const productSlug = collectorSlugs[0];
 
   const { data: card, error } = await admin
@@ -120,7 +147,7 @@ export async function assignCollectorCardFromPurchase({ userId, slugs = [], purc
 
 export async function grantVaultFromPurchaseSlugs({ userId, slugs = [], purchaseId = null }) {
   if (!(slugs || []).some(isVaultPassSlug) || !userId) return null;
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   await grantEntitlementFlag(admin, userId, "vault_access", "stripe_purchase", {
     metadata: { purchase_id: purchaseId },
   });
@@ -146,7 +173,7 @@ export async function revokeAllEntitlementsForDispute({ userId, paymentIntentId 
     return;
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   await revokeAllUserEntitlements(admin, userId, "charge_dispute");
 
   const { data: accessRows } = await admin
@@ -185,4 +212,7 @@ export async function revokeAllEntitlementsForDispute({ userId, paymentIntentId 
     .in("status", ["active", "trialing", "past_due"]);
 
   console.warn(`${LOG_PREFIX} dispute full revoke`, { userId, paymentIntentId, cardIds: cardIds.length });
+  // Dispute full revoke: wipe the entire entitlement cache for this user so no cached
+  // grant (tier or per-slug) can be served after credentials have been revoked.
+  invalidateUserEntitlementCache(userId).catch(() => {});
 }

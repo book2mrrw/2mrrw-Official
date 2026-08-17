@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getCommunityIdentitySnapshot } from "@/lib/community/identity";
 import { getGuestUser } from "@/lib/guest-session";
 import { createInAppNotification } from "@/lib/notifications";
@@ -131,7 +131,7 @@ export async function GET(req) {
     });
     if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const feed = await loadFeed(admin);
     const recentCutoff = new Date(Date.now() - 1000 * 60 * 30).toISOString();
     const { data: recentComments, error: recentError } = await admin
@@ -172,7 +172,7 @@ export async function POST(req) {
     });
     if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const identity = await getCommunityIdentitySnapshot(admin, user);
     const body = await req.json();
     const action = body.action || "post";

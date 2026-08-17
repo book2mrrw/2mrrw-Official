@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import {
   getActiveMembership,
   getCollectorAccessState,
@@ -48,7 +48,7 @@ export async function POST(request) {
   }
 
   const membership = await getActiveMembership(user.id);
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const ownedSlugs = await getOwnedSlugs(user.id);
   const collector = await getCollectorAccessState(admin, user.id, [...ownedSlugs]);
   const canGrant =
@@ -88,7 +88,7 @@ export async function GET(req) {
     return applyMediaCors(req, NextResponse.json({ items: [], ownedSlugs: [] }));
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data, error } = await admin
     .from("library_items")
     .select("id, source, granted_at, products (slug, title, product_type, cover_url, storage_path)")

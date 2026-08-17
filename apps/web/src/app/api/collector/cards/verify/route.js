@@ -1,17 +1,17 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import {
   requestDeviceInfo,
   requestIpHash,
   verifyCollectorCardToken,
 } from "@/lib/collector-cards";
 import { verifyCardToken } from "@/lib/verifyCardToken";
-import { getGuestUser } from "@/lib/guest-session";
+import { getRequestUser } from "@/lib/guest-session";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export async function POST(req) {
   try {
-    const user = await getGuestUser();
+    const user = await getRequestUser();
     const body = await req.json();
     const jwt = body.jwt || body.cardJwt;
     const token = body.token || body.hiddenSecureId || body.collectorToken;
@@ -33,7 +33,7 @@ export async function POST(req) {
           { status: 401 }
         );
       }
-      const admin = createAdminClient();
+      const admin = getAdminClient();
       const { data: card } = await admin
         .from("collector_cards")
         .select("id, visible_serial, release_title, access_tier, claimed, claimed_by_user_id, verification_status, revoked_at")

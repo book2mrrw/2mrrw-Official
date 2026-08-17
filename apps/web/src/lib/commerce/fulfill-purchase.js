@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 import { grantLibraryItems } from "@/lib/commerce/entitlements";
 import { grantCollectorOwnerships } from "@/lib/commerce/collector-ownerships";
 import { grantVaultPassEntitlement } from "@/lib/commerce/vault-entitlements";
@@ -24,7 +24,7 @@ export async function fulfillCheckoutSession(session) {
     items = [];
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const amountCents = session.amount_total ?? 0;
 
   const { data: purchase, error: purchaseErr } = await admin
@@ -84,7 +84,7 @@ export async function fulfillPaymentIntent(paymentIntent) {
     items = [];
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
 
   const { data: purchase, error: purchaseErr } = await admin
     .from("purchases")

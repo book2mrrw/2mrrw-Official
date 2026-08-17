@@ -384,3 +384,35 @@ async function resolvePlaybackKeyUncached(admin, slug, trackSlug) {
 
   return result;
 }
+
+/**
+ * Resolve the R2 key for a product's preview audio file only — never returns a full audio key.
+ * Used by the library stream endpoint to serve non-entitled users their 15-second preview
+ * through the same authenticated pipeline as full streams.
+ */
+export async function resolvePreviewKey(admin, slug) {
+  const normalizedSlug = String(slug || "").trim();
+  if (!normalizedSlug) return null;
+
+  const { data: product, error } = await admin
+    .from("products")
+    .select("id, slug, preview_path, storage_path, product_type, content_type, content_id, metadata")
+    .eq("slug", normalizedSlug)
+    .maybeSingle();
+
+  if (error || !product) return null;
+
+  const releaseType = inferProductReleaseType(product);
+  const previewFolder =
+    resolveEntityPreviewFolder(product.preview_path, product.slug) ||
+    (releaseType ? resolvePreviewPath(releaseType, product.slug, null) : null);
+  const legacyPreview =
+    resolveEntityPreviewFolder(
+      product.metadata?.preview_path || product.metadata?.preview_legacy,
+      product.slug
+    ) ||
+    (isEntityPreviewFolderPath(product.preview_path) ? null : product.preview_path) ||
+    null;
+
+  return resolvePreview(previewFolder, legacyPreview).catch(() => null);
+}

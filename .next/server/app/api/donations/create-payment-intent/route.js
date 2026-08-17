@@ -1,0 +1,12 @@
+var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/api/donations/create-payment-intent/route.js")
+R.c("server/chunks/[root-of-the-server]__08y8pkk._.js")
+R.c("server/chunks/[root-of-the-server]__0a0wvb0._.js")
+R.c("server/chunks/node_modules_next_124cnn1._.js")
+R.c("server/chunks/node_modules_next_04~_e52._.js")
+R.c("server/chunks/[root-of-the-server]__0.6bt.6._.js")
+R.c("server/chunks/node_modules_@supabase_supabase-js_dist_index_mjs_0hp37pu._.js")
+R.c("server/chunks/src_lib_commerce_stripe_0la9ow2.js")
+R.c("server/chunks/[root-of-the-server]__10p7p7~._.js")
+R.c("server/chunks/0zjb_server_app_api_donations_create-payment-intent_route_actions_038._9d.js")
+R.m(484785)
+module.exports=R.m(484785).exports

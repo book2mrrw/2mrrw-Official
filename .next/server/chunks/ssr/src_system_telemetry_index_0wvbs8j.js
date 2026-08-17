@@ -1,0 +1,5 @@
+;!function(){try { var e="undefined"!=typeof globalThis?globalThis:"undefined"!=typeof global?global:"undefined"!=typeof window?window:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&((e._debugIds|| (e._debugIds={}))[n]="58378ada-1ac0-ee70-eb93-54ed628bd56f")}catch(e){}}();
+module.exports=[532897,a=>{"use strict";a.i(367471);var b=a.i(60138);a.i(409370),a.s(["TELEMETRY_EVENT_TYPES",0,["modal.open.failed","playback.failed","image.load.failed","audio.stalled","queue.desync","render.spike","transition.failed","api.response.failed","interaction.slow","performance.measure","error.boundary.caught","signed.url.expired","preload.budget.exceeded"]],549612),a.i(549612),a.i(8036),a.s(["telemetry",()=>b.telemetry],532897)}];
+
+//# debugId=58378ada-1ac0-ee70-eb93-54ed628bd56f
+//# sourceMappingURL=src_system_telemetry_index_0wvbs8j.js.map

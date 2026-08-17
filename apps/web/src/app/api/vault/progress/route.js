@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { canAccessVaultTier, getActiveMembership, isMissingSupabaseTable } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
 import { getUserVaultAccess } from "@/lib/vault/access";
@@ -18,7 +18,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "contentId or slug required" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     let resolvedContentId = contentId;
     let content = null;
     if (!resolvedContentId) {

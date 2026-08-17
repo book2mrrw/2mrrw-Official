@@ -145,7 +145,6 @@ export class AudioEngineBase {
    * @param {{ startTime?: number, gainDb?: number, playbackRate?: number }} [options]
    * @returns {Promise<void>}
    */
-  // eslint-disable-next-line no-unused-vars
   async load(src, options = {}) {
     throw new Error("AudioEngine.load() not implemented");
   }
@@ -167,7 +166,6 @@ export class AudioEngineBase {
    * Seek to an absolute position.
    * @param {number} position — seconds
    */
-  // eslint-disable-next-line no-unused-vars
   seek(position) {
     throw new Error("AudioEngine.seek() not implemented");
   }
@@ -178,7 +176,6 @@ export class AudioEngineBase {
   // ── Volume (subclass should override for platform persistence) ─────────────
 
   /** @param {number} level — 0–1 inclusive */
-  // eslint-disable-next-line no-unused-vars
   setUserVolume(level) {}
 
   /** @returns {number} — 0–1 */
@@ -187,20 +184,15 @@ export class AudioEngineBase {
   // ── Gain / rate ────────────────────────────────────────────────────────────
 
   /** @param {number} gainDb — positive = louder, negative = quieter */
-  // eslint-disable-next-line no-unused-vars
   setTrackGain(gainDb) {}
 
   /** @param {number} rate — 0.25–4.0 */
-  // eslint-disable-next-line no-unused-vars
   setPlaybackRate(rate) {}
 
   // ── DSP effects (no-op default — web engine overrides) ────────────────────
 
-  // eslint-disable-next-line no-unused-vars
   setSpaceMode(enabled) {}
-  // eslint-disable-next-line no-unused-vars
   setBassMode(enabled) {}
-  // eslint-disable-next-line no-unused-vars
   setAtmosphereLevel(level) {}
 
   // ── Diagnostics ────────────────────────────────────────────────────────────

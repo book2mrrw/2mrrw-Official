@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
@@ -22,7 +22,7 @@ export async function GET(req) {
     });
     if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const { data: gifts, error } = await admin
       .from("gifts")
       .select("id, created_at, recipient_email, recipient_phone, item_title, item_type, item_id, status, claimed, claimed_at, sender_id")

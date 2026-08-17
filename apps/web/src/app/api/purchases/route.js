@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getGuestUser } from "@/lib/guest-session";
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
     return NextResponse.json({ purchases: [] }, { status: 401 });
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data, error } = await admin
     .from("purchases")
     .select("*")

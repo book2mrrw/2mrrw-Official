@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getActiveMembership, canAccessVaultTier } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
 import { getUserVaultAccess, loadVaultContentBySlug } from "@/lib/vault/access";
@@ -15,7 +15,7 @@ export async function GET(req) {
       return NextResponse.json({ error: "slug required" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const content = await loadVaultContentBySlug(admin, slug);
     if (!content) {
       return NextResponse.json({ error: "Vault content not found" }, { status: 404 });

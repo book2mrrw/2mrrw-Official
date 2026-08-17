@@ -518,7 +518,6 @@ export function usePlaybackPublicApi({ refs, delegates }) {
   }, [clearViewportResume, shouldAutoResumeViewport]);
 
   // ─── Stable Return ───────────────────────────────────────────────────────────
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => ({
     setRepeatMode, toggleRepeat, setShuffle, toggleShuffle,
     toggleSpaceMode, toggleBassBoost, cycleAtmosphere,

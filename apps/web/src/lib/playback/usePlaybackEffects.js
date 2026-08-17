@@ -392,6 +392,20 @@ export function usePlaybackEffects({
           // state after backgrounding (phone call, Siri, app switch). The onstatechange
           // resume attempt is non-gesture and iOS rejects it; the next user tap here
           // re-runs ctx.resume() in proper gesture context, unblocking audio.
+
+          // Phone call recovery: if the OS interrupted playback (not the user), resume
+          // audio now that we are inside a gesture context and the ctx is running.
+          const _audio = audioRef.current;
+          const _s = stateRef.current;
+          if (
+            _audio?.paused &&
+            _s.hasStarted &&
+            (_s.osInterrupted || playbackIntentBeforeHideRef.current) &&
+            !userIntentPausedRef.current &&
+            !userPausedRef.current
+          ) {
+            void _audio.play().catch(() => {});
+          }
         }
       };
 

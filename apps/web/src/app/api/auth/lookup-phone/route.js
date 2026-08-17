@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { normalizePhoneDigits } from "@/lib/auth/validation";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
@@ -19,7 +19,7 @@ export async function POST(request) {
     }
 
     const tail = digits.slice(-10);
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const { data: rows, error } = await admin
       .from("profiles")
       .select("email, full_name, phone")

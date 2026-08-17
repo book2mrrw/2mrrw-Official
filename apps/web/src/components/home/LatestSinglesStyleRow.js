@@ -16,6 +16,7 @@ import { withR2CatalogMedia, catalogCoverDisplay } from "@/components/home/catal
 import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
 import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import { getMediaSignature } from "@/lib/media/media-determinism";
+import { useArtworkGesture } from "@/hooks/useArtworkGesture";
 
 /** Phase P9 — MP4/cover surface; skips reconcile when only entitlement chrome changes. */
 const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface({
@@ -149,6 +150,11 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
   const { entitlementAccountState, userId, isAdminStable } = useStorefrontCardChrome();
   const catalogPlaybackLookup = getCatalogSurfaceRef().catalogPlaybackLookup;
   const mediaItem = useMemo(() => withR2CatalogMedia(item), [item]);
+  const singleCoverRef = useRef(null);
+  const { handlers: singleGesture } = useArtworkGesture({
+    slug: item?.slug || "",
+    elementRef: singleCoverRef,
+  });
   const access = useMemo(
     () => resolveContentAccess(mediaItem, entitlementAccountState),
     [mediaItem, entitlementAccountState]
@@ -210,11 +216,21 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
       }}
     >
       {isAdminStable ? <GiftOverlayButton onClick={() => onGift?.(mediaItem)} /> : null}
-      <SinglesStyleCardMediaSurface
-        mediaItem={mediaItem}
-        cardMedia={cardMedia}
-        coverDisplay={coverDisplay}
-      />
+      <div
+        ref={singleCoverRef}
+        onPointerDown={singleGesture.onPointerDown}
+        onPointerMove={singleGesture.onPointerMove}
+        onPointerUp={singleGesture.onPointerUp}
+        onPointerCancel={singleGesture.onPointerCancel}
+        onLostPointerCapture={singleGesture.onLostPointerCapture}
+        style={{ position: "relative" }}
+      >
+        <SinglesStyleCardMediaSurface
+          mediaItem={mediaItem}
+          cardMedia={cardMedia}
+          coverDisplay={coverDisplay}
+        />
+      </div>
       <div style={{ padding: isMobile ? "10px 12px 14px" : "12px 14px 16px" }}>
         <div
           className={titleClassName}

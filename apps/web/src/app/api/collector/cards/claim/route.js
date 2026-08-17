@@ -4,13 +4,13 @@ import {
   requestDeviceInfo,
   requestIpHash,
 } from "@/lib/collector-cards";
-import { getGuestUser } from "@/lib/guest-session";
+import { getRequestUser } from "@/lib/guest-session";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
 
 export async function POST(req) {
   try {
-    const user = await getGuestUser();
+    const user = await getRequestUser();
     if (!user) {
       return NextResponse.json({ error: "Sign in to claim collector access." }, { status: 401 });
     }

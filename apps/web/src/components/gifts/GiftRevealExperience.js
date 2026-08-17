@@ -71,6 +71,7 @@ export default function GiftRevealExperience({
   title,
   message,
   coverUrl,
+  coverImageUrl,
   coverArtType,
   productSlug,
   onFinished,
@@ -92,6 +93,8 @@ export default function GiftRevealExperience({
 
   useEffect(() => {
     if (phaseIndex >= PHASES.length - 1) return undefined;
+    // build phase waits indefinitely for the user's tap — no auto-advance
+    if (phase === "build") return undefined;
     const ms = timings[phase] ?? 800;
     const timer = window.setTimeout(() => {
       setPhaseIndex((i) => Math.min(i + 1, PHASES.length - 1));
@@ -146,6 +149,25 @@ export default function GiftRevealExperience({
           }}
           transition={{ duration: reduced ? 0.2 : 0.65, ease: [0.22, 1, 0.36, 1] }}
         >
+          {coverUrl && coverArtType === "video" ? (
+            <video
+              className="gift-reveal-artifact-cover"
+              src={coverUrl}
+              autoPlay
+              loop
+              muted
+              playsInline
+              preload="auto"
+              aria-hidden
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
+            />
+          ) : coverImageUrl ? (
+            <span
+              className="gift-reveal-artifact-cover"
+              style={{ backgroundImage: `url(${coverImageUrl})` }}
+              aria-hidden
+            />
+          ) : null}
           <span className="gift-reveal-artifact-core" />
           {showTouch ? (
             <span className="gift-reveal-touch-hint">Touch to open</span>

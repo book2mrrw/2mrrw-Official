@@ -152,18 +152,27 @@ const normalizeTrack = (track = {}) => {
     null;
   const id = track.id || track.trackId || slug || null;
   const baseTitle = stripSlowedSuffix(track.title || "Untitled");
-  const rawCover = track.baseCover || track.cover || track.coverArt || track.image || null;
-  // Bare filenames (no path separator, no protocol) are legacy DB data — resolveAbsoluteArtworkUrl
-  // would prepend the R2 CDN base and produce a 404. Fall back to the canonical legacy_cover
-  // (always a leading-slash /public dir path) when the raw value is not a routable URL.
-  const isValidCoverPath = rawCover &&
-    (String(rawCover).includes("/") || /^https?:\/\//i.test(rawCover));
-  const baseCover = isValidCoverPath
+  const coverArtType = track.coverArtType || track.cover_art_type || (track.video ? "video" : "image");
+  // Separate static vs. video cover sources so the video URL is never silently dropped.
+  // baseCover=static path for <img>; cover=video URL for video tracks, static URL otherwise.
+  const rawStaticCover = track.baseCover || track.coverArt || track.image || null;
+  const rawVideoCover = track.cover || null;
+  const rawCover = rawStaticCover || rawVideoCover;
+  // Bare filenames (no path separator, no protocol) are legacy DB data — fall back to canonical.
+  const isValidCoverPath = (url) =>
+    url && (String(url).includes("/") || /^https?:\/\//i.test(String(url)));
+  const canonical = getCanonicalReleaseBySlug(slug || id || "");
+  const baseCover = isValidCoverPath(rawCover)
     ? rawCover
-    : (getCanonicalReleaseBySlug(slug || id || "")?.legacy_cover ?? null);
+    : (canonical?.legacy_cover ?? canonical?.cover ?? null);
+  const cover =
+    coverArtType === "video" &&
+    isValidCoverPath(rawVideoCover) &&
+    rawVideoCover !== rawStaticCover
+      ? rawVideoCover
+      : baseCover;
   const csAudio = track.csAudio || track.cs_audio || null;
   const csCover = track.csCover || track.cs_cover || track.csCoverArt || null;
-  const coverArtType = track.coverArtType || track.cover_art_type || (track.video ? "video" : "image");
   const csCoverType = track.csCoverType || track.cs_cover_type || "image";
   const gainDb = track.gainDb ?? track.gain_db ?? track.metadata?.gainDb ?? null;
   return {
@@ -171,7 +180,7 @@ const normalizeTrack = (track = {}) => {
     slug: slug || id,
     title: baseTitle,
     artist: track.artist || "2MRRW",
-    cover: baseCover,
+    cover,
     baseSrc: track.baseSrc || src,
     baseCover,
     src,
@@ -193,11 +202,15 @@ function resolvePlaybackPresentation(track, csOn, usingCsSrc) {
   const baseSrc = track.baseSrc || track.src;
   const baseCover = track.baseCover || track.cover;
   if (!csOn) {
+    const coverForPresentation =
+      track.coverArtType === "video" && track.cover && track.cover !== track.baseCover
+        ? track.cover
+        : baseCover;
     return {
       ...track,
       title: baseTitle,
       src: baseSrc,
-      cover: baseCover,
+      cover: coverForPresentation,
       playbackRate: 1,
       useCsSrc: false,
     };

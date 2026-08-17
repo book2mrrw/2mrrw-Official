@@ -1,0 +1,3 @@
+{
+  "/api/cron/purge-stream-events/route": "app/api/cron/purge-stream-events/route.js"
+}

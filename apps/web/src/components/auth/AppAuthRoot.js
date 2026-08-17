@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import AuthGate from "@/components/auth/AuthGate";
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
 
-const AUTH_ROUTE_PREFIXES = ["/login", "/join", "/verify-otp"];
+const AUTH_ROUTE_PREFIXES = ["/login", "/join", "/verify-otp", "/forgot-password", "/reset-password", "/gift"];
 
 const BOOT_PLACEHOLDER = (
   <div

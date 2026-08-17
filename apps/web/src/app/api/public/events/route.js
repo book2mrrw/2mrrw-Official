@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export async function GET(req) {
   const rl = await checkRateLimit(req, { routeKey: "public.events", limit: 30, windowSeconds: 60 });
   if (rl.limited) return rateLimitResponse(rl.retryAfterSeconds);
   try {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const today = new Date().toISOString().slice(0, 10);
 
     const { data, error } = await admin

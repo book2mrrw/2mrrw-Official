@@ -45,6 +45,16 @@ export class WebAudioEngine extends AudioEngineBase {
     this._userVolume = this._readStoredVolume();
     /** @type {(() => void)|null} Fired when AudioContext transitions back to "running". */
     this._onContextRunning = null;
+    /** @type {AudioNode[]} Nodes inserted between bassFilter and limiter by effect engines. */
+    this._chainExtensionNodes = [];
+
+    // ── Two-deck representation handoff ──────────────────────────────────────
+    /** @type {GainNode|null} Standby deck fader — parallel to mainGain, permanently wired to userGain, normally gain=0. */
+    this._standbyGain = null;
+    /** @type {MediaElementAudioSourceNode|null} Standby deck audio source. */
+    this._standbySource = null;
+    /** @type {HTMLAudioElement|null} Standby deck audio element. */
+    this._standbyElement = null;
 
     // Element event listener tracking for _attachAudioElementListeners / _detachAudioElementListeners
     /** @type {Array<[string, Function]>|null} */
@@ -122,8 +132,15 @@ export class WebAudioEngine extends AudioEngineBase {
       if (this._boundElement) {
         try { this._boundElement[MRRW_SOURCE_BOUND] = false; } catch {}
       }
-      this.source        = null;
-      this._boundElement = null;
+      // Clear standby bindings — nodes belong to the dead context.
+      if (this._standbyElement) {
+        try { this._standbyElement[MRRW_SOURCE_BOUND] = false; } catch {}
+      }
+      this.source          = null;
+      this._boundElement   = null;
+      this._standbyGain    = null;
+      this._standbySource  = null;
+      this._standbyElement = null;
       this.ctx = new Ctx();
       this._attachStateChange();
     }
@@ -204,10 +221,37 @@ export class WebAudioEngine extends AudioEngineBase {
     // Primary chain: source → mainGain → userGain → analyser → stereoPanner → bassFilter → limiter → destination
     source.connect(mainGain);
     mainGain.connect(userGain);
+
+    // Standby deck fader — parallel input to userGain, starts silent.
+    // Reused across buildGraph() calls (same ctx); fresh node if context changed.
+    let sGain;
+    if (this._standbyGain && this._standbyGain.context === ctx) {
+      sGain = this._standbyGain;
+      try { sGain.disconnect(); } catch {}  // detach from old userGain
+    } else {
+      sGain = ctx.createGain();
+      sGain.gain.value = 0;
+    }
+    sGain.connect(userGain);
+    this._standbyGain = sGain;
+
+    // Reconnect standby source to the (possibly new) standby gain node.
+    if (this._standbySource && this._standbySource.context === ctx) {
+      try { this._standbySource.disconnect(); } catch {}
+      this._standbySource.connect(sGain);
+    } else if (this._standbySource) {
+      // Stale source from a dead context — release the element binding.
+      if (this._standbyElement) {
+        try { this._standbyElement[MRRW_SOURCE_BOUND] = false; } catch {}
+      }
+      this._standbySource  = null;
+      this._standbyElement = null;
+    }
+
     userGain.connect(analyser);
     analyser.connect(stereoPanner);
     stereoPanner.connect(bassFilter);
-    bassFilter.connect(limiter);
+    this._applyChain(bassFilter, limiter);
     limiter.connect(ctx.destination);
 
     this.mainGain = mainGain;
@@ -418,6 +462,57 @@ export class WebAudioEngine extends AudioEngineBase {
     return Boolean(this._boundElement?.src);
   }
 
+  // ── Chain extension (effect engines) ──────────────────────────────────────
+
+  /**
+   * Internal: connect bassFilter → (extension nodes) → limiter.
+   * Called from buildGraph() and setChainExtension().
+   */
+  _applyChain(bassFilter, limiter) {
+    const nodes = this._chainExtensionNodes;
+    if (!nodes || nodes.length === 0) {
+      bassFilter.connect(limiter);
+    } else {
+      bassFilter.connect(nodes[0]);
+      for (let i = 0; i < nodes.length - 1; i++) {
+        nodes[i].connect(nodes[i + 1]);
+      }
+      nodes[nodes.length - 1].connect(limiter);
+    }
+  }
+
+  /**
+   * Insert AudioNodes between bassFilter and limiter.
+   * Pass an empty array to remove extensions and restore direct connection.
+   * Effect engines call this to activate / deactivate themselves.
+   * @param {AudioNode[]} nodes
+   */
+  setChainExtension(nodes) {
+    if (!this.bassFilter || !this.limiter) return;
+    // Tear down current chain from bassFilter outward.
+    try { this.bassFilter.disconnect(); } catch {}
+    const prev = this._chainExtensionNodes;
+    if (prev && prev.length) {
+      for (const n of prev) { try { n.disconnect(); } catch {} }
+    }
+    this._chainExtensionNodes = Array.isArray(nodes) ? nodes : [];
+    this._applyChain(this.bassFilter, this.limiter);
+  }
+
+  /**
+   * Set preservesPitch on the bound audio element (all cross-browser variants).
+   * Pass false for real-time screw pitch shift; pass true to restore.
+   * @param {boolean} value
+   */
+  setPreservesPitch(value) {
+    const el = this._boundElement;
+    if (!el) return;
+    const v = Boolean(value);
+    if ("preservesPitch"        in el) el.preservesPitch        = v;
+    if ("mozPreservesPitch"     in el) el.mozPreservesPitch     = v;
+    if ("webkitPreservesPitch"  in el) el.webkitPreservesPitch  = v;
+  }
+
   // ── Audio element event forwarding ─────────────────────────────────────────
   // Attach these listeners to delegate audio element events to engine.on() subscribers.
   // AudioContext.js calls _attachAudioElementListeners() during Phase B-2 migration,
@@ -472,6 +567,143 @@ export class WebAudioEngine extends AudioEngineBase {
     }
     this._elListeners = null;
     this._listenerElement = null;
+  }
+
+  // ── Two-deck representation handoff API ────────────────────────────────────
+
+  /**
+   * Bind a standby audio element into the Web Audio graph via the standby gain node.
+   * The standby gain is permanently wired to userGain and starts at 0 — no audible output
+   * until startCrossfade() raises it. Safe to call multiple times (idempotent per element).
+   *
+   * @param {HTMLAudioElement|null} el  Pass null to release the current standby binding.
+   * @returns {{ ok: boolean }}
+   */
+  bindStandbyElement(el) {
+    if (!this.ctx || !this._standbyGain) return { ok: false };
+    if (this._standbyElement === el && el !== null) return { ok: true };
+
+    // Release previous binding.
+    if (this._standbyElement) {
+      try { this._standbyElement[MRRW_SOURCE_BOUND] = false; } catch {}
+    }
+    if (this._standbySource) {
+      try { this._standbySource.disconnect(); } catch {}
+      this._standbySource = null;
+    }
+    this._standbyElement = null;
+
+    if (!el) return { ok: true };
+
+    if (!el[MRRW_SOURCE_BOUND]) {
+      try {
+        this._standbySource = this.ctx.createMediaElementSource(el);
+        el[MRRW_SOURCE_BOUND] = true;
+        this._standbyElement = el;
+        this._standbySource.connect(this._standbyGain);
+        el.volume = 1;
+        return { ok: true };
+      } catch (e) {
+        console.error("[WebAudioEngine] bindStandbyElement failed", e);
+        return { ok: false };
+      }
+    }
+
+    return { ok: false };
+  }
+
+  /**
+   * Schedule an equal-power crossfade from the active deck (mainGain) to the standby deck
+   * (_standbyGain). All automation runs against AudioContext.currentTime — no React timing.
+   *
+   * @param {number} durationSec      Crossfade duration in seconds (~0.03)
+   * @param {number} standbyNormGain  Target gain for standby (loudness-normalized linear)
+   * @param {number} [activeNormGain] Active gain snapshot (reads mainGain.gain.value if omitted)
+   */
+  startCrossfade(durationSec, standbyNormGain, activeNormGain) {
+    if (!this.ctx || !this.mainGain || !this._standbyGain) return;
+    const now  = this.ctx.currentTime;
+    const end  = now + durationSec;
+    const from = activeNormGain ?? this.mainGain.gain.value;
+
+    this.mainGain.gain.cancelScheduledValues(now);
+    this.mainGain.gain.setValueAtTime(from, now);
+    this.mainGain.gain.linearRampToValueAtTime(0, end);
+
+    this._standbyGain.gain.cancelScheduledValues(now);
+    this._standbyGain.gain.setValueAtTime(this._standbyGain.gain.value, now);
+    this._standbyGain.gain.linearRampToValueAtTime(standbyNormGain, end);
+  }
+
+  /**
+   * Cancel a crossfade in progress — smoothly return to stable single-deck state.
+   * Call on rapid reversal or abort. Uses a 20ms return ramp to avoid clicks.
+   *
+   * @param {number} restoreGain  Active deck's normalization gain to restore
+   */
+  cancelCrossfade(restoreGain) {
+    if (!this.ctx || !this.mainGain || !this._standbyGain) return;
+    const now = this.ctx.currentTime;
+    const end = now + 0.02;
+
+    this.mainGain.gain.cancelScheduledValues(now);
+    this.mainGain.gain.setValueAtTime(this.mainGain.gain.value, now);
+    this.mainGain.gain.linearRampToValueAtTime(restoreGain, end);
+
+    this._standbyGain.gain.cancelScheduledValues(now);
+    this._standbyGain.gain.setValueAtTime(this._standbyGain.gain.value, now);
+    this._standbyGain.gain.linearRampToValueAtTime(0, end);
+  }
+
+  /** @returns {HTMLAudioElement|null} Active (playing) audio element — public read accessor. */
+  getActiveBoundElement() { return this._boundElement; }
+
+  /** @returns {HTMLAudioElement|null} Standby element wired to the silent standby gain. */
+  getStandbyElement() { return this._standbyElement; }
+
+  /**
+   * Complete a crossfade: swap active and standby deck identities in the JS layer.
+   * The Web Audio graph topology is unchanged — both gains remain wired to userGain.
+   * Only the role labels (mainGain / _standbyGain, source / _standbySource, etc.) flip.
+   *
+   * After this call:
+   *   this._boundElement  → former standby element (now active)
+   *   this._standbyElement → former active element (now recycled standby)
+   *   this.mainGain        → former _standbyGain (gain = standbyNormGain)
+   *   this._standbyGain    → former mainGain    (gain ≈ 0)
+   *
+   * Audio element event listeners are re-wired to the new active element automatically.
+   *
+   * @param {number} standbyNormGain  Final normalization gain of the new active deck
+   * @returns {HTMLAudioElement|null}  Former active element (caller updates audioRef.current)
+   */
+  completeCrossfade(standbyNormGain) {
+    if (!this.mainGain || !this._standbyGain || !this._standbyElement) return null;
+
+    // Snap to exact final values — eliminates residual AudioParam ramp error.
+    if (this.ctx) {
+      const now = this.ctx.currentTime;
+      this.mainGain.gain.cancelScheduledValues(now);
+      this.mainGain.gain.setValueAtTime(0, now);
+      this._standbyGain.gain.cancelScheduledValues(now);
+      this._standbyGain.gain.setValueAtTime(standbyNormGain, now);
+    }
+
+    // Swap GainNode roles — graph topology unchanged, only JS references flip.
+    [this.mainGain, this._standbyGain] = [this._standbyGain, this.mainGain];
+
+    // Swap source + element roles.
+    [this.source, this._standbySource] = [this._standbySource, this.source];
+    const oldActive = this._boundElement;
+    [this._boundElement, this._standbyElement] = [this._standbyElement, this._boundElement];
+
+    // Re-wire DOM event forwarding to the new active element.
+    if (this._boundElement) {
+      this._attachAudioElementListeners(this._boundElement);
+      this._boundElement.volume = 1;
+    }
+
+    return oldActive;
   }
 }
 

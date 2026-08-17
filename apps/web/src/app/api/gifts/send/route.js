@@ -23,13 +23,19 @@ export async function POST(req) {
       return NextResponse.json({ error: "Admin account required", code: "ADMIN_REQUIRED" }, { status: 403 });
     }
 
-    const emailCheck = validateEmail(body.recipientEmail);
-    if (!emailCheck.ok) {
-      return NextResponse.json({ error: emailCheck.error, code: "INVALID_EMAIL" }, { status: 400 });
-    }
-
     if (!releaseSlug) {
       return NextResponse.json({ error: "Release is required", code: "RELEASE_REQUIRED" }, { status: 400 });
+    }
+
+    // Email and phone are both optional individually — at least one must be provided.
+    let recipientEmail = null;
+    const rawEmail = String(body.recipientEmail || "").trim();
+    if (rawEmail) {
+      const emailCheck = validateEmail(rawEmail);
+      if (!emailCheck.ok) {
+        return NextResponse.json({ error: emailCheck.error, code: "INVALID_EMAIL" }, { status: 400 });
+      }
+      recipientEmail = emailCheck.value;
     }
 
     let recipientPhone = null;
@@ -42,6 +48,10 @@ export async function POST(req) {
       recipientPhone = phoneCheck.value;
     }
 
+    if (!recipientEmail && !recipientPhone) {
+      return NextResponse.json({ error: "Recipient email or phone number is required", code: "RECIPIENT_CONTACT_REQUIRED" }, { status: 400 });
+    }
+
     const productId = body.productId || body.product_id || null;
 
     console.info("[api/gifts/send] request", {
@@ -49,6 +59,7 @@ export async function POST(req) {
       releaseType: body.releaseType || body.item_type || null,
       productId,
       senderId: user.id,
+      hasEmail: Boolean(recipientEmail),
       hasPhone: Boolean(recipientPhone),
     });
 
@@ -58,7 +69,7 @@ export async function POST(req) {
       releaseTitle: body.releaseTitle || body.item_title,
       releaseType: body.releaseType || body.item_type,
       productId,
-      recipientEmail: emailCheck.value,
+      recipientEmail,
       recipientPhone,
       recipientName: body.recipientName || null,
       message: body.message || null,
@@ -69,7 +80,10 @@ export async function POST(req) {
       gift: result.gift,
       giftLink: result.giftLink,
       delivered: result.delivered,
+      emailSent: result.emailSent,
+      smsSent: result.smsSent,
       recipientEmail: result.recipientEmail,
+      recipientPhone: result.recipientPhone,
     });
   } catch (err) {
     const code = err?.code || "GIFT_SEND_FAILED";

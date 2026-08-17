@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getCommunityIdentitySnapshot } from "@/lib/community/identity";
 import { getGuestUser } from "@/lib/guest-session";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
@@ -45,7 +45,7 @@ export async function GET(req) {
       return NextResponse.json({ error: "section and itemId required" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     if (section === "innercircle") {
       const user = await getGuestUser();
       if (!user) {
@@ -96,7 +96,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "section, itemId, and content required" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const identity = await getCommunityIdentitySnapshot(admin, user);
     if (section === "innercircle" && !identity.innerCircle) {
       return NextResponse.json({ error: "Inner Circle access required" }, { status: 403 });

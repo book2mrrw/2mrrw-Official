@@ -1,0 +1,3 @@
+{
+  "/api/auth/lookup-phone/route": "app/api/auth/lookup-phone/route.js"
+}

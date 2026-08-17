@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getGuestUser } from "@/lib/guest-session";
 import { isMissingSignalTable, recordSignalAction } from "@/lib/signals";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
@@ -28,7 +28,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "signalId and action are required" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const result = await recordSignalAction(admin, user.id, {
       signalId,
       action,

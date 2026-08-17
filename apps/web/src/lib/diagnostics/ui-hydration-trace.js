@@ -19,6 +19,5 @@ export function isUiHydrationTraceEnabled() {
  */
 export function logUiHydrationTrace(event, meta = {}) {
   if (!isUiHydrationTraceEnabled()) return;
-  // eslint-disable-next-line no-console
   console.debug("[ui-hydration-trace]", { event, ts: Date.now(), ...meta });
 }

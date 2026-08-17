@@ -99,7 +99,7 @@ const _UI_KEYS        = new Set(["sleepTimerEndsAt", "sleepAfterCurrentTrack", "
  *   repeatMode: "off"|"one"|"all", shuffle: boolean,
  *   csMode: boolean, csTrack: object|null,
  *   spaceMode: boolean, bassMode: boolean, atmosphereLevel: number,
- *   isBuffering: boolean, playbackNetworkState: string,
+ *   isBuffering: boolean, playbackNetworkState: string, osInterrupted: boolean,
  *   currentTime: number, duration: number
  * }} PlaybackContext
  */
@@ -149,6 +149,10 @@ export const INITIAL_PLAYBACK_CONTEXT = Object.freeze({
   crossfadeEnabled: false,       // runtime value overridden in constructor from localStorage
   previewEnded: false,
   continuityFrozen: false,
+  // OS interrupt flag — true while audio is paused by a phone call / Siri / system event
+  // and the user has NOT explicitly paused. Cleared on the next onPlay. Used by the
+  // player button to show buffering state rather than ▶ Play during the call.
+  osInterrupted: false,
 });
 
 class PlaybackStateMachine {
@@ -442,10 +446,12 @@ class PlaybackStateMachine {
       }
     }
 
-    if (notifyMain) {
-      this._contextSnapshot = Object.freeze(next);
-      this._emitContext();
-    }
+    // Transport snapshot must be updated BEFORE _emitContext() fires. The AudioContext
+    // useMemo calls getTransportSnapshot() during its recompute — if a mixed patch
+    // (e.g. isPlaying:true + isBuffering:false from onPlay) emits the context channel
+    // first, the useMemo reads a stale _transportSnapshot that still holds isBuffering:true
+    // from the 500ms buffer-show timer, permanently locking the spinner visible.
+    let _transportChanged = false;
     if (notifyTransport) {
       const prevT = this._transportSnapshot;
       if (prevT.isBuffering !== next.isBuffering || prevT.playbackNetworkState !== next.playbackNetworkState) {
@@ -453,8 +459,16 @@ class PlaybackStateMachine {
           isBuffering: Boolean(next.isBuffering),
           playbackNetworkState: next.playbackNetworkState ?? "idle",
         });
-        this._emitTransport();
+        _transportChanged = true;
       }
+    }
+
+    if (notifyMain) {
+      this._contextSnapshot = Object.freeze(next);
+      this._emitContext();
+    }
+    if (_transportChanged) {
+      this._emitTransport();
     }
     if (notifyProgress) {
       const prevP = this._progressSnapshot;

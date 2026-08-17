@@ -1,7 +1,15 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import crypto from "crypto";
 import { isAdminUser } from "@/lib/auth/constants";
 import { userOwnsProductViaEntitlements } from "@/lib/commerce/unified-entitlements";
+import {
+  getCachedTier,
+  setCachedTier,
+  getCachedSlugResult,
+  setCachedSlugResult,
+  withInflight,
+  invalidateUserEntitlementCache,
+} from "@/lib/server/entitlement-cache";
 
 export {
   ENTITLEMENT_TYPES,
@@ -48,7 +56,7 @@ async function slugsFromEntitlements(admin, userId) {
 }
 
 export async function getOwnedSlugs(userId) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const fromEntitlements = await slugsFromEntitlements(admin, userId);
   if (fromEntitlements !== null) {
     return new Set(fromEntitlements);
@@ -64,7 +72,7 @@ export async function getOwnedSlugs(userId) {
 }
 
 export async function userOwnsProduct(userId, productSlug) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data: product } = await admin.from("products").select("id").eq("slug", productSlug).single();
   if (!product) return false;
 
@@ -102,36 +110,86 @@ async function resolveAdminFromProfile(admin, userId) {
 /** True when the user may stream full audio for this catalog slug (purchase, membership, or collector). */
 export async function userCanStreamProduct(userId, productSlug, user = null) {
   if (!userId || !productSlug) return false;
+  // Admin fast-path: checked against the user object already in hand — zero DB cost.
   if (user && isAdminUser(user)) return true;
-  const admin = createAdminClient();
 
-  // These two checks are independent — run them concurrently.
-  const [isAdmin, owns] = await Promise.all([
-    resolveAdminFromProfile(admin, userId),
-    userOwnsProduct(userId, productSlug),
-  ]);
-  if (isAdmin || owns) return true;
+  // Coalesce concurrent calls for the same (userId, slug) pair behind a single
+  // computation. At cold start under load, 1000 simultaneous play events for the
+  // same track by the same user produce exactly 1 DB round-trip.
+  return withInflight(`${userId}:${productSlug}`, async () => {
+    // ── L1/L2 slug cache (fastest path after first resolution) ────────────────
+    const cachedSlug = await getCachedSlugResult(userId, productSlug);
+    if (cachedSlug !== null) return cachedSlug;
 
-  // Membership and owned slugs are also independent of each other.
-  const [membership, ownedSlugs] = await Promise.all([
-    getActiveMembership(userId),
-    getOwnedSlugs(userId),
-  ]);
-  const collector = await getCollectorAccessState(admin, userId, [...ownedSlugs]);
-  const entitled =
-    membershipHasPremiumAccess(membership) || collector.hasCollectorAccess;
-  if (!entitled) return false;
+    // ── Tier cache short-circuit (SUBSCRIBER / COLLECTOR) ────────────────────
+    // If we already know this user can stream the full catalog, only the product
+    // type check remains — one DB read instead of 4–8.
+    const cachedTier = await getCachedTier(userId);
+    if (cachedTier?.canStreamAll) {
+      const admin = getAdminClient();
+      const { data: product } = await admin
+        .from("products")
+        .select("id, product_type")
+        .eq("slug", productSlug)
+        .maybeSingle();
+      const result = Boolean(product && isDigitalProduct(product));
+      await setCachedSlugResult(userId, productSlug, result);
+      return result;
+    }
 
-  const { data: product } = await admin
-    .from("products")
-    .select("id, product_type")
-    .eq("slug", productSlug)
-    .maybeSingle();
-  return Boolean(product && isDigitalProduct(product));
+    // ── Cache miss: full DB entitlement computation ───────────────────────────
+    const admin = getAdminClient();
+
+    const [isAdmin, owns] = await Promise.all([
+      resolveAdminFromProfile(admin, userId),
+      userOwnsProduct(userId, productSlug),
+    ]);
+
+    if (isAdmin) {
+      await Promise.all([
+        setCachedTier(userId, { canStreamAll: true, isAdmin: true }),
+        setCachedSlugResult(userId, productSlug, true),
+      ]);
+      return true;
+    }
+
+    if (owns) {
+      // PURCHASER: owns this specific slug. Cache slug=true only — tier cannot be
+      // inferred (user may own just this one item and be entry-level for everything else).
+      await setCachedSlugResult(userId, productSlug, true);
+      return true;
+    }
+
+    // Membership and owned slugs are independent — run concurrently.
+    const [membership, ownedSlugs] = await Promise.all([
+      getActiveMembership(userId),
+      getOwnedSlugs(userId),
+    ]);
+    const collector = await getCollectorAccessState(admin, userId, [...ownedSlugs]);
+    const isSubscriber = membershipHasPremiumAccess(membership);
+    const isCollector  = collector.hasCollectorAccess;
+
+    if (isSubscriber || isCollector) {
+      // Cache tier so ALL future play events for this user (any slug) skip the DB.
+      await setCachedTier(userId, { canStreamAll: true, isSubscriber, isCollector });
+      const { data: product } = await admin
+        .from("products")
+        .select("id, product_type")
+        .eq("slug", productSlug)
+        .maybeSingle();
+      const result = Boolean(product && isDigitalProduct(product));
+      await setCachedSlugResult(userId, productSlug, result);
+      return result;
+    }
+
+    // ENTRY: no access. Cache slug=false — repeated plays of the same track cost 0 DB.
+    await setCachedSlugResult(userId, productSlug, false);
+    return false;
+  });
 }
 
 export async function grantLibraryItems({ userId, purchaseId, slugs, source = "purchase", entitlementMetadata = null }) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data: products, error: pErr } = await admin.from("products").select("id, slug").in("slug", slugs);
   if (pErr) throw pErr;
 
@@ -172,11 +230,16 @@ export async function grantLibraryItems({ userId, purchaseId, slugs, source = "p
     metadataExtra: entitlementMetadata,
   });
 
+  // Invalidate entitlement cache for all granted slugs so the next play event
+  // reflects the new ownership immediately rather than waiting for TTL expiry.
+  // Fire-and-forget: a failed invalidation is recoverable (TTL expires within 5 min).
+  invalidateUserEntitlementCache(userId, slugs).catch(() => {});
+
   return data || [];
 }
 
 export async function createAccessToken({ userId, productId, purchaseId, ttlHours = 168 }) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const raw = crypto.randomBytes(32).toString("hex");
   const token_hash = crypto.createHash("sha256").update(raw).digest("hex");
   const expires_at = new Date(Date.now() + ttlHours * 3600 * 1000).toISOString();
@@ -194,7 +257,7 @@ export async function createAccessToken({ userId, productId, purchaseId, ttlHour
 }
 
 export async function verifyAccessToken(rawToken) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const token_hash = crypto.createHash("sha256").update(rawToken).digest("hex");
   const { data, error } = await admin
     .from("access_tokens")
@@ -241,11 +304,16 @@ export function isVaultPassSlug(slug) {
 
 export function isCollectorAccessSlug(slug) {
   if (!slug || typeof slug !== "string") return false;
+  // Explicit prefix patterns only. slug.includes("collector") was removed because
+  // it granted collector privileges to any product whose slug contained the word
+  // "collector" — a privilege-escalation risk if naming conventions drift.
+  // The authoritative source for collector status is products.is_collector_product (DB column).
+  // This function is retained as a legacy fallback for the getCollectorAccessState()
+  // slug-ownership check path; grant paths use the DB column directly.
   return (
     slug.startsWith("exc-bundle") ||
     slug.startsWith("exc-card") ||
-    slug.startsWith("collector-") ||
-    slug.includes("collector")
+    slug.startsWith("collector-")
   );
 }
 
@@ -291,7 +359,7 @@ export function canAccessVaultTier(userTier, contentTier) {
 }
 
 export async function getActiveMembership(userId) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data, error } = await admin
     .from("memberships")
     .select("tier, status, stripe_customer_id, stripe_subscription_id, current_period_end, started_at, canceled_at, updated_at")

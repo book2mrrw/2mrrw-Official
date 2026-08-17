@@ -1,0 +1,3 @@
+{
+  "/api/donations/create-payment-intent/route": "app/api/donations/create-payment-intent/route.js"
+}

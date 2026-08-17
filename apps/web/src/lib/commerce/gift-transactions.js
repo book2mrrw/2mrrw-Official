@@ -1,5 +1,5 @@
-import crypto from "crypto";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import crypto from "crypto";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { grantLibraryItems, isMissingSupabaseColumn } from "@/lib/commerce/entitlements";
 
 function hashToken(raw) {
@@ -19,7 +19,7 @@ export async function completeGiftTransaction({
   recipientUserId,
   redeemTokenRaw
 }) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const redeemTokenHash = hashToken(redeemTokenRaw);
 
   const { data: txn, error: txnError } = await admin
@@ -62,7 +62,7 @@ export async function createPendingGiftTransaction({
   stripePaymentIntentId,
   amountCents
 }) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   let productResult = await admin
     .from("products")
     .select("id, slug, gifting_enabled, metadata")

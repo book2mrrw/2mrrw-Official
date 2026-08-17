@@ -54,6 +54,7 @@ export function CollectorCardItem({ card, remaining, onSelect, isMobile }) {
               preload="auto"
               src={card.videoSrc}
               poster={card.artwork}
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
               style={{
                 position: "absolute",
                 inset: 0,

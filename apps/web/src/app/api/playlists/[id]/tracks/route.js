@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 async function verifyOwnership(admin, playlistId, userId) {
@@ -26,7 +26,7 @@ export async function POST(req, { params }) {
   const { trackSlug, albumSlug, trackData, sortOrder } = body;
   if (!trackSlug) return NextResponse.json({ error: "trackSlug required" }, { status: 400 });
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   if (!(await verifyOwnership(admin, playlistId, user.id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -65,7 +65,7 @@ export async function PUT(req, { params }) {
   const { trackIds } = body;
   if (!Array.isArray(trackIds)) return NextResponse.json({ error: "trackIds array required" }, { status: 400 });
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   if (!(await verifyOwnership(admin, playlistId, user.id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -96,7 +96,7 @@ export async function DELETE(req, { params }) {
   const { trackKey } = body;
   if (!trackKey) return NextResponse.json({ error: "trackKey required" }, { status: 400 });
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   if (!(await verifyOwnership(admin, playlistId, user.id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }

@@ -1,0 +1,3 @@
+{
+  "/api/cron/expire-gifts/route": "app/api/cron/expire-gifts/route.js"
+}

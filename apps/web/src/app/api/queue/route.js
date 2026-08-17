@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 const MAX_QUEUE_STORE = 50;
@@ -12,7 +12,7 @@ export async function GET(req) {
   const limit = await checkRateLimit(req, { routeKey: "queue.get", limit: 30, windowSeconds: 60, identifier: user.id });
   if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data, error } = await admin
     .from("user_playback_queue")
     .select("queue, queue_index, shuffle, repeat_mode, saved_at")
@@ -43,7 +43,7 @@ export async function PUT(req) {
 
   if (!Array.isArray(queue)) return NextResponse.json({ error: "queue array required" }, { status: 400 });
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { error } = await admin.from("user_playback_queue").upsert(
     {
       user_id: user.id,

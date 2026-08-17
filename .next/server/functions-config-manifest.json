@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "functions": {
+    "/api/admin/backfill-playback-keys": {
+      "maxDuration": 60
+    },
+    "/api/stripe/webhook": {},
+    "/api/webhook": {},
+    "/api/webhooks/stripe": {}
+  }
+}

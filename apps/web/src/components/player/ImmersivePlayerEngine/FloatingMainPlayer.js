@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useRef } from "react";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
 import {
@@ -13,7 +13,8 @@ import CoverArtCS from "@/components/ui/CoverArtCS";
 import SignaturePlayRing from "@/components/player/ImmersivePlayerEngine/SignaturePlayRing";
 import { formatPlayerTime } from "@/lib/player/formatTime";
 import { PLAYER_LAYOUT_ID } from "@/lib/player/constants";
-import { useMediaEngine } from "@/media/useMediaEngine";
+import { useMediaEngine }    from "@/media/useMediaEngine";
+import { useArtworkGesture } from "@/hooks/useArtworkGesture";
 
 function FloatingMainPlayer({
   currentTrack,
@@ -64,6 +65,13 @@ function FloatingMainPlayer({
     toggleCSMode: engineToggleCSMode,
   } = useMediaEngine();
   const showCs = Boolean(currentTrack?.hasCs || currentTrack?.csAudio);
+
+  // Interactive artwork gesture (Slow/Screw/Chop/Filter) on player cover
+  const coverRef = useRef(null);
+  const { handlers: coverGesture } = useArtworkGesture({
+    slug:       currentTrack?.slug || currentTrack?.id || "player",
+    elementRef: coverRef,
+  });
   const csModeActive = engineCsMode;
   const sourceLabel = String(currentTrack.source || "audio").replace(/_/g, " ");
 
@@ -100,7 +108,15 @@ function FloatingMainPlayer({
         </div>
 
         <div className="player-immersive-expanded__stage">
-          <div style={{ width: coverSize, height: coverSize, maxWidth: 320, maxHeight: 320 }}>
+          <div
+            ref={coverRef}
+            style={{ width: coverSize, height: coverSize, maxWidth: 320, maxHeight: 320 }}
+            onPointerDown={coverGesture.onPointerDown}
+            onPointerMove={coverGesture.onPointerMove}
+            onPointerUp={coverGesture.onPointerUp}
+            onPointerCancel={coverGesture.onPointerCancel}
+            onLostPointerCapture={coverGesture.onLostPointerCapture}
+          >
             <CoverArtCS
               originalSrc={baseCoverUrl}
               originalType={baseCoverType}

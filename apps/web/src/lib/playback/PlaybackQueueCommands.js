@@ -149,8 +149,11 @@ export function attachQueueCommands(self) {
   self.playQueueInternal = async function playQueueInternal(tracks = [], startIndex = 0, options = {}) {
     const { logDirectInternalCallViolation, stopAfterEachTrackRef } = self._deps;
     logDirectInternalCallViolation("playQueueInternal");
-    // autoAdvance defaults to true — singles/features pass false to stop after each track
-    stopAfterEachTrackRef.current = options.autoAdvance === false;
+    // autoAdvance defaults to true — singles/features pass false to stop after each track.
+    // Preview-only tracks always stop after play; no queue advance for entry-level users.
+    const startTrack = tracks[Math.max(0, Math.min(startIndex, tracks.length - 1))];
+    const isPreviewOnlyStart = Boolean(startTrack?.metadata?.access?.previewOnly);
+    stopAfterEachTrackRef.current = options.autoAdvance === false || isPreviewOnlyStart;
     const normalized = self.setQueueInternal(tracks, startIndex);
     if (!normalized.length) return false;
     const index = Math.max(0, Math.min(startIndex, normalized.length - 1));

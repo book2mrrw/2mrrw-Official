@@ -1,5 +1,6 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 import { isCollectorAccessSlug, isMissingCollectorOwnershipsTable, isMissingSupabaseTable, isVaultPassSlug } from "@/lib/commerce/entitlements";
+import { invalidateUserEntitlementCache } from "@/lib/server/entitlement-cache";
 
 const MEMBERSHIP_PRODUCT_SLUGS = new Set([
   "inner_circle_membership",
@@ -10,7 +11,7 @@ const MEMBERSHIP_PRODUCT_SLUGS = new Set([
 
 export async function revokeCollectorOwnershipsByPurchase(purchaseId) {
   if (!purchaseId) return { revoked: 0 };
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data, error } = await admin
     .from("collector_ownerships")
     .delete()
@@ -28,7 +29,7 @@ export async function revokeCollectorOwnershipsByPurchase(purchaseId) {
 
 export async function revokeVaultEntitlementsByPurchase(purchaseId) {
   if (!purchaseId) return { revoked: 0 };
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data, error } = await admin
     .from("vault_entitlements")
     .update({ status: "revoked", updated_at: new Date().toISOString() })
@@ -50,7 +51,7 @@ export async function revokeMembershipByPurchaseContext({ userId, slugs = [] }) 
   const hasMembershipSku = (slugs || []).some((slug) => MEMBERSHIP_PRODUCT_SLUGS.has(slug));
   if (!hasMembershipSku) return { revoked: false };
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data, error } = await admin
     .from("memberships")
     .update({
@@ -72,7 +73,7 @@ export async function revokeMembershipByPurchaseContext({ userId, slugs = [] }) 
 }
 
 export async function revokeExtendedEntitlementsForPurchase({ purchaseId, userId, slugs = [] }) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { revokeEntitlementsForPurchase } = await import("@/lib/commerce/unified-entitlements");
   const entitlements = await revokeEntitlementsForPurchase(admin, purchaseId);
 
@@ -83,6 +84,10 @@ export async function revokeExtendedEntitlementsForPurchase({ purchaseId, userId
   const normalizedSlugs = (slugs || []).filter(Boolean);
   const hadCollectorSku = normalizedSlugs.some(isCollectorAccessSlug);
   const hadVaultSku = normalizedSlugs.some(isVaultPassSlug);
+
+  // Revoke succeeded: wipe tier + per-slug cache for affected slugs so the next
+  // play event re-derives access from DB rather than serving a stale grant.
+  invalidateUserEntitlementCache(userId, normalizedSlugs).catch(() => {});
 
   return {
     entitlements,

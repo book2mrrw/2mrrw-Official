@@ -333,7 +333,7 @@ export function AuthProvider({ children }) {
         return snapshotToAccountPayload(entitlementSnapshotRef.current, accountStateRef.current);
       }
 
-      if (accountStateInFlightRef.current) {
+      if (accountStateInFlightRef.current && !meta.force) {
         logEntitlementRefreshBlocked({
           source: meta.source || "AuthContext",
           reason: logReason,

@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getActiveMembership } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
 import { getUserVaultAccess, loadPublishedVaultContent } from "@/lib/vault/access";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const user = await getGuestUser();
     const membership = user ? await getActiveMembership(user.id) : null;
     const vaultAccess = await getUserVaultAccess(admin, user?.id, membership);

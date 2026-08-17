@@ -13,6 +13,7 @@ import PlaybackPrewarmCardShell from "@/components/music/PlaybackPrewarmCardShel
 import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
 import { catalogCoverDisplay, withR2CatalogMedia } from "@/components/home/catalogMedia";
 import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
+import { useArtworkGesture } from "@/hooks/useArtworkGesture";
 
 const FeatureCard = memo(function FeatureCard({
   item,
@@ -33,8 +34,13 @@ const FeatureCard = memo(function FeatureCard({
   const showPlayActions = itemHasPlayableAudio(mediaItem, access);
   const coverDisplay = useMemo(() => catalogCoverDisplay(mediaItem), [mediaItem]);
   const videoRef = useRef(null);
+  const featureCoverRef = useRef(null);
   const [videoFailed, setVideoFailed] = useState(false);
   const { shouldAnimate } = useMountEnterAnimation();
+  const { handlers: featureGesture } = useArtworkGesture({
+    slug: item?.slug || "",
+    elementRef: featureCoverRef,
+  });
 
   return (
     <PlaybackPrewarmCardShell
@@ -65,6 +71,7 @@ const FeatureCard = memo(function FeatureCard({
     >
       {isAdminStable ? <GiftOverlayButton onClick={() => onGift?.(mediaItem)} /> : null}
       <div
+        ref={featureCoverRef}
         role="button"
         tabIndex={0}
         onClick={() => onOpenFeature?.(mediaItem)}
@@ -74,6 +81,11 @@ const FeatureCard = memo(function FeatureCard({
             onOpenFeature?.(mediaItem);
           }
         }}
+        onPointerDown={featureGesture.onPointerDown}
+        onPointerMove={featureGesture.onPointerMove}
+        onPointerUp={featureGesture.onPointerUp}
+        onPointerCancel={featureGesture.onPointerCancel}
+        onLostPointerCapture={featureGesture.onLostPointerCapture}
         style={{ cursor: "pointer" }}
       >
         {!videoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video" ? (

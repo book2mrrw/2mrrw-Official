@@ -27,7 +27,6 @@ export function isStateChurnLogEnabled() {
 export function logStateChurn(kind, meta = {}) {
   if (!isStateChurnLogEnabled()) return;
   const { source = "unknown", reason = "", ...rest } = meta;
-  // eslint-disable-next-line no-console
   console.debug("[state-churn]", {
     kind,
     source,
@@ -44,7 +43,6 @@ export function logStateChurn(kind, meta = {}) {
 export function logEntitlementRefreshBlocked(meta = {}) {
   if (!isStateChurnLogEnabled()) return;
   const { source = "unknown", reason = "", blockReason = "unknown", ...rest } = meta;
-  // eslint-disable-next-line no-console
   console.debug("[ENTITLEMENT-REFRESH-BLOCKED]", {
     source,
     reason,
@@ -64,7 +62,6 @@ export function logEntitlementRefreshBlocked(meta = {}) {
 export function logPlaybackResilience(kind, meta = {}) {
   if (!isStateChurnLogEnabled()) return;
   const { source = "unknown", code = "", ...rest } = meta;
-  // eslint-disable-next-line no-console
   console.debug("[playback-resilience]", {
     kind,
     source,

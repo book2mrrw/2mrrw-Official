@@ -11,11 +11,11 @@ import { isUpcomingReleaseDate } from "@/lib/media/release-date";
 import {
   catalogCoverUrl,
   catalogMotionVideoUrl,
-  catalogPreviewAudioUrl,
+
   catalogPublicMediaUrl,
   catalogVisualMediaUrl,
 } from "@/lib/media-urls";
-import { isLibraryStreamRedirectSrc } from "@/lib/playback/stream-client";
+
 
 /** Known storefront title → product slug (album rows that match singles/features). */
 const TITLE_SLUG_ALIASES = {
@@ -230,7 +230,6 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
   const previewPath =
     normalized?.preview_path || normalized?.previewPath || normalized?.preview || null;
   const playbackSrc = resolvePlaybackSrc(normalized, access, { userId, accountState });
-  const previewSrc = previewPath ? catalogPreviewAudioUrl(previewPath) : null;
 
   // gain_db: dB offset to reach -14 LUFS target. Null until populated server-side.
   const gainDb = normalized?.gain_db ?? normalized?.gainDb ?? null;
@@ -253,7 +252,6 @@ export function normalizeTrackForPlayback(item, accountState, source = "library"
     source,
     metadata: {
       access,
-      previewSrc,
       price: normalized?.price,
       albumSlug: normalized?.albumSlug || overrides.albumSlug,
       trackSlug: normalized?.trackSlug || overrides.trackSlug || null,
@@ -279,29 +277,13 @@ export function toPlaybackTrack(item, accountState, source = "library", override
  * through a preview clip; their tier is resolved once at sign-in and cached in
  * track.metadata.access.canStream.
  *
- * Preview-only users receive a 30-second public preview (no auth) and will be upgraded
- * to the full stream once they establish a session / purchase.
+ * All users route through /api/library/stream; the server serves preview audio for
+ * non-entitled tiers. No CDN downgrade, no upgrade attempt needed.
  *
  * @returns {{ startTrack: object, needsUpgrade: boolean }}
  */
 export function toInstantStartTrack(track) {
-  const previewSrc = track?.metadata?.previewSrc;
-  const isLibraryStream = /^\/api\/library\/stream/.test(track?.src || "");
-  if (!track || !isLibraryStream || !previewSrc || previewSrc === track.src) {
-    return { startTrack: track, needsUpgrade: false };
-  }
-  if (isLibraryStreamRedirectSrc(track.src)) {
-    // Entitled users bypass preview-first — they get the redirect URL directly.
-    if (track?.metadata?.access?.canStream) {
-      return { startTrack: track, needsUpgrade: false };
-    }
-    return { startTrack: { ...track, src: previewSrc }, needsUpgrade: true };
-  }
-  // Non-redirect path: entitled users play the library stream directly.
-  if (track?.metadata?.access?.canStream) {
-    return { startTrack: track, needsUpgrade: false };
-  }
-  return { startTrack: { ...track, src: previewSrc }, needsUpgrade: true };
+  return { startTrack: track, needsUpgrade: false };
 }
 
 /** First-track catalog item for inline album card play — matches modal start index 0. */

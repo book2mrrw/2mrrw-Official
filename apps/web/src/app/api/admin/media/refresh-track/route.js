@@ -1,4 +1,4 @@
-/**
+﻿/**
  * POST /api/admin/media/refresh-track
  *
  * Atomic audio refresh pipeline for a single track.
@@ -22,7 +22,7 @@ import { NextResponse } from "next/server";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import {
   resolvePlaybackKey,
   clearPersistedPlaybackKey,
@@ -30,6 +30,7 @@ import {
 import { clearMediaResolverCaches } from "@/lib/media/cache-invalidation";
 import { buildHLSPrefix } from "@/lib/hls/derive-key";
 import { r2Client, R2_BUCKET, listR2Objects } from "@/lib/storage/r2";
+import { invalidateManifestCache } from "@/lib/server/hls-manifest-cache";
 
 const VALID_RELEASE_TYPES = new Set([
   "singles", "albums", "features", "mixtapes-and-eps", "eps",
@@ -65,7 +66,7 @@ export async function POST(req) {
     ? body.releaseType
     : "singles";
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
 
   const steps = {
     jobCancelled:    false,
@@ -118,8 +119,15 @@ export async function POST(req) {
     ? delManifestQ.eq("track_slug", trackSlug)
     : delManifestQ.is("track_slug", null);
   const { error: manifestDeleteError } = await delManifestQ;
-  if (!manifestDeleteError) steps.manifestDeleted = true;
-  else console.warn("[refresh-track] manifest delete failed", { slug, trackSlug, error: manifestDeleteError.message });
+  if (!manifestDeleteError) {
+    steps.manifestDeleted = true;
+    // Wipe L1+L2 manifest cache so the next /api/library/hls request goes to DB
+    // and gets a 404 (triggering fallback to progressive) rather than serving the
+    // stale manifest pointer until its TTL expires (up to 24h fleet-wide).
+    await invalidateManifestCache(slug, trackSlug).catch(() => {});
+  } else {
+    console.warn("[refresh-track] manifest delete failed", { slug, trackSlug, error: manifestDeleteError.message });
+  }
 
   // ── Step 4: Delete every R2 HLS segment under hlsPrefix ─────────────────────
   // listR2Objects with recursive:true pages through all segment keys

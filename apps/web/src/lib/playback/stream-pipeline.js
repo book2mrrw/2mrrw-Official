@@ -1,6 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
-
-export const STREAM_SIGNED_URL_TTL_SECONDS = 3600;
+﻿export const STREAM_SIGNED_URL_TTL_SECONDS = 3600;
 export const STREAM_SESSION_OVERLAP_SECONDS = 30;
 
 function isMissingTable(error) {

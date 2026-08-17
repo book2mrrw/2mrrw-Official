@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import {
   requestDeviceInfo,
   requestIpHash,
@@ -46,7 +46,7 @@ export async function POST(req) {
 
     const deviceInfo = requestDeviceInfo(req);
     const ipHash = requestIpHash(req);
-    const admin = createAdminClient();
+    const admin = getAdminClient();
 
     let cardResult = null;
     let checkinMethod = "nfc";

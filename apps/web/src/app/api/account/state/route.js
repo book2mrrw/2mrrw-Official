@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getCachedState, setCachedState } from "@/lib/server/account-state-cache";
 import { getCollectorAccessRecords } from "@/lib/collector-cards";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import {
   getCollectorAccessState,
   getVaultPassAccessState,
@@ -103,7 +103,7 @@ export async function GET(req) {
       });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const [libraryResult, membershipResult, productsResult, collectorResult, mediaProgressResult, collectorAccessRecords] = await Promise.all([
       admin
         .from("library_items")

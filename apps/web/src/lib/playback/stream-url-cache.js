@@ -1,10 +1,17 @@
 import { STREAM_SIGNED_URL_TTL_SECONDS } from "@/lib/playback/stream-pipeline";
 
-/** Keep signed URLs valid — refresh before R2 presign expiry (1h). */
-const CACHE_TTL_MS = Math.max(
+/**
+ * Client-side TTL for signed stream URLs.
+ * Derived from server presign duration (STREAM_SIGNED_URL_TTL_SECONDS) minus a 5-minute
+ * safety margin, so clients refresh before R2 expiry under any clock skew.
+ * Exported so all consumers share one canonical value — import instead of hardcoding.
+ */
+export const SIGNED_URL_CLIENT_TTL_MS = Math.max(
   60_000,
   STREAM_SIGNED_URL_TTL_SECONDS * 1000 - 5 * 60 * 1000
 );
+
+const CACHE_TTL_MS = SIGNED_URL_CLIENT_TTL_MS;
 
 /** @type {Map<string, { url: string, expiresAt: number }>} */
 const cache = new Map();

@@ -38,7 +38,6 @@ export default class ModalErrorBoundary extends Component {
     if (!this._loggedError) {
       this._loggedError = true;
       if (process.env.NODE_ENV !== "production") {
-        // eslint-disable-next-line no-console
         console.error("[ModalErrorBoundary]", error?.message, errorInfo?.componentStack);
       }
       clientLog("error", "boundary_caught", {

@@ -64,11 +64,13 @@ export async function GET(req) {
   }
 
   if (meta) {
+    // JSON meta response: directly cacheable by CDN (Cloudflare honors s-maxage on JSON 200s).
+    // Prefer ?meta=1 over the 302 redirect path — 302s are not reliably cached by CDN proxies.
     return applyMediaCors(
       req,
       NextResponse.json(resolved, {
         headers: {
-          "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+          "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400, max-age=300",
         },
       })
     );

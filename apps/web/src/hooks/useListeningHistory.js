@@ -30,6 +30,22 @@ export function useListeningHistory({ accountState, singles = [], albums = [], u
     [...singles, ...albums].forEach((item) => {
       if (item?.slug) map.set(item.slug, item);
     });
+    // Also index individual album track slugs so album tracks show cover art in recently played
+    albums.forEach((album) => {
+      const trackList = album?.tracks || album?.trackTitles || [];
+      trackList.forEach((track) => {
+        if (!track || typeof track === "string") return;
+        const slug = track.slug;
+        if (!slug || map.has(slug)) return;
+        map.set(slug, {
+          ...track,
+          cover: track.cover || track.cover_art || album.cover || album.cover_art || album.cover_url || null,
+          albumSlug: album.slug,
+          albumTitle: album.title,
+          type: album.type || album.releaseType || "album",
+        });
+      });
+    });
     return map;
   }, [singles, albums]);
 

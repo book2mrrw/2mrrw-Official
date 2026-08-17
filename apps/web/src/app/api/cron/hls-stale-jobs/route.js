@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/cron/hls-stale-jobs
  *
  * Rescues HLS transcode jobs that have been stuck in 'processing' for longer
@@ -16,7 +16,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 const STALE_THRESHOLD_MINUTES = 15;
 const MAX_ATTEMPTS = 3;
@@ -35,7 +35,7 @@ export async function GET(req) {
     return json({ error: "Forbidden" }, 403);
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
 
   // Find jobs stuck in 'processing' past the stale threshold
   const staleAfter = new Date(Date.now() - STALE_THRESHOLD_MINUTES * 60 * 1000).toISOString();

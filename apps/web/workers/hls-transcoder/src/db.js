@@ -61,6 +61,31 @@ export async function markJobComplete(jobId, manifest) {
     .update({ status: "complete", completed_at: new Date().toISOString() })
     .eq("id", jobId);
   if (jErr) throw new Error(`markJobComplete: ${jErr.message}`);
+
+  // Notify the web app to invalidate the L1+L2 manifest cache immediately so
+  // the next /api/library/hls request serves the real manifest instead of waiting
+  // up to 24h for the TTL to expire.
+  const appUrl = process.env.APP_URL;
+  const workerToken = process.env.HLS_WORKER_API_TOKEN;
+  if (appUrl && workerToken) {
+    fetch(`${appUrl}/api/admin/hls/complete`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${workerToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ slug: manifest.slug, trackSlug: manifest.track_slug ?? null }),
+    }).catch((err) => console.warn("[worker] cache invalidation notify failed", err?.message));
+  }
+}
+
+export async function updatePosterKey(slug, trackSlug, posterKey, status = "ready") {
+  const { error } = await db
+    .from("hls_manifests")
+    .update({ poster_key: posterKey, poster_status: status })
+    .eq("slug", slug)
+    .is("track_slug", trackSlug ?? null);
+  if (error) throw new Error(`updatePosterKey: ${error.message}`);
 }
 
 export async function markJobFailed(jobId, errorMessage) {

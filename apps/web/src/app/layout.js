@@ -9,6 +9,7 @@ import SessionRecoveryRoot from "@/components/system/SessionRecoveryRoot";
 import PostHogInit from "@/components/system/PostHogInit";
 import BlackscreenTraceBootstrap from "@/components/system/BlackscreenTraceBootstrap";
 import PlaybackNetworkHints from "@/components/system/PlaybackNetworkHints";
+import GlobalMediaControllerMount from "@/components/system/GlobalMediaControllerMount";
 import { MediaErrorBoundary } from "@/system/errors";
 
 const R2 = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
@@ -69,6 +70,7 @@ export default function RootLayout({ children }) {
         <AuthProvider>
           <BlackscreenTraceBootstrap />
           <AudioProvider>
+            <GlobalMediaControllerMount />
             <AppAuthRoot>
               <AuthGateProvider>
                 <SessionRecoveryRoot>

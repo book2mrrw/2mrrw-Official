@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getGuestUser } from "@/lib/guest-session";
 
@@ -42,7 +42,7 @@ export async function getFanSessionUser() {
 
     let profile = getCachedProfile(user.id);
     if (!profile) {
-      const admin = createAdminClient();
+      const admin = getAdminClient();
       const { data } = await admin
         .from("profiles")
         .select("email, phone, full_name, role")

@@ -206,65 +206,60 @@ export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
   liveStreamDate,
   liveStreamTime,
 }) {
-  const { liveIsLive, liveCountdown } = useLiveCountdown();
+  const { liveIsLive, liveCountdown, liveChannel, liveTitle, liveGoesLiveAt } = useLiveCountdown();
+
+  const displayDate = liveGoesLiveAt
+    ? new Date(liveGoesLiveAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+    : liveStreamDate;
+  const displayTime = liveGoesLiveAt
+    ? new Date(liveGoesLiveAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+    : liveStreamTime;
+
+  const channel = liveChannel || "callme2mrrw";
+  // Twitch embeds require the parent domain. Works on production (www.2mrrw.com).
+  const isProduction = typeof window !== "undefined" && window.location.hostname !== "localhost";
+  const twitchParent = typeof window !== "undefined"
+    ? window.location.hostname
+    : "www.2mrrw.com";
+  const twitchSrc = `https://player.twitch.tv/?channel=${channel}&parent=${twitchParent}&autoplay=true&muted=false`;
+
   return (
     <>
+      {/* Header card — countdown when offline, LIVE NOW when live */}
       <div
         style={{
           background: "linear-gradient(135deg,#080808,#0d0d0d)",
-          border: "1px solid rgba(0,255,255,0.12)",
+          border: liveIsLive ? "1px solid rgba(0,255,255,0.35)" : "1px solid rgba(0,255,255,0.12)",
           borderRadius: 20,
           padding: isMobile ? "20px 16px" : "36px 32px",
           marginBottom: 28,
           textAlign: "center",
+          transition: "border-color 0.4s",
         }}
       >
-        <div
-          style={{
-            fontSize: 11,
-            color: "#555",
-            letterSpacing: 3,
-            marginBottom: 6,
-            textTransform: "uppercase",
-          }}
-        >
-          Next Live Stream
+        <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 6, textTransform: "uppercase" }}>
+          {liveIsLive ? "On Air Now" : "Next Live Stream"}
         </div>
-        <div style={{ fontSize: isMobile ? 17 : 22, fontWeight: 800, marginBottom: 4 }}>2MRRW LIVE – Dallas</div>
-        <div style={{ fontSize: 13, color: "#aaa", marginBottom: 28 }}>
-          {liveStreamDate} · {liveStreamTime}
+        <div style={{ fontSize: isMobile ? 17 : 22, fontWeight: 800, marginBottom: 4 }}>
+          {liveTitle || "2MRRW LIVE"}
         </div>
+        {!liveIsLive && (
+          <div style={{ fontSize: 13, color: "#aaa", marginBottom: 28 }}>
+            {displayDate} · {displayTime}
+          </div>
+        )}
         {liveIsLive ? (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 12,
-              marginBottom: 20,
-            }}
-          >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginTop: 12 }}>
             <div
               style={{
-                width: 12,
-                height: 12,
-                borderRadius: "50%",
-                background: "#00ffff",
-                boxShadow: "0 0 14px rgba(0,255,255,0.9)",
-                animation: "pulse 1.2s infinite",
+                width: 12, height: 12, borderRadius: "50%", background: "#00ffff",
+                boxShadow: "0 0 14px rgba(0,255,255,0.9)", animation: "pulse 1.2s infinite",
               }}
             />
             <div style={{ fontSize: 28, fontWeight: 900, color: "#00ffff", letterSpacing: 4 }}>LIVE NOW</div>
           </div>
         ) : (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              gap: isMobile ? 8 : 16,
-              flexWrap: "wrap",
-            }}
-          >
+          <div style={{ display: "flex", justifyContent: "center", gap: isMobile ? 8 : 16, flexWrap: "wrap" }}>
             {[
               { v: liveCountdown.days, l: "Days" },
               { v: liveCountdown.hours, l: "Hours" },
@@ -274,92 +269,71 @@ export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
               <div
                 key={u.l}
                 style={{
-                  background: "#0a0a0a",
-                  border: "1px solid #1e1e1e",
-                  borderRadius: 14,
-                  padding: isMobile ? "12px 10px" : "18px 22px",
-                  minWidth: isMobile ? 52 : 74,
-                  textAlign: "center",
+                  background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 14,
+                  padding: isMobile ? "12px 10px" : "18px 22px", minWidth: isMobile ? 52 : 74, textAlign: "center",
                 }}
               >
-                <div
-                  style={{
-                    fontSize: isMobile ? 26 : 36,
-                    fontWeight: 900,
-                    color: "#00ffff",
-                    fontVariantNumeric: "tabular-nums",
-                    lineHeight: 1,
-                  }}
-                >
+                <div style={{ fontSize: isMobile ? 26 : 36, fontWeight: 900, color: "#00ffff", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
                   {String(u.v).padStart(2, "0")}
                 </div>
-                <div
-                  style={{
-                    fontSize: 9,
-                    color: "#444",
-                    letterSpacing: 2,
-                    marginTop: 6,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {u.l}
-                </div>
+                <div style={{ fontSize: 9, color: "#444", letterSpacing: 2, marginTop: 6, textTransform: "uppercase" }}>{u.l}</div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Player area — Twitch embed when live, offline placeholder when not */}
       <div
         style={{
           background: "#0d0d0d",
-          border: "1px solid #1e1e1e",
+          border: liveIsLive ? "1px solid rgba(0,255,255,0.2)" : "1px solid #1e1e1e",
           borderRadius: 20,
           overflow: "hidden",
           marginBottom: 28,
+          transition: "border-color 0.4s",
         }}
       >
         <div style={{ position: "relative", paddingBottom: "56.25%", background: "#050505" }}>
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 16,
-            }}
-          >
+          {liveIsLive && isProduction ? (
+            <iframe
+              src={twitchSrc}
+              title="2MRRW Live Stream"
+              allowFullScreen
+              allow="autoplay; fullscreen"
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+            />
+          ) : (
             <div
               style={{
-                width: 70,
-                height: 70,
-                borderRadius: "50%",
-                border: "1px solid #222",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
+                position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+                alignItems: "center", justifyContent: "center", gap: 16,
               }}
             >
-              <svg viewBox="0 0 24 24" fill="#333" width="32" height="32">
-                <circle cx="12" cy="12" r="4" />
-                <path
-                  d="M20.188 10.934a8.999 8.999 0 0 0-16.376 0M23.472 9.16a13.5 13.5 0 0 0-22.944 0M16.905 12.7a4.5 4.5 0 0 0-9.81 0M12 17v-1m0 5v-2"
-                  stroke="#333"
-                  strokeWidth="1.5"
-                  fill="none"
-                />
-              </svg>
+              <div
+                style={{
+                  width: 70, height: 70, borderRadius: "50%", border: "1px solid #222",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}
+              >
+                <svg viewBox="0 0 24 24" fill="#333" width="32" height="32">
+                  <circle cx="12" cy="12" r="4" />
+                  <path
+                    d="M20.188 10.934a8.999 8.999 0 0 0-16.376 0M23.472 9.16a13.5 13.5 0 0 0-22.944 0M16.905 12.7a4.5 4.5 0 0 0-9.81 0M12 17v-1m0 5v-2"
+                    stroke="#333" strokeWidth="1.5" fill="none"
+                  />
+                </svg>
+              </div>
+              <div style={{ fontSize: 14, color: "#333", fontWeight: 700, letterSpacing: 2 }}>OFFLINE</div>
+              <div style={{ fontSize: 12, color: "#2a2a2a" }}>Stream will appear here when live</div>
             </div>
-            <div style={{ fontSize: 14, color: "#333", fontWeight: 700, letterSpacing: 2 }}>
-              {liveIsLive ? "STREAM STARTING…" : "OFFLINE"}
-            </div>
-            <div style={{ fontSize: 12, color: "#2a2a2a" }}>Live streams announced via Circle + socials</div>
-          </div>
+          )}
         </div>
         <div style={{ padding: "16px 20px", borderTop: "1px solid #111" }}>
           <div style={{ fontSize: 13, color: "#444" }}>
-            Live streams broadcast here and on Twitch. Follow to get notified.
+            {liveIsLive
+              ? `Streaming live · Also at twitch.tv/${channel}`
+              : "Live streams broadcast here and on Twitch. You'll be notified when 2MRRW goes live."}
           </div>
         </div>
       </div>

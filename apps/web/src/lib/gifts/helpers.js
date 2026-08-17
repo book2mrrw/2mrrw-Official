@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 import { grantLibraryItems } from "@/lib/commerce/entitlements";
 import { resolveGiftProduct } from "@/lib/commerce/resolve-storefront-product";
 import { getFanSessionUser } from "@/lib/auth/session-user";
@@ -6,11 +6,12 @@ import { normalizeEmail } from "@/lib/guest-session";
 import { hashGiftLinkToken } from "@/lib/gifts/token-hash";
 import { isGiftReminderToken, parseGiftReminderToken } from "@/lib/gifts/reminder-link";
 import { grantEntitlementFlag } from "@/lib/entitlements";
+import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
 
 export { getFanSessionUser };
 
 export async function getGiftByToken(token) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
 
   if (isGiftReminderToken(token)) {
     const parsed = parseGiftReminderToken(token);
@@ -54,7 +55,7 @@ export async function expireGiftIfNeeded(gift) {
   if (!gift || gift.status !== "pending") return gift;
   if (!gift.expires_at || new Date(gift.expires_at) >= new Date()) return gift;
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data, error } = await admin
     .from("gifts")
     .update({ status: "expired", updated_at: new Date().toISOString() })
@@ -66,7 +67,7 @@ export async function expireGiftIfNeeded(gift) {
 }
 
 export async function resolveProductForGift(gift) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data: direct } = await admin
     .from("products")
     .select("id, slug, title, cover_url, product_type, content_type")
@@ -104,7 +105,7 @@ function isVaultGiftProduct(product, gift) {
 }
 
 export async function claimGiftForUser(gift, user) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const product = await resolveProductForGift(gift);
   if (!product) {
     throw new Error("Gift item is not available in the catalog yet.");
@@ -150,12 +151,6 @@ export async function claimGiftForUser(gift, user) {
         type: gift.item_type || product.product_type,
       },
     ],
-    purchase_type: "gift",
-    gifted_by: gift.sender_id,
-    gift_id: gift.id,
-    item_id: product.id,
-    item_type: gift.item_type,
-    price_paid: 0,
   };
 
   const { data: purchase, error: purchaseError } = await admin
@@ -163,11 +158,13 @@ export async function claimGiftForUser(gift, user) {
     .insert(purchaseRow)
     .select("id")
     .single();
-  if (purchaseError) throw purchaseError;
+  if (purchaseError) {
+    console.warn("[gift-claim] purchases insert failed (non-fatal):", purchaseError.message);
+  }
 
   await grantLibraryItems({
     userId: user.id,
-    purchaseId: purchase.id,
+    purchaseId: purchase?.id ?? null,
     slugs: [product.slug],
     source: "gift",
     entitlementMetadata: { gift_id: gift.id },
@@ -185,7 +182,7 @@ export async function claimGiftForUser(gift, user) {
     .eq("product_id", product.id);
 
   if (isVaultGiftProduct(product, gift)) {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     await grantEntitlementFlag(admin, user.id, "vault_access", "gift_claim", {
       metadata: { gift_id: gift.id, product_slug: product.slug },
     });
@@ -207,9 +204,11 @@ export async function claimGiftForUser(gift, user) {
     },
   });
 
+  invalidateAccountStateCache(user.id).catch(() => {});
+
   return {
     gift: updatedGift,
     product,
-    purchaseId: purchase.id,
+    purchaseId: purchase?.id ?? null,
   };
 }

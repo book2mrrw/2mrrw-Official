@@ -1,7 +1,7 @@
-import { cookies } from "next/headers";
+﻿import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 const COOKIE_NAME = "guest_session";
 const ONE_YEAR = 60 * 60 * 24 * 365;
@@ -100,11 +100,40 @@ export async function getGuestIdFromCookie() {
   }
 }
 
+/**
+ * Unified user resolver for API routes.
+ * Checks the Supabase session (new email+password auth) first,
+ * falls back to the legacy guest_session cookie.
+ * Returns null only if neither is present.
+ */
+export async function getRequestUser() {
+  try {
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabase = await createClient();
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data?.user?.id) {
+      const u = data.user;
+      const meta = u.user_metadata || {};
+      return {
+        id: u.id,
+        email: meta.contact_email || u.email || "",
+        phone: meta.phone || u.phone || "",
+        name: meta.full_name || meta.name || "",
+        isGuest: false,
+        createdAt: u.created_at,
+      };
+    }
+  } catch {
+    // fall through to guest session
+  }
+  return getGuestUser();
+}
+
 export async function getGuestUser() {
   const guestId = await getGuestIdFromCookie();
   if (!guestId) return null;
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data, error } = await admin.auth.admin.getUserById(guestId);
   if (error) throw error;
   if (!data?.user) return null;
@@ -145,7 +174,7 @@ export async function createOrRetrieveGuest({ email, phone, name }) {
     throw new Error("Email and phone are required");
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const syntheticEmail = syntheticAuthEmail(normalizedEmail, normalizedPhone);
 
   const existing = await findGuestBySyntheticEmail(admin, syntheticEmail);

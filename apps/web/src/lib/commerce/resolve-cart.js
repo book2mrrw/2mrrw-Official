@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 
 /** Map cart lines to catalog products; prices always from DB. */
 export async function resolveCartLines(cart) {
@@ -9,7 +9,7 @@ export async function resolveCartLines(cart) {
   const slugs = [...new Set(cart.map((i) => i?.slug).filter(Boolean))];
   if (slugs.length === 0) throw new Error("Cart items missing slugs");
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data: products, error } = await admin
     .from("products")
     .select("*")

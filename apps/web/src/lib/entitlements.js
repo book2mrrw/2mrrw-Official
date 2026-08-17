@@ -1,5 +1,9 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 import { isMissingSupabaseTable } from "@/lib/commerce/entitlements";
+import {
+  invalidateEntitlementTierCache,
+  invalidateUserEntitlementCache,
+} from "@/lib/server/entitlement-cache";
 
 export const ENTITLEMENT_TYPES = ["vault_access", "subscriber", "collector_card"];
 
@@ -57,7 +61,7 @@ export async function getUserEntitlements(userId, admin = null) {
     };
   }
 
-  const client = admin || createAdminClient();
+  const client = admin || getAdminClient();
   const { data, error } = await client
     .from("user_entitlements")
     .select("*")
@@ -148,6 +152,9 @@ export async function upsertUserEntitlements(admin, userId, patch = {}) {
   }
 
   console.log(`${LOG_PREFIX} upsert`, { userId, vault: data.vault_access, subscriber: data.subscriber, collector: data.collector_card });
+  // Any write to user_entitlements changes tier state. Invalidate immediately so the
+  // next play event re-derives the correct tier rather than serving a stale cache entry.
+  invalidateEntitlementTierCache(userId).catch(() => {});
   return data;
 }
 
@@ -215,6 +222,9 @@ export async function revokeAllUserEntitlements(admin, userId, reason = "revoked
   }
 
   console.warn(`${LOG_PREFIX} revoked all`, { userId, reason });
+  // Full revoke: wipe the tier key and all slug keys for this user so the next
+  // play event hits the DB and gets correctly denied rather than serving a cached grant.
+  invalidateUserEntitlementCache(userId).catch(() => {});
   return data;
 }
 
@@ -233,7 +243,7 @@ export async function getActiveCardBenefits(admin, entitlementType = "collector_
 }
 
 export async function getCheckoutDiscountPercent(userId, admin = null) {
-  const client = admin || createAdminClient();
+  const client = admin || getAdminClient();
   const row = await getUserEntitlements(userId, client);
   if (!hasEntitlement(row, "collector_card")) return 0;
 

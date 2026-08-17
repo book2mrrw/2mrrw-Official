@@ -29,6 +29,7 @@ function SendGiftForm({ catalog, onSent }) {
   const [form, setForm] = useState({
     releaseSlug: "",
     recipientEmail: "",
+    recipientPhone: "",
     recipientName: "",
     message: "",
   });
@@ -46,8 +47,8 @@ function SendGiftForm({ catalog, onSent }) {
     e.preventDefault();
     setError(null);
     setResult(null);
-    if (!form.releaseSlug || !form.recipientEmail) {
-      setError("Release and recipient email are required.");
+    if (!form.releaseSlug || (!form.recipientEmail && !form.recipientPhone)) {
+      setError("Release and recipient email or phone are required.");
       return;
     }
     setLoading(true);
@@ -58,15 +59,16 @@ function SendGiftForm({ catalog, onSent }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           releaseSlug: form.releaseSlug,
-          recipientEmail: form.recipientEmail,
+          recipientEmail: form.recipientEmail || null,
+          recipientPhone: form.recipientPhone || null,
           recipientName: form.recipientName || null,
           message: form.message || null,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setResult({ giftLink: data.giftLink, delivered: data.delivered, recipientEmail: data.recipientEmail });
-      setForm({ releaseSlug: "", recipientEmail: "", recipientName: "", message: "" });
+      setResult({ giftLink: data.giftLink, delivered: data.delivered, recipientEmail: data.recipientEmail, recipientPhone: data.recipientPhone, smsSent: data.smsSent });
+      setForm({ releaseSlug: "", recipientEmail: "", recipientPhone: "", recipientName: "", message: "" });
       onSent?.();
     } catch (err) {
       setError(err.message);
@@ -98,15 +100,27 @@ function SendGiftForm({ catalog, onSent }) {
       </select>
 
       {/* Recipient email */}
-      <label style={s.label}>Recipient Email *</label>
+      <label style={s.label}>Recipient Email</label>
       <input
         type="email"
         value={form.recipientEmail}
         onChange={(e) => set("recipientEmail", e.target.value)}
         placeholder="fan@example.com"
         style={s.input}
-        required
       />
+
+      {/* Recipient phone */}
+      <label style={s.label}>Recipient Phone</label>
+      <input
+        type="tel"
+        value={form.recipientPhone}
+        onChange={(e) => set("recipientPhone", e.target.value)}
+        placeholder="+1 555 000 0000"
+        style={s.input}
+      />
+      <div style={{ fontSize: 11, color: "#444", marginTop: 4, marginBottom: 4 }}>
+        At least one contact method required. Both sends email + SMS.
+      </div>
 
       {/* Recipient name (optional) */}
       <label style={s.label}>Recipient Name (optional)</label>
@@ -137,8 +151,12 @@ function SendGiftForm({ catalog, onSent }) {
           </div>
           <div style={{ fontSize: 12, color: "#aaa", marginBottom: 8 }}>
             {result.delivered
-              ? `Added to ${result.recipientEmail}'s library immediately.`
-              : `Email with claim link sent to ${result.recipientEmail}.`}
+              ? `Added to ${result.recipientEmail || result.recipientPhone}'s library immediately.`
+              : [
+                  result.recipientEmail ? `Email sent to ${result.recipientEmail}.` : null,
+                  result.smsSent && result.recipientPhone ? `SMS sent to ${result.recipientPhone}.` : null,
+                  !result.recipientEmail && !result.smsSent ? `Gift link created — share it manually.` : null,
+                ].filter(Boolean).join(" ")}
           </div>
           {result.giftLink && (
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>

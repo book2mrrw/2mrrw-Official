@@ -17,8 +17,9 @@
 import { NextResponse } from "next/server";
 import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
 import { verifyVariantToken, signKeyToken } from "@/lib/hls/token";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { getOrFetchManifest } from "@/lib/server/hls-manifest-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -61,19 +62,27 @@ export async function GET(req) {
   });
   if (!rl.allowed) return cors(req, rateLimitResponse(rl.retryAfterSeconds));
 
-  // Fetch manifest metadata from DB — single query, no presigning needed.
+  // Fetch manifest metadata — served from L1/L2 cache on all warm requests.
+  // The factory SELECT is intentionally identical to the master route's factory so
+  // whichever route is called first populates the shared cache entry for both.
   // Normalize trackSlug: singles have track_slug IS NULL; treat trackSlug === slug as null.
   const effectiveTrackSlug = (trackSlug && trackSlug !== slug) ? trackSlug : null;
-  const admin = createAdminClient();
-  let manifestQ = admin
-    .from("hls_manifests")
-    .select("hls_prefix, segment_duration_secs, duration_seconds, segment_counts")
-    .eq("slug", slug);
-  manifestQ = effectiveTrackSlug ? manifestQ.eq("track_slug", effectiveTrackSlug) : manifestQ.is("track_slug", null);
-  const { data: manifest, error } = await manifestQ.maybeSingle();
 
-  if (error) {
-    console.error("[hls/variant] DB error", { slug, trackSlug, message: error.message });
+  let manifest;
+  try {
+    manifest = await getOrFetchManifest(slug, effectiveTrackSlug, async () => {
+      const admin = getAdminClient();
+      let q = admin
+        .from("hls_manifests")
+        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts")
+        .eq("slug", slug);
+      q = effectiveTrackSlug ? q.eq("track_slug", effectiveTrackSlug) : q.is("track_slug", null);
+      const { data, error } = await q.maybeSingle();
+      if (error) throw error;
+      return data ?? null;
+    });
+  } catch (err) {
+    console.error("[hls/variant] DB error", { slug, trackSlug, message: err.message });
     return cors(req, NextResponse.json({ error: "Internal error" }, { status: 500 }));
   }
   if (!manifest) {
@@ -129,9 +138,11 @@ export async function GET(req) {
       status: 200,
       headers: {
         "Content-Type": "application/x-mpegURL",
-        // max-age=3000 (50 min): 5 min buffer before the embedded key token (55 min TTL) expires,
-        // preventing a race where a cached playlist references an already-expired key token.
-        "Cache-Control": "private, max-age=3000",
+        // max-age=28500 (7.916 h): 5-min safety buffer below VARIANT_TTL_SECONDS (28800 = 8 h).
+        // The browser cache for the variant playlist expires before the embedded key token
+        // (KEY_TTL_SECONDS = 27900 = 7.75 h), so hls.js never holds a valid cached playlist
+        // with an expired key token — the session remains live for 7.75 h without any error.
+        "Cache-Control": "private, max-age=28500",
         "X-Content-Type-Options": "nosniff",
       },
     })

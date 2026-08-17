@@ -85,7 +85,6 @@ export function AudioProvider({ children }) {
   // ─── Context Value ───────────────────────────────────────────────────────────
   // publicApi and delegates are useMemo([], []) — identity never changes.
   // Only state, playbackOrchestrationState, and local React state values cause recomputes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const value = useMemo(() => {
     const { currentTime: _t, playbackNetworkState: _n, isBuffering: _b, ...playbackState } = state;
     const transport = playbackStateMachine.getTransportSnapshot();
@@ -139,7 +138,7 @@ export function AudioProvider({ children }) {
     };
   }, [
     state, playbackOrchestrationState, publicApi, delegates, uiState,
-  ]); // eslint-disable-line react-hooks/exhaustive-deps
+  ]);
 
   // ─── Debug Render Trace (dev/trace only) ─────────────────────────────────────
   if (isPlaybackTraceEnabled()) {

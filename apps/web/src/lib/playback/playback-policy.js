@@ -28,7 +28,7 @@ export const PLAYBACK_POLICY = /** @type {const} */ ({
   UNRESTRICTED:     "UNRESTRICTED",      // admin — full catalog, all access
   FULL_CATALOG:     "FULL_CATALOG",      // collector + subscriber
   PURCHASE_LIBRARY: "PURCHASE_LIBRARY",  // purchaser — per-slug ownership check
-  PREVIEW_ONLY:     "PREVIEW_ONLY",      // entry — 30s preview clips only
+  PREVIEW_ONLY:     "PREVIEW_ONLY",      // entry — 15s preview clips only
 });
 
 /**

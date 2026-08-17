@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { expireGiftIfNeeded, getGiftByToken, giftPublicState, resolveProductForGift } from "@/lib/gifts/helpers";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { hashGiftLinkToken } from "@/lib/gifts/token-hash";
+import { catalogCoverUrl } from "@/lib/media-urls";
+import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
 
 export async function GET(req, { params }) {
   try {
@@ -26,7 +28,16 @@ export async function GET(req, { params }) {
 
     gift = await expireGiftIfNeeded(gift);
     const { state } = giftPublicState(gift);
-    const product = state === "valid" ? await resolveProductForGift(gift) : null;
+    // Resolve product for any displayable state so the reveal always has cover art.
+    const product = state !== "invalid" ? await resolveProductForGift(gift) : null;
+
+    // Resolve cover using the same mechanism the storefront uses.
+    // cover_url  → visual discovery URL (animated video for singles, image for others) — for CoverArt
+    // cover_image_url → always the JPEG legacy cover — for CSS blurred backgrounds
+    const canonical = product?.slug ? getCanonicalReleaseBySlug(product.slug) : null;
+    const coverUrl = canonical?.cover || (product?.cover_url ? catalogCoverUrl(product.cover_url) : null) || null;
+    const coverImageUrl = canonical?.legacy_cover || (product?.cover_url ? catalogCoverUrl(product.cover_url) : null) || null;
+    const coverArtType = canonical?.coverArtType || null;
 
     return NextResponse.json({
       state,
@@ -39,7 +50,9 @@ export async function GET(req, { params }) {
         status: gift.status,
         recipient_id: gift.recipient_id,
       },
-      cover_url: product?.cover_url || null,
+      cover_url: coverUrl,
+      cover_image_url: coverImageUrl,
+      cover_art_type: coverArtType,
       product_slug: product?.slug || null,
     });
   } catch (err) {

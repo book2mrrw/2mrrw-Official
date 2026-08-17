@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 
 const MERCH_COVER_FALLBACK = {
   hoodie: "/images/albums/tbh.jpg",
@@ -49,7 +49,7 @@ function normalizePrintfulItem(item) {
 
 async function merchFromCatalog() {
   try {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const { data, error } = await admin
       .from("products")
       .select("slug, title, price_cents, cover_url")

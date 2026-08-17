@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getGuestUser } from "@/lib/guest-session";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { clearStreamSession, endStreamEvent, endStreamEventForUser, resolveProductIdBySlug } from "@/lib/playback/stream-pipeline";
@@ -26,7 +26,7 @@ export async function POST(req) {
   const completed = Boolean(body.completed);
 
   try {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     await endStreamEvent(admin, streamEventId, { durationSeconds, completed });
     // Redirect-path plays never receive a streamEventId — fall back to finding the
     // most recent open event for this user+product via slug lookup.

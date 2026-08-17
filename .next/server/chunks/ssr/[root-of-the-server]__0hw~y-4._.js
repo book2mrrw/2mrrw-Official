@@ -1,0 +1,5 @@
+;!function(){try { var e="undefined"!=typeof globalThis?globalThis:"undefined"!=typeof global?global:"undefined"!=typeof window?window:"undefined"!=typeof self?self:{},n=(new e.Error).stack;n&&((e._debugIds|| (e._debugIds={}))[n]="c2825a20-cf54-44e6-5a10-9e3d480856b7")}catch(e){}}();
+module.exports=[193695,(a,b,c)=>{b.exports=a.x("next/dist/shared/lib/no-fallback-error.external.js",()=>require("next/dist/shared/lib/no-fallback-error.external.js"))},110585,a=>{a.v("/_next/static/media/favicon.0x3dzn~oxb6tn.ico"+(globalThis.NEXT_CLIENT_ASSET_SUFFIX||""))},68611,a=>{"use strict";let b={src:a.i(110585).default,width:256,height:256};a.s(["default",0,b])},504276,(a,b,c)=>{let{createClientModuleProxy:d}=a.r(211857);a.n(d("[project]/node_modules/next/dist/client/components/builtin/global-error.js <module evaluation>"))},782509,(a,b,c)=>{let{createClientModuleProxy:d}=a.r(211857);a.n(d("[project]/node_modules/next/dist/client/components/builtin/global-error.js"))},866114,a=>{"use strict";a.i(504276);var b=a.i(782509);a.n(b)},262212,a=>{a.n(a.i(866114))}];
+
+//# debugId=c2825a20-cf54-44e6-5a10-9e3d480856b7
+//# sourceMappingURL=%5Broot-of-the-server%5D__0hw~y-4._.js.map

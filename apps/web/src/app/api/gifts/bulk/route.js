@@ -1,7 +1,7 @@
-import { isAdminUser } from "@/lib/auth/constants";
+﻿import { isAdminUser } from "@/lib/auth/constants";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { grantLibraryItems } from "@/lib/commerce/entitlements";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 const BATCH_SIZE = 50;
 const BULK_GIFT_RATE_WINDOW_MS = 60_000;
@@ -60,7 +60,7 @@ export async function POST(req) {
     return Response.json({ error: "slug and recipient_type required" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   let recipients = [];
 
   if (recipientType === "subscribers") {

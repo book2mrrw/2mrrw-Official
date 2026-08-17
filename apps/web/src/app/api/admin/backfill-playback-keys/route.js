@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { resolvePlaybackKey } from "@/lib/playback/resolve-playback-key";
 import { getHybridStreamingFeatureFlags } from "@/lib/feature-flags";
 import { createR2SignedGetUrl } from "@/lib/storage/r2";
@@ -28,7 +28,7 @@ export async function POST(req) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
 
   const { data: products, error: productsError } = await admin
     .from("products")
@@ -89,7 +89,7 @@ export async function GET(req) {
     return NextResponse.json({ flags: getHybridStreamingFeatureFlags() });
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const resolved = await resolvePlaybackKey(admin, slug, { trackSlug });
   if (!resolved?.key) {
     return NextResponse.json({ flags: getHybridStreamingFeatureFlags(), resolved: null });

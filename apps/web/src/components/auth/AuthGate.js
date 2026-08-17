@@ -1,20 +1,16 @@
 
 "use client";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  verifyEmailOtp,
-  sendEmailOtp,
-  formatOtpSendError,
-  getOtpCooldownRemainingMs,
-  resetOtpEmailIntent,
-  normalizeAuthEmail,
-} from "@/auth/authService";
-import { writePendingPhone, clearPendingPhone, readPendingPhone } from "@/lib/auth/otp-pending";
-import { validateEmail, validatePhone, formatResendCountdown } from "@/lib/auth/validation";
+import { useRouter } from "next/navigation";
+import { validateEmail } from "@/lib/auth/validation";
 import { useAuth } from "@/context/AuthContext";
+import { createClient } from "@/lib/supabase/client";
+
 const DISMISS_DRAG_PX = 80;
-const OTP_LENGTH = 8;
-const EMPTY_DIGITS = () => Array(OTP_LENGTH).fill("");
+const CODE_LENGTH = 6;
+const EMPTY_DIGITS = () => Array(CODE_LENGTH).fill("");
+
 const inputStyle = {
   padding: "14px 16px",
   background: "rgba(255,255,255,0.06)",
@@ -79,290 +75,150 @@ const GLOW_KEYFRAMES = `
     100% { background-position: 200% center; }
   }
 `;
+
 export default function AuthGate({ open, onClose, onVerified, variant = "sheet" }) {
   const isRoot = variant === "root";
+  const router = useRouter();
   const { applySessionUser } = useAuth();
-  const [mode, setMode] = useState("signup");
-  const [name, setName] = useState("");
+
+  const [mode, setMode] = useState("signin"); // "signin" | "code"
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [digits, setDigits] = useState(EMPTY_DIGITS);
   const [emailError, setEmailError] = useState("");
-  const [phoneError, setPhoneError] = useState("");
   const [formError, setFormError] = useState("");
+  const [codeError, setCodeError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [otpEmail, setOtpEmail] = useState("");
-  const [otpCreateUser, setOtpCreateUser] = useState(true);
-  const [digits, setDigits] = useState(EMPTY_DIGITS());
-  const [otpError, setOtpError] = useState("");
-  const [otpLoading, setOtpLoading] = useState(false);
-  const [otpSending, setOtpSending] = useState(false);
-  const [resendIn, setResendIn] = useState(0);
-  const [otpAwaitingEntry, setOtpAwaitingEntry] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [hasPhone, setHasPhone] = useState(false);
   const [sheetDragY, setSheetDragY] = useState(0);
+
+  const inFlightRef = useRef(false);
+  const verifyFlightRef = useRef(false);
+  const autoSubmittedRef = useRef(false);
   const inputsRef = useRef([]);
   const touchStartYRef = useRef(null);
   const draggingRef = useRef(false);
-  const otpAutoSubmittedRef = useRef(false);
-  const otpSendInFlightRef = useRef(false);
-  const verifyInFlightRef = useRef(false);
-  const completeProfileFetchedRef = useRef(false);
-  const otpRequestIdRef = useRef(null);
+
   const code = useMemo(() => digits.join(""), [digits]);
-  const screen = mode === "otp" ? "otp" : mode === "signin" ? "signin" : "signup";
-  const resetForm = useCallback(() => {
-    setMode("signup");
-    setName("");
-    setEmail("");
-    setPhone("");
-    setEmailError("");
-    setPhoneError("");
-    setFormError("");
-    setOtpEmail("");
-    setDigits(EMPTY_DIGITS());
-    setOtpError("");
-    setOtpSending(false);
-    setOtpAwaitingEntry(false);
-    setResendIn(0);
-    setSheetDragY(0);
-    otpSendInFlightRef.current = false;
-    verifyInFlightRef.current = false;
-    touchStartYRef.current = null;
-    draggingRef.current = false;
-    otpAutoSubmittedRef.current = false;
-    otpRequestIdRef.current = null;
-  }, []);
+
   useEffect(() => {
-    if (!open) resetForm();
-  }, [open, resetForm]);
-  useEffect(() => {
-    if (!open || typeof window === "undefined") return;
-    const pendingEmail = sessionStorage.getItem("pendingOtpEmail");
-    if (pendingEmail) {
-      setEmail(pendingEmail);
-      setOtpEmail(pendingEmail);
-      setMode("otp");
-      setOtpAwaitingEntry(true);
-      sessionStorage.removeItem("pendingOtpEmail");
+    if (!open) {
+      setMode("signin");
+      setEmail(""); setPassword(""); setDigits(EMPTY_DIGITS());
+      setEmailError(""); setFormError(""); setCodeError("");
+      setLoading(false); setVerifying(false); setHasPhone(false);
+      setSheetDragY(0);
+      inFlightRef.current = false;
+      verifyFlightRef.current = false;
+      autoSubmittedRef.current = false;
     }
   }, [open]);
-  useEffect(() => {
-    if (screen !== "otp" || !otpEmail) return undefined;
-    const syncCooldown = () => {
-      setResendIn(Math.ceil(getOtpCooldownRemainingMs(otpEmail) / 1000));
-    };
-    syncCooldown();
-    const timer = setInterval(syncCooldown, 500);
-    return () => clearInterval(timer);
-  }, [screen, otpEmail]);
-  const handleEmailChange = (next) => {
-    if (normalizeAuthEmail(next) !== normalizeAuthEmail(email)) {
-      resetOtpEmailIntent(email, { requestId: otpRequestIdRef.current });
-      otpRequestIdRef.current = null;
-      otpSendInFlightRef.current = false;
-      setLoading(false);
-      setOtpSending(false);
-    }
-    setEmail(next);
-    if (emailError) setEmailError("");
-  };
-  const sendOtpToEmail = useCallback(async (targetEmail, shouldCreateUser) => {
-    if (otpSendInFlightRef.current) return;
-    otpSendInFlightRef.current = true;
-    setOtpSending(true);
-    setOtpError("");
-    try {
-      if (!otpRequestIdRef.current) {
-        otpRequestIdRef.current =
-          typeof crypto !== "undefined" && crypto.randomUUID
-            ? crypto.randomUUID()
-            : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      }
-      const { error: otpErr, deduplicated, cooldownMs } = await sendEmailOtp({
-        email: targetEmail,
-        shouldCreateUser,
-        requestId: otpRequestIdRef.current,
-      });
-      if (otpErr && !deduplicated) {
-        if (cooldownMs > 0) {
-          throw new Error("Please wait before requesting another code.");
-        }
-        throw otpErr;
-      }
-      setOtpEmail(targetEmail);
-      setOtpCreateUser(shouldCreateUser);
-      setDigits(EMPTY_DIGITS());
-      setOtpAwaitingEntry(false);
-      otpAutoSubmittedRef.current = false;
-      setMode("otp");
-    } finally {
-      otpRequestIdRef.current = null;
-      otpSendInFlightRef.current = false;
-      setOtpSending(false);
-    }
-  }, []);
-  const checkEmailExists = useCallback(async (targetEmail) => {
-    const res = await fetch("/api/auth/lookup-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: targetEmail }),
-    });
-    const data = await res.json();
-    if (!res.ok) return false;
-    return Boolean(data.exists);
-  }, []);
-  const submitSignup = async (e) => {
+
+  // ── Step 1: email + password ──────────────────────────────────────────────
+  const submitCredentials = async (e) => {
     e.preventDefault();
-    setFormError("");
-    setEmailError("");
-    setPhoneError("");
-    const emailCheck = validateEmail(email);
-    const phoneCheck = validatePhone(phone);
-    if (!emailCheck.ok) setEmailError(emailCheck.error);
-    if (!phoneCheck.ok) setPhoneError(phoneCheck.error);
-    if (!emailCheck.ok || !phoneCheck.ok) return;
-    if (loading || otpSending) return;
-    setLoading(true);
-    try {
-      writePendingPhone(phoneCheck.value);
-      if (name.trim()) sessionStorage.setItem("pendingProfileName", name.trim());
-      const exists = await checkEmailExists(emailCheck.value);
-      await sendOtpToEmail(emailCheck.value, !exists);
-    } catch (err) {
-      if (/already|exists|registered/i.test(err.message || "")) {
-        setFormError("You already have an account. Sign in instead.");
-        setMode("signin");
-        setEmail(email.trim());
-      } else {
-        setFormError(formatOtpSendError(err));
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-  const submitSignin = async (e) => {
-    e.preventDefault();
-    setFormError("");
-    setEmailError("");
+    setFormError(""); setEmailError("");
     const emailCheck = validateEmail(email);
     if (!emailCheck.ok) { setEmailError(emailCheck.error); return; }
-    if (loading || otpSending) return;
+    if (!password) { setFormError("Password is required"); return; }
+    if (inFlightRef.current || loading) return;
+    inFlightRef.current = true;
     setLoading(true);
     try {
-      await sendOtpToEmail(emailCheck.value, false);
-    } catch (err) {
-      setFormError(formatOtpSendError(err));
+      const res = await fetch("/api/auth/login-step1", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailCheck.value, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFormError(data.error || "Login failed");
+        return;
+      }
+      setHasPhone(Boolean(data.hasPhone));
+      setDigits(EMPTY_DIGITS());
+      autoSubmittedRef.current = false;
+      setMode("code");
+    } catch {
+      setFormError("Something went wrong. Please try again.");
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   };
+
+  // ── Digit input ───────────────────────────────────────────────────────────
   const updateDigit = (index, value) => {
     const char = value.replace(/\D/g, "").slice(-1);
     const next = [...digits];
     next[index] = char;
     setDigits(next);
-    setOtpError("");
-    otpAutoSubmittedRef.current = false;
-    if (char && index < OTP_LENGTH - 1) inputsRef.current[index + 1]?.focus();
+    setCodeError("");
+    autoSubmittedRef.current = false;
+    if (char && index < CODE_LENGTH - 1) inputsRef.current[index + 1]?.focus();
   };
+
   const handlePaste = (e) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, OTP_LENGTH);
+    const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, CODE_LENGTH);
     if (!pasted) return;
     const next = EMPTY_DIGITS();
-    for (let i = 0; i < pasted.length; i += 1) next[i] = pasted[i];
+    for (let i = 0; i < pasted.length; i++) next[i] = pasted[i];
     setDigits(next);
-    setOtpError("");
-    otpAutoSubmittedRef.current = false;
-    const focusIndex = Math.min(pasted.length, OTP_LENGTH - 1);
-    inputsRef.current[focusIndex]?.focus();
+    setCodeError("");
+    autoSubmittedRef.current = false;
+    inputsRef.current[Math.min(pasted.length, CODE_LENGTH - 1)]?.focus();
   };
-  const verifyOtp = useCallback(
-    async (e) => {
-      e?.preventDefault?.();
-      if (code.length !== OTP_LENGTH) {
-        setOtpError("Enter the 8-digit code.");
+
+  // ── Step 2: verify code ───────────────────────────────────────────────────
+  const submitCode = useCallback(async (e) => {
+    e?.preventDefault?.();
+    if (code.length !== CODE_LENGTH) { setCodeError("Enter the 6-digit code."); return; }
+    if (verifyFlightRef.current || verifying) return;
+    verifyFlightRef.current = true;
+    setVerifying(true);
+    setCodeError("");
+    try {
+      const res = await fetch("/api/auth/login-step2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        if (data.expired) {
+          setMode("signin");
+          setDigits(EMPTY_DIGITS());
+          setPassword("");
+        }
+        setCodeError(data.error || "Verification failed");
         return;
       }
-      if (verifyInFlightRef.current || otpLoading) return;
-      verifyInFlightRef.current = true;
-      setOtpLoading(true);
-      setOtpError("");
-      try {
-        const { data, error: verifyError } = await verifyEmailOtp({
-          email: otpEmail,
-          token: code,
-          type: "email",
-        });
-        if (verifyError) throw verifyError;
-        const pendingPhone = readPendingPhone() || undefined;
-        const pendingName =
-          typeof window !== "undefined"
-            ? sessionStorage.getItem("pendingProfileName")
-            : "";
-        if ((pendingPhone || pendingName) && !completeProfileFetchedRef.current) {
-          completeProfileFetchedRef.current = true;
-          try {
-            await fetch("/api/auth/complete-profile", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              credentials: "include",
-              body: JSON.stringify({
-                email: otpEmail,
-                phone: pendingPhone,
-                name: pendingName || name.trim() || undefined,
-              }),
-            });
-          } catch {
-            /* profile sync is best-effort */
-          }
-        }
-        if (typeof window !== "undefined") {
-          sessionStorage.removeItem("pendingProfileName");
-        }
-        clearPendingPhone();
-        if (data?.session) {
-          await applySessionUser(data.session);
-        } else if (data?.user) {
-          await applySessionUser({ user: data.user });
-        }
-        await onVerified?.();
-      } catch {
-        setOtpError("Invalid or expired code. Try again or tap Resend code.");
-      } finally {
-        verifyInFlightRef.current = false;
-        setOtpLoading(false);
+      if (data.session) {
+        await applySessionUser(data.session);
+      } else {
+        const supabase = createClient();
+        const { data: sd } = await supabase.auth.getSession();
+        if (sd?.session) await applySessionUser(sd.session);
       }
-    },
-    [code, otpEmail, name, applySessionUser, onVerified, otpLoading]
-  );
+      await onVerified?.();
+    } catch {
+      setCodeError("Something went wrong. Please try again.");
+    } finally {
+      verifyFlightRef.current = false;
+      setVerifying(false);
+    }
+  }, [code, verifying, applySessionUser, onVerified]);
+
+  // Auto-submit when all digits filled
   useEffect(() => {
-    if (
-      screen !== "otp" ||
-      code.length !== OTP_LENGTH ||
-      otpLoading ||
-      verifyInFlightRef.current ||
-      otpAutoSubmittedRef.current
-    ) return;
-    otpAutoSubmittedRef.current = true;
-    void verifyOtp();
-  }, [screen, code, otpLoading, verifyOtp]);
-  const resendOtp = async () => {
-    if (
-      getOtpCooldownRemainingMs(otpEmail) > 0 ||
-      resendIn > 0 ||
-      !otpEmail ||
-      otpSending
-    ) {
-      return;
-    }
-    setOtpError("");
-    otpAutoSubmittedRef.current = false;
-    try {
-      await sendOtpToEmail(otpEmail, otpCreateUser);
-    } catch (err) {
-      setOtpError(formatOtpSendError(err));
-    }
-  };
+    if (mode !== "code" || code.length !== CODE_LENGTH || verifying || verifyFlightRef.current || autoSubmittedRef.current) return;
+    autoSubmittedRef.current = true;
+    void submitCode();
+  }, [code, mode, verifying, submitCode]);
+
+  // ── Drag to dismiss (sheet variant) ──────────────────────────────────────
   const handleSheetTouchStart = (e) => {
     if (e.touches.length !== 1) return;
     touchStartYRef.current = e.touches[0].clientY;
@@ -370,18 +226,17 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
   };
   const handleSheetTouchMove = (e) => {
     if (!draggingRef.current || touchStartYRef.current == null) return;
-    const delta = Math.max(0, e.touches[0].clientY - touchStartYRef.current);
-    setSheetDragY(delta);
+    setSheetDragY(Math.max(0, e.touches[0].clientY - touchStartYRef.current));
   };
   const handleSheetTouchEnd = () => {
-    if (sheetDragY >= DISMISS_DRAG_PX) onClose();
+    if (sheetDragY >= DISMISS_DRAG_PX) onClose?.();
     setSheetDragY(0);
     touchStartYRef.current = null;
     draggingRef.current = false;
   };
-  const signupReady = validateEmail(email).ok && validatePhone(phone).ok;
-  const signinReady = validateEmail(email).ok;
+
   if (!open) return null;
+
   const cardStyle = {
     width: "min(440px, calc(100vw - 24px))",
     background: "#111",
@@ -397,6 +252,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     overflowY: "auto",
     WebkitOverflowScrolling: "touch",
   };
+
   const overlayStyle = isRoot ? {
     position: "fixed",
     inset: 0,
@@ -415,6 +271,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     justifyContent: "center",
     background: "rgba(0,0,0,0.75)",
   };
+
   const wordmarkStyle = {
     fontSize: 26,
     fontWeight: 800,
@@ -432,6 +289,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
     animationTimingFunction: "ease-in-out, linear",
     animationIterationCount: "infinite, infinite",
   };
+
   return (
     <>
       <style>{GLOW_KEYFRAMES}</style>
@@ -439,7 +297,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
         role="dialog"
         aria-modal="true"
         style={overlayStyle}
-        onClick={isRoot ? undefined : onClose}
+        onClick={isRoot ? undefined : () => onClose?.()}
       >
         <div
           style={cardStyle}
@@ -460,35 +318,16 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
             }} />
           ) : null}
           <div style={wordmarkStyle}>2MRRW</div>
-          {screen === "otp" ? (
-            <form onSubmit={verifyOtp} style={{ display: "flex", flexDirection: "column" }}>
-              <h2 style={{
-                margin: "0 0 8px",
-                fontSize: 22,
-                fontWeight: 700,
-                color: "white",
-                fontFamily: "Georgia, serif",
-              }}>
-                Check your email
+
+          {mode === "code" ? (
+            <form onSubmit={submitCode} style={{ display: "flex", flexDirection: "column" }}>
+              <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 700, color: "white", fontFamily: "Georgia, serif" }}>
+                Check your {hasPhone ? "email & phone" : "email"}
               </h2>
-              <p style={{
-                margin: "0 0 20px",
-                color: "#666",
-                fontSize: 13,
-                lineHeight: 1.6,
-              }}>
-                {otpAwaitingEntry
-                  ? `Enter the code we already sent to ${otpEmail || "your email"}, or tap Resend code.`
-                  : `Enter the 8-digit code sent to ${otpEmail || "your email"}.`}
+              <p style={{ margin: "0 0 20px", color: "#666", fontSize: 13, lineHeight: 1.6 }}>
+                Enter the 6-digit code sent to {email}{hasPhone ? " and your phone" : ""}.
               </p>
-              <div style={{
-                display: "flex",
-                flexDirection: "row",
-                flexWrap: "nowrap",
-                width: "100%",
-                gap: 5,
-                marginBottom: 16,
-              }}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                 {digits.map((digit, index) => (
                   <input
                     key={index}
@@ -507,7 +346,7 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
                     style={{
                       flex: "1 1 0",
                       minWidth: 0,
-                      maxWidth: 40,
+                      maxWidth: 44,
                       aspectRatio: "1",
                       height: "auto",
                       background: "rgba(255,255,255,0.06)",
@@ -524,161 +363,77 @@ export default function AuthGate({ open, onClose, onVerified, variant = "sheet" 
                   />
                 ))}
               </div>
-              {otpError ? (
-                <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 8 }}>
-                  {otpError}
-                </div>
+              {codeError ? (
+                <div style={{ color: "#ef4444", fontSize: 12, marginBottom: 8 }}>{codeError}</div>
               ) : null}
               <button
                 type="submit"
-                disabled={otpLoading}
-                style={{ ...ctaStyle, opacity: otpLoading ? 0.7 : 1 }}
+                disabled={verifying}
+                style={{ ...ctaStyle, opacity: verifying ? 0.7 : 1 }}
               >
-                {otpLoading ? "Verifying…" : "Verify"}
+                {verifying ? "Verifying…" : "Verify"}
               </button>
               <button
                 type="button"
-                onClick={() => void resendOtp()}
-                disabled={resendIn > 0 || otpSending}
-                style={{
-                  ...linkStyle,
-                  opacity: resendIn > 0 || otpSending ? 0.5 : 1,
-                  cursor: resendIn > 0 || otpSending ? "default" : "pointer",
+                onClick={() => {
+                  setMode("signin");
+                  setDigits(EMPTY_DIGITS());
+                  setCodeError("");
+                  autoSubmittedRef.current = false;
                 }}
+                style={linkStyle}
               >
-                {otpSending
-                  ? "Sending…"
-                  : resendIn > 0
-                    ? `Resend code in ${formatResendCountdown(resendIn)}`
-                    : "Resend code"}
+                ← Back to sign in
               </button>
             </form>
-          ) : screen === "signin" ? (
-            <form onSubmit={submitSignin} style={{ display: "flex", flexDirection: "column" }}>
-              <h2 style={{
-                margin: "0 0 8px",
-                fontSize: 22,
-                fontWeight: 700,
-                color: "white",
-                fontFamily: "Georgia, serif",
-              }}>
+          ) : (
+            <form onSubmit={submitCredentials} style={{ display: "flex", flexDirection: "column" }}>
+              <h2 style={{ margin: "0 0 8px", fontSize: 22, fontWeight: 700, color: "white", fontFamily: "Georgia, serif" }}>
                 Welcome back
               </h2>
-              <p style={{
-                margin: "0 0 16px",
-                color: "#666",
-                fontSize: 13,
-                lineHeight: 1.6,
-              }}>
-                Enter your email and we&apos;ll send a verification code.
+              <p style={{ margin: "0 0 16px", color: "#666", fontSize: 13, lineHeight: 1.6 }}>
+                Enter your email and password to continue.
               </p>
               <input
                 placeholder="Email"
                 type="email"
                 value={email}
-                onChange={(e) => handleEmailChange(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); if (emailError) setEmailError(""); }}
                 required
-                style={{
-                  ...inputStyle,
-                  borderColor: emailError ? "#ef4444" : "rgba(255,255,255,0.12)",
-                }}
+                style={{ ...inputStyle, borderColor: emailError ? "#ef4444" : "rgba(255,255,255,0.12)" }}
               />
               {emailError ? <div style={errorStyle}>{emailError}</div> : null}
+              <input
+                placeholder="Password"
+                type="password"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); if (formError) setFormError(""); }}
+                required
+                style={inputStyle}
+              />
               {formError ? (
                 <div style={{ ...errorStyle, marginTop: 0 }}>⚠ {formError}</div>
               ) : null}
               <button
                 type="submit"
-                disabled={loading || otpSending || !signinReady}
-                style={{
-                  ...ctaStyle,
-                  opacity: loading || otpSending || !signinReady ? 0.5 : 1,
-                  cursor: loading || otpSending || !signinReady ? "default" : "pointer",
-                }}
+                disabled={loading}
+                style={{ ...ctaStyle, opacity: loading ? 0.5 : 1, cursor: loading ? "default" : "pointer" }}
               >
-                {loading || otpSending ? "Sending…" : "Send Code"}
+                {loading ? "Verifying…" : "Continue"}
               </button>
               <button
                 type="button"
-                onClick={() => { setMode("signup"); setFormError(""); }}
+                onClick={() => router.push("/join")}
                 style={linkStyle}
               >
                 Create account
               </button>
-            </form>
-          ) : (
-            <form onSubmit={submitSignup} style={{ display: "flex", flexDirection: "column" }}>
-              <h2 style={{
-                margin: "0 0 8px",
-                fontSize: 22,
-                fontWeight: 700,
-                color: "white",
-                fontFamily: "Georgia, serif",
-              }}>
-                Join 2MRRW Music
-              </h2>
-              <p style={{
-                margin: "0 0 16px",
-                color: "#666",
-                fontSize: 13,
-                lineHeight: 1.6,
-              }}>
-                Email verification. Phone is saved for your profile — no password.
-              </p>
-              <input
-                placeholder="Full Name (optional)"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                style={inputStyle}
-              />
-              <input
-                placeholder="Email"
-                type="email"
-                value={email}
-                onChange={(e) => handleEmailChange(e.target.value)}
-                required
-                style={{
-                  ...inputStyle,
-                  borderColor: emailError ? "#ef4444" : "rgba(255,255,255,0.12)",
-                }}
-              />
-              {emailError ? <div style={errorStyle}>{emailError}</div> : null}
-              <input
-                placeholder="Phone number"
-                type="tel"
-                value={phone}
-                onChange={(e) => {
-                  setPhone(e.target.value);
-                  if (phoneError) setPhoneError("");
-                }}
-                required
-                style={{
-                  ...inputStyle,
-                  borderColor: phoneError ? "#ef4444" : "rgba(255,255,255,0.12)",
-                }}
-              />
-              {phoneError ? <div style={errorStyle}>{phoneError}</div> : null}
-              {formError ? (
-                <div style={{ ...errorStyle, marginTop: 0 }}>⚠ {formError}</div>
-              ) : null}
-              <button
-                type="submit"
-                disabled={loading || otpSending || !signupReady}
-                style={{
-                  ...ctaStyle,
-                  opacity: loading || otpSending || !signupReady ? 0.5 : 1,
-                  cursor: loading || otpSending || !signupReady ? "default" : "pointer",
-                }}
-              >
-                {loading || otpSending ? "Sending…" : "Send Verification Code"}
-              </button>
               <button
                 type="button"
-                onClick={() => { setMode("signin"); setFormError(""); setEmailError(""); }}
-                style={linkStyle}
+                onClick={() => router.push("/forgot-password")}
+                style={{ ...linkStyle, color: "#555", fontSize: 12, marginTop: 8 }}
               >
-                Sign in
+                Forgot password?
               </button>
             </form>
           )}

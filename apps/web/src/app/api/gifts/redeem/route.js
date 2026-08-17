@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { grantLibraryItems } from "@/lib/commerce/entitlements";
 import { createOrRetrieveGuest, withGuestCookie } from "@/lib/guest-session";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
@@ -23,7 +23,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "Gift token required" }, { status: 400 });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const { data: gift, error: giftError } = await admin
       .from("gift_links")
       .select("id, title, active, expires_at, max_redemptions, redemption_count, gift_link_items(products(slug))")

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * POST /api/admin/hls/queue
  *
  * Enqueue one or more tracks for HLS transcoding.
@@ -20,15 +20,15 @@
 import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { resolvePlaybackKey } from "@/lib/playback/resolve-playback-key";
 import { buildHLSPrefix } from "@/lib/hls/derive-key";
 
 const VALID_RELEASE_TYPES = new Set([
-  "singles", "albums", "features", "mixtapes-and-eps", "eps",
+  "singles", "albums", "features", "mixtapes-and-eps", "eps", "vault",
 ]);
 
-const VALID_BITRATES = ["320k", "160k", "96k"];
+const VALID_BITRATES = ["4000k", "2000k", "1000k", "720k", "320k", "160k", "96k"];
 
 function json(data, status = 200) {
   return NextResponse.json(data, { status });
@@ -69,7 +69,7 @@ export async function POST(req) {
     return json({ error: "Invalid JSON body" }, 400);
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
 
   // Normalise to array of track descriptors
   const tracks = Array.isArray(body.tracks)
@@ -193,7 +193,7 @@ export async function DELETE(req) {
   const jobId = req.nextUrl.searchParams.get("jobId");
   if (!jobId) return json({ error: "jobId required" }, 400);
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { error } = await admin
     .from("hls_transcode_jobs")
     .update({ status: "cancelled" })

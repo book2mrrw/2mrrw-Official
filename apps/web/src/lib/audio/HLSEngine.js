@@ -27,6 +27,7 @@ let _prefetchLoaderClass = null;
  * Returns null in SSR, null if native HLS is sufficient (Safari).
  */
 import { isPlaybackTraceEnabled } from "@/lib/diagnostics/playback-trace";
+import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 import { createPrefetchLoaderClass } from "./hls-prefetch-loader";
 
 async function importHls() {
@@ -74,6 +75,15 @@ export class HLSEngine {
     this.onSegmentFatalError = null;
     /** @type {number} Current bitrate index (0 = auto) */
     this._currentLevel = -1;
+    /** @type {number} Per-track-load counter for HMAC-token renewal attempts (max 2) */
+    this._renewalAttempts = 0;
+    /**
+     * Monotonically increasing generation counter. Incremented by detach() whenever
+     * a new track takes ownership of the engine. In-flight renewals capture this value
+     * at launch and abort if it has changed by the time they reach _destroyHls() or
+     * hls attachment — preventing a stale renewal from clobbering the successor track.
+     */
+    this._manifestVersion = 0;
   }
 
   get isLoaded() {
@@ -91,11 +101,18 @@ export class HLSEngine {
    *
    * @param {string}           manifestUrl  /api/library/hls?slug=... (master m3u8)
    * @param {HTMLAudioElement} audioEl      The singleton playback element
-   * @param {{ startPosition?: number }} opts
+   * @param {{ startPosition?: number, _version?: number }} opts
+   *   _version: internal-only — renewal calls pass the manifestVersion they captured
+   *   before _destroyHls(). If the version has advanced (detach() was called for a
+   *   new track) the renewal aborts instead of clobbering the successor's hls.js.
+   *   External callers omit _version (defaults to -1 = no guard).
    * @returns {Promise<boolean>} true = HLS loaded, false = falls back to progressive
    */
-  async loadTrack(manifestUrl, audioEl, { startPosition = 0 } = {}) {
+  async loadTrack(manifestUrl, audioEl, { startPosition = 0, _version = -1 } = {}) {
     if (this._destroyed) return false;
+    // Stale-renewal guard (pre-await): if detach() was called between the renewal
+    // firing and this point, abort immediately without touching any engine state.
+    if (_version >= 0 && this._manifestVersion !== _version) return false;
 
     const Hls = await importHls();
 
@@ -107,6 +124,11 @@ export class HLSEngine {
       this._manifestUrl = manifestUrl;
       return true;
     }
+
+    // Stale-renewal guard (post-await): importHls() is async; detach() may have
+    // fired while we were awaiting. Abort before _destroyHls() so we never destroy
+    // the successor track's hls.js instance.
+    if (_version >= 0 && this._manifestVersion !== _version) return false;
 
     // Tear down any existing instance before reusing
     this._destroyHls();
@@ -124,7 +146,7 @@ export class HLSEngine {
       // Buffer targets — music is VOD, prioritise uninterrupted playback over low latency
       maxBufferLength:            60,         // seconds of forward buffer
       maxMaxBufferLength:         120,
-      maxBufferSize:              60 * 1000 * 1000, // 60 MB (3 × 20 MB per bitrate)
+      maxBufferSize:              20 * 1000 * 1000, // 20 MB — music is mono/stereo; 60 MB was 3× excess
       backBufferLength:           30,
 
       // ABR — let hls.js pick the starting level via its bandwidth estimate rather
@@ -132,7 +154,11 @@ export class HLSEngine {
       // guaranteed; startLevel: -1 is ordering-independent. The MANIFEST_PARSED
       // handler below remaps _currentLevel by actual bitrate after the manifest lands.
       startLevel:                 -1,
-      abrEwmaDefaultEstimate:     3_000_000,  // 3 Mbps initial estimate (generous for music)
+      // 500 Kbps conservative start: hls.js probes real bandwidth and upgrades quickly
+      // (abrBandWidthUpFactor: 0.7), but a 3 Mbps cold-start estimate selected 320k
+      // immediately and caused multi-second stalls on 3G/slow WiFi before the first
+      // segment arrived. 500 Kbps starts at 96k, buffers instantly, then climbs to 320k.
+      abrEwmaDefaultEstimate:     500_000,
       abrBandWidthFactor:         0.95,
       abrBandWidthUpFactor:       0.7,
 
@@ -205,6 +231,71 @@ export class HLSEngine {
           this._destroyHls();
           this.onFallback?.();
           settle(false);
+          return;
+        }
+
+        // ── HMAC token expiry (KEY_LOAD_ERROR 401/403) ───────────────────────
+        // Fired mid-stream when the HMAC-signed segment key URL returns 401/403
+        // because the 8-hour session token expired. We save the playback position,
+        // destroy the stale hls.js instance, and re-call loadTrack with the same
+        // manifest URL — the next /api/library/hls request issues fresh tokens.
+        // Bounded to 2 attempts: if renewal fails twice, escalate to onSegmentFatalError.
+        if (
+          settled &&
+          this._renewalAttempts < 2 &&
+          data.type === Hls.ErrorTypes.NETWORK_ERROR &&
+          data.details === Hls.ErrorDetails.KEY_LOAD_ERROR &&
+          (data.response?.code === 403 || data.response?.code === 401)
+        ) {
+          this._renewalAttempts++;
+          const currentTime    = this._audioEl?.currentTime ?? 0;
+          const capturedVersion = this._manifestVersion;
+          const capturedUrl    = this._manifestUrl;
+          const capturedEl     = this._audioEl;
+          logPlaybackResilience("hls-token-renewal", {
+            source:  "HLSEngine",
+            detail:  Hls.ErrorDetails.KEY_LOAD_ERROR,
+            attempt: this._renewalAttempts,
+            slug:    capturedUrl ? new URL(capturedUrl, "http://x").searchParams.get("slug") : null,
+          });
+          this._destroyHls();
+          this.loadTrack(capturedUrl, capturedEl, { startPosition: currentTime, _version: capturedVersion })
+            .then((ok) => {
+              if (ok) this._renewalAttempts = 0;
+              if (!ok) this.onSegmentFatalError?.();
+            })
+            .catch(() => { this.onSegmentFatalError?.(); });
+          return;
+        }
+
+        // ── AES-128 decryption failure (FRAG_DECRYPT_ERROR) ──────────────────
+        // Fired when HLS_MASTER_SECRET was rotated mid-session: the segment
+        // was encrypted with a key the current token can no longer decrypt.
+        // Same renewal flow as KEY_LOAD_ERROR — re-load the manifest to pick
+        // up fresh key URLs signed with the new secret.
+        if (
+          settled &&
+          this._renewalAttempts < 2 &&
+          data.details === Hls.ErrorDetails.FRAG_DECRYPT_ERROR
+        ) {
+          this._renewalAttempts++;
+          const currentTime     = this._audioEl?.currentTime ?? 0;
+          const capturedVersion = this._manifestVersion;
+          const capturedUrl     = this._manifestUrl;
+          const capturedEl      = this._audioEl;
+          logPlaybackResilience("hls-token-renewal", {
+            source:  "HLSEngine",
+            detail:  Hls.ErrorDetails.FRAG_DECRYPT_ERROR,
+            attempt: this._renewalAttempts,
+            slug:    capturedUrl ? new URL(capturedUrl, "http://x").searchParams.get("slug") : null,
+          });
+          this._destroyHls();
+          this.loadTrack(capturedUrl, capturedEl, { startPosition: currentTime, _version: capturedVersion })
+            .then((ok) => {
+              if (ok) this._renewalAttempts = 0;
+              if (!ok) this.onError?.(new Error("FRAG_DECRYPT_ERROR: unrecoverable after renewal"));
+            })
+            .catch(() => { this.onError?.(new Error("FRAG_DECRYPT_ERROR: renewal error")); });
           return;
         }
 
@@ -346,8 +437,10 @@ export class HLSEngine {
    */
   detach() {
     this._destroyHls();
-    this._manifestUrl = null;
-    this._audioEl     = null;
+    this._manifestUrl      = null;
+    this._audioEl          = null;
+    this._renewalAttempts  = 0;
+    this._manifestVersion++;  // invalidates any in-flight renewal for the previous track
   }
 
   _destroyHls() {
@@ -359,12 +452,14 @@ export class HLSEngine {
   }
 
   destroy() {
-    this._destroyed = true;
+    this._destroyed          = true;
     this._destroyHls();
-    this._audioEl          = null;
-    this._manifestUrl      = null;
-    this.onFallback        = null;
-    this.onError           = null;
+    this._audioEl            = null;
+    this._manifestUrl        = null;
+    this._renewalAttempts    = 0;
+    this._manifestVersion    = 0;
+    this.onFallback          = null;
+    this.onError             = null;
     this.onSegmentFatalError = null;
   }
 }
@@ -381,6 +476,16 @@ export function replaceHLSEngine() {
   if (_activeEngine) _activeEngine.destroy();
   _activeEngine = new HLSEngine();
   return _activeEngine;
+}
+
+/**
+ * Update the module singleton after a representation deck swap.
+ * RepresentationSwitcher calls this after completeCrossfade() so getHLSEngine()
+ * always returns the engine bound to the current active audio element.
+ * @param {HLSEngine} engine
+ */
+export function setActiveHLSEngine(engine) {
+  _activeEngine = engine;
 }
 
 /**

@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isAdminUser } from "@/lib/auth/constants";
 import { sendTransactionalEmail, buildWelcomeEmail } from "@/lib/server/email";
@@ -36,7 +36,7 @@ export async function POST(request) {
 
     let admin;
     try {
-      admin = createAdminClient();
+      admin = getAdminClient();
     } catch (err) {
       console.error("complete-profile admin client:", err?.message || err);
       return NextResponse.json({ error: "Profile service unavailable" }, { status: 503 });

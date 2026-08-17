@@ -55,16 +55,9 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
     if (isSameTrack) {
       if (bridge?.playbackState === "idle") {
         const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "feature_card");
-        const { startTrack, needsUpgrade } = toInstantStartTrack(track);
+        const { startTrack } = toInstantStartTrack(track);
         if (track.src) {
           void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
-          if (needsUpgrade) {
-            const upgradeSlug = startTrack.slug;
-            setTimeout(() => {
-              const b = getPagePlaybackActionsBridge();
-              if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
-            }, 2000);
-          }
         }
       } else {
         void bridge?.toggle?.();
@@ -72,39 +65,18 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
       return;
     }
 
-    const streamable = displayFeatures.filter(
-      (item) => resolveTrackAccess(item, account).canStream
-    );
-    if (!streamable.length) {
-      const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "feature_card");
-      const { startTrack, needsUpgrade } = toInstantStartTrack(track);
-      if (track.src) {
-        void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
-        if (needsUpgrade) {
-          const upgradeSlug = startTrack.slug;
-          setTimeout(() => {
-            const b = getPagePlaybackActionsBridge();
-            if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
-          }, 2000);
-        }
-      }
-      return;
-    }
-    const idx = Math.max(0, streamable.findIndex((s) => s.slug === clickedItem.slug));
+    const streamable = displayFeatures.filter((item) => {
+      const access = resolveTrackAccess(item, account);
+      return access.canStream || Boolean(item.preview_path || item.previewPath || item.preview);
+    });
+    const idx = streamable.findIndex((s) => s.slug === clickedItem.slug);
+    if (idx === -1) return;
     const tracks = streamable
       .map((item) => toPlaybackTrack(withR2CatalogMedia(item), account, "feature_card"))
       .filter((t) => t.src);
     if (tracks.length) {
-      const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[idx]);
-      const instantTracks = needsUpgrade ? tracks.map((t, i) => (i === idx ? startTrack : t)) : tracks;
-      void bridge?.playQueue?.(instantTracks, idx, { resumeAt: 0 });
-      if (needsUpgrade) {
-        const upgradeSlug = startTrack.slug;
-        setTimeout(() => {
-          const b = getPagePlaybackActionsBridge();
-          if (b?.currentTrack?.slug === upgradeSlug) void b.dispatchPlaybackCommand("upgradeStream");
-        }, 2000);
-      }
+      const { startTrack } = toInstantStartTrack(tracks[idx]);
+      void bridge?.playQueue?.(tracks.map((t, i) => (i === idx ? startTrack : t)), idx, { resumeAt: 0 });
     }
   }, [displayFeatures, entitlementAccountState, userId, isAdminStable]);
 
@@ -185,6 +157,35 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
         <CatalogGrid
           items={albums}
           type="albums"
+          addToCart={addToCart}
+          hoverIn={hoverIn}
+          hoverOut={hoverOut}
+          buttonHoverIn={buttonHoverIn}
+          buttonHoverOut={buttonHoverOut}
+          onCardClick={openAlbumModal}
+          onPlayAlbum={onPlayAlbum}
+          onOpenAlbumTracklist={setAlbumTracklistRelease}
+          catalogPlaybackLookup={catalogPlaybackLookup}
+          isMobile={isMobile}
+          accountState={entitlementAccountState}
+          userId={userId}
+          isAdmin={isAdminStable}
+          onGift={openGiftSheet}
+          onLibraryChange={handleLibraryChange}
+        />
+      </>
+    );
+  }
+
+  if (activeTab === "mixtapes") {
+    return (
+      <>
+        <h2 className="section-heading" style={{ marginBottom: 16 }}>
+          Mixtapes & EPs
+        </h2>
+        <CatalogGrid
+          items={mixtapesAndEps}
+          type="mixtapes"
           addToCart={addToCart}
           hoverIn={hoverIn}
           hoverOut={hoverOut}

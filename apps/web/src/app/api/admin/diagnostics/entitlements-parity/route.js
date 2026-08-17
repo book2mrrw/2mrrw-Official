@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { buildEntitlementsParityReport } from "@/lib/commerce/entitlements-parity";
 
 function authorize(request) {
@@ -13,7 +13,7 @@ export async function GET(request) {
   }
 
   try {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const report = await buildEntitlementsParityReport(admin);
     return NextResponse.json({ data: report });
   } catch (err) {

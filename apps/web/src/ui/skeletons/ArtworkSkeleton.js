@@ -5,7 +5,7 @@ import { resolveCoverMediaType } from "@/lib/media/cover-media-type";
 import SkeletonBase from "./SkeletonBase";
 import ProgressiveReveal from "./ProgressiveReveal";
 
-function VideoArt({ src, width, height, borderRadius, onClick, onTouchStart, onTouchEnd }) {
+function VideoArt({ src, baseCover, width, height, borderRadius, onClick, onTouchStart, onTouchEnd, onLoaded, onError }) {
   const videoRef = useRef(null);
   const prevSrcRef = useRef(null);
 
@@ -25,6 +25,9 @@ function VideoArt({ src, width, height, borderRadius, onClick, onTouchStart, onT
       muted
       playsInline
       preload="auto"
+      poster={baseCover || undefined}
+      onCanPlay={onLoaded}
+      onError={onError}
       onClick={onClick}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
@@ -41,6 +44,7 @@ function VideoArt({ src, width, height, borderRadius, onClick, onTouchStart, onT
 
 export default function ArtworkSkeleton({
   src,
+  baseCover,
   type = "image",
   alt = "",
   width,
@@ -91,12 +95,15 @@ export default function ArtworkSkeleton({
         {mediaType === "video" ? (
           <VideoArt
             src={src}
+            baseCover={baseCover}
             width="100%"
             height="100%"
             borderRadius={borderRadius}
             onClick={onClick}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
+            onLoaded={() => setLoaded(true)}
+            onError={() => setFailed(true)}
           />
         ) : (
           <img

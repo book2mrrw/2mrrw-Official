@@ -178,5 +178,10 @@ export function catalogVisualMediaUrl(visualPath) {
   if (isSiteApiMediaPath(normalized)) {
     return ensureRelativeSiteApiPath(normalized);
   }
+  // public/ assets (images/, videos/, audio/) — serve same-origin, never CDN-prefix.
+  // These files live in the Next.js public/ directory, not in R2.
+  if (/^(images|videos|audio)\//.test(normalized)) {
+    return `/${normalized}`;
+  }
   return catalogPublicMediaUrl(normalized);
 }

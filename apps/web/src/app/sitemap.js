@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 
 export const revalidate = 3600;
 
@@ -10,7 +10,7 @@ export default async function sitemap() {
   ];
 
   try {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const { data: products } = await admin
       .from("products")
       .select("slug, product_type, updated_at")

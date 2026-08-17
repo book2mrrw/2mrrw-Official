@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +37,7 @@ function mapProductToExclusiveItem(row) {
 
 export async function GET() {
   try {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const { data, error } = await admin
       .from("products")
       .select("slug, title, product_type, price_cents, cover_url, metadata, active")

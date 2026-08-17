@@ -1,5 +1,5 @@
-import { NextResponse, after } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse, after } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { sendPushToSubscribers } from "@/lib/server/web-push";
 
 function authorize(req) {
@@ -14,7 +14,7 @@ export async function POST(req) {
 
   try {
     const body = await req.json();
-    const admin = createAdminClient();
+    const admin = getAdminClient();
 
     const title = body.title || "Something new appeared in the Vault";
     const notifBody = body.body || "A limited surprise is available for eligible members.";

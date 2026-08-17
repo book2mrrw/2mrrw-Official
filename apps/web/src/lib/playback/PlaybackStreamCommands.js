@@ -18,9 +18,7 @@ import {
   clampRestorePosition,
   waitAudioSrcReady,
   warmupSignedStreamPreload,
-  loadAudioSrcAndPlay,
   playAudioIfNotPaused,
-  getTrackPreviewSrc,
   RESTORE_MIN_POSITION_SEC,
   AUDIO_SRC_READY_TIMEOUT_MS,
 } from "@/lib/audio/audio-element-utils";
@@ -30,7 +28,6 @@ import {
 } from "@/lib/audio/web-audio-context-utils";
 import { isAudioActuallyAudible } from "@/lib/playback/audibility";
 import {
-  canFallbackStreamToPreview,
   normalizeTrack,
   resolvePlaybackPresentation,
 } from "@/lib/playback/playback-track-utils";
@@ -280,53 +277,12 @@ export function attachStreamCommands(self) {
     const streamSlug = parseStreamSlugFromSrc(nextTrack.src) || nextTrack.slug;
     const usesLibraryStream = isLibraryStreamSrc(nextTrack.src);
     const redirectFastPath = isLibraryStreamRedirectSrc(nextTrack.src);
-    const previewSrc = getTrackPreviewSrc(nextTrack);
-
     let syncSrc = nextTrack.src;
     let backgroundStreamResolve = false;
 
     const applyStreamResolveError = (err) => {
       if (requestId !== playRequestIdRef.current) return;
       if (err?.name === "AbortError") return;
-      const canFallbackToPreview = canFallbackStreamToPreview(err, nextTrack);
-      if (canFallbackToPreview && !isAdminAccount(entitlementAccountStateRef.current)) {
-        console.warn("[AudioContext] stream fetch denied; falling back to preview", {
-          slug: nextTrack.slug,
-          trackId: nextTrack.id,
-          status: err?.status,
-        });
-        const previewFallbackSrc =
-          getTrackPreviewSrc(nextTrack) ||
-          nextTrack?.metadata?.previewSrc ||
-          nextTrack?.preview ||
-          null;
-        if (previewFallbackSrc) {
-          skipPauseInterruptionRef.current = true;
-          void loadAudioSrcAndPlay(audio, previewFallbackSrc).then((played) => {
-            if (requestId !== playRequestIdRef.current) return;
-            patchState({
-              isPlaying: false,
-              error: played ? null : "Preview unavailable",
-              source: "preview",
-              playbackState: played ? "preview_fallback" : "idle",
-              playbackNetworkState: played ? "playing" : "error_stream",
-              hasStarted: played,
-              currentTrack: {
-                ...nextTrack,
-                src: previewFallbackSrc,
-                metadata: {
-                  ...(nextTrack.metadata || {}),
-                  access: {
-                    ...(nextTrack.metadata?.access || {}),
-                    previewOnly: true,
-                  },
-                },
-              },
-            });
-          });
-          return;
-        }
-      }
       if (err?.code === "ACCESS_DENIED") {
         const prevMeta = streamMetaRef.current;
         if (prevMeta) finalizeStreamSession(prevMeta, { completed: false, durationSeconds: audio.currentTime || 0 });
@@ -375,9 +331,7 @@ export function attachStreamCommands(self) {
 
     if (usesLibraryStream && streamSlug) {
       const entitledFullStream = Boolean(nextTrack.metadata?.access?.canStream);
-      if (previewSrc && !entitledFullStream) {
-        syncSrc = previewSrc;
-      } else if (entitledFullStream) {
+      if (entitledFullStream) {
         if (redirectFastPath) {
           // The redirect URL is the playable proxy — auth and entitlement are
           // re-validated server-side per request. Start audio immediately; session
@@ -1055,13 +1009,6 @@ export function attachStreamCommands(self) {
           void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: false });
           return false;
         }
-        // Entitled users (canStream) start on the full library stream directly — they never
-        // enter the preview path. Non-entitled users who gain access mid-session are upgraded
-        // via upgradeToFullStream dispatched from the onEntitlementsUpdated handler, not by
-        // racing a prefetch here. No preview-first path for any entitled tier.
-        if (process.env.NODE_ENV !== "production" && nextTrack.metadata?.access?.canStream && syncSrc === previewSrc) {
-          console.error("[AudioContext] BUG: entitled user started on preview src — check toInstantStartTrack and justGainedStream", { slug: nextTrack.slug });
-        }
         pendingSeekRef.current = resumeAt;
       } else {
         if (!audio.paused) {
@@ -1170,76 +1117,6 @@ export function attachStreamCommands(self) {
         patchTransport({ isBuffering: false, playbackNetworkState: "idle" });
         return false;
       }
-      const previewFallbackSrc =
-        getTrackPreviewSrc(nextTrack) ||
-        nextTrack?.metadata?.previewSrc ||
-        nextTrack?.preview ||
-        null;
-      const failedLibraryStream =
-        isLibraryStreamSrc(syncSrc) || isLibraryStreamSrc(nextTrack?.src || "");
-      if (failedLibraryStream && previewFallbackSrc && !isAdminAccount(entitlementAccountStateRef.current)) {
-        console.warn("[AudioContext] library stream load failed; falling back to preview", {
-          slug: nextTrack?.slug,
-          message: err?.message || String(err),
-        });
-        logStreamLifecycle("preview-fallback", {
-          source: "playTrackInternal",
-          slug: nextTrack?.slug,
-        });
-        try {
-          if (!audio.paused) skipPauseInterruptionRef.current = true;
-          const played = await loadAudioSrcAndPlay(audio, previewFallbackSrc, {
-            signal: streamAbortController.signal,
-          });
-          patchState({
-            isPlaying: false,
-            error: played ? null : "Preview unavailable",
-            source: "preview",
-            playbackState: played ? "preview_fallback" : "idle",
-            playbackNetworkState: played ? "playing" : "error_stream",
-            hasStarted: played,
-            currentTrack: {
-              ...nextTrack,
-              src: previewFallbackSrc,
-              metadata: {
-                ...(nextTrack.metadata || {}),
-                access: {
-                  ...(nextTrack.metadata?.access || {}),
-                  previewOnly: true,
-                  canStream: false,
-                },
-              },
-            },
-          });
-          return played;
-        } catch (previewErr) {
-          console.error("[AudioContext] preview fallback failed", {
-            slug: nextTrack?.slug,
-            message: previewErr?.message || String(previewErr),
-          });
-          if (nextTrack?.slug) {
-            writeAvailabilityCache(
-              {
-                slug: nextTrack.slug,
-                trackSlug: nextTrack.metadata?.trackSlug,
-                albumSlug: nextTrack.metadata?.albumSlug,
-              },
-              { status: "unavailable", reasons: ["missing_preview"], audioKey: null, previewKey: null }
-            );
-          }
-          patchState({
-            isPlaying: false,
-            isBuffering: false,
-            error: "Preview unavailable",
-            streamRetryable: false,
-            hasStarted: false,
-            playbackState: "idle",
-            playbackNetworkState: "error_stream",
-          });
-          void updateMediaSession(nextTrack, { playing: false });
-          return false;
-        }
-      }
       console.error("[AudioContext] playTrack failed", {
         message: err?.message || String(err),
         code: err?.code || null,
@@ -1299,17 +1176,14 @@ export function attachStreamCommands(self) {
     if (!serverUserId || !clientUserId || serverUserId !== clientUserId) {
       return false;
     }
-    const previewSrc = getTrackPreviewSrc(track);
     const currentPlaybackSrc = normalizePlaybackSrc(audio.currentSrc || audio.src || "");
     const signedUrl = streamMetaRef.current?.url
       ? normalizePlaybackSrc(streamMetaRef.current.url)
       : "";
     const stillOnPreview =
-      Boolean(previewSrc) &&
-      (currentPlaybackSrc === normalizePlaybackSrc(previewSrc) ||
-        (Boolean(track.metadata?.access?.previewOnly) &&
-          !isLibraryStreamSrc(currentPlaybackSrc) &&
-          !signedUrl));
+      Boolean(track.metadata?.access?.previewOnly) &&
+      !isLibraryStreamSrc(currentPlaybackSrc) &&
+      !signedUrl;
 
     if (!track.metadata?.access?.previewOnly && signedUrl && currentPlaybackSrc === signedUrl) {
       return true;

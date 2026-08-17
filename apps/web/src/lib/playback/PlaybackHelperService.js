@@ -6,7 +6,7 @@ import {
   PLAYBACK_ORCHESTRATION_STATES,
 } from "@/media/PlaybackStateMachine";
 import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
-import { LIFECYCLE_AUDIO_TRUTH_STATES } from "@/lib/playback/PlaybackEventHandlers";
+import { LIFECYCLE_AUDIO_TRUTH_STATES, PREVIEW_HARD_CAP_SEC } from "@/lib/playback/PlaybackEventHandlers";
 import { notifyMediaEngineBridge } from "@/media/mediaEngineBridge";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
 import {
@@ -42,6 +42,7 @@ import {
   parseStreamTrackSlugFromSrc,
   streamUrlNeedsRefresh,
 } from "@/lib/playback/stream-client";
+import { SIGNED_URL_CLIENT_TTL_MS } from "@/lib/playback/stream-url-cache";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 import {
   isEntitledFullPlaybackTrack,
@@ -57,6 +58,7 @@ import { recordListeningEvent } from "@/lib/listening-history";
 import {
   getArtworkEntriesForTrack,
   persistMediaSessionTrack,
+  resolveAbsoluteArtworkUrl,
 } from "@/lib/media-session-artwork";
 import { recordAudioContextState } from "@/lib/dev/performanceMarks";
 import { prefetchHlsSegmentsForTrack } from "@/lib/audio/hls-segment-prefetcher";
@@ -92,7 +94,6 @@ const POSITION_STATE_THROTTLE_MS = 1000;
 const POSITION_SAVE_INTERVAL_MS = 15000;
 const KEEP_ALIVE_INTERVAL_MS = 20000;
 const LIFECYCLE_RECOVERY_SUPPRESSION_MS = 2500;
-const SIGNED_URL_CACHE_MAX_AGE_MS = 50 * 60 * 1000;
 const AUDIO_CONTENT_TYPE_RE = /^(audio\/|application\/octet-stream)/i;
 
 /**
@@ -1075,13 +1076,39 @@ export function createPlaybackHelpers(initialDeps) {
       const ms = navigator.mediaSession;
       if (!track) return;
 
-      const coverForSession =
-        self._deps.csModeRef.current && (track.csCover || track.cs_cover)
-          ? track.csCover || track.cs_cover
-          // baseCover is the always-static image URL; cover may be a video URL for motion-cover
-          // tracks — the lock-screen MediaSession renderer cannot display video, so prefer baseCover.
-          : track.baseCover || track.cover || track.coverArt || track.coverUrl || "";
-      const artwork = await getArtworkEntriesForTrack(coverForSession, track.slug);
+      // Capture slug before async work — used below to reject stale artwork updates.
+      const targetSlug = track.slug ?? null;
+
+      const isVideoTrack = track.coverArtType === "video";
+      const csCover = self._deps.csModeRef.current && (track.csCover || track.cs_cover)
+        ? (track.csCover || track.cs_cover)
+        : null;
+      const staticCover = csCover
+        || track.baseCover
+        || (!isVideoTrack ? track.cover : null)
+        || track.coverArt
+        || track.coverUrl
+        || "";
+      const rawVideoCover = isVideoTrack ? (track.cover || null) : null;
+
+      const staticEntries = await getArtworkEntriesForTrack(staticCover, track.slug);
+
+      // Stale-artwork guard: if the active track changed during async artwork resolution, abort.
+      // Prevents a slow artwork fetch for track A from overwriting track B's system metadata.
+      if (targetSlug) {
+        const nowSlug = self._deps.stateRef.current?.currentTrack?.slug ?? null;
+        if (nowSlug && nowSlug !== targetSlug) return;
+      }
+
+      let artwork = staticEntries;
+      if (rawVideoCover) {
+        const videoAbsUrl = resolveAbsoluteArtworkUrl(rawVideoCover);
+        // Dynamic Island on iOS supports animated MP4 — put it first so iOS picks it up.
+        // The static entries follow as fallback for lock screen / Bluetooth / Android.
+        if (videoAbsUrl && /^https?:\/\//i.test(videoAbsUrl)) {
+          artwork = [{ src: videoAbsUrl, sizes: "512x512", type: "video/mp4" }, ...staticEntries];
+        }
+      }
       try {
         ms.metadata = new MediaMetadata({
           title: self._deps.csModeRef.current
@@ -1193,12 +1220,28 @@ export function createPlaybackHelpers(initialDeps) {
         engine.registerContextRunningCallback(() => {
           const el = self._deps.audioRef.current;
           const s = self._deps.stateRef.current;
-          if (!s.isPlaying || !el || !el.paused) return;
+          // Resume if audio was interrupted by the OS (phone call, Siri, system event) —
+          // not just when isPlaying is true, because onPause already set isPlaying:false.
+          // playbackIntentBeforeHideRef stays true through the call; osInterrupted is set
+          // by onPause specifically for this case.
+          const hasIntent =
+            s.isPlaying ||
+            s.osInterrupted ||
+            self._deps.playbackIntentBeforeHideRef.current;
+          const userStopped =
+            self._deps.userIntentPausedRef.current || self._deps.userPausedRef.current;
+          if (!hasIntent || userStopped || !el || !el.paused) return;
           // 150 ms grace — let the OS fully stabilize the audio route before play().
           setTimeout(() => {
             const current = self._deps.stateRef.current;
             const elem = self._deps.audioRef.current;
-            if (!current.isPlaying || !elem || !elem.paused) return;
+            const stillHasIntent =
+              current.isPlaying ||
+              current.osInterrupted ||
+              self._deps.playbackIntentBeforeHideRef.current;
+            const stillUserStopped =
+              self._deps.userIntentPausedRef.current || self._deps.userPausedRef.current;
+            if (!stillHasIntent || stillUserStopped || !elem || !elem.paused) return;
             void elem.play().catch(() => {
               void playbackStateMachine.transition(
                 PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
@@ -1273,6 +1316,10 @@ export function createPlaybackHelpers(initialDeps) {
         );
         if (!(await ensureWebAudioRunning(self._deps.audioCtxRef))) {
           return false;
+        }
+
+        if (track?.metadata?.access?.previewOnly && audio.currentTime >= PREVIEW_HARD_CAP_SEC) {
+          audio.currentTime = 0;
         }
 
         if (audio.paused) {
@@ -1437,7 +1484,7 @@ export function createPlaybackHelpers(initialDeps) {
         if (
           cached &&
           !streamUrlNeedsRefresh(cached) &&
-          Date.now() - cached.fetchedAt < SIGNED_URL_CACHE_MAX_AGE_MS
+          Date.now() - cached.fetchedAt < SIGNED_URL_CLIENT_TTL_MS
         )
           return;
         try {
@@ -1552,7 +1599,7 @@ export function createPlaybackHelpers(initialDeps) {
         if (
           cached &&
           !streamUrlNeedsRefresh(cached) &&
-          Date.now() - cached.fetchedAt < SIGNED_URL_CACHE_MAX_AGE_MS
+          Date.now() - cached.fetchedAt < SIGNED_URL_CLIENT_TTL_MS
         )
           return;
         try {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/commerce/stripe";
 import { resolveCartLines } from "@/lib/commerce/resolve-cart";
 import { getOwnedSlugs, getCheckoutDiscountPercent, isMerchOrVinylProduct } from "@/lib/commerce/entitlements";
-import { getGuestUser } from "@/lib/guest-session";
+import { getRequestUser } from "@/lib/guest-session";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 const siteUrl = () =>
@@ -12,10 +12,10 @@ const siteUrl = () =>
 
 export async function POST(req) {
   try {
-    const user = await getGuestUser();
+    const user = await getRequestUser();
 
     if (!user) {
-      return NextResponse.json({ error: "Enter email and phone to checkout" }, { status: 401 });
+      return NextResponse.json({ error: "Sign in to checkout" }, { status: 401 });
     }
 
     const limit = await checkRateLimit(req, {

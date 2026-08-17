@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { validateEmail } from "@/lib/auth/validation";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
@@ -18,7 +18,7 @@ export async function POST(request) {
       return NextResponse.json({ exists: false });
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const { data: rows, error } = await admin
       .from("profiles")
       .select("email, full_name")

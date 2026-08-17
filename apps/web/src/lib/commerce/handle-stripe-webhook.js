@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/commerce/stripe";
 import { fulfillCheckoutSession, fulfillPaymentIntent } from "@/lib/commerce/fulfill-purchase";
 import { revokeExtendedEntitlementsForPurchase } from "@/lib/commerce/revoke-entitlements";
@@ -7,7 +7,8 @@ import {
   revokeAllEntitlementsForDispute,
   upsertMembershipFromSubscription,
 } from "@/lib/commerce/stripe-entitlements";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
+import { invalidateUserEntitlementCache } from "@/lib/server/entitlement-cache";
 import {
   sendTransactionalEmail,
   buildPurchaseConfirmationEmail,
@@ -33,7 +34,7 @@ async function revokePurchaseByPaymentIntent(paymentIntentId) {
     return;
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data: purchase, error: findErr } = await admin
     .from("purchases")
     .select("id, user_id")
@@ -93,6 +94,10 @@ async function revokePurchaseByPaymentIntent(paymentIntentId) {
     console.warn(`${LOG_PREFIX} extended revocation failed`, purchase.id, err.message);
   }
 
+  // Revoke succeeded: wipe tier + all per-slug cache entries so the next play event
+  // hits the DB and is correctly denied rather than serving a cached grant.
+  invalidateUserEntitlementCache(purchase.user_id, slugs).catch(() => {});
+
   console.warn(`${LOG_PREFIX} revoked purchase`, {
     paymentIntentId,
     userId: purchase.user_id,
@@ -134,7 +139,7 @@ export async function handleStripeWebhook(req) {
 
   console.log(`${LOG_PREFIX} received`, event.id, event.type);
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
 
   // Claim the event atomically before processing. INSERT with unique constraint on
   // event_id: if 23505, a concurrent handler already claimed it — return 200 immediately.
@@ -193,6 +198,16 @@ export async function handleStripeWebhook(req) {
 
       case "checkout.session.completed": {
         const session = event.data.object;
+
+        // ── Ticket purchase — separate fulfillment path ──────────────────────
+        if (session.metadata?.payment_kind === "ticket") {
+          if (session.payment_status === "paid") {
+            await fulfillTicketPurchase(admin, session);
+          }
+          break;
+        }
+
+        // ── Digital / merch purchase ─────────────────────────────────────────
         if (session.payment_status === "paid") {
           const result = await fulfillCheckoutSession(session);
           if (!result) {
@@ -277,7 +292,7 @@ export async function handleStripeWebhook(req) {
 
       case "charge.dispute.created": {
         const paymentIntentId = resolvePaymentIntentId(event);
-        const admin = createAdminClient();
+        const admin = getAdminClient();
         const { data: purchase } = await admin
           .from("purchases")
           .select("id, user_id")
@@ -311,6 +326,86 @@ export async function handleStripeWebhook(req) {
   }
 
   return NextResponse.json({ received: true, eventId: event.id, type: event.type });
+}
+
+async function fulfillTicketPurchase(admin, session) {
+  const meta = session.metadata || {};
+  const userId  = meta.guest_user_id || meta.user_id;
+  const showId  = meta.show_id;
+  const qty     = Number(meta.quantity) || 1;
+  const price   = Number(meta.price_cents) || 0;
+
+  if (!userId || !showId) {
+    console.warn(`${LOG_PREFIX} ticket fulfillment: missing user_id or show_id`, session.id);
+    return;
+  }
+
+  // Record the purchase
+  const { error: insertErr } = await admin.from("ticket_purchases").insert({
+    user_id: userId,
+    show_id: showId,
+    stripe_session_id: session.id,
+    stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id || null,
+    email: session.customer_details?.email || session.customer_email || meta.email || null,
+    phone: meta.phone || null,
+    quantity: qty,
+    price_cents: price,
+    status: "paid",
+  });
+
+  if (insertErr) {
+    console.error(`${LOG_PREFIX} ticket insert failed`, session.id, insertErr.message);
+    throw insertErr;
+  }
+
+  // Decrement available ticket count (non-fatal if it fails — purchase is already recorded)
+  try {
+    const { data: showRow } = await admin
+      .from("shows_events")
+      .select("tickets_available")
+      .eq("id", showId)
+      .single();
+    if (showRow && showRow.tickets_available !== null) {
+      await admin
+        .from("shows_events")
+        .update({ tickets_available: Math.max(0, showRow.tickets_available - qty) })
+        .eq("id", showId);
+    }
+  } catch (decrErr) {
+    console.warn(`${LOG_PREFIX} ticket count decrement failed`, showId, decrErr?.message);
+  }
+
+  // Confirmation email — non-fatal
+  try {
+    const to = session.customer_details?.email || session.customer_email || meta.email;
+    if (to) {
+      const showDate = meta.show_date
+        ? new Date(meta.show_date + "T12:00:00").toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric", year:"numeric" })
+        : "";
+      const { subject, html, text } = buildTicketConfirmationEmail({
+        name: session.customer_details?.name || "",
+        showName: meta.show_name || "2MRRW Live",
+        location: meta.show_location || "",
+        date: showDate,
+        time: meta.show_time || "",
+        quantity: qty,
+        amountCents: session.amount_total,
+      });
+      await sendTransactionalEmail({ to, subject, html, text });
+    }
+  } catch (emailErr) {
+    console.warn(`${LOG_PREFIX} ticket confirmation email failed`, session.id, emailErr?.message);
+  }
+
+  console.log(`${LOG_PREFIX} ticket fulfilled`, { sessionId: session.id, userId, showId, qty });
+}
+
+function buildTicketConfirmationEmail({ name, showName, location, date, time, quantity, amountCents }) {
+  const total = amountCents ? `$${(amountCents / 100).toFixed(2)}` : "";
+  const greeting = name ? `Hey ${name},` : "Hey,";
+  const text = `${greeting}\n\nYour ticket${quantity > 1 ? "s are" : " is"} confirmed!\n\n${showName}\n${location}\n${date}${time ? ` · ${time}` : ""}\n\nQuantity: ${quantity}\nTotal: ${total}\n\nSee you there.\n\n— 2MRRW`;
+  const html = `<p>${greeting}</p><p>Your ticket${quantity > 1 ? "s are" : " is"} confirmed.</p><h2>${showName}</h2><p>${location}<br/>${date}${time ? ` · ${time}` : ""}</p><p>Qty: ${quantity} · Total: ${total}</p><p>See you there.<br/>— 2MRRW</p>`;
+  return { subject: `Your ticket — ${showName}`, html, text };
 }
 
 async function sendToPrintful(session, merchItems) {

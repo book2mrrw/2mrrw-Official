@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getGuestUser } from "@/lib/guest-session";
 import { isMissingSupabaseTable } from "@/lib/commerce/entitlements";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
@@ -37,7 +37,7 @@ export async function POST(req) {
     });
     if (!limit.allowed) return applyMediaCors(req, rateLimitResponse(limit.retryAfterSeconds));
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const eventType = cleanEventType(body.eventType);
     const positionSeconds = Math.max(0, Math.floor(Number(body.positionSeconds) || 0));
     const durationSeconds = Math.max(0, Math.floor(Number(body.durationSeconds) || 0));

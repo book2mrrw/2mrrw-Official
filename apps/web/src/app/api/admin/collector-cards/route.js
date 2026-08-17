@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import crypto from "crypto";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import {
@@ -17,7 +17,7 @@ async function requireAdmin() {
   if (!user || !isAdminUser(user)) {
     return { error: NextResponse.json({ error: "Admin account required" }, { status: 403 }) };
   }
-  return { user, admin: createAdminClient() };
+  return { user, admin: getAdminClient() };
 }
 
 export async function GET(req) {

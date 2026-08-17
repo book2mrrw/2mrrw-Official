@@ -50,7 +50,9 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobi
           loop
           muted
           playsInline
+          preload="auto"
           aria-hidden
+          onError={(e) => { e.currentTarget.style.display = "none"; }}
           style={{ ...mediaStyle, opacity: showCs ? 0 : 0.4 }}
         />
       ) : (
@@ -71,7 +73,9 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobi
             loop
             muted
             playsInline
+            preload="auto"
             aria-hidden
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
             style={{ ...mediaStyle, opacity: showCs ? 0.4 : 0 }}
           />
         ) : (

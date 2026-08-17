@@ -1,6 +1,6 @@
-import { NextResponse, after } from "next/server";
+﻿import { NextResponse, after } from "next/server";
 import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { userCanStreamProduct } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
 import { getFanSessionUser } from "@/lib/auth/session-user";
@@ -8,6 +8,7 @@ import {
   resolvePlaybackKey,
   clearPlaybackKeyCache,
   clearPersistedPlaybackKey,
+  resolvePreviewKey,
 } from "@/lib/playback/resolve-playback-key";
 import {
   clearStreamSession,
@@ -78,24 +79,56 @@ function withStreamTiming(req, response, timing) {
   return applyMediaCors(req, timing.apply(response));
 }
 
-async function validateStreamEntitlement(req, user, slug) {
-  if (isAdminUser(user)) return null;
-  const canStream = await userCanStreamProduct(user.id, slug, user);
-  if (!canStream) {
+// Non-entitled users get their track's preview audio file served through the same
+// authenticated endpoint — no 403, no public CDN URLs. Server enforces the boundary.
+async function buildPreviewStreamResponse(req, user, slug, { timing } = {}) {
+  const admin = getAdminClient();
+  const previewKey = await resolvePreviewKey(admin, slug);
+  timing?.mark("resolve", "preview");
+  if (!previewKey) {
     return applyMediaCors(
       req,
-      NextResponse.json({ error: "Not entitled to stream this item" }, { status: 403 })
+      NextResponse.json({ error: "No preview available", code: "PREVIEW_UNAVAILABLE" }, { status: 404 })
     );
   }
-  return null;
+  const { url, cacheHit } = await getOrCreateStreamSignedUrl(
+    user.id,
+    `preview:${slug}`,
+    () => createR2SignedGetUrl(previewKey, STREAM_SIGNED_URL_TTL_SECONDS),
+    null
+  );
+  timing?.mark("sign", cacheHit ? "cache_hit" : undefined);
+
+  const redirect = req.nextUrl.searchParams.get("redirect") === "1";
+  if (redirect) {
+    if (DIRECT_STREAM_REDIRECT_ENABLED && req.method !== "HEAD") {
+      timing?.mark("cdn", "direct_redirect");
+      const redirectRes = NextResponse.redirect(url, 302);
+      redirectRes.headers.set("Cache-Control", "no-store");
+      redirectRes.headers.set("X-Playback-Preview", "true");
+      return applyMediaCors(req, redirectRes);
+    }
+    return proxySignedR2Get(req, url, { timing });
+  }
+  const proxySrc = libraryStreamRedirectSrc(slug);
+  return applyMediaCors(
+    req,
+    NextResponse.json({
+      url: proxySrc,
+      preview: true,
+      expiresIn: STREAM_SIGNED_URL_TTL_SECONDS,
+      sessionId: null,
+      streamEventId: null,
+    })
+  );
 }
 
 async function buildStreamResponse(req, user, slug, { force = false, trackSlug = null, timing } = {}) {
-  const denied = await validateStreamEntitlement(req, user, slug);
+  const canStream = isAdminUser(user) || await userCanStreamProduct(user.id, slug, user);
   timing?.mark("entitlement");
-  if (denied) return denied;
+  if (!canStream) return buildPreviewStreamResponse(req, user, slug, { timing });
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
 
   let resolved = null;
   try {
@@ -340,7 +373,7 @@ export async function DELETE(req) {
   }
 
   try {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     if (sessionId) {
       await clearStreamSession(admin, sessionId);
     } else {

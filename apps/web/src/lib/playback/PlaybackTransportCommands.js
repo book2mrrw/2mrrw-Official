@@ -1,6 +1,9 @@
 "use client";
 
-import { playbackStateMachine } from "@/media/PlaybackStateMachine";
+import {
+  playbackStateMachine,
+  PLAYBACK_ORCHESTRATION_EVENTS,
+} from "@/media/PlaybackStateMachine";
 import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
 import {
   clearLibraryStreamSession,
@@ -53,6 +56,21 @@ export function attachTransportCommands(self) {
 
     tracePlayback("pauseInternal", "pauseInternal", { fromViewport, userInitiated, interrupt });
     audioRef.current?.pause();
+
+    // When stall recovery has already paused the audio element, audio.pause() is a
+    // no-op that fires no 'pause' event — so onPause never runs and the SM is never
+    // updated. A user-initiated pause must always win. Schedule a microtask that fires
+    // after any synchronous 'pause' event handlers; if isPlaying is still true then,
+    // force SM and UI state into alignment directly.
+    if (userInitiated) {
+      queueMicrotask(() => {
+        const { audioRef: aRef, stateRef: sRef, patchState: ps } = self._deps;
+        if (aRef.current?.paused && sRef.current?.isPlaying) {
+          ps({ isPlaying: false, playbackNetworkState: "idle", isBuffering: false });
+          playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.PLAY_PAUSE);
+        }
+      });
+    }
   };
 
   self.pauseForViewport = function pauseForViewport() {
@@ -83,11 +101,16 @@ export function attachTransportCommands(self) {
     const track = stateRef.current.currentTrack;
     if (!audio || !track) return false;
 
-    // Session restore: audio element has no source — track was restored to UI state but
-    // playback never started. Route through the full play pipeline so src gets loaded
-    // and position is restored from position memory.
+    // Session restore or HLS blob revocation: audio element has no usable source.
+    // Common cause: HLS.js revokes the MediaSource blob URL during stall recovery or
+    // engine detach while audio is paused, leaving audio.src === window.location.href.
+    // Preserve the last-known SM position so the forced reload resumes at the right
+    // point instead of restarting from 0:00.
     if (!audio.src || audio.src === window.location.href) {
-      return self.playTrackInternal(track);
+      const resumeAt = (stateRef.current?.currentTime ?? 0) > 0
+        ? stateRef.current.currentTime
+        : undefined;
+      return self.playTrackInternal(track, resumeAt !== undefined ? { resumeAt } : undefined);
     }
 
     tracePlayback("resumeInternal", "resumeInternal", { slug: track.slug });

@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 function toClientPlaylist(pl, tracks) {
@@ -24,7 +24,7 @@ export async function GET(req) {
   const limit = await checkRateLimit(req, { routeKey: "playlists.list", limit: 60, windowSeconds: 60, identifier: user.id });
   if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data: rows, error: plErr } = await admin
     .from("user_playlists")
     .select("*")
@@ -61,7 +61,7 @@ export async function POST(req) {
   const body = await req.json().catch(() => ({}));
   const { id, title, artwork, isSystem = false, sortOrder = 0 } = body;
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const row = {
     user_id: user.id,
     title: String(title || "New Playlist").trim().slice(0, 200) || "New Playlist",

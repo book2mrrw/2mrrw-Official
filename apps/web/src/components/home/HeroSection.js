@@ -50,6 +50,7 @@ const HeroSection = memo(function HeroSection({
         preload="metadata"
         webkit-playsinline="true"
         src={catalogMotionVideoUrl("videos/A2B.mp4")}
+        onError={(e) => { e.currentTarget.style.display = "none"; }}
         style={{
           position: "absolute",
           width: "100%",

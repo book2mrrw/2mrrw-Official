@@ -1,8 +1,8 @@
-import { Redis } from "@upstash/redis";
+﻿import { Redis } from "@upstash/redis";
 import crypto from "crypto";
 import { NextResponse } from "next/server";
 import { after } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { isMissingSupabaseTable } from "@/lib/commerce/entitlements";
 
 // Vercel KV stores are prefixed with the store name.
@@ -51,7 +51,7 @@ async function checkWithRedis(key, windowSeconds) {
 }
 
 async function checkWithSupabase(key, routeKey, identifierHash, windowStart, expiresAt, limit, now) {
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   after(() => {
     admin.from("api_rate_limits").delete().lt("expires_at", new Date(now).toISOString()).then(() => {}).catch(() => {});
   });

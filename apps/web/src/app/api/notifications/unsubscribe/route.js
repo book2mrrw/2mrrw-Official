@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export async function POST(req) {
@@ -28,7 +28,7 @@ export async function POST(req) {
     return NextResponse.json({ error: "Missing endpoint" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   await admin
     .from("notification_push_subscriptions")
     .update({ enabled: false })

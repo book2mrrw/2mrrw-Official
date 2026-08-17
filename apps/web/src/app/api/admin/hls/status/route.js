@@ -1,4 +1,4 @@
-/**
+﻿/**
  * GET /api/admin/hls/status[?slug=&trackSlug=&status=&page=&limit=]
  *
  * Admin dashboard endpoint for HLS pipeline observability.
@@ -15,7 +15,7 @@
 import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 function json(data, status = 200) {
   return NextResponse.json(data, { status });
@@ -34,7 +34,7 @@ export async function GET(req) {
   const page      = Math.max(0, parseInt(searchParams.get("page")  || "0", 10));
   const limit     = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
 
   // Build job list query
   let jobQuery = admin

@@ -1,5 +1,6 @@
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { getAdminClient } from "@/lib/supabase/admin";
 import { isCollectorAccessSlug, isMissingCollectorOwnershipsTable } from "@/lib/commerce/entitlements";
+import { invalidateEntitlementTierCache } from "@/lib/server/entitlement-cache";
 
 function collectorTypeForSlug(slug) {
   if (slug?.startsWith("exc-bundle")) return "collector_bundle";
@@ -26,16 +27,25 @@ function addressFromPayment(payment) {
 }
 
 export async function grantCollectorOwnerships({ userId, purchaseId, slugs, items = [], payment }) {
-  const collectorSlugs = [...new Set((slugs || []).filter(isCollectorAccessSlug))];
-  if (!collectorSlugs.length) return [];
+  if (!slugs?.length) return [];
 
-  const admin = createAdminClient();
-  const { data: products, error } = await admin
+  const admin = getAdminClient();
+
+  // Query products table including is_collector_product column (authoritative).
+  // is_collector_product == null means the migration hasn't run yet — fall back to slug
+  // pattern so existing behaviour is preserved during the transition period.
+  const { data: allProducts, error: productErr } = await admin
     .from("products")
-    .select("id, slug, title, product_type, metadata")
-    .in("slug", collectorSlugs);
+    .select("id, slug, title, product_type, metadata, is_collector_product")
+    .in("slug", slugs);
 
-  if (error) throw error;
+  if (productErr) throw productErr;
+
+  const products = (allProducts || []).filter((p) =>
+    p.is_collector_product === true ||
+    (p.is_collector_product == null && isCollectorAccessSlug(p.slug))
+  );
+
   if (!products?.length) return [];
 
   const itemBySlug = new Map((items || []).map((item) => [item.slug, item]));
@@ -89,5 +99,9 @@ export async function grantCollectorOwnerships({ userId, purchaseId, slugs, item
     }
     throw upsertError;
   }
+
+  // Collector ownership granted → user is now a collector, tier cache must be invalidated.
+  invalidateEntitlementTierCache(userId).catch(() => {});
+
   return data || [];
 }

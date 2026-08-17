@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/commerce/stripe";
 import { fulfillPaymentIntent } from "@/lib/commerce/fulfill-purchase";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(req) {
   const secret = req.headers.get("x-seed-secret");
@@ -25,7 +25,7 @@ export async function POST(req) {
       );
     }
 
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const { data: libraryItems, error: libErr } = await admin
       .from("library_items")
       .select("id, user_id, product_id, purchase_id, source, granted_at, products(slug, title)")

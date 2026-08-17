@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export async function PATCH(req, { params }) {
@@ -18,7 +18,7 @@ export async function PATCH(req, { params }) {
   if (body.artwork !== undefined) patch.artwork_url = body.artwork || null;
   if (body.sortOrder !== undefined) patch.sort_order = Number(body.sortOrder) || 0;
 
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { data, error } = await admin
     .from("user_playlists")
     .update(patch)
@@ -41,7 +41,7 @@ export async function DELETE(req, { params }) {
   if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
   const { id } = await params;
-  const admin = createAdminClient();
+  const admin = getAdminClient();
   const { error } = await admin
     .from("user_playlists")
     .delete()

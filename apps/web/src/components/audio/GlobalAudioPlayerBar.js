@@ -1,11 +1,11 @@
 "use client";
 
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useMemo, forwardRef } from "react";
 import Link from "next/link";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 import { SignaturePlayRing, useImmersivePlayback, usePlayerBodyState } from "@/components/player/ImmersivePlayerEngine";
 import { usePlaybackStateMachine } from "@/media/PlaybackStateMachine";
-import { useAudioPlayer, usePlaybackIdentity } from "@/context/AudioContext";
+import { useAudioPlayer, usePlaybackIdentity, usePlaybackTransport } from "@/context/AudioContext";
 import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
 import {
   TrackTransportButton,
@@ -24,8 +24,10 @@ import {
   MOVE_CANCEL_PX,
 } from "@/lib/player/constants";
 import { resolvePlayerDisplayTitle } from "@/lib/playback/resolve-player-display-title";
+import { useArtworkGesture, isArtworkGestureActive } from "@/hooks/useArtworkGesture";
+import { interactiveMediaState, PLAYBACK_MODE } from "@/media/InteractiveMediaState";
 
-const PREVIEW_MAX_SEC = 30;
+const PREVIEW_MAX_SEC = 15;
 
 function fmtTime(sec) {
   const s = Math.max(0, Math.floor(sec || 0));
@@ -170,6 +172,7 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
 
 function MiniCoverHit({
   title,
+  trackSlug,
   baseCoverUrl,
   animatedCoverUrl,
   csCoverUrl,
@@ -183,16 +186,31 @@ function MiniCoverHit({
   onCoverTouchMove,
   onCoverTouchEnd,
 }) {
-  const [baseFailed, setBaseFailed] = useState(false);
-  const [videoFailed, setVideoFailed] = useState(false);
-  const [overlayFailed, setOverlayFailed] = useState(false);
-  const videoRef = useRef(null);
+  // Asset failure state keyed by stable track identity + role.
+  // trackSlug is stable for the lifetime of a track; URLs are ephemeral delivery attempts.
+  // When trackSlug changes, the derived keys change and all prior failures auto-clear — no reset
+  // effect is needed. This avoids the setState-in-effect anti-pattern while encoding the correct
+  // semantic: failure belongs to the asset identity, not to any particular signed URL.
+  const baseAssetKey    = `${trackSlug || ""}:cover:base`;
+  const videoAssetKey   = `${trackSlug || ""}:cover:video`;
+  const overlayAssetKey = `${trackSlug || ""}:cover:overlay`;
+  const [failedAssets, setFailedAssets] = useState({});
+  const markFailed = useCallback(
+    (key) => setFailedAssets((prev) => (prev[key] ? prev : { ...prev, [key]: true })),
+    []
+  );
+  const baseFailed    = Boolean(failedAssets[baseAssetKey]);
+  const videoFailed   = Boolean(failedAssets[videoAssetKey]);
+  const overlayFailed = Boolean(failedAssets[overlayAssetKey]);
 
-  useEffect(() => {
-    setBaseFailed(false);
-    setVideoFailed(false);
-    setOverlayFailed(false);
-  }, [baseCoverUrl, animatedCoverUrl, csCoverUrl]);
+  const videoRef  = useRef(null);
+  const coverRef  = useRef(null);
+
+  // Interactive artwork gesture — Slow/Screw/Chop/Filter on the mini player cover
+  const { handlers: artGesture } = useArtworkGesture({
+    slug:       trackSlug || "",
+    elementRef: coverRef,
+  });
 
   // Set video src imperatively to avoid re-mount flicker on track change.
   useLayoutEffect(() => {
@@ -214,6 +232,7 @@ function MiniCoverHit({
 
   return (
     <div
+      ref={coverRef}
       className="player-bar-cover-hit"
       role="button"
       tabIndex={0}
@@ -222,6 +241,11 @@ function MiniCoverHit({
       onTouchMove={onCoverTouchMove}
       onTouchEnd={(e) => onCoverTouchEnd(e, undefined)}
       onClick={(e) => e.preventDefault()}
+      onPointerDown={artGesture.onPointerDown}
+      onPointerMove={artGesture.onPointerMove}
+      onPointerUp={artGesture.onPointerUp}
+      onPointerCancel={artGesture.onPointerCancel}
+      onLostPointerCapture={artGesture.onLostPointerCapture}
     >
       {!showVideo && !showStaticLayer && !showOverlay ? (
         <div className="player-bar-cover-fallback">{letter}</div>
@@ -235,7 +259,7 @@ function MiniCoverHit({
           playsInline
           preload="auto"
           className="player-bar-cover-img player-bar-cover-img--base"
-          onError={() => setVideoFailed(true)}
+          onError={() => markFailed(videoAssetKey)}
         />
       ) : null}
       {showStaticLayer ? (
@@ -244,7 +268,7 @@ function MiniCoverHit({
           alt=""
           className="player-bar-cover-img player-bar-cover-img--base"
           data-playing={isPlaying ? "1" : undefined}
-          onError={() => setBaseFailed(true)}
+          onError={() => markFailed(baseAssetKey)}
         />
       ) : null}
       {showOverlay ? (
@@ -254,7 +278,7 @@ function MiniCoverHit({
           alt=""
           className="player-bar-cover-img player-bar-cover-img--cs"
           style={{ opacity: csOpacity }}
-          onError={() => setOverlayFailed(true)}
+          onError={() => markFailed(overlayAssetKey)}
         />
       ) : null}
     </div>
@@ -357,7 +381,7 @@ function SleepTimerButton({ active, label, onClick }) {
   );
 }
 
-function MiniPlayerDock({
+const MiniPlayerDock = forwardRef(function MiniPlayerDock({
   currentTrack,
   duration,
   isPlaying,
@@ -396,7 +420,7 @@ function MiniPlayerDock({
   onOpenSleepSheet,
   upNextCount,
   onOpenQueueSheet,
-}) {
+}, ref) {
   const giftBadge =
     currentTrack?.source === "gift" || currentTrack?.gifted ? (
       <GiftIcon
@@ -418,17 +442,18 @@ function MiniPlayerDock({
   const displayTitle = resolvePlayerDisplayTitle(currentTrack);
 
   return (
-    <div role="region" aria-label="Global audio player" className="player-bar-compact">
+    <div ref={ref} role="region" aria-label="Global audio player" className="player-bar-compact">
       <div className="player-bar-compact__pad">
         <div className="player-bar-compact__row">
           <MiniCoverHit
             title={displayTitle}
+            trackSlug={currentTrack?.slug}
             baseCoverUrl={baseCoverUrl}
             animatedCoverUrl={animatedCoverUrl}
             csCoverUrl={csCoverUrl}
             csMode={csMode}
             csOpacity={csOpacity}
-            isHoldAnimating={isHoldAnimating}
+            isHoldAnimating={effectiveIsHoldAnimating}
             csImgRef={csImgRef}
             hasCs={hasCs}
             isPlaying={isPlaying}
@@ -485,7 +510,7 @@ function MiniPlayerDock({
       </div>
     </div>
   );
-}
+});
 
 // ─── Main bar component ────────────────────────────────────────────────────────
 
@@ -501,6 +526,11 @@ function GlobalAudioPlayerBar() {
   // show Play while a card correctly shows Pause. Override isPlaying with the
   // synchronous snapshot so both always flip at the same time.
   const { isPlaying: syncedIsPlaying } = usePlaybackIdentity();
+  // isBuffering from the transport channel (useSyncExternalStore, direct snapshot).
+  // Previously read from useAudioPlayer() useMemo which only recomputes on context
+  // or orchestration channel changes — causing permanent spinner lock when the
+  // browser fails to fire 'playing' (e.g. iOS Safari after an HLS source swap).
+  const { isBuffering } = usePlaybackTransport();
   const {
     currentTrack,
     hasStarted,
@@ -510,7 +540,6 @@ function GlobalAudioPlayerBar() {
     error,
     streamRetryable,
     retryStreamPlayback,
-    isBuffering,
     accessDenied,
     streamConflict,
     progress,
@@ -539,9 +568,13 @@ function GlobalAudioPlayerBar() {
     queueIndex,
     removeFromQueue,
     moveInQueue,
+    osInterrupted,
   } = playback;
 
   const [isHoldAnimating, setIsHoldAnimating] = useState(false);
+  // Derived: hold animation is always suppressed while CS mode is active.
+  // This avoids a synchronous setState call in the csMode effect to cancel hold animation.
+  const effectiveIsHoldAnimating = isHoldAnimating && !csMode;
   const [sleepSheetOpen, setSleepSheetOpen] = useState(false);
   const [queueSheetOpen, setQueueSheetOpen] = useState(false);
   const [dragQueue, setDragQueue] = useState(null); // { fromIdx, overIdx }
@@ -558,6 +591,31 @@ function GlobalAudioPlayerBar() {
   const holdActiveRef = useRef(false);
   const lastTapTimeRef = useRef(0);
   const csModeRef = useRef(csMode);
+  const roCleanupRef = useRef(null);
+
+  const dockRef = useCallback((el) => {
+    if (roCleanupRef.current) {
+      roCleanupRef.current();
+      roCleanupRef.current = null;
+    }
+    if (!el) {
+      document.documentElement.style.setProperty('--player-bar-inset', '0px');
+      return;
+    }
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      const inset = Math.max(0, window.innerHeight - rect.top);
+      document.documentElement.style.setProperty('--player-bar-inset', `${inset}px`);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener('resize', update);
+    roCleanupRef.current = () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, []);
 
   const continuitySnap = continuityFrozen ? getContinuitySnapshot?.() : null;
 
@@ -615,7 +673,6 @@ function GlobalAudioPlayerBar() {
     if (csMode) {
       lastHoldOpacityRef.current = 0;
       holdActiveRef.current = false;
-      setIsHoldAnimating(false);
       if (csOverlayImgRef.current) csOverlayImgRef.current.style.opacity = "0";
     }
   }, [csMode]);
@@ -638,6 +695,11 @@ function GlobalAudioPlayerBar() {
   const applyHoldAudio = useCallback(
     (progressVal) => {
       if (csModeRef.current) return;
+      // Pointer gesture owns audio when active. On touch devices pointerdown fires
+      // before touchstart, so this flag is already set by the time this runs.
+      if (isArtworkGestureActive()) return;
+      // ScrewEngine owns playbackRate when IMS is not NORMAL.
+      if (interactiveMediaState.getSnapshot().playbackMode !== PLAYBACK_MODE.NORMAL) return;
       if (csAudio) beginCsHoldPreview(csAudio);
       else setCsHoldPlaybackRate(progressVal);
     },
@@ -1114,10 +1176,11 @@ function GlobalAudioPlayerBar() {
         </div>
       ) : null}
       <MiniPlayerDock
+        ref={dockRef}
         currentTrack={dockCurrentTrack}
         duration={dockDuration}
         isPlaying={dockIsPlaying}
-        isBuffering={isBuffering}
+        isBuffering={isBuffering || (Boolean(osInterrupted) && !dockIsPlaying)}
         error={error}
         streamRetryable={streamRetryable}
         onRetryStream={retryStreamPlayback}

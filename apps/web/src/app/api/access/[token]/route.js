@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { verifyAccessToken } from "@/lib/commerce/entitlements";
 import { buildR2Key, createR2SignedGetUrl, R2_PREFIX } from "@/lib/storage/r2";
 

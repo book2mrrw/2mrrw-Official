@@ -56,20 +56,7 @@ export default function AlbumTracklistSheet({
   const sheetOpacity = useTransform(dragY, [0, 120], [1, 0.55]);
   const dismissTriggered = useRef(false);
   const dragControls = useDragControls();
-  const upgradeTimerRef = useRef(null);
   const autoPlayedRef = useRef(false);
-
-  useEffect(() => () => {
-    if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
-  }, []);
-
-  const scheduleInstantStreamUpgrade = useCallback((slug) => {
-    if (upgradeTimerRef.current) clearTimeout(upgradeTimerRef.current);
-    upgradeTimerRef.current = setTimeout(() => {
-      const b = getPagePlaybackActionsBridge();
-      if (b?.currentTrack?.slug === slug) void b.dispatchPlaybackCommand("upgradeStream");
-    }, 2000);
-  }, []);
 
   const tracks = useMemo(
     () =>
@@ -94,10 +81,8 @@ export default function AlbumTracklistSheet({
       const queueIndex = resolveReleaseQueueStartIndex(playable, releaseTrackIndex, sourceTrack);
       const queueTrack = playable[queueIndex];
       if (!queueTrack) return;
-      const { startTrack, needsUpgrade } = toInstantStartTrack(queueTrack);
-      const instantQueue = needsUpgrade
-        ? playable.map((t, i) => (i === queueIndex ? startTrack : t))
-        : playable;
+      const { startTrack } = toInstantStartTrack(queueTrack);
+      const instantQueue = playable.map((t, i) => (i === queueIndex ? startTrack : t));
       if (isPlaybackTraceEnabled()) {
         logPlaybackEvent({
           type: "tracklist:play-requested",
@@ -113,9 +98,8 @@ export default function AlbumTracklistSheet({
         });
       }
       void dispatchPlaybackCommand("playQueue", { tracks: instantQueue, startIndex: queueIndex });
-      if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
     },
-    [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, scheduleInstantStreamUpgrade, album]
+    [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, album]
   );
 
   const isTrackActive = useCallback(
@@ -172,22 +156,17 @@ export default function AlbumTracklistSheet({
       if (shuffle) {
         setShuffle(true);
         const randomIdx = Math.floor(Math.random() * playable.length);
-        const { startTrack, needsUpgrade } = toInstantStartTrack(playable[randomIdx]);
-        const instantPlayable = needsUpgrade
-          ? playable.map((t, i) => (i === randomIdx ? startTrack : t))
-          : playable;
+        const { startTrack } = toInstantStartTrack(playable[randomIdx]);
+        const instantPlayable = playable.map((t, i) => (i === randomIdx ? startTrack : t));
         void dispatchPlaybackCommand("playQueue", { tracks: instantPlayable, startIndex: randomIdx });
-        if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
       } else {
         setShuffle(false);
-        const { startTrack, needsUpgrade } = toInstantStartTrack(playable[0]);
-        const instantPlayable = needsUpgrade ? [startTrack, ...playable.slice(1)] : playable;
-        void dispatchPlaybackCommand("playQueue", { tracks: instantPlayable, startIndex: 0 });
-        if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
+        const { startTrack } = toInstantStartTrack(playable[0]);
+        void dispatchPlaybackCommand("playQueue", { tracks: [startTrack, ...playable.slice(1)], startIndex: 0 });
       }
       onClose?.();
     },
-    [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, onClose, scheduleInstantStreamUpgrade]
+    [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, onClose]
   );
 
   const handleDragEnd = useCallback(
@@ -565,7 +544,7 @@ export default function AlbumTracklistSheet({
                 letterSpacing: 0.2,
               }}
             >
-              Can't play this right now. Try another track.
+              Can&apos;t play this right now. Try another track.
             </div>
           )}
 

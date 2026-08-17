@@ -127,7 +127,6 @@ export function usePlaybackDelegates(helperServiceRef, commandServiceRef) {
   // ─── Stable Return ───────────────────────────────────────────────────────────
   // useMemo with [] deps → same object reference on every render.
   // Safe because every function inside has [] deps (stable identity).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(() => ({
     // Helper delegates
     getAudibilityParams, readIsAudiblyPlaying, getPlaybackTransportHealth,

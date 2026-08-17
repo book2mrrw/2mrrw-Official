@@ -183,6 +183,589 @@ const innerCirclePosts = [
 
 // ── CONSTANTS ─────────────────────────────────────────────────────────────────
 const nextLiveDateTime = new Date("2026-05-10T20:00:00");
+
+function TicketCheckoutButton({ event, onClose }) {
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+  const handleBuy = async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/tickets/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ showId: event.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || "Checkout failed"); return; }
+      if (data.url) window.location.href = data.url;
+    } catch (e) { setErr("Network error — try again"); }
+    finally { setLoading(false); }
+  };
+  return (
+    <>
+      <button
+        onClick={handleBuy}
+        disabled={loading}
+        style={{width:"100%",padding:"12px 0",background:loading?"#1a1a1a":"#00ffff",color:loading?"#555":"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:loading?"wait":"pointer",fontSize:14,transition:"0.2s"}}
+      >{loading ? "Redirecting to checkout…" : `Buy Ticket — $${event.price.toFixed(2)}`}</button>
+      {err && <div style={{fontSize:12,color:"#ef4444",textAlign:"center"}}>{err}</div>}
+    </>
+  );
+}
+
+const PRESET_PRICES = [25,30,35,40,45,50,60,75,100,125,150,175,200,250,300,350,400,500,750,1000,1500,2000,2500,3000,3500];
+
+const TIMEZONES = [
+  // Americas
+  { label: "Hawaii (HT)",                value: "Pacific/Honolulu" },
+  { label: "Alaska (AKT)",               value: "America/Anchorage" },
+  { label: "Pacific (PT)",               value: "America/Los_Angeles" },
+  { label: "Mountain (MT)",              value: "America/Denver" },
+  { label: "Central (CT)",               value: "America/Chicago" },
+  { label: "Eastern (ET)",               value: "America/New_York" },
+  { label: "Atlantic (AT)",              value: "America/Halifax" },
+  { label: "São Paulo (BRT)",            value: "America/Sao_Paulo" },
+  { label: "Buenos Aires (ART)",         value: "America/Argentina/Buenos_Aires" },
+  // Europe
+  { label: "London (GMT/BST)",           value: "Europe/London" },
+  { label: "Amsterdam / Paris (CET)",    value: "Europe/Amsterdam" },
+  { label: "Berlin / Rome (CET)",        value: "Europe/Berlin" },
+  { label: "Moscow (MSK)",               value: "Europe/Moscow" },
+  // Africa
+  { label: "Lagos / Kinshasa (WAT)",     value: "Africa/Lagos" },
+  { label: "Johannesburg (SAST)",        value: "Africa/Johannesburg" },
+  { label: "Nairobi / Kampala (EAT)",   value: "Africa/Nairobi" },
+  // Asia / Pacific
+  { label: "Dubai (GST)",               value: "Asia/Dubai" },
+  { label: "India (IST +5:30)",         value: "Asia/Kolkata" },
+  { label: "Bangkok / Jakarta (ICT)",   value: "Asia/Bangkok" },
+  { label: "Singapore / KL (SGT)",      value: "Asia/Singapore" },
+  { label: "Hong Kong (HKT)",           value: "Asia/Hong_Kong" },
+  { label: "Tokyo (JST)",               value: "Asia/Tokyo" },
+  { label: "Seoul (KST)",               value: "Asia/Seoul" },
+  { label: "Sydney (AEDT/AEST)",        value: "Australia/Sydney" },
+  { label: "Auckland (NZST/NZDT)",      value: "Pacific/Auckland" },
+];
+
+// Parse "8:00 PM", "20:00", etc. → total minutes from midnight
+function _parseTimeMin(timeStr) {
+  if (!timeStr) return null;
+  let m = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) return parseInt(m[1]) * 60 + parseInt(m[2]);
+  m = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!m) return null;
+  let h = parseInt(m[1]), min = parseInt(m[2]);
+  const ap = m[3].toUpperCase();
+  if (ap === "PM" && h !== 12) h += 12;
+  if (ap === "AM" && h === 12) h = 0;
+  return h * 60 + min;
+}
+
+// Convert venue local datetime → UTC Date object
+function _venueToUTC(dateStr, timeStr, venueTz) {
+  const totalMin = _parseTimeMin(timeStr);
+  if (totalMin === null || !dateStr || !venueTz) return null;
+  const [yr, mo, dy] = dateStr.split("-").map(Number);
+  const noonUTC = new Date(Date.UTC(yr, mo - 1, dy, 12, 0));
+  try {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: venueTz, hour: "2-digit", minute: "2-digit", hour12: false,
+    }).formatToParts(noonUTC);
+    const tzH = parseInt(parts.find(p => p.type === "hour").value) % 24;
+    const tzM = parseInt(parts.find(p => p.type === "minute").value);
+    // offset of venue tz vs UTC at this date (in minutes)
+    const offsetMin = tzH * 60 + tzM - 12 * 60;
+    const venueMidnightUTC = noonUTC.getTime() - (12 * 60 + offsetMin) * 60000;
+    return new Date(venueMidnightUTC + totalMin * 60000);
+  } catch { return null; }
+}
+
+// Format event time: "8:00 PM CDT · 9:00 PM EDT your time" (or just venue time if same tz)
+function _fmtEventTime(dateStr, timeStr, venueTz) {
+  if (!timeStr) return "";
+  const utc = _venueToUTC(dateStr, timeStr, venueTz);
+  if (!utc || !venueTz) return timeStr;
+  try {
+    const venueFmt = new Intl.DateTimeFormat("en-US", {
+      timeZone: venueTz, hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short",
+    });
+    const venueStr = venueFmt.format(utc);
+    const viewerTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (viewerTz === venueTz) return venueStr;
+    const viewerFmt = new Intl.DateTimeFormat("en-US", {
+      hour: "numeric", minute: "2-digit", hour12: true, timeZoneName: "short",
+    });
+    const viewerStr = viewerFmt.format(utc);
+    return `${venueStr} · ${viewerStr} your time`;
+  } catch { return timeStr; }
+}
+
+// ── Inline admin shows management (admin-only, renders inside the SHOWS tab) ──
+function InlineShowsAdmin({ onRefreshFanView }) {
+  const [shows, setShows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [flash, setFlash] = useState(null);
+  const [customPrice, setCustomPrice] = useState(false);
+  const blank = { name:"", location:"", event_date:"", event_time:"", venue_timezone:"America/Chicago", price_cents:"", tickets_available:"", active:true };
+  const [form, setForm] = useState(blank);
+
+  const showFlash = (msg, isErr=false) => {
+    setFlash({ msg, isErr });
+    setTimeout(() => setFlash(null), 4000);
+  };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/admin/shows");
+      const data = await res.json();
+      setShows(data.shows || []);
+    } catch { setShows([]); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openCreate = () => { setForm(blank); setEditingId(null); setCustomPrice(false); setShowForm(true); };
+  const openEdit = (show) => {
+    const isPreset = PRESET_PRICES.includes(show.price_cents / 100);
+    setForm({
+      name: show.name, location: show.location, event_date: show.event_date,
+      event_time: show.event_time || "",
+      venue_timezone: show.venue_timezone || "America/Chicago",
+      price_cents: String(show.price_cents),
+      tickets_available: show.tickets_available != null ? String(show.tickets_available) : "",
+      active: show.active,
+    });
+    setCustomPrice(!isPreset);
+    setEditingId(show.id);
+    setShowForm(true);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        price_cents: Number(form.price_cents) || 0,
+        tickets_available: form.tickets_available === "" ? null : Number(form.tickets_available),
+      };
+      const res = await fetch("/api/admin/shows", {
+        method: editingId ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(editingId ? { id: editingId, ...payload } : payload),
+      });
+      const data = await res.json();
+      if (!res.ok) { showFlash(data.error || "Save failed", true); return; }
+      showFlash(editingId ? "Show updated" : "Show created");
+      setShowForm(false); setEditingId(null);
+      await load(); onRefreshFanView?.();
+    } catch (err) { showFlash(err.message || "Error", true); }
+    finally { setSaving(false); }
+  };
+
+  const handleToggle = async (show) => {
+    const res = await fetch("/api/admin/shows", { method:"PATCH", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id: show.id, active: !show.active }) });
+    if (!res.ok) { showFlash("Update failed", true); return; }
+    showFlash(show.active ? "Show hidden from fans" : "Show visible to fans");
+    await load(); onRefreshFanView?.();
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("Delete this show? It will be hidden from fans.")) return;
+    const res = await fetch("/api/admin/shows", { method:"DELETE", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ id }) });
+    if (!res.ok) { showFlash("Delete failed", true); return; }
+    showFlash("Show removed");
+    await load(); onRefreshFanView?.();
+  };
+
+  const fmtDate = (d) => d ? new Date(d + "T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"}) : "—";
+  const isPast  = (d) => d && new Date(d) < new Date(new Date().toISOString().slice(0,10));
+  const admIn   = { background:"rgba(155,93,229,0.06)", border:"1px solid rgba(155,93,229,0.18)", borderRadius:14, padding:"16px 18px", marginBottom:20 };
+
+  return (
+    <div style={admIn}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:flash||showForm?14:0}}>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:9,letterSpacing:".25em",color:"#9b5de5",textTransform:"uppercase"}}>Admin — Shows Manager</span>
+        <button onClick={openCreate} style={{background:"#9b5de5",border:"none",borderRadius:8,padding:"7px 14px",fontSize:11,fontWeight:700,color:"white",cursor:"pointer",letterSpacing:".08em"}}>+ New Show</button>
+      </div>
+
+      {flash && (
+        <div style={{fontSize:12,padding:"8px 12px",borderRadius:8,marginBottom:10,background:flash.isErr?"rgba(239,68,68,.1)":"rgba(34,197,94,.1)",color:flash.isErr?"#ef4444":"#22c55e",border:`1px solid ${flash.isErr?"rgba(239,68,68,.2)":"rgba(34,197,94,.2)"}`}}>{flash.msg}</div>
+      )}
+
+      {showForm && (
+        <form onSubmit={handleSave} style={{display:"flex",flexDirection:"column",gap:12,padding:"14px 0",borderTop:"1px solid rgba(155,93,229,0.15)"}}>
+          <div style={{fontFamily:"'DM Mono',monospace",fontSize:9,letterSpacing:".2em",color:"rgba(255,255,255,.4)"}}>{editingId ? "EDIT SHOW" : "NEW SHOW"}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:9,fontFamily:"'DM Mono',monospace",letterSpacing:".15em",color:"rgba(255,255,255,.45)"}}>
+              SHOW NAME *
+              <input style={{background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,padding:"9px 12px",fontSize:12,color:"white",outline:"none"}} value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="2MRRW Live – Dallas" required />
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:9,fontFamily:"'DM Mono',monospace",letterSpacing:".15em",color:"rgba(255,255,255,.45)"}}>
+              LOCATION *
+              <input style={{background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,padding:"9px 12px",fontSize:12,color:"white",outline:"none"}} value={form.location} onChange={e=>setForm(f=>({...f,location:e.target.value}))} placeholder="Dallas, TX" required />
+            </label>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:9,fontFamily:"'DM Mono',monospace",letterSpacing:".15em",color:"rgba(255,255,255,.45)"}}>
+              DATE *
+              <input type="date" style={{background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,padding:"9px 12px",fontSize:12,color:"white",outline:"none",colorScheme:"dark"}} value={form.event_date} onChange={e=>setForm(f=>({...f,event_date:e.target.value}))} required />
+            </label>
+            <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:9,fontFamily:"'DM Mono',monospace",letterSpacing:".15em",color:"rgba(255,255,255,.45)"}}>
+              TIME
+              <input style={{background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,padding:"9px 12px",fontSize:12,color:"white",outline:"none"}} value={form.event_time} onChange={e=>setForm(f=>({...f,event_time:e.target.value}))} placeholder="8:00 PM" />
+            </label>
+          </div>
+          <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:9,fontFamily:"'DM Mono',monospace",letterSpacing:".15em",color:"rgba(255,255,255,.45)"}}>
+            VENUE TIMEZONE *
+            <select
+              value={form.venue_timezone}
+              onChange={e=>setForm(f=>({...f,venue_timezone:e.target.value}))}
+              style={{background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,padding:"9px 12px",fontSize:12,color:"white",outline:"none",appearance:"none",cursor:"pointer"}}
+              required
+            >
+              {TIMEZONES.map(tz=>(
+                <option key={tz.value} value={tz.value} style={{background:"#1a1a1a",color:"white"}}>{tz.label}</option>
+              ))}
+            </select>
+          </label>
+          <div>
+            <div style={{fontSize:9,fontFamily:"'DM Mono',monospace",letterSpacing:".15em",color:"rgba(255,255,255,.45)",marginBottom:8}}>TICKET PRICE (USD) *</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:customPrice?8:0}}>
+              {PRESET_PRICES.map(p=>(
+                <button type="button" key={p}
+                  onClick={()=>{setCustomPrice(false);setForm(f=>({...f,price_cents:String(p*100)}));}}
+                  style={{padding:"7px 11px",borderRadius:8,border:Number(form.price_cents)===p*100?"1px solid #9b5de5":"1px solid rgba(255,255,255,.1)",background:Number(form.price_cents)===p*100?"rgba(155,93,229,0.18)":"transparent",color:Number(form.price_cents)===p*100?"#c084fc":"rgba(255,255,255,.45)",fontSize:12,fontWeight:Number(form.price_cents)===p*100?700:400,cursor:"pointer",transition:"0.12s",lineHeight:1}}
+                >${p}</button>
+              ))}
+              <button type="button"
+                onClick={()=>setCustomPrice(true)}
+                style={{padding:"7px 11px",borderRadius:8,border:customPrice?"1px solid #9b5de5":"1px solid rgba(255,255,255,.1)",background:customPrice?"rgba(155,93,229,0.18)":"transparent",color:customPrice?"#c084fc":"rgba(255,255,255,.45)",fontSize:12,cursor:"pointer",transition:"0.12s",lineHeight:1}}
+              >Custom</button>
+            </div>
+            {customPrice && (
+              <input autoFocus type="number" min="1" step="1"
+                style={{background:"rgba(255,255,255,.05)",border:"1px solid rgba(155,93,229,0.4)",borderRadius:8,padding:"9px 12px",fontSize:13,color:"white",outline:"none",width:"100%",boxSizing:"border-box"}}
+                placeholder="Enter price in dollars (e.g. 75)"
+                value={form.price_cents ? Number(form.price_cents)/100 : ""}
+                onChange={e=>setForm(f=>({...f,price_cents:String(Math.round(parseFloat(e.target.value||0)*100))}))}
+              />
+            )}
+            {!form.price_cents && <input type="hidden" required />}
+          </div>
+          <label style={{display:"flex",flexDirection:"column",gap:5,fontSize:9,fontFamily:"'DM Mono',monospace",letterSpacing:".15em",color:"rgba(255,255,255,.45)"}}>
+            TICKETS AVAILABLE
+            <input type="number" min="0" step="1" style={{background:"rgba(255,255,255,.05)",border:"1px solid rgba(255,255,255,.1)",borderRadius:8,padding:"9px 12px",fontSize:12,color:"white",outline:"none"}} value={form.tickets_available} onChange={e=>setForm(f=>({...f,tickets_available:e.target.value}))} placeholder="Unlimited" />
+          </label>
+          <label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"rgba(255,255,255,.5)",cursor:"pointer"}}>
+            <input type="checkbox" checked={form.active} onChange={e=>setForm(f=>({...f,active:e.target.checked}))} />
+            Visible to fans
+          </label>
+          <div style={{display:"flex",gap:8}}>
+            <button type="submit" disabled={saving} style={{background:"#9b5de5",border:"none",borderRadius:8,padding:"9px 18px",fontSize:12,fontWeight:700,color:"white",cursor:saving?"wait":"pointer",opacity:saving?0.6:1}}>{saving ? "Saving…" : editingId ? "Save Changes" : "Create Show"}</button>
+            <button type="button" onClick={()=>{setShowForm(false);setEditingId(null);}} style={{background:"transparent",border:"1px solid rgba(255,255,255,.12)",borderRadius:8,padding:"9px 18px",fontSize:12,color:"rgba(255,255,255,.4)",cursor:"pointer"}}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {!showForm && (
+        loading ? (
+          <div style={{fontSize:12,color:"rgba(255,255,255,.25)",padding:"8px 0"}}>Loading…</div>
+        ) : shows.length === 0 ? (
+          <div style={{fontSize:12,color:"rgba(255,255,255,.25)",padding:"8px 0"}}>No shows yet — create your first one above.</div>
+        ) : (
+          <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:10}}>
+            {shows.map(show => (
+              <div key={show.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:"10px 12px",background:"rgba(255,255,255,.03)",border:"1px solid rgba(255,255,255,.07)",borderRadius:10,opacity:(!show.active||isPast(show.event_date))?0.5:1}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"white",marginBottom:2}}>{show.name}</div>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,.4)"}}>{show.location} · {fmtDate(show.event_date)}{show.event_time?` · ${show.event_time}`:""} · ${(show.price_cents/100).toFixed(2)}{show.tickets_available!=null?` · ${show.tickets_available} left`:" · unlimited"}
+                    {isPast(show.event_date) && <span style={{color:"#f59e0b",marginLeft:6}}>PAST</span>}
+                    {!show.active && <span style={{color:"#ef4444",marginLeft:6}}>HIDDEN</span>}
+                    {show.active && !isPast(show.event_date) && show.tickets_available===0 && <span style={{color:"#ef4444",marginLeft:6}}>SOLD OUT</span>}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:6,flexShrink:0}}>
+                  <button onClick={()=>openEdit(show)} style={{background:"transparent",border:"1px solid rgba(255,255,255,.12)",borderRadius:6,padding:"4px 10px",fontSize:10,color:"rgba(255,255,255,.5)",cursor:"pointer"}}>Edit</button>
+                  <button onClick={()=>handleToggle(show)} style={{background:"transparent",border:"1px solid rgba(255,255,255,.12)",borderRadius:6,padding:"4px 10px",fontSize:10,color:show.active?"#f59e0b":"#22c55e",cursor:"pointer"}}>{show.active?"Hide":"Show"}</button>
+                  <button onClick={()=>handleDelete(show.id)} style={{background:"transparent",border:"1px solid rgba(255,255,255,.12)",borderRadius:6,padding:"4px 10px",fontSize:10,color:"#ef4444",cursor:"pointer"}}>Delete</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+// ── Inline admin live-stream manager (admin-only, renders in the LIVE tab) ──
+function InlineLiveAdmin() {
+  const [broadcast, setBroadcast]       = useState(null);
+  const [loading, setLoading]           = useState(true);
+  const [saving, setSaving]             = useState(false);
+  const [flash, setFlash]               = useState(null);
+  const [showForm, setShowForm]         = useState(false);
+  const [form, setForm]                 = useState({ title: "2MRRW Live", goesLiveAt: "", channel: "callme2mrrw" });
+  const [eventSub, setEventSub]         = useState(null);   // { configured, allActive, subscriptions, missing }
+  const [eventSubLoading, setEsLoading] = useState(true);
+  const [eventSubSaving, setEsSaving]   = useState(false);
+
+  const showFlash = (msg, isErr = false) => {
+    setFlash({ msg, isErr });
+    setTimeout(() => setFlash(null), 5000);
+  };
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res  = await fetch("/api/admin/livestream");
+      const data = await res.json();
+      setBroadcast(data.broadcast || null);
+    } catch { setBroadcast(null); }
+    finally { setLoading(false); }
+  }, []);
+
+  const loadEventSub = useCallback(async () => {
+    setEsLoading(true);
+    try {
+      const res  = await fetch("/api/admin/twitch/register");
+      const data = await res.json();
+      setEventSub(data);
+    } catch { setEventSub(null); }
+    finally { setEsLoading(false); }
+  }, []);
+
+  const handleConnectEventSub = async () => {
+    setEsSaving(true);
+    try {
+      const res  = await fetch("/api/admin/twitch/register", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { showFlash(data.error || "EventSub registration failed", true); }
+      else { showFlash("Twitch EventSub connected. Going live on Twitch will now auto-trigger everything."); }
+      await loadEventSub();
+      // New subscriptions start in pending state — Twitch verifies the webhook within ~5s.
+      // Re-check after 7s so the UI reflects the post-verification enabled state.
+      setTimeout(() => loadEventSub(), 7000);
+    } catch (err) { showFlash(err.message || "Error", true); }
+    finally { setEsSaving(false); }
+  };
+
+  const handleDisconnectEventSub = async () => {
+    if (!confirm("Remove all Twitch EventSub subscriptions?")) return;
+    setEsSaving(true);
+    try {
+      const res  = await fetch("/api/admin/twitch/register", { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) { showFlash(data.error || "Disconnect failed", true); }
+      else { showFlash(`Removed ${data.removed} subscription(s).`); }
+      await loadEventSub();
+    } catch (err) { showFlash(err.message || "Error", true); }
+    finally { setEsSaving(false); }
+  };
+
+  useEffect(() => { load(); loadEventSub(); }, [load, loadEventSub]);
+
+  const handleSchedule = async (e) => {
+    e.preventDefault();
+    if (!form.goesLiveAt) { showFlash("Please pick a date and time", true); return; }
+    setSaving(true);
+    try {
+      const res  = await fetch("/api/admin/livestream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ title: form.title, goesLiveAt: new Date(form.goesLiveAt).toISOString(), channel: form.channel }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showFlash(data.error || "Schedule failed", true); return; }
+      showFlash("Stream scheduled — notifications will fire 24h and 15min before.");
+      setShowForm(false);
+      await load();
+    } catch (err) { showFlash(err.message || "Error", true); }
+    finally { setSaving(false); }
+  };
+
+  const handleGoLive = async () => {
+    setSaving(true);
+    try {
+      const res  = await fetch("/api/admin/livestream", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ action: "go_live", broadcastId: broadcast?.id, title: form.title }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showFlash(data.error || "Go live failed", true); return; }
+      showFlash("You're LIVE. Notifications sent to all accounts.");
+      await load();
+    } catch (err) { showFlash(err.message || "Error", true); }
+    finally { setSaving(false); }
+  };
+
+  const handleEndLive = async () => {
+    if (!confirm("End the live stream?")) return;
+    setSaving(true);
+    try {
+      const res  = await fetch("/api/admin/livestream", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ action: "end_live", broadcastId: broadcast?.id }),
+      });
+      const data = await res.json();
+      if (!res.ok) { showFlash(data.error || "End failed", true); return; }
+      showFlash("Stream ended.");
+      await load();
+    } catch (err) { showFlash(err.message || "Error", true); }
+    finally { setSaving(false); }
+  };
+
+  const admIn = { background: "rgba(155,93,229,0.06)", border: "1px solid rgba(155,93,229,0.18)", borderRadius: 14, padding: "16px 18px", marginBottom: 20 };
+  const inputStyle = { background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 8, padding: "9px 12px", fontSize: 12, color: "white", outline: "none", width: "100%", boxSizing: "border-box" };
+  const labelStyle = { display: "flex", flexDirection: "column", gap: 5, fontSize: 9, fontFamily: "'DM Mono',monospace", letterSpacing: ".15em", color: "rgba(255,255,255,.45)" };
+
+  return (
+    <div style={admIn}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: flash || showForm ? 14 : 0 }}>
+        <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".25em", color: "#9b5de5", textTransform: "uppercase" }}>Admin — Live Stream</span>
+        <div style={{ display: "flex", gap: 8 }}>
+          {!broadcast?.is_live && (
+            <button onClick={() => setShowForm((s) => !s)} style={{ background: "transparent", border: "1px solid rgba(155,93,229,0.4)", borderRadius: 8, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: "#c084fc", cursor: "pointer" }}>
+              {showForm ? "Cancel" : "Schedule"}
+            </button>
+          )}
+          {broadcast?.is_live ? (
+            <button onClick={handleEndLive} disabled={saving} style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: "white", cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1 }}>
+              {saving ? "Ending…" : "End Stream"}
+            </button>
+          ) : (
+            <button onClick={handleGoLive} disabled={saving} style={{ background: "#00ffff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: "#000", cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1 }}>
+              {saving ? "Going live…" : "⬤ Go Live Now"}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {flash && (
+        <div style={{ fontSize: 12, padding: "8px 12px", borderRadius: 8, marginBottom: 10, background: flash.isErr ? "rgba(239,68,68,.1)" : "rgba(34,197,94,.1)", color: flash.isErr ? "#ef4444" : "#22c55e", border: `1px solid ${flash.isErr ? "rgba(239,68,68,.2)" : "rgba(34,197,94,.2)"}` }}>
+          {flash.msg}
+        </div>
+      )}
+
+      {showForm && !broadcast?.is_live && (
+        <form onSubmit={handleSchedule} style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 0", borderTop: "1px solid rgba(155,93,229,0.15)" }}>
+          <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".2em", color: "rgba(255,255,255,.4)" }}>SCHEDULE STREAM</div>
+          <label style={labelStyle}>TITLE<input style={inputStyle} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="2MRRW Live" /></label>
+          <label style={labelStyle}>GOES LIVE AT (your local time) *<input type="datetime-local" style={{ ...inputStyle, colorScheme: "dark" }} value={form.goesLiveAt} onChange={(e) => setForm((f) => ({ ...f, goesLiveAt: e.target.value }))} required /></label>
+          <label style={labelStyle}>TWITCH CHANNEL<input style={inputStyle} value={form.channel} onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value }))} placeholder="callme2mrrw" /></label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button type="submit" disabled={saving} style={{ background: "#9b5de5", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 12, fontWeight: 700, color: "white", cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : "Save Schedule"}</button>
+          </div>
+        </form>
+      )}
+
+      {!showForm && (
+        loading ? (
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,.25)", padding: "8px 0" }}>Loading…</div>
+        ) : broadcast ? (
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,.5)", marginTop: 10 }}>
+            <span style={{ color: broadcast.is_live ? "#00ffff" : "rgba(255,255,255,.3)", fontWeight: 700 }}>
+              {broadcast.is_live ? "● LIVE" : "○ OFFLINE"}
+            </span>
+            {" · "}{broadcast.title}
+            {broadcast.goes_live_at && !broadcast.is_live && (
+              <span style={{ color: "rgba(255,255,255,.3)" }}> · scheduled {new Date(broadcast.goes_live_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</span>
+            )}
+          </div>
+        ) : (
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,.25)", padding: "8px 0" }}>No stream scheduled — use Go Live Now or Schedule above.</div>
+        )
+      )}
+
+      {/* ── Twitch EventSub section ─────────────────────────────────────── */}
+      <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(155,93,229,0.12)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".2em", color: "rgba(155,93,229,0.7)", textTransform: "uppercase" }}>Twitch EventSub</span>
+            {!eventSubLoading && eventSub && (
+              <span style={{ marginLeft: 10, fontSize: 10, fontWeight: 700, color: eventSub.allActive ? "#22c55e" : eventSub.configured ? "#f59e0b" : "#ef4444" }}>
+                {eventSub.allActive ? "● Connected" : eventSub.configured ? "⚠ Partial" : "○ Not connected"}
+              </span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 6 }}>
+            {!eventSubLoading && eventSub?.allActive && (
+              <button onClick={handleDisconnectEventSub} disabled={eventSubSaving} style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6, padding: "4px 10px", fontSize: 10, color: "#ef4444", cursor: eventSubSaving ? "wait" : "pointer", opacity: eventSubSaving ? 0.6 : 1 }}>
+                {eventSubSaving ? "…" : "Disconnect"}
+              </button>
+            )}
+            {!eventSubLoading && !eventSub?.allActive && (
+              <button onClick={handleConnectEventSub} disabled={eventSubSaving} style={{ background: "rgba(145,70,255,0.15)", border: "1px solid rgba(145,70,255,0.4)", borderRadius: 6, padding: "4px 10px", fontSize: 10, fontWeight: 700, color: "#9146ff", cursor: eventSubSaving ? "wait" : "pointer", opacity: eventSubSaving ? 0.6 : 1 }}>
+                {eventSubSaving ? "Connecting…" : "Connect"}
+              </button>
+            )}
+          </div>
+        </div>
+        {!eventSubLoading && eventSub && !eventSub.configured && eventSub.missing?.length > 0 && (
+          <div style={{ fontSize: 10, color: "#f59e0b", marginTop: 6, lineHeight: 1.5 }}>
+            Missing env vars: {eventSub.missing.join(", ")}
+          </div>
+        )}
+        {!eventSubLoading && eventSub?.allActive && (
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,.3)", marginTop: 6, lineHeight: 1.6 }}>
+            Going live on Twitch auto-triggers the embed and notifies all accounts. No button needed.
+          </div>
+        )}
+        {!eventSubLoading && eventSub && !eventSub.allActive && eventSub.configured && (
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,.3)", marginTop: 6, lineHeight: 1.6 }}>
+            Click Connect to register stream.online / stream.offline webhooks with Twitch.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── My Tickets panel (logged-in users see their purchased tickets) ──
+function MyTicketsPanel({ userId }) {
+  const [tickets, setTickets] = useState(null);
+
+  useEffect(() => {
+    if (!userId) return;
+    fetch("/api/tickets/my")
+      .then(r => r.json())
+      .then(d => setTickets(d.tickets || []))
+      .catch(() => setTickets([]));
+  }, [userId]);
+
+  if (!tickets || tickets.length === 0) return null;
+
+  return (
+    <div style={{marginTop:32}}>
+      <h2 style={{letterSpacing:3,fontSize:14,color:"#555",marginBottom:14,textTransform:"uppercase"}}>Your Tickets</h2>
+      <div style={{display:"flex",flexDirection:"column",gap:10}}>
+        {tickets.map(t => (
+          <div key={t.id} style={{background:"#0e0e0e",border:"1px solid rgba(0,255,255,0.12)",borderRadius:12,padding:"14px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+            <div>
+              <div style={{fontWeight:700,fontSize:13,marginBottom:3}}>{t.show?.name || "Show"}</div>
+              <div style={{fontSize:11,color:"#aaa"}}>{t.show?.location}</div>
+              <div style={{fontSize:11,color:"#555",marginTop:2}}>{t.show?.date ? new Date(t.show.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"}) : ""}{t.show?.time ? ` · ${t.show.time}` : ""}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#00ffff",letterSpacing:1}}>✓ CONFIRMED</div>
+              <div style={{fontSize:11,color:"#555",marginTop:2}}>{t.quantity} ticket{t.quantity!==1?"s":""} · ${(t.priceCents/100).toFixed(2)}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const FALLBACK_EVENTS = [
   { id:"evt-1", name:"2MRRW Live – Dallas",  location:"Dallas, TX",      date:"2026-05-10", time:"8:00 PM", price:25.00, tickets:50 },
   { id:"evt-2", name:"2MRRW Live – Houston", location:"Houston, TX",     date:"2026-05-24", time:"9:00 PM", price:25.00, tickets:75 },
@@ -298,7 +881,7 @@ const liveStreamTime = nextLiveDateTime.toLocaleTimeString("en-US",{hour:"numeri
 
 const sidebarNav = [
   { groupId:"g-home",      label:"HOME",           directTab:"home",    subTabs:[] },
-  { groupId:"g-music",     label:"MUSIC",          directTab:"singles", subTabs:[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mymusic",label:"My Music Collection"}] },
+  { groupId:"g-music",     label:"MUSIC",          directTab:"singles", subTabs:[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mixtapes",label:"Mixtapes & EPs"},{id:"mymusic",label:"My Music Collection"}] },
   { groupId:"g-shop",      label:"SHOP",           directTab:"shop",    subTabs:[{id:"shop",label:"Merch"}] },
   { groupId:"g-cards",     label:"CARDS",          directTab:"cards",   subTabs:[{id:"cards",label:"Collector's Cards"}] },
   { groupId:"g-vault",     label:"VAULT",          directTab:"vault",   subTabs:[{id:"vault",label:"Exclusive Drops"}] },
@@ -414,8 +997,7 @@ function PageStorefront({ initialEvents }) {
   const singlesRowRef      = useRef(null);
   const heroContainerRef   = useRef(null);
   const heroVideoRef       = useRef(null);
-  const instantUpgradeTimerRef = useRef(null);
-  const instantUpgradeCleanupRef = useRef(null);
+
   const heroTextRef        = useRef(null);
   const heroSocialsRef     = useRef(null);
   const isMobileRef        = useRef(false);
@@ -858,54 +1440,6 @@ function PageStorefront({ initialEvents }) {
     }
   }, [activeTab]);
 
-  // Entitled full-stream tracks resolve to a signed URL that needs a network round trip;
-  // start from the (already-known, near-instant) preview and swap in the full stream as
-  // soon as the race-prefetch signals the preload element is buffered. Falls back to a
-  // 2 s timer so the upgrade still fires on slow networks where the warmup takes longer.
-  const scheduleInstantStreamUpgrade = useCallback((slug) => {
-    // Cancel any previous pending upgrade (different track played before upgrade fired).
-    instantUpgradeCleanupRef.current?.();
-
-    let fired = false;
-    const doUpgrade = () => {
-      if (fired) return;
-      fired = true;
-      const b = getPagePlaybackActionsBridge();
-      if (b?.currentTrack?.slug === slug) void b.dispatchPlaybackCommand("upgradeStream");
-    };
-
-    // Listen for the preload-ready signal emitted by AudioContext's race-prefetch.
-    const onPreloadReady = (e) => {
-      if (e.detail?.slug !== slug) return;
-      cleanup();
-      // 150 ms settle — ensures the audio element is in a stable playing state before
-      // we hand off from preview to library stream.
-      instantUpgradeTimerRef.current = setTimeout(doUpgrade, 150);
-    };
-
-    // 2 s fallback: fires if the network is slow or the preload signal never arrives.
-    const fallbackId = setTimeout(() => {
-      cleanup();
-      doUpgrade();
-    }, 2000);
-
-    window.addEventListener("2mrrw:stream-preload-ready", onPreloadReady);
-
-    const cleanup = () => {
-      window.removeEventListener("2mrrw:stream-preload-ready", onPreloadReady);
-      clearTimeout(fallbackId);
-      clearTimeout(instantUpgradeTimerRef.current);
-      instantUpgradeCleanupRef.current = null;
-    };
-
-    instantUpgradeCleanupRef.current = cleanup;
-  }, []);
-
-  useEffect(() => () => {
-    instantUpgradeCleanupRef.current?.();
-    if (instantUpgradeTimerRef.current) clearTimeout(instantUpgradeTimerRef.current);
-  }, []);
-
   const playAlbumTracks = useCallback(
     async (album, startIndex = 0, accountStateOverride) => {
       const auth = getPageAuthRef();
@@ -924,13 +1458,10 @@ function PageStorefront({ initialEvents }) {
       if (playable.length) {
         const sourceTrack = tracks[startIndex];
         const queueIndex = resolveReleaseQueueStartIndex(playable, startIndex, sourceTrack);
-        const { startTrack, needsUpgrade } = toInstantStartTrack(playable[queueIndex]);
-        const instantQueue = needsUpgrade
-          ? playable.map((t, i) => (i === queueIndex ? startTrack : t))
-          : playable;
+        const { startTrack } = toInstantStartTrack(playable[queueIndex]);
+        const instantQueue = playable.map((t, i) => (i === queueIndex ? startTrack : t));
         try {
           const result = await playQueue(instantQueue, queueIndex);
-          if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
           return result !== false;
         } catch {
           return false;
@@ -947,7 +1478,7 @@ function PageStorefront({ initialEvents }) {
         return false;
       }
     },
-    [playQueue, playTrack, scheduleInstantStreamUpgrade]
+    [playQueue, playTrack]
   );
 
   const playMixtapeEpCard = useCallback(
@@ -982,9 +1513,8 @@ function PageStorefront({ initialEvents }) {
       if (bridge?.playbackState === "idle") {
         const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_single_card");
         if (track?.src) {
-          const { startTrack, needsUpgrade } = toInstantStartTrack(track);
+          const { startTrack } = toInstantStartTrack(track);
           void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
-          if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
         }
       } else {
         void bridge?.toggle?.();
@@ -993,29 +1523,20 @@ function PageStorefront({ initialEvents }) {
     }
 
     const allSingles = surface.displaySingles || [];
-    const streamable = allSingles.filter((item) => resolveTrackAccess(item, account).canStream);
-    if (!streamable.length) {
-      const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_single_card");
-      if (track?.src) {
-        const { startTrack, needsUpgrade } = toInstantStartTrack(track);
-        void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
-        if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
-      }
-      return;
-    }
-    const idx = Math.max(0, streamable.findIndex((s) => s.slug === clickedItem.slug));
+    const streamable = allSingles.filter((item) => {
+      const access = resolveTrackAccess(item, account);
+      return access.canStream || Boolean(item.preview_path || item.previewPath || item.preview);
+    });
+    const idx = streamable.findIndex((s) => s.slug === clickedItem.slug);
+    if (idx === -1) return;
     const tracks = streamable
       .map((item) => toPlaybackTrack(withR2CatalogMedia(item), account, "home_single_card"))
       .filter((t) => t?.src);
     if (tracks.length) {
-      const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[idx]);
-      const instantTracks = needsUpgrade
-        ? tracks.map((t, i) => (i === idx ? startTrack : t))
-        : tracks;
-      void bridge?.playQueue?.(instantTracks, idx, { resumeAt: 0 });
-      if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
+      const { startTrack } = toInstantStartTrack(tracks[idx]);
+      void bridge?.playQueue?.(tracks.map((t, i) => (i === idx ? startTrack : t)), idx, { resumeAt: 0 });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const playFeaturesQueue = useCallback((e, clickedItem) => {
     e.stopPropagation();
@@ -1029,9 +1550,8 @@ function PageStorefront({ initialEvents }) {
       if (bridge?.playbackState === "idle") {
         const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_feature_card");
         if (track?.src) {
-          const { startTrack, needsUpgrade } = toInstantStartTrack(track);
+          const { startTrack } = toInstantStartTrack(track);
           void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
-          if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
         }
       } else {
         void bridge?.toggle?.();
@@ -1040,29 +1560,20 @@ function PageStorefront({ initialEvents }) {
     }
 
     const allFeatures = surface.displayFeatures || [];
-    const streamable = allFeatures.filter((item) => resolveTrackAccess(item, account).canStream);
-    if (!streamable.length) {
-      const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_feature_card");
-      if (track?.src) {
-        const { startTrack, needsUpgrade } = toInstantStartTrack(track);
-        void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
-        if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
-      }
-      return;
-    }
-    const idx = Math.max(0, streamable.findIndex((s) => s.slug === clickedItem.slug));
+    const streamable = allFeatures.filter((item) => {
+      const access = resolveTrackAccess(item, account);
+      return access.canStream || Boolean(item.preview_path || item.previewPath || item.preview);
+    });
+    const idx = streamable.findIndex((s) => s.slug === clickedItem.slug);
+    if (idx === -1) return;
     const tracks = streamable
       .map((item) => toPlaybackTrack(withR2CatalogMedia(item), account, "home_feature_card"))
       .filter((t) => t?.src);
     if (tracks.length) {
-      const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[idx]);
-      const instantTracks = needsUpgrade
-        ? tracks.map((t, i) => (i === idx ? startTrack : t))
-        : tracks;
-      void bridge?.playQueue?.(instantTracks, idx, { resumeAt: 0 });
-      if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
+      const { startTrack } = toInstantStartTrack(tracks[idx]);
+      void bridge?.playQueue?.(tracks.map((t, i) => (i === idx ? startTrack : t)), idx, { resumeAt: 0 });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const playCanonicalCatalogItem = useCallback((item, source) => {
     const auth = getPageAuthRef();
@@ -1072,13 +1583,12 @@ function PageStorefront({ initialEvents }) {
       source
     );
     if (playbackTrack?.src) {
-      const { startTrack, needsUpgrade } = toInstantStartTrack(playbackTrack);
+      const { startTrack } = toInstantStartTrack(playbackTrack);
       // resumeAt: 0 — explicit catalog tap always starts from the beginning;
       // clears any saved listening position so the track never resumes mid-way.
       void getPagePlaybackActionsBridge()?.playQueue?.([startTrack], 0, { resumeAt: 0 });
-      if (needsUpgrade) scheduleInstantStreamUpgrade(startTrack.slug);
     }
-  }, [scheduleInstantStreamUpgrade]);
+  }, []);
 
   const goRadio = useCallback((i) => {
     // phase11: startTransition — carousel index is non-urgent
@@ -1318,10 +1828,18 @@ function PageStorefront({ initialEvents }) {
     await getPageAuthRef().signOut?.();
   };
 
+  const refreshLiveEvents = useCallback(async () => {
+    try {
+      const res = await fetch("/api/shows");
+      const data = await res.json();
+      if (Array.isArray(data.shows)) setLiveEvents(data.shows);
+    } catch {}
+  }, []);
+
   const getDaysInMonth     = (m, y) => new Date(y, m+1, 0).getDate();
   const getFirstDayOfMonth = (m, y) => new Date(y, m, 1).getDay();
   const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const getShowsForDay = day => liveEvents.filter(s => { const d=new Date(s.date); return d.getFullYear()===calYear && d.getMonth()===calMonth && d.getDate()===day; });
+  const getShowsForDay = day => liveEvents.filter(s => { const d=new Date(s.date+"T12:00:00"); return d.getFullYear()===calYear && d.getMonth()===calMonth && d.getDate()===day; });
   const prevMonth = () => { if (calMonth===0) { setCalMonth(11); setCalYear(calYear-1); } else setCalMonth(calMonth-1); };
   const nextMonth = () => { if (calMonth===11) { setCalMonth(0); setCalYear(calYear+1); } else setCalMonth(calMonth+1); };
 
@@ -1407,6 +1925,7 @@ function PageStorefront({ initialEvents }) {
       const navGroupByTab = {
         singles: "g-music",
         albums: "g-music",
+        mixtapes: "g-music",
         mymusic: "g-music",
         shop: "g-shop",
         blog: "g-community",
@@ -1604,10 +2123,18 @@ function PageStorefront({ initialEvents }) {
           <div onClick={e=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:30,width:isMobile?"100%":360,maxWidth:isMobile?"calc(100vw - 32px)":"none",display:"flex",flexDirection:"column",gap:14}}>
             <div style={{fontSize:20,fontWeight:800,letterSpacing:2}}>{selectedEvent.name}</div>
             <div style={{fontSize:13,color:"#aaa"}}>{selectedEvent.location}</div>
-            <div style={{fontSize:13,color:"#aaa"}}>{new Date(selectedEvent.date).toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})} · {selectedEvent.time}</div>
+            <div style={{fontSize:13,color:"#aaa"}}>{new Date(selectedEvent.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}{selectedEvent.time ? ` · ${_fmtEventTime(selectedEvent.date, selectedEvent.time, selectedEvent.venueTz)}` : ""}</div>
             <div style={{fontSize:22,fontWeight:900,color:"#00ffff"}}>${selectedEvent.price.toFixed(2)}</div>
-            <div style={{fontSize:12,color:"#555"}}>{selectedEvent.tickets} tickets remaining</div>
-            <button onClick={()=>{addToCart({title:`Ticket – ${selectedEvent.name}`,slug:selectedEvent.id,cover:null,price:selectedEvent.price});setSelectedEvent(null);}} style={{width:"100%",padding:"12px 0",background:"#00ffff",color:"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:"pointer",fontSize:14}}>Add Ticket to Cart – ${selectedEvent.price.toFixed(2)}</button>
+            {selectedEvent.tickets === 0 ? (
+              <div style={{fontSize:12,color:"#ef4444",fontWeight:700,letterSpacing:2}}>SOLD OUT</div>
+            ) : selectedEvent.tickets != null ? (
+              <div style={{fontSize:12,color:"#555"}}>{selectedEvent.tickets} ticket{selectedEvent.tickets!==1?"s":""} remaining</div>
+            ) : null}
+            {selectedEvent.tickets === 0 ? (
+              <button disabled style={{width:"100%",padding:"12px 0",background:"#1a1a1a",color:"#444",fontWeight:"bold",border:"1px solid #2a2a2a",borderRadius:8,cursor:"not-allowed",fontSize:14}}>Sold Out</button>
+            ) : (
+              <TicketCheckoutButton event={selectedEvent} onClose={()=>setSelectedEvent(null)} />
+            )}
             <button onClick={()=>setSelectedEvent(null)} style={{background:"none",border:"none",color:"#555",cursor:"pointer",fontSize:12,textAlign:"center"}}>Close</button>
           </div>
         </div>
@@ -1617,12 +2144,12 @@ function PageStorefront({ initialEvents }) {
       {exclusiveModal && (
         <div onClick={()=>setExclusiveModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:20}}>
           <div onClick={e=>e.stopPropagation()} style={{background:"#0d0d0d",border:`1px solid ${exclusiveModal.badgeColor}33`,borderRadius:24,padding:isMobile?20:32,width:isMobile?"100%":380,maxWidth:isMobile?"calc(100vw - 32px)":"none",maxHeight:"88vh",overflowY:"auto",display:"flex",flexDirection:"column",gap:16,boxShadow:`0 0 60px ${exclusiveModal.badgeColor}22`}}>
-            <div style={{position:"relative"}}><img src={exclusiveModal.cover} style={{width:"100%",height:200,borderRadius:14,objectFit:"cover",display:"block"}}/><div style={{position:"absolute",top:12,left:12,background:exclusiveModal.badgeColor,color:"#000",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 10px",borderRadius:20}}>{exclusiveModal.badge}</div></div>
+            <div style={{position:"relative"}}><img src={exclusiveModal.cover} alt={exclusiveModal.title || ""} style={{width:"100%",height:200,borderRadius:14,objectFit:"cover",display:"block"}}/><div style={{position:"absolute",top:12,left:12,background:exclusiveModal.badgeColor,color:"#000",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 10px",borderRadius:20}}>{exclusiveModal.badge}</div></div>
             <div style={{fontSize:20,fontWeight:900,letterSpacing:1}}>{exclusiveModal.title}</div>
             <div style={{fontSize:12,color:"#555",letterSpacing:1}}>{exclusiveModal.subtitle}</div>
             <div style={{fontSize:13,color:"#999",lineHeight:1.8}}>{exclusiveModal.description}</div>
             <div style={{borderTop:"1px solid #1e1e1e",paddingTop:16}}>
-              <div style={{fontSize:11,color:"#555",letterSpacing:2,marginBottom:10,textTransform:"uppercase"}}>What's Included</div>
+              <div style={{fontSize:11,color:"#555",letterSpacing:2,marginBottom:10,textTransform:"uppercase"}}>What&apos;s Included</div>
               {exclusiveModal.features.map((f,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 0",fontSize:13,color:"#ccc",borderBottom:"1px solid #111"}}><span style={{color:exclusiveModal.badgeColor,fontSize:16,lineHeight:1}}>✓</span> {f}</div>)}
             </div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4}}>
@@ -1656,10 +2183,10 @@ function PageStorefront({ initialEvents }) {
         isMobile={isMobile}
         ambientRefs={ambientRefs}
       >
-      <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"100dvh",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
+      <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"calc(100dvh - var(--player-bar-inset, 0px))",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
         {/* ── DESKTOP SIDEBAR ── */}
         {!isMobile && (
-          <div style={{width:220,flexShrink:0,borderRight:"1px solid #141414",background:"rgba(4,4,4,0.9)",backdropFilter:"blur(20px)",display:"flex",flexDirection:"column",height:"100dvh",overflowY:"auto",boxShadow:"2px 0 32px rgba(0,0,0,0.5)"}}>
+          <div style={{width:220,flexShrink:0,borderRight:"1px solid #141414",background:"rgba(4,4,4,0.9)",backdropFilter:"blur(20px)",display:"flex",flexDirection:"column",height:"100%",overflowY:"auto",boxShadow:"2px 0 32px rgba(0,0,0,0.5)"}}>
             <div style={{padding:"22px 18px 18px",borderBottom:"1px solid #111",flexShrink:0}}>
               <div style={{fontSize:20,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 24px rgba(0,255,255,0.45)",marginBottom:4}}>2MRRW</div>
               <PageAuthSidebarBadge
@@ -1762,7 +2289,7 @@ function PageStorefront({ initialEvents }) {
               </div>
 
               {/* ══ MUSIC TAB ══ */}
-              {(activeTab==="singles"||activeTab==="albums"||activeTab==="mymusic") && (
+              {(activeTab==="singles"||activeTab==="albums"||activeTab==="mixtapes"||activeTab==="mymusic") && (
                 <EntitlementSurfaceIsland islandId="music-tab">
                   {(ent) => (
                     <AuthSurfaceIsland islandId="music-tab" onGiftRequest={setGiftSheetRelease}>
@@ -1819,7 +2346,7 @@ function PageStorefront({ initialEvents }) {
                     <>
                   <div style={{marginTop:8,marginBottom:0}}>
                     <div style={{display:"flex",gap:0,borderBottom:"1px solid #1a1a1a",marginBottom:24}}>
-                      {[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mymusic",label:"Collection"}].map(sub=>(
+                      {[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mixtapes",label:"Mixtapes & EPs"},{id:"mymusic",label:"Collection"}].map(sub=>(
                         <button key={sub.id} onClick={()=>switchTab(sub.id)} style={{padding:isMobile?"11px 16px":"12px 22px",background:"none",border:"none",borderBottom:activeTab===sub.id?"2px solid #00ffff":"2px solid transparent",color:activeTab===sub.id?"#00ffff":"#555",fontSize:isMobile?12:13,fontWeight:700,letterSpacing:1.5,cursor:"pointer",transition:"all 0.18s",textTransform:"uppercase",marginBottom:-1}}>
                           {sub.label}
                         </button>
@@ -1889,55 +2416,85 @@ function PageStorefront({ initialEvents }) {
               )}
 
               {/* ══ SHOWS ══ */}
-              {activeTab==="shows" && (
-                <>
-                  <h2 className="section-heading" style={{marginBottom:20}}>Shows & Events</h2>
-                  {!isMobile && (
-                    <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,padding:24,marginBottom:30}}>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
-                        <button onClick={prevMonth} style={{background:"none",border:"1px solid #333",color:"white",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontSize:16}}>‹</button>
-                        <div style={{fontSize:18,fontWeight:700,letterSpacing:3}}>{monthNames[calMonth]} {calYear}</div>
-                        <button onClick={nextMonth} style={{background:"none",border:"1px solid #333",color:"white",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontSize:16}}>›</button>
+              <AuthSurfaceIsland islandId="shows-tab">
+                {(auth) => activeTab==="shows" && (
+                  <>
+                    <h2 className="section-heading" style={{marginBottom:20}}>Shows & Events</h2>
+
+                    {auth.isAdminStable && (
+                      <InlineShowsAdmin onRefreshFanView={refreshLiveEvents} />
+                    )}
+
+                    <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?12:24,marginBottom:30}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
+                          <button onClick={prevMonth} style={{background:"none",border:"1px solid #333",color:"white",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontSize:16}}>‹</button>
+                          <div style={{fontSize:18,fontWeight:700,letterSpacing:3}}>{monthNames[calMonth]} {calYear}</div>
+                          <button onClick={nextMonth} style={{background:"none",border:"1px solid #333",color:"white",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontSize:16}}>›</button>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=><div key={d} style={{textAlign:"center",fontSize:11,color:"#555",paddingBottom:6}}>{d}</div>)}</div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
+                          {Array.from({length:getFirstDayOfMonth(calMonth,calYear)}).map((_,i)=><div key={`e-${i}`}/>)}
+                          {Array.from({length:getDaysInMonth(calMonth,calYear)}).map((_,i)=>{
+                            const day=i+1; const dayShows=getShowsForDay(day);
+                            const isToday=new Date().getDate()===day && new Date().getMonth()===calMonth && new Date().getFullYear()===calYear;
+                            return <div key={day} onClick={()=>dayShows.length>0&&setSelectedEvent(dayShows[0])} style={{minHeight:44,borderRadius:8,background:dayShows.length>0?"rgba(0,255,255,0.08)":"transparent",border:isToday?"1px solid #00ffff":dayShows.length>0?"1px solid rgba(0,255,255,0.3)":"1px solid #1a1a1a",cursor:dayShows.length>0?"pointer":"default",padding:6,display:"flex",flexDirection:"column",alignItems:"center",gap:3,transition:"0.2s"}}><span style={{fontSize:12,color:isToday?"#00ffff":"#aaa"}}>{day}</span>{dayShows.map(s=><span key={s.id} style={{fontSize:9,background:"#00ffff",color:"#000",borderRadius:4,padding:"1px 4px",fontWeight:700}}>EVENT</span>)}</div>;
+                          })}
+                        </div>
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>{["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d=><div key={d} style={{textAlign:"center",fontSize:11,color:"#555",paddingBottom:6}}>{d}</div>)}</div>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4}}>
-                        {Array.from({length:getFirstDayOfMonth(calMonth,calYear)}).map((_,i)=><div key={`e-${i}`}/>)}
-                        {Array.from({length:getDaysInMonth(calMonth,calYear)}).map((_,i)=>{
-                          const day=i+1; const dayShows=getShowsForDay(day);
-                          const isToday=new Date().getDate()===day && new Date().getMonth()===calMonth && new Date().getFullYear()===calYear;
-                          return <div key={day} onClick={()=>dayShows.length>0&&setSelectedEvent(dayShows[0])} style={{minHeight:44,borderRadius:8,background:dayShows.length>0?"rgba(0,255,255,0.08)":"transparent",border:isToday?"1px solid #00ffff":dayShows.length>0?"1px solid rgba(0,255,255,0.3)":"1px solid #1a1a1a",cursor:dayShows.length>0?"pointer":"default",padding:6,display:"flex",flexDirection:"column",alignItems:"center",gap:3,transition:"0.2s"}}><span style={{fontSize:12,color:isToday?"#00ffff":"#aaa"}}>{day}</span>{dayShows.map(s=><span key={s.id} style={{fontSize:9,background:"#00ffff",color:"#000",borderRadius:4,padding:"1px 4px",fontWeight:700}}>EVENT</span>)}</div>;
-                        })}
-                      </div>
+
+                    <h2 style={{letterSpacing:3,fontSize:14,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Upcoming Events</h2>
+                    {liveEvents.length === 0 && (
+                      <div style={{color:"#555",fontSize:13,letterSpacing:1,padding:"24px 0"}}>No upcoming shows scheduled.</div>
+                    )}
+                    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                      {liveEvents.map(evt=>{
+                        const soldOut = evt.tickets === 0;
+                        return (
+                          <div key={evt.id} style={{background:"#0e0e0e",border:`1px solid ${soldOut?"#2a1a1a":"#1e1e1e"}`,borderRadius:14,padding:isMobile?"14px":"18px 20px",display:"flex",alignItems:isMobile?"flex-start":"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",opacity:soldOut?0.7:1}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                                <div style={{fontWeight:700,fontSize:isMobile?13:15}}>{evt.name}</div>
+                                {soldOut && <div style={{fontSize:9,fontWeight:900,letterSpacing:2,padding:"2px 8px",borderRadius:20,background:"rgba(239,68,68,0.12)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.25)"}}>SOLD OUT</div>}
+                              </div>
+                              <div style={{fontSize:12,color:"#aaa"}}>{evt.location}</div>
+                              <div style={{fontSize:11,color:"#555",marginTop:2}}>{new Date(evt.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})}{evt.time ? ` · ${_fmtEventTime(evt.date, evt.time, evt.venueTz)}` : ""}</div>
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:isMobile?10:14}}>
+                              <div style={{fontSize:isMobile?15:18,fontWeight:900,color:soldOut?"#555":"#00ffff"}}>${evt.price.toFixed(2)}</div>
+                              <button
+                                onClick={()=>!soldOut&&setSelectedEvent(evt)}
+                                disabled={soldOut}
+                                onMouseEnter={soldOut?null:buttonHoverIn}
+                                onMouseLeave={soldOut?null:buttonHoverOut}
+                                style={{padding:isMobile?"9px 14px":"10px 20px",background:soldOut?"#111":"#111",color:soldOut?"#444":"white",border:`1px solid ${soldOut?"#2a2a2a":"#333"}`,borderRadius:8,cursor:soldOut?"not-allowed":"pointer",fontWeight:"bold",fontSize:isMobile?12:13,transition:"0.25s"}}
+                              >{soldOut?"Sold Out":"Get Tickets"}</button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
-                  <h2 style={{letterSpacing:3,fontSize:14,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Upcoming Events</h2>
-                  {liveEvents.length === 0 && (
-                    <div style={{color:"#555",fontSize:13,letterSpacing:1,padding:"24px 0"}}>No upcoming shows scheduled.</div>
-                  )}
-                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
-                    {liveEvents.map(evt=>(
-                      <div key={evt.id} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?"14px":"18px 20px",display:"flex",alignItems:isMobile?"flex-start":"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-                        <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:isMobile?13:15,marginBottom:4}}>{evt.name}</div><div style={{fontSize:12,color:"#aaa"}}>{evt.location}</div><div style={{fontSize:11,color:"#555",marginTop:2}}>{new Date(evt.date).toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})} · {evt.time}</div></div>
-                        <div style={{display:"flex",alignItems:"center",gap:isMobile?10:14}}><div style={{fontSize:isMobile?15:18,fontWeight:900,color:"#00ffff"}}>${evt.price.toFixed(2)}</div><button onClick={()=>setSelectedEvent(evt)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{padding:isMobile?"9px 14px":"10px 20px",background:"#111",color:"white",border:"1px solid #333",borderRadius:8,cursor:"pointer",fontWeight:"bold",fontSize:isMobile?12:13,transition:"0.25s"}}>Get Tickets</button></div>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              )}
+
+                    {auth.userId && <MyTicketsPanel userId={auth.userId} />}
+                  </>
+                )}
+              </AuthSurfaceIsland>
 
               {/* ══ LIVE ══ */}
-              {activeTab==="live" && (
-                <>
-                  <h2 className="section-heading">2MRRW LIVE</h2>
-                  <LiveCountdownProvider targetDate={nextLiveDateTime}>
-                    <LiveCountdownLiveTab
-                      isMobile={isMobile}
-                      liveStreamDate={liveStreamDate}
-                      liveStreamTime={liveStreamTime}
-                    />
-                  </LiveCountdownProvider>
-                </>
-              )}
+              <AuthSurfaceIsland islandId="live-tab">
+                {(auth) => activeTab==="live" && (
+                  <>
+                    <h2 className="section-heading">2MRRW LIVE</h2>
+                    {auth.isAdminStable && <InlineLiveAdmin />}
+                    <LiveCountdownProvider targetDate={nextLiveDateTime}>
+                      <LiveCountdownLiveTab
+                        isMobile={isMobile}
+                        liveStreamDate={liveStreamDate}
+                        liveStreamTime={liveStreamTime}
+                      />
+                    </LiveCountdownProvider>
+                  </>
+                )}
+              </AuthSurfaceIsland>
 
               {/* ══ HELP & SUPPORT ══ */}
               {activeTab==="help" && (
@@ -2014,7 +2571,7 @@ function PageStorefront({ initialEvents }) {
                     <h2 className="section-heading" style={{margin:0}}>The Circle</h2>
                     {pa.userStatus && <div style={{fontSize:10,fontWeight:900,letterSpacing:2,padding:"3px 10px",borderRadius:20,background:pa.userStatus.glow+"22",color:pa.userStatus.color,border:`1px solid ${pa.userStatus.color}44`,boxShadow:`0 0 10px ${pa.userStatus.glow}`}}>{pa.userStatus.label}</div>}
                   </div>
-                  <p style={{fontSize:13,color:"#444",marginBottom:28,lineHeight:1.8}}>This is not a comment section. It's a direct line. Ask 2MRRW anything. Share what the music means to you. Selected submissions receive an official response.</p>
+                  <p style={{fontSize:13,color:"#444",marginBottom:28,lineHeight:1.8}}>This is not a comment section. It&apos;s a direct line. Ask 2MRRW anything. Share what the music means to you. Selected submissions receive an official response.</p>
                   <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:28,marginBottom:32}}>
                     <div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Ask 2MRRW</div>
                     <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>{["question","thought","feedback","message"].map(cat=><button key={cat} onClick={()=>setCircleCategory(cat)} style={{padding:"6px 12px",fontSize:11,fontWeight:700,letterSpacing:1,cursor:"pointer",border:circleCategory===cat?"1px solid #00ffff":"1px solid #2a2a2a",borderRadius:20,background:circleCategory===cat?"rgba(0,255,255,0.1)":"transparent",color:circleCategory===cat?"#00ffff":"#555",textTransform:"uppercase",transition:"0.2s"}}>{cat}</button>)}</div>
@@ -2029,7 +2586,7 @@ function PageStorefront({ initialEvents }) {
                   <div style={{display:"flex",flexDirection:"column",gap:16,marginBottom:36}}>
                     {circleResponses.map(resp=>(
                       <div key={resp.id} style={{background:resp.highlight?"linear-gradient(135deg,#0d0d0d,#111)":"#0a0a0a",border:resp.highlight?`1px solid ${resp.tagColor}33`:"1px solid #1a1a1a",borderRadius:18,padding:isMobile?18:24,boxShadow:resp.highlight?`0 0 30px ${resp.tagColor}10`:"none"}}>
-                        <div style={{marginBottom:16}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><div style={{width:28,height:28,borderRadius:"50%",background:"#1a1a1a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#555",fontWeight:700,flexShrink:0}}>{resp.questionBy[0]}</div><div><div style={{fontSize:12,fontWeight:700,color:"#aaa"}}>{resp.questionBy}</div><div style={{fontSize:10,color:"#444"}}>{resp.questionTime}</div></div></div><div style={{fontSize:14,color:"#888",lineHeight:1.7,fontStyle:"italic"}}>"{resp.question}"</div></div>
+                        <div style={{marginBottom:16}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><div style={{width:28,height:28,borderRadius:"50%",background:"#1a1a1a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#555",fontWeight:700,flexShrink:0}}>{resp.questionBy[0]}</div><div><div style={{fontSize:12,fontWeight:700,color:"#aaa"}}>{resp.questionBy}</div><div style={{fontSize:10,color:"#444"}}>{resp.questionTime}</div></div></div><div style={{fontSize:14,color:"#888",lineHeight:1.7,fontStyle:"italic"}}>&quot;{resp.question}&quot;</div></div>
                         <div style={{borderTop:"1px solid #1a1a1a",paddingTop:16}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><div style={{fontSize:11,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 10px rgba(0,255,255,0.5)"}}>2MRRW</div><div style={{fontSize:10,fontWeight:900,letterSpacing:1,padding:"2px 8px",borderRadius:10,background:resp.tagColor+"22",color:resp.tagColor,border:`1px solid ${resp.tagColor}44`}}>{resp.tag}</div></div><div style={{fontSize:14,color:"#ccc",lineHeight:1.9}}>{resp.response}</div></div>
                       </div>
                     ))}
@@ -2180,7 +2737,7 @@ function PageStorefront({ initialEvents }) {
             {cart.length===0 && <p style={{opacity:0.4,fontSize:13}}>Empty</p>}
             {cart.map((item,i)=>(
               <div key={i} style={{marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-                {item.cover && <img src={item.cover} style={{width:36,height:36,borderRadius:6,objectFit:"cover"}}/>}
+                {item.cover && <img src={item.cover} alt={item.title || ""} style={{width:36,height:36,borderRadius:6,objectFit:"cover"}}/>}
                 <span style={{fontSize:12,flex:1,lineHeight:1.4}}>{item.title}<br/><span style={{color:"#00ffff",fontSize:11}}>${item.price.toFixed(2)}</span></span>
                 <button onClick={()=>removeFromCart(i)} onMouseEnter={e=>e.currentTarget.style.color="#fff"} onMouseLeave={e=>e.currentTarget.style.color="#666"} style={{background:"none",border:"none",color:"#666",fontSize:16,cursor:"pointer",marginLeft:"auto",transition:"0.2s"}}>×</button>
               </div>

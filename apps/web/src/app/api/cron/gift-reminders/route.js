@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+﻿import { NextResponse } from "next/server";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { sendGiftReminderEmail } from "@/lib/gifts/email";
 import { buildSignedGiftReminderLink } from "@/lib/gifts/reminder-link";
+import { sendSMS } from "@/lib/server/twilio";
 
 function authorizeCron(request) {
   const secret = process.env.CRON_SECRET;
@@ -17,14 +18,14 @@ export async function GET(request) {
   }
 
   try {
-    const admin = createAdminClient();
+    const admin = getAdminClient();
     const now = new Date();
     const inFiveDays = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000).toISOString();
     const nowIso = now.toISOString();
 
     const { data: gifts, error } = await admin
       .from("gifts")
-      .select("id, recipient_email, item_title, gift_link_token, gift_link_token_hash, expires_at")
+      .select("id, recipient_email, recipient_phone, item_title, gift_link_token, gift_link_token_hash, expires_at")
       .eq("status", "pending")
       .eq("reminder_sent", false)
       .gte("expires_at", nowIso)
@@ -47,12 +48,22 @@ export async function GET(request) {
         } else {
           return { skipped: true };
         }
-        await sendGiftReminderEmail({
-          to: gift.recipient_email,
-          itemTitle: gift.item_title || "your gift",
-          giftLink,
-          expiresAt: gift.expires_at,
-        });
+        if (gift.recipient_email) {
+          await sendGiftReminderEmail({
+            to: gift.recipient_email,
+            itemTitle: gift.item_title || "your gift",
+            giftLink,
+            expiresAt: gift.expires_at,
+          });
+        }
+        if (!gift.recipient_email && gift.recipient_phone) {
+          const title = gift.item_title || "your gift";
+          const smsBody = [
+            `🎁 Reminder: you have a gift from 2MRRW — ${title}!`,
+            `Don't let it expire. Claim it here: ${giftLink}`,
+          ].join("\n");
+          await sendSMS({ to: gift.recipient_phone, body: smsBody });
+        }
         return { id: gift.id };
       })
     );

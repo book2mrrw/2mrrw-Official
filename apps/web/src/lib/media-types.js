@@ -80,9 +80,8 @@
  *   −14 LUFS target. Applied as gainLinear = 10^(gainDb/20) on mainGain.gain.
  *   Null until populated server-side; engine treats null as 0 dB (unity).
  * @property {string}             source        Origin identifier ("library", "catalog", …).
- * @property {TrackMetadata}      metadata      Access grant + preview URL + album context.
- * @property {string|null}        preview       Raw preview storage path. Use
- *   `metadata.previewSrc` for the resolved CDN URL instead.
+ * @property {TrackMetadata}      metadata      Access grant + album context.
+ * @property {string|null}        preview       Raw preview storage path.
  */
 
 /**
