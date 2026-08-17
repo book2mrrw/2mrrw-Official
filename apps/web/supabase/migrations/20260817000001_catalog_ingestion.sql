@@ -1,22 +1,15 @@
--- Catalog Ingestion: DB-driven catalog columns + catalog_tracks table.
--- Enables R2 auto-discovery to populate the catalog without code deploys.
--- Fully additive — safe to re-run.
+-- Catalog Ingestion: extend existing tables for R2 auto-ingest pipeline.
+-- catalog_tracks was created in 20260529120000 with album_slug/track_number schema;
+-- this migration ALTERS the existing table to add product_id + supporting columns
+-- rather than re-creating it (CREATE TABLE IF NOT EXISTS would silently skip).
 
--- ── Products: media path columns ─────────────────────────────────────────────
+-- ── Products: new columns ─────────────────────────────────────────────────────
+-- release_date, video_path, stream_path already exist from prior migrations.
 ALTER TABLE public.products
   ADD COLUMN IF NOT EXISTS release_type text
     CHECK (release_type IS NULL OR release_type IN ('singles','features','albums','mixtapes-and-eps')),
-  ADD COLUMN IF NOT EXISTS video_path text,
   ADD COLUMN IF NOT EXISTS image_path text,
-  ADD COLUMN IF NOT EXISTS stream_path text,
-  ADD COLUMN IF NOT EXISTS release_date date,
   ADD COLUMN IF NOT EXISTS ingested_from_r2_at timestamptz;
-
-COMMENT ON COLUMN public.products.release_type IS 'R2 folder segment: singles | features | albums | mixtapes-and-eps';
-COMMENT ON COLUMN public.products.video_path IS 'R2 key for motion cover video (videos/{type}/{slug}/)';
-COMMENT ON COLUMN public.products.image_path IS 'R2 key for static cover image (images/{type}/{slug}/)';
-COMMENT ON COLUMN public.products.stream_path IS 'R2 key for AAC stream file (streaming/{type}/{slug}/)';
-COMMENT ON COLUMN public.products.ingested_from_r2_at IS 'Timestamp of last R2 auto-ingest scan that touched this row';
 
 CREATE INDEX IF NOT EXISTS products_release_type_idx ON public.products (release_type)
   WHERE release_type IS NOT NULL;
@@ -24,38 +17,62 @@ CREATE INDEX IF NOT EXISTS products_release_type_idx ON public.products (release
 CREATE INDEX IF NOT EXISTS products_release_date_idx ON public.products (release_date DESC)
   WHERE release_date IS NOT NULL;
 
--- Backfill release_type from metadata for existing rows that have it stored in JSON.
 UPDATE public.products
 SET release_type = (metadata->>'release_type')::text
 WHERE release_type IS NULL
   AND metadata->>'release_type' IS NOT NULL
   AND metadata->>'release_type' IN ('singles','features','albums','mixtapes-and-eps');
 
--- ── Catalog Tracks ────────────────────────────────────────────────────────────
--- One row per track in a multi-track release (album, EP, mixtape).
--- Discovery: R2 folder listing under digital-assets/{type}/{albumSlug}/{trackSlug}/
-CREATE TABLE IF NOT EXISTS public.catalog_tracks (
-  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  product_id      uuid NOT NULL REFERENCES public.products(id) ON DELETE CASCADE,
-  slug            text NOT NULL,
-  title           text NOT NULL,
-  position        integer NOT NULL DEFAULT 1,
-  storage_path    text,
-  preview_path    text,
-  stream_path     text,
-  duration_seconds integer,
-  metadata        jsonb NOT NULL DEFAULT '{}'::jsonb,
-  created_at      timestamptz NOT NULL DEFAULT now(),
-  updated_at      timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (product_id, slug)
-);
+-- ── catalog_tracks: extend for R2 auto-ingest ────────────────────────────────
+-- Existing schema: album_slug NOT NULL, track_number NOT NULL, slug, title,
+--   display_title, storage_path, preview_path, stream_path, stream_key.
+-- We make album_slug + track_number nullable (ingest rows won't have them)
+-- then add product_id FK, position, metadata, duration_seconds.
+
+ALTER TABLE public.catalog_tracks
+  ALTER COLUMN album_slug DROP NOT NULL,
+  ALTER COLUMN track_number DROP NOT NULL;
+
+ALTER TABLE public.catalog_tracks
+  ADD COLUMN IF NOT EXISTS product_id uuid REFERENCES public.products(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS position integer NOT NULL DEFAULT 1,
+  ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS duration_seconds integer;
+
+-- Backfill position from track_number for existing rows.
+UPDATE public.catalog_tracks
+SET position = track_number
+WHERE track_number IS NOT NULL;
+
+-- Backfill product_id by matching album_slug → products.slug.
+UPDATE public.catalog_tracks ct
+SET product_id = p.id
+FROM public.products p
+WHERE ct.album_slug = p.slug
+  AND ct.product_id IS NULL;
+
+-- Unique index used as ON CONFLICT target in the ingest upsert route.
+-- NULLs are always distinct in PostgreSQL unique indexes, so legacy rows
+-- with NULL product_id never conflict with each other or with new ingest rows.
+CREATE UNIQUE INDEX IF NOT EXISTS catalog_tracks_product_slug_unique
+  ON public.catalog_tracks (product_id, slug);
 
 CREATE INDEX IF NOT EXISTS catalog_tracks_product_position_idx
-  ON public.catalog_tracks (product_id, position);
+  ON public.catalog_tracks (product_id, position)
+  WHERE product_id IS NOT NULL;
+
 CREATE INDEX IF NOT EXISTS catalog_tracks_slug_idx
   ON public.catalog_tracks (slug);
 
-ALTER TABLE public.catalog_tracks ENABLE ROW LEVEL SECURITY;
+-- ── RLS policy ────────────────────────────────────────────────────────────────
+-- Legacy rows (product_id IS NULL) remain fully public as before.
+-- New ingest rows (product_id IS NOT NULL) gated on products.active = true.
+DROP POLICY IF EXISTS "catalog_tracks_public_read" ON public.catalog_tracks;
+CREATE POLICY "catalog_tracks_public_read" ON public.catalog_tracks
+  FOR SELECT USING (
+    product_id IS NULL
+    OR product_id IN (SELECT id FROM public.products WHERE active = true)
+  );
 
 DROP POLICY IF EXISTS "catalog_tracks_admin_all" ON public.catalog_tracks;
 CREATE POLICY "catalog_tracks_admin_all" ON public.catalog_tracks
@@ -65,15 +82,6 @@ CREATE POLICY "catalog_tracks_admin_all" ON public.catalog_tracks
   WITH CHECK (EXISTS (
     SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin'
   ));
-
-DROP POLICY IF EXISTS "catalog_tracks_public_read" ON public.catalog_tracks;
-CREATE POLICY "catalog_tracks_public_read" ON public.catalog_tracks
-  FOR SELECT USING (
-    EXISTS (
-      SELECT 1 FROM public.products p
-      WHERE p.id = catalog_tracks.product_id AND p.active = true
-    )
-  );
 
 DROP TRIGGER IF EXISTS catalog_tracks_updated_at ON public.catalog_tracks;
 CREATE TRIGGER catalog_tracks_updated_at
