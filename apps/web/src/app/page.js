@@ -1,4 +1,5 @@
 ﻿import { getAdminClient } from "@/lib/supabase/admin";
+import { getStorefrontCatalogFromDB } from "@/lib/media/catalog-db";
 import HomeClient from "./HomeClient";
 
 // Revalidate the page every hour so events stay fresh without a full rebuild.
@@ -39,6 +40,15 @@ async function fetchEvents() {
 }
 
 export default async function Page() {
-  const events = await fetchEvents();
-  return <HomeClient initialEvents={events ?? FALLBACK_EVENTS} />;
+  // Fetch in parallel — catalog DB failure is non-fatal (HomeClient falls back to hardcoded arrays).
+  const [events, initialCatalog] = await Promise.all([
+    fetchEvents(),
+    getStorefrontCatalogFromDB(),
+  ]);
+  return (
+    <HomeClient
+      initialEvents={events ?? FALLBACK_EVENTS}
+      initialCatalog={initialCatalog}
+    />
+  );
 }

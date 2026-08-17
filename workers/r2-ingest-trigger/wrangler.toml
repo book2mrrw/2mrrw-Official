@@ -1,0 +1,13 @@
+name = "2mrrw-r2-ingest-trigger"
+main = "index.js"
+compatibility_date = "2024-09-23"
+
+# Queue consumer — R2 events arrive here
+[[queues.consumers]]
+queue = "r2-ingest-events"
+max_batch_size = 100
+max_batch_timeout = 30
+
+# Secrets (set via `wrangler secret put`):
+#   ADMIN_SEED_SECRET
+#   STOREFRONT_BASE_URL

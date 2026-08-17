@@ -896,14 +896,36 @@ const blogPosts = [
 ];
 
 // ══════════════════════════════════════════════════════════════════════════════
-export default function HomeClient({ initialEvents }) {
+export default function HomeClient({ initialEvents, initialCatalog }) {
+  // Prefer DB-driven catalog when available; fall back to hardcoded inline arrays.
+  // withR2CatalogMedia resolves R2 paths to public CDN URLs for all sources.
+  const effectiveSingles =
+    initialCatalog?.singles?.length > 0
+      ? initialCatalog.singles.map((r) => withR2CatalogMedia(r))
+      : INLINE_SINGLES;
+
+  const effectiveFeatures =
+    initialCatalog?.features?.length > 0
+      ? initialCatalog.features.map((r) => withR2CatalogMedia(r))
+      : INLINE_FEATURES;
+
+  const effectiveAlbums =
+    initialCatalog?.albums?.length > 0
+      ? initialCatalog.albums.map((r) => withR2CatalogMedia(r))
+      : INLINE_ALBUMS;
+
+  const effectiveMixtapes =
+    initialCatalog?.mixtapes?.length > 0
+      ? initialCatalog.mixtapes.map((r) => withR2CatalogMedia(r))
+      : INLINE_MIXTAPES_AND_EPS;
+
   return (
     <CatalogSurfaceProvider
-      initialSingles={singles}
-      inlineSingles={INLINE_SINGLES}
-      inlineFeatures={INLINE_FEATURES}
-      inlineAlbums={INLINE_ALBUMS}
-      inlineMixtapesAndEps={INLINE_MIXTAPES_AND_EPS}
+      initialSingles={effectiveSingles}
+      inlineSingles={effectiveSingles}
+      inlineFeatures={effectiveFeatures}
+      inlineAlbums={effectiveAlbums}
+      inlineMixtapesAndEps={effectiveMixtapes}
     >
       <PageStorefront initialEvents={initialEvents} />
     </CatalogSurfaceProvider>
