@@ -153,6 +153,58 @@ export function attachTransportCommands(self) {
           return false;
         }
       }
+      // Pre-play URL refresh: if the stream URL is about to expire (or already has),
+      // refresh it while the audio element is still paused. audio.load() on a paused
+      // element fires no "pause" event, so skipPauseInterruptionRef is not needed here
+      // and there is no play→load→play stutter. If the refresh fails, we fall through
+      // and attempt playback with the existing URL.
+      const meta = streamMetaRef.current;
+      const slug = meta?.slug || parseStreamSlugFromSrc(track.src) || track.slug;
+      if (slug && meta && streamUrlNeedsRefresh(meta) && !isLibraryStreamRedirectSrc(meta.url)) {
+        try {
+          const savedPosition = audio.currentTime || 0;
+          const data = await fetchLibraryStream(slug, { force: false });
+          if (stateRef.current.currentTrack?.slug !== track.slug) return false;
+          streamMetaRef.current = {
+            ...meta,
+            url: data.url,
+            fetchedAt: Date.now(),
+            expiresIn: data.expiresIn || 3600,
+            streamEventId: data.streamEventId || meta.streamEventId,
+            sessionId: data.sessionId || meta.sessionId,
+          };
+          // audio is paused here — audio.load() fires no pause event, no stutter
+          await waitAudioSrcReady(audio, data.url, { signal: activeStreamAbortRef.current?.signal });
+          if (stateRef.current.currentTrack?.slug !== track.slug) return false;
+          if (savedPosition > 0) {
+            const seekToSaved = () => {
+              if (savedPosition > 0 && isFinite(audio.duration)) {
+                audio.currentTime = Math.min(savedPosition, Math.max(0, audio.duration - 0.25));
+              }
+            };
+            if (isFinite(audio.duration) && audio.duration > 0) {
+              seekToSaved();
+            } else {
+              audio.addEventListener("loadedmetadata", seekToSaved, { once: true });
+            }
+          }
+        } catch (refreshErr) {
+          reportPlaybackDiagnostic({
+            level: "warn",
+            code: "RESUME_PRE_REFRESH_FAILED",
+            command: PLAYBACK_COMMANDS.RESUME,
+            requestId: activeCommandRef.current?.requestId || null,
+            state: stateRef.current,
+            error: refreshErr,
+            context: {
+              visibility: typeof document !== "undefined" ? document.visibilityState : null,
+              source: stateRef.current?.source || null,
+            },
+          });
+          // Fall through — attempt playback with the existing URL
+        }
+      }
+
       const played = await playAudioIfNotPaused(audio, true, {
         command: PLAYBACK_COMMANDS.RESUME,
         requestId: activeCommandRef.current?.requestId || null,
@@ -173,68 +225,6 @@ export function attachTransportCommands(self) {
         accessDenied: false,
         hasStarted: true,
       });
-
-      const meta = streamMetaRef.current;
-      const slug = meta?.slug || parseStreamSlugFromSrc(track.src) || track.slug;
-      if (slug && meta && streamUrlNeedsRefresh(meta) && !isLibraryStreamRedirectSrc(meta.url)) {
-        const refreshTrackSlug = track?.slug;
-        void (async () => {
-          try {
-            const data = await fetchLibraryStream(slug, { force: false });
-            // Bail if the user skipped to a different track while the URL refresh was in flight.
-            if (stateRef.current.currentTrack?.slug !== refreshTrackSlug) return;
-            streamMetaRef.current = {
-              ...meta,
-              url: data.url,
-              fetchedAt: Date.now(),
-              expiresIn: data.expiresIn || 3600,
-              streamEventId: data.streamEventId || meta.streamEventId,
-              sessionId: data.sessionId || meta.sessionId,
-            };
-            const resumeAt = audio.currentTime || 0;
-            // Capture playing state BEFORE waitAudioSrcReady — that function calls
-            // audio.load() which pauses the element, so checking !audio.paused after
-            // the await always returns false and play() would never be called.
-            const wasPlaying = !audio.paused;
-            // Guard: only set skipPauseInterruptionRef when the element is currently
-            // playing. audio.load() fires a "pause" event ONLY when transitioning from
-            // non-paused → paused. If the element is already paused, no "pause" event
-            // fires and the flag is never consumed, leaking into the next user tap —
-            // silently swallowing it (the modal auto-play starts-then-stops bug).
-            // Pattern mirrors FIX 2 (PlaybackStreamCommands.js:122) and FIX 15 (line 513).
-            if (!audio.paused) self._deps.skipPauseInterruptionRef.current = true;
-            await waitAudioSrcReady(audio, data.url, { signal: activeStreamAbortRef.current?.signal });
-            // Check again after the async src-ready wait
-            if (stateRef.current.currentTrack?.slug !== refreshTrackSlug) return;
-            if (resumeAt > 0) {
-              const seekAfterLoad = () => {
-                if (resumeAt > 0 && isFinite(audio.duration)) {
-                  audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
-                }
-              };
-              if (isFinite(audio.duration) && audio.duration > 0) {
-                seekAfterLoad();
-              } else {
-                audio.addEventListener("loadedmetadata", seekAfterLoad, { once: true });
-              }
-            }
-            if (wasPlaying || stateRef.current.isPlaying) await playAudioIfNotPaused(audio, stateRef.current.isPlaying);
-          } catch (error) {
-            reportPlaybackDiagnostic({
-              level: "warn",
-              code: "RESUME_STREAM_REFRESH_FAILED",
-              command: PLAYBACK_COMMANDS.RESUME,
-              requestId: activeCommandRef.current?.requestId || null,
-              state: stateRef.current,
-              error,
-              context: {
-                visibility: typeof document !== "undefined" ? document.visibilityState : null,
-                source: stateRef.current?.source || null,
-              },
-            });
-          }
-        })();
-      }
 
       return true;
     } catch (err) {

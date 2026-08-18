@@ -93,6 +93,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
     return (
       <video
         ref={videoRef}
+        data-single-carousel
         src={coverVideoSrc || undefined}
         poster={mediaItem.cover || undefined}
         autoPlay
