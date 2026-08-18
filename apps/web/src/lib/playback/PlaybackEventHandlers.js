@@ -439,7 +439,9 @@ export function createPlaybackEventHandlers({
       if (gain && ctx) {
         const now = ctx.currentTime;
         gain.gain.cancelScheduledValues(now);
-        gain.gain.setValueAtTime(userVolumeRef.current, now);
+        gain.gain.setValueAtTime(0, now);
+        // Ramp back over 80 ms — inaudible while paused, prevents gain-snap pop
+        gain.gain.linearRampToValueAtTime(userVolumeRef.current, now + 0.08);
       }
     }
     const userInitiated = userPausedRef.current;
@@ -687,14 +689,16 @@ export function createPlaybackEventHandlers({
         previewFadeInitRef.current = false;
         skipPauseInterruptionRef.current = true;
         audio.pause();
-        // Restore gain after pause — gain is at 0 from the ramp at this point;
-        // restoring before pause would snap volume back up and cause a click.
+        // Restore gain after pause. Pin to 0 first so any residual ramp drift
+        // doesn't create a discontinuity, then ramp back over 80 ms — inaudible
+        // while the element is paused, and eliminates the post-fade pop.
         const gain = userGainRef.current;
         const ctx = audioCtxRef.current;
         if (gain && ctx) {
           const now = ctx.currentTime;
           gain.gain.cancelScheduledValues(now);
-          gain.gain.setValueAtTime(userVolumeRef.current, now);
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(userVolumeRef.current, now + 0.08);
         }
         syncProgressTime(0);
         patchState({
@@ -781,6 +785,19 @@ export function createPlaybackEventHandlers({
         pendingSessionUpgradeRef.current = null;
         void dispatchPlaybackCommandRef.current?.("upgradeStream");
         return;
+      }
+      // Restore gain if the preview fade was in progress when the file ended naturally
+      // (file shorter than PREVIEW_HARD_CAP_SEC). Same pop-free ramp used by the hard cap.
+      if (previewFadeInitRef.current) {
+        previewFadeInitRef.current = false;
+        const gain = userGainRef.current;
+        const ctx = audioCtxRef.current;
+        if (gain && ctx) {
+          const now = ctx.currentTime;
+          gain.gain.cancelScheduledValues(now);
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(userVolumeRef.current, now + 0.08);
+        }
       }
       stopProgressRaf();
       stopPositionSaveTimer();
