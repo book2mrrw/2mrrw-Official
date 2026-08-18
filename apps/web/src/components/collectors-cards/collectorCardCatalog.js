@@ -1,3 +1,5 @@
+import { visualDiscoveryUrl } from "@/lib/media/canonical-paths";
+
 /** Static catalog for /collectors-cards — artwork paths match site albums. */
 
 const R2 = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
