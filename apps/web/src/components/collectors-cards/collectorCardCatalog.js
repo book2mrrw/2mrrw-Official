@@ -1,6 +1,6 @@
-import { visualDiscoveryUrl } from "@/lib/media/canonical-paths";
-
 /** Static catalog for /collectors-cards — artwork paths match site albums. */
+
+const R2 = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
 
 export const COLLECTOR_CARD_BENEFITS = [
   "Hand Signed",
@@ -22,9 +22,7 @@ export const COLLECTOR_CARDS_CATALOG = [
     price: 89.99,
     editionSize: 200,
     accentColor: "#00ffff",
-    artwork: visualDiscoveryUrl("mixtape", "tbh", {
-      legacyImage: "images/mixtapes-and-eps/tbh/tbh.jpg",
-    }),
+    artwork: `${R2}/images/mixtapes-and-eps/tbh/tbh.jpg`,
     faceType: "image",
   },
   {
@@ -35,9 +33,7 @@ export const COLLECTOR_CARDS_CATALOG = [
     price: 99.99,
     editionSize: 200,
     accentColor: "#ff6b35",
-    artwork: visualDiscoveryUrl("mixtape", "ad", {
-      legacyImage: "images/mixtapes-and-eps/ad/ad.jpg",
-    }),
+    artwork: `${R2}/images/mixtapes-and-eps/ad/ad.jpg`,
     faceType: "image",
   },
   {
