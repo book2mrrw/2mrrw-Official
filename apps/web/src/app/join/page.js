@@ -6,6 +6,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { validateEmail } from "@/lib/auth/validation";
 
+const VALID_GENDERS = ["male", "female"];
+const VALID_AGE_RANGES = ["18-25", "25-40", "40-65"];
+
 const inputStyle = {
   padding: "12px 14px",
   background: "#111",
@@ -16,6 +19,7 @@ const inputStyle = {
   outline: "none",
   width: "100%",
   boxSizing: "border-box",
+  fontFamily: "inherit",
 };
 
 function validatePassword(pw) {
@@ -29,6 +33,33 @@ function validatePhone(ph) {
   return { ok: true, value: ph.trim() };
 }
 
+function SegmentedPicker({ label, options, value, onChange }) {
+  return (
+    <div>
+      <div style={{ fontSize: 11, color: "#666", marginBottom: 8, letterSpacing: 1 }}>{label}</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {options.map(opt => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            style={{
+              flex: "1 1 0", minWidth: 0, padding: "10px 8px", borderRadius: 10, border: "1px solid",
+              borderColor: value === opt.value ? "#00ffff" : "#2a2a2a",
+              background: value === opt.value ? "rgba(0,255,255,0.08)" : "#111",
+              color: value === opt.value ? "#00ffff" : "#777",
+              fontWeight: value === opt.value ? 700 : 400,
+              fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function JoinForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
@@ -40,6 +71,10 @@ function JoinForm() {
   const [password,    setPassword]    = useState("");
   const [confirm,     setConfirm]     = useState("");
   const [phone,       setPhone]       = useState("");
+  const [city,        setCity]        = useState("");
+  const [state,       setState]       = useState("");
+  const [gender,      setGender]      = useState("");
+  const [ageRange,    setAgeRange]    = useState("");
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState("");
   const [emailError,  setEmailError]  = useState("");
@@ -57,7 +92,6 @@ function JoinForm() {
       .then(d => {
         if (d?.gift) {
           setGiftPreview(d);
-          // Pre-fill the email field with the recipient address from the gift record
           if (d.gift.recipient_email) setEmail(d.gift.recipient_email);
         }
       })
@@ -72,48 +106,42 @@ function JoinForm() {
 
     const emailCheck = validateEmail(email);
     const passCheck  = validatePassword(password);
-    // Phone is required for standard signups (needed for SMS 2FA) but optional for gift
-    // recipients — they prove email ownership via the gift link in their inbox.
     const phoneTrimmed = phone.trim();
     const phoneCheck = (giftToken && !phoneTrimmed) ? { ok: true, value: null } : validatePhone(phone);
 
-    if (!emailCheck.ok) setEmailError(emailCheck.error);
-    if (!passCheck.ok)  setPassError(passCheck.error);
-    if (password && confirm && password !== confirm) setConfError("Passwords do not match");
-    if (!phoneCheck.ok) setPhoneError(phoneCheck.error);
-    if (!emailCheck.ok || !passCheck.ok || (password && confirm && password !== confirm) || !phoneCheck.ok) return;
+    let hasError = false;
+    if (!emailCheck.ok)  { setEmailError(emailCheck.error); hasError = true; }
+    if (!passCheck.ok)   { setPassError(passCheck.error); hasError = true; }
+    if (password && confirm && password !== confirm) { setConfError("Passwords do not match"); hasError = true; }
+    if (!phoneCheck.ok)  { setPhoneError(phoneCheck.error); hasError = true; }
+    if (!city.trim())    { setError("City is required"); hasError = true; }
+    if (!state.trim())   { setError("State is required"); hasError = true; }
+    if (!VALID_GENDERS.includes(gender))    { setError("Please select your gender"); hasError = true; }
+    if (!VALID_AGE_RANGES.includes(ageRange)) { setError("Please select your age range"); hasError = true; }
+    if (hasError) return;
 
     if (inFlightRef.current || loading) return;
     inFlightRef.current = true;
     setLoading(true);
 
     try {
-      // Gift signup path — server creates account with email already confirmed so no
-      // second confirmation email is sent. The gift link arriving in the inbox proves
-      // ownership of the address.
       if (giftToken) {
         const res = await fetch("/api/gifts/claim-signup", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({
-            email:    emailCheck.value,
-            password,
-            name:     name.trim() || undefined,
-            phone:    phoneCheck.value,
-            giftToken,
+            email: emailCheck.value, password,
+            name: name.trim() || undefined,
+            phone: phoneCheck.value,
+            giftToken, city: city.trim(), state: state.trim(), gender, age_range: ageRange,
           }),
         });
         const data = await res.json();
         if (!res.ok) {
-          if (data.existsHint) {
-            setExistsHint(true);
-            setError(data.error || "An account with this email already exists. Sign in instead.");
-          } else if (data.error === "email_mismatch") {
-            setEmailError(data.message || "This gift was sent to a different email address.");
-          } else {
-            setError(data.error || "Sign up failed");
-          }
+          if (data.existsHint) { setExistsHint(true); setError(data.error || "An account with this email already exists. Sign in instead."); }
+          else if (data.error === "email_mismatch") { setEmailError(data.message || "This gift was sent to a different email address."); }
+          else { setError(data.error || "Sign up failed"); }
           return;
         }
         await applySessionUser(data.session);
@@ -122,27 +150,21 @@ function JoinForm() {
         return;
       }
 
-      // Standard signup — server creates account with email already confirmed,
-      // signs in immediately, and returns the session. No confirmation email.
       const res = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
-          email: emailCheck.value,
-          password,
-          name:  name.trim() || undefined,
+          email: emailCheck.value, password,
+          name: name.trim() || undefined,
           phone: phoneCheck.value,
+          city: city.trim(), state: state.trim(), gender, age_range: ageRange,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
-        if (data.existsHint) {
-          setExistsHint(true);
-          setError(data.error || "An account with this email already exists. Sign in instead.");
-        } else {
-          setError(data.error || "Sign up failed");
-        }
+        if (data.existsHint) { setExistsHint(true); setError(data.error || "An account with this email already exists. Sign in instead."); }
+        else { setError(data.error || "Sign up failed"); }
         return;
       }
       await applySessionUser(data.session);
@@ -160,7 +182,7 @@ function JoinForm() {
     <main style={{ minHeight: "100vh", background: "#050505", color: "white", display: "grid", placeItems: "center", padding: 24, fontFamily: "sans-serif" }}>
       <form
         onSubmit={submit}
-        style={{ width: "100%", maxWidth: 420, background: "#0d0d0d", border: "1px solid #222", borderRadius: 20, padding: 28, display: "flex", flexDirection: "column", gap: 12 }}
+        style={{ width: "100%", maxWidth: 440, background: "#0d0d0d", border: "1px solid #222", borderRadius: 20, padding: 28, display: "flex", flexDirection: "column", gap: 14 }}
       >
         <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: 6, color: "#00ffff" }}>2MRRW</div>
 
@@ -172,11 +194,9 @@ function JoinForm() {
           </div>
         ) : null}
 
-        <h1 style={{ margin: "6px 0 0", fontSize: 24 }}>Join 2MRRW</h1>
-        <p style={{ margin: "0 0 8px", color: "#888", fontSize: 14, lineHeight: 1.6 }}>
-          Create your account with email and password.
-        </p>
+        <h1 style={{ margin: "2px 0 0", fontSize: 22 }}>Join 2MRRW</h1>
 
+        {/* Name */}
         <input
           placeholder="Full Name (optional)"
           type="text"
@@ -185,6 +205,7 @@ function JoinForm() {
           style={inputStyle}
         />
 
+        {/* Email */}
         <div>
           <input
             placeholder="Email"
@@ -197,11 +218,13 @@ function JoinForm() {
           {emailError ? <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>{emailError}</div> : null}
         </div>
 
+        {/* Password */}
         <div>
           <input
             placeholder="Password (min 8 characters)"
             type="password"
             value={password}
+            autoComplete="new-password"
             onChange={e => { setPassword(e.target.value); if (passError) setPassError(""); }}
             required
             style={{ ...inputStyle, borderColor: passError ? "#ef4444" : "#2a2a2a" }}
@@ -209,11 +232,13 @@ function JoinForm() {
           {passError ? <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>{passError}</div> : null}
         </div>
 
+        {/* Confirm password */}
         <div>
           <input
             placeholder="Confirm password"
             type="password"
             value={confirm}
+            autoComplete="new-password"
             onChange={e => { setConfirm(e.target.value); if (confError) setConfError(""); }}
             required
             style={{ ...inputStyle, borderColor: confError ? "#ef4444" : "#2a2a2a" }}
@@ -221,6 +246,7 @@ function JoinForm() {
           {confError ? <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>{confError}</div> : null}
         </div>
 
+        {/* Phone */}
         <div>
           <input
             placeholder={giftToken ? "Phone number (optional)" : "Phone number"}
@@ -232,9 +258,46 @@ function JoinForm() {
           />
           {phoneError
             ? <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>{phoneError}</div>
-            : <div style={{ color: "#555", fontSize: 11, marginTop: 6 }}>{giftToken ? "Optional — add later in your account settings." : "Used to receive your login codes via SMS."}</div>
+            : <div style={{ color: "#555", fontSize: 11, marginTop: 4 }}>{giftToken ? "Optional — add later in settings." : "For SMS login codes."}</div>
           }
         </div>
+
+        {/* City + State */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: 10 }}>
+          <input
+            placeholder="City"
+            type="text"
+            value={city}
+            onChange={e => setCity(e.target.value)}
+            required
+            style={inputStyle}
+          />
+          <input
+            placeholder="State"
+            type="text"
+            value={state}
+            onChange={e => setState(e.target.value.toUpperCase().slice(0, 2))}
+            required
+            maxLength={2}
+            style={{ ...inputStyle, textTransform: "uppercase" }}
+          />
+        </div>
+
+        {/* Gender */}
+        <SegmentedPicker
+          label="GENDER"
+          options={[{ value: "male", label: "Male" }, { value: "female", label: "Female" }]}
+          value={gender}
+          onChange={setGender}
+        />
+
+        {/* Age range */}
+        <SegmentedPicker
+          label="AGE RANGE"
+          options={VALID_AGE_RANGES.map(r => ({ value: r, label: r }))}
+          value={ageRange}
+          onChange={setAgeRange}
+        />
 
         {error ? <div style={{ color: "#ff4d4d", fontSize: 13 }}>{error}</div> : null}
         {existsHint ? (
@@ -246,7 +309,7 @@ function JoinForm() {
         <button
           type="submit"
           disabled={loading}
-          style={{ padding: "13px 0", background: "#00ffff", color: "#000", fontWeight: 900, border: "none", borderRadius: 10, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1 }}
+          style={{ padding: "13px 0", background: "#00ffff", color: "#000", fontWeight: 900, border: "none", borderRadius: 10, cursor: loading ? "wait" : "pointer", opacity: loading ? 0.7 : 1, fontFamily: "inherit" }}
         >
           {loading ? "Creating account…" : "Create Account"}
         </button>

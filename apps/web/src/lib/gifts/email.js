@@ -43,8 +43,15 @@ function buildGiftEmailHtml({ itemTitle, message, giftLink, expiresAt, coverUrl 
     ? `<p style="margin:20px 0 0;font-size:15px;line-height:1.7;color:#d4c4ff;font-style:italic;">&ldquo;${escapeHtml(message.trim())}&rdquo;</p>`
     : "";
   const absoluteCover = absoluteUrl(coverUrl);
+  // Cover art is intentionally blurred — creates mystery and drives the click.
+  // filter:blur is supported by Gmail, Apple Mail, and modern mobile clients.
   const artBlock = absoluteCover
-    ? `<img src="${escapeHtml(absoluteCover)}" alt="" width="280" height="280" style="display:block;width:min(280px,88vw);height:auto;aspect-ratio:1;border-radius:16px;margin:0 auto 24px;border:1px solid rgba(162,89,255,0.35);box-shadow:0 24px 60px rgba(0,0,0,0.55);" />`
+    ? `<div style="position:relative;width:min(280px,88vw);margin:0 auto 24px;border-radius:16px;overflow:hidden;border:1px solid rgba(162,89,255,0.35);box-shadow:0 24px 60px rgba(0,0,0,0.55);">
+        <img src="${escapeHtml(absoluteCover)}" alt="" width="280" height="280" style="display:block;width:100%;height:auto;aspect-ratio:1;filter:blur(12px) brightness(0.7) saturate(0.8);transform:scale(1.08);" />
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+          <span style="font-size:13px;font-weight:900;letter-spacing:2px;color:rgba(255,255,255,0.85);text-transform:uppercase;text-shadow:0 2px 12px rgba(0,0,0,0.8);">Open to reveal</span>
+        </div>
+       </div>`
     : `<div style="width:200px;height:200px;margin:0 auto 24px;border-radius:16px;background:linear-gradient(135deg,#1a1030,#0a0a12);border:1px solid rgba(162,89,255,0.35);"></div>`;
 
   return `<!DOCTYPE html>

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { email: rawEmail, password, name, phone } = body;
+    const { email: rawEmail, password, name, phone, city, state, gender, age_range } = body;
 
     const emailCheck = validateEmail(rawEmail);
     if (!emailCheck.ok) return NextResponse.json({ error: emailCheck.error }, { status: 400 });
@@ -51,6 +51,8 @@ export async function POST(req) {
 
     const newUser = userData.user;
 
+    const VALID_GENDERS = ["male", "female"];
+    const VALID_AGE_RANGES = ["18-25", "25-40", "40-65"];
     await admin.from("profiles").upsert(
       {
         id: newUser.id,
@@ -58,6 +60,10 @@ export async function POST(req) {
         phone: String(phone || "").trim() || null,
         full_name: String(name || "").trim() || "",
         phone_verified: Boolean(String(phone || "").trim()),
+        city: String(city || "").trim() || null,
+        state: String(state || "").trim() || null,
+        gender: VALID_GENDERS.includes(gender) ? gender : null,
+        age_range: VALID_AGE_RANGES.includes(age_range) ? age_range : null,
         role: "user",
       },
       { onConflict: "id" }

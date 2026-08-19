@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { email: rawEmail, password, name, phone, giftToken } = body;
+    const { email: rawEmail, password, name, phone, giftToken, city, state, gender, age_range } = body;
 
     const rl = await checkRateLimit(req, {
       routeKey: "gifts.claim-signup",
@@ -43,9 +43,9 @@ export async function POST(req) {
     if (!gift) return NextResponse.json({ error: "Gift not found" }, { status: 404 });
 
     gift = await expireGiftIfNeeded(gift);
-    const { state } = giftPublicState(gift);
-    if (state !== "valid") {
-      return NextResponse.json({ error: `Gift is ${state}` }, { status: 410 });
+    const { state: giftState } = giftPublicState(gift);
+    if (giftState !== "valid") {
+      return NextResponse.json({ error: `Gift is ${giftState}` }, { status: 410 });
     }
 
     // The gift token landing in the recipient's inbox proves email ownership,
@@ -81,6 +81,8 @@ export async function POST(req) {
 
     const newUser = userData.user;
 
+    const VALID_GENDERS = ["male", "female"];
+    const VALID_AGE_RANGES = ["18-25", "25-40", "40-65"];
     await admin.from("profiles").upsert(
       {
         id: newUser.id,
@@ -88,6 +90,10 @@ export async function POST(req) {
         phone: String(phone || "").trim() || null,
         full_name: String(name || "").trim() || "",
         phone_verified: Boolean(String(phone || "").trim()),
+        city: String(city || "").trim() || null,
+        state: String(state || "").trim() || null,
+        gender: VALID_GENDERS.includes(gender) ? gender : null,
+        age_range: VALID_AGE_RANGES.includes(age_range) ? age_range : null,
         role: "user",
       },
       { onConflict: "id" }
