@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import Link from "next/link";
 
 export default function AnalyticsDashboard({ isMobile }) {
   const [data, setData] = useState(null);
@@ -20,10 +21,29 @@ export default function AnalyticsDashboard({ isMobile }) {
     <div style={{ padding: 24, color: "#ff8a8a", fontSize: 13 }}>{error}</div>
   );
 
-  const { tracks = [], totals = { plays: 0, purchases: 0 } } = data || {};
+  const { tracks = [], totals = { plays: 0, purchases: 0 }, overview } = data || {};
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Full dashboard link */}
+      <Link href="/admin/analytics" style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between",
+        padding: "14px 18px",
+        background: "rgba(0,255,255,0.05)",
+        border: "1px solid rgba(0,255,255,0.2)",
+        borderRadius: 12,
+        textDecoration: "none",
+      }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#00ffff" }}>Full Analytics Dashboard</div>
+          <div style={{ fontSize: 11, color: "#555", marginTop: 3 }}>
+            Fan demographics · Geography · Growth · Tracks
+            {overview?.totalFans ? ` · ${overview.totalFans.toLocaleString()} total fans` : ""}
+          </div>
+        </div>
+        <span style={{ fontSize: 18, color: "#00ffff" }}>→</span>
+      </Link>
+
       {/* Totals */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
         {[
