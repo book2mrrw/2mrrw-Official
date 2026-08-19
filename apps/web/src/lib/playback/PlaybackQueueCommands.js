@@ -160,6 +160,10 @@ export function attachQueueCommands(self) {
     return self.playTrackInternal(normalized[index], {
       ...options,
       preserveActiveStream: Boolean(options.preserveActiveStream),
+      // An explicit playQueue intent always starts from 0 unless the caller passes an
+      // explicit resumeAt (e.g. session-restore). Without this, getSavedPlaybackPosition
+      // silently restores a stale mid-track position when the user taps "Play All".
+      resumeAt: options.resumeAt != null ? options.resumeAt : 0,
     });
   };
 }

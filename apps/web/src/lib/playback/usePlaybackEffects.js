@@ -515,7 +515,7 @@ export function usePlaybackEffects({
       queueRef, queueIndexRef, repeatModeRef, shuffleRef, csModeRef,
       stopAfterEachTrackRef: refs.stopAfterEachTrackRef, onPreviewEndedRef: refs.onPreviewEndedRef,
       spuriousEndedGuardRef: refs.spuriousEndedGuardRef, sleepTimerRef: refs.sleepTimerRef,
-      userVolumeRef: refs.userVolumeRef,
+      userVolumeRef: refs.userVolumeRef, listeningUserIdRef: refs.listeningUserIdRef,
       // Callbacks
       patchState, syncProgressTime, syncPositionState,
       startProgressRaf, stopProgressRaf, startKeepAlivePing, stopKeepAlivePing,

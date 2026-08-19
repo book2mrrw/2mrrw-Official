@@ -1009,7 +1009,21 @@ export function attachStreamCommands(self) {
           void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: false });
           return false;
         }
-        pendingSeekRef.current = resumeAt;
+        // Apply position restore directly — audio.duration is available at readyState >= 1
+        // (canplay fires after loadedmetadata, so duration is always known here).
+        // The previous loadedmetadata listener approach silently failed because the event
+        // had already fired by the time the listener was registered.
+        if (resumeAt) {
+          const dur = isFinite(audio.duration) ? audio.duration : 0;
+          const safe = dur > 0 ? clampRestorePosition(resumeAt, dur) : null;
+          if (safe != null && Math.abs(audio.currentTime - safe) > 0.5) {
+            audio.currentTime = safe;
+            spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
+          } else if (safe == null && userId && streamSlug) {
+            clearPlaybackPosition(userId, streamSlug);
+          }
+        }
+        pendingSeekRef.current = null;
       } else {
         if (!audio.paused) {
           const audible = isAudioActuallyAudible({
@@ -1039,29 +1053,6 @@ export function attachStreamCommands(self) {
 
       applyCsToElement(audio, presentation, pendingSeekRef.current || null);
       if (requestId !== playRequestIdRef.current) return false;
-
-      if (pendingSeekRef.current) {
-        const pendingSnapshot = pendingSeekRef.current;
-        let pendingSeekTimeoutId = null;
-        const applyPendingSeek = () => {
-          clearTimeout(pendingSeekTimeoutId);
-          if (pendingSnapshot != null && isFinite(audio.duration) && audio.duration > 0) {
-            const safe = clampRestorePosition(pendingSnapshot, audio.duration);
-            if (safe != null) {
-              audio.currentTime = safe;
-            } else if (listeningUserIdRef.current && nextTrack.slug) {
-              clearPlaybackPosition(listeningUserIdRef.current, nextTrack.slug);
-            }
-            spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
-          }
-          pendingSeekRef.current = null;
-        };
-        audio.addEventListener("loadedmetadata", applyPendingSeek, { once: true });
-        pendingSeekTimeoutId = setTimeout(
-          () => audio.removeEventListener("loadedmetadata", applyPendingSeek),
-          5000
-        );
-      }
 
       // Same-track resume: restore userGain if a preview fade left it faded to 0.
       // New-track path already reset gain before waitAudioSrcReady.

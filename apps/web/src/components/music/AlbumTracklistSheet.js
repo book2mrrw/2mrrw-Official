@@ -136,17 +136,19 @@ export default function AlbumTracklistSheet({
     if (startTrack?.src) void hintUpcomingPlay(startTrack);
   }, [open, tracks, accountState, userId, isAdmin, isPlaying, hintUpcomingPlay]);
 
-  // Auto-play track 1 when sheet opens — only if nothing from this album is already playing.
+  // Auto-play track 1 when sheet opens — only if the global player is completely idle.
+  // If anything is playing (even a different release), the sheet opens in browse mode
+  // without interrupting playback. This matches Spotify/Apple Music: opening an album
+  // sheet never replaces an active queue; only an explicit tap triggers playback.
   // autoPlayedRef blocks re-fire if deps change while the sheet stays open.
   useEffect(() => {
     if (!open || autoPlayedRef.current || !tracks.length) return;
-    const alreadyPlayingThisAlbum = isPlaying && tracks.some((t) => isTrackActive(t));
-    if (alreadyPlayingThisAlbum) return;
+    if (isPlaying) return;
     const hasPlayable = tracks.some((t) => Boolean(t.src));
     if (!hasPlayable) return;
     autoPlayedRef.current = true;
     playTrackInSheet(0);
-  }, [open, tracks, isTrackActive, isPlaying, playTrackInSheet]);
+  }, [open, tracks, isPlaying, playTrackInSheet]);
 
   // Play All / Shuffle close the sheet after queuing.
   const playAndClose = useCallback(

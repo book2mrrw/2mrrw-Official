@@ -29,7 +29,9 @@ import {
   waitAudioSrcReady,
   playAudioIfNotPaused,
   RESTORE_NEAR_END_BUFFER_SEC,
+  isNearEndRestorePosition,
 } from "@/lib/audio/audio-element-utils";
+import { savePlaybackPosition } from "@/lib/playback/position-memory";
 import { updateAudibilitySample } from "@/lib/playback/audibility";
 
 import { dispatchPreviewEnded } from "@/lib/playback/playback-track-utils";
@@ -177,6 +179,7 @@ export function createPlaybackEventHandlers({
   spuriousEndedGuardRef,
   sleepTimerRef,
   userVolumeRef,
+  listeningUserIdRef,
 
   // Callbacks (useCallback from AudioContext.js)
   patchState,
@@ -582,6 +585,19 @@ export function createPlaybackEventHandlers({
 
     stopKeepAlivePing();
     stopProgressRaf();
+    // Save position on OS-initiated pauses (phone call, headphone disconnect, interruption)
+    // before the interval timer is cleared. User-initiated pauses skip this because the
+    // 15s timer already covers them and a redundant save adds no value.
+    if (!userInitiated && !wasViewportPause && !skipPauseInterruptionRef.current) {
+      const osTrack = stateRef.current.currentTrack;
+      const osUserId = listeningUserIdRef.current;
+      if (osTrack?.slug && osUserId && isFinite(audio.duration) && audio.duration > 0) {
+        const osPos = audio.currentTime || 0;
+        if (!isNearEndRestorePosition(osPos, audio.duration)) {
+          savePlaybackPosition(osUserId, osTrack.slug, osPos, audio.duration);
+        }
+      }
+    }
     stopPositionSaveTimer();
     // If the Recovery Coordinator is managing an active transition — stall recovery,
     // stream upgrade, or signed-URL swap — this pause is part of a controlled handoff.

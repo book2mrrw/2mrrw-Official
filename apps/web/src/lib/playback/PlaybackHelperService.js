@@ -297,7 +297,9 @@ export function createPlaybackHelpers(initialDeps) {
         });
       }
 
-      // Release freeze when audio + UI intent match snapshot.
+      // Release freeze when audio + UI intent match snapshot, when the audio element
+      // has errored (stream failed while backgrounded), or after 30s maximum duration
+      // so a stuck freeze never leaves the UI permanently wrong.
       if (
         self._deps.continuityFrozenRef.current &&
         self._deps.continuitySnapshotRef.current
@@ -305,12 +307,17 @@ export function createPlaybackHelpers(initialDeps) {
         const currentSnap = self._deps.continuitySnapshotRef.current;
         const el = self._deps.audioRef.current;
         const stateIntentIsPlaying = self._deps.stateRef.current.isPlaying;
+        const frozenTooLong =
+          currentSnap.timestamp != null &&
+          Date.now() - currentSnap.timestamp > 30_000;
         const shouldRelease =
-          Boolean(el) &&
+          frozenTooLong ||
+          Boolean(el?.error) ||
+          (Boolean(el) &&
           transport.intact &&
           !el.paused &&
           !el.ended &&
-          stateIntentIsPlaying === currentSnap.isPlaying;
+          stateIntentIsPlaying === currentSnap.isPlaying);
 
         if (shouldRelease) {
           self.setContinuityFrozenUi(false);
