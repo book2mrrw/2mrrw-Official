@@ -1,0 +1,115 @@
+import { NextResponse } from "next/server";
+import { getFanSessionUser } from "@/lib/auth/session-user";
+import { isAdminUser } from "@/lib/auth/constants";
+import { createR2SignedPutUrl } from "@/lib/storage/r2";
+import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+
+export const dynamic = "force-dynamic";
+
+const SLUG_RE = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
+
+const ASSET_CONFIGS = {
+  audio:       { maxBytes: 2_000_000_000, types: ["audio/wav","audio/x-wav","audio/flac","audio/aiff","audio/x-aiff"], expiresIn: 900 },
+  cover:       { maxBytes:    20_000_000, types: ["image/jpeg","image/png","image/webp"],                               expiresIn: 600 },
+  "cover-mp4": { maxBytes:   500_000_000, types: ["video/mp4"],                                                        expiresIn: 900 },
+  preview:     { maxBytes:    50_000_000, types: ["audio/mpeg","audio/mp3","audio/wav","audio/x-wav"],                 expiresIn: 600 },
+};
+
+const RELEASE_TYPE_FOLDERS = {
+  single:  "singles",
+  feature: "features",
+  album:   "albums",
+  ep:      "mixtapes-and-eps",
+  mixtape: "mixtapes-and-eps",
+};
+
+function buildR2Key(releaseType, slug, assetType, filename, trackSlug) {
+  const folder = RELEASE_TYPE_FOLDERS[releaseType];
+  if (!folder) return null;
+
+  const ext = (filename || "").split(".").pop().toLowerCase() || "wav";
+
+  switch (assetType) {
+    case "audio":
+      if (trackSlug) return `digital-assets/${folder}/${slug}/${trackSlug}/${trackSlug}.${ext}`;
+      return `digital-assets/${folder}/${slug}/${slug}.${ext}`;
+    case "cover":
+      return `images/${folder}/${slug}/${slug}.${ext}`;
+    case "cover-mp4":
+      return `videos/${folder}/${slug}/${slug}.mp4`;
+    case "preview":
+      if (trackSlug) return `previews/${folder}/${slug}/${trackSlug}/${trackSlug}-preview.${ext}`;
+      return `previews/${folder}/${slug}/${slug}-preview.${ext}`;
+    default:
+      return null;
+  }
+}
+
+export async function POST(req) {
+  const user = await getFanSessionUser();
+  if (!user || !isAdminUser(user)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rl = await checkRateLimit(req, {
+    routeKey: "admin.upload.presigned",
+    limit: 30,
+    windowSeconds: 60,
+    identifier: user.id,
+  });
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
+
+  let body;
+  try { body = await req.json(); } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const { releaseType, slug, assetType, filename, contentType, size, trackSlug } = body;
+
+  // Validate release type
+  if (!RELEASE_TYPE_FOLDERS[releaseType]) {
+    return NextResponse.json({ error: "Invalid releaseType" }, { status: 400 });
+  }
+
+  // Validate slug (path traversal protection)
+  if (!slug || !SLUG_RE.test(slug)) {
+    return NextResponse.json({ error: "Invalid slug — must be lowercase alphanumeric with hyphens" }, { status: 400 });
+  }
+  if (trackSlug && !SLUG_RE.test(trackSlug)) {
+    return NextResponse.json({ error: "Invalid trackSlug" }, { status: 400 });
+  }
+
+  // Validate asset type
+  const assetConfig = ASSET_CONFIGS[assetType];
+  if (!assetConfig) {
+    return NextResponse.json({ error: `Invalid assetType — must be one of: ${Object.keys(ASSET_CONFIGS).join(", ")}` }, { status: 400 });
+  }
+
+  // Validate content type
+  if (!assetConfig.types.includes(contentType)) {
+    return NextResponse.json({ error: `Content type ${contentType} not allowed for ${assetType}` }, { status: 400 });
+  }
+
+  // Validate file size
+  if (size && size > assetConfig.maxBytes) {
+    const mb = Math.round(assetConfig.maxBytes / 1_000_000);
+    return NextResponse.json({ error: `File too large — max ${mb}MB for ${assetType}` }, { status: 400 });
+  }
+
+  const key = buildR2Key(releaseType, slug, assetType, filename, trackSlug);
+  if (!key) {
+    return NextResponse.json({ error: "Could not build R2 key" }, { status: 400 });
+  }
+
+  try {
+    const uploadUrl = await createR2SignedPutUrl(key, contentType, assetConfig.expiresIn);
+    const expiresAt = new Date(Date.now() + assetConfig.expiresIn * 1000).toISOString();
+
+    console.info(`[admin/upload/presigned] user=${user.id} key=${key} type=${assetType}`);
+
+    return NextResponse.json({ uploadUrl, key, expiresAt });
+  } catch (err) {
+    console.error("[admin/upload/presigned] R2 presign error", err?.message);
+    return NextResponse.json({ error: "Failed to generate upload URL" }, { status: 500 });
+  }
+}
