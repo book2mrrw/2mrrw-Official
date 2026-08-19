@@ -17,6 +17,12 @@ export async function POST(req) {
     if (!password || password.length < 8) {
       return NextResponse.json({ error: "Password must be at least 8 characters" }, { status: 400 });
     }
+    if (!country || !String(country).trim()) {
+      return NextResponse.json({ error: "Country is required" }, { status: 400 });
+    }
+    if (String(country).trim() === "United States" && !String(state || "").trim()) {
+      return NextResponse.json({ error: "State is required for U.S. locations" }, { status: 400 });
+    }
 
     const email = emailCheck.value;
 

@@ -6,8 +6,44 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { validateEmail } from "@/lib/auth/validation";
 
-const VALID_GENDERS = ["male", "female"];
+const VALID_GENDERS   = ["male", "female"];
 const VALID_AGE_RANGES = ["18-25", "25-40", "40-65"];
+
+// Countries list — United States always first so it's the default expected selection.
+// The rest are alphabetical UN member states + common territories.
+const COUNTRIES = [
+  "United States",
+  "Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda",
+  "Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain",
+  "Bangladesh","Barbados","Belarus","Belgium","Belize","Benin","Bhutan",
+  "Bolivia","Bosnia and Herzegovina","Botswana","Brazil","Brunei","Bulgaria",
+  "Burkina Faso","Burundi","Cabo Verde","Cambodia","Cameroon","Canada",
+  "Central African Republic","Chad","Chile","China","Colombia","Comoros",
+  "Congo","Costa Rica","Croatia","Cuba","Cyprus","Czech Republic","Denmark",
+  "Djibouti","Dominica","Dominican Republic","Ecuador","Egypt","El Salvador",
+  "Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia","Fiji",
+  "Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece",
+  "Grenada","Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras",
+  "Hungary","Iceland","India","Indonesia","Iran","Iraq","Ireland","Israel",
+  "Italy","Jamaica","Japan","Jordan","Kazakhstan","Kenya","Kiribati","Kuwait",
+  "Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya",
+  "Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia",
+  "Maldives","Mali","Malta","Marshall Islands","Mauritania","Mauritius",
+  "Mexico","Micronesia","Moldova","Monaco","Mongolia","Montenegro","Morocco",
+  "Mozambique","Myanmar","Namibia","Nauru","Nepal","Netherlands","New Zealand",
+  "Nicaragua","Niger","Nigeria","North Korea","North Macedonia","Norway",
+  "Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay",
+  "Peru","Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda",
+  "Saint Kitts and Nevis","Saint Lucia","Saint Vincent and the Grenadines",
+  "Samoa","San Marino","Sao Tome and Principe","Saudi Arabia","Senegal",
+  "Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia",
+  "Solomon Islands","Somalia","South Africa","South Korea","South Sudan",
+  "Spain","Sri Lanka","Sudan","Suriname","Sweden","Switzerland","Syria",
+  "Taiwan","Tajikistan","Tanzania","Thailand","Timor-Leste","Togo","Tonga",
+  "Trinidad and Tobago","Tunisia","Turkey","Turkmenistan","Tuvalu","Uganda",
+  "Ukraine","United Arab Emirates","United Kingdom","Uruguay","Uzbekistan",
+  "Vanuatu","Vatican City","Venezuela","Vietnam","Yemen","Zambia","Zimbabwe",
+];
 
 const inputStyle = {
   padding: "12px 14px",
@@ -20,6 +56,18 @@ const inputStyle = {
   width: "100%",
   boxSizing: "border-box",
   fontFamily: "inherit",
+};
+
+const selectStyle = {
+  ...inputStyle,
+  appearance: "none",
+  WebkitAppearance: "none",
+  MozAppearance: "none",
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23666' d='M5 6L0 0h10z'/%3E%3C/svg%3E")`,
+  backgroundRepeat: "no-repeat",
+  backgroundPosition: "right 14px center",
+  paddingRight: 38,
+  cursor: "pointer",
 };
 
 function validatePassword(pw) {
@@ -71,9 +119,9 @@ function JoinForm() {
   const [password,    setPassword]    = useState("");
   const [confirm,     setConfirm]     = useState("");
   const [phone,       setPhone]       = useState("");
-  const [city,        setCity]        = useState("");
-  const [state,       setState]       = useState("");
   const [country,     setCountry]     = useState("");
+  const [city,        setCity]        = useState("");
+  const [stateField,  setStateField]  = useState("");
   const [gender,      setGender]      = useState("");
   const [ageRange,    setAgeRange]    = useState("");
   const [loading,     setLoading]     = useState(false);
@@ -85,6 +133,9 @@ function JoinForm() {
   const [existsHint,  setExistsHint]  = useState(false);
   const [giftPreview, setGiftPreview] = useState(null);
   const inFlightRef  = useRef(false);
+
+  // Derived: United States requires a 2-letter state for city disambiguation
+  const isUS = country === "United States";
 
   useEffect(() => {
     if (!giftToken) return;
@@ -99,31 +150,44 @@ function JoinForm() {
       .catch(() => {});
   }, [giftToken]);
 
+  // Clear state field when switching away from US to avoid stale 2-char value
+  useEffect(() => {
+    if (!isUS) setStateField("");
+  }, [isUS]);
+
   const nextPath = giftToken ? `/gift/${giftToken}` : "/?tab=mymusic";
 
   const submit = async (e) => {
     e.preventDefault();
     setError(""); setEmailError(""); setPassError(""); setConfError(""); setPhoneError(""); setExistsHint(false);
 
-    const emailCheck = validateEmail(email);
-    const passCheck  = validatePassword(password);
+    const emailCheck   = validateEmail(email);
+    const passCheck    = validatePassword(password);
     const phoneTrimmed = phone.trim();
-    const phoneCheck = (giftToken && !phoneTrimmed) ? { ok: true, value: null } : validatePhone(phone);
+    const phoneCheck   = (giftToken && !phoneTrimmed) ? { ok: true, value: null } : validatePhone(phone);
 
     let hasError = false;
     if (!emailCheck.ok)  { setEmailError(emailCheck.error); hasError = true; }
     if (!passCheck.ok)   { setPassError(passCheck.error); hasError = true; }
     if (password && confirm && password !== confirm) { setConfError("Passwords do not match"); hasError = true; }
     if (!phoneCheck.ok)  { setPhoneError(phoneCheck.error); hasError = true; }
+    if (!country)        { setError("Please select your country"); hasError = true; }
     if (!city.trim())    { setError("City is required"); hasError = true; }
-    if (!country.trim()) { setError("Country is required"); hasError = true; }
-    if (!VALID_GENDERS.includes(gender))    { setError("Please select your gender"); hasError = true; }
+    // State is required only inside the U.S. — same cities exist across states
+    if (isUS && !stateField.trim()) { setError("State is required for U.S. locations"); hasError = true; }
+    if (!VALID_GENDERS.includes(gender))      { setError("Please select your gender"); hasError = true; }
     if (!VALID_AGE_RANGES.includes(ageRange)) { setError("Please select your age range"); hasError = true; }
     if (hasError) return;
 
     if (inFlightRef.current || loading) return;
     inFlightRef.current = true;
     setLoading(true);
+
+    const locationPayload = {
+      country: country.trim(),
+      city: city.trim(),
+      state: stateField.trim() || null,
+    };
 
     try {
       if (giftToken) {
@@ -135,14 +199,16 @@ function JoinForm() {
             email: emailCheck.value, password,
             name: name.trim() || undefined,
             phone: phoneCheck.value,
-            giftToken, city: city.trim(), state: state.trim(), country: country.trim(), gender, age_range: ageRange,
+            giftToken,
+            ...locationPayload,
+            gender, age_range: ageRange,
           }),
         });
         const data = await res.json();
         if (!res.ok) {
-          if (data.existsHint) { setExistsHint(true); setError(data.error || "An account with this email already exists. Sign in instead."); }
+          if (data.existsHint)          { setExistsHint(true); setError(data.error || "An account with this email already exists. Sign in instead."); }
           else if (data.error === "email_mismatch") { setEmailError(data.message || "This gift was sent to a different email address."); }
-          else { setError(data.error || "Sign up failed"); }
+          else                          { setError(data.error || "Sign up failed"); }
           return;
         }
         await applySessionUser(data.session);
@@ -159,13 +225,14 @@ function JoinForm() {
           email: emailCheck.value, password,
           name: name.trim() || undefined,
           phone: phoneCheck.value,
-          city: city.trim(), state: state.trim(), country: country.trim(), gender, age_range: ageRange,
+          ...locationPayload,
+          gender, age_range: ageRange,
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         if (data.existsHint) { setExistsHint(true); setError(data.error || "An account with this email already exists. Sign in instead."); }
-        else { setError(data.error || "Sign up failed"); }
+        else                 { setError(data.error || "Sign up failed"); }
         return;
       }
       await applySessionUser(data.session);
@@ -263,8 +330,23 @@ function JoinForm() {
           }
         </div>
 
-        {/* City + State */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: 10 }}>
+        {/* Country — dropdown, required */}
+        <div>
+          <select
+            value={country}
+            onChange={e => setCountry(e.target.value)}
+            required
+            style={{ ...selectStyle, color: country ? "white" : "#555" }}
+          >
+            <option value="" disabled>Select your country</option>
+            {COUNTRIES.map(c => (
+              <option key={c} value={c} style={{ background: "#111", color: "white" }}>{c}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* City + State — state required only for U.S. */}
+        <div style={{ display: "grid", gridTemplateColumns: isUS ? "1fr 80px" : "1fr", gap: 10 }}>
           <input
             placeholder="City"
             type="text"
@@ -273,25 +355,28 @@ function JoinForm() {
             required
             style={inputStyle}
           />
-          <input
-            placeholder="State"
-            type="text"
-            value={state}
-            onChange={e => setState(e.target.value.toUpperCase().slice(0, 2))}
-            maxLength={2}
-            style={{ ...inputStyle, textTransform: "uppercase" }}
-          />
+          {isUS && (
+            <input
+              placeholder="State"
+              type="text"
+              value={stateField}
+              onChange={e => setStateField(e.target.value.toUpperCase().slice(0, 2))}
+              required
+              maxLength={2}
+              style={{ ...inputStyle, textTransform: "uppercase" }}
+            />
+          )}
         </div>
-
-        {/* Country */}
-        <input
-          placeholder="Country"
-          type="text"
-          value={country}
-          onChange={e => setCountry(e.target.value)}
-          required
-          style={inputStyle}
-        />
+        {/* Non-US: optional province/region */}
+        {!isUS && country && (
+          <input
+            placeholder="State / Province (optional)"
+            type="text"
+            value={stateField}
+            onChange={e => setStateField(e.target.value)}
+            style={inputStyle}
+          />
+        )}
 
         {/* Gender */}
         <SegmentedPicker
