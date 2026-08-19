@@ -7,6 +7,18 @@ import { geoNaturalEarth1, geoPath, geoGraticule } from "d3-geo";
 import { feature as topoFeature } from "topojson-client";
 import worldTopo from "world-atlas/countries-110m.json";
 
+// ─── Mobile breakpoint hook ───────────────────────────────────────────────────
+function useIsMobile(bp = 768) {
+  const [mobile, setMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setMobile(window.innerWidth < bp);
+    check();
+    window.addEventListener("resize", check, { passive: true });
+    return () => window.removeEventListener("resize", check);
+  }, [bp]);
+  return mobile;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 const ADMIN_EMAIL = "book2mrrw@gmail.com";
 const MAP_W = 960, MAP_H = 460;
@@ -569,9 +581,10 @@ function CountryPanel({ country, data, onClose }) {
           </div>
         </div>
         <button onClick={onClose} style={{
-          background: "none", border: `1px solid ${C.border}`, borderRadius: 8,
-          color: C.muted, fontSize: 12, padding: "5px 12px", cursor: "pointer",
-          fontFamily: "inherit",
+          background: "rgba(0,255,255,0.06)", border: `1px solid rgba(0,255,255,0.18)`,
+          borderRadius: 8, color: C.accent, fontSize: 11, fontWeight: 700,
+          padding: "8px 14px", cursor: "pointer", fontFamily: "inherit",
+          letterSpacing: 1, flexShrink: 0,
         }}>
           ← World
         </button>
@@ -775,6 +788,7 @@ function GeographyTable({ data, onCountryClick }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function AdminGlobalAnalytics() {
   const router = useRouter();
+  const isMobile = useIsMobile(768);
   const [ready, setReady] = useState(false);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -814,60 +828,82 @@ export default function AdminGlobalAnalytics() {
   if (!ready) return <div style={{ minHeight: "100vh", background: C.bg }} />;
 
   const ov = data?.overview || {};
+  const pad = isMobile ? "0 16px" : "0 28px";
+  const bodyPad = isMobile ? "18px 16px 80px" : "28px 28px 60px";
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text, fontFamily: "system-ui,-apple-system,sans-serif" }}>
-      {/* Nav */}
+      {/* ── Sticky nav ───────────────────────────────────────────────────────── */}
       <div style={{
         position: "sticky", top: 0, zIndex: 100,
         background: "rgba(5,5,5,0.96)", backdropFilter: "blur(24px)",
         borderBottom: `1px solid ${C.border}`,
       }}>
-        <div style={{ maxWidth: 1400, margin: "0 auto", padding: "0 28px", display: "flex", alignItems: "center", gap: 20, height: 54 }}>
-          <div style={{ fontSize: 13, fontWeight: 900, letterSpacing: 5, color: C.accent }}>2MRRW</div>
-          <div style={{ width: 1, height: 18, background: C.border }} />
-          <div style={{ fontSize: 13, color: C.muted, fontWeight: 500 }}>Global Analytics</div>
+        {/* Primary row */}
+        <div style={{ maxWidth: 1400, margin: "0 auto", padding: pad, display: "flex", alignItems: "center", gap: 14, height: 50 }}>
+          <a href="/" style={{ fontSize: 12, fontWeight: 900, letterSpacing: 5, color: C.accent, textDecoration: "none" }}>2MRRW</a>
+          <div style={{ width: 1, height: 16, background: C.border, flexShrink: 0 }} />
+          {!isMobile && <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, whiteSpace: "nowrap" }}>Global Analytics</div>}
           {selectedCountry && (
             <>
-              <div style={{ fontSize: 13, color: C.dim }}>›</div>
-              <div style={{ fontSize: 13, color: C.text, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}>
-                <span>{flag(selectedCountry.a2)}</span> {selectedCountry.name}
+              {!isMobile && <div style={{ fontSize: 12, color: C.dim }}>›</div>}
+              <div style={{ fontSize: 12, color: C.text, fontWeight: 600, display: "flex", alignItems: "center", gap: 5, minWidth: 0 }}>
+                <span>{flag(selectedCountry.a2)}</span>
+                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{selectedCountry.name}</span>
               </div>
             </>
           )}
+          {!selectedCountry && isMobile && (
+            <div style={{ fontSize: 12, color: C.muted, fontWeight: 500 }}>Global Analytics</div>
+          )}
           <div style={{ flex: 1 }} />
-          {/* Map mode toggle */}
-          <div style={{ display: "flex", gap: 1, background: C.surface2, borderRadius: 8, padding: 3 }}>
-            {["DOTS","HEAT","GROWTH"].map(mode => (
-              <button key={mode} onClick={() => setMapMode(mode)} style={{
-                background: mapMode === mode ? C.surface3 : "none",
-                border: mapMode === mode ? `1px solid ${C.border}` : "1px solid transparent",
-                borderRadius: 6, padding: "4px 12px", fontSize: 10, fontWeight: 700,
-                color: mapMode === mode ? C.accent : C.muted, cursor: "pointer",
-                fontFamily: "inherit", letterSpacing: 1.5,
-              }}>
-                {mode}
-              </button>
-            ))}
-          </div>
+          {/* Map mode toggle — hidden on mobile (dots is fine by default) */}
+          {!isMobile && (
+            <div style={{ display: "flex", gap: 1, background: C.surface2, borderRadius: 8, padding: 3 }}>
+              {["DOTS","HEAT","GROWTH"].map(mode => (
+                <button key={mode} onClick={() => setMapMode(mode)} style={{
+                  background: mapMode === mode ? C.surface3 : "none",
+                  border: mapMode === mode ? `1px solid ${C.border}` : "1px solid transparent",
+                  borderRadius: 6, padding: "4px 10px", fontSize: 9, fontWeight: 700,
+                  color: mapMode === mode ? C.accent : C.muted, cursor: "pointer",
+                  fontFamily: "inherit", letterSpacing: 1.5,
+                }}>{mode}</button>
+              ))}
+            </div>
+          )}
           <button onClick={load} style={{
             background: "none", border: `1px solid ${C.border}`, borderRadius: 8,
-            color: C.muted, fontSize: 12, padding: "5px 14px", cursor: "pointer",
-            fontFamily: "inherit",
+            color: C.muted, fontSize: 11, padding: isMobile ? "5px 10px" : "5px 14px",
+            cursor: "pointer", fontFamily: "inherit", flexShrink: 0,
           }}>
-            ↺ Refresh
+            {isMobile ? "↺" : "↺ Refresh"}
           </button>
         </div>
+        {/* Mobile map mode row */}
+        {isMobile && (
+          <div style={{ display: "flex", gap: 1, padding: "0 16px 8px", justifyContent: "flex-end" }}>
+            {["DOTS","HEAT","GROWTH"].map(mode => (
+              <button key={mode} onClick={() => setMapMode(mode)} style={{
+                background: mapMode === mode ? "rgba(0,255,255,0.08)" : "none",
+                border: mapMode === mode ? `1px solid rgba(0,255,255,0.22)` : `1px solid ${C.border}`,
+                borderRadius: 6, padding: "3px 10px", fontSize: 9, fontWeight: 700,
+                color: mapMode === mode ? C.accent : C.muted, cursor: "pointer",
+                fontFamily: "inherit", letterSpacing: 1.5,
+              }}>{mode}</button>
+            ))}
+          </div>
+        )}
       </div>
 
-      <div style={{ maxWidth: 1400, margin: "0 auto", padding: "28px 28px 60px" }}>
+      {/* ── Body ─────────────────────────────────────────────────────────────── */}
+      <div style={{ maxWidth: 1400, margin: "0 auto", padding: bodyPad }}>
         {loading && !data && (
-          <div style={{ textAlign: "center", padding: "120px 0", color: C.muted, fontSize: 14 }}>
+          <div style={{ textAlign: "center", padding: "100px 0", color: C.muted, fontSize: 14 }}>
             Loading global analytics…
           </div>
         )}
         {error && (
-          <div style={{ textAlign: "center", padding: "120px 0", color: C.red, fontSize: 14 }}>
+          <div style={{ textAlign: "center", padding: "100px 0", color: C.red, fontSize: 14 }}>
             {error}
           </div>
         )}
@@ -875,30 +911,35 @@ export default function AdminGlobalAnalytics() {
         {data && (
           <>
             {/* KPI strip */}
-            <div style={{ display: "flex", gap: 12, marginBottom: 24, flexWrap: "wrap" }}>
-              <KPITile label="Total Fans" value={fmt(ov.total_fans)} sub="All-time signups" color={C.accent} />
-              <KPITile label="Countries" value={fmt(ov.unique_countries)} sub="Markets reached" color={C.purple} />
-              <KPITile label="Cities" value={fmt(ov.unique_cities)} sub="Locations recorded" color={C.gold} />
-              <KPITile label="Streams" value={fmt(ov.total_streams)} sub="Geo-tagged plays" color={C.green} />
+            <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+              <KPITile label="Total Fans" value={fmt(ov.total_fans)} sub="All-time signups" color={C.accent}
+                style={{ minWidth: isMobile ? "calc(50% - 5px)" : 140 }} />
+              <KPITile label="Countries" value={fmt(ov.unique_countries)} sub="Markets reached" color={C.purple}
+                style={{ minWidth: isMobile ? "calc(50% - 5px)" : 140 }} />
+              <KPITile label="Cities" value={fmt(ov.unique_cities)} sub="Locations recorded" color={C.gold}
+                style={{ minWidth: isMobile ? "calc(50% - 5px)" : 140 }} />
+              <KPITile label="Streams" value={fmt(ov.total_streams)} sub="Geo-tagged plays" color={C.green}
+                style={{ minWidth: isMobile ? "calc(50% - 5px)" : 140 }} />
               <KPITile
-                label="This Month"
-                value={`+${fmt(data.monthly_growth?.at(-1)?.fans || 0)}`}
-                sub="New fans"
-                color={C.accent}
-              />
+                label="This Month" value={`+${fmt(data.monthly_growth?.at(-1)?.fans || 0)}`} sub="New fans" color={C.accent}
+                style={{ minWidth: isMobile ? "100%" : 140 }} />
             </div>
 
-            {/* Map + side panel */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 16, marginBottom: 20, alignItems: "start" }}>
+            {/* Map + side panel — stacks on mobile */}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "1fr 340px",
+              gap: 14, marginBottom: 18, alignItems: "start",
+            }}>
               {/* Map card */}
               <Card style={{ padding: 0, overflow: "hidden", position: "relative" }}>
-                {/* Map mode indicator */}
                 <div style={{
-                  position: "absolute", top: 14, left: 16, zIndex: 10,
-                  fontSize: 9, fontWeight: 700, letterSpacing: 3,
+                  position: "absolute", top: isMobile ? 8 : 14, left: isMobile ? 10 : 16, zIndex: 10,
+                  fontSize: 8, fontWeight: 700, letterSpacing: 3,
                   color: C.dim, textTransform: "uppercase",
                 }}>
-                  {mapMode === "DOTS" ? "Fan Locations" : mapMode === "HEAT" ? "Fan Density" : "30-Day Growth"} · Click a country to explore
+                  {mapMode === "DOTS" ? "Fan Locations" : mapMode === "HEAT" ? "Fan Density" : "30-Day Growth"}
+                  {!isMobile && " · Click a country to explore"}
                 </div>
                 <WorldMap
                   data={data}
@@ -906,10 +947,15 @@ export default function AdminGlobalAnalytics() {
                   onCountryClick={setSelectedCountry}
                   mapMode={mapMode}
                 />
+                {isMobile && (
+                  <div style={{ padding: "8px 12px", borderTop: `1px solid ${C.border}`, fontSize: 10, color: C.dim, textAlign: "center" }}>
+                    Tap a country to explore
+                  </div>
+                )}
               </Card>
 
               {/* Side panel */}
-              <Card style={{ padding: 20 }}>
+              <Card style={{ padding: isMobile ? 16 : 20 }}>
                 {selectedCountry ? (
                   <CountryPanel
                     country={selectedCountry}
@@ -923,33 +969,31 @@ export default function AdminGlobalAnalytics() {
             </div>
 
             {/* Fan growth timeline */}
-            <Card style={{ marginBottom: 20 }}>
+            <Card style={{ marginBottom: 18 }}>
               <Label>Fan Growth — Last 12 Months</Label>
-              <GrowthChart data={data.monthly_growth} height={140} />
-              <div style={{ display: "flex", gap: 32, flexWrap: "wrap", marginTop: 16 }}>
-                <div>
-                  <span style={{ fontSize: 11, color: C.muted }}>This month  </span>
-                  <span style={{ fontSize: 22, fontWeight: 900, color: C.accent, fontVariantNumeric: "tabular-nums" }}>
-                    +{fmt(data.monthly_growth?.at(-1)?.fans || 0)}
-                  </span>
-                </div>
-                <div>
-                  <span style={{ fontSize: 11, color: C.muted }}>Countries reached  </span>
-                  <span style={{ fontSize: 22, fontWeight: 900, color: C.purple, fontVariantNumeric: "tabular-nums" }}>
-                    {ov.unique_countries || 0}
-                  </span>
-                </div>
-                <div>
-                  <span style={{ fontSize: 11, color: C.muted }}>Total fanbase  </span>
-                  <span style={{ fontSize: 22, fontWeight: 900, color: C.text, fontVariantNumeric: "tabular-nums" }}>
-                    {fmt(ov.total_fans)}
-                  </span>
-                </div>
+              <GrowthChart data={data.monthly_growth} height={isMobile ? 110 : 140} />
+              <div style={{ display: "flex", gap: isMobile ? 16 : 32, flexWrap: "wrap", marginTop: 14 }}>
+                {[
+                  { label: "This month", value: `+${fmt(data.monthly_growth?.at(-1)?.fans || 0)}`, color: C.accent },
+                  { label: "Countries", value: ov.unique_countries || 0, color: C.purple },
+                  { label: "Total fanbase", value: fmt(ov.total_fans), color: C.text },
+                ].map(item => (
+                  <div key={item.label}>
+                    <span style={{ fontSize: 11, color: C.muted }}>{item.label}  </span>
+                    <span style={{ fontSize: isMobile ? 18 : 22, fontWeight: 900, color: item.color, fontVariantNumeric: "tabular-nums" }}>
+                      {item.value}
+                    </span>
+                  </div>
+                ))}
               </div>
             </Card>
 
-            {/* Geography table */}
-            <GeographyTable data={data} onCountryClick={setSelectedCountry} />
+            {/* Geography table — scrollable on mobile */}
+            <div style={{ overflowX: isMobile ? "auto" : "visible", WebkitOverflowScrolling: "touch" }}>
+              <div style={{ minWidth: isMobile ? 560 : "auto" }}>
+                <GeographyTable data={data} onCountryClick={setSelectedCountry} />
+              </div>
+            </div>
           </>
         )}
       </div>

@@ -643,6 +643,18 @@ export default function AnalyticsDashboard({ isMobile }) {
           ))}
         </div>
         <div style={{ flex:1 }} />
+        <a href="/admin/analytics" style={{
+          display:"inline-flex", alignItems:"center", gap:5,
+          background:"rgba(0,255,255,0.07)",
+          border:`1px solid rgba(0,255,255,0.22)`,
+          borderRadius:8, color:C.accent,
+          fontSize:11, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase",
+          padding:"6px 13px", cursor:"pointer", fontFamily:"inherit",
+          textDecoration:"none",
+          transition:"background 0.15s, border-color 0.15s",
+        }}>
+          Global Map ↗
+        </a>
         <button onClick={load} style={{
           background:"none",
           border:`1px solid ${C.border}`,
