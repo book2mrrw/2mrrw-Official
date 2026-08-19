@@ -46,6 +46,11 @@ export async function POST(req) {
       ? Math.max(0, Math.min(1, positionSeconds / durationSeconds))
       : null;
 
+    const ipCountry = req.headers.get("x-vercel-ip-country") || null;
+    const ipRegion = req.headers.get("x-vercel-ip-region") || null;
+    const rawIpCity = req.headers.get("x-vercel-ip-city") || null;
+    const ipCity = rawIpCity ? (() => { try { return decodeURIComponent(rawIpCity); } catch { return rawIpCity; } })() : null;
+
     const eventPayload = {
       user_id: user?.id || null,
       product_slug: slug,
@@ -54,6 +59,9 @@ export async function POST(req) {
       position_seconds: positionSeconds,
       duration_seconds: durationSeconds,
       completion_rate: completionRate,
+      country: ipCountry,
+      region: ipRegion,
+      city: ipCity,
       metadata: {
         title: body.title || null,
         source: body.source || "web-player",
