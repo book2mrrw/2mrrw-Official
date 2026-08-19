@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req) {
   try {
     const body = await req.json().catch(() => ({}));
-    const { email: rawEmail, password, name, phone, city, state, gender, age_range } = body;
+    const { email: rawEmail, password, name, phone, city, state, country, gender, age_range } = body;
 
     const emailCheck = validateEmail(rawEmail);
     if (!emailCheck.ok) return NextResponse.json({ error: emailCheck.error }, { status: 400 });
@@ -62,6 +62,7 @@ export async function POST(req) {
         phone_verified: Boolean(String(phone || "").trim()),
         city: String(city || "").trim() || null,
         state: String(state || "").trim() || null,
+        country: String(country || "").trim() || null,
         gender: VALID_GENDERS.includes(gender) ? gender : null,
         age_range: VALID_AGE_RANGES.includes(age_range) ? age_range : null,
         role: "user",

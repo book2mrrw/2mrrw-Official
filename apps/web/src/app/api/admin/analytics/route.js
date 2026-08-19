@@ -28,7 +28,7 @@ export async function GET(req) {
     admin.from("library_items").select("product_id, source, products(slug, title, cover_url)").eq("source", "purchase").limit(10000),
     admin.from("purchases").select("items, status, amount_cents").eq("status", "completed").gte("created_at", ninetyDaysAgo).limit(5000),
     admin.from("products").select("slug, title, cover_url").order("title").limit(1000),
-    admin.from("profiles").select("gender, age_range, city, state, created_at, role").limit(50000),
+    admin.from("profiles").select("gender, age_range, city, state, country, created_at, role").limit(50000),
   ]);
 
   // ─── Play stats ───────────────────────────────────────────────────────────
@@ -81,6 +81,7 @@ export async function GET(req) {
   const ageRange = { "18-25": 0, "25-40": 0, "40-65": 0, unknown: 0 };
   const stateCounts = {};
   const cityCounts = {};
+  const countryCounts = {};
   const monthCounts = {};
   let fansWithDemographics = 0;
 
@@ -103,6 +104,10 @@ export async function GET(req) {
       const key = `${p.city.trim()}|${s}`;
       cityCounts[key] = (cityCounts[key] || 0) + 1;
     }
+    if (p.country) {
+      const c = p.country.trim();
+      countryCounts[c] = (countryCounts[c] || 0) + 1;
+    }
     if (p.created_at) {
       const m = p.created_at.slice(0, 7);
       monthCounts[m] = (monthCounts[m] || 0) + 1;
@@ -119,6 +124,10 @@ export async function GET(req) {
       const [city, state] = key.split("|");
       return { city, state, count };
     });
+
+  const topCountries = Object.entries(countryCounts)
+    .sort((a, b) => b[1] - a[1]).slice(0, 50)
+    .map(([country, count]) => ({ country, count }));
 
   // Rolling 12-month fan growth
   const now = new Date();
@@ -142,7 +151,7 @@ export async function GET(req) {
       demographicsCoverage: totalFans > 0 ? Math.round((fansWithDemographics / totalFans) * 100) : 0,
     },
     demographics: { gender, ageRange },
-    geography: { topStates, topCities },
+    geography: { topStates, topCities, topCountries },
     growth: { monthly },
   }, {
     headers: { "Cache-Control": "private, max-age=120" },

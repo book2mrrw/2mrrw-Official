@@ -73,6 +73,7 @@ function JoinForm() {
   const [phone,       setPhone]       = useState("");
   const [city,        setCity]        = useState("");
   const [state,       setState]       = useState("");
+  const [country,     setCountry]     = useState("");
   const [gender,      setGender]      = useState("");
   const [ageRange,    setAgeRange]    = useState("");
   const [loading,     setLoading]     = useState(false);
@@ -115,7 +116,7 @@ function JoinForm() {
     if (password && confirm && password !== confirm) { setConfError("Passwords do not match"); hasError = true; }
     if (!phoneCheck.ok)  { setPhoneError(phoneCheck.error); hasError = true; }
     if (!city.trim())    { setError("City is required"); hasError = true; }
-    if (!state.trim())   { setError("State is required"); hasError = true; }
+    if (!country.trim()) { setError("Country is required"); hasError = true; }
     if (!VALID_GENDERS.includes(gender))    { setError("Please select your gender"); hasError = true; }
     if (!VALID_AGE_RANGES.includes(ageRange)) { setError("Please select your age range"); hasError = true; }
     if (hasError) return;
@@ -134,7 +135,7 @@ function JoinForm() {
             email: emailCheck.value, password,
             name: name.trim() || undefined,
             phone: phoneCheck.value,
-            giftToken, city: city.trim(), state: state.trim(), gender, age_range: ageRange,
+            giftToken, city: city.trim(), state: state.trim(), country: country.trim(), gender, age_range: ageRange,
           }),
         });
         const data = await res.json();
@@ -158,7 +159,7 @@ function JoinForm() {
           email: emailCheck.value, password,
           name: name.trim() || undefined,
           phone: phoneCheck.value,
-          city: city.trim(), state: state.trim(), gender, age_range: ageRange,
+          city: city.trim(), state: state.trim(), country: country.trim(), gender, age_range: ageRange,
         }),
       });
       const data = await res.json();
@@ -277,11 +278,20 @@ function JoinForm() {
             type="text"
             value={state}
             onChange={e => setState(e.target.value.toUpperCase().slice(0, 2))}
-            required
             maxLength={2}
             style={{ ...inputStyle, textTransform: "uppercase" }}
           />
         </div>
+
+        {/* Country */}
+        <input
+          placeholder="Country"
+          type="text"
+          value={country}
+          onChange={e => setCountry(e.target.value)}
+          required
+          style={inputStyle}
+        />
 
         {/* Gender */}
         <SegmentedPicker
