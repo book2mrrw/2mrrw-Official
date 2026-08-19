@@ -4,7 +4,7 @@
 // cinematic overlay with independent scroll/lock behavior (see Phase 11 Step 1).
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import CoverArt from "@/components/ui/CoverArt";
 import { markGiftRevealSeen, scheduleGiftCollectionHandoff } from "@/lib/gifts/session-keys";
 
@@ -118,6 +118,7 @@ export default function GiftRevealExperience({
   }, [phase, giftId, productSlug, onFinished, timings.dock]);
 
   return (
+    <LayoutGroup id="gift-reveal">
     <div
       className={`gift-reveal-root gift-reveal-phase-${phase}${reduced ? " gift-reveal-reduced" : ""}`}
       role="dialog"
@@ -137,6 +138,7 @@ export default function GiftRevealExperience({
 
       {showArtifact ? (
         <motion.button
+          layoutId="gift-reveal-core"
           type="button"
           className="gift-reveal-artifact"
           onClick={phase === "build" ? advanceFromBuild : undefined}
@@ -179,9 +181,9 @@ export default function GiftRevealExperience({
 
       {showArtwork ? (
         <motion.div
+          layoutId="gift-reveal-core"
           className="gift-reveal-artwork-wrap"
-          initial={{ scale: 0.35, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
+          initial={false}
           transition={{ duration: reduced ? 0.25 : 0.85, ease: [0.16, 1, 0.3, 1] }}
         >
           {coverUrl ? (
@@ -235,5 +237,6 @@ export default function GiftRevealExperience({
         </motion.div>
       ) : null}
     </div>
+    </LayoutGroup>
   );
 }
