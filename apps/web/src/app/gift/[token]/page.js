@@ -15,7 +15,7 @@ function formatDate(iso) {
 export default function GiftClaimPage() {
   const { token } = useParams();
   const router = useRouter();
-  const { refreshAccountState, signOut, user, loading: authLoading } = useAuth();
+  const { refreshAccountState, user, loading: authLoading } = useAuth();
   const [preview, setPreview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
@@ -88,6 +88,8 @@ export default function GiftClaimPage() {
       beginReveal(data);
     } catch (err) {
       setError(err.message);
+      // Allow retry — don't leave the user stuck if there was a transient network error
+      claimAttemptedRef.current = false;
     } finally {
       setClaiming(false);
     }
@@ -99,8 +101,18 @@ export default function GiftClaimPage() {
   const isRecipient = Boolean(user?.id && gift?.recipient_id === user.id);
   const revealSeen = gift?.id ? hasSeenGiftReveal(gift.id) : false;
 
+  // Detect email mismatch up-front so we never fire auto-claim against the wrong account.
+  // This prevents admin from triggering a claim attempt (and the sign-out prompt) when
+  // they open a gift link to inspect it.
+  const giftEmail = String(gift?.recipient_email || "").toLowerCase();
+  const userEmail = String(user?.email || "").toLowerCase();
+  const emailWouldMismatch = Boolean(giftEmail && userEmail && giftEmail !== userEmail);
+
   useEffect(() => {
     if (authLoading || loading || !user || !preview?.gift || revealSeen || revealPayload) return;
+    // Never auto-claim if the logged-in user is not the intended recipient.
+    // Admins and other signed-in users inspecting a gift link must not trigger a claim.
+    if (emailWouldMismatch) return;
     if (state !== "valid" && !(state === "claimed" && isRecipient)) return;
     if (claimAttemptedRef.current) return;
     claimAttemptedRef.current = true;
@@ -117,6 +129,7 @@ export default function GiftClaimPage() {
     revealPayload,
     state,
     isRecipient,
+    emailWouldMismatch,
     claim,
     gift,
   ]);
@@ -241,7 +254,7 @@ export default function GiftClaimPage() {
             ) : null}
             <p style={{ fontSize: 13, color: "#888", marginBottom: 24 }}>Claim before {formatDate(gift?.expires_at)}</p>
 
-            {user ? (
+            {user && !emailWouldMismatch ? (
               <button
                 type="button"
                 onClick={() => void claim()}
@@ -260,6 +273,18 @@ export default function GiftClaimPage() {
               >
                 {claiming ? "Opening your gift…" : "Open Your Gift"}
               </button>
+            ) : user && emailWouldMismatch ? (
+              <div style={{ padding: 16, borderRadius: 14, background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.2)" }}>
+                <p style={{ margin: "0 0 12px", fontSize: 14, color: "#ffaaaa", lineHeight: 1.6 }}>
+                  This gift was sent to {giftEmail}. Sign in with that account to claim it.
+                </p>
+                <Link
+                  href={`/login?gift=${token}`}
+                  style={{ color: "#00ffff", fontSize: 13, fontWeight: 700 }}
+                >
+                  Sign in with the correct account →
+                </Link>
+              </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <Link
@@ -312,18 +337,24 @@ export default function GiftClaimPage() {
         {emailMismatch ? (
           <div style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.25)" }}>
             <p style={{ margin: "0 0 14px", fontSize: 14, color: "#ffaaaa", lineHeight: 1.6 }}>
-              This gift was sent to a different email address. Sign out and sign in with the correct account to claim it.
+              This gift was sent to {giftEmail || "a different email address"}. Sign in with the correct account to claim it.
             </p>
-            <button
-              type="button"
-              onClick={async () => {
-                await signOut();
-                router.push(`/login?gift=${token}`);
+            <Link
+              href={`/login?gift=${token}`}
+              style={{
+                display: "block",
+                textAlign: "center",
+                padding: "13px 0",
+                background: "#00ffff",
+                color: "#000",
+                fontWeight: 900,
+                borderRadius: 10,
+                textDecoration: "none",
+                fontSize: 14,
               }}
-              style={{ width: "100%", padding: "13px 0", background: "#00ffff", color: "#000", fontWeight: 900, border: "none", borderRadius: 10, cursor: "pointer", fontSize: 14 }}
             >
-              Sign out &amp; sign in with the correct account
-            </button>
+              Sign in with the correct account
+            </Link>
           </div>
         ) : null}
         {error && !emailMismatch ? <p style={{ color: "#ff6b6b", fontSize: 13, marginTop: 16 }}>{error}</p> : null}

@@ -22,7 +22,7 @@ function VerifyOtpForm() {
   const { applySessionUser } = useAuth();
   const email = (searchParams.get("email") || "").trim();
   const nextPath = searchParams.get("next") || "/?tab=mymusic";
-  const shouldCreateUser = searchParams.get("createUser") !== "0";
+  const shouldCreateUser = searchParams.get("createUser") === "1";
 
   const [digits, setDigits] = useState(EMPTY_DIGITS);
   const [otpError, setOtpError] = useState("");

@@ -72,7 +72,10 @@ function JoinForm() {
 
     const emailCheck = validateEmail(email);
     const passCheck  = validatePassword(password);
-    const phoneCheck = validatePhone(phone);
+    // Phone is required for standard signups (needed for SMS 2FA) but optional for gift
+    // recipients — they prove email ownership via the gift link in their inbox.
+    const phoneTrimmed = phone.trim();
+    const phoneCheck = (giftToken && !phoneTrimmed) ? { ok: true, value: null } : validatePhone(phone);
 
     if (!emailCheck.ok) setEmailError(emailCheck.error);
     if (!passCheck.ok)  setPassError(passCheck.error);
@@ -220,16 +223,16 @@ function JoinForm() {
 
         <div>
           <input
-            placeholder="Phone number"
+            placeholder={giftToken ? "Phone number (optional)" : "Phone number"}
             type="tel"
             value={phone}
             onChange={e => { setPhone(e.target.value); if (phoneError) setPhoneError(""); }}
-            required
+            required={!giftToken}
             style={{ ...inputStyle, borderColor: phoneError ? "#ef4444" : "#2a2a2a" }}
           />
           {phoneError
             ? <div style={{ color: "#ef4444", fontSize: 12, marginTop: 6 }}>{phoneError}</div>
-            : <div style={{ color: "#555", fontSize: 11, marginTop: 6 }}>Used to receive your login codes via SMS.</div>
+            : <div style={{ color: "#555", fontSize: 11, marginTop: 6 }}>{giftToken ? "Optional — add later in your account settings." : "Used to receive your login codes via SMS."}</div>
           }
         </div>
 
