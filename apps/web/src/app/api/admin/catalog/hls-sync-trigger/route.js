@@ -1,11 +1,15 @@
 /**
  * POST /api/admin/catalog/hls-sync-trigger
  *
- * Session-authenticated admin trigger: re-queue all catalog tracks for HLS
- * transcoding. Scans BOTH the old catalog system (catalog_tracks) AND the
- * new upload wizard system (releases + tracks). Deduplicates by release slug
- * + track slug, then queues/updates hls_transcode_jobs for every track found.
- * Skips tracks that are already pending or processing.
+ * Session-authenticated admin trigger: scan R2 directly for all audio files
+ * across every release type (singles, features, albums, mixtapes-and-eps),
+ * clear stale playback caches, and re-queue HLS transcode jobs for every track
+ * that has audio in R2.
+ *
+ * R2 is the source of truth — not the DB. This means newly added or manually
+ * replaced audio files are picked up automatically without a prior Sync Catalog.
+ * Wizard draft releases (status != "published") are skipped.
+ * Tracks with jobs already pending/processing are cache-cleared but not re-queued.
  */
 
 import { NextResponse } from "next/server";
@@ -14,22 +18,61 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { isAdminUser } from "@/lib/auth/constants";
 import { resolvePlaybackKey, clearPersistedPlaybackKey } from "@/lib/playback/resolve-playback-key";
 import { buildHLSPrefix } from "@/lib/hls/derive-key";
+import { ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { r2Client, R2_BUCKET } from "@/lib/storage/r2";
 
 export const dynamic = "force-dynamic";
 
-const RELEASE_TYPE_MAP = {
-  single: "singles",
-  singles: "singles",
-  album: "albums",
-  albums: "albums",
-  feature: "features",
-  features: "features",
-  mixtape: "mixtapes-and-eps",
-  "mixtapes-and-eps": "mixtapes-and-eps",
-  ep: "mixtapes-and-eps",
-  eps: "mixtapes-and-eps",
-  vault: "vault",
-};
+const RELEASE_TYPE_FOLDERS = ["singles", "features", "albums", "mixtapes-and-eps"];
+const MULTI_TRACK_FOLDERS = new Set(["albums", "mixtapes-and-eps"]);
+const AUDIO_EXTENSIONS = [".wav", ".flac", ".m4a", ".mp3"];
+
+async function listR2Subfolders(prefix) {
+  if (!R2_BUCKET) return [];
+  const normalized = String(prefix || "").replace(/^\//, "");
+  const listPrefix = normalized.endsWith("/") ? normalized : `${normalized}/`;
+  const subfolders = [];
+  let continuationToken;
+  do {
+    const response = await r2Client.send(
+      new ListObjectsV2Command({
+        Bucket: R2_BUCKET,
+        Prefix: listPrefix,
+        Delimiter: "/",
+        ContinuationToken: continuationToken,
+      })
+    );
+    for (const cp of response.CommonPrefixes || []) {
+      if (cp.Prefix) {
+        const slug = cp.Prefix.replace(listPrefix, "").replace(/\/$/, "").trim();
+        if (slug) subfolders.push(slug);
+      }
+    }
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+  return subfolders;
+}
+
+async function hasAudioFile(prefix) {
+  if (!R2_BUCKET) return false;
+  const normalized = String(prefix || "").replace(/^\//, "");
+  const listPrefix = normalized.endsWith("/") ? normalized : `${normalized}/`;
+  try {
+    const response = await r2Client.send(
+      new ListObjectsV2Command({
+        Bucket: R2_BUCKET,
+        Prefix: listPrefix,
+        Delimiter: "/",
+        MaxKeys: 20,
+      })
+    );
+    return (response.Contents || [])
+      .map((item) => item.Key || "")
+      .some((key) => AUDIO_EXTENSIONS.some((ext) => key.toLowerCase().endsWith(ext)));
+  } catch {
+    return false;
+  }
+}
 
 export async function POST() {
   const user = await getFanSessionUser();
@@ -40,65 +83,49 @@ export async function POST() {
   const admin = getAdminClient();
 
   try {
+    // Scan R2 directly for all audio files — R2 is the source of truth.
     // allTracks: Map keyed by `${releaseSlug}::${trackSlug|""}` → { releaseSlug, trackSlug, releaseType }
-    // New system (releases+tracks) wins on conflict — it has explicit audio_r2_key.
     const allTracks = new Map();
 
-    // ── Old system: catalog_tracks ────────────────────────────────────────────
-    const { data: catalogTracks, error: catalogErr } = await admin
-      .from("catalog_tracks")
-      .select("slug, album_slug, metadata")
-      .order("album_slug");
+    for (const folder of RELEASE_TYPE_FOLDERS) {
+      const releaseSlugs = await listR2Subfolders(`digital-assets/${folder}`);
 
-    if (catalogErr) {
-      console.error("[hls-sync-trigger] catalog_tracks fetch error", catalogErr.message);
-    } else {
-      for (const t of catalogTracks || []) {
-        const releaseSlug = t.album_slug || t.slug;
-        const trackSlug = t.album_slug ? t.slug : null;
-        const rawType = t.metadata?.release_category || t.metadata?.release_type || "single";
-        const releaseType = RELEASE_TYPE_MAP[rawType] || "singles";
-        if (!releaseSlug) continue;
-        const key = `${releaseSlug}::${trackSlug || ""}`;
-        allTracks.set(key, { releaseSlug, trackSlug, releaseType });
-      }
-    }
+      for (const releaseSlug of releaseSlugs) {
+        // Skip wizard releases that are not yet published
+        const { data: wizardRow } = await admin
+          .from("releases").select("status").eq("slug", releaseSlug).maybeSingle();
+        if (wizardRow && wizardRow.status !== "published") continue;
 
-    // ── New system: releases + tracks ─────────────────────────────────────────
-    const { data: newTracks, error: newErr } = await admin
-      .from("tracks")
-      .select("slug, audio_r2_key, releases!inner(slug, release_type)")
-      .not("audio_r2_key", "is", null);
-
-    if (newErr) {
-      console.error("[hls-sync-trigger] releases+tracks fetch error", newErr.message);
-    } else {
-      for (const t of newTracks || []) {
-        const rel = Array.isArray(t.releases) ? t.releases[0] : t.releases;
-        if (!rel?.slug) continue;
-        const isMulti = ["album", "ep", "mixtape"].includes(rel.release_type);
-        const releaseSlug = rel.slug;
-        const trackSlug = isMulti ? t.slug : null;
-        const releaseType = RELEASE_TYPE_MAP[rel.release_type] || "singles";
-        const key = `${releaseSlug}::${trackSlug || ""}`;
-        // New system wins — overwrite any entry from old system
-        allTracks.set(key, { releaseSlug, trackSlug, releaseType });
+        if (MULTI_TRACK_FOLDERS.has(folder)) {
+          // Albums / mixtapes-and-eps: each sub-folder is a track
+          const trackSlugs = await listR2Subfolders(`digital-assets/${folder}/${releaseSlug}`);
+          for (const trackSlug of trackSlugs) {
+            const hasAudio = await hasAudioFile(`digital-assets/${folder}/${releaseSlug}/${trackSlug}`);
+            if (!hasAudio) continue;
+            allTracks.set(`${releaseSlug}::${trackSlug}`, { releaseSlug, trackSlug, releaseType: folder });
+          }
+        } else {
+          // Singles / features: release folder IS the audio folder
+          const hasAudio = await hasAudioFile(`digital-assets/${folder}/${releaseSlug}`);
+          if (!hasAudio) continue;
+          allTracks.set(`${releaseSlug}::`, { releaseSlug, trackSlug: null, releaseType: folder });
+        }
       }
     }
 
     if (allTracks.size === 0) {
-      return NextResponse.json({ ok: true, queued: 0, skipped: 0, failed: 0, message: "No catalog tracks found in either system" });
+      return NextResponse.json({ ok: true, queued: 0, skipped: 0, failed: 0, message: "No audio files found in R2" });
     }
 
     const results = [];
     const errors = [];
 
     for (const { releaseSlug, trackSlug, releaseType } of allTracks.values()) {
-      // Always clear stale durable cache first — audio may have been manually replaced in R2
-      // even if a job is already pending/processing (the new segments will use the new file)
+      // Always clear stale durable playback cache first — audio may have been
+      // manually replaced in R2 even while a job is pending/processing
       try { await clearPersistedPlaybackKey(admin, releaseSlug, trackSlug || null); } catch {}
 
-      // Skip tracks already in-flight — don't interrupt an active job
+      // Check for an existing in-flight job — don't interrupt active work
       let q = admin
         .from("hls_transcode_jobs")
         .select("id, status")
@@ -111,7 +138,7 @@ export async function POST() {
         continue;
       }
 
-      // Resolve source audio key (never modify resolvePlaybackKey)
+      // Resolve source audio key from R2 / DB
       const sourceKey = await resolvePlaybackKey(admin, releaseSlug, {
         trackSlug: trackSlug || undefined,
         preferMaster: true,
@@ -170,8 +197,8 @@ export async function POST() {
       }
     }
 
-    const queued = results.filter((r) => !r.skipped).length;
-    const skipped = results.filter((r) => r.skipped).length;
+    const queued  = results.filter((r) => !r.skipped).length;
+    const skipped = results.filter((r) =>  r.skipped).length;
 
     return NextResponse.json({
       ok: true,
