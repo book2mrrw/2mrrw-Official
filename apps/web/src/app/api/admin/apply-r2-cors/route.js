@@ -18,6 +18,7 @@ const R2_BUCKET = process.env.CLOUDFLARE_R2_BUCKET_NAME;
 const CORS_POLICY = {
   CORSRules: [
     {
+      // Presigned PUT uploads from the browser go directly to R2 — PUT must be allowed
       AllowedOrigins: [
         "https://www.2mrrw.com",
         "https://2mrrw.com",
@@ -26,8 +27,8 @@ const CORS_POLICY = {
         "http://localhost:3000",
         "http://127.0.0.1:3000",
       ],
-      AllowedMethods: ["GET", "HEAD"],
-      AllowedHeaders: ["Range", "Content-Type", "Authorization", "Origin", "Accept"],
+      AllowedMethods: ["GET", "HEAD", "PUT", "DELETE"],
+      AllowedHeaders: ["*"],
       ExposeHeaders: [
         "Accept-Ranges",
         "Content-Length",
