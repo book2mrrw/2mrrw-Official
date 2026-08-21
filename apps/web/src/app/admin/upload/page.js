@@ -9,30 +9,70 @@ function isAdmin(session) {
   return (session?.user?.email?.toLowerCase() || "") === ADMIN_EMAIL;
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────────
+function slugify(str) {
+  return String(str || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || `release-${Date.now()}`;
+}
+
+function slugifyTrack(title, position) {
+  const base = String(title || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  const num = String(position).padStart(2, "0");
+  return base ? `${num}-${base}` : `track-${position}`;
+}
+
+function newTrack(position) {
+  return {
+    tempId:          `t-${Date.now()}-${position}`,
+    id:              null,
+    position,
+    title:           "",
+    slug:            `track-${position}`,
+    audio_key:       "",
+    audio_filename:  "",
+    upload_status:   "idle",
+    upload_progress: 0,
+    upload_error:    null,
+    featured_artists: null,
+    content_rating:  null,
+    isrc:            "",
+    lyrics:          "",
+  };
+}
+
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const C = {
-  bg:          "#050505",
-  surface:     "#0d0d0d",
-  surface2:    "#121212",
-  border:      "rgba(255,255,255,0.06)",
-  border2:     "rgba(255,255,255,0.12)",
-  accent:      "#00ffff",
-  accentDim:   "rgba(0,255,255,0.07)",
-  accentBorder:"rgba(0,255,255,0.20)",
-  purple:      "#a259ff",
-  text:        "#e8e8e8",
-  muted:       "rgba(255,255,255,0.45)",
-  muted2:      "rgba(255,255,255,0.28)",
-  success:     "#32d74b",
-  warn:        "#ff9f0a",
-  error:       "#ff453a",
+  bg:           "#050505",
+  surface:      "#0d0d0d",
+  surface2:     "#121212",
+  border:       "rgba(255,255,255,0.06)",
+  border2:      "rgba(255,255,255,0.12)",
+  accent:       "#00ffff",
+  accentDim:    "rgba(0,255,255,0.07)",
+  accentBorder: "rgba(0,255,255,0.20)",
+  purple:       "#a259ff",
+  text:         "#e8e8e8",
+  muted:        "rgba(255,255,255,0.45)",
+  muted2:       "rgba(255,255,255,0.28)",
+  success:      "#32d74b",
+  warn:         "#ff9f0a",
+  error:        "#ff453a",
 };
 
-const STEPS = ["Type", "Info", "Credits", "Audio", "Artwork & Lyrics", "Review"];
-
-// ── Shared UI atoms ────────────────────────────────────────────────────────────
+// ── UI atoms ───────────────────────────────────────────────────────────────────
 function Label({ children }) {
-  return <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", color: C.muted2, textTransform: "uppercase", marginBottom: 7 }}>{children}</div>;
+  return (
+    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.1em", color: C.muted2, textTransform: "uppercase", marginBottom: 7 }}>
+      {children}
+    </div>
+  );
 }
 
 function Field({ label, children, hint }) {
@@ -103,8 +143,9 @@ function Btn({ onClick, children, variant = "primary", disabled = false, style =
   };
   const variants = {
     primary:   { background: C.accent,   color: "#000" },
-    secondary: { background: C.surface2, color: C.text,  border: `1px solid ${C.border2}` },
-    danger:    { background: C.error,    color: "#fff"  },
+    secondary: { background: C.surface2, color: C.text, border: `1px solid ${C.border2}` },
+    danger:    { background: C.error,    color: "#fff" },
+    ghost:     { background: "none",     color: C.muted, border: `1px solid ${C.border}` },
   };
   return (
     <button onClick={disabled ? undefined : onClick} style={{ ...base, ...variants[variant] }}>
@@ -148,43 +189,34 @@ function MultiEntry({ label, items, onAdd, onRemove, placeholder }) {
   );
 }
 
-function StatusBadge({ status }) {
-  const map = {
-    pending:    [C.muted2,  "Pending"],
-    uploading:  [C.accent,  "Uploading…"],
-    ready:      [C.success, "Ready ✓"],
-    error:      [C.error,   "Error"],
-    processing: [C.warn,    "Processing…"],
-  };
-  const [color, label] = map[status] || [C.muted2, status];
-  return <span style={{ color, fontSize: 12, fontWeight: 700 }}>{label}</span>;
-}
-
 // ── Step progress bar ──────────────────────────────────────────────────────────
-function StepBar({ current }) {
+function StepBar({ steps, current }) {
   return (
     <div style={{ display: "flex", gap: 0, marginBottom: 36, overflowX: "auto" }}>
-      {STEPS.map((label, i) => {
-        const done    = i < current;
-        const active  = i === current;
+      {steps.map((label, i) => {
+        const done   = i < current;
+        const active = i === current;
         return (
           <div key={i} style={{ display: "flex", alignItems: "center", flex: 1, minWidth: 0 }}>
-            <div style={{
-              display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flex: 1,
-            }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, flex: 1 }}>
               <div style={{
-                width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-                background: done ? C.success : active ? C.accent : C.surface2,
-                border: `2px solid ${done ? C.success : active ? C.accent : C.border2}`,
-                fontSize: 11, fontWeight: 800, color: done || active ? "#000" : C.muted,
+                width: 28, height: 28, borderRadius: "50%", display: "flex",
+                alignItems: "center", justifyContent: "center",
+                background:  done ? C.success : active ? C.accent : C.surface2,
+                border:     `2px solid ${done ? C.success : active ? C.accent : C.border2}`,
+                fontSize: 11, fontWeight: 800,
+                color: done || active ? "#000" : C.muted,
               }}>
                 {done ? "✓" : i + 1}
               </div>
-              <div style={{ fontSize: 10, color: active ? C.accent : done ? C.success : C.muted2, fontWeight: 700, letterSpacing: "0.05em", textAlign: "center", whiteSpace: "nowrap" }}>
+              <div style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: "0.05em", textAlign: "center",
+                whiteSpace: "nowrap", color: active ? C.accent : done ? C.success : C.muted2,
+              }}>
                 {label}
               </div>
             </div>
-            {i < STEPS.length - 1 && (
+            {i < steps.length - 1 && (
               <div style={{ height: 2, flex: 1, background: done ? C.success : C.border2, margin: "0 6px", marginBottom: 22 }} />
             )}
           </div>
@@ -194,7 +226,7 @@ function StepBar({ current }) {
   );
 }
 
-// ── Page 1: Release Type ───────────────────────────────────────────────────────
+// ── Step 0: Release Type ───────────────────────────────────────────────────────
 function ReleaseTypeStep({ data, onChange, onNext, loading }) {
   const TYPES = [
     { value: "single",  label: "Single",  desc: "One track, solo or feature" },
@@ -257,11 +289,10 @@ function ReleaseTypeStep({ data, onChange, onNext, loading }) {
   );
 }
 
-// ── Page 2: Release Info ───────────────────────────────────────────────────────
+// ── Step 1: Release Info ───────────────────────────────────────────────────────
 function ReleaseInfoStep({ data, onChange, onNext, onBack }) {
-  const isSingle = data.release_type === "single" || data.release_type === "feature";
+  const isSingle   = data.release_type === "single" || data.release_type === "feature";
   const hasFeatured = data.artist_mode === "featured" || data.release_type === "feature";
-
   const GENRES = ["R&B","Hip-Hop","Pop","Alternative R&B","Soul","Neo-Soul","Trap","Rap","Electronic","Other"];
 
   return (
@@ -270,7 +301,14 @@ function ReleaseInfoStep({ data, onChange, onNext, onBack }) {
       <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>This is how your release appears to fans.</p>
 
       <Field label={isSingle ? "Song Title" : "Project Title"} hint="Required">
-        <Input value={data.title} onChange={(v) => onChange("title", v)} placeholder={isSingle ? "e.g. Hour Glass" : "e.g. Love Hz Vol. 2"} />
+        <Input
+          value={data.title}
+          onChange={(v) => {
+            onChange("title", v);
+            onChange("proposed_slug", slugify(v));
+          }}
+          placeholder={isSingle ? "e.g. Hour Glass" : "e.g. Love Hz Vol. 2"}
+        />
       </Field>
 
       <Field label="Primary Artist">
@@ -322,7 +360,7 @@ function ReleaseInfoStep({ data, onChange, onNext, onBack }) {
       )}
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <Field label="Price" hint="Default $2.99 for singles, $9.99 for EPs/Mixtapes, $12.99 for albums">
+        <Field label="Price" hint="Default: $2.99 single · $9.99 EP/Mixtape · $12.99 album">
           <Input
             type="number"
             value={data.price}
@@ -357,14 +395,18 @@ function ReleaseInfoStep({ data, onChange, onNext, onBack }) {
   );
 }
 
-// ── Page 3: Credits ────────────────────────────────────────────────────────────
-function CreditsStep({ data, onChange, onNext, onBack }) {
+// ── Step 2: Credits ────────────────────────────────────────────────────────────
+function CreditsStep({ data, onChange, onNext, onBack, isMultiTrack }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   return (
     <div>
       <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>Credits</h2>
-      <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>Internal record — not shown publicly on the fan site.</p>
+      <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>
+        {isMultiTrack
+          ? "Project-level credits — used as defaults for all tracks. Override per track in the next steps."
+          : "Internal record — not shown publicly on the fan site."}
+      </p>
 
       <MultiEntry
         label="Produced By"
@@ -401,10 +443,12 @@ function CreditsStep({ data, onChange, onNext, onBack }) {
             <Field label="Executive Producer">
               <Input value={data.executive_producer} onChange={(v) => onChange("executive_producer", v)} placeholder="Name" />
             </Field>
-            <Field label="ISRC">
-              <Input value={data.isrc} onChange={(v) => onChange("isrc", v)} placeholder="e.g. USRC12345678" />
-            </Field>
-            <Field label="UPC / EAN (project-level)">
+            {!isMultiTrack && (
+              <Field label="ISRC">
+                <Input value={data.isrc} onChange={(v) => onChange("isrc", v)} placeholder="e.g. USRC12345678" />
+              </Field>
+            )}
+            <Field label="UPC / EAN">
               <Input value={data.upc} onChange={(v) => onChange("upc", v)} placeholder="e.g. 123456789012" />
             </Field>
             <Field label="℗ Copyright Year">
@@ -431,7 +475,7 @@ function CreditsStep({ data, onChange, onNext, onBack }) {
   );
 }
 
-// ── Page 4: Audio Upload ───────────────────────────────────────────────────────
+// ── Step 3a: Audio Upload (single / feature) ───────────────────────────────────
 function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug }) {
   const [uploadState, setUploadState] = useState({ status: "idle", progress: 0, error: null });
   const xhrRef = useRef(null);
@@ -441,7 +485,6 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
     setUploadState({ status: "uploading", progress: 0, error: null });
 
     try {
-      // 1. Get presigned URL
       const presignRes = await fetch("/api/admin/upload/presigned", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -456,10 +499,8 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
       });
       const presignData = await presignRes.json();
       if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
-
       const { uploadUrl, key } = presignData;
 
-      // 2. XHR PUT with progress
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
         xhrRef.current = xhr;
@@ -468,17 +509,13 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
             setUploadState((s) => ({ ...s, progress: Math.round((e.loaded / e.total) * 100) }));
           }
         };
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error(`Upload failed: HTTP ${xhr.status}`));
-        };
+        xhr.onload  = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
         xhr.onerror = () => reject(new Error("Network error during upload"));
         xhr.open("PUT", uploadUrl);
         xhr.setRequestHeader("Content-Type", file.type || "audio/wav");
         xhr.send(file);
       });
 
-      // 3. Confirm completion
       const completeRes = await fetch("/api/admin/upload/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -488,6 +525,8 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
           assetType: "audio",
           releaseType: data.release_type,
           slug: draftSlug,
+          trackTitle: data.title || "",
+          position: 1,
         }),
       });
       const completeData = await completeRes.json();
@@ -500,7 +539,7 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
     } catch (err) {
       setUploadState({ status: "error", progress: 0, error: err.message });
     }
-  }, [data.release_type, draftSlug, releaseId, onChange]);
+  }, [data.release_type, data.title, draftSlug, releaseId, onChange]);
 
   const pickFile = () => {
     const input = document.createElement("input");
@@ -523,8 +562,7 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
           background: C.surface2,
           border: `2px dashed ${status === "ready" ? C.success : status === "error" ? C.error : C.border2}`,
           borderRadius: 14, padding: "40px 24px", textAlign: "center",
-          cursor: status !== "uploading" ? "pointer" : "default",
-          marginBottom: 20,
+          cursor: status !== "uploading" ? "pointer" : "default", marginBottom: 20,
         }}
       >
         {status === "idle" && (
@@ -561,7 +599,7 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
 
       <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: "12px 16px", marginBottom: 24 }}>
         <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-          HLS transcoding queues automatically after upload. You can publish while HLS is still processing — the player falls back to the source file until HLS is ready.
+          HLS transcoding queues automatically after upload. You can publish while HLS is still processing.
         </div>
       </div>
 
@@ -573,9 +611,395 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
   );
 }
 
-// ── Page 5: Artwork + Lyrics ───────────────────────────────────────────────────
-function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlug }) {
+// ── Step 3b: Tracklist Builder (album / EP / mixtape) ─────────────────────────
+function TrackRow({ track, idx, total, albumSlug, data, releaseId, setTracks }) {
+  const fileInputRef = useRef(null);
+  const xhrRef       = useRef(null);
+
+  const updateSelf = (updates) =>
+    setTracks((prev) => prev.map((t) => t.tempId === track.tempId ? { ...t, ...updates } : t));
+
+  const startUpload = async (file) => {
+    const trackSlug = track.slug || slugifyTrack(track.title, track.position);
+    updateSelf({ upload_status: "uploading", upload_progress: 0, upload_error: null, audio_filename: file.name, slug: trackSlug });
+
+    try {
+      const presignRes = await fetch("/api/admin/upload/presigned", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          releaseType: data.release_type,
+          slug: albumSlug,
+          trackSlug,
+          assetType: "audio",
+          filename: file.name,
+          contentType: file.type || "audio/wav",
+          size: file.size,
+          releaseId,
+        }),
+      });
+      const presignData = await presignRes.json();
+      if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
+      const { uploadUrl, key } = presignData;
+
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhrRef.current = xhr;
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round((e.loaded / e.total) * 100);
+            updateSelf({ upload_progress: pct });
+          }
+        };
+        xhr.onload  = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.open("PUT", uploadUrl);
+        xhr.send(file);
+      });
+
+      const completeRes = await fetch("/api/admin/upload/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          releaseId,
+          key,
+          assetType: "audio",
+          releaseType: data.release_type,
+          slug: albumSlug,
+          trackSlug,
+          trackTitle: track.title || `Track ${track.position}`,
+          position: track.position,
+        }),
+      });
+      const completeData = await completeRes.json();
+      if (!completeRes.ok) throw new Error(completeData.error || "Upload verification failed");
+
+      updateSelf({ id: completeData.trackId, audio_key: key, upload_status: "ready", upload_progress: 100, slug: trackSlug });
+    } catch (err) {
+      updateSelf({ upload_status: "error", upload_error: err.message });
+    }
+  };
+
+  const moveUp = () =>
+    setTracks((prev) => {
+      const i = prev.findIndex((t) => t.tempId === track.tempId);
+      if (i <= 0) return prev;
+      const next = [...prev];
+      [next[i - 1], next[i]] = [next[i], next[i - 1]];
+      return next.map((t, j) => ({ ...t, position: j + 1 }));
+    });
+
+  const moveDown = () =>
+    setTracks((prev) => {
+      const i = prev.findIndex((t) => t.tempId === track.tempId);
+      if (i >= prev.length - 1) return prev;
+      const next = [...prev];
+      [next[i], next[i + 1]] = [next[i + 1], next[i]];
+      return next.map((t, j) => ({ ...t, position: j + 1 }));
+    });
+
+  const removeTrack = () =>
+    setTracks((prev) => {
+      const filtered = prev.filter((t) => t.tempId !== track.tempId);
+      return filtered.map((t, j) => ({ ...t, position: j + 1 }));
+    });
+
+  const titleChange = (v) =>
+    setTracks((prev) => prev.map((t) => t.tempId === track.tempId
+      ? { ...t, title: v, slug: slugifyTrack(v, t.position) }
+      : t));
+
+  const st = track.upload_status;
+  const statusColor = { idle: C.muted2, uploading: C.accent, ready: C.success, error: C.error }[st] || C.muted2;
+
+  return (
+    <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <div style={{ fontSize: 12, color: C.muted2, minWidth: 22, textAlign: "right", fontWeight: 700 }}>{track.position}.</div>
+        <input
+          type="text"
+          value={track.title}
+          onChange={(e) => titleChange(e.target.value)}
+          placeholder={`Track ${track.position} title`}
+          style={{
+            flex: 1, background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 6,
+            color: C.text, fontSize: 13, padding: "8px 11px", outline: "none", fontFamily: "inherit",
+          }}
+        />
+        <div style={{ display: "flex", gap: 4 }}>
+          <button onClick={moveUp}   disabled={idx === 0}           style={iconBtn}       title="Move up">↑</button>
+          <button onClick={moveDown} disabled={idx === total - 1}   style={iconBtn}       title="Move down">↓</button>
+          {total > 1 && (
+            <button onClick={removeTrack} style={{ ...iconBtn, color: C.error }} title="Remove track">×</button>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ flex: 1 }}>
+          {st === "idle" && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              style={{ background: "none", border: `1px dashed ${C.border2}`, borderRadius: 7, padding: "8px 14px", fontSize: 12, color: C.muted, cursor: "pointer", fontFamily: "inherit", width: "100%" }}
+            >
+              Select audio file…
+            </button>
+          )}
+          {st === "uploading" && (
+            <div style={{ fontSize: 12, color: C.accent }}>
+              <div style={{ marginBottom: 5 }}>Uploading… {track.upload_progress}%</div>
+              <div style={{ background: C.surface, borderRadius: 3, height: 4, overflow: "hidden" }}>
+                <div style={{ background: C.accent, width: `${track.upload_progress}%`, height: "100%", transition: "width 0.2s" }} />
+              </div>
+            </div>
+          )}
+          {st === "ready" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 12, color: C.success }}>✓ {track.audio_filename || "Audio ready"}</span>
+              <button onClick={() => fileInputRef.current?.click()} style={{ background: "none", border: "none", color: C.muted2, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>replace</button>
+            </div>
+          )}
+          {st === "error" && (
+            <div style={{ fontSize: 12, color: C.error }}>
+              {track.upload_error || "Upload failed"} —{" "}
+              <button onClick={() => fileInputRef.current?.click()} style={{ background: "none", border: "none", color: C.accent, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>retry</button>
+            </div>
+          )}
+        </div>
+        <div style={{ fontSize: 11, color: statusColor, fontWeight: 700, minWidth: 60, textAlign: "right" }}>
+          {st === "idle" ? "No file" : st === "uploading" ? "Uploading" : st === "ready" ? "✓ Ready" : "Error"}
+        </div>
+      </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".wav,.flac,.aiff,.aif,audio/wav,audio/flac,audio/aiff"
+        style={{ display: "none" }}
+        onChange={(e) => { if (e.target.files?.[0]) startUpload(e.target.files[0]); e.target.value = ""; }}
+      />
+    </div>
+  );
+}
+
+const iconBtn = {
+  background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 5, padding: "5px 9px",
+  color: C.muted, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+};
+
+function TracklistBuilderStep({ data, tracks, setTracks, onNext, onBack, releaseId, draftSlug }) {
+  const albumSlug   = data.proposed_slug || draftSlug || `draft-${releaseId?.slice(0, 8)}`;
+  const readyCount  = tracks.filter((t) => t.upload_status === "ready").length;
+  const uploadingAny = tracks.some((t) => t.upload_status === "uploading");
+
+  const addTrack = () =>
+    setTracks((prev) => [...prev, newTrack(prev.length + 1)]);
+
+  return (
+    <div>
+      <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>Build Tracklist</h2>
+      <p style={{ color: C.muted, fontSize: 13, marginBottom: 8 }}>
+        Add tracks, name them, and upload audio for each. Tracks can be uploaded simultaneously.
+      </p>
+      <div style={{ fontSize: 12, color: C.muted2, marginBottom: 24 }}>
+        Album slug: <span style={{ color: C.muted }}>{albumSlug}</span>
+      </div>
+
+      {tracks.map((track, idx) => (
+        <TrackRow
+          key={track.tempId}
+          track={track}
+          idx={idx}
+          total={tracks.length}
+          albumSlug={albumSlug}
+          data={data}
+          releaseId={releaseId}
+          setTracks={setTracks}
+        />
+      ))}
+
+      <button
+        onClick={addTrack}
+        style={{
+          width: "100%", background: "none", border: `1px dashed ${C.border2}`, borderRadius: 8,
+          padding: "11px 0", color: C.muted, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+          marginBottom: 24,
+        }}
+      >
+        + Add Track
+      </button>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <Btn onClick={onBack} variant="secondary">← Back</Btn>
+        <Btn onClick={onNext} disabled={readyCount === 0 || uploadingAny}>
+          {uploadingAny ? "Uploading…" : `Continue → (${readyCount}/${tracks.length} ready)`}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── Step 4b: Track Details (multi-track only) ─────────────────────────────────
+function TrackDetailAccordion({ track, projectDefaults, isOpen, onToggle, onUpdate }) {
+  const statusColor = { idle: C.muted2, uploading: C.accent, ready: C.success, error: C.error }[track.upload_status] || C.muted2;
+
+  return (
+    <div style={{ marginBottom: 8, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, overflow: "hidden" }}>
+      <div onClick={onToggle} style={{ padding: "14px 16px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ fontSize: 12, color: C.muted2, minWidth: 22, fontWeight: 700 }}>{track.position}.</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{track.title || `Track ${track.position}`}</div>
+          <div style={{ fontSize: 11, color: statusColor, marginTop: 2 }}>
+            {track.upload_status === "ready" ? "✓ Audio ready" : `Audio: ${track.upload_status}`}
+          </div>
+        </div>
+        <div style={{ fontSize: 12, color: C.muted2 }}>{isOpen ? "▲" : "▼"}</div>
+      </div>
+
+      {isOpen && (
+        <div style={{ padding: "0 16px 16px", borderTop: `1px solid ${C.border}` }}>
+          <div style={{ height: 12 }} />
+
+          <Field label="Track Title">
+            <Input
+              value={track.title}
+              onChange={(v) => onUpdate({ title: v, slug: slugifyTrack(v, track.position) })}
+              placeholder={`Track ${track.position}`}
+            />
+          </Field>
+
+          {/* Featured artist override */}
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+              <Label>Featured Artists</Label>
+              {track.featured_artists !== null ? (
+                <button
+                  onClick={() => onUpdate({ featured_artists: null })}
+                  style={{ background: "none", border: "none", color: C.muted2, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+                >
+                  Clear override
+                </button>
+              ) : (
+                <span style={{ fontSize: 11, color: C.muted2 }}>Using project defaults</span>
+              )}
+            </div>
+
+            {track.featured_artists === null ? (
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>
+                  {projectDefaults.featured_artists?.length > 0 ? projectDefaults.featured_artists.join(", ") : "None"}
+                </div>
+                <button
+                  onClick={() => onUpdate({ featured_artists: [] })}
+                  style={{ background: "none", border: `1px solid ${C.border2}`, borderRadius: 5, padding: "3px 9px", fontSize: 11, color: C.muted, cursor: "pointer", fontFamily: "inherit" }}
+                >
+                  Override
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <FeaturedArtistInput
+                    items={track.featured_artists}
+                    onAdd={(v) => onUpdate({ featured_artists: [...track.featured_artists, v] })}
+                    onRemove={(i) => onUpdate({ featured_artists: track.featured_artists.filter((_, idx) => idx !== i) })}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <Field label="Content Rating">
+            <div style={{ display: "flex", gap: 8 }}>
+              {["clean", "explicit", "instrumental"].map((v) => {
+                const current = track.content_rating || projectDefaults.content_rating || "clean";
+                return (
+                  <div
+                    key={v}
+                    onClick={() => onUpdate({ content_rating: v })}
+                    style={{
+                      background: current === v ? C.accentDim : C.surface,
+                      border: `2px solid ${current === v ? C.accent : C.border2}`,
+                      borderRadius: 6, padding: "7px 12px", cursor: "pointer",
+                      fontSize: 11, fontWeight: 700, color: current === v ? C.accent : C.text,
+                    }}
+                  >
+                    {v}
+                  </div>
+                );
+              })}
+            </div>
+          </Field>
+
+          <Field label="ISRC (per-track)">
+            <Input value={track.isrc || ""} onChange={(v) => onUpdate({ isrc: v })} placeholder="e.g. USRC12345678" />
+          </Field>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeaturedArtistInput({ items, onAdd, onRemove }) {
+  const [val, setVal] = useState("");
+  const add = () => {
+    const v = val.trim();
+    if (v) { onAdd(v); setVal(""); }
+  };
+  return (
+    <div style={{ width: "100%" }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input
+          type="text"
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="Artist name"
+          style={{ flex: 1, background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 6, color: C.text, fontSize: 13, padding: "8px 11px", outline: "none", fontFamily: "inherit" }}
+        />
+        <button onClick={add} style={{ background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 6, padding: "8px 12px", color: C.muted, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>+ Add</button>
+      </div>
+      <TagList items={items} onRemove={onRemove} />
+    </div>
+  );
+}
+
+function TrackDetailsStep({ data, tracks, setTracks, onNext, onBack }) {
+  const [openTempId, setOpenTempId] = useState(tracks[0]?.tempId || null);
+
+  const toggle = (tempId) => setOpenTempId((prev) => (prev === tempId ? null : tempId));
+
+  const updateTrack = (tempId, updates) =>
+    setTracks((prev) => prev.map((t) => t.tempId === tempId ? { ...t, ...updates } : t));
+
+  return (
+    <div>
+      <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>Track Details</h2>
+      <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>Review titles and set per-track overrides. Credits default to project settings.</p>
+
+      {tracks.map((track) => (
+        <TrackDetailAccordion
+          key={track.tempId}
+          track={track}
+          projectDefaults={data}
+          isOpen={openTempId === track.tempId}
+          onToggle={() => toggle(track.tempId)}
+          onUpdate={(updates) => updateTrack(track.tempId, updates)}
+        />
+      ))}
+
+      <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
+        <Btn onClick={onBack} variant="secondary">← Back</Btn>
+        <Btn onClick={onNext}>Continue →</Btn>
+      </div>
+    </div>
+  );
+}
+
+// ── Step 4/5: Artwork + Lyrics ─────────────────────────────────────────────────
+function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlug, isMultiTrack, tracks, setTracks }) {
   const [coverState, setCoverState] = useState({ status: data.cover_key ? "ready" : "idle", error: null });
+  const [openLyricsId, setOpenLyricsId] = useState(null);
 
   const uploadCover = useCallback(async (file) => {
     setCoverState({ status: "uploading", error: null });
@@ -594,12 +1018,11 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
       });
       const presignData = await presignRes.json();
       if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
-
       const { uploadUrl, key } = presignData;
 
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
+        xhr.onload  = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
         xhr.onerror = () => reject(new Error("Network error"));
         xhr.open("PUT", uploadUrl);
         xhr.setRequestHeader("Content-Type", file.type || "image/jpeg");
@@ -628,12 +1051,15 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
     input.click();
   };
 
+  const updateTrackLyrics = (tempId, lyrics) =>
+    setTracks((prev) => prev.map((t) => t.tempId === tempId ? { ...t, lyrics } : t));
+
   const { status, error } = coverState;
 
   return (
     <div>
       <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>Artwork & Lyrics</h2>
-      <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>Cover art is required to publish. Lyrics are optional.</p>
+      <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>Cover art is required to publish. Lyrics are optional and stored internally.</p>
 
       <Field label="Cover Artwork" hint="JPG, PNG, or WEBP — square recommended — max 20 MB. Required.">
         <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
@@ -641,7 +1067,8 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
             onClick={status !== "uploading" ? pickCover : undefined}
             style={{
               width: 140, height: 140, flexShrink: 0, borderRadius: 10,
-              background: C.surface2, border: `2px dashed ${status === "ready" ? C.success : status === "error" ? C.error : C.border2}`,
+              background: C.surface2,
+              border: `2px dashed ${status === "ready" ? C.success : status === "error" ? C.error : C.border2}`,
               cursor: status !== "uploading" ? "pointer" : "default",
               overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center",
             }}
@@ -660,21 +1087,54 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
               {status === "ready" ? "Replace Cover" : status === "uploading" ? "Uploading…" : "Upload Cover"}
             </Btn>
             {status === "ready" && <div style={{ fontSize: 12, color: C.success }}>✓ Cover uploaded</div>}
-            {status === "error" && <div style={{ fontSize: 12, color: C.error }}>{error}</div>}
+            {status === "error"  && <div style={{ fontSize: 12, color: C.error }}>{error}</div>}
           </div>
         </div>
       </Field>
 
-      <Field label="Lyrics" hint="Optional — preserves line breaks and verse structure. Stored internally, not displayed publicly.">
-        <Textarea
-          value={data.lyrics}
-          onChange={(v) => onChange("lyrics", v)}
-          placeholder={"[Verse 1]\n...\n\n[Chorus]\n..."}
-          rows={10}
-        />
-      </Field>
+      {isMultiTrack ? (
+        <div>
+          <Label>Lyrics (Per Track)</Label>
+          <p style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Optional — stored internally, not displayed publicly.</p>
+          {tracks.map((track) => (
+            <div key={track.tempId} style={{ marginBottom: 6, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
+              <div
+                onClick={() => setOpenLyricsId((prev) => prev === track.tempId ? null : track.tempId)}
+                style={{ padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
+                  {track.position}. {track.title || `Track ${track.position}`}
+                </span>
+                <span style={{ fontSize: 11, color: track.lyrics ? C.success : C.muted2 }}>
+                  {track.lyrics ? "Lyrics added ✓" : "No lyrics"} {openLyricsId === track.tempId ? "▲" : "▼"}
+                </span>
+              </div>
+              {openLyricsId === track.tempId && (
+                <div style={{ padding: "0 14px 14px", borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ height: 10 }} />
+                  <Textarea
+                    value={track.lyrics || ""}
+                    onChange={(v) => updateTrackLyrics(track.tempId, v)}
+                    placeholder={"[Verse 1]\n...\n\n[Chorus]\n..."}
+                    rows={8}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Field label="Lyrics" hint="Optional — preserves line breaks and verse structure.">
+          <Textarea
+            value={data.lyrics}
+            onChange={(v) => onChange("lyrics", v)}
+            placeholder={"[Verse 1]\n...\n\n[Chorus]\n..."}
+            rows={10}
+          />
+        </Field>
+      )}
 
-      <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+      <div style={{ display: "flex", gap: 12, marginTop: 24 }}>
         <Btn onClick={onBack} variant="secondary">← Back</Btn>
         <Btn onClick={onNext} disabled={status !== "ready" && !data.cover_key}>Continue →</Btn>
       </div>
@@ -682,22 +1142,31 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
   );
 }
 
-// ── Page 6: Review + Publish ───────────────────────────────────────────────────
-function ReviewStep({ data, releaseId, onBack, onGoToStep }) {
+// ── Step 5/6: Review + Publish ─────────────────────────────────────────────────
+function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack }) {
   const router = useRouter();
   const [publishing, setPublishing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
 
-  const checks = [
-    { label: "Title set",        ok: Boolean(data.title),       blocking: true  },
-    { label: "Audio uploaded",   ok: Boolean(data.audio_key),   blocking: true  },
-    { label: "Cover uploaded",   ok: Boolean(data.cover_key),   blocking: true  },
-    { label: "Release type set", ok: Boolean(data.release_type),blocking: true  },
-    { label: "Credits added",    ok: data.produced_by?.length > 0 || data.written_by?.length > 0, blocking: false },
-    { label: "Lyrics added",     ok: Boolean(data.lyrics),      blocking: false },
-    { label: "Genre set",        ok: Boolean(data.genre),       blocking: false },
-  ];
+  const readyTracks = tracks.filter((t) => t.upload_status === "ready");
+
+  const checks = isMultiTrack
+    ? [
+        { label: "Project title set",           ok: Boolean(data.title),            blocking: true  },
+        { label: `Audio uploaded (${readyTracks.length}/${tracks.length} tracks)`, ok: readyTracks.length > 0, blocking: true  },
+        { label: "Cover artwork uploaded",       ok: Boolean(data.cover_key),        blocking: true  },
+        { label: "Credits added",                ok: data.produced_by?.length > 0 || data.written_by?.length > 0, blocking: false },
+        { label: "Genre set",                    ok: Boolean(data.genre),            blocking: false },
+      ]
+    : [
+        { label: "Title set",        ok: Boolean(data.title),       blocking: true  },
+        { label: "Audio uploaded",   ok: Boolean(data.audio_key),   blocking: true  },
+        { label: "Cover uploaded",   ok: Boolean(data.cover_key),   blocking: true  },
+        { label: "Credits added",    ok: data.produced_by?.length > 0 || data.written_by?.length > 0, blocking: false },
+        { label: "Lyrics added",     ok: Boolean(data.lyrics),      blocking: false },
+        { label: "Genre set",        ok: Boolean(data.genre),       blocking: false },
+      ];
 
   const hasBlocker = checks.some((c) => c.blocking && !c.ok);
 
@@ -736,6 +1205,16 @@ function ReviewStep({ data, releaseId, onBack, onGoToStep }) {
           track_id:           data.track_id,
           lyrics:             data.lyrics,
           scheduled_at,
+          tracks: tracks.map((t) => ({
+            id:               t.id,
+            slug:             t.slug,
+            position:         t.position,
+            title:            t.title,
+            lyrics:           t.lyrics,
+            isrc:             t.isrc || null,
+            featured_artists: t.featured_artists !== null ? t.featured_artists : undefined,
+            content_rating:   t.content_rating   !== null ? t.content_rating   : undefined,
+          })),
         }),
       });
       const json = await res.json();
@@ -760,11 +1239,13 @@ function ReviewStep({ data, releaseId, onBack, onGoToStep }) {
             ? `Your release will go live on ${data.scheduled_date} at ${data.scheduled_time || "00:00"} UTC`
             : "Your release is now live on the storefront."}
         </p>
-        <p style={{ color: C.muted2, fontSize: 13, marginBottom: 32 }}>Slug: <span style={{ color: C.accent }}>/{result.slug}</span></p>
+        <p style={{ color: C.muted2, fontSize: 13, marginBottom: 32 }}>
+          Slug: <span style={{ color: C.accent }}>/{result.slug}</span>
+        </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
           <Btn onClick={() => router.push("/")} variant="secondary">View Storefront</Btn>
           <Btn onClick={() => router.push("/admin/upload")}>Upload Another</Btn>
-          <Btn onClick={() => router.push("/admin")} variant="secondary">Admin Home</Btn>
+          <Btn onClick={() => router.push("/admin/releases")} variant="secondary">Manage Releases</Btn>
         </div>
       </div>
     );
@@ -773,9 +1254,9 @@ function ReviewStep({ data, releaseId, onBack, onGoToStep }) {
   return (
     <div>
       <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>Final Review</h2>
-      <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>Review everything before publishing. Go back to edit any section.</p>
+      <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>Review everything before publishing.</p>
 
-      {/* Release summary */}
+      {/* Summary card */}
       <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 12, padding: "20px 22px", marginBottom: 24 }}>
         <div style={{ display: "grid", gridTemplateColumns: data.cover_preview_url ? "100px 1fr" : "1fr", gap: 16, alignItems: "start" }}>
           {data.cover_preview_url && (
@@ -787,14 +1268,32 @@ function ReviewStep({ data, releaseId, onBack, onGoToStep }) {
               {data.release_type?.charAt(0).toUpperCase() + data.release_type?.slice(1)}
               {data.featured_artists?.length > 0 && ` ft. ${data.featured_artists.join(", ")}`}
             </div>
-            {data.genre && <div style={{ fontSize: 12, color: C.muted2 }}>{data.genre}</div>}
-            {data.release_date && <div style={{ fontSize: 12, color: C.muted2, marginTop: 2 }}>Release date: {data.release_date}</div>}
-            <div style={{ fontSize: 12, color: C.muted2, marginTop: 2 }}>
-              Price: ${data.price || (data.release_type === "album" ? "12.99" : data.release_type === "ep" || data.release_type === "mixtape" ? "9.99" : "2.99")}
-            </div>
+            {data.genre       && <div style={{ fontSize: 12, color: C.muted2 }}>{data.genre}</div>}
+            {data.release_date && <div style={{ fontSize: 12, color: C.muted2 }}>Release date: {data.release_date}</div>}
+            {isMultiTrack && (
+              <div style={{ fontSize: 12, color: C.muted2, marginTop: 2 }}>
+                {tracks.length} track{tracks.length !== 1 ? "s" : ""} · {readyTracks.length} ready
+              </div>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Tracklist preview (multi-track) */}
+      {isMultiTrack && (
+        <div style={{ marginBottom: 24 }}>
+          <Label>Tracklist</Label>
+          {tracks.map((t) => (
+            <div key={t.tempId} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ fontSize: 12, color: C.muted2, minWidth: 20 }}>{t.position}.</div>
+              <div style={{ flex: 1, fontSize: 13, color: C.text }}>{t.title || `Track ${t.position}`}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: t.upload_status === "ready" ? C.success : t.upload_status === "error" ? C.error : C.muted2 }}>
+                {t.upload_status === "ready" ? "✓ Ready" : t.upload_status === "error" ? "Error" : "No audio"}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Readiness checklist */}
       <div style={{ marginBottom: 24 }}>
@@ -805,8 +1304,8 @@ function ReviewStep({ data, releaseId, onBack, onGoToStep }) {
               {c.ok ? "✓" : c.blocking ? "✗" : "⚠"}
             </div>
             <div style={{ flex: 1, fontSize: 13, color: c.ok ? C.text : c.blocking ? C.error : C.warn }}>{c.label}</div>
-            {!c.ok && c.blocking && <span style={{ fontSize: 10, fontWeight: 700, color: C.error, letterSpacing: "0.08em" }}>BLOCKING</span>}
-            {!c.ok && !c.blocking && <span style={{ fontSize: 10, fontWeight: 700, color: C.warn, letterSpacing: "0.08em" }}>OPTIONAL</span>}
+            {!c.ok && c.blocking  && <span style={{ fontSize: 10, fontWeight: 700, color: C.error, letterSpacing: "0.08em" }}>BLOCKING</span>}
+            {!c.ok && !c.blocking && <span style={{ fontSize: 10, fontWeight: 700, color: C.warn,  letterSpacing: "0.08em" }}>OPTIONAL</span>}
           </div>
         ))}
       </div>
@@ -845,45 +1344,53 @@ function ReviewStep({ data, releaseId, onBack, onGoToStep }) {
 
 // ── Root wizard state machine ──────────────────────────────────────────────────
 const DEFAULT_DATA = {
-  release_type: "",
-  artist_mode: "solo",
-  title: "",
-  primary_artist: "2MRRW",
-  featured_artists: [],
-  release_date: "",
-  genre: "",
-  content_rating: "clean",
-  price: "",
-  publish_mode: "immediate",
-  scheduled_date: "",
-  scheduled_time: "00:00",
-  produced_by: [],
-  written_by: [],
-  mixing_engineer: "",
+  release_type:       "",
+  artist_mode:        "solo",
+  title:              "",
+  proposed_slug:      "",
+  primary_artist:     "2MRRW",
+  featured_artists:   [],
+  release_date:       "",
+  genre:              "",
+  content_rating:     "clean",
+  price:              "",
+  publish_mode:       "immediate",
+  scheduled_date:     "",
+  scheduled_time:     "00:00",
+  produced_by:        [],
+  written_by:         [],
+  mixing_engineer:    "",
   mastering_engineer: "",
   executive_producer: "",
-  isrc: "",
-  upc: "",
-  copyright_year: "",
-  c_line: "",
-  p_line: "",
+  isrc:               "",
+  upc:                "",
+  copyright_year:     "",
+  c_line:             "",
+  p_line:             "",
   publishing_credits: "",
-  audio_key: "",
-  audio_filename: "",
-  track_id: null,
-  cover_key: "",
-  cover_preview_url: "",
-  lyrics: "",
+  audio_key:          "",
+  audio_filename:     "",
+  track_id:           null,
+  cover_key:          "",
+  cover_preview_url:  "",
+  lyrics:             "",
 };
+
+const STEPS_SINGLE = ["Type", "Info", "Credits", "Audio", "Artwork", "Review"];
+const STEPS_MULTI  = ["Type", "Info", "Credits", "Tracklist", "Details", "Artwork", "Review"];
 
 export default function AdminUploadPage() {
   const router = useRouter();
-  const [checked, setChecked] = useState(false);
-  const [step, setStep] = useState(0);
-  const [data, setData] = useState(DEFAULT_DATA);
-  const [releaseId, setReleaseId] = useState(null);
-  const [draftSlug, setDraftSlug] = useState(null);
+  const [checked,      setChecked]      = useState(false);
+  const [step,         setStep]         = useState(0);
+  const [data,         setData]         = useState(DEFAULT_DATA);
+  const [tracks,       setTracks]       = useState([newTrack(1)]);
+  const [releaseId,    setReleaseId]    = useState(null);
+  const [draftSlug,    setDraftSlug]    = useState(null);
   const [creatingDraft, setCreatingDraft] = useState(false);
+
+  const isMultiTrack = ["album", "ep", "mixtape"].includes(data.release_type);
+  const STEPS        = isMultiTrack ? STEPS_MULTI : STEPS_SINGLE;
 
   useEffect(() => {
     const sb = createBrowserClient(
@@ -900,19 +1407,20 @@ export default function AdminUploadPage() {
     setData((prev) => ({ ...prev, [key]: value }));
   }, []);
 
-  // Step 0 → 1: create draft on server
   const handleTypeNext = async () => {
     setCreatingDraft(true);
     try {
       const res = await fetch("/api/admin/releases/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ release_type: data.release_type, has_featured_artist: data.artist_mode === "featured" }),
+        body: JSON.stringify({ release_type: data.release_type }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to create draft");
       setReleaseId(json.draft_id);
       setDraftSlug(json.slug);
+      // Reset tracks with a single empty track when starting fresh
+      setTracks([newTrack(1)]);
       setStep(1);
     } catch (err) {
       alert("Could not create draft: " + err.message);
@@ -920,6 +1428,9 @@ export default function AdminUploadPage() {
       setCreatingDraft(false);
     }
   };
+
+  const next = () => setStep((s) => Math.min(s + 1, STEPS.length - 1));
+  const back = () => setStep((s) => Math.max(s - 1, 0));
 
   if (!checked) {
     return (
@@ -930,11 +1441,13 @@ export default function AdminUploadPage() {
     );
   }
 
+  const stepName = STEPS[step];
+  const commonProps = { data, onChange: setField, onNext: next, onBack: back, releaseId, draftSlug };
+
   return (
     <div style={{ minHeight: "100vh", background: C.bg, padding: "40px 20px", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
-      <div style={{ maxWidth: 680, margin: "0 auto" }}>
+      <div style={{ maxWidth: 700, margin: "0 auto" }}>
 
-        {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32 }}>
           <div>
             <a href="/admin" style={{ fontSize: 11, color: C.muted2, textDecoration: "none", letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase" }}>
@@ -949,60 +1462,56 @@ export default function AdminUploadPage() {
           )}
         </div>
 
-        <StepBar current={step} />
+        <StepBar steps={STEPS} current={step} />
 
-        {/* Step card */}
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: "32px 32px" }}>
-          {step === 0 && (
-            <ReleaseTypeStep
-              data={data}
-              onChange={setField}
-              onNext={handleTypeNext}
-              loading={creatingDraft}
-            />
+          {stepName === "Type" && (
+            <ReleaseTypeStep {...commonProps} loading={creatingDraft} onNext={handleTypeNext} />
           )}
-          {step === 1 && (
-            <ReleaseInfoStep
-              data={data}
-              onChange={setField}
-              onNext={() => setStep(2)}
-              onBack={() => setStep(0)}
-            />
+          {stepName === "Info" && (
+            <ReleaseInfoStep {...commonProps} />
           )}
-          {step === 2 && (
-            <CreditsStep
-              data={data}
-              onChange={setField}
-              onNext={() => setStep(3)}
-              onBack={() => setStep(1)}
-            />
+          {stepName === "Credits" && (
+            <CreditsStep {...commonProps} isMultiTrack={isMultiTrack} />
           )}
-          {step === 3 && (
-            <AudioUploadStep
+          {stepName === "Audio" && (
+            <AudioUploadStep {...commonProps} />
+          )}
+          {stepName === "Tracklist" && (
+            <TracklistBuilderStep
               data={data}
-              onChange={setField}
-              onNext={() => setStep(4)}
-              onBack={() => setStep(2)}
+              tracks={tracks}
+              setTracks={setTracks}
+              onNext={next}
+              onBack={back}
               releaseId={releaseId}
               draftSlug={draftSlug}
             />
           )}
-          {step === 4 && (
+          {stepName === "Details" && (
+            <TrackDetailsStep
+              data={data}
+              tracks={tracks}
+              setTracks={setTracks}
+              onNext={next}
+              onBack={back}
+            />
+          )}
+          {stepName === "Artwork" && (
             <ArtworkLyricsStep
-              data={data}
-              onChange={setField}
-              onNext={() => setStep(5)}
-              onBack={() => setStep(3)}
-              releaseId={releaseId}
-              draftSlug={draftSlug}
+              {...commonProps}
+              isMultiTrack={isMultiTrack}
+              tracks={tracks}
+              setTracks={setTracks}
             />
           )}
-          {step === 5 && (
+          {stepName === "Review" && (
             <ReviewStep
               data={data}
+              tracks={tracks}
               releaseId={releaseId}
-              onBack={() => setStep(4)}
-              onGoToStep={setStep}
+              isMultiTrack={isMultiTrack}
+              onBack={back}
             />
           )}
         </div>

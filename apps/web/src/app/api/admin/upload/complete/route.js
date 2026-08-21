@@ -40,7 +40,7 @@ export async function POST(req) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { releaseId, trackId, key, assetType, releaseType, slug, trackSlug } = body;
+  const { releaseId, trackId, key, assetType, releaseType, slug, trackSlug, trackTitle, position } = body;
 
   if (!key || !assetType || !releaseId) {
     return NextResponse.json({ error: "releaseId, key, and assetType are required" }, { status: 400 });
@@ -81,18 +81,24 @@ export async function POST(req) {
           .eq("id", trackId);
         if (error) throw error;
       } else {
-        // Find track by release_id, or create one
-        const { data: existing } = await admin
+        // For multi-track: find by release_id + slug; for single: find by release_id only
+        let existingQuery = admin
           .from("tracks")
           .select("id")
-          .eq("release_id", releaseId)
-          .maybeSingle();
+          .eq("release_id", releaseId);
+        if (trackSlug) existingQuery = existingQuery.eq("slug", trackSlug);
+        const { data: existing } = await existingQuery.maybeSingle();
 
         if (existing?.id) {
           resolvedTrackId = existing.id;
           const { error } = await admin
             .from("tracks")
-            .update({ ...trackPayload, upload_status: "ready" })
+            .update({
+              ...trackPayload,
+              upload_status: "ready",
+              ...(trackTitle ? { title: trackTitle } : {}),
+              ...(position ? { position } : {}),
+            })
             .eq("id", existing.id);
           if (error) throw error;
         } else {
@@ -101,8 +107,9 @@ export async function POST(req) {
             .insert({
               ...trackPayload,
               release_id: releaseId,
-              slug: slug || `track-${releaseId}`,
-              title: "",
+              slug: trackSlug || slug || `track-${releaseId}`,
+              title: trackTitle || "",
+              position: position || 1,
               upload_status: "ready",
             })
             .select("id")

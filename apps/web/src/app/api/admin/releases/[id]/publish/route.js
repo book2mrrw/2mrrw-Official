@@ -83,9 +83,10 @@ export async function POST(req, { params }) {
     publishing_credits,
     cover_key,         // R2 key set by /upload/complete
     audio_key,         // R2 key set by /upload/complete
-    track_id,          // tracks row id
+    track_id,          // tracks row id (single/feature only)
     lyrics,
     scheduled_at,
+    tracks: bodyTracks = [],  // per-track overrides from wizard (multi-track)
   } = body;
 
   const admin = getAdminClient();
@@ -109,10 +110,29 @@ export async function POST(req, { params }) {
   const isMultiTrack = ["album", "ep", "mixtape"].includes(releaseType);
 
   // ── 2. Load tracks ─────────────────────────────────────────────────────────
-  const { data: tracks } = await admin
+  const { data: dbTracks } = await admin
     .from("tracks")
     .select("id, slug, title, upload_status, audio_r2_key, position, lyrics")
     .eq("release_id", releaseId);
+
+  // Merge body track data (titles, lyrics, credits overrides) into DB rows
+  const tracks = (dbTracks || []).map((dbTrack) => {
+    const bodyTrack = bodyTracks.find((bt) => bt.id === dbTrack.id || bt.slug === dbTrack.slug);
+    if (!bodyTrack) return dbTrack;
+    return {
+      ...dbTrack,
+      title:            bodyTrack.title    || dbTrack.title,
+      position:         bodyTrack.position ?? dbTrack.position,
+      lyrics:           bodyTrack.lyrics   || dbTrack.lyrics,
+      featured_artists: bodyTrack.featured_artists !== undefined ? bodyTrack.featured_artists : null,
+      track_credits: {
+        produced_by:    bodyTrack.produced_by    ?? null,
+        written_by:     bodyTrack.written_by     ?? null,
+        isrc:           bodyTrack.isrc           || null,
+        content_rating: bodyTrack.content_rating || null,
+      },
+    };
+  });
 
   // ── 3. VALIDATING — blocking checks ───────────────────────────────────────
   if (!title?.trim()) {
@@ -144,13 +164,16 @@ export async function POST(req, { params }) {
     return NextResponse.json({ error: "BLOCKING: At least one track must have audio uploaded" }, { status: 422 });
   }
 
-  // ── 4. Build canonical slug ────────────────────────────────────────────────
+  // ── 4. Resolve final status (needed for product active flag) ──────────────
+  const newStatus = scheduled_at ? "scheduled" : "published";
+
+  // ── 5. Build canonical slug ────────────────────────────────────────────────
   const existingSlug = release.slug;
   const releaseSlug = (!existingSlug || existingSlug.startsWith("draft-"))
     ? slugify(title)
     : existingSlug;
 
-  // ── 5. Build storefront media paths ───────────────────────────────────────
+  // ── 6. Build storefront media paths ───────────────────────────────────────
   const storage_path = resolveStoragePath(typeFolder, releaseSlug);
   const artwork_path = resolveArtworkPath(typeFolder, releaseSlug);
   const preview_path = resolvePreviewPath(typeFolder, releaseSlug);
@@ -188,7 +211,7 @@ export async function POST(req, { params }) {
         release_type:  normalizeReleaseType(releaseType),
         release_date:  resolvedReleaseDate,
         price_cents:   resolvedPriceCents,
-        active:        true,
+        active:        newStatus === "published",
         release_id:    releaseId,
         storage_path,
         artwork_path,
@@ -223,22 +246,31 @@ export async function POST(req, { params }) {
 
   // ── 7. For multi-track: upsert catalog_tracks ──────────────────────────────
   if (isMultiTrack && readyTracks.length > 0) {
-    const trackRows = readyTracks.map((t, i) => ({
-      slug:             t.slug || `track-${i + 1}`,
-      title:            t.title || `Track ${i + 1}`,
-      display_title:    t.title || `Track ${i + 1}`,
-      album_slug:       releaseSlug,
-      track_number:     t.position || (i + 1),
-      position:         t.position || (i + 1),
-      product_id:       productId,
-      track_id:         t.id,
-      storage_path:     resolveStoragePath(typeFolder, releaseSlug, t.slug),
-      preview_path:     resolvePreviewPath(typeFolder, t.slug, releaseSlug),
-      lyrics:           t.lyrics || null,
-      credits:          {},
-      featured_artists: [],
-      metadata:         {},
-    }));
+    const trackRows = readyTracks.map((t, i) => {
+      const tCredits = {
+        produced_by:    t.track_credits?.produced_by    ?? produced_by  ?? [],
+        written_by:     t.track_credits?.written_by     ?? written_by   ?? [],
+        isrc:           t.track_credits?.isrc           || null,
+        content_rating: t.track_credits?.content_rating || content_rating || "clean",
+      };
+      const tFeatured = t.featured_artists ?? featured_artists ?? [];
+      return {
+        slug:             t.slug || `track-${i + 1}`,
+        title:            t.title || `Track ${i + 1}`,
+        display_title:    t.title || `Track ${i + 1}`,
+        album_slug:       releaseSlug,
+        track_number:     t.position || (i + 1),
+        position:         t.position || (i + 1),
+        product_id:       productId,
+        track_id:         t.id,
+        storage_path:     resolveStoragePath(typeFolder, releaseSlug, t.slug),
+        preview_path:     resolvePreviewPath(typeFolder, t.slug, releaseSlug),
+        lyrics:           t.lyrics || null,
+        credits:          tCredits,
+        featured_artists: tFeatured,
+        metadata:         {},
+      };
+    });
 
     const { error: trackErr } = await admin
       .from("catalog_tracks")
@@ -249,14 +281,16 @@ export async function POST(req, { params }) {
     }
   }
 
-  // For singles/features: save lyrics on the tracks row if provided
-  if (!isMultiTrack && lyrics && track_id) {
-    await admin.from("tracks").update({ lyrics }).eq("id", track_id).catch(() => {});
+  // For singles/features: update the tracks row with title + lyrics + isrc
+  if (!isMultiTrack && track_id) {
+    const singleTrackUpdate = { position: 1 };
+    if (title?.trim()) singleTrackUpdate.title = title.trim();
+    if (lyrics)        singleTrackUpdate.lyrics = lyrics;
+    if (isrc)          singleTrackUpdate.isrc   = isrc;
+    await admin.from("tracks").update(singleTrackUpdate).eq("id", track_id).catch(() => {});
   }
 
   // ── 8. Update releases row status + canonical slug ─────────────────────────
-  const newStatus = scheduled_at ? "scheduled" : "published";
-
   const releaseUpdate = {
     status:             newStatus,
     storefront_visible: !scheduled_at,
