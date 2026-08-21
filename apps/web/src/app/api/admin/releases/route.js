@@ -3,6 +3,7 @@ import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { discoverFileByExtensions } from "@/lib/storage/r2";
 
 export const dynamic = "force-dynamic";
 
@@ -22,37 +23,33 @@ export async function GET(req) {
 
   const admin = getAdminClient();
 
-  const { data: releases, error } = await admin
+  // ── 1. Wizard releases (new upload system) ────────────────────────────────
+  const { data: wizardReleases, error: wizardError } = await admin
     .from("releases")
     .select("id, slug, status, release_type, release_date, storefront_visible, scheduled_at, cover_art_r2_key, upc, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (wizardError) {
+    console.error("[admin/releases] wizard releases fetch error:", wizardError.message);
   }
 
-  // For each release, get product title + track count
-  const releaseIds = (releases || []).map((r) => r.id);
+  const releaseIds = (wizardReleases || []).map((r) => r.id);
 
-  const [productsRes, tracksRes] = await Promise.all([
-    admin
-      .from("products")
-      .select("release_id, title, active")
-      .in("release_id", releaseIds),
-    admin
-      .from("tracks")
-      .select("release_id, upload_status")
-      .in("release_id", releaseIds),
-  ]);
+  // Get product title + track counts for wizard releases
+  const [wizardProductsRes, wizardTracksRes] = releaseIds.length > 0
+    ? await Promise.all([
+        admin.from("products").select("release_id, title, active").in("release_id", releaseIds),
+        admin.from("tracks").select("release_id, upload_status").in("release_id", releaseIds),
+      ])
+    : [{ data: [] }, { data: [] }];
 
   const productsByRelease = {};
-  for (const p of (productsRes.data || [])) {
+  for (const p of (wizardProductsRes.data || [])) {
     productsByRelease[p.release_id] = p;
   }
-
   const trackCountByRelease = {};
-  for (const t of (tracksRes.data || [])) {
+  for (const t of (wizardTracksRes.data || [])) {
     if (!trackCountByRelease[t.release_id]) {
       trackCountByRelease[t.release_id] = { total: 0, ready: 0 };
     }
@@ -60,12 +57,101 @@ export async function GET(req) {
     if (t.upload_status === "ready") trackCountByRelease[t.release_id].ready++;
   }
 
-  const enriched = (releases || []).map((r) => ({
+  const enrichedWizard = (wizardReleases || []).map((r) => ({
     ...r,
-    title:        productsByRelease[r.id]?.title || null,
+    title: productsByRelease[r.id]?.title || null,
     product_active: productsByRelease[r.id]?.active || false,
     track_counts: trackCountByRelease[r.id] || { total: 0, ready: 0 },
+    source: "releases",
   }));
 
-  return NextResponse.json({ releases: enriched });
+  // ── 2. Catalog releases (legacy R2-ingest system → products table) ────────
+  const { data: catalogProducts, error: catalogError } = await admin
+    .from("products")
+    .select("id, slug, title, product_type, release_type, active, image_path, price_cents, created_at, updated_at, metadata")
+    .order("updated_at", { ascending: false })
+    .limit(200);
+
+  if (catalogError) {
+    console.error("[admin/releases] catalog products fetch error:", catalogError.message);
+  }
+
+  // Track counts from catalog_tracks
+  const productIds = (catalogProducts || []).map((p) => p.id);
+  const { data: catalogTracksData } = productIds.length > 0
+    ? await admin.from("catalog_tracks").select("product_id").in("product_id", productIds)
+    : { data: [] };
+
+  const catalogTrackCountByProduct = {};
+  for (const t of (catalogTracksData || [])) {
+    if (!catalogTrackCountByProduct[t.product_id]) {
+      catalogTrackCountByProduct[t.product_id] = { total: 0, ready: 0 };
+    }
+    catalogTrackCountByProduct[t.product_id].total++;
+    catalogTrackCountByProduct[t.product_id].ready++;
+  }
+
+  // Discover cover art keys for catalog products in parallel
+  // image_path is stored as folder prefix (e.g. "images/singles/slug/")
+  // discoverFileByExtensions finds the actual file key within that folder
+  const catalogWithArt = await Promise.all(
+    (catalogProducts || []).map(async (p) => {
+      if (!p.image_path) return { ...p, cover_art_r2_key: null };
+      try {
+        const folderPrefix = String(p.image_path).replace(/\/$/, "");
+        const key = await discoverFileByExtensions(folderPrefix, [".jpg", ".jpeg", ".png", ".webp"]);
+        return { ...p, cover_art_r2_key: key || null };
+      } catch {
+        return { ...p, cover_art_r2_key: null };
+      }
+    })
+  );
+
+  // Normalize catalog products into the unified release shape
+  const catalogAsReleases = catalogWithArt.map((p) => {
+    const releaseType = p.release_type || p.product_type || "single";
+    const isMultiTrack = ["album", "mixtape", "ep", "albums", "mixtapes-and-eps"].includes(releaseType);
+    const trackCounts = catalogTrackCountByProduct[p.id] || { total: 0, ready: 0 };
+
+    // Singles/features that aren't multi-track are always 1 track
+    if (!isMultiTrack && trackCounts.total === 0) {
+      trackCounts.total = 1;
+      trackCounts.ready = 1;
+    }
+
+    return {
+      id: p.id,
+      slug: p.slug,
+      status: p.active ? "published" : "draft",
+      release_type: releaseType,
+      release_date: p.metadata?.release_date || null,
+      storefront_visible: Boolean(p.active),
+      scheduled_at: null,
+      cover_art_r2_key: p.cover_art_r2_key,
+      upc: p.metadata?.upc || null,
+      created_at: p.created_at || p.updated_at,
+      title: p.title,
+      product_active: Boolean(p.active),
+      track_counts: trackCounts,
+      price_cents: p.price_cents || null,
+      source: "catalog",
+    };
+  });
+
+  // ── 3. Merge: wizard releases win on slug conflict ─────────────────────────
+  // Catalog entries go in first, then wizard entries overwrite matching slugs
+  const merged = new Map();
+  for (const r of catalogAsReleases) {
+    merged.set(r.slug, r);
+  }
+  for (const r of enrichedWizard) {
+    merged.set(r.slug, r);
+  }
+
+  // Sort newest first
+  const allReleases = [...merged.values()].sort(
+    (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
+  );
+
+  return NextResponse.json({ releases: allReleases });
 }

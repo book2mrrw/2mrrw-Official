@@ -16,41 +16,79 @@ const BTN_BASE = {
   cursor: "pointer",
 };
 
+function buildCatalogLabel(state, details) {
+  if (state === "idle") return "Sync Catalog";
+  if (state === "loading") return "Syncing…";
+  if (state === "ok") {
+    const n = details?.summary?.productsUpserted;
+    return n != null ? `Synced ${n} ✓` : "Synced ✓";
+  }
+  // error
+  const upserted = details?.summary?.productsUpserted;
+  const failed = details?.summary?.failed;
+  if (upserted > 0 && failed > 0) return `Partial (${failed} failed)`;
+  return "Failed ✗";
+}
+
+function buildAudioLabel(state, details) {
+  if (state === "idle") return "Sync Audio";
+  if (state === "loading") return "Queuing…";
+  if (state === "ok") {
+    const n = details?.queued;
+    return n != null ? `Queued ${n} ✓` : "Queued ✓";
+  }
+  return "Failed ✗";
+}
+
+function buildTooltip(state, details) {
+  if (state !== "error" || !details) return undefined;
+  if (details.error) return details.error;
+  if (details.failed?.length) {
+    return details.failed.slice(0, 5).map((f) => `${f.slug || f.type || "?"}: ${f.error}`).join("\n");
+  }
+  return undefined;
+}
+
 function AdminIngestButton() {
   const { isAdmin } = useAuth();
-  const [catalogState, setCatalogState] = useState("idle"); // idle | loading | ok | error
+  const [catalogState, setCatalogState] = useState("idle");
   const [audioState, setAudioState] = useState("idle");
+  const [catalogDetails, setCatalogDetails] = useState(null);
+  const [audioDetails, setAudioDetails] = useState(null);
 
   if (!isAdmin) return null;
 
   async function triggerCatalog() {
     if (catalogState === "loading") return;
     setCatalogState("loading");
+    setCatalogDetails(null);
     try {
       const res = await fetch("/api/admin/catalog/ingest-trigger", { method: "POST" });
       const json = await res.json();
+      setCatalogDetails(json);
       setCatalogState(json.ok ? "ok" : "error");
-    } catch {
+    } catch (e) {
+      setCatalogDetails({ error: e?.message || "Network error" });
       setCatalogState("error");
     }
-    setTimeout(() => setCatalogState("idle"), 4000);
+    setTimeout(() => { setCatalogState("idle"); setCatalogDetails(null); }, 8000);
   }
 
   async function triggerAudio() {
     if (audioState === "loading") return;
     setAudioState("loading");
+    setAudioDetails(null);
     try {
       const res = await fetch("/api/admin/catalog/hls-sync-trigger", { method: "POST" });
       const json = await res.json();
+      setAudioDetails(json);
       setAudioState(json.ok ? "ok" : "error");
-    } catch {
+    } catch (e) {
+      setAudioDetails({ error: e?.message || "Network error" });
       setAudioState("error");
     }
-    setTimeout(() => setAudioState("idle"), 4000);
+    setTimeout(() => { setAudioState("idle"); setAudioDetails(null); }, 8000);
   }
-
-  const catalogLabel = { idle: "Sync Catalog", loading: "Syncing…", ok: "Synced ✓", error: "Failed ✗" }[catalogState];
-  const audioLabel   = { idle: "Sync Audio",   loading: "Queuing…", ok: "Queued ✓", error: "Failed ✗" }[audioState];
 
   const stateStyle = (s) => ({
     color: s === "ok" ? "#4ade80" : s === "error" ? "#f87171" : "#aaa",
@@ -61,11 +99,21 @@ function AdminIngestButton() {
 
   return (
     <div style={{ display: "flex", flexDirection: "row", gap: 6 }}>
-      <button onClick={triggerCatalog} disabled={catalogState === "loading"} style={{ ...BTN_BASE, ...stateStyle(catalogState) }}>
-        {catalogLabel}
+      <button
+        onClick={triggerCatalog}
+        disabled={catalogState === "loading"}
+        title={buildTooltip(catalogState, catalogDetails)}
+        style={{ ...BTN_BASE, ...stateStyle(catalogState) }}
+      >
+        {buildCatalogLabel(catalogState, catalogDetails)}
       </button>
-      <button onClick={triggerAudio} disabled={audioState === "loading"} style={{ ...BTN_BASE, ...stateStyle(audioState) }}>
-        {audioLabel}
+      <button
+        onClick={triggerAudio}
+        disabled={audioState === "loading"}
+        title={buildTooltip(audioState, audioDetails)}
+        style={{ ...BTN_BASE, ...stateStyle(audioState) }}
+      >
+        {buildAudioLabel(audioState, audioDetails)}
       </button>
     </div>
   );

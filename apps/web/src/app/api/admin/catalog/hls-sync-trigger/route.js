@@ -9,9 +9,8 @@
  */
 
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { getFanSessionUser } from "@/lib/auth/session-user";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { cookies } from "next/headers";
 import { isAdminUser } from "@/lib/auth/constants";
 import { resolvePlaybackKey } from "@/lib/playback/resolve-playback-key";
 import { buildHLSPrefix } from "@/lib/hls/derive-key";
@@ -33,14 +32,7 @@ const RELEASE_TYPE_MAP = {
 };
 
 export async function POST() {
-  const cookieStore = await cookies();
-  const sb = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { cookies: { getAll: () => cookieStore.getAll() } }
-  );
-
-  const { data: { user } } = await sb.auth.getUser();
+  const user = await getFanSessionUser();
   if (!user || !isAdminUser(user)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
