@@ -45,11 +45,14 @@ export async function markJobComplete(jobId, manifest) {
 
   if (insErr) {
     if (insErr.code === "23505") {
-      const { error: updErr } = await db
+      let updQ = db
         .from("hls_manifests")
         .update({ ...manifest, updated_at: new Date().toISOString() })
-        .eq("slug", manifest.slug)
-        .is("track_slug", manifest.track_slug ?? null);
+        .eq("slug", manifest.slug);
+      updQ = manifest.track_slug != null
+        ? updQ.eq("track_slug", manifest.track_slug)
+        : updQ.is("track_slug", null);
+      const { error: updErr } = await updQ;
       if (updErr) throw new Error(`update manifest: ${updErr.message}`);
     } else {
       throw new Error(`insert manifest: ${insErr.message}`);
@@ -80,11 +83,12 @@ export async function markJobComplete(jobId, manifest) {
 }
 
 export async function updatePosterKey(slug, trackSlug, posterKey, status = "ready") {
-  const { error } = await db
+  let q = db
     .from("hls_manifests")
     .update({ poster_key: posterKey, poster_status: status })
-    .eq("slug", slug)
-    .is("track_slug", trackSlug ?? null);
+    .eq("slug", slug);
+  q = trackSlug != null ? q.eq("track_slug", trackSlug) : q.is("track_slug", null);
+  const { error } = await q;
   if (error) throw new Error(`updatePosterKey: ${error.message}`);
 }
 
