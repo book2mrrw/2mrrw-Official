@@ -213,6 +213,18 @@ export async function runR2Ingest({ admin, dryRun = false }) {
 
     for (const slug of slugs) {
       try {
+        // Skip wizard releases that are not yet published — deactivate any stale product
+        const { data: wizardRow } = await admin
+          .from("releases").select("status").eq("slug", slug).maybeSingle();
+        if (wizardRow && wizardRow.status !== "published") {
+          if (!dryRun) {
+            await admin.from("products")
+              .update({ active: false, updated_at: new Date().toISOString() })
+              .eq("slug", slug);
+          }
+          continue;
+        }
+
         const media = await discoverSimpleReleaseMedia(slug, releaseTypeFolder);
         destArray.push({ slug, title: titleFromSlug(slug), productType, releaseTypeFolder, media });
 
@@ -253,6 +265,18 @@ export async function runR2Ingest({ admin, dryRun = false }) {
 
     for (const albumSlug of albumSlugs) {
       try {
+        // Skip wizard releases that are not yet published — deactivate any stale product
+        const { data: wizardRow } = await admin
+          .from("releases").select("status").eq("slug", albumSlug).maybeSingle();
+        if (wizardRow && wizardRow.status !== "published") {
+          if (!dryRun) {
+            await admin.from("products")
+              .update({ active: false, updated_at: new Date().toISOString() })
+              .eq("slug", albumSlug);
+          }
+          continue;
+        }
+
         const [tracks, imageKey, videoKey] = await Promise.all([
           discoverAlbumTracks(albumSlug, releaseTypeFolder),
           discoverFile(`images/${releaseTypeFolder}/${albumSlug}`, [".jpg", ".jpeg", ".png", ".webp"]),

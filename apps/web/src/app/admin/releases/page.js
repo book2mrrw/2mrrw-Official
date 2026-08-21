@@ -386,6 +386,7 @@ export default function AdminReleasesPage() {
   const [replacing, setReplacing] = useState(null); // release object for modal
   const [replacingCover, setReplacingCover] = useState(null); // release object for cover modal
   const [filter,   setFilter]   = useState("all");
+  const [deleting, setDeleting] = useState(null); // slug being deleted (for loading state)
 
   useEffect(() => {
     const sb = createBrowserClient(
@@ -410,6 +411,26 @@ export default function AdminReleasesPage() {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const deleteRelease = async (rel) => {
+    const isDraft = rel.status === "draft";
+    const label = isDraft ? "Delete this draft?" : "Take down this release? It will be hidden from the storefront.";
+    if (!window.confirm(label)) return;
+    setDeleting(rel.slug);
+    try {
+      const url = rel.source === "catalog"
+        ? `/api/admin/releases/${rel.id}?source=catalog`
+        : `/api/admin/releases/${rel.id}`;
+      const res = await fetch(url, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Delete failed");
+      await loadReleases();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -601,6 +622,32 @@ export default function AdminReleasesPage() {
                         }}
                       >
                         New Upload
+                      </button>
+                    )}
+                    {rel.status === "draft" && (
+                      <button
+                        onClick={() => deleteRelease(rel)}
+                        disabled={deleting === rel.slug}
+                        style={{
+                          background: "rgba(255,69,58,0.10)", border: `1px solid rgba(255,69,58,0.30)`, borderRadius: 6,
+                          padding: "5px 10px", fontSize: 11, color: C.error, cursor: "pointer", fontFamily: "inherit",
+                          opacity: deleting === rel.slug ? 0.5 : 1,
+                        }}
+                      >
+                        {deleting === rel.slug ? "Deleting…" : "Delete Draft"}
+                      </button>
+                    )}
+                    {(isLive || isScheduled) && (
+                      <button
+                        onClick={() => deleteRelease(rel)}
+                        disabled={deleting === rel.slug}
+                        style={{
+                          background: "rgba(255,159,10,0.10)", border: `1px solid rgba(255,159,10,0.30)`, borderRadius: 6,
+                          padding: "5px 10px", fontSize: 11, color: C.warn, cursor: "pointer", fontFamily: "inherit",
+                          opacity: deleting === rel.slug ? 0.5 : 1,
+                        }}
+                      >
+                        {deleting === rel.slug ? "Taking Down…" : "Take Down"}
                       </button>
                     )}
                   </div>

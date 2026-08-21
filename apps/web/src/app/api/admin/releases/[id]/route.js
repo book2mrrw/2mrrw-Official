@@ -294,3 +294,91 @@ export async function PATCH(req, { params }) {
   } catch {}
   return NextResponse.json({ ok: true });
 }
+
+// ── DELETE /api/admin/releases/[id] ─────────────────────────────────────────────
+// Wizard drafts: hard-deletes releases + tracks rows (product row deactivated if exists).
+// Catalog products (source=catalog): sets active=false (takedown, preserves purchase history).
+// Query param: ?source=catalog to force catalog path when id is a product id.
+export async function DELETE(req, { params }) {
+  const user = await getFanSessionUser();
+  if (!user || !isAdminUser(user)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const rl = await checkRateLimit(req, {
+    routeKey: "admin.releases.delete",
+    limit: 20,
+    windowSeconds: 60,
+    identifier: user.id,
+  });
+  if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
+
+  const { id } = params;
+  if (!id) return NextResponse.json({ error: "Release ID required" }, { status: 400 });
+
+  const { searchParams } = new URL(req.url);
+  const forceCatalog = searchParams.get("source") === "catalog";
+
+  const admin = getAdminClient();
+
+  if (!forceCatalog) {
+    // ── Path A: wizard release ─────────────────────────────────────────────────
+    const { data: release } = await admin
+      .from("releases").select("id, slug, status").eq("id", id).maybeSingle();
+
+    if (release) {
+      // Deactivate any linked product (don't hard-delete — may have purchase history)
+      await admin.from("products")
+        .update({ active: false, updated_at: new Date().toISOString() })
+        .eq("release_id", id);
+
+      // Also deactivate by slug in case it was ingested without release_id link
+      if (release.slug) {
+        await admin.from("products")
+          .update({ active: false, updated_at: new Date().toISOString() })
+          .eq("slug", release.slug)
+          .is("release_id", null);
+      }
+
+      // Hard-delete tracks
+      await admin.from("tracks").delete().eq("release_id", id);
+
+      // Hard-delete the release row
+      const { error } = await admin.from("releases").delete().eq("id", id);
+      if (error) {
+        return NextResponse.json({ error: `Failed to delete release: ${error.message}` }, { status: 500 });
+      }
+
+      try {
+        revalidatePath("/");
+        revalidatePath("/song/[slug]", "page");
+      } catch {}
+      return NextResponse.json({ ok: true, deleted: "wizard_release" });
+    }
+  }
+
+  // ── Path B: catalog product — takedown (set active=false) ─────────────────────
+  const { data: product, error: productErr } = await admin
+    .from("products").select("id, slug").eq("id", id).maybeSingle();
+
+  if (productErr || !product) {
+    return NextResponse.json({ error: "Release not found" }, { status: 404 });
+  }
+
+  const { error: takedownErr } = await admin
+    .from("products")
+    .update({ active: false, updated_at: new Date().toISOString() })
+    .eq("id", id);
+
+  if (takedownErr) {
+    return NextResponse.json({ error: `Takedown failed: ${takedownErr.message}` }, { status: 500 });
+  }
+
+  try {
+    revalidatePath("/");
+    revalidatePath("/song/[slug]", "page");
+    revalidatePath("/feature/[slug]", "page");
+    revalidatePath("/album/[slug]", "page");
+  } catch {}
+  return NextResponse.json({ ok: true, deleted: "catalog_takedown" });
+}
