@@ -239,9 +239,8 @@ export default function AlbumTracklistSheet({
       >
         <div
           style={{
-            maxHeight: isMobile
-              ? "min(78dvh, calc(100dvh - env(safe-area-inset-top) - 48px))"
-              : "70vh",
+            height: isMobile ? "calc(100dvh - env(safe-area-inset-top) - 8px)" : undefined,
+            maxHeight: isMobile ? "none" : "70vh",
             background: "linear-gradient(165deg, rgba(20,20,24,0.96) 0%, rgba(8,8,12,0.98) 100%)",
             border: "1px solid rgba(255,255,255,0.06)",
             borderRadius: "16px 16px 0 0",
@@ -358,6 +357,7 @@ export default function AlbumTracklistSheet({
             style={{
               overflowY: "auto",
               overflowX: "hidden",
+              overscrollBehavior: "contain",
               flex: 1,
               minHeight: 0,
               padding: isMobile ? "0 4px" : "0 8px",
