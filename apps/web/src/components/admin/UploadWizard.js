@@ -319,7 +319,7 @@ function ReleaseTypeStep({ data, onChange, onNext, loading }) {
 function ReleaseInfoStep({ data, onChange, onNext, onBack }) {
   const isSingle    = data.release_type === "single" || data.release_type === "feature";
   const hasFeatured = data.artist_mode === "featured" || data.release_type === "feature";
-  const GENRES = ["R&B","Hip-Hop","Pop","Alternative R&B","Soul","Neo-Soul","Trap","Rap","Electronic","Other"];
+  const GENRES = ["R&B","Hip-Hop","Pop","Alternative R&B","Soul","Neo-Soul","Trap","Rap","Melodic Rap","Pop/R&B","Hiphop/R&B","Electronic","Other"];
 
   return (
     <div>

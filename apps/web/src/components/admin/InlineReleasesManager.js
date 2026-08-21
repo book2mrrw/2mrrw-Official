@@ -453,7 +453,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const [audioError,      setAudioError]      = useState("");
   const audioXhrRef = useRef(null);
 
-  const GENRES = ["R&B","Hip-Hop","Pop","Alternative R&B","Soul","Neo-Soul","Trap","Rap","Electronic","Other"];
+  const GENRES = ["R&B","Hip-Hop","Pop","Alternative R&B","Soul","Neo-Soul","Trap","Rap","Melodic Rap","Pop/R&B","Hiphop/R&B","Electronic","Other"];
 
   // ── Load release detail ────────────────────────────────────────────────────────
   useEffect(() => {
