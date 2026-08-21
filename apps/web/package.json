@@ -21,7 +21,8 @@
     "recover:deploy": "node scripts/recovery/recover-deploy.mjs",
     "snapshot:foundation": "node scripts/recovery/create-frontend-snapshot.mjs",
     "recover:checkpoint": "node scripts/recovery/create-frontend-checkpoint.mjs",
-    "test:batch1": "node --import ./scripts/register-alias.mjs scripts/test-batch1-regression.mjs"
+    "test:batch1": "node --import ./scripts/register-alias.mjs scripts/test-batch1-regression.mjs",
+    "test:core-invariants": "node --test src/lib/playback-core/__tests__/invariants.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1051.0",
