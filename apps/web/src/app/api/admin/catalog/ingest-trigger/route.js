@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { isAdminUser } from "@/lib/auth/constants";
+import { getAdminClient } from "@/lib/supabase/admin";
+import { runR2Ingest } from "@/lib/catalog/r2-ingest-pipeline";
 
 export const dynamic = "force-dynamic";
 
@@ -18,16 +20,12 @@ export async function POST() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const base = process.env.NEXT_PUBLIC_SITE_URL || "https://www.2mrrw.com";
-  const res = await fetch(`${base}/api/admin/catalog/r2-ingest`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-seed-secret": process.env.ADMIN_SEED_SECRET || "",
-    },
-    body: JSON.stringify({ dryRun: false }),
-  });
-
-  const json = await res.json();
-  return NextResponse.json(json, { status: res.status });
+  try {
+    const admin = getAdminClient();
+    const result = await runR2Ingest({ admin, dryRun: false });
+    return NextResponse.json(result);
+  } catch (err) {
+    console.error("[ingest-trigger] unhandled error", err?.message);
+    return NextResponse.json({ ok: false, error: err?.message || "Internal error" }, { status: 500 });
+  }
 }
