@@ -16,6 +16,7 @@ import {
   isUiHydrationTraceEnabled,
   logUiHydrationTrace,
 } from "@/lib/diagnostics/ui-hydration-trace";
+import AdminIngestButton from "@/components/admin/AdminIngestButton";
 
 const HomeStorefront = memo(function HomeStorefront({
   liveCountdownTarget,
@@ -82,8 +83,11 @@ const HomeStorefront = memo(function HomeStorefront({
       </div>
 
       <motion.div style={{ marginTop: 20, marginBottom: 4 }}>
-        <motion.div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+        <motion.div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
           <h2 className="section-heading" style={{ margin: 0 }}>Latest Singles</h2>
+          <AdminIngestButton />
+        </motion.div>
+        <motion.div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
           <button type="button" className={styles.collBtn} onClick={onOpenCollection} aria-label="Open my music collection">
             MY COLLECTION
           </button>

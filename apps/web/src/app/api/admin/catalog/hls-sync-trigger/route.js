@@ -45,13 +45,14 @@ export async function POST() {
 
   const admin = getAdminClient();
 
+  try {
   const { data: tracks, error: fetchErr } = await admin
     .from("catalog_tracks")
     .select("slug, album_slug, metadata")
     .order("album_slug");
 
   if (fetchErr) {
-    return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: fetchErr.message }, { status: 500 });
   }
   if (!tracks?.length) {
     return NextResponse.json({ ok: true, queued: 0, skipped: 0, failed: 0, message: "No catalog tracks found" });
@@ -62,7 +63,8 @@ export async function POST() {
 
   for (const t of tracks) {
     const releaseSlug = t.album_slug || t.slug;
-    const trackSlug = (t.slug && t.slug !== t.album_slug) ? t.slug : null;
+    // Only set trackSlug for multi-track releases (where album_slug is set and differs from the track slug)
+    const trackSlug = t.album_slug ? t.slug : null;
     const rawType = t.metadata?.release_category || t.metadata?.release_type || "single";
     const releaseType = RELEASE_TYPE_MAP[rawType] || "singles";
 
@@ -154,4 +156,8 @@ export async function POST() {
     jobs: results,
     errors,
   });
+  } catch (err) {
+    console.error("[hls-sync-trigger] unhandled error", err?.message);
+    return NextResponse.json({ ok: false, error: err?.message || "Internal error" }, { status: 500 });
+  }
 }

@@ -7,7 +7,6 @@ import { AudioProvider } from "@/context/AudioContext";
 import GlobalAudioPlayerBar from "@/components/audio/GlobalAudioPlayerBar";
 import SessionRecoveryRoot from "@/components/system/SessionRecoveryRoot";
 import PostHogInit from "@/components/system/PostHogInit";
-import AdminIngestButton from "@/components/admin/AdminIngestButton";
 import BlackscreenTraceBootstrap from "@/components/system/BlackscreenTraceBootstrap";
 import PlaybackNetworkHints from "@/components/system/PlaybackNetworkHints";
 import GlobalMediaControllerMount from "@/components/system/GlobalMediaControllerMount";
@@ -84,7 +83,6 @@ export default function RootLayout({ children }) {
               </AuthGateProvider>
             </AppAuthRoot>
             <GlobalAudioPlayerBar />
-            <AdminIngestButton />
           </AudioProvider>
         </AuthProvider>
       </body>

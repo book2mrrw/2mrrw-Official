@@ -334,12 +334,12 @@ export async function POST(req) {
             stream_path: media.streamKey ? media.streamPath : null,
             video_path: media.videoKey ? `videos/${releaseTypeFolder}/${slug}/` : null,
             image_path: media.imageKey ? `images/${releaseTypeFolder}/${slug}/` : null,
-            ingested_from_r2_at: scannedAt,
             metadata: {
               release_type: normalizeReleaseType(productType),
               release_category: productType,
               canonical: false,
               r2_ingested: true,
+              ingested_from_r2_at: scannedAt,
             },
           };
 
@@ -389,17 +389,17 @@ export async function POST(req) {
             price_cents: DEFAULT_PRICE_CENTS[releaseTypeFolder],
             active: true,
             release_type: releaseTypeFolder,
-            storage_path: null,   // multi-track; tracks have their own paths
+            storage_path: null,
             preview_path: null,
             stream_path: null,
             video_path: videoKey ? `videos/${releaseTypeFolder}/${albumSlug}/` : null,
             image_path: imageKey ? `images/${releaseTypeFolder}/${albumSlug}/` : null,
-            ingested_from_r2_at: scannedAt,
             metadata: {
               release_type: releaseTypeFolder,
               release_category: isEpMixtape ? "mixtape" : "album",
               canonical: false,
               r2_ingested: true,
+              ingested_from_r2_at: scannedAt,
             },
           };
 

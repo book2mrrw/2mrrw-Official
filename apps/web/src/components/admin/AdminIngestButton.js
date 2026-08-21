@@ -60,7 +60,7 @@ function AdminIngestButton() {
   });
 
   return (
-    <div style={{ position: "fixed", top: 14, right: 16, zIndex: 9999, display: "flex", flexDirection: "column", gap: 6 }}>
+    <div style={{ display: "flex", flexDirection: "row", gap: 6 }}>
       <button onClick={triggerCatalog} disabled={catalogState === "loading"} style={{ ...BTN_BASE, ...stateStyle(catalogState) }}>
         {catalogLabel}
       </button>
