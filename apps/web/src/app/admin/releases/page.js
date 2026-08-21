@@ -376,6 +376,107 @@ function ReplaceCoverModal({ release, onClose }) {
   );
 }
 
+// ── Swipe-to-Delete Row ────────────────────────────────────────────────────────
+// Swipe left to reveal a delete zone. Haptic buzz fires exactly once at the
+// threshold. Releasing past threshold commits the delete; before snaps back.
+// touchAction:"pan-y" lets vertical scroll pass through normally.
+function SwipeDeleteRow({ children, onDelete, showBorder }) {
+  const [offsetX, setOffsetX]   = useState(0);
+  const [progress, setProgress] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const startXRef      = useRef(null);
+  const currentOffRef  = useRef(0);
+  const buzzedRef      = useRef(false);
+  const committedRef   = useRef(false);
+
+  const THRESHOLD = 110; // px left-drag before delete commits
+
+  const onTouchStart = (e) => {
+    if (committedRef.current) return;
+    startXRef.current = e.touches[0].clientX;
+    buzzedRef.current = false;
+    setDragging(true);
+  };
+
+  const onTouchMove = (e) => {
+    if (startXRef.current === null || committedRef.current) return;
+    const raw = e.touches[0].clientX - startXRef.current;
+    if (raw > 6) { startXRef.current = null; setDragging(false); return; } // ignore right-swipe
+    const abs = Math.abs(Math.min(raw, 0));
+    // elastic resistance past threshold
+    const clamped = abs <= THRESHOLD ? -abs : -(THRESHOLD + (abs - THRESHOLD) * 0.22);
+    currentOffRef.current = clamped;
+    setOffsetX(clamped);
+    const p = Math.min(1, abs / THRESHOLD);
+    setProgress(p);
+    if (p >= 1 && !buzzedRef.current) {
+      buzzedRef.current = true;
+      try { navigator.vibrate?.([35, 12, 35]); } catch {}
+    }
+  };
+
+  const onTouchEnd = () => {
+    setDragging(false);
+    startXRef.current = null;
+    if (committedRef.current) return;
+    if (currentOffRef.current <= -THRESHOLD) {
+      committedRef.current = true;
+      setOffsetX(-(typeof window !== "undefined" ? window.innerWidth : 600));
+      setTimeout(onDelete, 320);
+    } else {
+      setOffsetX(0);
+      setProgress(0);
+    }
+  };
+
+  const atThreshold = progress >= 1;
+  const showLabel   = progress > 0.25;
+
+  return (
+    <div style={{
+      position: "relative",
+      overflow: "hidden",
+      borderBottom: showBorder ? `1px solid ${C.border}` : "none",
+    }}>
+      {/* Delete zone — fades in as content slides left */}
+      <div style={{
+        position: "absolute", inset: 0,
+        background: `rgba(255,69,58,${Math.min(0.18, progress * 0.22)})`,
+        display: "flex", alignItems: "center", justifyContent: "flex-end",
+        paddingRight: 22,
+        pointerEvents: "none",
+      }}>
+        {showLabel && (
+          <span style={{
+            fontSize: 11, fontWeight: 800, letterSpacing: "0.1em",
+            textTransform: "uppercase",
+            color: atThreshold ? C.error : `rgba(255,69,58,${0.35 + progress * 0.55})`,
+            transition: dragging ? "none" : "color 0.15s",
+          }}>
+            {atThreshold ? "× DELETE" : "slide to delete"}
+          </span>
+        )}
+      </div>
+      {/* Sliding content */}
+      <div
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{
+          transform: `translateX(${offsetX}px)`,
+          transition: dragging ? "none" : "transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+          background: C.surface,
+          position: "relative", zIndex: 1,
+          willChange: "transform",
+          touchAction: "pan-y",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function AdminReleasesPage() {
   const router = useRouter();
@@ -414,10 +515,12 @@ export default function AdminReleasesPage() {
     }
   };
 
-  const deleteRelease = async (rel) => {
-    const isDraft = rel.status === "draft";
-    const label = isDraft ? "Delete this draft?" : "Take down this release? It will be hidden from the storefront.";
-    if (!window.confirm(label)) return;
+  const deleteRelease = async (rel, skipConfirm = false) => {
+    if (!skipConfirm) {
+      const isDraft = rel.status === "draft";
+      const label = isDraft ? "Delete this draft?" : "Take down this release? It will be hidden from the storefront.";
+      if (!window.confirm(label)) return;
+    }
     setDeleting(rel.slug);
     try {
       const url = rel.source === "catalog"
@@ -537,15 +640,16 @@ export default function AdminReleasesPage() {
               const prefix = SLUG_PREFIX[rel.release_type] || "/song/";
               const isLive = rel.status === "published" && rel.storefront_visible;
               const isScheduled = rel.status === "scheduled";
+              const isDraft = rel.status === "draft";
+              const showBorder = i < filtered.length - 1;
+              const swipeable = isDraft || isScheduled;
 
-              return (
+              const rowEl = (
                 <div
-                  key={rel.id}
                   style={{
                     display: "grid",
                     gridTemplateColumns: "1fr 90px 100px 110px 180px",
                     padding: "14px 20px",
-                    borderBottom: i < filtered.length - 1 ? `1px solid ${C.border}` : "none",
                     alignItems: "center",
                   }}
                 >
@@ -651,6 +755,23 @@ export default function AdminReleasesPage() {
                       </button>
                     )}
                   </div>
+                </div>
+              );
+
+              if (swipeable) {
+                return (
+                  <SwipeDeleteRow
+                    key={rel.id}
+                    onDelete={() => deleteRelease(rel, true)}
+                    showBorder={showBorder}
+                  >
+                    {rowEl}
+                  </SwipeDeleteRow>
+                );
+              }
+              return (
+                <div key={rel.id} style={{ borderBottom: showBorder ? `1px solid ${C.border}` : "none" }}>
+                  {rowEl}
                 </div>
               );
             })}
