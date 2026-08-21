@@ -22,6 +22,8 @@
 
 import { NextResponse } from "next/server";
 import { invalidateManifestCache } from "@/lib/server/hls-manifest-cache";
+import { getAdminClient } from "@/lib/supabase/admin";
+import { clearPersistedPlaybackKey } from "@/lib/playback/resolve-playback-key";
 
 const LOG_PREFIX = "[hls/complete]";
 
@@ -64,6 +66,17 @@ export async function POST(req) {
   try {
     await invalidateManifestCache(slug, trackSlug);
     console.log(`${LOG_PREFIX} manifest cache invalidated`, { slug, trackSlug });
+
+    // Also clear the durable playback key cache so the next play request
+    // re-discovers the newly transcoded HLS manifest rather than serving stale
+    try {
+      const admin = getAdminClient();
+      await clearPersistedPlaybackKey(admin, slug, trackSlug ?? null);
+      console.log(`${LOG_PREFIX} playback key cache cleared`, { slug, trackSlug });
+    } catch (pkErr) {
+      console.warn(`${LOG_PREFIX} playback key cache clear failed (non-fatal)`, pkErr?.message);
+    }
+
     return json({ ok: true, slug, trackSlug });
   } catch (err) {
     // Cache invalidation failure is logged but not fatal — the DB row already exists

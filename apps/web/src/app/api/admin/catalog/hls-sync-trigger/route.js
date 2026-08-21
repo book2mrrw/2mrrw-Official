@@ -94,6 +94,10 @@ export async function POST() {
     const errors = [];
 
     for (const { releaseSlug, trackSlug, releaseType } of allTracks.values()) {
+      // Always clear stale durable cache first — audio may have been manually replaced in R2
+      // even if a job is already pending/processing (the new segments will use the new file)
+      try { await clearPersistedPlaybackKey(admin, releaseSlug, trackSlug || null); } catch {}
+
       // Skip tracks already in-flight — don't interrupt an active job
       let q = admin
         .from("hls_transcode_jobs")
@@ -106,10 +110,6 @@ export async function POST() {
         results.push({ slug: releaseSlug, trackSlug, jobId: existing.id, status: existing.status, skipped: true });
         continue;
       }
-
-      // Clear stale durable cache so resolvePlaybackKey re-discovers the current R2 audio
-      // (handles audio replacements where the cached key may be outdated)
-      try { await clearPersistedPlaybackKey(admin, releaseSlug, trackSlug || null); } catch {}
 
       // Resolve source audio key (never modify resolvePlaybackKey)
       const sourceKey = await resolvePlaybackKey(admin, releaseSlug, {
