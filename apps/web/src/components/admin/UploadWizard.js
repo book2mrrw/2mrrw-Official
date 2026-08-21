@@ -684,6 +684,7 @@ function TrackRow({ track, idx, total, albumSlug, data, releaseId, setTracks }) 
         xhr.onload  = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
         xhr.onerror = () => reject(new Error("Network error"));
         xhr.open("PUT", uploadUrl);
+        xhr.setRequestHeader("Content-Type", file.type || "audio/wav");
         xhr.send(file);
       });
 
