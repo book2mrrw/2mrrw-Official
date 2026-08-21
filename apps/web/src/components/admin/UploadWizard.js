@@ -182,6 +182,39 @@ function MultiEntry({ label, items, onAdd, onRemove, placeholder }) {
   );
 }
 
+// ── Price options ─────────────────────────────────────────────────────────────────
+const PRICE_OPTIONS = {
+  single:  ["2.99", "5.99", "7.99", "14.99", "19.99"],
+  feature: ["2.99", "5.99", "7.99", "14.99", "19.99"],
+  album:   ["12.99", "15.99", "19.99", "29.99", "49.99", "79.99"],
+  ep:      ["9.99", "15.99", "19.99", "49.99", "79.99"],
+  mixtape: ["9.99", "15.99", "19.99", "49.99", "79.99"],
+};
+
+function PriceSelector({ releaseType, value, onChange }) {
+  const options = PRICE_OPTIONS[releaseType] || PRICE_OPTIONS.single;
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      {options.map((opt) => (
+        <button
+          key={opt}
+          type="button"
+          onClick={() => onChange(opt)}
+          style={{
+            background: value === opt ? C.accentDim : C.surface2,
+            border: `2px solid ${value === opt ? C.accent : C.border2}`,
+            borderRadius: 8, padding: "9px 16px", cursor: "pointer",
+            fontSize: 13, fontWeight: 700, color: value === opt ? C.accent : C.text,
+            fontFamily: "inherit",
+          }}
+        >
+          ${opt}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ── Step progress bar ────────────────────────────────────────────────────────────
 function StepBar({ steps, current }) {
   return (
@@ -352,15 +385,15 @@ function ReleaseInfoStep({ data, onChange, onNext, onBack }) {
         </Field>
       )}
 
+      <Field label="Price">
+        <PriceSelector
+          releaseType={data.release_type}
+          value={data.price}
+          onChange={(v) => onChange("price", v)}
+        />
+      </Field>
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        <Field label="Price" hint="Default: $2.99 single · $9.99 EP/Mixtape · $12.99 album">
-          <Input
-            type="number"
-            value={data.price}
-            onChange={(v) => onChange("price", v)}
-            placeholder={data.release_type === "album" ? "12.99" : data.release_type === "ep" || data.release_type === "mixtape" ? "9.99" : "2.99"}
-          />
-        </Field>
         <Field label="Publication">
           <Select value={data.publish_mode} onChange={(v) => onChange("publish_mode", v)}>
             <option value="immediate">Release Immediately</option>
