@@ -12,7 +12,7 @@ import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { isAdminUser } from "@/lib/auth/constants";
-import { resolvePlaybackKey } from "@/lib/playback/resolve-playback-key";
+import { resolvePlaybackKey, clearPersistedPlaybackKey } from "@/lib/playback/resolve-playback-key";
 import { buildHLSPrefix } from "@/lib/hls/derive-key";
 
 export const dynamic = "force-dynamic";
@@ -106,6 +106,10 @@ export async function POST() {
         results.push({ slug: releaseSlug, trackSlug, jobId: existing.id, status: existing.status, skipped: true });
         continue;
       }
+
+      // Clear stale durable cache so resolvePlaybackKey re-discovers the current R2 audio
+      // (handles audio replacements where the cached key may be outdated)
+      try { await clearPersistedPlaybackKey(admin, releaseSlug, trackSlug || null); } catch {}
 
       // Resolve source audio key (never modify resolvePlaybackKey)
       const sourceKey = await resolvePlaybackKey(admin, releaseSlug, {
