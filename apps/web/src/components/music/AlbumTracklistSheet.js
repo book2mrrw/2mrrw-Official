@@ -97,7 +97,7 @@ export default function AlbumTracklistSheet({
           },
         });
       }
-      void dispatchPlaybackCommand("playQueue", { tracks: instantQueue, startIndex: queueIndex });
+      void dispatchPlaybackCommand("playQueue", { tracks: instantQueue, startIndex: queueIndex, resumeAt: 0 });
     },
     [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, album]
   );
@@ -136,19 +136,21 @@ export default function AlbumTracklistSheet({
     if (startTrack?.src) void hintUpcomingPlay(startTrack);
   }, [open, tracks, accountState, userId, isAdmin, isPlaying, hintUpcomingPlay]);
 
-  // Auto-play track 1 when sheet opens — only if the global player is completely idle.
-  // If anything is playing (even a different release), the sheet opens in browse mode
-  // without interrupting playback. This matches Spotify/Apple Music: opening an album
-  // sheet never replaces an active queue; only an explicit tap triggers playback.
-  // autoPlayedRef blocks re-fire if deps change while the sheet stays open.
+  // Auto-play track 1 on first-ever open of this release.
+  // Persistence: localStorage key "2mrrw_fp_{slug}" is set the moment auto-play fires.
+  // Subsequent opens skip auto-play and open in browse mode — user picks the track.
+  // autoPlayedRef guards against re-fire within the same modal session.
+  // First-time plays are intentional context switches, so isPlaying is not a guard.
   useEffect(() => {
-    if (!open || autoPlayedRef.current || !tracks.length) return;
-    if (isPlaying) return;
+    if (!open || autoPlayedRef.current || !tracks.length || !album?.slug) return;
+    const firstPlayKey = `2mrrw_fp_${album.slug}`;
+    if (localStorage.getItem(firstPlayKey)) return;
     const hasPlayable = tracks.some((t) => Boolean(t.src));
     if (!hasPlayable) return;
     autoPlayedRef.current = true;
+    localStorage.setItem(firstPlayKey, "1");
     playTrackInSheet(0);
-  }, [open, tracks, isPlaying, playTrackInSheet]);
+  }, [open, tracks, playTrackInSheet, album?.slug]);
 
   // Play All / Shuffle close the sheet after queuing.
   const playAndClose = useCallback(
@@ -160,11 +162,11 @@ export default function AlbumTracklistSheet({
         const randomIdx = Math.floor(Math.random() * playable.length);
         const { startTrack } = toInstantStartTrack(playable[randomIdx]);
         const instantPlayable = playable.map((t, i) => (i === randomIdx ? startTrack : t));
-        void dispatchPlaybackCommand("playQueue", { tracks: instantPlayable, startIndex: randomIdx });
+        void dispatchPlaybackCommand("playQueue", { tracks: instantPlayable, startIndex: randomIdx, resumeAt: 0 });
       } else {
         setShuffle(false);
         const { startTrack } = toInstantStartTrack(playable[0]);
-        void dispatchPlaybackCommand("playQueue", { tracks: [startTrack, ...playable.slice(1)], startIndex: 0 });
+        void dispatchPlaybackCommand("playQueue", { tracks: [startTrack, ...playable.slice(1)], startIndex: 0, resumeAt: 0 });
       }
       onClose?.();
     },
@@ -191,6 +193,13 @@ export default function AlbumTracklistSheet({
 
   const trackCount = tracks.length || album.tracks?.length || album.trackTitles?.length || 0;
   const albumCoverType = album.coverArtType || "image";
+
+  // Drive header from the live active track when it belongs to this album;
+  // fall back to album-level data when nothing from this album is playing.
+  const activeAlbumTrack = hasStarted ? tracks.find((t) => isTrackActive(t)) : null;
+  const headerCover = activeAlbumTrack?.cover || album.cover;
+  const headerTitle = activeAlbumTrack?.title || album.title;
+  const headerCoverType = activeAlbumTrack?.coverArtType || albumCoverType;
 
   return (
     <ModalErrorBoundary stackId="album-tracklist-sheet" onClose={onClose}>
@@ -276,8 +285,8 @@ export default function AlbumTracklistSheet({
             }}
           >
             <CoverArt
-              src={album.cover}
-              type={albumCoverType}
+              src={headerCover}
+              type={headerCoverType}
               alt=""
               width={56}
               height={56}
@@ -294,7 +303,7 @@ export default function AlbumTracklistSheet({
                   textOverflow: "ellipsis",
                 }}
               >
-                {album.title}
+                {headerTitle}
               </div>
               <div className="player-track-meta" style={{ fontSize: 11, marginTop: 4, opacity: 0.45 }}>
                 {trackCount} tracks
