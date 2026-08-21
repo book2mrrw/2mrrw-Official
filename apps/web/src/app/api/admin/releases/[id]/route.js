@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -187,6 +188,14 @@ export async function PATCH(req, { params }) {
     console.error("[releases PATCH] partial errors", errors);
     return NextResponse.json({ ok: false, errors }, { status: 207 });
   }
+
+  // Propagate changes to ISR-cached storefront and release pages
+  try {
+    revalidatePath("/");
+    revalidatePath("/song/[slug]", "page");
+    revalidatePath("/feature/[slug]", "page");
+    revalidatePath("/album/[slug]", "page");
+  } catch {}
 
   return NextResponse.json({ ok: true });
 }

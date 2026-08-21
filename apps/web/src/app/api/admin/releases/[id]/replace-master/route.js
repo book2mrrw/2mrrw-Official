@@ -4,6 +4,7 @@ import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { headR2ObjectKey } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { clearPersistedPlaybackKey } from "@/lib/playback/resolve-playback-key";
 
 export const dynamic = "force-dynamic";
 
@@ -133,6 +134,11 @@ export async function POST(req, { params }) {
         attempt_count: 0,
       });
   }
+
+  // Clear durable playback key cache so the player picks up the new master immediately
+  try {
+    await clearPersistedPlaybackKey(admin, release.slug, isMultiTrack ? trackRow.slug : null);
+  } catch {}
 
   console.info(`[replace-master] SUCCESS releaseId=${releaseId} trackId=${trackRow.id} newKey=${newKey}`);
   return NextResponse.json({ ok: true, trackId: trackRow.id, hlsQueued: true });

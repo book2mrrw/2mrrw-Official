@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { headR2ObjectKey } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+
+function revalidateStorefront() {
+  try {
+    revalidatePath("/");
+    revalidatePath("/song/[slug]", "page");
+    revalidatePath("/feature/[slug]", "page");
+    revalidatePath("/album/[slug]", "page");
+  } catch {}
+}
 
 export const dynamic = "force-dynamic";
 
@@ -167,6 +177,7 @@ export async function POST(req) {
       if (error) throw error;
 
       console.info(`[admin/upload/complete] cover complete key=${key} releaseId=${releaseId}`);
+      revalidateStorefront();
       return NextResponse.json({ ok: true, assetType });
     }
 
@@ -180,6 +191,7 @@ export async function POST(req) {
         .eq("id", releaseId);
       if (error) throw error;
 
+      revalidateStorefront();
       return NextResponse.json({ ok: true, assetType });
     }
 
