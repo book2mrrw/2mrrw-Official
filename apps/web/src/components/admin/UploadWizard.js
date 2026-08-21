@@ -316,7 +316,7 @@ function ReleaseTypeStep({ data, onChange, onNext, loading }) {
 }
 
 // ── Step 1: Release Info ─────────────────────────────────────────────────────────
-function ReleaseInfoStep({ data, onChange, onNext, onBack }) {
+function ReleaseInfoStep({ data, onChange, onNext, onBack, loading }) {
   const isSingle    = data.release_type === "single" || data.release_type === "feature";
   const hasFeatured = data.artist_mode === "featured" || data.release_type === "feature";
   const GENRES = ["R&B","Hip-Hop","Pop","Alternative R&B","Soul","Neo-Soul","Trap","Rap","Melodic Rap","Pop/R&B","Hiphop/R&B","Electronic","Other"];
@@ -415,7 +415,9 @@ function ReleaseInfoStep({ data, onChange, onNext, onBack }) {
 
       <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
         <Btn onClick={onBack} variant="secondary">← Back</Btn>
-        <Btn onClick={onNext} disabled={!data.title}>Continue →</Btn>
+        <Btn onClick={onNext} disabled={!data.title || loading}>
+          {loading ? "Creating Draft…" : "Continue →"}
+        </Btn>
       </div>
     </div>
   );
@@ -1419,20 +1421,30 @@ export function UploadWizard({ onComplete, onDismiss }) {
     setDraftSlug(null);
   }, []);
 
-  const handleTypeNext = async () => {
+  // Step 0: just advance — draft is created after title is known (Step 1)
+  const handleTypeNext = () => {
+    setTracks([newTrack(1)]);
+    setStep(1);
+  };
+
+  // Step 1: create draft using the title-derived slug so R2 paths are canonical from day one
+  const handleInfoNext = async () => {
+    if (!data.title?.trim()) return;
     setCreatingDraft(true);
     try {
       const res = await fetch("/api/admin/releases/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ release_type: data.release_type }),
+        body: JSON.stringify({
+          release_type: data.release_type,
+          slug: data.proposed_slug || slugify(data.title),
+        }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to create draft");
       setReleaseId(json.draft_id);
       setDraftSlug(json.slug);
-      setTracks([newTrack(1)]);
-      setStep(1);
+      next();
     } catch (err) {
       alert("Could not create draft: " + err.message);
     } finally {
@@ -1473,10 +1485,10 @@ export function UploadWizard({ onComplete, onDismiss }) {
 
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: "32px 32px" }}>
         {stepName === "Type" && (
-          <ReleaseTypeStep {...commonProps} loading={creatingDraft} onNext={handleTypeNext} />
+          <ReleaseTypeStep {...commonProps} loading={false} onNext={handleTypeNext} />
         )}
         {stepName === "Info" && (
-          <ReleaseInfoStep {...commonProps} />
+          <ReleaseInfoStep {...commonProps} onNext={handleInfoNext} loading={creatingDraft} />
         )}
         {stepName === "Credits" && (
           <CreditsStep {...commonProps} isMultiTrack={isMultiTrack} />

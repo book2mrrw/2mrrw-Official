@@ -23,7 +23,7 @@ export async function POST(req) {
   let body;
   try { body = await req.json(); } catch { body = {}; }
 
-  const { release_type } = body;
+  const { release_type, slug: requestedSlug } = body;
 
   const VALID_TYPES = ["single", "feature", "album", "ep", "mixtape"];
   if (!VALID_TYPES.includes(release_type)) {
@@ -31,7 +31,22 @@ export async function POST(req) {
   }
 
   const admin = getAdminClient();
-  const draftSlug = `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  // Derive final slug: prefer caller-supplied title-based slug, deduplicate if taken
+  const SLUG_RE = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
+  let draftSlug;
+  if (requestedSlug && SLUG_RE.test(requestedSlug)) {
+    let candidate = requestedSlug;
+    for (let attempt = 1; attempt <= 10; attempt++) {
+      const { data: existing } = await admin
+        .from("releases").select("id").eq("slug", candidate).maybeSingle();
+      if (!existing) { draftSlug = candidate; break; }
+      candidate = `${requestedSlug}-${attempt + 1}`;
+    }
+  }
+  if (!draftSlug) {
+    draftSlug = `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  }
 
   const { data, error } = await admin
     .from("releases")

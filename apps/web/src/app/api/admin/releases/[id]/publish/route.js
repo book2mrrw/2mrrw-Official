@@ -256,6 +256,29 @@ export async function POST(req, { params }) {
     await deleteR2Object(srcKey).catch(() => {});
   }
 
+  // ── 5c. Canonicalize cover art path ───────────────────────────────────────
+  // Cover art uploaded during wizard lands at images/{folder}/draft-xxx/draft-xxx.ext.
+  // Move it to the canonical images/{folder}/{slug}/{slug}.ext so both the releases
+  // cover_art_r2_key and the catalog image_path folder discovery agree.
+  let canonicalCoverKey = resolvedCoverKey;
+  if (resolvedCoverKey) {
+    const coverExt = extFromKey(resolvedCoverKey);
+    const targetCoverKey = coverExt
+      ? `images/${typeFolder}/${releaseSlug}/${releaseSlug}${coverExt}`
+      : resolvedCoverKey;
+    if (targetCoverKey !== resolvedCoverKey) {
+      try {
+        await copyR2Object(resolvedCoverKey, targetCoverKey);
+        await admin.from("releases").update({ cover_art_r2_key: targetCoverKey }).eq("id", releaseId).catch(() => {});
+        await deleteR2Object(resolvedCoverKey).catch(() => {});
+        canonicalCoverKey = targetCoverKey;
+      } catch (err) {
+        console.warn("[publish] cover art canonicalize error (non-fatal)", err?.message);
+        // canonicalCoverKey stays as resolvedCoverKey — display degrades but publish succeeds
+      }
+    }
+  }
+
   // ── 6. Build storefront media paths ───────────────────────────────────────
   const storage_path = resolveStoragePath(typeFolder, releaseSlug);
   const artwork_path = resolveArtworkPath(typeFolder, releaseSlug);
@@ -311,7 +334,7 @@ export async function POST(req, { params }) {
           genre:                    genre || null,
           content_rating:           content_rating || null,
           featured_artists:         featured_artists || [],
-          cover_art_r2_key:         resolvedCoverKey,
+          cover_art_r2_key:         canonicalCoverKey,
         },
         gifting_enabled: false,
       },

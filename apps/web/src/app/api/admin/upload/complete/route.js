@@ -130,14 +130,12 @@ export async function POST(req) {
       }
 
       // Queue HLS transcode job (check-then-insert to handle COALESCE-based unique index)
+      // jobSlug is always the release slug; trackSlug stored separately in track_slug column
       const hlsPrefix = buildHLSPrefix(releaseType, slug, trackSlug);
-      const jobSlug = trackSlug || slug;
-      const { data: existingJob } = await admin
-        .from("hls_transcode_jobs")
-        .select("id, status")
-        .eq("slug", jobSlug)
-        .is(trackSlug ? "track_slug" : "track_slug", trackSlug || null)
-        .maybeSingle();
+      const jobSlug = slug;
+      let jobQ = admin.from("hls_transcode_jobs").select("id, status").eq("slug", jobSlug);
+      jobQ = trackSlug ? jobQ.eq("track_slug", trackSlug) : jobQ.is("track_slug", null);
+      const { data: existingJob } = await jobQ.maybeSingle();
 
       let hlsError = null;
       if (existingJob) {
@@ -170,11 +168,28 @@ export async function POST(req) {
     }
 
     if (assetType === "cover") {
-      const { error } = await admin
-        .from("releases")
-        .update({ cover_art_r2_key: key })
-        .eq("id", releaseId);
-      if (error) throw error;
+      // Try wizard release (releases table) first
+      const { data: relRow } = await admin
+        .from("releases").select("id").eq("id", releaseId).maybeSingle();
+
+      if (relRow) {
+        const { error } = await admin
+          .from("releases").update({ cover_art_r2_key: key }).eq("id", releaseId);
+        if (error) throw error;
+      } else {
+        // Catalog product (products table) — update image_path + metadata
+        const { data: product, error: prodErr } = await admin
+          .from("products").select("metadata").eq("id", releaseId).maybeSingle();
+        if (prodErr || !product) {
+          return NextResponse.json({ error: "Release not found for cover art update" }, { status: 404 });
+        }
+        const coverFolder = key.split("/").slice(0, -1).join("/") + "/";
+        const { error: updErr } = await admin.from("products").update({
+          image_path: coverFolder,
+          metadata:   { ...(product.metadata || {}), cover_art_r2_key: key },
+        }).eq("id", releaseId);
+        if (updErr) throw updErr;
+      }
 
       console.info(`[admin/upload/complete] cover complete key=${key} releaseId=${releaseId}`);
       revalidateStorefront();

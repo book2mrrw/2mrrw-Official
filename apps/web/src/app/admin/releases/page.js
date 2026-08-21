@@ -258,6 +258,124 @@ function ReplaceMasterModal({ release, onClose }) {
   );
 }
 
+// ── Replace Cover Modal ────────────────────────────────────────────────────────
+function ReplaceCoverModal({ release, onClose }) {
+  const [phase, setPhase] = useState("select");
+  const [progress, setProgress] = useState(0);
+  const [errMsg, setErrMsg] = useState("");
+
+  const pickAndUpload = async (file) => {
+    if (!file) return;
+    setPhase("uploading");
+    setProgress(0);
+
+    try {
+      const presignRes = await fetch("/api/admin/upload/presigned", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          releaseType: release.release_type,
+          slug: release.slug,
+          assetType: "cover",
+          filename: file.name,
+          contentType: file.type || "image/jpeg",
+          size: file.size,
+        }),
+      });
+      const presignData = await presignRes.json();
+      if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
+      const { uploadUrl, key } = presignData;
+
+      await new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
+        };
+        xhr.onload  = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.open("PUT", uploadUrl);
+        xhr.setRequestHeader("Content-Type", file.type || "image/jpeg");
+        xhr.send(file);
+      });
+
+      const completeRes = await fetch("/api/admin/upload/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ releaseId: release.id, key, assetType: "cover", releaseType: release.release_type, slug: release.slug }),
+      });
+      const completeData = await completeRes.json();
+      if (!completeRes.ok) throw new Error(completeData.error || "Cover update failed");
+
+      setPhase("done");
+    } catch (err) {
+      setErrMsg(err.message);
+      setPhase("error");
+    }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 16, padding: "32px", width: "100%", maxWidth: 420 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 800, color: C.text, margin: 0 }}>Replace Cover Art</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 22, cursor: "pointer" }}>×</button>
+        </div>
+
+        <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>
+          <strong style={{ color: C.text }}>{release?.title || release?.slug}</strong>
+          {" · "}
+          {TYPE_LABELS[release?.release_type] || release?.release_type}
+        </div>
+
+        {phase === "select" && (
+          <>
+            <div style={{ background: C.surface2, border: `2px dashed ${C.border2}`, borderRadius: 10, padding: "28px 20px", textAlign: "center", marginBottom: 16, fontSize: 13, color: C.muted }}>
+              JPG · PNG · WEBP — square recommended — max 20 MB
+            </div>
+            <button
+              onClick={() => {
+                const input = document.createElement("input");
+                input.type = "file";
+                input.accept = "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp";
+                input.onchange = (e) => { if (e.target.files?.[0]) pickAndUpload(e.target.files[0]); };
+                input.click();
+              }}
+              style={{ width: "100%", background: C.accent, border: "none", borderRadius: 9, padding: "13px 0", fontSize: 13, fontWeight: 700, color: "#000", cursor: "pointer", letterSpacing: "0.06em", textTransform: "uppercase", fontFamily: "inherit" }}
+            >
+              Select Cover Image
+            </button>
+          </>
+        )}
+
+        {phase === "uploading" && (
+          <div style={{ textAlign: "center", padding: "12px 0" }}>
+            <div style={{ fontSize: 13, color: C.accent, fontWeight: 700, marginBottom: 12 }}>Uploading… {progress}%</div>
+            <div style={{ background: C.surface2, borderRadius: 4, height: 6, overflow: "hidden" }}>
+              <div style={{ background: C.accent, width: `${progress}%`, height: "100%", transition: "width 0.2s" }} />
+            </div>
+          </div>
+        )}
+
+        {phase === "done" && (
+          <div style={{ textAlign: "center", padding: "12px 0" }}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>✅</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.success, marginBottom: 6 }}>Cover art updated</div>
+            <div style={{ fontSize: 12, color: C.muted }}>File saved to the canonical cover art folder.</div>
+            <button onClick={onClose} style={{ marginTop: 20, background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 9, padding: "10px 24px", fontSize: 13, color: C.text, cursor: "pointer", fontFamily: "inherit" }}>Close</button>
+          </div>
+        )}
+
+        {phase === "error" && (
+          <div>
+            <div style={{ fontSize: 13, color: C.error, marginBottom: 16 }}>{errMsg || "Unknown error"}</div>
+            <button onClick={() => { setPhase("select"); setErrMsg(""); }} style={{ background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 9, padding: "10px 20px", fontSize: 13, color: C.text, cursor: "pointer", fontFamily: "inherit" }}>Try Again</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function AdminReleasesPage() {
   const router = useRouter();
@@ -266,6 +384,7 @@ export default function AdminReleasesPage() {
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState(null);
   const [replacing, setReplacing] = useState(null); // release object for modal
+  const [replacingCover, setReplacingCover] = useState(null); // release object for cover modal
   const [filter,   setFilter]   = useState("all");
 
   useEffect(() => {
@@ -452,15 +571,26 @@ export default function AdminReleasesPage() {
                       </a>
                     )}
                     {(isLive || isScheduled) && (
-                      <button
-                        onClick={() => setReplacing(rel)}
-                        style={{
-                          background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 6,
-                          padding: "5px 10px", fontSize: 11, color: C.muted, cursor: "pointer", fontFamily: "inherit",
-                        }}
-                      >
-                        Replace Master
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setReplacing(rel)}
+                          style={{
+                            background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 6,
+                            padding: "5px 10px", fontSize: 11, color: C.muted, cursor: "pointer", fontFamily: "inherit",
+                          }}
+                        >
+                          Replace Master
+                        </button>
+                        <button
+                          onClick={() => setReplacingCover(rel)}
+                          style={{
+                            background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 6,
+                            padding: "5px 10px", fontSize: 11, color: C.muted, cursor: "pointer", fontFamily: "inherit",
+                          }}
+                        >
+                          Replace Cover
+                        </button>
+                      </>
                     )}
                     {rel.status === "draft" && (
                       <button
@@ -485,6 +615,12 @@ export default function AdminReleasesPage() {
         <ReplaceMasterModal
           release={replacing}
           onClose={() => { setReplacing(null); loadReleases(); }}
+        />
+      )}
+      {replacingCover && (
+        <ReplaceCoverModal
+          release={replacingCover}
+          onClose={() => { setReplacingCover(null); loadReleases(); }}
         />
       )}
     </div>
