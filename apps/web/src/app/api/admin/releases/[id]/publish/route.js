@@ -3,7 +3,8 @@ import { revalidatePath } from "next/cache";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { headR2ObjectKey } from "@/lib/storage/r2";
+import { headR2ObjectKey, copyR2Object, deleteR2Object } from "@/lib/storage/r2";
+import { buildHLSPrefix } from "@/lib/hls/derive-key";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import {
   resolveStoragePath,
@@ -112,7 +113,7 @@ export async function POST(req, { params }) {
   // ── 2. Load tracks ─────────────────────────────────────────────────────────
   const { data: dbTracks } = await admin
     .from("tracks")
-    .select("id, slug, title, upload_status, audio_r2_key, position, lyrics")
+    .select("id, slug, title, upload_status, audio_r2_key, master_r2_key, position, lyrics")
     .eq("release_id", releaseId);
 
   // Merge body track data (titles, lyrics, credits overrides) into DB rows
@@ -172,6 +173,88 @@ export async function POST(req, { params }) {
   const releaseSlug = (!existingSlug || existingSlug.startsWith("draft-"))
     ? slugify(title)
     : existingSlug;
+
+  // ── 5b. Canonicalize audio R2 paths ───────────────────────────────────────
+  // Wizard uploads land at draft-slug paths (e.g. digital-assets/singles/draft-xxx/draft-xxx.wav).
+  // resolvePlaybackKey discovers audio by scanning storage_path, which is keyed
+  // to the final slug. Copy each audio file to its canonical location now so
+  // the audio pipeline can find it immediately after publish.
+  const HLS_FOLDER_MAP = {
+    single: "singles", feature: "features",
+    album: "albums", ep: "mixtapes-and-eps", mixtape: "mixtapes-and-eps",
+  };
+  const hlsFolder = HLS_FOLDER_MAP[releaseType] || "singles";
+
+  function extFromKey(k) {
+    const i = String(k || "").lastIndexOf(".");
+    return i >= 0 ? k.slice(i) : "";
+  }
+
+  for (const track of readyTracks) {
+    const srcKey = track.audio_r2_key;
+    if (!srcKey) continue;
+
+    const ext = extFromKey(srcKey);
+    const destKey = isMultiTrack
+      ? `digital-assets/${typeFolder}/${releaseSlug}/${track.slug}/${track.slug}${ext}`
+      : `digital-assets/${typeFolder}/${releaseSlug}/${releaseSlug}${ext}`;
+
+    if (srcKey === destKey) continue; // already at canonical path (R2-ingest releases)
+
+    // Copy audio to canonical path — blocking: a published release must have accessible audio
+    try {
+      await copyR2Object(srcKey, destKey);
+    } catch (err) {
+      console.error(`[publish] R2 audio copy failed for track ${track.id}:`, err?.message);
+      return NextResponse.json(
+        { error: "Publish failed — could not move audio to canonical storage. Please try again." },
+        { status: 500 }
+      );
+    }
+
+    // Update DB: canonical audio_r2_key (and master_r2_key if it followed the same draft pattern)
+    const trackUpdateFields = { audio_r2_key: destKey };
+    if (track.master_r2_key && track.master_r2_key !== srcKey) {
+      const masterExt = extFromKey(track.master_r2_key);
+      const masterDest = isMultiTrack
+        ? `digital-assets/${typeFolder}/${releaseSlug}/${track.slug}/${track.slug}-master${masterExt}`
+        : `digital-assets/${typeFolder}/${releaseSlug}/${releaseSlug}-master${masterExt}`;
+      if (track.master_r2_key !== masterDest) {
+        try {
+          await copyR2Object(track.master_r2_key, masterDest);
+          trackUpdateFields.master_r2_key = masterDest;
+        } catch {
+          // master_r2_key is supplementary — non-fatal
+        }
+      }
+    }
+    await admin.from("tracks").update(trackUpdateFields).eq("id", track.id).catch((err) => {
+      console.warn("[publish] track audio_r2_key update error (non-fatal)", err?.message);
+    });
+
+    // Update the HLS transcode job queued at upload time (used draft slug/prefix/source_key)
+    // Skip jobs currently being processed by the worker — they'll be corrected on next sync
+    const newHlsPrefix = buildHLSPrefix(releaseSlug, isMultiTrack ? track.slug : null, hlsFolder);
+    await admin
+      .from("hls_transcode_jobs")
+      .update({
+        source_key:    destKey,
+        slug:          releaseSlug,
+        track_slug:    isMultiTrack ? track.slug : null,
+        hls_prefix:    newHlsPrefix,
+        status:        "pending",
+        attempt_count: 0,
+        error_message: null,
+      })
+      .eq("source_key", srcKey)
+      .neq("status", "processing")
+      .catch((err) => {
+        console.warn("[publish] HLS job canonicalize error (non-fatal)", err?.message);
+      });
+
+    // Clean up draft file — non-fatal; leave on failure (worker may still be reading)
+    await deleteR2Object(srcKey).catch(() => {});
+  }
 
   // ── 6. Build storefront media paths ───────────────────────────────────────
   const storage_path = resolveStoragePath(typeFolder, releaseSlug);

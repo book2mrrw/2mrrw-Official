@@ -1,4 +1,6 @@
 import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
@@ -196,6 +198,35 @@ export async function headR2ObjectKey(key) {
     if (status === 403 || (status >= 500 && status < 600)) throw err;
     return false;
   }
+}
+
+/**
+ * Server-side same-bucket copy. Used at publish time to move wizard-uploaded
+ * audio from the temporary draft-slug path to the canonical slug path.
+ * @param {string} sourceKey - existing R2 key
+ * @param {string} destKey   - destination R2 key (must not equal sourceKey)
+ */
+export async function copyR2Object(sourceKey, destKey) {
+  const src  = String(sourceKey || "").replace(/^\//, "");
+  const dest = String(destKey   || "").replace(/^\//, "");
+  if (!R2_BUCKET || !src || !dest) throw new Error("copyR2Object: missing bucket or keys");
+  await r2Client.send(
+    new CopyObjectCommand({
+      Bucket:     R2_BUCKET,
+      CopySource: `${R2_BUCKET}/${src}`,
+      Key:        dest,
+    })
+  );
+}
+
+/**
+ * Delete a single R2 object by key. Non-throwing for missing objects.
+ * @param {string} key - R2 object key to delete
+ */
+export async function deleteR2Object(key) {
+  const normalized = String(key || "").replace(/^\//, "");
+  if (!R2_BUCKET || !normalized) return;
+  await r2Client.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: normalized }));
 }
 
 export async function discoverFileByExtensions(prefix, extensionsInPriorityOrder) {
