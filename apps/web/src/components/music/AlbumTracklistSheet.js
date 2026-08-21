@@ -57,6 +57,8 @@ export default function AlbumTracklistSheet({
   const dismissTriggered = useRef(false);
   const dragControls = useDragControls();
   const autoPlayedRef = useRef(false);
+  const [trackSwitching, setTrackSwitching] = useState(false);
+  const switchClearRef = useRef(null);
 
   const tracks = useMemo(
     () =>
@@ -97,6 +99,10 @@ export default function AlbumTracklistSheet({
           },
         });
       }
+      // Suppress stale error banners during rapid track switching.
+      setTrackSwitching(true);
+      if (switchClearRef.current) clearTimeout(switchClearRef.current);
+      switchClearRef.current = setTimeout(() => setTrackSwitching(false), 1500);
       void dispatchPlaybackCommand("playQueue", { tracks: instantQueue, startIndex: queueIndex, resumeAt: 0 });
     },
     [tracks, accountState, userId, isAdmin, dispatchPlaybackCommand, setShuffle, album]
@@ -542,7 +548,7 @@ export default function AlbumTracklistSheet({
             })}
           </div>
 
-          {error && tracks.some((t) => isSamePlaybackTrack(currentTrack, t)) && (
+          {error && !trackSwitching && tracks.some((t) => isSamePlaybackTrack(currentTrack, t)) && (
             <div
               style={{
                 padding: "10px 16px",

@@ -29,6 +29,12 @@ import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { correlateBlackscreenPlayback } from "@/lib/diagnostics/playback-trace";
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
 
+// PLAY_QUEUE supersede counter. Increments with every PLAY_QUEUE dispatch.
+// The queued run() for each command checks this at execution time — if a
+// newer PLAY_QUEUE has arrived, the stale one skips immediately without
+// touching audio state. Result: only the last rapid tap executes.
+let _playQueueSeq = 0;
+
 // Minimal silent WAV (RIFF header, 0 PCM samples) used as a dedicated unlock
 // element for iOS gesture-time audio permission. iOS Safari requires audio.play()
 // to be called synchronously within the user gesture event handler — calling it
@@ -215,6 +221,22 @@ export function dispatchPlaybackCommand(type, payload = {}, { serial = true, can
     activeStreamAbortRef.current?.abort();
   }
 
-  commandQueueRef.current = commandQueueRef.current.catch(() => undefined).then(run);
+  // For PLAY_QUEUE: wrap run() in a supersede guard so only the most recently
+  // dispatched command actually loads a stream. Intermediate rapid-tap commands
+  // skip the queue synchronously — no stream request, no timeout, no error state.
+  let execFn = run;
+  if (resolvedType === PLAYBACK_COMMANDS.PLAY_QUEUE) {
+    const mySeq = ++_playQueueSeq;
+    const original = run;
+    execFn = () => {
+      if (_playQueueSeq !== mySeq) {
+        getPlaybackCommandBus().emit("command:superseded", { type: resolvedType, requestId });
+        return null;
+      }
+      return original();
+    };
+  }
+
+  commandQueueRef.current = commandQueueRef.current.catch(() => undefined).then(execFn);
   return commandQueueRef.current;
 }
