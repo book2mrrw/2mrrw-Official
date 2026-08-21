@@ -83,119 +83,132 @@ export async function POST() {
   const admin = getAdminClient();
 
   try {
-    // Scan R2 directly for all audio files — R2 is the source of truth.
-    // allTracks: Map keyed by `${releaseSlug}::${trackSlug|""}` → { releaseSlug, trackSlug, releaseType }
+    // Phase 1: scan all 4 release-type folders concurrently
+    const folderScans = await Promise.all(
+      RELEASE_TYPE_FOLDERS.map(async (folder) => {
+        const releaseSlugs = await listR2Subfolders(`digital-assets/${folder}`);
+        return { folder, releaseSlugs };
+      })
+    );
+
+    // Phase 2: for every release slug, run wizard check + track discovery concurrently
+    // JS is single-threaded so concurrent Map.set is safe
     const allTracks = new Map();
 
-    for (const folder of RELEASE_TYPE_FOLDERS) {
-      const releaseSlugs = await listR2Subfolders(`digital-assets/${folder}`);
+    await Promise.all(
+      folderScans.flatMap(({ folder, releaseSlugs }) =>
+        releaseSlugs.map(async (releaseSlug) => {
+          // Skip wizard releases that are not yet published
+          const { data: wizardRow } = await admin
+            .from("releases").select("status").eq("slug", releaseSlug).maybeSingle();
+          if (wizardRow && wizardRow.status !== "published") return;
 
-      for (const releaseSlug of releaseSlugs) {
-        // Skip wizard releases that are not yet published
-        const { data: wizardRow } = await admin
-          .from("releases").select("status").eq("slug", releaseSlug).maybeSingle();
-        if (wizardRow && wizardRow.status !== "published") continue;
-
-        if (MULTI_TRACK_FOLDERS.has(folder)) {
-          // Albums / mixtapes-and-eps: each sub-folder is a track
-          const trackSlugs = await listR2Subfolders(`digital-assets/${folder}/${releaseSlug}`);
-          for (const trackSlug of trackSlugs) {
-            const hasAudio = await hasAudioFile(`digital-assets/${folder}/${releaseSlug}/${trackSlug}`);
-            if (!hasAudio) continue;
-            allTracks.set(`${releaseSlug}::${trackSlug}`, { releaseSlug, trackSlug, releaseType: folder });
+          if (MULTI_TRACK_FOLDERS.has(folder)) {
+            // Albums / mixtapes-and-eps: each sub-folder is a track — scan all concurrently
+            const trackSlugs = await listR2Subfolders(`digital-assets/${folder}/${releaseSlug}`);
+            await Promise.all(
+              trackSlugs.map(async (trackSlug) => {
+                const hasAudio = await hasAudioFile(`digital-assets/${folder}/${releaseSlug}/${trackSlug}`);
+                if (!hasAudio) return;
+                allTracks.set(`${releaseSlug}::${trackSlug}`, { releaseSlug, trackSlug, releaseType: folder });
+              })
+            );
+          } else {
+            // Singles / features: release folder IS the audio folder
+            const hasAudio = await hasAudioFile(`digital-assets/${folder}/${releaseSlug}`);
+            if (!hasAudio) return;
+            allTracks.set(`${releaseSlug}::`, { releaseSlug, trackSlug: null, releaseType: folder });
           }
-        } else {
-          // Singles / features: release folder IS the audio folder
-          const hasAudio = await hasAudioFile(`digital-assets/${folder}/${releaseSlug}`);
-          if (!hasAudio) continue;
-          allTracks.set(`${releaseSlug}::`, { releaseSlug, trackSlug: null, releaseType: folder });
-        }
-      }
-    }
+        })
+      )
+    );
 
     if (allTracks.size === 0) {
       return NextResponse.json({ ok: true, queued: 0, skipped: 0, failed: 0, message: "No audio files found in R2" });
     }
 
+    // Phase 3: process every discovered track concurrently — cache clear, job check, resolve, upsert
     const results = [];
     const errors = [];
 
-    for (const { releaseSlug, trackSlug, releaseType } of allTracks.values()) {
-      // Always clear stale durable playback cache first — audio may have been
-      // manually replaced in R2 even while a job is pending/processing
-      try { await clearPersistedPlaybackKey(admin, releaseSlug, trackSlug || null); } catch {}
+    await Promise.all(
+      Array.from(allTracks.values()).map(async ({ releaseSlug, trackSlug, releaseType }) => {
+        // Always clear stale durable playback cache first — audio may have been
+        // manually replaced in R2 even while a job is pending/processing
+        try { await clearPersistedPlaybackKey(admin, releaseSlug, trackSlug || null); } catch {}
 
-      // Check for an existing in-flight job — don't interrupt active work
-      let q = admin
-        .from("hls_transcode_jobs")
-        .select("id, status")
-        .eq("slug", releaseSlug);
-      q = trackSlug ? q.eq("track_slug", trackSlug) : q.is("track_slug", null);
-      const { data: existing } = await q.maybeSingle();
-
-      if (existing?.status === "pending" || existing?.status === "processing") {
-        results.push({ slug: releaseSlug, trackSlug, jobId: existing.id, status: existing.status, skipped: true });
-        continue;
-      }
-
-      // Resolve source audio key from R2 / DB
-      const sourceKey = await resolvePlaybackKey(admin, releaseSlug, {
-        trackSlug: trackSlug || undefined,
-        preferMaster: true,
-      }).then((r) => r?.key || null).catch(() => null);
-
-      if (!sourceKey) {
-        errors.push({ slug: releaseSlug, trackSlug, error: "Could not resolve source audio key" });
-        continue;
-      }
-
-      const hlsPrefix = buildHLSPrefix(releaseSlug, trackSlug, releaseType);
-
-      if (existing) {
-        const { data, error: upErr } = await admin
+        // Check for an existing in-flight job — don't interrupt active work
+        let q = admin
           .from("hls_transcode_jobs")
-          .update({
-            source_key: sourceKey,
-            hls_prefix: hlsPrefix,
-            release_type: releaseType,
-            status: "pending",
-            priority: 3,
-            attempt_count: 0,
-            error_message: null,
-            worker_id: null,
-            queued_by: user.id,
-            started_at: null,
-            completed_at: null,
-          })
-          .eq("id", existing.id)
           .select("id, status")
-          .single();
-        if (upErr) errors.push({ slug: releaseSlug, trackSlug, error: upErr.message });
-        else results.push({ slug: releaseSlug, trackSlug, jobId: data.id, status: data.status });
-      } else {
-        const { data, error: insErr } = await admin
-          .from("hls_transcode_jobs")
-          .insert({
-            slug: releaseSlug,
-            track_slug: trackSlug,
-            release_type: releaseType,
-            source_key: sourceKey,
-            hls_prefix: hlsPrefix,
-            status: "pending",
-            priority: 3,
-            attempt_count: 0,
-            error_message: null,
-            worker_id: null,
-            queued_by: user.id,
-            started_at: null,
-            completed_at: null,
-          })
-          .select("id, status")
-          .single();
-        if (insErr) errors.push({ slug: releaseSlug, trackSlug, error: insErr.message });
-        else results.push({ slug: releaseSlug, trackSlug, jobId: data.id, status: data.status });
-      }
-    }
+          .eq("slug", releaseSlug);
+        q = trackSlug ? q.eq("track_slug", trackSlug) : q.is("track_slug", null);
+        const { data: existing } = await q.maybeSingle();
+
+        if (existing?.status === "pending" || existing?.status === "processing") {
+          results.push({ slug: releaseSlug, trackSlug, jobId: existing.id, status: existing.status, skipped: true });
+          return;
+        }
+
+        // Resolve source audio key from R2 / DB
+        const sourceKey = await resolvePlaybackKey(admin, releaseSlug, {
+          trackSlug: trackSlug || undefined,
+          preferMaster: true,
+        }).then((r) => r?.key || null).catch(() => null);
+
+        if (!sourceKey) {
+          errors.push({ slug: releaseSlug, trackSlug, error: "Could not resolve source audio key" });
+          return;
+        }
+
+        const hlsPrefix = buildHLSPrefix(releaseSlug, trackSlug, releaseType);
+
+        if (existing) {
+          const { data, error: upErr } = await admin
+            .from("hls_transcode_jobs")
+            .update({
+              source_key: sourceKey,
+              hls_prefix: hlsPrefix,
+              release_type: releaseType,
+              status: "pending",
+              priority: 3,
+              attempt_count: 0,
+              error_message: null,
+              worker_id: null,
+              queued_by: user.id,
+              started_at: null,
+              completed_at: null,
+            })
+            .eq("id", existing.id)
+            .select("id, status")
+            .single();
+          if (upErr) errors.push({ slug: releaseSlug, trackSlug, error: upErr.message });
+          else results.push({ slug: releaseSlug, trackSlug, jobId: data.id, status: data.status });
+        } else {
+          const { data, error: insErr } = await admin
+            .from("hls_transcode_jobs")
+            .insert({
+              slug: releaseSlug,
+              track_slug: trackSlug,
+              release_type: releaseType,
+              source_key: sourceKey,
+              hls_prefix: hlsPrefix,
+              status: "pending",
+              priority: 3,
+              attempt_count: 0,
+              error_message: null,
+              worker_id: null,
+              queued_by: user.id,
+              started_at: null,
+              completed_at: null,
+            })
+            .select("id, status")
+            .single();
+          if (insErr) errors.push({ slug: releaseSlug, trackSlug, error: insErr.message });
+          else results.push({ slug: releaseSlug, trackSlug, jobId: data.id, status: data.status });
+        }
+      })
+    );
 
     const queued  = results.filter((r) => !r.skipped).length;
     const skipped = results.filter((r) =>  r.skipped).length;
