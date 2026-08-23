@@ -81,24 +81,60 @@ export const CommitRejectionReason = Object.freeze({
   PREDICTION_MISMATCH:      "PREDICTION_MISMATCH",
 });
 
+// ─── Core readiness lifecycle ─────────────────────────────────────────────────
+// A public PlaybackPort cannot accept executable commands before READY.
+// Commands dispatched before _injectExecutionEngine() throw explicitly — no silent drops.
+
+export const CoreReadiness = Object.freeze({
+  /** Constructed but execution adapter not yet injected. Port commands throw. */
+  CONSTRUCTING: "CONSTRUCTING",
+  /** Execution adapter injected. Port accepts commands. */
+  READY:        "READY",
+  /** Initialization failed permanently. */
+  FAILED:       "FAILED",
+  /** Destroyed. All port calls throw. */
+  DISPOSED:     "DISPOSED",
+});
+
 // ─── Diagnostic event types ───────────────────────────────────────────────────
 // Every intent lifecycle stage has a named event so race conditions are observable.
 
 export const DiagnosticEventType = Object.freeze({
-  CORE_INITIALIZED:            "CORE_INITIALIZED",
-  CORE_DESTROYED:              "CORE_DESTROYED",
-  INTENT_CREATED:              "INTENT_CREATED",
-  INTENT_AUTHORITY_GRANTED:    "INTENT_AUTHORITY_GRANTED",
-  INTENT_AUTHORITY_SUPERSEDED: "INTENT_AUTHORITY_SUPERSEDED",
-  INTENT_EXECUTION_START:      "INTENT_EXECUTION_START",
-  INTENT_EXECUTION_COMPLETE:   "INTENT_EXECUTION_COMPLETE",
-  INTENT_EXECUTION_ERROR:      "INTENT_EXECUTION_ERROR",
-  INTENT_COMMIT_PROPOSED:      "INTENT_COMMIT_PROPOSED",
-  INTENT_COMMIT_ACCEPTED:      "INTENT_COMMIT_ACCEPTED",
-  INTENT_COMMIT_REJECTED:      "INTENT_COMMIT_REJECTED",
-  DOMAIN_OWNER_CHANGED:        "DOMAIN_OWNER_CHANGED",
-  DOMAIN_COMMITTED:            "DOMAIN_COMMITTED",
+  CORE_INITIALIZED:               "CORE_INITIALIZED",
+  CORE_READY:                     "CORE_READY",
+  CORE_DESTROYED:                 "CORE_DESTROYED",
+  INTENT_CREATED:                 "INTENT_CREATED",
+  INTENT_AUTHORITY_GRANTED:       "INTENT_AUTHORITY_GRANTED",
+  INTENT_AUTHORITY_SUPERSEDED:    "INTENT_AUTHORITY_SUPERSEDED",
+  INTENT_EXECUTION_START:         "INTENT_EXECUTION_START",
+  INTENT_EXECUTION_COMPLETE:      "INTENT_EXECUTION_COMPLETE",
+  INTENT_EXECUTION_ERROR:         "INTENT_EXECUTION_ERROR",
+  INTENT_COMMIT_PROPOSED:         "INTENT_COMMIT_PROPOSED",
+  INTENT_COMMIT_ACCEPTED:         "INTENT_COMMIT_ACCEPTED",
+  INTENT_COMMIT_REJECTED:         "INTENT_COMMIT_REJECTED",
+  DOMAIN_OWNER_CHANGED:           "DOMAIN_OWNER_CHANGED",
+  DOMAIN_COMMITTED:               "DOMAIN_COMMITTED",
+  CORE_ADAPTER_DISPATCH:          "CORE_ADAPTER_DISPATCH",
+  CORE_ADAPTER_SKIPPED_SUPERSEDED:"CORE_ADAPTER_SKIPPED_SUPERSEDED",
+  CORE_ADAPTER_UNKNOWN_COMMAND:   "CORE_ADAPTER_UNKNOWN_COMMAND",
+  CORE_ADAPTER_OUT_OF_SCOPE:      "CORE_ADAPTER_OUT_OF_SCOPE",
 });
+
+// ─── Slice 1B production routing scope ────────────────────────────────────────
+// The adapter defines a permanent mapping for all eight command types, but only
+// the commands in this set are routed LIVE through Core to the production
+// dispatcher. The remainder stay dormant contract infrastructure until the
+// Selection Domain migration, because NowPlaying + Queue + QueueIndex must move
+// together — routing NEXT/PREVIOUS/SET_QUEUE early would split that triple
+// across two authorities.
+//
+// Locked for Slice 1B. Widening this set is a Slice 2 decision, not a local one.
+export const CoreLiveCommandScope = Object.freeze(new Set([
+  CoreCommandType.PLAY,
+  CoreCommandType.PAUSE,
+  CoreCommandType.RESUME,
+  CoreCommandType.SEEK,
+]));
 
 // ─── Named domain store keys ──────────────────────────────────────────────────
 // Keys used to look up domain stores inside PlaybackCore.

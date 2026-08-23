@@ -5,8 +5,10 @@
  * INVARIANTS (locked):
  *   • Each domain store has its OWN version counter and subscriber set.
  *   • A commit to domain A MUST NOT notify subscribers of domain B.
- *   • Snapshots returned by getSnapshot() are FROZEN — callers cannot
- *     mutate canonical state through a returned reference.
+ *   • Snapshots returned by getSnapshot() are DEEPLY FROZEN — callers cannot
+ *     mutate canonical state through a returned reference at any depth.
+ *   • External references passed to _applyCommit() cannot mutate canonical
+ *     state after commit (structuredClone breaks all shared references).
  *   • Unchanged domains retain their previous snapshot identity (===),
  *     which is essential for useSyncExternalStore selector stability.
  *   • _applyCommit() is package-internal: only CommitGate calls it.
@@ -22,13 +24,47 @@ export class DomainStore {
   #listeners;
 
   /**
+   * Recursively freeze an object and all nested objects/arrays in place.
+   * Uses a WeakSet to detect and skip cyclic references — structuredClone
+   * preserves cycles in its output, so deepFreeze must be cycle-safe.
+   */
+  static #deepFreeze(val, seen = new WeakSet()) {
+    if (val === null || typeof val !== "object") return val;
+    if (seen.has(val)) return val;   // cycle detected — already being processed
+    seen.add(val);
+    for (const key of Object.getOwnPropertyNames(val)) {
+      DomainStore.#deepFreeze(val[key], seen);
+    }
+    return Object.freeze(val);
+  }
+
+  /**
+   * Return a fully isolated, deeply frozen copy of snapshot.
+   * Requires structuredClone — fails explicitly if unavailable.
+   * JSON.parse(JSON.stringify(...)) is permanently rejected: it is lossy
+   * (destroys undefined, Date, Map, Set, BigInt, typed values) and the Core
+   * fails closed rather than silently corrupting canonical state.
+   */
+  static #immuteCopy(snapshot) {
+    if (typeof structuredClone !== "function") {
+      throw new Error(
+        "[DomainStore] structuredClone() is unavailable. " +
+        "PlaybackCore requires a trustworthy structured-clone implementation. " +
+        "JSON.parse(JSON.stringify(...)) is lossy and permanently rejected — " +
+        "the Core fails closed rather than silently corrupting canonical state."
+      );
+    }
+    return DomainStore.#deepFreeze(structuredClone(snapshot));
+  }
+
+  /**
    * @param {string} name            - domain name, for diagnostics
-   * @param {object} initialSnapshot - initial state (will be frozen)
+   * @param {object} initialSnapshot - initial state (will be deep-frozen clone)
    */
   constructor(name, initialSnapshot) {
     if (!name) throw new TypeError("DomainStore: name is required");
     this.#name = name;
-    this.#snapshot = Object.freeze({ ...initialSnapshot });
+    this.#snapshot = DomainStore.#immuteCopy(initialSnapshot);
     this.#version = 0;
     this.#listeners = new Set();
   }
@@ -82,10 +118,10 @@ export class DomainStore {
    * INTERNAL — only CommitGate may call this. Calling from anywhere else
    * bypasses the AuthorityGate and violates Invariant 2.
    *
-   * @param {object} snapshot - new state (will be frozen + shallow-copied)
+   * @param {object} snapshot - new state (deep-cloned + deep-frozen)
    */
   _applyCommit(snapshot) {
-    this.#snapshot = Object.freeze({ ...snapshot });
+    this.#snapshot = DomainStore.#immuteCopy(snapshot);
     this.#version += 1;
     const v = this.#version;
     const s = this.#snapshot;

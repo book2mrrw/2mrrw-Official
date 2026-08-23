@@ -6,8 +6,37 @@ import { getAdminClient } from "@/lib/supabase/admin";
 const COOKIE_NAME = "guest_session";
 const ONE_YEAR = 60 * 60 * 24 * 365;
 
+/**
+ * Guest-cookie signing keys.
+ *
+ * ── INV-ENT-17: one secret, one trust domain ────────────────────────────────
+ *
+ * This previously fell back to ADMIN_SEED_SECRET, which is simultaneously the
+ * bearer credential for eleven privileged API routes and — until E1 — was typed
+ * into a browser prompt on the admin gifts page. That made a server master
+ * secret capable of FORGING GUEST SESSION COOKIES FOR ANY USER ID, because
+ * getGuestUser() resolves whatever id the signed cookie names.
+ *
+ * The fallback is removed. Signing now requires a dedicated
+ * GUEST_SESSION_SECRET and nothing else.
+ *
+ * ── Rotation (same dual-key scheme as lib/hls/token.js) ─────────────────────
+ *   SIGN:   always GUEST_SESSION_SECRET
+ *   VERIFY: GUEST_SESSION_SECRET, then GUEST_SESSION_SECRET_PREVIOUS
+ *
+ * To cut over without logging every guest out, set
+ * GUEST_SESSION_SECRET_PREVIOUS to the old value (the ADMIN_SEED_SECRET the
+ * cookies were signed with) for one cookie lifetime, then remove it.
+ *
+ * Fails CLOSED: with no current secret, signing throws and verification
+ * returns null, so no cookie is ever minted or accepted.
+ */
 function secret() {
-  return process.env.GUEST_SESSION_SECRET || process.env.ADMIN_SEED_SECRET;
+  return process.env.GUEST_SESSION_SECRET || "";
+}
+
+function previousSecret() {
+  return process.env.GUEST_SESSION_SECRET_PREVIOUS || "";
 }
 
 export function normalizeEmail(email) {
@@ -18,9 +47,13 @@ export function normalizePhone(phone) {
   return String(phone || "").replace(/[^\d+]/g, "").trim();
 }
 
-function signGuestId(guestId) {
-  const key = secret();
-  if (!key) throw new Error("Missing GUEST_SESSION_SECRET or fallback secret");
+function signGuestId(guestId, key = secret()) {
+  if (!key) {
+    throw new Error(
+      "GUEST_SESSION_SECRET is required. The ADMIN_SEED_SECRET fallback was removed " +
+      "in E1 — a secret that signs session cookies must not also be an admin bearer token."
+    );
+  }
   return crypto.createHmac("sha256", key).update(guestId).digest("hex");
 }
 
@@ -28,21 +61,32 @@ function encodeGuestCookie(guestId) {
   return `${guestId}.${signGuestId(guestId)}`;
 }
 
-function syntheticAuthEmail(email, phone) {
-  const digest = crypto
-    .createHash("sha256")
-    .update(`${email}:${phone}`)
-    .digest("hex")
-    .slice(0, 24);
-  return `guest-${digest}@guest.2mrrw.local`;
+/**
+ * Verify a guest cookie against the current key, then the previous one.
+ *
+ * Returns null on any failure — including a length mismatch, which previously
+ * reached crypto.timingSafeEqual and threw a RangeError on attacker-supplied
+ * input. Callers wrapped that in try/catch so it failed closed, but the
+ * function's contract said "returns null", and a future caller trusting that
+ * would have 500'd on a malformed cookie.
+ */
+function verifyAgainst(guestId, sig, key) {
+  if (!key) return false;
+  let expected;
+  try { expected = signGuestId(guestId, key); } catch { return false; }
+  const a = Buffer.from(sig, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  if (a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
 }
 
 function decodeGuestCookie(value) {
   const [guestId, sig] = String(value || "").split(".");
   if (!guestId || !sig) return null;
-  const expected = signGuestId(guestId);
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
-  return guestId;
+  if (verifyAgainst(guestId, sig, secret())) return guestId;
+  // Rotation window: accept cookies signed with the previous key.
+  if (verifyAgainst(guestId, sig, previousSecret())) return guestId;
+  return null;
 }
 
 export function withGuestCookie(response, guestId, options = {}) {
@@ -129,8 +173,15 @@ export async function getRequestUser() {
   return getGuestUser();
 }
 
-export async function getGuestUser() {
-  const guestId = await getGuestIdFromCookie();
+/**
+ * Resolve the guest user for the current request.
+ *
+ * @param {{ overrideId?: string }} [opts] `overrideId` is for the possession-proof
+ *   flow only, where the server has just verified a challenge and needs to load
+ *   the account before minting its cookie. It is never derived from client input.
+ */
+export async function getGuestUser({ overrideId = null } = {}) {
+  const guestId = overrideId || (await getGuestIdFromCookie());
   if (!guestId) return null;
 
   const admin = getAdminClient();
@@ -148,78 +199,5 @@ export async function getGuestUser() {
     badge: "Early Supporter",
     isGuest: true,
     createdAt: data.user.created_at,
-  };
-}
-
-async function findGuestBySyntheticEmail(admin, syntheticEmail) {
-  let page = 1;
-  const perPage = 1000;
-  while (page < 20) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
-    if (error) throw error;
-    const found = data?.users?.find((user) => user.email === syntheticEmail);
-    if (found) return found;
-    if (!data?.users?.length || data.users.length < perPage) return null;
-    page += 1;
-  }
-  return null;
-}
-
-export async function createOrRetrieveGuest({ email, phone, name }) {
-  const normalizedEmail = normalizeEmail(email);
-  const normalizedPhone = normalizePhone(phone);
-  const fullName = String(name || "").trim();
-
-  if (!normalizedEmail || !normalizedPhone) {
-    throw new Error("Email and phone are required");
-  }
-
-  const admin = getAdminClient();
-  const syntheticEmail = syntheticAuthEmail(normalizedEmail, normalizedPhone);
-
-  const existing = await findGuestBySyntheticEmail(admin, syntheticEmail);
-  if (existing) {
-    const metadata = existing.user_metadata || {};
-    if (fullName && metadata.full_name !== fullName) {
-      await admin.auth.admin.updateUserById(existing.id, {
-        user_metadata: { ...metadata, full_name: fullName },
-      });
-      metadata.full_name = fullName;
-    }
-    return {
-      id: existing.id,
-      email: metadata.contact_email || normalizedEmail,
-      phone: metadata.phone || normalizedPhone,
-      name: metadata.full_name || fullName || "Fan",
-      badge: "Early Supporter",
-      isGuest: true,
-      createdAt: existing.created_at,
-    };
-  }
-
-  const { data: created, error: createError } = await admin.auth.admin.createUser({
-    // Supabase Auth enforces unique email globally. The product identity key is
-    // email + phone, so the hidden auth row uses a synthetic email while the
-    // real contact details live in public.profiles.
-    email: syntheticEmail,
-    email_confirm: true,
-    user_metadata: {
-      full_name: fullName,
-      contact_email: normalizedEmail,
-      phone: normalizedPhone,
-      guest: true,
-    },
-  });
-
-  if (createError) throw createError;
-
-  return {
-    id: created.user.id,
-    email: normalizedEmail,
-    phone: normalizedPhone,
-    name: fullName || "Fan",
-    badge: "Early Supporter",
-    isGuest: true,
-    createdAt: created.user.created_at,
   };
 }

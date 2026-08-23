@@ -48,6 +48,8 @@ import { CommandGateway }          from "../commands/CommandGateway.js";
 import { PlaybackPort }            from "../ports/PlaybackPort.js";
 import { LegacyPlaybackAdapter }   from "../ports/LegacyPlaybackAdapter.js";
 import { ReactPlaybackAdapter }    from "../adapters/ReactPlaybackAdapter.js";
+import { DesiredStateStore }       from "../desired/DesiredStateStore.js";
+import { CoreReadiness }           from "../types/index.js";
 
 export class PlaybackCore {
   #sequencer;
@@ -58,7 +60,11 @@ export class PlaybackCore {
   #legacyAdapter;
   #reactAdapter;
   #logger;
+  #authorityGate;
+  #desiredStore;
+  #executionEngine = null;
   #destroyed = false;
+  #readiness = CoreReadiness.CONSTRUCTING;
 
   /**
    * Private constructor — use PlaybackCore.create() instead.
@@ -72,6 +78,8 @@ export class PlaybackCore {
     this.#legacyAdapter     = deps.legacyAdapter;
     this.#reactAdapter      = deps.reactAdapter;
     this.#logger            = deps.logger;
+    this.#authorityGate     = deps.authorityGate;
+    this.#desiredStore      = deps.desiredStore;
 
     this.#logger.emitCoreInitialized({ sessionEpoch: this.#sequencer.sessionEpoch });
   }
@@ -104,11 +112,19 @@ export class PlaybackCore {
       executionEngine: null,
     });
 
-    const port          = new PlaybackPort(commandGateway);
     const legacyAdapter = new LegacyPlaybackAdapter({ stores, ownershipRegistry });
     const reactAdapter  = new ReactPlaybackAdapter(stores);
+    const desiredStore  = new DesiredStateStore({ logger });
 
-    return new PlaybackCore({
+    // Readiness accessor — closed over the PlaybackCore instance (assigned below).
+    // The port calls this before accepting any command; before READY it throws
+    // explicitly rather than silently dropping the command.
+    let coreRef = null;
+    const isReady = () => coreRef !== null && coreRef.readiness === CoreReadiness.READY;
+
+    const port = new PlaybackPort(commandGateway, isReady);
+
+    const core = new PlaybackCore({
       sequencer,
       ownershipRegistry,
       commandGateway,
@@ -117,7 +133,11 @@ export class PlaybackCore {
       legacyAdapter,
       reactAdapter,
       logger,
+      authorityGate,
+      desiredStore,
     });
+    coreRef = core;
+    return core;
   }
 
   // ─── Public surface ────────────────────────────────────────────────────────
@@ -127,6 +147,8 @@ export class PlaybackCore {
   get reactAdapter()  { this.#assertAlive(); return this.#reactAdapter; }
   get logger()        { return this.#logger; }
   get sessionEpoch()  { return this.#sequencer.sessionEpoch; }
+  /** Current readiness state — CONSTRUCTING until adapter injected, then READY, then DISPOSED. */
+  get readiness()     { return this.#readiness; }
 
   /**
    * Tear down the Core instance.
@@ -135,19 +157,31 @@ export class PlaybackCore {
   destroy() {
     if (this.#destroyed) return;
     this.#destroyed = true;
+    this.#readiness = CoreReadiness.DISPOSED;
+    // Stop the reconciler before anything else. A live ConvergenceEngine would
+    // otherwise keep driving the shared media runtime toward this Core's stale
+    // desired state after the Core itself is gone.
+    this.#executionEngine?.dispose?.();
     this.#logger.emitCoreDestroyed({ sessionEpoch: this.#sequencer.sessionEpoch });
   }
 
   // ─── Internal — Slice 1+ wiring only ──────────────────────────────────────
 
   /**
-   * Inject the execution engine once the real engine is ready.
-   * Called by Slice 1 wiring. Not part of the public API.
+   * Inject the execution engine and transition Core to READY.
    *
-   * @param {object} engine
+   * MUST be called synchronously before any public PlaybackPort command is
+   * dispatched. The engine must be fully constructed — no lazy initialization,
+   * no dynamic import, no async bridge. Wiring is deterministic.
+   *
+   * @param {import('../adapters/PlaybackCoreAdapter.js').PlaybackCoreAdapter} engine
    */
   _injectExecutionEngine(engine) {
+    this.#assertAlive();
+    this.#executionEngine = engine;
     this.#commandGateway.setExecutionEngine(engine);
+    this.#readiness = CoreReadiness.READY;
+    this.#logger.emitCoreReady({ sessionEpoch: this.#sequencer.sessionEpoch });
   }
 
   /**
@@ -165,6 +199,30 @@ export class PlaybackCore {
    * Not part of the public API.
    */
   get _commitGate() { return this.#commitGate; }
+
+  /**
+   * The AuthorityGate this Core's CommandGateway registers intents against.
+   * Exposed solely so the execution adapter can perform its second authority
+   * check against the SAME gate — a different gate instance would silently
+   * make the check meaningless. Not part of the public API.
+   */
+  get _authorityGate() { return this.#authorityGate; }
+
+  /**
+   * Canonical DESIRED execution state store (Slice 1C).
+   * Read freely for diagnostics; only the ConvergenceEngine should apply intents.
+   */
+  get desiredState() { return this.#desiredStore.current; }
+
+  /** Internal handle for wiring the ConvergenceEngine. Not part of the public API. */
+  get _desiredStore() { return this.#desiredStore; }
+
+  /**
+   * The injected execution engine (ConvergenceEngine in production).
+   * Exposed for diagnostics and for tests that must await convergence settlement.
+   * Not part of the public API.
+   */
+  get _executionEngine() { return this.#executionEngine; }
 
   // ─── Private ──────────────────────────────────────────────────────────────
 

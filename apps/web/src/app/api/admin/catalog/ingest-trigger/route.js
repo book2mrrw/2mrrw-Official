@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { runR2Ingest } from "@/lib/catalog/r2-ingest-pipeline";
+import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 
 export const dynamic = "force-dynamic";
 
@@ -18,12 +18,7 @@ export async function POST() {
     const result = await runR2Ingest({ admin, dryRun: false });
 
     // Bust the storefront ISR cache so changes are visible immediately
-    try {
-      revalidatePath("/");
-      revalidatePath("/song/[slug]", "page");
-      revalidatePath("/feature/[slug]", "page");
-      revalidatePath("/album/[slug]", "page");
-    } catch {}
+    revalidateStorefront();
 
     return NextResponse.json(result);
   } catch (err) {

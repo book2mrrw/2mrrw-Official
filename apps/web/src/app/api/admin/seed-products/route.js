@@ -3,8 +3,8 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { getProductCatalog } from "@/lib/commerce/catalog";
 
 export async function POST(req) {
-  const secret = req.headers.get("x-seed-secret");
-  if (!process.env.ADMIN_SEED_SECRET || secret !== process.env.ADMIN_SEED_SECRET) {
+  const gate = await requireAdminOrCapability(req, ServiceCapability.PRODUCT_SEED);
+  if (!gate.ok) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

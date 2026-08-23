@@ -67,12 +67,13 @@ export async function POST(req) {
     // Clear any prior unused OTPs for this user
     await admin.from("login_otp").delete().eq("user_id", userId).eq("used", false);
 
-    // Store new OTP
-    await admin.from("login_otp").insert({
+    // Store new OTP and keep its id so verification binds to THIS challenge.
+    const { data: otpRow, error: otpError } = await admin.from("login_otp").insert({
       user_id:    userId,
       code_hash:  codeHash,
       expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-    });
+    }).select("id").single();
+    if (otpError) throw otpError;
 
     // Hold session tokens in HTTP-only cookie until 2FA complete
     const cookieStore = await cookies();
@@ -80,6 +81,7 @@ export async function POST(req) {
       access_token:  authData.access_token,
       refresh_token: authData.refresh_token,
       user_id:       userId,
+      challenge_id:  otpRow.id,
     }), {
       httpOnly: true,
       secure:   process.env.NODE_ENV === "production",

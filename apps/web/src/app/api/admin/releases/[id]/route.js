@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { discoverFileByExtensions } from "@/lib/storage/r2";
+import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 
 export const dynamic = "force-dynamic";
 
@@ -220,12 +220,7 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ ok: false, errors }, { status: 207 });
     }
 
-    try {
-      revalidatePath("/");
-      revalidatePath("/song/[slug]", "page");
-      revalidatePath("/feature/[slug]", "page");
-      revalidatePath("/album/[slug]", "page");
-    } catch {}
+    revalidateStorefront();
     return NextResponse.json({ ok: true });
   }
 
@@ -286,12 +281,7 @@ export async function PATCH(req, { params }) {
     return NextResponse.json({ ok: false, errors }, { status: 207 });
   }
 
-  try {
-    revalidatePath("/");
-    revalidatePath("/song/[slug]", "page");
-    revalidatePath("/feature/[slug]", "page");
-    revalidatePath("/album/[slug]", "page");
-  } catch {}
+  revalidateStorefront();
   return NextResponse.json({ ok: true });
 }
 
@@ -349,10 +339,7 @@ export async function DELETE(req, { params }) {
         return NextResponse.json({ error: `Failed to delete release: ${error.message}` }, { status: 500 });
       }
 
-      try {
-        revalidatePath("/");
-        revalidatePath("/song/[slug]", "page");
-      } catch {}
+      revalidateStorefront();
       return NextResponse.json({ ok: true, deleted: "wizard_release" });
     }
   }
@@ -374,11 +361,6 @@ export async function DELETE(req, { params }) {
     return NextResponse.json({ error: `Takedown failed: ${takedownErr.message}` }, { status: 500 });
   }
 
-  try {
-    revalidatePath("/");
-    revalidatePath("/song/[slug]", "page");
-    revalidatePath("/feature/[slug]", "page");
-    revalidatePath("/album/[slug]", "page");
-  } catch {}
+  revalidateStorefront();
   return NextResponse.json({ ok: true, deleted: "catalog_takedown" });
 }

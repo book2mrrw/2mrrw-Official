@@ -1,7 +1,9 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import crypto from "crypto";
 import { isAdminUser } from "@/lib/auth/constants";
+import { isAdminUserId } from "@/lib/auth/admin-authority";
 import { userOwnsProductViaEntitlements } from "@/lib/commerce/unified-entitlements";
+import { resolveOwnedSlugs } from "@/lib/commerce/ownership-authority";
 import {
   getCachedTier,
   setCachedTier,
@@ -55,20 +57,34 @@ async function slugsFromEntitlements(admin, userId) {
   return (products || []).map((row) => row.slug).filter(Boolean);
 }
 
+/**
+ * Owned product slugs for a user.
+ *
+ * INV-ENT-10 (ENT-06): the source of truth is an EXPLICIT authority state, not
+ * inferred from whether the entitlements table happens to exist. Previously an
+ * existing-but-unbackfilled entitlements table produced an authoritative
+ * "owns nothing", silently under-reporting ownership.
+ *
+ * Both sources are read and handed to the authority resolver, which decides
+ * according to LEGACY_LIBRARY / DUAL_VERIFY / ENTITLEMENTS_CANONICAL. The
+ * default, DUAL_VERIFY, unions them so no user is ever denied because one side
+ * lags behind the other.
+ */
 export async function getOwnedSlugs(userId) {
   const admin = getAdminClient();
-  const fromEntitlements = await slugsFromEntitlements(admin, userId);
-  if (fromEntitlements !== null) {
-    return new Set(fromEntitlements);
-  }
 
-  const { data, error } = await admin
-    .from("library_items")
-    .select("product_id, products(slug)")
-    .eq("user_id", userId);
+  const [fromEntitlements, libraryResult] = await Promise.all([
+    slugsFromEntitlements(admin, userId),
+    admin.from("library_items").select("product_id, products(slug)").eq("user_id", userId),
+  ]);
 
-  if (error) throw error;
-  return new Set((data || []).map((row) => row.products?.slug).filter(Boolean));
+  if (libraryResult.error) throw libraryResult.error;
+  const fromLibrary = (libraryResult.data || [])
+    .map((row) => row.products?.slug)
+    .filter(Boolean);
+
+  const { slugs } = await resolveOwnedSlugs(admin, userId, { fromEntitlements, fromLibrary });
+  return slugs;
 }
 
 export async function userOwnsProduct(userId, productSlug) {
@@ -98,13 +114,19 @@ export async function userOwnsProduct(userId, productSlug) {
   return !!data;
 }
 
-async function resolveAdminFromProfile(admin, userId) {
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, email, role")
-    .eq("id", userId)
-    .maybeSingle();
-  return Boolean(profile && isAdminUser({ id: profile.id, email: profile.email, role: profile.role }));
+/**
+ * Resolve admin authority for a bare user id.
+ *
+ * INV-ENT-2: reads the server-controlled admin_principals table plus
+ * deployment-pinned identity. It no longer derives authority from
+ * profiles.role, which the profiles_update_own RLS policy allowed the user to
+ * set on themselves (ENT-01) — that made this function a direct
+ * privilege-escalation sink for the streaming gate.
+ *
+ * Fails closed: any lookup error resolves to false.
+ */
+async function resolveAdminAuthority(admin, userId) {
+  return isAdminUserId(userId, admin);
 }
 
 /** True when the user may stream full audio for this catalog slug (purchase, membership, or collector). */
@@ -141,7 +163,7 @@ export async function userCanStreamProduct(userId, productSlug, user = null) {
     const admin = getAdminClient();
 
     const [isAdmin, owns] = await Promise.all([
-      resolveAdminFromProfile(admin, userId),
+      resolveAdminAuthority(admin, userId),
       userOwnsProduct(userId, productSlug),
     ]);
 
@@ -375,13 +397,54 @@ export async function getActiveMembership(userId) {
   return data || null;
 }
 
+/**
+ * Does the user own any product flagged as a collector product?
+ *
+ * INV-ENT-6: catalog naming conventions cannot independently grant capability.
+ * Authority comes from the typed products.is_collector_product column. The
+ * historical slug-prefix heuristic (exc-bundle / exc-card / collector-) is used
+ * ONLY when the column is absent — i.e. the E0 migration has not been applied
+ * yet — so behaviour is preserved during rollout and then becomes inert.
+ *
+ * Fails closed: a query error grants nothing.
+ */
+async function ownsCollectorProduct(admin, ownedSlugs) {
+  if (!ownedSlugs.length) return false;
+  try {
+    const { data, error } = await admin
+      .from("products")
+      .select("slug, is_collector_product")
+      .in("slug", ownedSlugs);
+
+    if (error) {
+      if (isMissingSupabaseColumn(error)) {
+        // Column not migrated yet — legacy prefix behaviour, transitional only.
+        return ownedSlugs.some(isCollectorAccessSlug);
+      }
+      console.error("[entitlements] collector product lookup failed", error.message);
+      return false;
+    }
+
+    return (data || []).some((p) =>
+      p.is_collector_product === true ||
+      // NULL means the row predates the backfill; fall back for that row only.
+      (p.is_collector_product == null && isCollectorAccessSlug(p.slug))
+    );
+  } catch (err) {
+    console.error("[entitlements] collector product lookup threw", err?.message);
+    return false;
+  }
+}
+
 export async function getCollectorAccessState(admin, userId, legacyOwnedSlugs = []) {
-  const slugs = new Set(legacyOwnedSlugs || []);
-  const hasSlugAccess = [...slugs].some(isCollectorAccessSlug);
+  const slugs = [...new Set((legacyOwnedSlugs || []).filter(Boolean))];
 
   if (!admin || !userId) {
-    return { hasCollectorAccess: hasSlugAccess, records: [] };
+    // No client to consult — cannot resolve typed authority, so deny.
+    return { hasCollectorAccess: false, records: [] };
   }
+
+  const hasSlugAccess = await ownsCollectorProduct(admin, slugs);
 
   const { data, error } = await admin
     .from("collector_ownerships")

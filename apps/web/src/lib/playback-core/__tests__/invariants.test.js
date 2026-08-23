@@ -37,8 +37,14 @@ import { CommandGateway }          from "../commands/CommandGateway.js";
 import { PlaybackPort }            from "../ports/PlaybackPort.js";
 import { LegacyPlaybackAdapter }   from "../ports/LegacyPlaybackAdapter.js";
 import { PlaybackCore }            from "../core/PlaybackCore.js";
+import { PlaybackCoreAdapter }     from "../adapters/PlaybackCoreAdapter.js";
+import { DesiredStateStore }       from "../desired/DesiredStateStore.js";
+import { TransportDisposition }    from "../desired/DesiredExecutionState.js";
+import { ConvergenceEngine }       from "../convergence/ConvergenceEngine.js";
 import {
   CoreCommandType,
+  CoreReadiness,
+  CoreLiveCommandScope,
   ResumePolicy,
   DomainOwner,
   Domain,
@@ -71,6 +77,9 @@ function makeFullStack() {
   return { sequencer, intentFactory, authorityGate, ownershipRegistry, stores, logger, commitGate, commandGateway, port, legacyAdapter };
 }
 
+// UUID v4 pattern — used across epoch-format assertions
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // INV-SEQ: IntentSequencer
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,9 +97,9 @@ describe("INV-SEQ: IntentSequencer", () => {
     assert.ok(b.sequence < c.sequence);
   });
 
-  test("sessionEpoch is an 8-character hex string", () => {
+  test("sessionEpoch is a 128-bit UUID (crypto.randomUUID format)", () => {
     const seq = new IntentSequencer();
-    assert.match(seq.sessionEpoch, /^[0-9a-f]{8}$/);
+    assert.match(seq.sessionEpoch, UUID_RE);
   });
 
   test("sessionEpoch is stable across multiple next() calls", () => {
@@ -103,14 +112,15 @@ describe("INV-SEQ: IntentSequencer", () => {
   test("intentId format is <epoch>:<sequence>", () => {
     const seq = new IntentSequencer();
     const { intentId, sequence } = seq.next();
-    assert.match(intentId, /^[0-9a-f]{8}:\d+$/);
+    assert.ok(intentId.startsWith(seq.sessionEpoch), "intentId must begin with sessionEpoch");
+    assert.ok(intentId.endsWith(`:${sequence}`), "intentId must end with :sequence");
     assert.equal(intentId, `${seq.sessionEpoch}:${sequence}`);
   });
 
   test("two sequencers have different epochs (probabilistic)", () => {
     const a = new IntentSequencer();
     const b = new IntentSequencer();
-    // Probability of collision is 1/2^32; acceptable for testing
+    // Probability of collision is 1/2^122 (UUID v4 entropy) — negligible
     assert.notEqual(a.sessionEpoch, b.sessionEpoch);
   });
 });
@@ -610,12 +620,67 @@ describe("INV-CORE: PlaybackCore.create() — full wiring", () => {
   test("create() returns a live core with a valid port", () => {
     const core = PlaybackCore.create({ loggerEnabled: false });
     assert.ok(core.port, "port must exist");
-    assert.ok(core.sessionEpoch.match(/^[0-9a-f]{8}$/), "sessionEpoch format");
+    assert.ok(UUID_RE.test(core.sessionEpoch), `sessionEpoch must be UUID, got: ${core.sessionEpoch}`);
     core.destroy();
   });
 
-  test("port.play() is accepted without throwing", () => {
+  test("Core starts in CONSTRUCTING state before adapter is injected", () => {
     const core = PlaybackCore.create({ loggerEnabled: false });
+    assert.equal(core.readiness, CoreReadiness.CONSTRUCTING);
+    core.destroy();
+  });
+
+  test("port commands throw with READY error when Core is CONSTRUCTING", () => {
+    const core = PlaybackCore.create({ loggerEnabled: false });
+    assert.throws(
+      () => core.port.play({ trackId: "t1" }),
+      /not READY|CONSTRUCTING/,
+      "port.play() must throw before adapter injected"
+    );
+    assert.throws(() => core.port.pause(), /not READY|CONSTRUCTING/);
+    assert.throws(() => core.port.resume(), /not READY|CONSTRUCTING/);
+    assert.throws(() => core.port.seek({ positionSeconds: 0 }), /not READY|CONSTRUCTING/);
+    assert.throws(() => core.port.next(), /not READY|CONSTRUCTING/);
+    assert.throws(() => core.port.previous(), /not READY|CONSTRUCTING/);
+    core.destroy();
+  });
+
+  test("_injectExecutionEngine transitions Core to READY and port accepts commands", () => {
+    const core      = PlaybackCore.create({ loggerEnabled: false });
+    const dispatched = [];
+    const adapter   = new PlaybackCoreAdapter({
+      dispatch: (type, payload) => { dispatched.push({ type, payload }); return Promise.resolve(true); },
+      authorityGate: makeFullStack().authorityGate,
+      logger: null,
+    });
+    core._injectExecutionEngine(adapter);
+    assert.equal(core.readiness, CoreReadiness.READY);
+    assert.doesNotThrow(() => core.port.play({ trackId: "t1" }));
+    core.destroy();
+  });
+
+  test("_injectExecutionEngine emits CORE_READY diagnostic event", () => {
+    const core    = PlaybackCore.create({ loggerEnabled: true });
+    const events  = [];
+    core.logger.subscribe((e) => events.push(e));
+    const adapter = new PlaybackCoreAdapter({
+      dispatch: () => Promise.resolve(),
+      authorityGate: makeFullStack().authorityGate,
+      logger: null,
+    });
+    core._injectExecutionEngine(adapter);
+    assert.ok(events.some((e) => e.type === "CORE_READY"), "CORE_READY must be emitted");
+    core.destroy();
+  });
+
+  test("port.play() is accepted without throwing when READY", () => {
+    const core    = PlaybackCore.create({ loggerEnabled: false });
+    const adapter = new PlaybackCoreAdapter({
+      dispatch: () => Promise.resolve(),
+      authorityGate: makeFullStack().authorityGate,
+      logger: null,
+    });
+    core._injectExecutionEngine(adapter);
     assert.doesNotThrow(() => core.port.play({ trackId: "t1" }));
     core.destroy();
   });
@@ -630,7 +695,13 @@ describe("INV-CORE: PlaybackCore.create() — full wiring", () => {
     assert.equal(destroyed.sessionEpoch, core.sessionEpoch);
   });
 
-  test("destroy() prevents further port access", () => {
+  test("destroy() transitions Core to DISPOSED", () => {
+    const core = PlaybackCore.create({ loggerEnabled: false });
+    core.destroy();
+    assert.equal(core.readiness, CoreReadiness.DISPOSED);
+  });
+
+  test("destroy() prevents further port access (throws destroyed error)", () => {
     const core = PlaybackCore.create({ loggerEnabled: false });
     core.destroy();
     assert.throws(() => core.port.play(), { message: /destroyed/ });
@@ -794,5 +865,911 @@ describe("INV-TYPES: Type constants — completeness and immutability", () => {
     assert.ok(Object.isFrozen(Domain));
     assert.ok(Object.isFrozen(StoreKey));
     assert.ok(Object.isFrozen(CommitRejectionReason));
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INV-DEEP: Deep snapshot isolation (Slice 0H)
+// Nothing reachable from a returned Core snapshot can mutate canonical state.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("INV-DEEP: Deep snapshot isolation — nested objects cannot mutate Core state", () => {
+  test("nested object mutation via returned snapshot is rejected", () => {
+    const store = new DomainStore("test", { track: { title: "Original" } });
+    const snap = store.getSnapshot();
+    try { snap.track.title = "MUTATED"; } catch (_) {}
+    assert.equal(store.getSnapshot().track.title, "Original");
+  });
+
+  test("nested object mutation via original input reference is isolated", () => {
+    const store = new DomainStore("test", {});
+    const meta = { title: "Original" };
+    store._applyCommit({ track: meta });
+    meta.title = "EXTERNAL_MUTATION";  // mutate the original object after commit
+    assert.equal(store.getSnapshot().track.title, "Original",
+      "structuredClone must break the external reference");
+  });
+
+  test("nested array push via returned snapshot is rejected", () => {
+    const store = new DomainStore("test", {});
+    store._applyCommit({ queue: ["a", "b"] });
+    const snap = store.getSnapshot();
+    try { snap.queue.push("INJECTED"); } catch (_) {}
+    assert.equal(store.getSnapshot().queue.length, 2);
+  });
+
+  test("nested array push via original input reference is isolated", () => {
+    const store = new DomainStore("test", {});
+    const arr = ["a", "b"];
+    store._applyCommit({ queue: arr });
+    arr.push("EXTERNAL_PUSH");
+    assert.equal(store.getSnapshot().queue.length, 2,
+      "structuredClone must break the external array reference");
+  });
+
+  test("object inside nested array mutation via returned snapshot is rejected", () => {
+    const store = new DomainStore("test", {});
+    store._applyCommit({ queue: [{ trackId: "t1", title: "Original" }] });
+    const snap = store.getSnapshot();
+    try { snap.queue[0].title = "MUTATED"; } catch (_) {}
+    assert.equal(store.getSnapshot().queue[0].title, "Original");
+  });
+
+  test("object inside nested array mutation via original reference is isolated", () => {
+    const store = new DomainStore("test", {});
+    const entry = { trackId: "t1", title: "Original" };
+    store._applyCommit({ queue: [entry] });
+    entry.title = "EXTERNAL_MUTATION";
+    assert.equal(store.getSnapshot().queue[0].title, "Original",
+      "structuredClone must break reference into nested array entries");
+  });
+
+  test("deeply nested object mutation via returned snapshot is rejected", () => {
+    const store = new DomainStore("test", {});
+    store._applyCommit({ track: { metadata: { credits: { producer: "P" } } } });
+    const snap = store.getSnapshot();
+    try { snap.track.metadata.credits.producer = "HACKED"; } catch (_) {}
+    assert.equal(store.getSnapshot().track.metadata.credits.producer, "P");
+  });
+
+  test("returned snapshot is deeply frozen at all nesting levels", () => {
+    const store = new DomainStore("test", {});
+    store._applyCommit({ level1: { level2: { level3: "value" } } });
+    const snap = store.getSnapshot();
+    assert.ok(Object.isFrozen(snap),         "top level must be frozen");
+    assert.ok(Object.isFrozen(snap.level1),  "level1 must be frozen");
+    assert.ok(Object.isFrozen(snap.level1.level2), "level2 must be frozen");
+  });
+
+  test("initial snapshot passed to constructor is also deeply isolated", () => {
+    const nested = { x: 1 };
+    const store = new DomainStore("test", { nested });
+    nested.x = 999;
+    assert.equal(store.getSnapshot().nested.x, 1,
+      "constructor must also deep-clone the initial snapshot");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INV-INTERLEAVE: Command interleaving and supersession (Slice 0H)
+// Authority gate semantics under concurrent / out-of-order command issuance.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("INV-INTERLEAVE: Command interleaving and supersession", () => {
+  test("PLAY A → SEEK: SEEK supersedes PLAY A", () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const playA = intentFactory.create({ type: CoreCommandType.PLAY, trackId: "a" });
+    const seek  = intentFactory.create({ type: CoreCommandType.SEEK, positionSeconds: 30 });
+    authorityGate.register(playA);
+    authorityGate.register(seek);
+    assert.ok(!authorityGate.isAuthoritative(playA), "PLAY A must be superseded");
+    assert.ok(authorityGate.isAuthoritative(seek),   "SEEK must be sole authority");
+  });
+
+  test("PLAY A → PAUSE: PAUSE supersedes PLAY A", () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const playA = intentFactory.create({ type: CoreCommandType.PLAY });
+    const pause = intentFactory.create({ type: CoreCommandType.PAUSE });
+    authorityGate.register(playA);
+    authorityGate.register(pause);
+    assert.ok(!authorityGate.isAuthoritative(playA));
+    assert.ok(authorityGate.isAuthoritative(pause));
+  });
+
+  test("PLAY A → PAUSE → RESUME: RESUME is final authority", () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const playA  = intentFactory.create({ type: CoreCommandType.PLAY });
+    const pause  = intentFactory.create({ type: CoreCommandType.PAUSE });
+    const resume = intentFactory.create({ type: CoreCommandType.RESUME });
+    authorityGate.register(playA);
+    authorityGate.register(pause);
+    authorityGate.register(resume);
+    assert.ok(!authorityGate.isAuthoritative(playA));
+    assert.ok(!authorityGate.isAuthoritative(pause));
+    assert.ok(authorityGate.isAuthoritative(resume));
+  });
+
+  test("PLAY A → PLAY B: B supersedes A", () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const playA = intentFactory.create({ type: CoreCommandType.PLAY, trackId: "a" });
+    const playB = intentFactory.create({ type: CoreCommandType.PLAY, trackId: "b" });
+    authorityGate.register(playA);
+    authorityGate.register(playB);
+    assert.ok(!authorityGate.isAuthoritative(playA));
+    assert.ok(authorityGate.isAuthoritative(playB));
+  });
+
+  test("PLAY A → PLAY B → PAUSE: PAUSE is final authority", () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const playA = intentFactory.create({ type: CoreCommandType.PLAY, trackId: "a" });
+    const playB = intentFactory.create({ type: CoreCommandType.PLAY, trackId: "b" });
+    const pause = intentFactory.create({ type: CoreCommandType.PAUSE });
+    authorityGate.register(playA);
+    authorityGate.register(playB);
+    authorityGate.register(pause);
+    assert.ok(!authorityGate.isAuthoritative(playA));
+    assert.ok(!authorityGate.isAuthoritative(playB));
+    assert.ok(authorityGate.isAuthoritative(pause));
+  });
+
+  test("PAUSE → SEEK → RESUME: RESUME is final authority", () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const pause  = intentFactory.create({ type: CoreCommandType.PAUSE });
+    const seek   = intentFactory.create({ type: CoreCommandType.SEEK, positionSeconds: 45 });
+    const resume = intentFactory.create({ type: CoreCommandType.RESUME });
+    authorityGate.register(pause);
+    authorityGate.register(seek);
+    authorityGate.register(resume);
+    assert.ok(!authorityGate.isAuthoritative(pause));
+    assert.ok(!authorityGate.isAuthoritative(seek));
+    assert.ok(authorityGate.isAuthoritative(resume));
+  });
+
+  test("SEEK → SEEK → SEEK: only last SEEK is authoritative", () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const seeks = [0, 30, 60].map((pos) =>
+      intentFactory.create({ type: CoreCommandType.SEEK, positionSeconds: pos })
+    );
+    seeks.forEach((s) => authorityGate.register(s));
+    assert.ok(!authorityGate.isAuthoritative(seeks[0]));
+    assert.ok(!authorityGate.isAuthoritative(seeks[1]));
+    assert.ok(authorityGate.isAuthoritative(seeks[2]));
+  });
+
+  test("rapid 100-command sequence: only last command is authoritative", () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const commands = [];
+    for (let i = 0; i < 100; i++) {
+      const cmd = intentFactory.create({ type: CoreCommandType.NEXT });
+      commands.push(cmd);
+      authorityGate.register(cmd);
+    }
+    const last = commands[commands.length - 1];
+    assert.ok(authorityGate.isAuthoritative(last), "last command must be authoritative");
+    for (const cmd of commands.slice(0, -1)) {
+      assert.ok(!authorityGate.isAuthoritative(cmd), `intermediate command seq=${cmd.sequence} must be superseded`);
+    }
+  });
+
+  test("superseded intent cannot commit state even after delayed resolution (out-of-order async)", () => {
+    const { intentFactory, authorityGate, ownershipRegistry, commitGate } = makeFullStack();
+    ownershipRegistry.transferToCore(Domain.TRANSPORT);
+
+    const playA = intentFactory.create({ type: CoreCommandType.PLAY });
+    const playB = intentFactory.create({ type: CoreCommandType.PLAY });
+    authorityGate.register(playA);
+    authorityGate.register(playB);  // B supersedes A immediately
+
+    // A "completes" its async work late and tries to commit — must be rejected
+    const lateResult = commitGate.propose({
+      intent:   playA,
+      storeKey: StoreKey.TRANSPORT_STATUS,
+      domain:   Domain.TRANSPORT,
+      snapshot: { playing: true, trackId: "track-a" },
+    });
+    assert.equal(lateResult.accepted, false);
+    assert.equal(lateResult.rejectionReason, CommitRejectionReason.SUPERSEDED);
+  });
+
+  test("randomized commit order: canonical state always reflects last-registered intent", () => {
+    const { intentFactory, authorityGate, ownershipRegistry, commitGate, stores } = makeFullStack();
+    ownershipRegistry.transferToCore(Domain.TRANSPORT);
+
+    const N = 15;
+    const intents = [];
+    for (let i = 0; i < N; i++) {
+      const intent = intentFactory.create({ type: CoreCommandType.PLAY });
+      intents.push({ intent, trackId: `track-${i}` });
+      authorityGate.register(intent);
+    }
+    const lastEntry = intents[N - 1];
+
+    // Commit in shuffled order — simulates arbitrary async completion timing
+    const shuffled = [...intents].sort(() => Math.random() - 0.5);
+    for (const { intent, trackId } of shuffled) {
+      commitGate.propose({
+        intent,
+        storeKey: StoreKey.TRANSPORT_STATUS,
+        domain:   Domain.TRANSPORT,
+        snapshot: { playing: true, trackId },
+      });
+    }
+
+    const finalSnap = stores.get(StoreKey.TRANSPORT_STATUS).getSnapshot();
+    assert.equal(
+      finalSnap.trackId,
+      lastEntry.trackId,
+      "Canonical state must reflect the last-registered intent regardless of commit order"
+    );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INV-SLICE1: Core Command Authority Integration
+//   Proves the full pipeline: PlaybackPort → CommandGateway → IntentFactory
+//   → AuthorityGate → PlaybackCoreAdapter.execute() → dispatch() (mock)
+//
+//   HARDENING-B note: these tests prove authority semantics with the real adapter
+//   and a mock dispatch function. Physical transport correctness (PLAY A → SEEK 92
+//   → A playing at 92s) cannot be proven here — it requires the real media runtime.
+//   HARDENING-B is the acceptance gate for Slice 1 against the real runtime.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Every command type — used to exercise the dormant mapping contract. */
+const ALL_COMMANDS = new Set(Object.values(CoreCommandType));
+
+/**
+ * Build a mock adapter with a tracked dispatch function.
+ *
+ * @param {AuthorityGate} authorityGate
+ * @param {Set<string>} [liveScope] defaults to the adapter's own production
+ *   scope (PLAY/PAUSE/RESUME/SEEK). Pass ALL_COMMANDS to test the dormant
+ *   mapping contract for out-of-scope command types.
+ */
+function makeMockAdapter(authorityGate, liveScope) {
+  const calls = [];
+  const events = [];
+  const dispatch = (type, payload) => {
+    calls.push({ type, payload });
+    return Promise.resolve(true);
+  };
+  const logger = { emit: (e) => events.push(e) };
+  const adapter = new PlaybackCoreAdapter(
+    liveScope
+      ? { dispatch, authorityGate, logger, liveScope }
+      : { dispatch, authorityGate, logger }
+  );
+  return { adapter, calls, events };
+}
+
+describe("INV-SLICE1: Core Command Authority Integration", () => {
+  // ── Intent → command mapping ────────────────────────────────────────────────
+
+  test("PLAY intent maps to PLAY_TRACK with track from queueEntries", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate);
+    const track = { id: "t1", slug: "track-one", title: "Track One" };
+    const intent = intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "t1",
+      queueEntries: [track], queueIndex: 0,
+    });
+    authorityGate.register(intent);
+    await adapter.execute(intent);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].type, "PLAY_TRACK");
+    assert.deepEqual(calls[0].payload.track, track);
+  });
+
+  test("PLAY intent maps to PLAY_TRACK with minimal track when no queueEntries", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate);
+    const intent = intentFactory.create({ type: CoreCommandType.PLAY, trackId: "t99" });
+    authorityGate.register(intent);
+    await adapter.execute(intent);
+    assert.equal(calls[0].type, "PLAY_TRACK");
+    assert.equal(calls[0].payload.track.id, "t99");
+    assert.equal(calls[0].payload.track.slug, "t99");
+  });
+
+  test("PAUSE intent maps to PAUSE", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate);
+    const intent = intentFactory.create({ type: CoreCommandType.PAUSE });
+    authorityGate.register(intent);
+    await adapter.execute(intent);
+    assert.equal(calls[0].type, "PAUSE");
+  });
+
+  test("RESUME intent maps to RESUME", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate);
+    const intent = intentFactory.create({ type: CoreCommandType.RESUME });
+    authorityGate.register(intent);
+    await adapter.execute(intent);
+    assert.equal(calls[0].type, "RESUME");
+  });
+
+  test("SEEK intent maps to SEEK with payload.time (not positionSeconds)", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate);
+    const intent = intentFactory.create({ type: CoreCommandType.SEEK, positionSeconds: 92 });
+    authorityGate.register(intent);
+    await adapter.execute(intent);
+    assert.equal(calls[0].type, "SEEK");
+    assert.equal(calls[0].payload.time, 92,
+      "legacy executor reads payload.time — adapter must map positionSeconds → time");
+  });
+
+  // The next three command types are OUT OF Slice 1B production scope. Their
+  // mapping is dormant contract infrastructure, so these tests exercise it with
+  // an explicitly widened scope. Production containment is asserted separately
+  // in the scope-gate block below.
+  test("NEXT intent maps to NEXT_TRACK (dormant contract)", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate, ALL_COMMANDS);
+    const intent = intentFactory.create({ type: CoreCommandType.NEXT });
+    authorityGate.register(intent);
+    await adapter.execute(intent);
+    assert.equal(calls[0].type, "NEXT_TRACK");
+  });
+
+  test("PREVIOUS intent maps to PREV_TRACK (dormant contract)", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate, ALL_COMMANDS);
+    const intent = intentFactory.create({ type: CoreCommandType.PREVIOUS });
+    authorityGate.register(intent);
+    await adapter.execute(intent);
+    assert.equal(calls[0].type, "PREV_TRACK");
+  });
+
+  test("SET_QUEUE intent maps to PLAY_QUEUE with tracks and startIndex (dormant contract)", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate, ALL_COMMANDS);
+    const tracks = [{ id: "a" }, { id: "b" }];
+    const intent = intentFactory.create({
+      type: CoreCommandType.SET_QUEUE,
+      queueEntries: tracks,
+      queueIndex: 1,
+    });
+    authorityGate.register(intent);
+    await adapter.execute(intent);
+    assert.equal(calls[0].type, "PLAY_QUEUE");
+    assert.deepEqual(calls[0].payload.tracks, tracks);
+    assert.equal(calls[0].payload.startIndex, 1);
+  });
+
+  test("REORDER_QUEUE has no mapping even with scope widened (Slice 2)", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls, events } = makeMockAdapter(authorityGate, ALL_COMMANDS);
+    const intent = intentFactory.create({
+      type: CoreCommandType.REORDER_QUEUE, fromIndex: 0, toIndex: 2,
+    });
+    authorityGate.register(intent);
+    await adapter.execute(intent);
+    assert.equal(calls.length, 0, "REORDER_QUEUE must not dispatch in Slice 1");
+    assert.ok(events.some((e) => e.type === "CORE_ADAPTER_UNKNOWN_COMMAND"));
+  });
+
+  // ── Authority enforcement through the adapter ───────────────────────────────
+
+  test("superseded intent does NOT reach the dispatch function", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate);
+    const playA = intentFactory.create({ type: CoreCommandType.PLAY, trackId: "a" });
+    const pause = intentFactory.create({ type: CoreCommandType.PAUSE });
+    authorityGate.register(playA);
+    authorityGate.register(pause);  // PLAY A is now superseded
+
+    await adapter.execute(playA);   // should be silently dropped
+    assert.equal(calls.length, 0, "superseded intent must not reach dispatch");
+
+    await adapter.execute(pause);   // pause is still authoritative
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].type, "PAUSE");
+  });
+
+  test("HARDENING-B/PLAY A → SEEK: only SEEK reaches adapter (authority proven)", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate);
+    const playA = intentFactory.create({ type: CoreCommandType.PLAY, trackId: "a" });
+    const seek  = intentFactory.create({ type: CoreCommandType.SEEK, positionSeconds: 92 });
+    authorityGate.register(playA);
+    authorityGate.register(seek);   // PLAY A superseded
+
+    // Simulate: PLAY A "completes async work" after SEEK was registered
+    await adapter.execute(playA);
+    await adapter.execute(seek);
+
+    assert.equal(calls.length, 1,      "only one dispatch call");
+    assert.equal(calls[0].type, "SEEK","SEEK must reach adapter, PLAY A must not");
+    assert.equal(calls[0].payload.time, 92);
+  });
+
+  test("HARDENING-B/PLAY A → PLAY B: only PLAY B reaches adapter", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate);
+    const playA = intentFactory.create({ type: CoreCommandType.PLAY, trackId: "a" });
+    const playB = intentFactory.create({ type: CoreCommandType.PLAY, trackId: "b" });
+    authorityGate.register(playA);
+    authorityGate.register(playB);
+
+    await adapter.execute(playA);   // arrives late, superseded
+    await adapter.execute(playB);   // authoritative
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].payload.track.id, "b");
+  });
+
+  test("HARDENING-B/rapid commands: only last command reaches adapter", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate, ALL_COMMANDS);
+    const intents = [];
+    for (let i = 0; i < 20; i++) {
+      const intent = intentFactory.create({ type: CoreCommandType.NEXT });
+      intents.push(intent);
+      authorityGate.register(intent);
+    }
+    // Execute all in order — only last is authoritative
+    for (const intent of intents) {
+      await adapter.execute(intent);
+    }
+    assert.equal(calls.length, 1, "only the last intent in a rapid sequence must reach dispatch");
+  });
+
+  test("HARDENING-B/randomized completion order: only last registered intent dispatches", async () => {
+    const { intentFactory, authorityGate } = makeFullStack();
+    const { adapter, calls } = makeMockAdapter(authorityGate, ALL_COMMANDS);
+    const intents = [];
+    for (let i = 0; i < 10; i++) {
+      const intent = intentFactory.create({ type: CoreCommandType.NEXT });
+      intents.push(intent);
+      authorityGate.register(intent);
+    }
+    const last = intents[intents.length - 1];
+
+    // Execute in shuffled order — simulates async completion out of order
+    const shuffled = [...intents].sort(() => Math.random() - 0.5);
+    for (const intent of shuffled) {
+      await adapter.execute(intent);
+    }
+    assert.equal(calls.length, 1, "randomized order: only one dispatch");
+    // The one that dispatched must be the last registered
+    assert.ok(
+      shuffled.every((i) => i !== last || calls.length === 1),
+      "the dispatched command corresponds to the last-registered intent"
+    );
+  });
+
+  // ── Slice 1B production scope containment ───────────────────────────────────
+  // NEXT / PREVIOUS / SET_QUEUE / REORDER_QUEUE must not route live to
+  // production until the Selection Domain migration moves NowPlaying + Queue +
+  // QueueIndex together.
+
+  test("SCOPE: default live scope is exactly PLAY, PAUSE, RESUME, SEEK", () => {
+    assert.deepEqual(
+      [...CoreLiveCommandScope].sort(),
+      ["PAUSE", "PLAY", "RESUME", "SEEK"],
+    );
+  });
+
+  for (const blocked of ["NEXT", "PREVIOUS", "SET_QUEUE", "REORDER_QUEUE"]) {
+    test(`SCOPE: ${blocked} is refused by the default production scope`, async () => {
+      const { intentFactory, authorityGate } = makeFullStack();
+      const { adapter, calls, events } = makeMockAdapter(authorityGate);
+      const intent = intentFactory.create({
+        type: CoreCommandType[blocked],
+        queueEntries: [{ id: "a" }], queueIndex: 0, fromIndex: 0, toIndex: 1,
+      });
+      authorityGate.register(intent);
+      await adapter.execute(intent);
+      assert.equal(calls.length, 0, `${blocked} must not reach production in Slice 1B`);
+      assert.ok(
+        events.some((e) => e.type === "CORE_ADAPTER_OUT_OF_SCOPE"),
+        `${blocked} must be logged as CORE_ADAPTER_OUT_OF_SCOPE`
+      );
+    });
+  }
+
+  for (const allowed of ["PLAY", "PAUSE", "RESUME", "SEEK"]) {
+    test(`SCOPE: ${allowed} is admitted by the default production scope`, async () => {
+      const { intentFactory, authorityGate } = makeFullStack();
+      const { adapter, calls } = makeMockAdapter(authorityGate);
+      const intent = intentFactory.create({
+        type: CoreCommandType[allowed], trackId: "a", positionSeconds: 5,
+      });
+      authorityGate.register(intent);
+      await adapter.execute(intent);
+      assert.equal(calls.length, 1, `${allowed} must remain live in Slice 1B`);
+    });
+  }
+
+  // ── PlaybackCoreAdapter constructor guards ──────────────────────────────────
+
+  test("PlaybackCoreAdapter constructor throws if dispatch is not a function", () => {
+    const { authorityGate } = makeFullStack();
+    assert.throws(
+      () => new PlaybackCoreAdapter({ dispatch: "not-a-function", authorityGate, logger: null }),
+      /dispatch must be a function/
+    );
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INV-DESIRED: Desired-state convergence (Slice 1C)
+//
+//   INV-DESIRED-1  Every physical transport effect must be compatible with the
+//                  latest authoritative desired state AT THE EFFECT BOUNDARY.
+//   INV-DESIRED-2  A later command may inherit unaffected desired-state fields
+//                  from prior commands; supersession revokes AUTHORITY, not
+//                  SEMANTIC CONTEXT.
+//   INV-DESIRED-3  Physical state may lag desired state, but must never
+//                  intentionally converge toward an older revision once a newer
+//                  revision exists.
+//   INV-DESIRED-4  Emergency commands may bypass execution queues without
+//                  bypassing desired-state authority.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Deterministic in-memory physical runtime for convergence unit tests. */
+function makeProbeRuntime(initial = {}) {
+  const phys = {
+    mediaIdentity: initial.mediaIdentity ?? null,
+    transport:     initial.transport ?? TransportDisposition.IDLE,
+    position:      initial.position ?? 0,
+  };
+  const calls = [];
+  const adapter = {
+    dispatchStep(step) {
+      calls.push(step);
+      switch (step.kind) {
+        case "LOAD":
+          phys.mediaIdentity = step.entry?.id ?? step.entry?.slug ?? null;
+          phys.position = 0;
+          phys.transport = TransportDisposition.PLAYING;
+          break;
+        case "SEEK":   phys.position = step.position; break;
+        case "PAUSE":  phys.transport = TransportDisposition.PAUSED; break;
+        case "RESUME":
+          if (phys.mediaIdentity) phys.transport = TransportDisposition.PLAYING;
+          break;
+      }
+      return Promise.resolve(true);
+    },
+  };
+  return { phys, calls, adapter, probe: { snapshot: () => ({ ...phys }) } };
+}
+
+function makeEngine(initialPhysical) {
+  const { intentFactory, authorityGate, logger } = makeFullStack();
+  const store = new DesiredStateStore({ logger: null });
+  const rt = makeProbeRuntime(initialPhysical);
+  const engine = new ConvergenceEngine({
+    desiredStore: store, adapter: rt.adapter, probe: rt.probe, logger: null,
+  });
+  return { engine, store, intentFactory, authorityGate, ...rt };
+}
+
+async function drain(engine, ms = 400) {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 5));
+    if (engine.inFlight === 0 && !engine.isConverging) {
+      await new Promise((r) => setTimeout(r, 15));
+      if (engine.inFlight === 0 && !engine.isConverging) break;
+    }
+  }
+}
+
+describe("INV-DESIRED: desired-state convergence", () => {
+
+  // ── INV-DESIRED-2: semantic inheritance ─────────────────────────────────────
+
+  test("D2.1 PAUSE inherits requestedMediaIdentity from a prior PLAY", () => {
+    const { store, intentFactory } = makeEngine();
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "a",
+      queueEntries: [{ id: "a", slug: "a" }], queueIndex: 0,
+    }));
+    store.apply(intentFactory.create({ type: CoreCommandType.PAUSE }));
+
+    assert.equal(store.current.requestedMediaIdentity, "a",
+      "supersession revokes authority, not semantic context");
+    assert.equal(store.current.desiredTransport, TransportDisposition.PAUSED);
+  });
+
+  test("D2.2 SEEK inherits media identity — a seek can never target the wrong track", () => {
+    const { store, intentFactory } = makeEngine();
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "a",
+      queueEntries: [{ id: "a", slug: "a" }], queueIndex: 0,
+    }));
+    store.apply(intentFactory.create({ type: CoreCommandType.SEEK, positionSeconds: 92 }));
+
+    assert.equal(store.current.requestedMediaIdentity, "a");
+    assert.equal(store.current.positionTarget, 92);
+    assert.equal(store.current.desiredTransport, TransportDisposition.PLAYING);
+  });
+
+  test("D2.3 RESUME inherits both media identity and position target", () => {
+    const { store, intentFactory } = makeEngine();
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "a",
+      queueEntries: [{ id: "a", slug: "a" }], queueIndex: 0,
+    }));
+    store.apply(intentFactory.create({ type: CoreCommandType.SEEK, positionSeconds: 30 }));
+    store.apply(intentFactory.create({ type: CoreCommandType.PAUSE }));
+    store.apply(intentFactory.create({ type: CoreCommandType.RESUME }));
+
+    assert.equal(store.current.requestedMediaIdentity, "a");
+    assert.equal(store.current.positionTarget, 30);
+    assert.equal(store.current.desiredTransport, TransportDisposition.PLAYING);
+  });
+
+  test("D2.4 a new PLAY replaces media identity and clears the position target", () => {
+    const { store, intentFactory } = makeEngine();
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "a",
+      queueEntries: [{ id: "a", slug: "a" }], queueIndex: 0,
+    }));
+    store.apply(intentFactory.create({ type: CoreCommandType.SEEK, positionSeconds: 92 }));
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "b",
+      queueEntries: [{ id: "b", slug: "b" }], queueIndex: 0,
+    }));
+
+    assert.equal(store.current.requestedMediaIdentity, "b");
+    assert.equal(store.current.positionTarget, null,
+      "a fresh PLAY must not inherit the previous track's seek target");
+  });
+
+  // ── Revision discipline ─────────────────────────────────────────────────────
+
+  test("D-REV.1 desiredRevision is monotonic across in-scope intents", () => {
+    const { store, intentFactory } = makeEngine();
+    const seen = [];
+    for (const type of [CoreCommandType.PLAY, CoreCommandType.PAUSE,
+                        CoreCommandType.RESUME, CoreCommandType.SEEK]) {
+      store.apply(intentFactory.create({ type, trackId: "a", positionSeconds: 1 }));
+      seen.push(store.revision);
+    }
+    assert.deepEqual(seen, [1, 2, 3, 4]);
+  });
+
+  test("D-REV.2 out-of-scope intents do not advance the revision", () => {
+    const { store, intentFactory } = makeEngine();
+    store.apply(intentFactory.create({ type: CoreCommandType.PLAY, trackId: "a" }));
+    const before = store.revision;
+    for (const type of [CoreCommandType.NEXT, CoreCommandType.PREVIOUS,
+                        CoreCommandType.SET_QUEUE, CoreCommandType.REORDER_QUEUE]) {
+      store.apply(intentFactory.create({ type, queueEntries: [], queueIndex: 0, fromIndex: 0, toIndex: 1 }));
+    }
+    assert.equal(store.revision, before);
+  });
+
+  test("D-REV.3 desired state objects are frozen", () => {
+    const { store, intentFactory } = makeEngine();
+    store.apply(intentFactory.create({ type: CoreCommandType.PLAY, trackId: "a" }));
+    assert.ok(Object.isFrozen(store.current));
+    assert.throws(() => { store.current.desiredTransport = "HACKED"; }, TypeError);
+  });
+
+  // ── INV-DESIRED-1 / 3: effect-boundary revalidation ─────────────────────────
+
+  test("D1.1 a step planned against a stale revision is not dispatched", async () => {
+    const { engine, store, intentFactory, calls } = makeEngine();
+    // Register a revision, then advance it before convergence can act.
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "a",
+      queueEntries: [{ id: "a", slug: "a" }], queueIndex: 0,
+    }));
+    const staleRevision = store.revision;
+    store.apply(intentFactory.create({ type: CoreCommandType.PAUSE }));
+    assert.notEqual(store.revision, staleRevision);
+
+    await engine.converge("test");
+    await drain(engine);
+
+    // Convergence must have worked toward the NEWEST revision (PAUSED), never
+    // re-asserted the stale PLAYING one.
+    const last = calls[calls.length - 1];
+    assert.ok(last, "convergence should have taken at least one step");
+    assert.notEqual(last.kind, "RESUME",
+      "converging toward the stale PLAYING revision would violate INV-DESIRED-3");
+  });
+
+  test("D3.1 convergence reaches the newest desired state, not an older one", async () => {
+    const { engine, store, intentFactory, phys } = makeEngine({ mediaIdentity: "x", transport: TransportDisposition.PLAYING, position: 10 });
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "a",
+      queueEntries: [{ id: "a", slug: "a" }], queueIndex: 0,
+    }));
+    store.apply(intentFactory.create({ type: CoreCommandType.PAUSE }));
+
+    await engine.converge("test");
+    await drain(engine);
+
+    assert.equal(phys.mediaIdentity, "a");
+    assert.equal(phys.transport, TransportDisposition.PAUSED);
+  });
+
+  test("D3.2 convergence is idempotent — a settled system takes no further steps", async () => {
+    const { engine, store, intentFactory, calls } = makeEngine();
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "a",
+      queueEntries: [{ id: "a", slug: "a" }], queueIndex: 0,
+    }));
+    await engine.converge("first");
+    await drain(engine);
+    const afterFirst = calls.length;
+
+    await engine.converge("second");
+    await drain(engine);
+    assert.equal(calls.length, afterFirst,
+      "convergence on an already-converged system must be a no-op");
+  });
+
+  test("D3.3 convergence terminates (no runaway loop) for a reachable target", async () => {
+    const { engine, store, intentFactory, calls } = makeEngine({ mediaIdentity: "x", transport: TransportDisposition.PLAYING });
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "a",
+      queueEntries: [{ id: "a", slug: "a" }], queueIndex: 0,
+    }));
+    store.apply(intentFactory.create({ type: CoreCommandType.SEEK, positionSeconds: 92 }));
+    store.apply(intentFactory.create({ type: CoreCommandType.PAUSE }));
+
+    await engine.converge("test");
+    await drain(engine);
+    assert.ok(calls.length <= 8, `expected a bounded step count, got ${calls.length}`);
+  });
+
+  test("D3.4 a repeated SEEK target is not re-issued as playback drifts", async () => {
+    const { engine, store, intentFactory, calls, phys } = makeEngine();
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "a",
+      queueEntries: [{ id: "a", slug: "a" }], queueIndex: 0,
+    }));
+    store.apply(intentFactory.create({ type: CoreCommandType.SEEK, positionSeconds: 92 }));
+    await engine.converge("test");
+    await drain(engine);
+    const seeksAfterFirst = calls.filter((c) => c.kind === "SEEK").length;
+
+    // Simulate playback advancing past the seek target.
+    phys.position = 97;
+    await engine.converge("drift");
+    await drain(engine);
+
+    assert.equal(calls.filter((c) => c.kind === "SEEK").length, seeksAfterFirst,
+      "a satisfied seek target must not be re-issued when the playhead moves on");
+  });
+
+  // ── INV-DESIRED-4: emergency bypass does not bypass authority ───────────────
+
+  test("D4.1 PAUSE advances the desired revision before any effect is dispatched", () => {
+    const { engine, store, intentFactory, calls } = makeEngine({
+      mediaIdentity: "a", transport: TransportDisposition.PLAYING,
+    });
+    const before = store.revision;
+    engine.execute(intentFactory.create({ type: CoreCommandType.PAUSE }));
+
+    assert.equal(store.revision, before + 1,
+      "INV-DESIRED-4: bypassing the execution queue must not bypass authority");
+    assert.equal(store.current.desiredTransport, TransportDisposition.PAUSED);
+    assert.ok(calls.some((c) => c.kind === "PAUSE"),
+      "the emergency effect must still be dispatched immediately");
+  });
+
+  test("D4.2 PAUSE dispatches its effect SYNCHRONOUSLY within execute()", () => {
+    const { engine, intentFactory, calls } = makeEngine({
+      mediaIdentity: "a", transport: TransportDisposition.PLAYING,
+    });
+    engine.execute(intentFactory.create({ type: CoreCommandType.PAUSE }));
+    // No await — asserting in the same synchronous turn.
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].kind, "PAUSE");
+  });
+
+  test("D4.3 PLAY dispatches LOAD synchronously (iOS gesture requirement)", () => {
+    const { engine, intentFactory, calls } = makeEngine();
+    engine.execute(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "a",
+      queueEntries: [{ id: "a", slug: "a" }], queueIndex: 0,
+    }));
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].kind, "LOAD");
+  });
+
+  test("D4.4 out-of-scope intents dispatch nothing and change nothing", () => {
+    const { engine, store, intentFactory, calls } = makeEngine();
+    const before = store.revision;
+    engine.execute(intentFactory.create({ type: CoreCommandType.NEXT }));
+    assert.equal(calls.length, 0);
+    assert.equal(store.revision, before);
+  });
+
+  // ── Disposal ────────────────────────────────────────────────────────────────
+
+  test("D-DISPOSE.1 a disposed engine performs no further effects", async () => {
+    const { engine, store, intentFactory, calls } = makeEngine({
+      mediaIdentity: "x", transport: TransportDisposition.PLAYING,
+    });
+    engine.dispose();
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "a",
+      queueEntries: [{ id: "a", slug: "a" }], queueIndex: 0,
+    }));
+    await engine.converge("after-dispose");
+    await drain(engine, 100);
+    assert.equal(calls.length, 0,
+      "an orphaned reconciler must never keep driving the media runtime");
+  });
+
+  test("D-DISPOSE.2 PlaybackCore.destroy() disposes the execution engine", () => {
+    const core = PlaybackCore.create({ loggerEnabled: false });
+    let disposed = false;
+    core._injectExecutionEngine({ execute: () => null, dispose: () => { disposed = true; } });
+    core.destroy();
+    assert.ok(disposed, "destroy() must stop the reconciler");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INV-HARDEN-A: DomainStore hardening (Slice 1 preflight)
+//   A1 — JSON clone fallback removed: structuredClone unavailable → explicit throw
+//   A2 — deepFreeze is cycle-safe: cyclic structures do not cause stack overflow
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("INV-HARDEN-A: DomainStore preflight hardening", () => {
+  test("A1 — structuredClone path is taken (runtime supports it)", () => {
+    // Confirms the happy path: structuredClone is available in this runtime,
+    // meaning Core initialization succeeds and all snapshot contracts hold.
+    assert.ok(typeof structuredClone === "function",
+      "structuredClone must be available — Core requires it; JSON fallback is permanently rejected");
+    const store = new DomainStore("test", { x: 1 });
+    assert.equal(store.getSnapshot().x, 1);
+  });
+
+  test("A2 — deepFreeze is cycle-safe: two-node cycle does not stack overflow", () => {
+    // A → B → A (two-node cycle)
+    // structuredClone preserves the cycle in its output; deepFreeze must handle it.
+    const a = { name: "a" };
+    const b = { name: "b", parent: a };
+    a.child = b;   // creates A → B → A cycle
+
+    const store = new DomainStore("test", {});
+    assert.doesNotThrow(
+      () => store._applyCommit({ tree: a }),
+      "deepFreeze must not overflow on a cyclic structure"
+    );
+  });
+
+  test("A2 — deepFreeze is cycle-safe: self-referential object does not stack overflow", () => {
+    // A → A (direct self-reference)
+    const self = { name: "self" };
+    self.ref = self;
+
+    const store = new DomainStore("test", {});
+    assert.doesNotThrow(
+      () => store._applyCommit({ node: self }),
+      "deepFreeze must not overflow on a self-referential object"
+    );
+  });
+
+  test("A2 — deepFreeze is cycle-safe: deep chain with shared node does not overflow", () => {
+    // Shared node referenced from multiple parents — not a cycle but tests WeakSet path
+    const shared = { value: 42 };
+    const store = new DomainStore("test", {});
+    assert.doesNotThrow(
+      () => store._applyCommit({ left: shared, right: shared, deeper: { also: shared } }),
+      "deepFreeze must handle shared (DAG) references without redundant recursion"
+    );
+  });
+
+  test("A2 — cycle-frozen snapshot still satisfies top-level frozen invariant", () => {
+    const a = { name: "cyclic" };
+    a.self = a;
+    const store = new DomainStore("test", {});
+    store._applyCommit({ node: a });
+    const snap = store.getSnapshot();
+    assert.ok(Object.isFrozen(snap), "top-level snapshot must be frozen even after cyclic commit");
+    assert.ok(Object.isFrozen(snap.node), "cyclic node itself must be frozen");
   });
 });

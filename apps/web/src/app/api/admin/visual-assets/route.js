@@ -7,20 +7,31 @@ import {
   VISUAL_INTERACTIONS,
   VISUAL_ENTITLEMENT_TIERS,
 } from "@/lib/media/visual-asset-schema";
+import { getFanSessionUser } from "@/lib/auth/session-user";
+import { isAdminUser } from "@/lib/auth/constants";
 
 export const dynamic = "force-dynamic";
 
-const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
-
+/**
+ * Admin gate.
+ *
+ * INV-ENT-9: previously compared session.user.email against
+ * NEXT_PUBLIC_ADMIN_EMAIL (with a hardcoded fallback), binding authority to a
+ * mutable, re-assignable attribute and bypassing isAdminUser() entirely.
+ * Authority now resolves through the single admin authority path.
+ *
+ * Also switched from getSession() to getFanSessionUser(), which uses
+ * supabase.auth.getUser() — the session is re-verified against the auth server
+ * rather than trusted from the cookie payload.
+ */
 async function requireAdmin(cookieStore) {
-  const sb = createServerClient(
+  const user = await getFanSessionUser();
+  if (!user || !isAdminUser(user)) return null;
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.SUPABASE_SERVICE_ROLE_KEY,
     { cookies: { getAll: () => cookieStore.getAll() } }
   );
-  const { data: { session } } = await sb.auth.getSession();
-  if (session?.user?.email?.toLowerCase() !== ADMIN_EMAIL) return null;
-  return sb;
 }
 
 /**

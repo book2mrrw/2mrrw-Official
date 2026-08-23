@@ -14,22 +14,42 @@
  *      Adding parameters to a new slice is additive with default values.
  *   5. This class has no React dependency.
  *
- * In Slice 0 the port wires to CommandGateway, which has a stub execution engine.
- * Commands are accepted, intents are created, authority is tracked — but no actual
- * playback state changes. This is intentional: the seam is live but not yet driving
- * the legacy engine.
+ * READINESS GUARD (Slice 1):
+ *   All command methods fail explicitly if the execution adapter is not yet
+ *   injected (Core is CONSTRUCTING). `isReady` is provided by PlaybackCore
+ *   as a closure over its internal readiness state. When `isReady` is not
+ *   provided (standalone port construction in tests), the guard is disabled.
+ *   No silent drops — ever.
  */
 
 import { CoreCommandType, ResumePolicy } from "../types/index.js";
 
 export class PlaybackPort {
   #commandGateway;
+  #isReady;
 
   /**
    * @param {import('../commands/CommandGateway.js').CommandGateway} commandGateway
+   * @param {(() => boolean)|null} [isReady]  — returns true when Core is READY.
+   *   Omit (or pass null) for standalone port construction (tests, Slice 0).
+   *   In that mode the guard is disabled and all commands are accepted.
    */
-  constructor(commandGateway) {
+  constructor(commandGateway, isReady = null) {
     this.#commandGateway = commandGateway;
+    this.#isReady = isReady;
+  }
+
+  /**
+   * Throw if the execution adapter is not yet wired (Core is CONSTRUCTING).
+   * Disabled when `isReady` was not provided (backward compat for standalone tests).
+   */
+  #assertReady(methodName) {
+    if (this.#isReady && !this.#isReady()) {
+      throw new Error(
+        `[PlaybackPort.${methodName}] Core is not READY. ` +
+        "Inject an execution adapter via _injectExecutionEngine() before dispatching commands."
+      );
+    }
   }
 
   /**
@@ -43,6 +63,7 @@ export class PlaybackPort {
    * @param {string}  [params.source]         - "user" | "system" | "autoplay"
    */
   play({ trackId, resumePolicy = ResumePolicy.RESUME_IF_AVAILABLE, queueEntries, queueIndex, source = "user" } = {}) {
+    this.#assertReady("play");
     this.#commandGateway.dispatch(
       CoreCommandType.PLAY,
       { trackId, resumePolicy, queueEntries, queueIndex },
@@ -56,6 +77,7 @@ export class PlaybackPort {
    * @param {{ source?: string }} [params]
    */
   pause({ source = "user" } = {}) {
+    this.#assertReady("pause");
     this.#commandGateway.dispatch(CoreCommandType.PAUSE, {}, source);
   }
 
@@ -65,6 +87,7 @@ export class PlaybackPort {
    * @param {{ source?: string }} [params]
    */
   resume({ source = "user" } = {}) {
+    this.#assertReady("resume");
     this.#commandGateway.dispatch(CoreCommandType.RESUME, {}, source);
   }
 
@@ -76,6 +99,7 @@ export class PlaybackPort {
    * @param {string}  [params.source]
    */
   seek({ positionSeconds, source = "user" } = {}) {
+    this.#assertReady("seek");
     if (typeof positionSeconds !== "number" || positionSeconds < 0) {
       throw new TypeError("PlaybackPort.seek: positionSeconds must be a non-negative number");
     }
@@ -88,6 +112,7 @@ export class PlaybackPort {
    * @param {{ source?: string }} [params]
    */
   next({ source = "user" } = {}) {
+    this.#assertReady("next");
     this.#commandGateway.dispatch(CoreCommandType.NEXT, {}, source);
   }
 
@@ -97,6 +122,7 @@ export class PlaybackPort {
    * @param {{ source?: string }} [params]
    */
   previous({ source = "user" } = {}) {
+    this.#assertReady("previous");
     this.#commandGateway.dispatch(CoreCommandType.PREVIOUS, {}, source);
   }
 
@@ -109,6 +135,7 @@ export class PlaybackPort {
    * @param {string}  [params.source]
    */
   setQueue({ queueEntries, queueIndex = 0, source = "user" } = {}) {
+    this.#assertReady("setQueue");
     if (!Array.isArray(queueEntries)) {
       throw new TypeError("PlaybackPort.setQueue: queueEntries must be an array");
     }
@@ -124,6 +151,7 @@ export class PlaybackPort {
    * @param {string}  [params.source]
    */
   reorderQueue({ fromIndex, toIndex, source = "user" } = {}) {
+    this.#assertReady("reorderQueue");
     if (typeof fromIndex !== "number" || typeof toIndex !== "number") {
       throw new TypeError("PlaybackPort.reorderQueue: fromIndex and toIndex must be numbers");
     }

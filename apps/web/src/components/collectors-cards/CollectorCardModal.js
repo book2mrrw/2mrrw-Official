@@ -16,16 +16,11 @@ import {
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
 export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurchaseComplete }) {
-  const { currentUser, owns, enterGuest, refreshAccountState, refreshLibrary } = useAuth();
+  const { currentUser, owns, refreshAccountState, refreshLibrary } = useAuth();
 
   const [clientSecret, setClientSecret] = useState(null);
   const [preparing, setPreparing] = useState(false);
   const [purchaseError, setPurchaseError] = useState("");
-  const [showIdentity, setShowIdentity] = useState(false);
-  const [identityLoading, setIdentityLoading] = useState(false);
-  const [identityName, setIdentityName] = useState("");
-  const [identityEmail, setIdentityEmail] = useState("");
-  const [identityPhone, setIdentityPhone] = useState("");
 
   useEffect(() => {
     const onKey = (e) => {
@@ -38,7 +33,6 @@ export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurch
   useEffect(() => {
     setClientSecret(null);
     setPurchaseError("");
-    setShowIdentity(false);
     setPreparing(false);
   }, [card?.slug]);
 
@@ -70,42 +64,25 @@ export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurch
     }
   };
 
-  const ensureIdentity = async () => {
-    if (currentUser) return true;
-    if (!identityEmail.trim() || !identityPhone.trim()) {
-      setPurchaseError("Enter email and phone before checkout.");
-      return false;
-    }
-    setIdentityLoading(true);
-    setPurchaseError("");
-    try {
-      await enterGuest({
-        email: identityEmail.trim(),
-        phone: identityPhone.trim(),
-        name: identityName.trim(),
-      });
-      return true;
-    } catch (err) {
-      setPurchaseError(err.message || "Could not continue.");
-      return false;
-    } finally {
-      setIdentityLoading(false);
-    }
-  };
-
+  /**
+   * Purchase.
+   *
+   * This modal used to carry an inline email+phone identity form for collecting
+   * an anonymous buyer before checkout. That path is gone: the platform admits
+   * five tiers — Entry, Purchaser, Subscriber, Collector card owner, Admin —
+   * and every one is a registered account. An unauthenticated visitor never
+   * reaches this component, because AuthGate covers the app before it renders.
+   *
+   * So `currentUser` is always present here. The guard below is defence in
+   * depth, not a branch anyone can take: rather than silently minting an
+   * identity, it refuses and says so.
+   */
   const handlePurchase = async () => {
     if (soldOut || alreadyOwned) return;
     if (!currentUser) {
-      setShowIdentity(true);
+      setPurchaseError("Please sign in to continue.");
       return;
     }
-    await startPaymentIntent();
-  };
-
-  const handleIdentityContinue = async () => {
-    const ok = await ensureIdentity();
-    if (!ok) return;
-    setShowIdentity(false);
     await startPaymentIntent();
   };
 
@@ -231,51 +208,6 @@ export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurch
               ))}
             </ul>
 
-            {showIdentity && !currentUser && (
-              <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ fontSize: 10, color: "#777", letterSpacing: 2, textTransform: "uppercase" }}>
-                  Account for unlock
-                </div>
-                <input
-                  type="text"
-                  placeholder="Name (optional)"
-                  value={identityName}
-                  onChange={(e) => setIdentityName(e.target.value)}
-                  style={identityInputStyle}
-                />
-                <input
-                  type="email"
-                  placeholder="Email"
-                  value={identityEmail}
-                  onChange={(e) => setIdentityEmail(e.target.value)}
-                  style={identityInputStyle}
-                />
-                <input
-                  type="tel"
-                  placeholder="Phone"
-                  value={identityPhone}
-                  onChange={(e) => setIdentityPhone(e.target.value)}
-                  style={identityInputStyle}
-                />
-                <button
-                  type="button"
-                  onClick={handleIdentityContinue}
-                  disabled={identityLoading || preparing}
-                  style={{
-                    padding: "11px 16px",
-                    background: accent,
-                    color: "#000",
-                    fontWeight: 900,
-                    border: "none",
-                    borderRadius: 10,
-                    cursor: "pointer",
-                    fontSize: 13,
-                  }}
-                >
-                  {identityLoading || preparing ? "Preparing…" : "Continue to payment"}
-                </button>
-              </div>
-            )}
 
             {purchaseError && (
               <p style={{ color: "#ff4d4d", fontSize: 12, marginBottom: 12 }}>{purchaseError}</p>
@@ -284,8 +216,8 @@ export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurch
             <div style={{ display: "flex", gap: 10 }}>
               <button
                 type="button"
-                onClick={showIdentity && !currentUser ? handleIdentityContinue : handlePurchase}
-                disabled={soldOut || alreadyOwned || preparing || identityLoading}
+                onClick={handlePurchase}
+                disabled={soldOut || alreadyOwned || preparing}
                 style={{
                   flex: 1,
                   padding: "12px 20px",
@@ -377,13 +309,3 @@ export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurch
     </div>
   );
 }
-
-const identityInputStyle = {
-  width: "100%",
-  padding: "10px 12px",
-  background: "#111",
-  border: "1px solid #2a2a2a",
-  borderRadius: 8,
-  color: "#fff",
-  fontSize: 13,
-};

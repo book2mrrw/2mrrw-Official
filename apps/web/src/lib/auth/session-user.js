@@ -1,8 +1,9 @@
-﻿import { getAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getGuestUser } from "@/lib/guest-session";
+import { isAdminPrincipal } from "@/lib/auth/admin-authority";
 
-// Per-user in-process profile cache. The profile row (email, phone, name, role)
+// Per-user in-process profile cache. The profile row (email, phone, name)
 // changes rarely — 30 s TTL halves DB calls for every authenticated route without
 // meaningful staleness risk. Same pattern as account-state route.
 const _profileCache = new Map();
@@ -28,6 +29,22 @@ export function invalidateProfileCache(userId) {
   if (userId) _profileCache.delete(userId);
 }
 
+/**
+ * Resolve the authenticated fan session user.
+ *
+ * ADMIN AUTHORITY (INV-ENT-1 / INV-ENT-2):
+ *   `isAdmin` is resolved here, once, from trusted server-controlled sources
+ *   only — the admin_principals table plus deployment-pinned env identity and
+ *   the service-role-only app_metadata claim. Downstream code reads the
+ *   resolved boolean through isAdminUser().
+ *
+ *   Two sources are deliberately NOT consulted:
+ *     user_metadata.role  — writable by the user via supabase.auth.updateUser()
+ *     profiles.role       — was client-writable through profiles_update_own RLS
+ *
+ *   `role` is still returned for display and for legacy consumers, but it is
+ *   derived from the resolved authority rather than trusted as an input.
+ */
 export async function getFanSessionUser() {
   const supabase = await createClient();
   const {
@@ -35,22 +52,26 @@ export async function getFanSessionUser() {
   } = await supabase.auth.getUser();
 
   if (user?.email && !user.email.endsWith("@guest.2mrrw.local")) {
-    const metaRole =
-      user.app_metadata?.role ||
-      user.user_metadata?.role ||
-      null;
-
     let profile = getCachedProfile(user.id);
     if (!profile) {
       const admin = getAdminClient();
       const { data } = await admin
         .from("profiles")
-        .select("email, phone, full_name, role")
+        .select("email, phone, full_name")
         .eq("id", user.id)
         .maybeSingle();
       profile = data || null;
       setCachedProfile(user.id, profile);
     }
+
+    // Trusted resolution. app_metadata comes from the verified JWT; the
+    // admin_principals lookup is server-only and fails closed.
+    const isAdmin = await isAdminPrincipal({
+      id: user.id,
+      email: profile?.email || user.email,
+      authEmail: user.email || "",
+      app_metadata: user.app_metadata,
+    });
 
     return {
       id: user.id,
@@ -60,7 +81,8 @@ export async function getFanSessionUser() {
       name: profile?.full_name || "",
       isGuest: false,
       isOtp: true,
-      role: [profile?.role, metaRole].find((r) => r === "admin") ?? profile?.role ?? "user",
+      isAdmin,
+      role: isAdmin ? "admin" : "user",
     };
   }
 

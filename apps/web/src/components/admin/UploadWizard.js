@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
+import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 function slugify(str) {
@@ -513,35 +514,13 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
     setUploadState({ status: "uploading", progress: 0, error: null });
 
     try {
-      const presignRes = await fetch("/api/admin/upload/presigned", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          releaseType: data.release_type,
-          slug: draftSlug || `draft-${Date.now()}`,
-          assetType: "audio",
-          filename: file.name,
-          contentType: file.type || "audio/wav",
-          size: file.size,
-        }),
-      });
-      const presignData = await presignRes.json();
-      if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
-      const { uploadUrl, key } = presignData;
-
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhrRef.current = xhr;
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            setUploadState((s) => ({ ...s, progress: Math.round((e.loaded / e.total) * 100) }));
-          }
-        };
-        xhr.onload  = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
-        xhr.onerror = () => reject(new Error("Network error during upload"));
-        xhr.open("PUT", uploadUrl);
-        xhr.setRequestHeader("Content-Type", file.type || "audio/wav");
-        xhr.send(file);
+      const { key } = await uploadAssetToR2({
+        releaseType: data.release_type,
+        slug: draftSlug || `draft-${Date.now()}`,
+        assetType: "audio",
+        file,
+        onProgress: (progress) => setUploadState((s) => ({ ...s, progress })),
+        xhrRef,
       });
 
       const completeRes = await fetch("/api/admin/upload/complete", {
@@ -657,37 +636,15 @@ function TrackRow({ track, idx, total, albumSlug, data, releaseId, setTracks }) 
     updateSelf({ upload_status: "uploading", upload_progress: 0, upload_error: null, audio_filename: file.name, slug: trackSlug });
 
     try {
-      const presignRes = await fetch("/api/admin/upload/presigned", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          releaseType: data.release_type,
-          slug: albumSlug,
-          trackSlug,
-          assetType: "audio",
-          filename: file.name,
-          contentType: file.type || "audio/wav",
-          size: file.size,
-          releaseId,
-        }),
-      });
-      const presignData = await presignRes.json();
-      if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
-      const { uploadUrl, key } = presignData;
-
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhrRef.current = xhr;
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            updateSelf({ upload_progress: Math.round((e.loaded / e.total) * 100) });
-          }
-        };
-        xhr.onload  = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
-        xhr.onerror = () => reject(new Error("Network error"));
-        xhr.open("PUT", uploadUrl);
-        xhr.setRequestHeader("Content-Type", file.type || "audio/wav");
-        xhr.send(file);
+      const { key } = await uploadAssetToR2({
+        releaseType: data.release_type,
+        slug: albumSlug,
+        trackSlug,
+        assetType: "audio",
+        file,
+        releaseId,
+        onProgress: (upload_progress) => updateSelf({ upload_progress }),
+        xhrRef,
       });
 
       const completeRes = await fetch("/api/admin/upload/complete", {
@@ -1027,29 +984,11 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
   const uploadCover = useCallback(async (file) => {
     setCoverState({ status: "uploading", error: null });
     try {
-      const presignRes = await fetch("/api/admin/upload/presigned", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          releaseType: data.release_type,
-          slug: draftSlug || `draft-${Date.now()}`,
-          assetType: "cover",
-          filename: file.name,
-          contentType: file.type || "image/jpeg",
-          size: file.size,
-        }),
-      });
-      const presignData = await presignRes.json();
-      if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
-      const { uploadUrl, key } = presignData;
-
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.onload  = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
-        xhr.onerror = () => reject(new Error("Network error"));
-        xhr.open("PUT", uploadUrl);
-        xhr.setRequestHeader("Content-Type", file.type || "image/jpeg");
-        xhr.send(file);
+      const { key } = await uploadAssetToR2({
+        releaseType: data.release_type,
+        slug: draftSlug || `draft-${Date.now()}`,
+        assetType: "cover",
+        file,
       });
 
       await fetch("/api/admin/upload/complete", {

@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { headR2ObjectKey, copyR2Object, deleteR2Object } from "@/lib/storage/r2";
 import { buildHLSPrefix } from "@/lib/hls/derive-key";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 import {
   resolveStoragePath,
   resolvePreviewPath,
@@ -420,14 +420,7 @@ export async function POST(req, { params }) {
   });
 
   // ── 9. Cache invalidation ──────────────────────────────────────────────────
-  try {
-    revalidatePath("/");
-    revalidatePath(`/song/${releaseSlug}`);
-    revalidatePath(`/feature/${releaseSlug}`);
-    revalidatePath(`/album/${releaseSlug}`);
-  } catch (err) {
-    console.warn("[publish] revalidatePath error (non-fatal)", err?.message);
-  }
+  revalidateStorefront();
 
   console.info(`[publish] SUCCESS releaseId=${releaseId} slug=${releaseSlug} productId=${productId} status=${newStatus}`);
 

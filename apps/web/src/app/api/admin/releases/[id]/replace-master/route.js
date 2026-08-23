@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { headR2ObjectKey, deleteR2Object, discoverFileByExtensions } from "@/lib/storage/r2";
+import { headR2ObjectKey, deleteR2Object, listR2Objects, isDirectChildObjectKey } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { clearPersistedPlaybackKey } from "@/lib/playback/resolve-playback-key";
 import { buildHLSPrefix } from "@/lib/hls/derive-key";
+import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,12 @@ export async function POST(req, { params }) {
     return NextResponse.json({ error: "New audio file not found in R2 — complete upload first" }, { status: 422 });
   }
 
+  // Delete any other audio file left in the same folder (e.g. replacing a .wav
+  // master with a .flac one) — storage paths are folder-level and resolved by
+  // extension-priority scan at playback/transcode time, so a stale sibling file
+  // can silently keep serving even after a "successful" replace otherwise.
+  const newKeyParts = newKey.replace(/^\//, "").split("/");
+  const newAudioFolder = newKeyParts.slice(0, -1).join("/");
   const admin = getAdminClient();
 
   // ── Path A: wizard release (releases table) ───────────────────────────────────
@@ -82,10 +89,13 @@ export async function POST(req, { params }) {
       return NextResponse.json({ error: "Failed to update track record" }, { status: 500 });
     }
 
+    const cleanupWarnings = await removeStaleMasterSiblings(newAudioFolder, newKey);
+
     await requeue(admin, user, release.slug, release.release_type, trackRow.slug, newKey, release);
     try { await clearPersistedPlaybackKey(admin, release.slug, trackRow.slug || null); } catch {}
+    revalidateStorefront();
 
-    return NextResponse.json({ ok: true, trackId: trackRow.id, hlsQueued: true });
+    return NextResponse.json({ ok: true, trackId: trackRow.id, hlsQueued: true, cleanupWarnings });
   }
 
   // ── Path B: catalog release (products table, R2-ingested) ─────────────────────
@@ -117,48 +127,72 @@ export async function POST(req, { params }) {
 
   const trackSlug = isMultiTrack && catalogTrack ? catalogTrack.slug : null;
 
-  // Determine the audio folder from the new key (parent directory)
-  const newKeyParts = newKey.replace(/^\//, "").split("/");
-  const newAudioFolder = newKeyParts.slice(0, -1).join("/");
-
-  // Delete any old audio files from R2 in the same folder to avoid resolver picking stale file
-  try {
-    const oldKey = await discoverFileByExtensions(newAudioFolder, AUDIO_EXTENSIONS);
-    if (oldKey && oldKey !== newKey) {
-      await deleteR2Object(oldKey);
-      console.info(`[replace-master/catalog] deleted old audio key=${oldKey}`);
-    }
-  } catch {
-    // Non-fatal — continue even if old file cleanup fails
-  }
-
   // Update catalog_track or product storage_path to point to the new folder
   if (isMultiTrack && catalogTrack) {
-    await admin
+    const { error } = await admin
       .from("catalog_tracks")
       .update({
         storage_path: `${newAudioFolder}/`,
         metadata: { ...(catalogTrack.metadata || {}), audio_key: newKey, audio_replaced_at: new Date().toISOString() },
       })
       .eq("id", catalogTrack.id);
+    if (error) return NextResponse.json({ error: "Failed to update catalog track" }, { status: 500 });
   } else {
-    await admin
+    const { error } = await admin
       .from("products")
       .update({
         storage_path: `${newAudioFolder}/`,
         metadata: { ...(product.metadata || {}), audio_key: newKey, audio_replaced_at: new Date().toISOString() },
       })
       .eq("id", product.id);
+    if (error) return NextResponse.json({ error: "Failed to update product master" }, { status: 500 });
   }
+
+  const cleanupWarnings = await removeStaleMasterSiblings(newAudioFolder, newKey);
 
   // Clear durable playback key cache
   try { await clearPersistedPlaybackKey(admin, product.slug, trackSlug); } catch {}
 
   // Re-queue HLS transcode job
   await requeue(admin, user, product.slug, releaseType, trackSlug, newKey, { slug: product.slug, release_type: releaseType });
+  revalidateStorefront();
 
   console.info(`[replace-master/catalog] SUCCESS productId=${product.id} slug=${product.slug} newKey=${newKey}`);
-  return NextResponse.json({ ok: true, slug: product.slug, hlsQueued: true });
+  return NextResponse.json({ ok: true, slug: product.slug, hlsQueued: true, cleanupWarnings });
+}
+
+async function removeStaleMasterSiblings(folder, newKey) {
+  const prefix = `${String(folder || "").replace(/\/$/, "")}/`;
+  const supported = new Set(AUDIO_EXTENSIONS.map((ext) => ext.toLowerCase()));
+  const warnings = [];
+
+  try {
+    const objects = await listR2Objects(prefix, { recursive: false });
+    const staleKeys = objects
+      .map((item) => item.Key)
+      .filter((key) => key && key !== newKey && isDirectChildObjectKey(prefix, key))
+      .filter((key) => supported.has(key.slice(key.lastIndexOf(".")).toLowerCase()));
+
+    for (const staleKey of staleKeys) {
+      try {
+        await deleteR2Object(staleKey);
+        console.info(`[replace-master] deleted stale audio key=${staleKey}`);
+      } catch (err) {
+        const warning = { key: staleKey, error: err?.message || "delete failed" };
+        warnings.push(warning);
+        console.error("[replace-master] stale master cleanup failed", {
+          folder, newKey, staleKey, error: warning.error,
+        });
+      }
+    }
+  } catch (err) {
+    warnings.push({ folder, error: err?.message || "list failed" });
+    console.error("[replace-master] stale master listing failed", {
+      folder, newKey, error: err?.message,
+    });
+  }
+
+  return warnings;
 }
 
 async function requeue(admin, user, releaseSlug, releaseType, trackSlug, sourceKey, release) {

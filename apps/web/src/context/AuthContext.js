@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { bootstrapSession, signOut as authSignOut, subscribeAuthState } from "@/auth/authService";
 import { isAdminUser } from "@/lib/auth/constants";
+
 import {
   accountStateShallowEqual,
   libraryItemsShallowEqual,
@@ -23,6 +24,7 @@ import {
   writeEntitlementsCache,
 } from "@/lib/auth/entitlement-cache";
 import { SUPABASE_AUTH_STORAGE_KEY } from "@/lib/supabase/auth-storage-key";
+
 
 const EMPTY_ACCOUNT_STATE = {
   library: [],
@@ -70,7 +72,7 @@ export const DEFAULT_AUTH_CONTEXT = {
   loading: true,
   sessionHydrated: false,
   authStatus: "checking",
-  enterGuest: noopAsync,
+
   signOut: noopAsync,
   refreshGuest: noopAsync,
   refreshLibrary: noopAsync,
@@ -548,33 +550,6 @@ export function AuthProvider({ children }) {
     };
   }, [clearEntitlementSnapshot, invalidateEntitlementSnapshot]);
 
-  const enterGuest = useCallback(async ({ email, phone, name }) => {
-    const res = await fetch("/api/guest/session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ email, phone, name }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Could not enter");
-    setUser(data.user);
-    setIsAdmin(isAdminUser(data.user));
-    invalidateEntitlementSnapshot("auth:login");
-    await refreshAccountState({
-      reason: "auth:login",
-      source: "AuthContext:enterGuest",
-      force: true,
-    });
-    if (typeof window !== "undefined") {
-      const redirect = sessionStorage.getItem("postAuthRedirect");
-      if (redirect) {
-        sessionStorage.removeItem("postAuthRedirect");
-        window.location.href = redirect;
-        return data.user;
-      }
-    }
-    return data.user;
-  }, [invalidateEntitlementSnapshot, refreshAccountState]);
 
   const signOut = useCallback(async () => {
     try {
@@ -648,7 +623,7 @@ export function AuthProvider({ children }) {
     loading,
     sessionHydrated,
     authStatus,
-    enterGuest,
+
     signOut,
     refreshGuest,
     refreshLibrary,
@@ -669,7 +644,7 @@ export function AuthProvider({ children }) {
     loading,
     sessionHydrated,
     authStatus,
-    enterGuest,
+
     signOut,
     refreshGuest,
     refreshLibrary,

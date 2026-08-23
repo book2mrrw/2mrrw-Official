@@ -5,7 +5,7 @@
  * Session-authenticated callers use /api/admin/catalog/ingest-trigger instead,
  * which calls the same pipeline directly without the HTTP hop.
  *
- * Auth: x-seed-secret header (ADMIN_SEED_SECRET env var).
+ * Auth: scoped service capability (see lib/auth/admin-api-guard.js).
  *
  * Body (optional JSON):
  *   { dryRun?: boolean }   — true = scan + classify only, no DB writes
@@ -17,8 +17,7 @@ import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { runR2Ingest } from "@/lib/catalog/r2-ingest-pipeline";
 
 function authorize(req) {
-  const secret = req.headers.get("x-seed-secret");
-  return Boolean(process.env.ADMIN_SEED_SECRET && secret === process.env.ADMIN_SEED_SECRET);
+  return requireServiceCapability(req, ServiceCapability.CATALOG_INGEST).ok;   // INV-ADMIN-3
 }
 
 export const dynamic = "force-dynamic";

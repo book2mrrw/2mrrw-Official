@@ -1,16 +1,8 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 
 export const dynamic = "force-dynamic";
-
-const RELEASE_SLUG_PATHS = {
-  single:  (s) => `/song/${s}`,
-  feature: (s) => `/feature/${s}`,
-  album:   (s) => `/album/${s}`,
-  ep:      (s) => `/album/${s}`,
-  mixtape: (s) => `/album/${s}`,
-};
 
 export async function GET(req) {
   const auth     = req.headers.get("authorization");
@@ -59,13 +51,6 @@ export async function GET(req) {
         console.warn("[cron/publish-scheduled] products update error (non-fatal)", productErr.message);
       }
 
-      // Cache invalidation
-      try {
-        revalidatePath("/");
-        const slugPath = RELEASE_SLUG_PATHS[rel.release_type];
-        if (slugPath && rel.slug) revalidatePath(slugPath(rel.slug));
-      } catch {}
-
       results.push({ id: rel.id, slug: rel.slug, ok: true });
       console.info(`[cron/publish-scheduled] published id=${rel.id} slug=${rel.slug}`);
     } catch (err) {
@@ -75,5 +60,6 @@ export async function GET(req) {
   }
 
   const succeeded = results.filter((r) => r.ok).length;
+  if (succeeded > 0) revalidateStorefront();
   return NextResponse.json({ published: succeeded, total: dueReleases.length, results });
 }

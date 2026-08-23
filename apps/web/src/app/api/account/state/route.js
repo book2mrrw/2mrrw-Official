@@ -14,6 +14,8 @@ import {
 import { getUserEntitlements, hasEntitlement, hasVaultAccess } from "@/lib/entitlements";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
+import { buildCapabilityDocument } from "@/lib/auth/capability-document";
+import { resolveCapabilityVersion } from "@/lib/auth/capability-version";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import {
   clearGuestCookie,
@@ -285,6 +287,21 @@ export async function GET(req) {
     const tier = deriveUserTier(resolvedPermissions, finalOwnedSlugs);
     const playbackPolicy = derivePlaybackPolicy(tier);
 
+    // INV-ENT-7 — normalized capability document + fingerprint + version.
+    // Built from RIGHTS ONLY: no timestamps, no Stripe ids, no session data, so a
+    // JWT refresh or a rights-neutral membership rewrite produces an identical
+    // fingerprint and does NOT advance capabilityVersion.
+    const capabilityDocument = buildCapabilityDocument({
+      isAdmin,
+      isSubscriber: Boolean(resolvedPermissions?.subscriber),
+      isCollector: Boolean(resolvedPermissions?.collectorAccess || resolvedPermissions?.collector),
+      vaultTier,
+      playbackPolicy,
+      ownedSlugs: finalOwnedSlugs,
+    });
+    const { fingerprint: capabilityFingerprint, version: capabilityVersion } =
+      await resolveCapabilityVersion(user.id, capabilityDocument);
+
     const body = {
       user,
       library,
@@ -296,6 +313,9 @@ export async function GET(req) {
       membership,
       tier,
       playbackPolicy,
+      capabilityDocument,
+      capabilityFingerprint,
+      capabilityVersion,
       mediaProgress: (mediaProgressResult.data || []).map((row) => ({
         slug: row.product_slug,
         mediaType: row.media_type,

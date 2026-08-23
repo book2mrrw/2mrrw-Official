@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { normalizeStoragePathForStorefront } from "@/lib/sync/normalize-storage-path";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
@@ -6,8 +6,7 @@ import { isAutoGenerateStreamAssetsEnabled } from "@/lib/feature-flags";
 import { maybeGenerateStreamAfterCatalogSync } from "@/lib/media/stream-upload-pipeline";
 
 function authorize(req) {
-  const secret = req.headers.get("x-seed-secret");
-  return Boolean(process.env.ADMIN_SEED_SECRET && secret === process.env.ADMIN_SEED_SECRET);
+  return requireServiceCapability(req, ServiceCapability.CATALOG_SYNC).ok;   // INV-ADMIN-3
 }
 
 export async function POST(req) {

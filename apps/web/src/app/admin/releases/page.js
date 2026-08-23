@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
+import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
 
 const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
 function isAdmin(session) {
@@ -73,36 +74,16 @@ function ReplaceMasterModal({ release, onClose }) {
     setFilename(file.name);
 
     try {
-      // Presigned URL
-      const presignRes = await fetch("/api/admin/upload/presigned", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          releaseType: release.release_type,
-          slug: release.slug,
-          trackSlug: isMultiTrack && trackId ? (tracks.find((t) => t.id === trackId)?.slug || null) : null,
-          assetType: "audio",
-          filename: file.name,
-          contentType: file.type || "audio/wav",
-          size: file.size,
-          releaseId: release.id,
-        }),
-      });
-      const presignData = await presignRes.json();
-      if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
-      const { uploadUrl, key } = presignData;
-
-      // XHR upload
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhrRef.current = xhr;
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
-        };
-        xhr.onload  = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
-        xhr.onerror = () => reject(new Error("Network error"));
-        xhr.open("PUT", uploadUrl);
-        xhr.send(file);
+      const trackSlug = isMultiTrack && trackId ? (tracks.find((t) => t.id === trackId)?.slug || null) : null;
+      const { key } = await uploadAssetToR2({
+        releaseType: release.release_type,
+        slug: release.slug,
+        trackSlug,
+        assetType: "audio",
+        file,
+        releaseId: release.id,
+        onProgress: setProgress,
+        xhrRef,
       });
 
       setNewKey(key);
@@ -270,32 +251,12 @@ function ReplaceCoverModal({ release, onClose }) {
     setProgress(0);
 
     try {
-      const presignRes = await fetch("/api/admin/upload/presigned", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          releaseType: release.release_type,
-          slug: release.slug,
-          assetType: "cover",
-          filename: file.name,
-          contentType: file.type || "image/jpeg",
-          size: file.size,
-        }),
-      });
-      const presignData = await presignRes.json();
-      if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
-      const { uploadUrl, key } = presignData;
-
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
-        };
-        xhr.onload  = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
-        xhr.onerror = () => reject(new Error("Network error"));
-        xhr.open("PUT", uploadUrl);
-        xhr.setRequestHeader("Content-Type", file.type || "image/jpeg");
-        xhr.send(file);
+      const { key } = await uploadAssetToR2({
+        releaseType: release.release_type,
+        slug: release.slug,
+        assetType: "cover",
+        file,
+        onProgress: setProgress,
       });
 
       const completeRes = await fetch("/api/admin/upload/complete", {

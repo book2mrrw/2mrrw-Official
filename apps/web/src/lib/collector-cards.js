@@ -18,7 +18,7 @@ export function hashCollectorSecret(value) {
 export function hashIpAddress(value) {
   const raw = String(value || "").trim();
   if (!raw) return null;
-  return crypto.createHmac("sha256", process.env.GUEST_SESSION_SECRET || process.env.ADMIN_SEED_SECRET || "collector-ip").update(raw).digest("hex");
+  return crypto.createHmac("sha256", process.env.COLLECTOR_IP_HASH_SECRET || process.env.GUEST_SESSION_SECRET || "collector-ip").update(raw).digest("hex");
 }
 
 export function requestDeviceInfo(req) {

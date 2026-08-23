@@ -13,8 +13,8 @@ function hashToken(raw) {
 
 export async function POST(req) {
   try {
-    const secret = req.headers.get("x-seed-secret");
-    if (!process.env.ADMIN_SEED_SECRET || secret !== process.env.ADMIN_SEED_SECRET) {
+    const gate = await requireAdminActor();   // human administrator only
+  if (!gate.ok) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { catalogCoverUrl } from "@/lib/media-urls";
 import { UploadWizard } from "@/components/admin/UploadWizard";
+import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
 
 // ── Design tokens ────────────────────────────────────────────────────────────────
 const C = {
@@ -531,34 +532,13 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
     setPreview(URL.createObjectURL(file));
 
     try {
-      // 1. Presigned URL
-      const presignRes  = await fetch("/api/admin/upload/presigned", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          releaseType: detail.release.release_type,
-          slug:        detail.release.slug,
-          assetType,
-          filename:    file.name,
-          contentType: file.type,
-          size:        file.size,
-        }),
-      });
-      const presignData = await presignRes.json();
-      if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
-      const { uploadUrl, key } = presignData;
-
-      // 2. XHR PUT to R2 with progress tracking
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setState((s) => ({ ...s, pct: Math.round((e.loaded / e.total) * 100) }));
-        };
-        xhr.onload  = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
-        xhr.onerror = () => reject(new Error("Network error"));
-        xhr.open("PUT", uploadUrl);
-        xhr.setRequestHeader("Content-Type", file.type);
-        xhr.send(file);
+      // 1-2. Presign + XHR PUT to R2, with progress tracking
+      const { key } = await uploadAssetToR2({
+        releaseType: detail.release.release_type,
+        slug:        detail.release.slug,
+        assetType,
+        file,
+        onProgress:  (pct) => setState((s) => ({ ...s, pct })),
       });
 
       // 3. Complete — writes to DB; server-side revalidatePath fires automatically
@@ -583,7 +563,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
       setPreview(null);
       setState({ status: "error", error: err.message, pct: 0 });
     }
-  }, [detail, relStub?.id, showMsg, onSaved]);
+  }, [detail, relStub, showMsg, onSaved]);
 
   const pickFile = (accept, handler) => {
     const inp    = document.createElement("input");
@@ -610,34 +590,15 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
     const trackSlug = isMulti ? audioReplacing.slug : null;
 
     try {
-      const presignRes  = await fetch("/api/admin/upload/presigned", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({
-          releaseType: detail.release.release_type,
-          slug:        detail.release.slug,
-          trackSlug,
-          assetType:   "audio",
-          filename:    file.name,
-          contentType: file.type || "audio/wav",
-          size:        file.size,
-          releaseId:   relStub.id,
-        }),
-      });
-      const presignData = await presignRes.json();
-      if (!presignRes.ok) throw new Error(presignData.error || "Failed to get upload URL");
-      const { uploadUrl, key } = presignData;
-
-      await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        audioXhrRef.current = xhr;
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) setAudioProgress(Math.round((e.loaded / e.total) * 100));
-        };
-        xhr.onload  = () => (xhr.status >= 200 && xhr.status < 300) ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
-        xhr.onerror = () => reject(new Error("Network error"));
-        xhr.open("PUT", uploadUrl);
-        xhr.send(file);
+      const { key } = await uploadAssetToR2({
+        releaseType: detail.release.release_type,
+        slug:        detail.release.slug,
+        trackSlug,
+        assetType:   "audio",
+        file,
+        releaseId:   relStub.id,
+        onProgress:  setAudioProgress,
+        xhrRef:      audioXhrRef,
       });
 
       setAudioNewKey(key);
@@ -646,7 +607,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
       setAudioError(err.message);
       setAudioPhase("error");
     }
-  }, [audioReplacing, detail, relStub?.id]);
+  }, [audioReplacing, detail, relStub]);
 
   const confirmAudioReplace = async () => {
     setAudioPhase("uploading");

@@ -131,4 +131,12 @@ export class CoreLogger {
   emitCoreDestroyed(meta) {
     this.emit({ type: DiagnosticEventType.CORE_DESTROYED, sessionEpoch: meta.sessionEpoch });
   }
+
+  /**
+   * Convenience: emit a CORE_READY event when the execution adapter is injected.
+   * @param {{ sessionEpoch: string }} meta
+   */
+  emitCoreReady(meta) {
+    this.emit({ type: DiagnosticEventType.CORE_READY, sessionEpoch: meta.sessionEpoch });
+  }
 }

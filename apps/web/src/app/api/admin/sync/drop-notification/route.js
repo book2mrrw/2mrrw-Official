@@ -1,10 +1,9 @@
-﻿import { NextResponse, after } from "next/server";
+import { NextResponse, after } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { sendPushToSubscribers } from "@/lib/server/web-push";
 
 function authorize(req) {
-  const secret = req.headers.get("x-seed-secret");
-  return Boolean(process.env.ADMIN_SEED_SECRET && secret === process.env.ADMIN_SEED_SECRET);
+  return requireServiceCapability(req, ServiceCapability.DROP_NOTIFICATION).ok;   // INV-ADMIN-3
 }
 
 export async function POST(req) {

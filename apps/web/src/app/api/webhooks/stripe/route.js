@@ -1,10 +1,16 @@
-import { NextResponse } from "next/server";
+import { handleStripeWebhook } from "@/lib/commerce/handle-stripe-webhook";
 
-/** Legacy path — forward to active endpoint so no Stripe events are silently dropped. */
+/**
+ * Legacy Stripe webhook alias — invokes the canonical handler DIRECTLY.
+ *
+ * INV-ENT-5: Stripe webhook delivery never depends on HTTP redirect following.
+ * See app/api/stripe/webhook/route.js for the full rationale — this route had the
+ * same 308 defect.
+ *
+ * Canonical endpoint remains /api/webhook — point the Stripe Dashboard there.
+ */
 export const runtime = "nodejs";
 
 export async function POST(req) {
-  console.warn("[stripe-webhook] /api/webhooks/stripe is a legacy path — update Stripe Dashboard to use /api/webhook");
-  const url = new URL("/api/webhook", req.url);
-  return NextResponse.redirect(url, { status: 308 });
+  return handleStripeWebhook(req);
 }

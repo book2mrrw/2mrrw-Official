@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
+import { retiredRouteGuard } from "@/lib/auth/retired-route";
 import { createClient } from "@supabase/supabase-js";
 
 export async function POST(req) {
-  const secret = req.headers.get("x-seed-secret");
-  if (!process.env.ADMIN_SEED_SECRET || secret !== process.env.ADMIN_SEED_SECRET) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const retired = retiredRouteGuard("/api/register-user");
+  if (retired) return retired;
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,

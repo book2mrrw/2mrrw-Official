@@ -2,11 +2,15 @@ import crypto from "crypto";
 
 const REMINDER_PREFIX = "r1.";
 
+/**
+ * INV-ENT-17: no ADMIN_SEED_SECRET fallback. A key that signs gift reminder
+ * links — which grant access to a gift claim — must not also be the bearer
+ * credential for eleven privileged API routes.
+ */
 function signingSecret() {
   return (
     process.env.GIFT_REMINDER_SIGNING_SECRET ||
     process.env.GUEST_SESSION_SECRET ||
-    process.env.ADMIN_SEED_SECRET ||
     ""
   );
 }

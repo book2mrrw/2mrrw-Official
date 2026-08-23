@@ -5,10 +5,8 @@ import {
   getFanSessionUser,
   getGiftByToken,
   giftPublicState,
-  resolveProductForGift,
+  isGiftRecipient,
 } from "@/lib/gifts/helpers";
-import { grantLibraryItems } from "@/lib/commerce/entitlements";
-import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { hashGiftLinkToken } from "@/lib/gifts/token-hash";
 import { catalogCoverUrl } from "@/lib/media-urls";
@@ -43,38 +41,42 @@ export async function POST(req, { params }) {
     }
 
     if (state === "claimed") {
-      // If the requesting user is the original recipient, ensure the library item exists
-      // (it may have been missed if grantLibraryItems threw after the atomic gift update)
-      // and return success so the client can refresh account state and show the reveal.
+      // A claimed gift is NOT necessarily finished. The grant is several writes
+      // after the gift is marked, so a claim can be recorded while the recipient
+      // owns nothing. Re-entering claimGiftForUser repairs that: it re-checks
+      // authority by EMAIL, re-points a stale recipient_id, and re-runs the
+      // idempotent grant.
+      //
+      // The previous implementation compared `sessionUser.id === gift.recipient_id`
+      // and duplicated a partial recovery here. That comparison is what returned
+      // "already claimed" to the rightful recipient forever when the id was stale.
+      // One code path now, and email is the authority.
       const sessionUser = await getFanSessionUser();
-      if (sessionUser && sessionUser.id === gift.recipient_id) {
-        const product = await resolveProductForGift(gift);
-        if (product) {
-          await grantLibraryItems({
-            userId: sessionUser.id,
-            purchaseId: null,
-            slugs: [product.slug],
-            source: "gift",
-            entitlementMetadata: { gift_id: gift.id },
-          }).catch((err) => console.error("[gift-claim] recovery grant failed:", err?.message));
-          invalidateAccountStateCache(sessionUser.id).catch(() => {});
-        }
-        const recoveryCanonical = product?.slug ? getCanonicalReleaseBySlug(product.slug) : null;
-        const recoveryCoverUrl = recoveryCanonical?.cover || (product?.cover_url ? catalogCoverUrl(product.cover_url) : null) || null;
-        const recoveryCoverImageUrl = recoveryCanonical?.legacy_cover || (product?.cover_url ? catalogCoverUrl(product.cover_url) : null) || null;
-        return NextResponse.json({
-          success: true,
-          gift_id: gift.id,
-          item_type: gift.item_type,
-          item_id: product?.id || null,
-          item_title: gift.item_title || product?.title || null,
-          product_slug: product?.slug || null,
-          cover_url: recoveryCoverUrl,
-          cover_image_url: recoveryCoverImageUrl,
-          cover_art_type: recoveryCanonical?.coverArtType || null,
-        });
+      if (!sessionUser) {
+        return NextResponse.json({ requiresSignup: true, token }, { status: 401 });
       }
-      return NextResponse.json({ error: "claimed", message: "This gift has already been claimed" }, { status: 409 });
+      if (!isGiftRecipient(gift, sessionUser)) {
+        return NextResponse.json(
+          { error: "claimed", message: "This gift has already been claimed" },
+          { status: 409 }
+        );
+      }
+
+      const repaired = await claimGiftForUser(gift, sessionUser);
+      const rc = repaired.product?.slug ? getCanonicalReleaseBySlug(repaired.product.slug) : null;
+      const rCover = rc?.cover || (repaired.product?.cover_url ? catalogCoverUrl(repaired.product.cover_url) : null) || null;
+      const rCoverImg = rc?.legacy_cover || (repaired.product?.cover_url ? catalogCoverUrl(repaired.product.cover_url) : null) || null;
+      return NextResponse.json({
+        success: true,
+        gift_id: repaired.gift.id,
+        item_type: repaired.gift.item_type,
+        item_id: repaired.product?.id || null,
+        item_title: repaired.gift.item_title || repaired.product?.title || null,
+        product_slug: repaired.product?.slug || null,
+        cover_url: rCover,
+        cover_image_url: rCoverImg,
+        cover_art_type: rc?.coverArtType || null,
+      });
     }
 
     if (state === "revoked") {
@@ -86,14 +88,13 @@ export async function POST(req, { params }) {
       return NextResponse.json({ requiresSignup: true, token }, { status: 401 });
     }
 
-    const email = String(user.email || "").toLowerCase();
-    const giftEmail = String(gift.recipient_email || "").toLowerCase();
-    if (giftEmail && email && giftEmail !== email) {
+    // Authority is enforced inside claimGiftForUser (EMAIL_MISMATCH → 403), so
+    // this is a fast, friendly refusal rather than a second source of truth.
+    // Duplicated authorisation logic is how the two paths drifted apart in the
+    // first place — one comparing email, the other comparing recipient_id.
+    if (!isGiftRecipient(gift, user)) {
       return NextResponse.json(
-        {
-          error: "email_mismatch",
-          message: "Sign in with the email this gift was sent to.",
-        },
+        { error: "email_mismatch", message: "Sign in with the email this gift was sent to." },
         { status: 403 }
       );
     }
@@ -117,6 +118,15 @@ export async function POST(req, { params }) {
   } catch (err) {
     if (err?.code === "ALREADY_CLAIMED" || err?.status === 409) {
       return NextResponse.json({ error: "claimed", message: "This gift has already been claimed" }, { status: 409 });
+    }
+    // claimGiftForUser enforces authority itself, so its refusal must surface as
+    // a 403 rather than falling through to a generic 500 that tells the
+    // recipient nothing about what to do.
+    if (err?.code === "EMAIL_MISMATCH" || err?.status === 403) {
+      return NextResponse.json(
+        { error: "email_mismatch", message: err.message || "Sign in with the email this gift was sent to." },
+        { status: 403 }
+      );
     }
     console.error("gift claim error:", err);
     return NextResponse.json({ error: err.message || "Claim failed" }, { status: 500 });

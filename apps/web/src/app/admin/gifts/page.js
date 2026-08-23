@@ -208,14 +208,19 @@ function GiftLinkForm({ catalog }) {
     setLink(null);
     if (!slugs.length) { setError("Select at least one release."); return; }
 
-    const adminSecret = window.prompt("Enter ADMIN_SEED_SECRET:");
-    if (!adminSecret) return;
-
+    // INV-ENT-18: no secret is handled in the browser. This page previously
+    // collected ADMIN_SEED_SECRET with window.prompt() and sent it as a header —
+    // putting a server master secret (which also signed guest session cookies)
+    // into client memory and the network log on every use.
+    //
+    // The route now authorises the administrator's own session via
+    // requireAdminOrService, so the request carries credentials only.
     setLoading(true);
     try {
       const res = await fetch("/api/admin/gifts", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-seed-secret": adminSecret },
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title || `Gift Link — ${slugs.join(", ")}`,
           slugs,

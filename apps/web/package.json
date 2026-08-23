@@ -22,7 +22,8 @@
     "snapshot:foundation": "node scripts/recovery/create-frontend-snapshot.mjs",
     "recover:checkpoint": "node scripts/recovery/create-frontend-checkpoint.mjs",
     "test:batch1": "node --import ./scripts/register-alias.mjs scripts/test-batch1-regression.mjs",
-    "test:core-invariants": "node --test src/lib/playback-core/__tests__/invariants.test.js"
+    "test:core-invariants": "node --test src/lib/playback-core/__tests__/invariants.test.js",
+    "test:admin-upload": "node --test src/lib/media/__tests__/admin-upload-hardening.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1051.0",
@@ -56,6 +57,7 @@
     "zustand": "5.0.13"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "4.2.2",
     "eslint": "9.39.4",
     "eslint-config-next": "16.2.4",

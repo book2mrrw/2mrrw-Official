@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
+import { requireAdminOrCapability, requireServiceCapability, ServiceCapability } from "@/lib/auth/admin-api-guard";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
+import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req) {
-  // Allow both admin session auth and seed secret (for server-to-server calls from publish endpoint)
-  const seedSecret = req.headers.get("x-seed-secret");
-  const validSecret = seedSecret && seedSecret === process.env.ADMIN_SEED_SECRET;
+  // Admin session, or the scoped CATALOG_REVALIDATE capability for the
+  // server-to-server call the publish endpoint makes.
+  const validSecret = requireServiceCapability(req, ServiceCapability.CATALOG_REVALIDATE).ok;   // INV-ADMIN-3
 
   if (!validSecret) {
     const user = await getFanSessionUser();
@@ -17,10 +18,7 @@ export async function POST(req) {
     }
   }
 
-  revalidatePath("/");
-  revalidatePath("/song/[slug]", "page");
-  revalidatePath("/feature/[slug]", "page");
-  revalidatePath("/album/[slug]", "page");
+  revalidateStorefront();
 
   return NextResponse.json({ revalidated: true, timestamp: Date.now() });
 }

@@ -9,9 +9,13 @@
  *   • Only destroying and creating a new PlaybackCore resets these values.
  *
  * intentId format:  "<sessionEpoch>:<sequence>"
- *   sessionEpoch — 8 hex chars, unique per Core instance, diagnostic-friendly.
+ *   sessionEpoch — UUID (128-bit cryptographically random), unique per Core instance.
  *   sequence     — cheap numeric comparison for authority checks.
  *   intentId     — durable diagnostic identity usable in logs, traces, CI output.
+ *
+ * Collision probability: 1/2^122 (UUID v4 entropy — negligible).
+ * Math.random() fallback is REJECTED — cryptographic strength is non-negotiable.
+ * If crypto.randomUUID is unavailable, construction throws so the caller is aware.
  */
 
 export class IntentSequencer {
@@ -45,14 +49,15 @@ export class IntentSequencer {
     };
   }
 
-  /** Generate a cryptographically-random 8-hex-char epoch string. */
+  /** Generate a 128-bit cryptographically-random epoch via crypto.randomUUID(). */
   static #generateEpoch() {
-    if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
-      const buf = new Uint32Array(1);
-      crypto.getRandomValues(buf);
-      return buf[0].toString(16).padStart(8, "0");
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
     }
-    // Fallback for environments without Web Crypto (older Node, workers, etc.)
-    return Math.floor(Math.random() * 0xffffffff).toString(16).padStart(8, "0");
+    throw new Error(
+      "[IntentSequencer] crypto.randomUUID() is unavailable. " +
+      "PlaybackCore requires a cryptographically secure runtime (Node ≥ 19, modern browser). " +
+      "Math.random() fallback is rejected — epoch strength is non-negotiable."
+    );
   }
 }

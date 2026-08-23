@@ -4,9 +4,10 @@ import { cookies } from "next/headers";
 import { VISUAL_ENTITLEMENT_TIERS, visualEntitlementSatisfied } from "@/lib/media/visual-asset-schema";
 import { getPublicR2Url } from "@/lib/storage/r2";
 
-export const dynamic = "force-dynamic";
+import { getFanSessionUser } from "@/lib/auth/session-user";
+import { isAdminUser } from "@/lib/auth/constants";
 
-const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
+export const dynamic = "force-dynamic";
 
 /**
  * GET /api/media/visual-assets/[slug]
@@ -37,16 +38,18 @@ export async function GET(req, { params }) {
       { cookies: { getAll: () => cookieStore.getAll() } }
     );
 
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-      const email = session.user.email?.toLowerCase() ?? "";
-      if (email === ADMIN_EMAIL) {
+    // INV-ENT-9: admin tier resolves through the single admin authority path,
+    // never by matching a mutable email attribute. getFanSessionUser() also
+    // re-verifies the JWT via getUser() rather than trusting the cookie payload.
+    const sessionUser = await getFanSessionUser();
+    if (sessionUser) {
+      if (isAdminUser(sessionUser)) {
         serverTier = "admin";
       } else {
         const { data: ent } = await supabase
           .from("user_entitlements")
           .select("subscriber, collector_card, vault_access")
-          .eq("user_id", session.user.id)
+          .eq("user_id", sessionUser.id)
           .maybeSingle();
 
         if (ent?.collector_card) serverTier = "collector";
@@ -57,7 +60,7 @@ export async function GET(req, { params }) {
           const { count } = await supabase
             .from("purchases")
             .select("id", { count: "exact", head: true })
-            .eq("user_id", session.user.id)
+            .eq("user_id", sessionUser.id)
             .eq("status", "completed")
             .limit(1);
           serverTier = count > 0 ? "purchaser" : "signed_in";

@@ -1,19 +1,10 @@
 import { NextResponse } from "next/server";
-import { revalidatePath } from "next/cache";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { headR2ObjectKey } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
-
-function revalidateStorefront() {
-  try {
-    revalidatePath("/");
-    revalidatePath("/song/[slug]", "page");
-    revalidatePath("/feature/[slug]", "page");
-    revalidatePath("/album/[slug]", "page");
-  } catch {}
-}
+import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 
 export const dynamic = "force-dynamic";
 
@@ -164,6 +155,7 @@ export async function POST(req) {
       }
 
       console.info(`[admin/upload/complete] audio complete key=${key} trackId=${resolvedTrackId}`);
+      revalidateStorefront();
       return NextResponse.json({ ok: true, assetType, trackId: resolvedTrackId, hlsQueued: !hlsError });
     }
 
@@ -219,6 +211,7 @@ export async function POST(req) {
         .eq("id", releaseId);
       if (error) throw error;
 
+      revalidateStorefront();
       return NextResponse.json({ ok: true, assetType });
     }
 

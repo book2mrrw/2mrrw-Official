@@ -12,24 +12,76 @@ function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
+/**
+ * Resolve the account a gift should be cached against.
+ *
+ * ── What this is, and what it is NOT ────────────────────────────────────────
+ *
+ * The result becomes `gifts.recipient_id`, which is a CACHE. It is never the
+ * authority for who may claim — `recipient_email` is, and claimGiftForUser
+ * enforces it. A wrong or absent id here costs a lookup, not a lost gift.
+ *
+ * Three faults in the previous four lines:
+ *
+ *   1. `.maybeSingle()` on a NON-UNIQUE match. `profiles.email` has no unique
+ *      constraint, so two rows are possible — and PostgREST returns an error
+ *      rather than a row when that happens.
+ *   2. The error was discarded by `const { data: profile } = …`, so the failure
+ *      was indistinguishable from "no account" and silently produced a null id.
+ *   3. No principal-class discrimination. `profiles` held rows for legacy
+ *      session principals keyed by the SAME real email as a person's actual
+ *      account, so a gift could bind to the wrong one — which is exactly how a
+ *      real gift ended up invisible to its recipient.
+ *
+ * Now: fetch all matches, order deterministically, and log ambiguity instead of
+ * swallowing it.
+ */
 async function findRecipientProfile(email) {
   const admin = getAdminClient();
-  const { data: profile } = await admin
+  const { data, error } = await admin
     .from("profiles")
-    .select("id, email, full_name")
+    .select("id, email, full_name, created_at")
     .ilike("email", email)
-    .maybeSingle();
-  return profile;
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("[gift-send] recipient profile lookup failed", { email, error: error.message });
+    return null;
+  }
+
+  const matches = data || [];
+  if (!matches.length) return null;
+
+  if (matches.length > 1) {
+    // Not fatal — email remains the claim authority — but it means two profile
+    // rows share an address, which should not happen and will mis-attribute
+    // anything that trusts recipient_id.
+    console.warn("[gift-send] AMBIGUOUS recipient profile: multiple rows share this email", {
+      email,
+      ids: matches.map((m) => m.id),
+    });
+  }
+
+  return matches[0];
 }
 
 async function findRecipientProfileByPhone(phone) {
   const admin = getAdminClient();
-  const { data: profile } = await admin
+  const { data, error } = await admin
     .from("profiles")
-    .select("id, email, full_name")
+    .select("id, email, full_name, created_at")
     .eq("phone", phone)
-    .maybeSingle();
-  return profile;
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("[gift-send] recipient phone lookup failed", { error: error.message });
+    return null;
+  }
+  const matches = data || [];
+  if (matches.length > 1) {
+    console.warn("[gift-send] AMBIGUOUS recipient profile by phone", { ids: matches.map((m) => m.id) });
+  }
+  return matches[0] || null;
 }
 
 export class GiftSendError extends Error {
