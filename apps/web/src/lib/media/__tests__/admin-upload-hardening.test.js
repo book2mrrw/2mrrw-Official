@@ -35,11 +35,11 @@ describe("admin upload MIME authority", () => {
 });
 
 describe("one upload transport and one storefront invalidator", () => {
-  test("all seven upload call sites use the shared transport", () => {
+  test("all eight upload call sites use the shared transport", () => {
     const wizard = read("src/components/admin/UploadWizard.js");
     const releases = read("src/app/admin/releases/page.js");
     const inline = read("src/components/admin/InlineReleasesManager.js");
-    assert.equal((wizard.match(/uploadAssetToR2\s*\(/g) || []).length, 3);
+    assert.equal((wizard.match(/uploadAssetToR2\s*\(/g) || []).length, 4);
     assert.equal((releases.match(/uploadAssetToR2\s*\(/g) || []).length, 2);
     assert.equal((inline.match(/uploadAssetToR2\s*\(/g) || []).length, 2);
     for (const source of [wizard, releases, inline]) {
@@ -54,6 +54,16 @@ describe("one upload transport and one storefront invalidator", () => {
     assert.match(wizard, /coverInputRef\.current\?\.click\(\)/);
     assert.ok(!/const pickCover = \(\) => \{\s*const input = document\.createElement/.test(wizard));
     assert.match(wizard, /if \(!completeRes\.ok\)/);
+  });
+
+  test("cover MP4 selection enforces the seven-minute contract", () => {
+    const wizard = read("src/components/admin/UploadWizard.js");
+    const complete = read("src/app/api/admin/upload/complete/route.js");
+    assert.match(wizard, /ref=\{videoInputRef\}/);
+    assert.match(wizard, /accept="video\/mp4,\.mp4"/);
+    assert.match(wizard, /durationSeconds > 420\.5/);
+    assert.match(wizard, /assetType: "cover-mp4"/);
+    assert.match(complete, /durationSeconds > 420\.5/);
   });
 
   test("master cleanup occurs after persistence and preserves the new key", () => {

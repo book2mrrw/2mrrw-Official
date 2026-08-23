@@ -979,8 +979,10 @@ function TrackDetailsStep({ data, tracks, setTracks, onNext, onBack }) {
 // ── Step 4/5: Artwork + Lyrics ───────────────────────────────────────────────────
 function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlug, isMultiTrack, tracks, setTracks }) {
   const [coverState, setCoverState] = useState({ status: data.cover_key ? "ready" : "idle", error: null });
+  const [videoState, setVideoState] = useState({ status: data.cover_video_key ? "ready" : "idle", error: null });
   const [openLyricsId, setOpenLyricsId] = useState(null);
   const coverInputRef = useRef(null);
+  const videoInputRef = useRef(null);
 
   const uploadCover = useCallback(async (file) => {
     setCoverState({ status: "uploading", error: null });
@@ -1012,6 +1014,53 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
   }, [data.release_type, draftSlug, releaseId, onChange]);
 
   const pickCover = () => coverInputRef.current?.click();
+
+  const uploadCoverVideo = useCallback(async (file) => {
+    setVideoState({ status: "checking", error: null });
+    const previewUrl = URL.createObjectURL(file);
+    onChange("cover_video_preview_url", previewUrl);
+    try {
+      const durationSeconds = await new Promise((resolve, reject) => {
+        const video = document.createElement("video");
+        video.preload = "metadata";
+        video.onloadedmetadata = () => resolve(video.duration);
+        video.onerror = () => reject(new Error("Could not read this MP4 file"));
+        video.src = previewUrl;
+      });
+      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+        throw new Error("Could not determine the MP4 duration");
+      }
+      if (durationSeconds > 420.5) {
+        throw new Error("Video must be 7 minutes or shorter");
+      }
+
+      setVideoState({ status: "uploading", error: null });
+      const { key } = await uploadAssetToR2({
+        releaseType: data.release_type,
+        slug: draftSlug || `draft-${Date.now()}`,
+        assetType: "cover-mp4",
+        file,
+      });
+      const completeRes = await fetch("/api/admin/upload/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          releaseId, key, assetType: "cover-mp4", releaseType: data.release_type,
+          slug: draftSlug, durationSeconds,
+        }),
+      });
+      const completeData = await completeRes.json().catch(() => ({}));
+      if (!completeRes.ok) {
+        throw new Error(completeData.error || `Video registration failed (HTTP ${completeRes.status})`);
+      }
+      onChange("cover_video_key", key);
+      setVideoState({ status: "ready", error: null });
+    } catch (err) {
+      setVideoState({ status: "error", error: err.message });
+    }
+  }, [data.release_type, draftSlug, releaseId, onChange]);
+
+  const pickCoverVideo = () => videoInputRef.current?.click();
 
   const updateTrackLyrics = (tempId, lyrics) =>
     setTracks((prev) => prev.map((t) => t.tempId === tempId ? { ...t, lyrics } : t));
@@ -1065,6 +1114,42 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
             {status === "error"  && <div style={{ fontSize: 12, color: C.error }}>{error}</div>}
           </div>
         </div>
+      </Field>
+
+      <Field label="Cover Video (Optional)" hint="MP4 only — up to 7 minutes and 500 MB. The image above remains the fallback artwork.">
+        <input
+          ref={videoInputRef}
+          type="file"
+          accept="video/mp4,.mp4"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = "";
+            if (file) uploadCoverVideo(file);
+          }}
+          style={{ display: "none" }}
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+        {data.cover_video_preview_url && (
+          <video
+            src={data.cover_video_preview_url}
+            controls
+            playsInline
+            preload="metadata"
+            style={{ width: "100%", maxHeight: 260, borderRadius: 10, background: "#000", marginBottom: 10 }}
+          />
+        )}
+        <Btn
+          onClick={pickCoverVideo}
+          variant="secondary"
+          disabled={videoState.status === "checking" || videoState.status === "uploading"}
+        >
+          {videoState.status === "ready" ? "Replace MP4 Video" :
+            videoState.status === "checking" ? "Checking duration…" :
+            videoState.status === "uploading" ? "Uploading MP4…" : "Upload MP4 Video"}
+        </Btn>
+        {videoState.status === "ready" && <div style={{ fontSize: 12, color: C.success, marginTop: 7 }}>✓ Cover video uploaded</div>}
+        {videoState.status === "error" && <div style={{ fontSize: 12, color: C.error, marginTop: 7 }}>{videoState.error}</div>}
       </Field>
 
       {isMultiTrack ? (
@@ -1343,6 +1428,8 @@ const DEFAULT_DATA = {
   track_id:           null,
   cover_key:          "",
   cover_preview_url:  "",
+  cover_video_key:    "",
+  cover_video_preview_url: "",
   lyrics:             "",
 };
 

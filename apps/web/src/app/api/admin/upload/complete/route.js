@@ -41,7 +41,7 @@ export async function POST(req) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { releaseId, trackId, key, assetType, releaseType, slug, trackSlug, trackTitle, position } = body;
+  const { releaseId, trackId, key, assetType, releaseType, slug, trackSlug, trackTitle, position, durationSeconds } = body;
 
   if (!key || !assetType || !releaseId) {
     return NextResponse.json({ error: "releaseId, key, and assetType are required" }, { status: 400 });
@@ -190,6 +190,9 @@ export async function POST(req) {
     }
 
     if (assetType === "cover-mp4") {
+      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > 420.5) {
+        return NextResponse.json({ error: "Cover video must be an MP4 no longer than 7 minutes" }, { status: 400 });
+      }
       // Store animated cover R2 key in releases metadata
       const { data: rel } = await admin.from("releases").select("metadata").eq("id", releaseId).single();
       const meta = (rel?.metadata && typeof rel.metadata === "object") ? rel.metadata : {};
