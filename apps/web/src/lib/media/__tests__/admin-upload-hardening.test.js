@@ -48,6 +48,14 @@ describe("one upload transport and one storefront invalidator", () => {
     }
   });
 
+  test("cover selection uses a persistent input and validates completion", () => {
+    const wizard = read("src/components/admin/UploadWizard.js");
+    assert.match(wizard, /ref=\{coverInputRef\}/);
+    assert.match(wizard, /coverInputRef\.current\?\.click\(\)/);
+    assert.ok(!/const pickCover = \(\) => \{\s*const input = document\.createElement/.test(wizard));
+    assert.match(wizard, /if \(!completeRes\.ok\)/);
+  });
+
   test("master cleanup occurs after persistence and preserves the new key", () => {
     const route = read("src/app/api/admin/releases/[id]/replace-master/route.js");
     const update = route.indexOf('.from("tracks")');

@@ -980,9 +980,12 @@ function TrackDetailsStep({ data, tracks, setTracks, onNext, onBack }) {
 function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlug, isMultiTrack, tracks, setTracks }) {
   const [coverState, setCoverState] = useState({ status: data.cover_key ? "ready" : "idle", error: null });
   const [openLyricsId, setOpenLyricsId] = useState(null);
+  const coverInputRef = useRef(null);
 
   const uploadCover = useCallback(async (file) => {
     setCoverState({ status: "uploading", error: null });
+    const previewUrl = URL.createObjectURL(file);
+    onChange("cover_preview_url", previewUrl);
     try {
       const { key } = await uploadAssetToR2({
         releaseType: data.release_type,
@@ -991,27 +994,24 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
         file,
       });
 
-      await fetch("/api/admin/upload/complete", {
+      const completeRes = await fetch("/api/admin/upload/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ releaseId, key, assetType: "cover", releaseType: data.release_type, slug: draftSlug }),
       });
+      const completeData = await completeRes.json().catch(() => ({}));
+      if (!completeRes.ok) {
+        throw new Error(completeData.error || `Cover registration failed (HTTP ${completeRes.status})`);
+      }
 
       onChange("cover_key", key);
-      onChange("cover_preview_url", URL.createObjectURL(file));
       setCoverState({ status: "ready", error: null });
     } catch (err) {
       setCoverState({ status: "error", error: err.message });
     }
   }, [data.release_type, draftSlug, releaseId, onChange]);
 
-  const pickCover = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp";
-    input.onchange = (e) => { if (e.target.files?.[0]) uploadCover(e.target.files[0]); };
-    input.click();
-  };
+  const pickCover = () => coverInputRef.current?.click();
 
   const updateTrackLyrics = (tempId, lyrics) =>
     setTracks((prev) => prev.map((t) => t.tempId === tempId ? { ...t, lyrics } : t));
@@ -1024,6 +1024,19 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
       <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>Cover art is required to publish. Lyrics are optional and stored internally.</p>
 
       <Field label="Cover Artwork" hint="JPG, PNG, or WEBP — square recommended — max 20 MB. Required.">
+        <input
+          ref={coverInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = "";
+            if (file) uploadCover(file);
+          }}
+          style={{ display: "none" }}
+          aria-hidden="true"
+          tabIndex={-1}
+        />
         <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
           <div
             onClick={status !== "uploading" ? pickCover : undefined}
