@@ -82,12 +82,14 @@ export async function POST(req) {
           .eq("id", trackId);
         if (error) throw error;
       } else {
-        // For multi-track: find by release_id + slug; for single: find by release_id only
+        // Position is the persisted track identity. Track slugs are carried by
+        // the upload/HLS payload and must not make completion depend on an
+        // optional database column.
         let existingQuery = admin
           .from("tracks")
           .select("id")
           .eq("release_id", releaseId);
-        if (trackSlug) existingQuery = existingQuery.eq("slug", trackSlug);
+        if (position) existingQuery = existingQuery.eq("position", position);
         const { data: existing } = await existingQuery.maybeSingle();
 
         if (existing?.id) {
@@ -108,7 +110,6 @@ export async function POST(req) {
             .insert({
               ...trackPayload,
               release_id: releaseId,
-              slug: trackSlug || slug || `track-${releaseId}`,
               title: trackTitle || "",
               position: position || 1,
               upload_status: "ready",

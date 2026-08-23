@@ -66,7 +66,7 @@ export async function POST(req, { params }) {
     .single();
 
   if (release) {
-    let trackQuery = admin.from("tracks").select("id, audio_r2_key, master_r2_key, master_history, slug").eq("release_id", releaseId);
+    let trackQuery = admin.from("tracks").select("id, audio_r2_key, master_r2_key, master_history, position").eq("release_id", releaseId);
     if (track_id) trackQuery = trackQuery.eq("id", track_id);
     const { data: trackRow, error: trackErr } = await trackQuery.maybeSingle();
 
@@ -91,8 +91,11 @@ export async function POST(req, { params }) {
 
     const cleanupWarnings = await removeStaleMasterSiblings(newAudioFolder, newKey);
 
-    await requeue(admin, user, release.slug, release.release_type, trackRow.slug, newKey, release);
-    try { await clearPersistedPlaybackKey(admin, release.slug, trackRow.slug || null); } catch {}
+    const isMultiTrack = ["album", "ep", "mixtape"].includes(release.release_type);
+    const folderParts = newAudioFolder.replace(/\/$/, "").split("/");
+    const trackSlug = isMultiTrack ? folderParts.at(-1) : null;
+    await requeue(admin, user, release.slug, release.release_type, trackSlug, newKey, release);
+    try { await clearPersistedPlaybackKey(admin, release.slug, trackSlug); } catch {}
     revalidateStorefront();
 
     return NextResponse.json({ ok: true, trackId: trackRow.id, hlsQueued: true, cleanupWarnings });

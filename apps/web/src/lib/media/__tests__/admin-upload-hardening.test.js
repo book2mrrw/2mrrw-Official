@@ -62,3 +62,31 @@ describe("one upload transport and one storefront invalidator", () => {
     assert.ok(!/unstable_cache|revalidateTag|\bcache\s*\(|redis/i.test(catalog));
   });
 });
+
+describe("release upload database contract", () => {
+  const migration = read("supabase/migrations/20260823000010_tracks_upload_contract_closure.sql");
+
+  test("tracks supplies every field shared by complete, publish, edit, and replace-master", () => {
+    for (const column of ["position", "master_history", "slug"]) {
+      assert.match(migration, new RegExp(`ADD COLUMN IF NOT EXISTS ${column}`));
+    }
+    assert.match(migration, /ALTER COLUMN slug SET NOT NULL/);
+    assert.match(migration, /NOTIFY pgrst, 'reload schema'/);
+  });
+
+  test("the publish linkage column is present even when the earlier migration was skipped", () => {
+    assert.match(migration, /public\.products[\s\S]*ADD COLUMN IF NOT EXISTS release_id uuid/);
+  });
+
+  test("live routes tolerate the pre-migration tracks table", () => {
+    const complete = read("src/app/api/admin/upload/complete/route.js");
+    const publish = read("src/app/api/admin/releases/[id]/publish/route.js");
+    const replace = read("src/app/api/admin/releases/[id]/replace-master/route.js");
+    const detail = read("src/app/api/admin/releases/[id]/route.js");
+    assert.ok(!complete.includes('.eq("slug", trackSlug)'));
+    assert.ok(!complete.includes("slug: trackSlug || slug"));
+    assert.ok(!publish.includes('.select("id, slug, title'));
+    assert.ok(!replace.includes("master_history, slug"));
+    assert.ok(!/\.from\("tracks"\)[\s\S]{0,120}\.select\("id, slug, title/.test(detail));
+  });
+});

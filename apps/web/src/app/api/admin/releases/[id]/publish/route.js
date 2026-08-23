@@ -113,15 +113,19 @@ export async function POST(req, { params }) {
   // ── 2. Load tracks ─────────────────────────────────────────────────────────
   const { data: dbTracks } = await admin
     .from("tracks")
-    .select("id, slug, title, upload_status, audio_r2_key, master_r2_key, position, lyrics")
+    .select("id, title, upload_status, audio_r2_key, master_r2_key, position, lyrics")
     .eq("release_id", releaseId);
 
   // Merge body track data (titles, lyrics, credits overrides) into DB rows
   const tracks = (dbTracks || []).map((dbTrack) => {
-    const bodyTrack = bodyTracks.find((bt) => bt.id === dbTrack.id || bt.slug === dbTrack.slug);
-    if (!bodyTrack) return dbTrack;
+    const bodyTrack = bodyTracks.find((bt) =>
+      bt.id === dbTrack.id || Number(bt.position) === Number(dbTrack.position)
+    );
+    const stableSlug = bodyTrack?.slug || slugify(bodyTrack?.title || dbTrack.title || `track-${dbTrack.position || 1}`);
+    if (!bodyTrack) return { ...dbTrack, slug: stableSlug };
     return {
       ...dbTrack,
+      slug:             stableSlug,
       title:            bodyTrack.title    || dbTrack.title,
       position:         bodyTrack.position ?? dbTrack.position,
       lyrics:           bodyTrack.lyrics   || dbTrack.lyrics,

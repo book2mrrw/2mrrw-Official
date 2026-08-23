@@ -44,7 +44,7 @@ export async function GET(req, { params }) {
       .maybeSingle(),
     admin
       .from("tracks")
-      .select("id, slug, title, position, lyrics, upload_status, audio_r2_key")
+      .select("id, title, position, lyrics, upload_status, audio_r2_key")
       .eq("release_id", id)
       .order("position", { ascending: true }),
   ]);
@@ -73,7 +73,8 @@ export async function GET(req, { params }) {
       },
       tracks: tracks.map((t) => ({
         id:            t.id,
-        slug:          t.slug,
+        slug:          String(t.title || `track-${t.position || 1}`)
+          .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
         title:         t.title || "",
         position:      t.position,
         lyrics:        t.lyrics || "",
