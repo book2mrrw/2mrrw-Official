@@ -3,28 +3,11 @@ import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { createR2SignedPutUrl } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { ADMIN_UPLOAD_CONTRACTS, extensionForFilename } from "@/lib/media/admin-upload-contract";
 
 export const dynamic = "force-dynamic";
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
-
-const ASSET_CONFIGS = {
-  audio:       { maxBytes: 2_000_000_000, expiresIn: 900 },
-  cover:       { maxBytes:    20_000_000, expiresIn: 600 },
-  "cover-mp4": { maxBytes:   500_000_000, expiresIn: 900 },
-  preview:     { maxBytes:    50_000_000, expiresIn: 600 },
-};
-
-// Single source of truth for Content-Type: derived from the filename extension,
-// never trusted from the client. R2 signs Content-Type into the presigned PUT URL,
-// so whatever is resolved here MUST be exactly what the client sends back on the
-// PUT — the presign response echoes it for that reason (see uploadUrl response).
-const EXTENSION_CONTENT_TYPES = {
-  audio: { wav: "audio/wav", wave: "audio/wav", flac: "audio/flac", aiff: "audio/aiff", aif: "audio/aiff" },
-  cover: { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" },
-  "cover-mp4": { mp4: "video/mp4" },
-  preview: { mp3: "audio/mpeg", wav: "audio/wav" },
-};
 
 const RELEASE_TYPE_FOLDERS = {
   single:  "singles",
@@ -46,8 +29,8 @@ function buildR2Key(releaseType, slug, assetType, filename, trackSlug) {
       return `digital-assets/${folder}/${slug}/${slug}.${ext}`;
     case "cover":
       return `images/${folder}/${slug}/${slug}.${ext}`;
-    case "cover-mp4":
-      return `videos/${folder}/${slug}/${slug}.mp4`;
+    case "cover-video":
+      return `videos/${folder}/${slug}/${slug}.${ext}`;
     case "preview":
       if (trackSlug) return `previews/${folder}/${slug}/${trackSlug}/${trackSlug}-preview.${ext}`;
       return `previews/${folder}/${slug}/${slug}-preview.${ext}`;
@@ -91,17 +74,17 @@ export async function POST(req) {
   }
 
   // Validate asset type
-  const assetConfig = ASSET_CONFIGS[assetType];
+  const assetConfig = ADMIN_UPLOAD_CONTRACTS[assetType];
   if (!assetConfig) {
-    return NextResponse.json({ error: `Invalid assetType — must be one of: ${Object.keys(ASSET_CONFIGS).join(", ")}` }, { status: 400 });
+    return NextResponse.json({ error: `Invalid assetType — must be one of: ${Object.keys(ADMIN_UPLOAD_CONTRACTS).join(", ")}` }, { status: 400 });
   }
 
   // Resolve the canonical Content-Type from the filename extension — this is the
   // single source of truth for what gets signed into the PUT URL and is echoed
   // back to the client below, so the header the browser sends can never drift
   // from what R2 verifies the signature against.
-  const extMap = EXTENSION_CONTENT_TYPES[assetType] || {};
-  const fileExt = (filename || "").split(".").pop()?.toLowerCase() || "";
+  const extMap = assetConfig.extensions;
+  const fileExt = extensionForFilename(filename);
   const contentType = extMap[fileExt];
   if (!contentType) {
     const allowed = Object.keys(extMap).map((e) => `.${e}`).join(", ");

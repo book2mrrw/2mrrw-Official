@@ -5,6 +5,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { headR2ObjectKey } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
+import { ADMIN_UPLOAD_CONTRACTS } from "@/lib/media/admin-upload-contract";
 
 export const dynamic = "force-dynamic";
 
@@ -189,18 +190,26 @@ export async function POST(req) {
       return NextResponse.json({ ok: true, assetType });
     }
 
-    if (assetType === "cover-mp4") {
-      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > 420.5) {
-        return NextResponse.json({ error: "Cover video must be an MP4 no longer than 7 minutes" }, { status: 400 });
+    if (assetType === "cover-video") {
+      if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > ADMIN_UPLOAD_CONTRACTS["cover-video"].maxDurationSeconds + 0.5) {
+        return NextResponse.json({ error: "Cover video must be no longer than 7 minutes" }, { status: 400 });
       }
-      // Store animated cover R2 key in releases metadata
-      const { data: rel } = await admin.from("releases").select("metadata").eq("id", releaseId).single();
-      const meta = (rel?.metadata && typeof rel.metadata === "object") ? rel.metadata : {};
-      const { error } = await admin
-        .from("releases")
-        .update({ metadata: { ...meta, animated_cover_r2_key: key } })
-        .eq("id", releaseId);
-      if (error) throw error;
+      const { data: rel } = await admin.from("releases").select("id, metadata").eq("id", releaseId).maybeSingle();
+      if (rel) {
+        const meta = (rel.metadata && typeof rel.metadata === "object") ? rel.metadata : {};
+        const { error } = await admin.from("releases")
+          .update({ metadata: { ...meta, animated_cover_r2_key: key } }).eq("id", releaseId);
+        if (error) throw error;
+      } else {
+        const { data: product, error: productError } = await admin.from("products")
+          .select("metadata").eq("id", releaseId).single();
+        if (productError) throw productError;
+        const { error } = await admin.from("products").update({
+          metadata: { ...(product.metadata || {}), animated_cover_r2_key: key },
+          video_path: key.split("/").slice(0, -1).join("/") + "/",
+        }).eq("id", releaseId);
+        if (error) throw error;
+      }
 
       revalidateStorefront();
       return NextResponse.json({ ok: true, assetType });

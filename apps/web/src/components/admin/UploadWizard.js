@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
+import { VIDEO_COVER_ACCEPT } from "@/lib/media/admin-upload-contract";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 function slugify(str) {
@@ -1024,11 +1025,11 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
         const video = document.createElement("video");
         video.preload = "metadata";
         video.onloadedmetadata = () => resolve(video.duration);
-        video.onerror = () => reject(new Error("Could not read this MP4 file"));
+        video.onerror = () => reject(new Error("Could not read this cover video"));
         video.src = previewUrl;
       });
       if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
-        throw new Error("Could not determine the MP4 duration");
+        throw new Error("Could not determine the cover-video duration");
       }
       if (durationSeconds > 420.5) {
         throw new Error("Video must be 7 minutes or shorter");
@@ -1038,14 +1039,14 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
       const { key } = await uploadAssetToR2({
         releaseType: data.release_type,
         slug: draftSlug || `draft-${Date.now()}`,
-        assetType: "cover-mp4",
+        assetType: "cover-video",
         file,
       });
       const completeRes = await fetch("/api/admin/upload/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          releaseId, key, assetType: "cover-mp4", releaseType: data.release_type,
+          releaseId, key, assetType: "cover-video", releaseType: data.release_type,
           slug: draftSlug, durationSeconds,
         }),
       });
@@ -1072,7 +1073,18 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
       <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>Artwork & Lyrics</h2>
       <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>Cover art is required to publish. Lyrics are optional and stored internally.</p>
 
-      <Field label="Cover Artwork" hint="JPG, PNG, or WEBP — square recommended — max 20 MB. Required.">
+      <style>{`
+        @keyframes cover-orbit { to { transform: rotate(360deg); } }
+        @keyframes cover-pulse { 0%,100% { opacity:.35; transform:scale(.86) } 50% { opacity:1; transform:scale(1) } }
+        @keyframes cover-scan { 0% { transform:translateY(-52px); opacity:0 } 20%,80% { opacity:.8 } 100% { transform:translateY(52px); opacity:0 } }
+        .release-cover-picker { position:relative; isolation:isolate; transition:transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
+        .release-cover-picker:hover { transform:translateY(-2px); border-color:rgba(0,255,255,.62)!important; box-shadow:0 18px 50px rgba(0,255,255,.10), inset 0 0 28px rgba(162,89,255,.08); }
+        .release-cover-orbit { position:absolute; width:68px; height:68px; border:1px solid rgba(0,255,255,.38); border-left-color:#a259ff; border-radius:50%; animation:cover-orbit 5s linear infinite; }
+        .release-cover-core { width:38px; height:38px; border-radius:12px; border:1px solid rgba(255,255,255,.18); background:radial-gradient(circle at 35% 30%,#00ffff 0 4%,#14202a 5% 34%,#09090d 35% 100%); box-shadow:0 0 26px rgba(0,255,255,.22); animation:cover-pulse 2.4s ease-in-out infinite; }
+        .release-cover-scan { position:absolute; width:84px; height:1px; background:linear-gradient(90deg,transparent,#00ffff,transparent); box-shadow:0 0 10px #00ffff; animation:cover-scan 2.8s ease-in-out infinite; }
+        @media (prefers-reduced-motion:reduce) { .release-cover-orbit,.release-cover-core,.release-cover-scan { animation:none } }
+      `}</style>
+      <Field label="Cover Artwork" hint="JPG, PNG, or WebP — square recommended — max 20 MB. Required.">
         <input
           ref={coverInputRef}
           type="file"
@@ -1088,6 +1100,7 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
         />
         <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
           <div
+            className="release-cover-picker"
             onClick={status !== "uploading" ? pickCover : undefined}
             style={{
               width: 140, height: 140, flexShrink: 0, borderRadius: 10,
@@ -1101,8 +1114,12 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
               <img src={data.cover_preview_url} alt="cover" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             ) : (
               <div style={{ textAlign: "center", padding: 12 }}>
-                <div style={{ fontSize: 28 }}>🖼</div>
-                <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{status === "uploading" ? "Uploading…" : "Tap to upload"}</div>
+                <div style={{ height: 88, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span className="release-cover-orbit" />
+                  <span className="release-cover-core" />
+                  <span className="release-cover-scan" />
+                </div>
+                <div style={{ fontSize: 10, color: C.muted, letterSpacing: ".14em", textTransform: "uppercase" }}>{status === "uploading" ? "Transmitting" : "Select artwork"}</div>
               </div>
             )}
           </div>
@@ -1116,11 +1133,11 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
         </div>
       </Field>
 
-      <Field label="Cover Video (Optional)" hint="MP4 only — up to 7 minutes and 500 MB. The image above remains the fallback artwork.">
+      <Field label="Cover Video (Optional)" hint="MP4, MOV, or WebM — up to 7 minutes and 500 MB. The image above remains the fallback artwork.">
         <input
           ref={videoInputRef}
           type="file"
-          accept="video/mp4,.mp4"
+          accept={VIDEO_COVER_ACCEPT}
           onChange={(event) => {
             const file = event.currentTarget.files?.[0];
             event.currentTarget.value = "";
@@ -1144,9 +1161,9 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
           variant="secondary"
           disabled={videoState.status === "checking" || videoState.status === "uploading"}
         >
-          {videoState.status === "ready" ? "Replace MP4 Video" :
+          {videoState.status === "ready" ? "Replace Cover Video" :
             videoState.status === "checking" ? "Checking duration…" :
-            videoState.status === "uploading" ? "Uploading MP4…" : "Upload MP4 Video"}
+            videoState.status === "uploading" ? "Uploading Video…" : "Upload Cover Video"}
         </Btn>
         {videoState.status === "ready" && <div style={{ fontSize: 12, color: C.success, marginTop: 7 }}>✓ Cover video uploaded</div>}
         {videoState.status === "error" && <div style={{ fontSize: 12, color: C.error, marginTop: 7 }}>{videoState.error}</div>}

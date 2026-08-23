@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const WEB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
 const read = (relative) => readFileSync(path.join(WEB, relative), "utf8");
+const uploadContracts = read("src/lib/media/admin-upload-contract.js");
 
 describe("admin upload MIME authority", () => {
   const presign = read("src/app/api/admin/upload/presigned/route.js");
@@ -17,7 +18,9 @@ describe("admin upload MIME authority", () => {
       ['aiff: "audio/aiff"', 'aif: "audio/aiff"'],
       ['jpg: "image/jpeg"', 'jpeg: "image/jpeg"', 'png: "image/png"', 'webp: "image/webp"'],
       ['mp4: "video/mp4"', 'mp3: "audio/mpeg"'],
-    ].flat()) assert.match(presign, new RegExp(pair.replace(/[/.]/g, "\\$&")));
+      ['mov: "video/quicktime"', 'webm: "video/webm"'],
+    ].flat()) assert.match(uploadContracts, new RegExp(pair.replace(/[/.]/g, "\\$&")));
+    assert.match(presign, /ADMIN_UPLOAD_CONTRACTS\[assetType\]/);
   });
 
   test("unsupported extensions and invalid sizes fail closed", () => {
@@ -56,14 +59,24 @@ describe("one upload transport and one storefront invalidator", () => {
     assert.match(wizard, /if \(!completeRes\.ok\)/);
   });
 
-  test("cover MP4 selection enforces the seven-minute contract", () => {
+  test("cover video selection shares MP4, MOV, WebM and seven-minute rules", () => {
     const wizard = read("src/components/admin/UploadWizard.js");
     const complete = read("src/app/api/admin/upload/complete/route.js");
     assert.match(wizard, /ref=\{videoInputRef\}/);
-    assert.match(wizard, /accept="video\/mp4,\.mp4"/);
+    assert.match(wizard, /accept=\{VIDEO_COVER_ACCEPT\}/);
+    assert.match(uploadContracts, /VIDEO_COVER_ACCEPT[\s\S]*video\/mp4[\s\S]*video\/quicktime[\s\S]*video\/webm/);
     assert.match(wizard, /durationSeconds > 420\.5/);
-    assert.match(wizard, /assetType: "cover-mp4"/);
-    assert.match(complete, /durationSeconds > 420\.5/);
+    assert.match(wizard, /assetType: "cover-video"/);
+    assert.match(complete, /ADMIN_UPLOAD_CONTRACTS\["cover-video"\]\.maxDurationSeconds/);
+  });
+
+  test("My Releases replaces audio immediately after direct upload", () => {
+    const inline = read("src/components/admin/InlineReleasesManager.js");
+    const uploadStart = inline.indexOf("const uploadAudio");
+    const replaceCall = inline.indexOf("/replace-master`,", uploadStart);
+    assert.ok(replaceCall > uploadStart);
+    assert.ok(!inline.includes('setAudioPhase("confirming")'));
+    assert.ok(!inline.includes('audioPhase === "confirming"'));
   });
 
   test("master cleanup occurs after persistence and preserves the new key", () => {

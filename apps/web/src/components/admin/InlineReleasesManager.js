@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { catalogCoverUrl } from "@/lib/media-urls";
 import { UploadWizard } from "@/components/admin/UploadWizard";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
+import { VIDEO_COVER_ACCEPT, MASTER_AUDIO_ACCEPT } from "@/lib/media/admin-upload-contract";
 
 // ── Design tokens ────────────────────────────────────────────────────────────────
 const C = {
@@ -442,13 +443,13 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const [coverState,   setCoverState]   = useState({ status: "idle", error: null, pct: 0 });
   const [coverPreview, setCoverPreview] = useState(null);
 
-  // Animated cover (MP4) upload state
+  // Animated cover video upload state
   const [mp4State,   setMp4State]   = useState({ status: "idle", error: null, pct: 0 });
   const [mp4Preview, setMp4Preview] = useState(null);
 
   // Audio replace state
   const [audioReplacing,  setAudioReplacing]  = useState(null);
-  const [audioPhase,      setAudioPhase]      = useState("idle"); // idle | uploading | confirming | done | error
+  const [audioPhase,      setAudioPhase]      = useState("idle"); // idle | uploading | done | error
   const [audioProgress,   setAudioProgress]   = useState(0);
   const [audioNewKey,     setAudioNewKey]     = useState(null);
   const [audioError,      setAudioError]      = useState("");
@@ -524,14 +525,29 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
     }
   };
 
-  // ── Generic asset upload (cover JPEG or cover MP4) ────────────────────────────
+  // ── Unified cover upload (still image or cover video) ─────────────────────────
   // presigned → XHR PUT with progress → complete → revalidation fires server-side
   const uploadAsset = useCallback(async ({ file, assetType, setState, setPreview }) => {
     if (!file || !detail) return;
-    setState({ status: "uploading", error: null, pct: 0 });
-    setPreview(URL.createObjectURL(file));
+    const previewUrl = URL.createObjectURL(file);
+    setPreview(previewUrl);
 
     try {
+      let durationSeconds;
+      if (assetType === "cover-video") {
+        setState({ status: "checking", error: null, pct: 0 });
+        durationSeconds = await new Promise((resolve, reject) => {
+          const video = document.createElement("video");
+          video.preload = "metadata";
+          video.onloadedmetadata = () => resolve(video.duration);
+          video.onerror = () => reject(new Error("Could not read this cover video"));
+          video.src = previewUrl;
+        });
+        if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > 420.5) {
+          throw new Error("Cover video must be 7 minutes or shorter");
+        }
+      }
+      setState({ status: "uploading", error: null, pct: 0 });
       // 1-2. Presign + XHR PUT to R2, with progress tracking
       const { key } = await uploadAssetToR2({
         releaseType: detail.release.release_type,
@@ -551,13 +567,14 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
           assetType,
           releaseType: detail.release.release_type,
           slug:        detail.release.slug,
+          durationSeconds,
         }),
       });
       const completeData = await completeRes.json();
       if (!completeRes.ok) throw new Error(completeData.error || "Upload complete failed");
 
       setState({ status: "done", error: null, pct: 100 });
-      showMsg(`${assetType === "cover" ? "Cover" : "Animated cover"} updated — live on storefront`);
+      showMsg(`${assetType === "cover" ? "Cover" : "Cover video"} updated — live on storefront`);
       onSaved();
     } catch (err) {
       setPreview(null);
@@ -569,7 +586,13 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
     const inp    = document.createElement("input");
     inp.type     = "file";
     inp.accept   = accept;
-    inp.onchange = (e) => { if (e.target.files?.[0]) handler(e.target.files[0]); };
+    inp.style.display = "none";
+    inp.onchange = (e) => {
+      const file = e.target.files?.[0];
+      inp.remove();
+      if (file) handler(file);
+    };
+    document.body.appendChild(inp);
     inp.click();
   };
 
@@ -602,31 +625,21 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
       });
 
       setAudioNewKey(key);
-      setAudioPhase("confirming");
-    } catch (err) {
-      setAudioError(err.message);
-      setAudioPhase("error");
-    }
-  }, [audioReplacing, detail, relStub]);
-
-  const confirmAudioReplace = async () => {
-    setAudioPhase("uploading");
-    try {
-      const res  = await fetch(`/api/admin/releases/${relStub.id}/replace-master`, {
-        method:  "POST",
+      const res = await fetch(`/api/admin/releases/${relStub.id}/replace-master`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ key: audioNewKey, track_id: audioReplacing?.id }),
+        body: JSON.stringify({ key, track_id: audioReplacing?.id }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Replace master failed");
       setAudioPhase("done");
-      showMsg("Master replaced — HLS re-queued, playback cache cleared");
+      showMsg("Master replaced — HLS re-queued and playback cache cleared");
       onSaved();
     } catch (err) {
       setAudioError(err.message);
       setAudioPhase("error");
     }
-  };
+  }, [audioReplacing, detail, relStub, showMsg, onSaved]);
 
   const cancelAudioReplace = () => { setAudioReplacing(null); setAudioPhase("idle"); };
 
@@ -783,9 +796,9 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
               </div>
             </div>
 
-            {/* Animated cover MP4 */}
+            {/* Animated cover video */}
             <div>
-              <Label>Animated Cover Loop · MP4</Label>
+              <Label>Cover Video · MP4 / MOV / WebM</Label>
               <p style={{ fontSize: 12, color: C.muted, marginBottom: 14 }}>
                 Shown in the catalog grid, carousels, and immersive player on motion-enabled surfaces. Stored as a short silent loop (max 500 MB).
               </p>
@@ -809,15 +822,15 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                 <div>
                   <Btn
                     variant="secondary" small
-                    disabled={mp4State.status === "uploading"}
-                    onClick={() => pickFile("video/mp4,.mp4", (f) => uploadAsset({ file: f, assetType: "cover-mp4", setState: setMp4State, setPreview: setMp4Preview }))}
+                    disabled={mp4State.status === "checking" || mp4State.status === "uploading"}
+                    onClick={() => pickFile(VIDEO_COVER_ACCEPT, (f) => uploadAsset({ file: f, assetType: "cover-video", setState: setMp4State, setPreview: setMp4Preview }))}
                   >
-                    {mp4State.status === "uploading" ? `Uploading ${mp4State.pct}%…` : mp4State.status === "done" ? "✓ Replace MP4" : "Upload MP4 Loop"}
+                    {mp4State.status === "checking" ? "Checking duration…" : mp4State.status === "uploading" ? `Uploading ${mp4State.pct}%…` : mp4State.status === "done" ? "✓ Replace Video" : "Upload Cover Video"}
                   </Btn>
                   {mp4State.status === "uploading" && <ProgressBar pct={mp4State.pct} />}
                   {mp4State.status === "error" && <div style={{ fontSize: 11, color: C.error, marginTop: 6 }}>{mp4State.error}</div>}
                   {mp4State.status === "done" && <div style={{ fontSize: 11, color: C.success, marginTop: 6 }}>Live on motion surfaces</div>}
-                  <div style={{ fontSize: 11, color: C.muted2, marginTop: 8 }}>Silent loop · Max 500 MB</div>
+                  <div style={{ fontSize: 11, color: C.muted2, marginTop: 8 }}>Up to 7 minutes · Max 500 MB</div>
                 </div>
               </div>
             </div>
@@ -864,7 +877,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                     {audioPhase === "idle" && (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <button
-                          onClick={() => pickFile(".wav,.flac,.aiff,.aif,audio/wav,audio/flac,audio/aiff", uploadAudio)}
+                          onClick={() => pickFile(MASTER_AUDIO_ACCEPT, uploadAudio)}
                           style={{ background: C.accent, border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 12, fontWeight: 700, color: "#000", cursor: "pointer", fontFamily: "inherit" }}
                         >
                           Select New Master
@@ -878,17 +891,6 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                           {audioNewKey ? "Replacing…" : `Uploading… ${audioProgress}%`}
                         </div>
                         {!audioNewKey && <ProgressBar pct={audioProgress} />}
-                      </div>
-                    )}
-                    {audioPhase === "confirming" && (
-                      <div>
-                        <div style={{ background: "rgba(255,159,10,0.08)", border: "1px solid rgba(255,159,10,0.3)", borderRadius: 8, padding: "10px 14px", marginBottom: 12, fontSize: 12, color: C.warn }}>
-                          Upload complete. Replace current master and re-queue HLS? Old master archived.
-                        </div>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button onClick={confirmAudioReplace} style={{ background: C.warn, border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 12, fontWeight: 700, color: "#000", cursor: "pointer", fontFamily: "inherit" }}>Yes, Replace Now</button>
-                          <button onClick={() => { setAudioPhase("idle"); setAudioNewKey(null); }} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 14px", fontSize: 12, color: C.muted, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-                        </div>
                       </div>
                     )}
                     {audioPhase === "done" && (
