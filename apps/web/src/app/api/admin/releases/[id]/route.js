@@ -25,7 +25,7 @@ export async function GET(req, { params }) {
   });
   if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
-  const { id } = params;
+  const { id } = await params;
   if (!id) return NextResponse.json({ error: "Release ID required" }, { status: 400 });
 
   const admin = getAdminClient();
@@ -160,7 +160,7 @@ export async function PATCH(req, { params }) {
   });
   if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
-  const { id } = params;
+  const { id } = await params;
   if (!id) return NextResponse.json({ error: "Release ID required" }, { status: 400 });
 
   let body;
@@ -304,7 +304,7 @@ export async function DELETE(req, { params }) {
   });
   if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
-  const { id } = params;
+  const { id } = await params;
   if (!id) return NextResponse.json({ error: "Release ID required" }, { status: 400 });
 
   const { searchParams } = new URL(req.url);

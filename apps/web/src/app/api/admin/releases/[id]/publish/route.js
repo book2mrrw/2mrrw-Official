@@ -33,6 +33,7 @@ const PRODUCT_TYPE_MAP = {
   ep:      "album",
   mixtape: "album",
 };
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function slugify(title) {
   return String(title || "")
@@ -56,8 +57,9 @@ export async function POST(req, { params }) {
   });
   if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
-  const { id: releaseId } = params;
-  if (!releaseId) return NextResponse.json({ error: "Release ID required" }, { status: 400 });
+  const { id: releaseId } = await params;
+  if (!releaseId) return NextResponse.json({ error: "Release ID was not supplied to the publish endpoint" }, { status: 400 });
+  if (!UUID_RE.test(releaseId)) return NextResponse.json({ error: "Release ID is malformed" }, { status: 400 });
 
   let body;
   try { body = await req.json(); } catch { body = {}; }

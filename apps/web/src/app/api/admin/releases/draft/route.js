@@ -23,7 +23,7 @@ export async function POST(req) {
   let body;
   try { body = await req.json(); } catch { body = {}; }
 
-  const { release_type, slug: requestedSlug } = body;
+  const { release_type, slug: requestedSlug, upload_session_id: uploadSessionId } = body;
 
   const VALID_TYPES = ["single", "feature", "album", "ep", "mixtape"];
   if (!VALID_TYPES.includes(release_type)) {
@@ -31,6 +31,31 @@ export async function POST(req) {
   }
 
   const admin = getAdminClient();
+
+  if (!uploadSessionId || !/^[a-f0-9-]{36}$/i.test(uploadSessionId)) {
+    return NextResponse.json({ error: "A valid upload_session_id is required" }, { status: 400 });
+  }
+
+  // Draft creation is idempotent for the lifetime of an upload session.
+  const { data: existingDraft, error: existingError } = await admin
+    .from("releases")
+    .select("id, slug, status, release_type")
+    .eq("status", "draft")
+    .contains("metadata", { upload_session_id: uploadSessionId })
+    .maybeSingle();
+  if (existingError) {
+    console.error("[admin/releases/draft] lookup error", existingError.message);
+    return NextResponse.json({ error: "Failed to recover release draft" }, { status: 500 });
+  }
+  if (existingDraft) {
+    return NextResponse.json({
+      release_id: existingDraft.id,
+      slug: existingDraft.slug,
+      status: existingDraft.status,
+      release_type: existingDraft.release_type,
+      recovered: true,
+    });
+  }
 
   // Derive final slug: prefer caller-supplied title-based slug, deduplicate if taken
   const SLUG_RE = /^[a-z0-9][a-z0-9-]*[a-z0-9]$|^[a-z0-9]$/;
@@ -55,6 +80,7 @@ export async function POST(req) {
       status: "draft",
       storefront_visible: false,
       slug: draftSlug,
+      metadata: { upload_session_id: uploadSessionId },
     })
     .select("id, slug, status, release_type")
     .single();
@@ -64,5 +90,5 @@ export async function POST(req) {
     return NextResponse.json({ error: "Failed to create draft" }, { status: 500 });
   }
 
-  return NextResponse.json({ draft_id: data.id, slug: data.slug, release_type: data.release_type });
+  return NextResponse.json({ release_id: data.id, slug: data.slug, release_type: data.release_type, recovered: false });
 }

@@ -11,7 +11,7 @@ export async function GET(req, { params }) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   if (!id) return NextResponse.json({ error: "Release ID required" }, { status: 400 });
 
   const admin = getAdminClient();

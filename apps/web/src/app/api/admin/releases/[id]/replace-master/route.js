@@ -34,7 +34,7 @@ export async function POST(req, { params }) {
   });
   if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
 
-  const { id: releaseId } = params;
+  const { id: releaseId } = await params;
   if (!releaseId) return NextResponse.json({ error: "Release ID required" }, { status: 400 });
 
   let body;

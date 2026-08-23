@@ -128,4 +128,29 @@ describe("release upload database contract", () => {
     assert.ok(!replace.includes("master_history, slug"));
     assert.ok(!/\.from\("tracks"\)[\s\S]{0,120}\.select\("id, slug, title/.test(detail));
   });
+
+  test("Next 16 release routes await dynamic params", () => {
+    for (const relative of [
+      "src/app/api/admin/releases/[id]/publish/route.js",
+      "src/app/api/admin/releases/[id]/replace-master/route.js",
+      "src/app/api/admin/releases/[id]/status/route.js",
+      "src/app/api/admin/releases/[id]/route.js",
+    ]) {
+      const route = read(relative);
+      assert.ok(!/\}\s*=\s*params\s*;/.test(route), `${relative} reads async params synchronously`);
+      assert.match(route, /\}\s*=\s*await params\s*;/);
+    }
+  });
+
+  test("draft identity persists and draft creation is idempotent", () => {
+    const wizard = read("src/components/admin/UploadWizard.js");
+    const draft = read("src/app/api/admin/releases/draft/route.js");
+    const migration = read("supabase/migrations/20260823000020_release_upload_session_identity.sql");
+    assert.match(wizard, /sessionStorage\.setItem\("2mrrw\.admin\.release-upload"/);
+    assert.match(wizard, /upload_session_id: uploadSessionIdRef\.current/);
+    assert.match(wizard, /setReleaseId\(json\.release_id\)/);
+    assert.match(draft, /contains\("metadata", \{ upload_session_id: uploadSessionId \}\)/);
+    assert.match(draft, /release_id: data\.id/);
+    assert.match(migration, /CREATE UNIQUE INDEX IF NOT EXISTS releases_upload_session_id_uidx/);
+  });
 });

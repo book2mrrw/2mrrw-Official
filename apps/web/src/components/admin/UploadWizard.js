@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
 import { MASTER_AUDIO_ACCEPT, VIDEO_COVER_ACCEPT } from "@/lib/media/admin-upload-contract";
 
@@ -1259,6 +1259,9 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
     setPublishing(true);
     setError(null);
     try {
+      if (!releaseId) {
+        throw new Error("The canonical release ID was lost before publication. Return to Release Info to recover the draft.");
+      }
       let scheduled_at = null;
       if (data.publish_mode === "scheduled" && data.scheduled_date) {
         scheduled_at = `${data.scheduled_date}T${data.scheduled_time || "00:00"}:00Z`;
@@ -1470,6 +1473,41 @@ export function UploadWizard({ onComplete, onDismiss }) {
   const [releaseId,     setReleaseId]     = useState(null);
   const [draftSlug,     setDraftSlug]     = useState(null);
   const [creatingDraft, setCreatingDraft] = useState(false);
+  const [sessionHydrated, setSessionHydrated] = useState(false);
+  const uploadSessionIdRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem("2mrrw.admin.release-upload") || "null");
+      if (!saved?.uploadSessionId) {
+        uploadSessionIdRef.current = crypto.randomUUID();
+        setSessionHydrated(true);
+        return;
+      }
+      uploadSessionIdRef.current = saved.uploadSessionId;
+      if (saved.releaseId) setReleaseId(saved.releaseId);
+      if (saved.draftSlug) setDraftSlug(saved.draftSlug);
+      if (Number.isInteger(saved.step)) setStep(saved.step);
+      if (saved.data) setData({ ...DEFAULT_DATA, ...saved.data, cover_preview_url: "", cover_video_preview_url: "" });
+      if (Array.isArray(saved.tracks) && saved.tracks.length) setTracks(saved.tracks);
+    } catch {
+      uploadSessionIdRef.current = crypto.randomUUID();
+    } finally {
+      setSessionHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!sessionHydrated || !uploadSessionIdRef.current) return;
+    sessionStorage.setItem("2mrrw.admin.release-upload", JSON.stringify({
+      uploadSessionId: uploadSessionIdRef.current,
+      releaseId,
+      draftSlug,
+      step,
+      data: { ...data, cover_preview_url: "", cover_video_preview_url: "" },
+      tracks,
+    }));
+  }, [sessionHydrated, releaseId, draftSlug, step, data, tracks]);
 
   const isMultiTrack = ["album", "ep", "mixtape"].includes(data.release_type);
   const STEPS        = isMultiTrack ? STEPS_MULTI : STEPS_SINGLE;
@@ -1484,6 +1522,8 @@ export function UploadWizard({ onComplete, onDismiss }) {
     setTracks([newTrack(1)]);
     setReleaseId(null);
     setDraftSlug(null);
+    sessionStorage.removeItem("2mrrw.admin.release-upload");
+    uploadSessionIdRef.current = crypto.randomUUID();
   }, []);
 
   // Step 0: just advance — draft is created after title is known (Step 1)
@@ -1495,19 +1535,26 @@ export function UploadWizard({ onComplete, onDismiss }) {
   // Step 1: create draft using the title-derived slug so R2 paths are canonical from day one
   const handleInfoNext = async () => {
     if (!data.title?.trim()) return;
+    if (releaseId) {
+      next();
+      return;
+    }
     setCreatingDraft(true);
     try {
+      if (!uploadSessionIdRef.current) uploadSessionIdRef.current = crypto.randomUUID();
       const res = await fetch("/api/admin/releases/draft", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           release_type: data.release_type,
           slug: data.proposed_slug || slugify(data.title),
+          upload_session_id: uploadSessionIdRef.current,
         }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to create draft");
-      setReleaseId(json.draft_id);
+      if (!json.release_id) throw new Error("Draft response did not include the canonical release ID");
+      setReleaseId(json.release_id);
       setDraftSlug(json.slug);
       next();
     } catch (err) {
