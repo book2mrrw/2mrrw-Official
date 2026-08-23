@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
-import { VIDEO_COVER_ACCEPT } from "@/lib/media/admin-upload-contract";
+import { MASTER_AUDIO_ACCEPT, VIDEO_COVER_ACCEPT } from "@/lib/media/admin-upload-contract";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 function slugify(str) {
@@ -509,6 +509,7 @@ function CreditsStep({ data, onChange, onNext, onBack, isMultiTrack }) {
 function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug }) {
   const [uploadState, setUploadState] = useState({ status: "idle", progress: 0, error: null });
   const xhrRef = useRef(null);
+  const audioInputRef = useRef(null);
 
   const upload = useCallback(async (file) => {
     if (!file) return;
@@ -549,13 +550,7 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
     }
   }, [data.release_type, data.title, draftSlug, releaseId, onChange]);
 
-  const pickFile = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".wav,.flac,.aiff,.aif,audio/wav,audio/flac,audio/aiff";
-    input.onchange = (e) => { if (e.target.files?.[0]) upload(e.target.files[0]); };
-    input.click();
-  };
+  const pickFile = () => audioInputRef.current?.click();
 
   const { status, progress, error } = uploadState;
 
@@ -563,6 +558,20 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
     <div>
       <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>Upload Audio</h2>
       <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>WAV, FLAC, or AIFF preferred. Upload goes directly to secure storage — Vercel is not in the data path.</p>
+
+      <input
+        ref={audioInputRef}
+        type="file"
+        accept={MASTER_AUDIO_ACCEPT}
+        onChange={(event) => {
+          const file = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          if (file) upload(file);
+        }}
+        style={{ display: "none" }}
+        aria-hidden="true"
+        tabIndex={-1}
+      />
 
       <div
         onClick={status !== "uploading" ? pickFile : undefined}

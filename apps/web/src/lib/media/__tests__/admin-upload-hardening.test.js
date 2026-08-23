@@ -59,6 +59,14 @@ describe("one upload transport and one storefront invalidator", () => {
     assert.match(wizard, /if \(!completeRes\.ok\)/);
   });
 
+  test("single and multi-track audio pickers persist through first selection", () => {
+    const wizard = read("src/components/admin/UploadWizard.js");
+    assert.match(wizard, /ref=\{audioInputRef\}/);
+    assert.match(wizard, /audioInputRef\.current\?\.click\(\)/);
+    assert.match(wizard, /ref=\{fileInputRef\}/);
+    assert.ok(!/const pickFile = \(\) => \{\s*const input = document\.createElement/.test(wizard));
+  });
+
   test("cover video selection shares MP4, MOV, WebM and seven-minute rules", () => {
     const wizard = read("src/components/admin/UploadWizard.js");
     const complete = read("src/app/api/admin/upload/complete/route.js");
