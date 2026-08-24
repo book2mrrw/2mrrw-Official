@@ -86,7 +86,14 @@ const FeatureCard = memo(function FeatureCard({
         onPointerUp={featureGesture.onPointerUp}
         onPointerCancel={featureGesture.onPointerCancel}
         onLostPointerCapture={featureGesture.onLostPointerCapture}
-        style={{ cursor: "pointer", position: "relative" }}
+        style={{
+          cursor: "pointer",
+          position: "relative",
+          filter: access?.lifecycle && !access.lifecycle.live && !access.lifecycle.earlyEligible
+            ? "grayscale(.78) brightness(.62)"
+            : undefined,
+          transition: "filter .25s ease",
+        }}
       >
         {!videoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video" ? (
           <video
@@ -165,7 +172,9 @@ const FeatureCard = memo(function FeatureCard({
                   color: "white",
                   border: "1px solid #2a2a2a",
                 }}
-                cartLabel={access?.lifecycle?.preorderOpen ? "Preorder" : "+ Cart"}
+                cartLabel={access?.lifecycle?.preorderOpen
+                  ? access.lifecycle.earlyAccessEnabled ? "Preorder Early Access" : "Preorder"
+                  : "+ Cart"}
               />
             </div>
           ) : null}

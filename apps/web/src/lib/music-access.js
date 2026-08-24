@@ -408,13 +408,22 @@ export function resolveContentAccess(item, accountState = {}) {
   const libraryMode = trackAccess.canStream;
   const lifecycleCanStream = lifecycleAccess ? lifecycleAccess.canPlayFull : trackAccess.canStream;
   const lifecycleCanBuy = lifecycleAccess ? lifecycleAccess.canPurchase : !libraryMode;
+  const liveDateLabel = lifecycleAccess?.availableAt
+    ? new Date(lifecycleAccess.availableAt).toLocaleDateString()
+    : "release day";
+  const earlyDateLabel = lifecycleAccess?.earlyAccessAt
+    ? new Date(lifecycleAccess.earlyAccessAt).toLocaleDateString()
+    : null;
+  const earlyOffer = lifecycleAccess?.preorderOpen && lifecycleAccess?.earlyAccessEnabled && earlyDateLabel
+    ? ` Preorder for Early Access — Listen ${earlyDateLabel}.`
+    : "";
   const lifecycleMessage = lifecycleAccess && !lifecycleAccess.live
     ? completedPreorder && lifecycleAccess.earlyEligible
       ? "Early access unlocked"
       : trackAccess.collector
-        ? `Collector Digital Access unlocks ${lifecycleAccess.availableAt ? new Date(lifecycleAccess.availableAt).toLocaleDateString() : "on release day"}`
+        ? `Collector Digital Access unlocks ${liveDateLabel}.${earlyOffer}`
         : trackAccess.subscription
-          ? `Included with your subscription on ${lifecycleAccess.availableAt ? new Date(lifecycleAccess.availableAt).toLocaleDateString() : "release day"}`
+          ? `Included with your subscription on ${liveDateLabel}.${earlyOffer}`
           : lifecycleAccess.preorderOpen
             ? "Pre-order available"
             : "Available on release day"

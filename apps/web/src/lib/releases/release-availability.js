@@ -53,6 +53,8 @@ export function releaseAvailability(release, context = {}, now = new Date()) {
     canPlayFull,
     canPreview: visible && !canPlayFull && (live || Boolean(release?.preview_before_release)),
     availableAt: availableMs == null ? null : new Date(availableMs).toISOString(),
+    earlyAccessAt: earlyMs == null ? null : new Date(earlyMs).toISOString(),
+    earlyAccessEnabled: Boolean(release?.early_access_enabled),
     preorderPriceCents: preorderOpen && release?.preorder_price_cents != null
       ? Number(release.preorder_price_cents)
       : null,
