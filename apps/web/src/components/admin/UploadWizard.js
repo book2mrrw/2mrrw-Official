@@ -23,6 +23,23 @@ function slugifyTrack(title, position) {
   return base ? `${num}-${base}` : `track-${position}`;
 }
 
+function wallClockToUtc(date, time, timeZone) {
+  if (!date) return null;
+  const target = Date.parse(`${date}T${time || "00:00"}:00Z`);
+  if (!Number.isFinite(target)) return null;
+  let guess = target;
+  for (let i = 0; i < 3; i += 1) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone, year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    }).formatToParts(new Date(guess));
+    const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const represented = Date.UTC(+value.year, +value.month - 1, +value.day, +value.hour, +value.minute, +value.second);
+    guess += target - represented;
+  }
+  return new Date(guess).toISOString();
+}
+
 export function newTrack(position) {
   return {
     tempId:           `t-${Date.now()}-${position}`,
@@ -109,6 +126,15 @@ function Select({ value, onChange, children, style = {} }) {
     >
       {children}
     </select>
+  );
+}
+
+function Toggle({ checked, onChange, label, hint }) {
+  return (
+    <label style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 14, cursor: "pointer" }}>
+      <input type="checkbox" checked={Boolean(checked)} onChange={(e) => onChange(e.target.checked)} style={{ marginTop: 3, accentColor: C.accent }} />
+      <span><span style={{ display: "block", color: C.text, fontSize: 13, fontWeight: 700 }}>{label}</span>{hint ? <span style={{ color: C.muted, fontSize: 11 }}>{hint}</span> : null}</span>
+    </label>
   );
 }
 
@@ -405,13 +431,37 @@ function ReleaseInfoStep({ data, onChange, onNext, onBack, loading }) {
       </div>
 
       {data.publish_mode === "scheduled" && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+        <div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
           <Field label="Publish Date">
             <Input type="date" value={data.scheduled_date} onChange={(v) => onChange("scheduled_date", v)} />
           </Field>
-          <Field label="Publish Time (UTC)">
+          <Field label="Release Time">
             <Input type="time" value={data.scheduled_time} onChange={(v) => onChange("scheduled_time", v)} />
           </Field>
+          <Field label="Timezone">
+            <Select value={data.release_timezone} onChange={(v) => onChange("release_timezone", v)}>
+              <option value="America/Chicago">Central (Chicago)</option>
+              <option value="America/New_York">Eastern (New York)</option>
+              <option value="America/Denver">Mountain (Denver)</option>
+              <option value="America/Los_Angeles">Pacific (Los Angeles)</option>
+              <option value="UTC">UTC</option>
+            </Select>
+          </Field>
+        </div>
+        <Toggle checked={data.upcoming_visible} onChange={(v) => onChange("upcoming_visible", v)} label="Show publicly before release" hint="Places a locked upcoming card in the release's canonical section." />
+        {data.upcoming_visible ? <Toggle checked={data.preview_before_release} onChange={(v) => onChange("preview_before_release", v)} label="Allow preview before release" hint="Only the configured preview asset is public; masters remain protected." /> : null}
+        {data.upcoming_visible ? <Toggle checked={data.preorder_enabled} onChange={(v) => onChange("preorder_enabled", v)} label="Enable pre-order" hint="Fans may purchase now; playback remains locked until an authorized access time." /> : null}
+        {data.upcoming_visible && data.preorder_enabled ? (
+          <div style={{ padding: 16, border: `1px solid ${C.accentBorder}`, borderRadius: 10, marginBottom: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <Field label="Pre-order Starts"><Input type="datetime-local" value={data.preorder_starts_local} onChange={(v) => onChange("preorder_starts_local", v)} /></Field>
+              <Field label="Pre-order Price"><Input type="number" value={data.preorder_price} onChange={(v) => onChange("preorder_price", v)} placeholder="9.99" /></Field>
+            </div>
+            <Toggle checked={data.early_access_enabled} onChange={(v) => onChange("early_access_enabled", v)} label="Pre-order purchaser early access" hint="Unlocks the complete release for preorder purchasers at the selected time." />
+            {data.early_access_enabled ? <Field label="Early Access Starts"><Input type="datetime-local" value={data.early_access_starts_local} onChange={(v) => onChange("early_access_starts_local", v)} /></Field> : null}
+          </div>
+        ) : null}
         </div>
       )}
 
@@ -1253,6 +1303,17 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
         { label: "Genre set",        ok: Boolean(data.genre),       blocking: false },
       ];
 
+  if (data.publish_mode === "scheduled") {
+    checks.push({ label: "Future release date and time set", ok: Boolean(data.scheduled_date && data.scheduled_time), blocking: true });
+  }
+  if (data.preorder_enabled) {
+    checks.push({ label: "Pre-order start set", ok: Boolean(data.preorder_starts_local), blocking: true });
+    checks.push({ label: "Pre-order price set", ok: data.preorder_price !== "" && Number(data.preorder_price) >= 0, blocking: true });
+  }
+  if (data.early_access_enabled) {
+    checks.push({ label: "Early-access start set", ok: Boolean(data.early_access_starts_local), blocking: true });
+  }
+
   const hasBlocker = checks.some((c) => c.blocking && !c.ok);
 
   const publish = async () => {
@@ -1264,7 +1325,7 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
       }
       let scheduled_at = null;
       if (data.publish_mode === "scheduled" && data.scheduled_date) {
-        scheduled_at = `${data.scheduled_date}T${data.scheduled_time || "00:00"}:00Z`;
+        scheduled_at = wallClockToUtc(data.scheduled_date, data.scheduled_time, data.release_timezone);
       }
 
       const res = await fetch(`/api/admin/releases/${releaseId}/publish`, {
@@ -1293,6 +1354,16 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
           track_id:           data.track_id,
           lyrics:             data.lyrics,
           scheduled_at,
+          release_timezone: data.release_timezone,
+          upcoming_visible: data.upcoming_visible,
+          preview_before_release: data.preview_before_release,
+          preorder_enabled: data.preorder_enabled,
+          preorder_starts_at: data.preorder_starts_local ? wallClockToUtc(...data.preorder_starts_local.split("T"), data.release_timezone) : null,
+          preorder_price_cents: data.preorder_enabled && data.preorder_price !== "" ? Math.round(Number(data.preorder_price) * 100) : null,
+          early_access_enabled: data.early_access_enabled,
+          early_access_starts_at: data.early_access_starts_local ? wallClockToUtc(...data.early_access_starts_local.split("T"), data.release_timezone) : null,
+          early_access_scope: { mode: "full_release", track_ids: [] },
+          early_access_audiences: ["preorder_purchasers"],
           tracks: tracks.map((t) => ({
             id:               t.id,
             slug:             t.slug,
@@ -1324,7 +1395,7 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
         </h2>
         <p style={{ color: C.muted, fontSize: 14, marginBottom: 6 }}>
           {result.status === "scheduled"
-            ? `Your release will go live on ${data.scheduled_date} at ${data.scheduled_time || "00:00"} UTC`
+            ? `Your release will go live on ${data.scheduled_date} at ${data.scheduled_time || "00:00"} (${data.release_timezone})`
             : "Your release is now live on the storefront."}
         </p>
         <p style={{ color: C.muted2, fontSize: 13, marginBottom: 32 }}>
@@ -1408,7 +1479,7 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
 
       {data.publish_mode === "scheduled" && data.scheduled_date && (
         <div style={{ background: C.accentDim, border: `1px solid ${C.accentBorder}`, borderRadius: 8, padding: "12px 16px", marginBottom: 20, fontSize: 13, color: C.accent }}>
-          Scheduled: {data.scheduled_date} at {data.scheduled_time || "00:00"} UTC
+          Scheduled: {data.scheduled_date} at {data.scheduled_time || "00:00"} ({data.release_timezone})
         </div>
       )}
 
@@ -1441,6 +1512,14 @@ const DEFAULT_DATA = {
   publish_mode:       "immediate",
   scheduled_date:     "",
   scheduled_time:     "00:00",
+  release_timezone:   "America/Chicago",
+  upcoming_visible:   false,
+  preview_before_release: false,
+  preorder_enabled:   false,
+  preorder_starts_local: "",
+  preorder_price:     "",
+  early_access_enabled: false,
+  early_access_starts_local: "",
   produced_by:        [],
   written_by:         [],
   mixing_engineer:    "",

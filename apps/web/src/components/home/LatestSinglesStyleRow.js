@@ -231,6 +231,13 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
           cardMedia={cardMedia}
           coverDisplay={coverDisplay}
         />
+        {access?.lifecycle && access.lifecycle.phase !== "live" ? (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", padding: 10, background: "linear-gradient(transparent 45%,rgba(0,0,0,.82))", pointerEvents: "none" }}>
+            <span style={{ fontSize: 9, fontWeight: 900, letterSpacing: 1.2, color: access.lifecycle.earlyEligible ? "#00ffff" : "#fff", background: "rgba(0,0,0,.72)", border: "1px solid rgba(255,255,255,.22)", borderRadius: 20, padding: "5px 8px" }}>
+              {access.lifecycle.earlyEligible ? "EARLY ACCESS" : access.lifecycle.preorderOpen ? "PRE-ORDER" : "UPCOMING"}
+            </span>
+          </div>
+        ) : null}
       </div>
       <div style={{ padding: isMobile ? "10px 12px 14px" : "12px 14px 16px" }}>
         <div
@@ -239,6 +246,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
         >
           {mediaItem.title}
         </div>
+        {access?.lifecycleMessage ? <div style={{ fontSize: 10, color: "rgba(255,255,255,.58)", lineHeight: 1.35, marginBottom: 7 }}>{access.lifecycleMessage}</div> : null}
         {access?.showPrice && mediaItem.price != null && Number.isFinite(Number(mediaItem.price)) ? (
           <div
             style={{
@@ -251,7 +259,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
             ${Number(mediaItem.price).toFixed(2)}
           </div>
         ) : null}
-        {showPlayActions ? (
+        {showPlayActions || access?.showCart ? (
           <div onClick={(e) => e.stopPropagation()}>
             <ReleaseCardActions
               item={playItemResolved}
@@ -259,6 +267,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
               userId={userId}
               isAdmin={isAdminStable}
               source={source}
+              showPlay={showPlayActions}
               onPlayClick={onPlayClick}
               showCart={Boolean(access?.showCart)}
               onLibraryChange={onLibraryChange}
@@ -271,7 +280,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
                 color: "white",
                 border: "1px solid #2a2a2a",
               }}
-              cartLabel="+ Cart"
+              cartLabel={access?.lifecycle?.preorderOpen ? "Preorder" : "+ Cart"}
             />
           </div>
         ) : null}

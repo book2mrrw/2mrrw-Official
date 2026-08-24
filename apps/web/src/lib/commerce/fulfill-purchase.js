@@ -50,7 +50,18 @@ export async function fulfillCheckoutSession(session) {
 
   if (slugs.length > 0) {
     await Promise.all([
-      grantLibraryItems({ userId, purchaseId: purchase.id, slugs, source: "purchase" }),
+      grantLibraryItems({
+        userId,
+        purchaseId: purchase.id,
+        slugs,
+        source: "purchase",
+        entitlementMetadata: {
+          access_type: items.some((item) => item?.access_type === "preorder") ? "preorder" : "purchase",
+          release_ids: items.map((item) => item?.release_id).filter(Boolean),
+          purchased_at: new Date().toISOString(),
+          early_access_eligible: items.some((item) => item?.access_type === "preorder"),
+        },
+      }),
       grantCollectorOwnerships({ userId, purchaseId: purchase.id, slugs, items, payment: session }),
       grantVaultPassEntitlement({ userId, purchaseId: purchase.id, slugs, items, payment: session }),
     ]);
@@ -107,7 +118,18 @@ export async function fulfillPaymentIntent(paymentIntent) {
 
   if (slugs.length > 0) {
     await Promise.all([
-      grantLibraryItems({ userId, purchaseId: purchase.id, slugs, source: "purchase" }),
+      grantLibraryItems({
+        userId,
+        purchaseId: purchase.id,
+        slugs,
+        source: "purchase",
+        entitlementMetadata: {
+          access_type: items.some((item) => item?.access_type === "preorder") ? "preorder" : "purchase",
+          release_ids: items.map((item) => item?.release_id).filter(Boolean),
+          purchased_at: new Date().toISOString(),
+          early_access_eligible: items.some((item) => item?.access_type === "preorder"),
+        },
+      }),
       grantCollectorOwnerships({ userId, purchaseId: purchase.id, slugs, items, payment: paymentIntent }),
       grantVaultPassEntitlement({ userId, purchaseId: purchase.id, slugs, items, payment: paymentIntent }),
     ]);

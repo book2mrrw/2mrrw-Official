@@ -276,6 +276,7 @@ function CatalogGrid({
             <div
               key={mediaItem.slug}
               className="release-card release-card--upcoming"
+              onClick={() => onCardClick?.(mediaItem)}
               style={{
                 ...(isMobile ? { flex: "0 0 160px", width: 160, scrollSnapAlign: "start" } : {}),
                 position: "relative",
@@ -305,7 +306,12 @@ function CatalogGrid({
                 <div className="release-card-title" style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700 }}>
                   {mediaItem.title}
                 </div>
-                <div className="release-card-upcoming-label">DROPPING SOON</div>
+                <div className="release-card-upcoming-label">
+                  {mediaItem.availability?.phase === "early_access" ? "EARLY ACCESS"
+                    : mediaItem.availability?.preorderOpen ? "PRE-ORDER OPEN"
+                    : "DROPPING SOON"}
+                </div>
+                {access?.lifecycleMessage ? <div style={{ fontSize: 10, color: "rgba(255,255,255,.58)", lineHeight: 1.35, marginTop: 5 }}>{access.lifecycleMessage}</div> : null}
               </div>
             </div>
           );

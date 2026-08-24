@@ -165,6 +165,7 @@ export function ReleaseCardActions({
   cartButtonStyle,
   cartLabel = "+ Cart",
   showCart = true,
+  showPlay = true,
 }) {
   const access = useMemo(
     () => resolveTrackAccess(item, { ...(accountState || {}), userId, isAdmin }),
@@ -173,10 +174,10 @@ export function ReleaseCardActions({
 
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <ReleaseCardPlayButton item={item} accountState={accountState} userId={userId} isAdmin={isAdmin} source={source} onPlayClick={onPlayClick} />
-      <span onClick={(e) => e.stopPropagation()}>
+      {showPlay ? <ReleaseCardPlayButton item={item} accountState={accountState} userId={userId} isAdmin={isAdmin} source={source} onPlayClick={onPlayClick} /> : null}
+      {showPlay ? <span onClick={(e) => e.stopPropagation()}>
         <MusicPlusButton track={item} userId={userId} access={access} onLibraryChange={onLibraryChange} />
-      </span>
+      </span> : null}
       {showCart ? (
         <button
           type="button"

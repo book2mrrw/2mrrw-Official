@@ -16,6 +16,8 @@ import {
   previewCacheKey,
 } from "@/lib/playback/preview-resolution-cache";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { getAdminClient } from "@/lib/supabase/admin";
+import { releaseAvailability } from "@/lib/releases/release-availability";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +99,27 @@ export async function GET(req) {
       : legacy
         ? [String(legacy).replace(/^\//, "")]
         : [];
+
+  if (type === "preview") {
+    const lifecycleSlug = String(entityFolder || "").match(
+      /\/(?:singles|features|albums|mixtapes-and-eps)\/([^/]+)\/?$/
+    )?.[1] || extractSlugFromFlatPreviewKey(legacy);
+    if (lifecycleSlug) {
+      const admin = getAdminClient();
+      const { data: product, error } = await admin
+        .from("products")
+        .select("releases(status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,unavailable_at)")
+        .eq("slug", lifecycleSlug)
+        .maybeSingle();
+      if (error) {
+        return applyMediaCors(req, NextResponse.json({ error: "Preview availability check failed" }, { status: 503 }));
+      }
+      const lifecycle = Array.isArray(product?.releases) ? product.releases[0] : product?.releases;
+      if (lifecycle && !releaseAvailability(lifecycle).canPreview) {
+        return applyMediaCors(req, NextResponse.json({ error: "Preview unavailable before release" }, { status: 403 }));
+      }
+    }
+  }
 
   if (type === "preview") {
     const fastPath = tryCanonicalPreviewFastPath(entityFolder, legacyCandidates);

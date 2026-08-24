@@ -88,6 +88,7 @@ export async function GET(req) {
         user: null,
         library: [],
         ownedSlugs: [],
+        preorderSlugs: [],
         membership: null,
         collectorOwnerships: [],
         vaultAccess: false,
@@ -106,7 +107,7 @@ export async function GET(req) {
     }
 
     const admin = getAdminClient();
-    const [libraryResult, membershipResult, productsResult, collectorResult, mediaProgressResult, collectorAccessRecords] = await Promise.all([
+    const [libraryResult, membershipResult, productsResult, collectorResult, mediaProgressResult, collectorAccessRecords, preorderResult] = await Promise.all([
       admin
         .from("library_items")
         .select("id, source, granted_at, products (slug, title, product_type, cover_url, storage_path)")
@@ -121,7 +122,7 @@ export async function GET(req) {
         .maybeSingle(),
       admin
         .from("products")
-        .select("slug, title, product_type, cover_url, storage_path")
+        .select("id, slug, title, product_type, cover_url, storage_path")
         .eq("active", true)
         .limit(10000),
       admin
@@ -136,6 +137,13 @@ export async function GET(req) {
         .order("last_played_at", { ascending: false })
         .limit(100),
       getCollectorAccessRecords(admin, user.id),
+      admin
+        .from("entitlements")
+        .select("resource_id, metadata")
+        .eq("user_id", user.id)
+        .eq("resource_type", "product")
+        .eq("status", "active")
+        .eq("metadata->>access_type", "preorder"),
     ]);
 
     if (libraryResult.error) {
@@ -164,6 +172,10 @@ export async function GET(req) {
       purchasedAt: row.granted_at,
     }));
     const membership = membershipResult.data || null;
+    const productSlugById = new Map((productsResult.data || []).map((product) => [product.id, product.slug]));
+    const preorderSlugs = preorderResult.error
+      ? []
+      : (preorderResult.data || []).map((row) => productSlugById.get(row.resource_id)).filter(Boolean);
     const bySlug = new Map(purchasedLibrary.map((item) => [item.slug, item]));
     const legacyOwnedSlugs = purchasedLibrary.map((item) => item.slug).filter(Boolean);
     const [collectorAccess, vaultPassAccess, notificationState, userEntitlements] = await Promise.all([
@@ -298,6 +310,7 @@ export async function GET(req) {
       vaultTier,
       playbackPolicy,
       ownedSlugs: finalOwnedSlugs,
+      preorderSlugs,
     });
     const { fingerprint: capabilityFingerprint, version: capabilityVersion } =
       await resolveCapabilityVersion(user.id, capabilityDocument);

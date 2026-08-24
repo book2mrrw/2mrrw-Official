@@ -86,7 +86,7 @@ const FeatureCard = memo(function FeatureCard({
         onPointerUp={featureGesture.onPointerUp}
         onPointerCancel={featureGesture.onPointerCancel}
         onLostPointerCapture={featureGesture.onLostPointerCapture}
-        style={{ cursor: "pointer" }}
+        style={{ cursor: "pointer", position: "relative" }}
       >
         {!videoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video" ? (
           <video
@@ -121,6 +121,11 @@ const FeatureCard = memo(function FeatureCard({
             style={{ aspectRatio: "1/1", display: "block" }}
           />
         )}
+        {access?.lifecycle && access.lifecycle.phase !== "live" ? (
+          <div style={{ position: "absolute", left: 10, bottom: 10, fontSize: 9, fontWeight: 900, letterSpacing: 1.2, color: access.lifecycle.earlyEligible ? "#00ffff" : "#fff", background: "rgba(0,0,0,.78)", border: "1px solid rgba(162,89,255,.55)", borderRadius: 20, padding: "5px 8px", pointerEvents: "none" }}>
+            {access.lifecycle.earlyEligible ? "EARLY ACCESS" : access.lifecycle.preorderOpen ? "PRE-ORDER" : "UPCOMING"}
+          </div>
+        ) : null}
       </div>
       <div style={{ padding: isMobile ? "10px 12px 14px" : "12px 14px 16px" }}>
         <div className="hero-title-glow" style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, marginBottom: 4 }}>
@@ -129,6 +134,7 @@ const FeatureCard = memo(function FeatureCard({
         <div style={{ fontSize: 10, color: "#a259ff", fontWeight: 700, letterSpacing: 1.5, marginBottom: 6 }}>
           {mediaItem.featuring}
         </div>
+        {access?.lifecycleMessage ? <div style={{ fontSize: 10, color: "rgba(255,255,255,.58)", lineHeight: 1.35, marginBottom: 7 }}>{access.lifecycleMessage}</div> : null}
         {access?.showPrice && mediaItem.price != null && Number.isFinite(Number(mediaItem.price)) ? (
           <div style={{ fontSize: 12, color: "#00ffff", fontWeight: 700, marginBottom: isMobile ? 8 : 10 }}>
             ${Number(mediaItem.price).toFixed(2)}
@@ -138,7 +144,7 @@ const FeatureCard = memo(function FeatureCard({
           style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
           onClick={(e) => e.stopPropagation()}
         >
-          {showPlayActions ? (
+          {showPlayActions || access?.showCart ? (
             <div style={{ flex: 1, minWidth: 0 }}>
               <ReleaseCardActions
                 item={mediaItem}
@@ -146,6 +152,7 @@ const FeatureCard = memo(function FeatureCard({
                 userId={userId}
                 isAdmin={isAdminStable}
                 source="home_feature_card"
+                showPlay={showPlayActions}
                 showCart={Boolean(access?.showCart)}
                 onLibraryChange={onLibraryChange}
                 onPlayClick={onPlayClick}
@@ -158,7 +165,7 @@ const FeatureCard = memo(function FeatureCard({
                   color: "white",
                   border: "1px solid #2a2a2a",
                 }}
-                cartLabel="+ Cart"
+                cartLabel={access?.lifecycle?.preorderOpen ? "Preorder" : "+ Cart"}
               />
             </div>
           ) : null}

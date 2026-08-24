@@ -19,8 +19,8 @@ export async function GET(req) {
     .from("releases")
     .select("id, slug, release_type")
     .eq("status", "scheduled")
-    .lte("scheduled_at", now)
-    .not("scheduled_at", "is", null);
+    .lte("available_at", now)
+    .not("available_at", "is", null);
 
   if (fetchErr) {
     console.error("[cron/publish-scheduled] fetch error", fetchErr.message);
@@ -38,7 +38,7 @@ export async function GET(req) {
       // Update release to published + visible
       const { error: relErr } = await admin
         .from("releases")
-        .update({ status: "published", storefront_visible: true })
+        .update({ status: "published", storefront_visible: true, published_at: now })
         .eq("id", rel.id);
       if (relErr) throw relErr;
 

@@ -5,6 +5,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { discoverFileByExtensions } from "@/lib/storage/r2";
 import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
+import { validateLifecycleConfiguration } from "@/lib/releases/release-availability";
 
 export const dynamic = "force-dynamic";
 
@@ -166,6 +167,12 @@ export async function PATCH(req, { params }) {
   let body;
   try { body = await req.json(); } catch { body = {}; }
   const { title, price, genre, release_date, track_lyrics } = body;
+  const lifecycleKeys = [
+    "available_at", "release_timezone", "upcoming_visible", "preview_before_release",
+    "preorder_enabled", "preorder_starts_at", "preorder_price_cents",
+    "early_access_enabled", "early_access_starts_at", "early_access_scope",
+    "early_access_audiences", "unavailable_at",
+  ];
 
   const admin = getAdminClient();
   const errors = [];
@@ -173,11 +180,28 @@ export async function PATCH(req, { params }) {
   // ── Path A: wizard release ─────────────────────────────────────────────────────
   const { data: release } = await admin
     .from("releases")
-    .select("id, slug, release_type")
+    .select("id, slug, status, release_type, scheduled_at, available_at, release_timezone, upcoming_visible, preview_before_release, preorder_enabled, preorder_starts_at, preorder_price_cents, early_access_enabled, early_access_starts_at, early_access_scope, early_access_audiences, unavailable_at")
     .eq("id", id)
     .single();
 
   if (release) {
+    const lifecycleUpdates = Object.fromEntries(
+      lifecycleKeys.filter((key) => body[key] !== undefined).map((key) => [key, body[key]])
+    );
+    if (Object.keys(lifecycleUpdates).length) {
+      const merged = { ...release, ...lifecycleUpdates };
+      const availableMs = Date.parse(merged.available_at || merged.scheduled_at || "");
+      if (Number.isFinite(availableMs)) {
+        lifecycleUpdates.scheduled_at = merged.available_at;
+        lifecycleUpdates.status = availableMs <= Date.now() ? "published" : "scheduled";
+        lifecycleUpdates.storefront_visible = lifecycleUpdates.status === "published" || Boolean(merged.upcoming_visible);
+      }
+      const validationErrors = validateLifecycleConfiguration({ ...merged, ...lifecycleUpdates });
+      if (validationErrors.length) return NextResponse.json({ error: validationErrors.join("; ") }, { status: 422 });
+      const { error } = await admin.from("releases").update(lifecycleUpdates).eq("id", id);
+      if (error) errors.push(`releases.lifecycle: ${error.message}`);
+      await admin.from("products").update({ active: lifecycleUpdates.status === "published" || Boolean(merged.upcoming_visible) }).eq("release_id", id);
+    }
     if (release_date !== undefined) {
       const { error } = await admin.from("releases").update({ release_date }).eq("id", id);
       if (error) errors.push(`releases.release_date: ${error.message}`);
@@ -221,7 +245,7 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ ok: false, errors }, { status: 207 });
     }
 
-    revalidateStorefront();
+    revalidateStorefront(release.slug, release.release_type);
     return NextResponse.json({ ok: true });
   }
 

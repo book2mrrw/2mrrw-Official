@@ -19,9 +19,10 @@ import {
   visualDiscoveryUrl,
 } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
+import { releaseAvailability } from "@/lib/releases/release-availability";
 
 const PRODUCT_COLS = [
-  "id", "slug", "title", "product_type", "price_cents",
+  "id", "release_id", "slug", "title", "product_type", "price_cents",
   "cover_url", "storage_path", "preview_path",
   "video_path", "image_path", "stream_path",
   "release_type", "release_date",
@@ -29,9 +30,13 @@ const PRODUCT_COLS = [
   "content_type", "content_id",
 ].join(", ");
 
+const RELEASE_LIFECYCLE_COLS = "id,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,preorder_enabled,preorder_starts_at,preorder_price_cents,early_access_enabled,early_access_starts_at,early_access_scope,early_access_audiences,release_timezone,unavailable_at";
+
 /** Map a raw products row to an enriched storefront release shape. */
 function mapProductRow(row) {
   const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  const lifecycleRow = Array.isArray(row.releases) ? row.releases[0] : row.releases;
+  const availability = lifecycleRow ? releaseAvailability(lifecycleRow) : null;
 
   // Canonical release type (R2 folder segment): 'singles' | 'features' | 'albums' | 'mixtapes-and-eps'
   const releaseTypeFolder =
@@ -73,10 +78,15 @@ function mapProductRow(row) {
     release_type: releaseTypeShort,
     release_category: meta.release_category || null,
     release_date: row.release_date || meta.release_date || null,
+    release_id: row.release_id || null,
+    status: lifecycleRow?.status || (row.active ? "published" : "unavailable"),
+    scheduled_publish_at: lifecycleRow?.available_at || lifecycleRow?.scheduled_at || null,
+    availability,
+    lifecycle: lifecycleRow || null,
 
     // Commerce
-    price_cents: row.price_cents || 0,
-    price: (row.price_cents || 0) / 100,
+    price_cents: availability?.preorderPriceCents ?? row.price_cents ?? 0,
+    price: (availability?.preorderPriceCents ?? row.price_cents ?? 0) / 100,
     gifting_enabled: row.gifting_enabled || false,
     product_type: row.product_type,
     content_type: row.content_type || null,
@@ -172,9 +182,8 @@ export async function getStorefrontCatalogFromDB() {
 
     const { data, error } = await admin
       .from("products")
-      .select(PRODUCT_COLS)
+      .select(`${PRODUCT_COLS}, releases(${RELEASE_LIFECYCLE_COLS})`)
       .in("product_type", ["single", "feature", "album"])
-      .eq("active", true)
       .order("release_date", { ascending: false, nullsLast: true });
 
     if (error) throw error;
@@ -187,6 +196,8 @@ export async function getStorefrontCatalogFromDB() {
 
     for (const row of data) {
       const enriched = mapProductRow(row);
+      if (!enriched.lifecycle && !row.active) continue;
+      if (enriched.availability && !enriched.availability.visible) continue;
       const releaseTypeFolder =
         row.release_type ||
         normalizeReleaseType(
@@ -233,6 +244,15 @@ export async function getStorefrontCatalogFromDB() {
       singles.length > 0 || features.length > 0 ||
       albums.length > 0 || mixtapes.length > 0;
 
+    const lifecycleOrder = (a, b) => {
+      const aUpcoming = a.availability && !a.availability.live;
+      const bUpcoming = b.availability && !b.availability.live;
+      if (aUpcoming !== bUpcoming) return aUpcoming ? -1 : 1;
+      const aTime = Date.parse(a.scheduled_publish_at || a.release_date || 0) || 0;
+      const bTime = Date.parse(b.scheduled_publish_at || b.release_date || 0) || 0;
+      return aUpcoming ? aTime - bTime : bTime - aTime;
+    };
+    [singles, features, albums, mixtapes].forEach((items) => items.sort(lifecycleOrder));
     return hasContent ? { singles, features, albums, mixtapes } : null;
   } catch (err) {
     console.error("[catalog-db] getStorefrontCatalogFromDB error", { error: err?.message });

@@ -1,5 +1,8 @@
 {
   "buildCommand": "cd apps/web && npm run build",
   "outputDirectory": "apps/web/.next",
-  "installCommand": "cd apps/web && npm install --legacy-peer-deps"
+  "installCommand": "cd apps/web && npm install --legacy-peer-deps",
+  "crons": [
+    { "path": "/api/cron/publish-scheduled", "schedule": "* * * * *" }
+  ]
 }

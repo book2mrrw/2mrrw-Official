@@ -15,6 +15,7 @@ import {
   previewDiscoveryUrl,
 } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
+import { validateLifecycleConfiguration } from "@/lib/releases/release-availability";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +90,16 @@ export async function POST(req, { params }) {
     track_id,          // tracks row id (single/feature only)
     lyrics,
     scheduled_at,
+    release_timezone = "America/Chicago",
+    upcoming_visible = false,
+    preview_before_release = false,
+    preorder_enabled = false,
+    preorder_starts_at = null,
+    preorder_price_cents = null,
+    early_access_enabled = false,
+    early_access_starts_at = null,
+    early_access_scope = { mode: "full_release", track_ids: [] },
+    early_access_audiences = ["preorder_purchasers"],
     tracks: bodyTracks = [],  // per-track overrides from wizard (multi-track)
   } = body;
 
@@ -104,9 +115,7 @@ export async function POST(req, { params }) {
   if (relErr || !release) {
     return NextResponse.json({ error: "Release not found" }, { status: 404 });
   }
-  if (release.status === "published") {
-    return NextResponse.json({ error: "Release is already published" }, { status: 409 });
-  }
+  // Re-publishing is an idempotent projection refresh for the same release ID.
 
   const releaseType = release.release_type;
   const typeFolder  = RELEASE_TYPE_FOLDERS[releaseType] || "singles";
@@ -173,6 +182,21 @@ export async function POST(req, { params }) {
 
   // ── 4. Resolve final status (needed for product active flag) ──────────────
   const newStatus = scheduled_at ? "scheduled" : "published";
+  const availableAt = scheduled_at || new Date().toISOString();
+  const lifecycle = {
+    status: newStatus,
+    available_at: availableAt,
+    preorder_enabled: Boolean(preorder_enabled),
+    preorder_starts_at,
+    preorder_price_cents: preorder_price_cents == null ? null : Number(preorder_price_cents),
+    early_access_enabled: Boolean(early_access_enabled),
+    early_access_starts_at,
+    release_timezone,
+  };
+  const lifecycleErrors = validateLifecycleConfiguration(lifecycle);
+  if (lifecycleErrors.length) {
+    return NextResponse.json({ error: `BLOCKING: ${lifecycleErrors.join("; ")}` }, { status: 422 });
+  }
 
   // ── 5. Build canonical slug ────────────────────────────────────────────────
   const existingSlug = release.slug;
@@ -323,7 +347,9 @@ export async function POST(req, { params }) {
         release_type:  normalizeReleaseType(releaseType),
         release_date:  resolvedReleaseDate,
         price_cents:   resolvedPriceCents,
-        active:        newStatus === "published",
+        // active means listed in the catalog. Playback authority is evaluated
+        // independently from releases.available_at on every protected request.
+        active:        newStatus === "published" || Boolean(upcoming_visible),
         release_id:    releaseId,
         storage_path,
         artwork_path,
@@ -341,6 +367,7 @@ export async function POST(req, { params }) {
           content_rating:           content_rating || null,
           featured_artists:         featured_artists || [],
           cover_art_r2_key:         canonicalCoverKey,
+          lifecycle_managed:        true,
         },
         gifting_enabled: false,
       },
@@ -405,9 +432,21 @@ export async function POST(req, { params }) {
   // ── 8. Update releases row status + canonical slug ─────────────────────────
   const releaseUpdate = {
     status:             newStatus,
-    storefront_visible: !scheduled_at,
+    storefront_visible: !scheduled_at || Boolean(upcoming_visible),
     slug:               releaseSlug,
     scheduled_at:       scheduled_at || null,
+    available_at:       availableAt,
+    release_timezone,
+    upcoming_visible:   Boolean(upcoming_visible),
+    preview_before_release: Boolean(preview_before_release),
+    preorder_enabled:   Boolean(preorder_enabled),
+    preorder_starts_at,
+    preorder_price_cents: preorder_price_cents == null ? null : Number(preorder_price_cents),
+    early_access_enabled: Boolean(early_access_enabled),
+    early_access_starts_at,
+    early_access_scope,
+    early_access_audiences,
+    published_at:       scheduled_at ? null : new Date().toISOString(),
     release_date:       resolvedReleaseDate,
   };
 
@@ -426,7 +465,7 @@ export async function POST(req, { params }) {
   });
 
   // ── 9. Cache invalidation ──────────────────────────────────────────────────
-  revalidateStorefront();
+  revalidateStorefront(releaseSlug, releaseType);
 
   console.info(`[publish] SUCCESS releaseId=${releaseId} slug=${releaseSlug} productId=${productId} status=${newStatus}`);
 

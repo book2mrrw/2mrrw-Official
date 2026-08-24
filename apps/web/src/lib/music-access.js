@@ -2,6 +2,7 @@ import { membershipHasPremiumAccess } from "@/lib/commerce/entitlements";
 import { isAdminUser } from "@/lib/auth/constants";
 import { permanentOwnedSlugsFromState } from "@/lib/library-ownership";
 import { getOfflinePlaybackUrl } from "@/lib/offline-cache";
+import { releaseAvailability } from "@/lib/releases/release-availability";
 
 const ACTIVE_COLLECTOR_STATUSES = new Set(["active", "verified", "granted"]);
 
@@ -364,6 +365,24 @@ export function resolveContentAccess(item, accountState = {}) {
   const subscriptionActive =
     Boolean(accountState.subscriberActive) || membershipHasPremiumAccess(membership);
 
+  const itemSlug = item?.slug || item?.productSlug || item?.product_slug;
+  const permanentOwned = itemSlug
+    ? new Set(permanentOwnedSlugsFromState(accountState)).has(itemSlug)
+    : false;
+  const completedPreorder = itemSlug
+    ? new Set(accountState?.preorderSlugs || []).has(itemSlug)
+    : false;
+  const lifecycleAccess = item?.lifecycle
+    ? releaseAvailability(item.lifecycle, {
+        admin: Boolean(trackAccess.admin),
+        owned: permanentOwned,
+        preorderOwned: completedPreorder,
+        normallyEntitled: Boolean(trackAccess.canStream),
+        subscriber: Boolean(trackAccess.subscription),
+        collector: Boolean(trackAccess.collector),
+      })
+    : null;
+
   if (trackAccess.admin) {
     return {
       ...trackAccess,
@@ -387,20 +406,35 @@ export function resolveContentAccess(item, accountState = {}) {
   else if (trackAccess.owned) tier = "purchaser";
 
   const libraryMode = trackAccess.canStream;
+  const lifecycleCanStream = lifecycleAccess ? lifecycleAccess.canPlayFull : trackAccess.canStream;
+  const lifecycleCanBuy = lifecycleAccess ? lifecycleAccess.canPurchase : !libraryMode;
+  const lifecycleMessage = lifecycleAccess && !lifecycleAccess.live
+    ? completedPreorder && lifecycleAccess.earlyEligible
+      ? "Early access unlocked"
+      : trackAccess.collector
+        ? `Collector Digital Access unlocks ${lifecycleAccess.availableAt ? new Date(lifecycleAccess.availableAt).toLocaleDateString() : "on release day"}`
+        : trackAccess.subscription
+          ? `Included with your subscription on ${lifecycleAccess.availableAt ? new Date(lifecycleAccess.availableAt).toLocaleDateString() : "release day"}`
+          : lifecycleAccess.preorderOpen
+            ? "Pre-order available"
+            : "Available on release day"
+    : null;
   return {
     ...trackAccess,
     tier,
-    mode: libraryMode ? "library" : "store",
-    canPreview: !libraryMode,
-    canStream: trackAccess.canStream,
+    mode: lifecycleCanStream ? "library" : "store",
+    canPreview: lifecycleAccess ? lifecycleAccess.canPreview : !libraryMode,
+    canStream: lifecycleCanStream,
     canAddToLibrary: trackAccess.canAddToLibrary,
     canAddToPlaylist: trackAccess.canAddToPlaylist,
     canShare: trackAccess.canShare,
     canOffline:
       trackAccess.canStream &&
       (tier === "subscriber" || tier === "collector" || trackAccess.owned),
-    showPrice: !libraryMode,
-    showCart: !libraryMode,
+    showPrice: lifecycleCanBuy,
+    showCart: lifecycleCanBuy,
+    lifecycle: lifecycleAccess,
+    lifecycleMessage,
     badges: trackAccess.badge ? [trackAccess.badge] : [],
   };
 }

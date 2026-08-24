@@ -20,6 +20,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { signVariantToken } from "@/lib/hls/token";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { getOrFetchManifest } from "@/lib/server/hls-manifest-cache";
+import { resolveReleaseAccessForProduct } from "@/lib/releases/release-availability-server";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +65,10 @@ export async function GET(req) {
 
   // Entitlement — admins bypass; all others must have canStream
   if (!isAdminUser(user)) {
-    const canStream = await userCanStreamProduct(user.id, slug, user);
+    const releaseAccess = await resolveReleaseAccessForProduct({ slug, user, trackId: trackSlug });
+    const canStream = releaseAccess.availability
+      ? releaseAccess.availability.canPlayFull
+      : await userCanStreamProduct(user.id, slug, user);
     if (!canStream) {
       return cors(req, NextResponse.json({ error: "Not entitled" }, { status: 403 }));
     }

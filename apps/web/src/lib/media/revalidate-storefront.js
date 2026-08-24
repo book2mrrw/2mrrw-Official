@@ -7,12 +7,17 @@ import { revalidatePath } from "next/cache";
  * routes (replace-master, upload/complete's audio branch) silently drift and
  * skip it entirely, so live-edited releases sat stale for up to an hour.
  */
-export function revalidateStorefront() {
+export function revalidateStorefront(slug = null, releaseType = null) {
   try {
     revalidatePath("/");
     revalidatePath("/song/[slug]", "page");
     revalidatePath("/feature/[slug]", "page");
     revalidatePath("/album/[slug]", "page");
+    if (slug) {
+      const prefix = releaseType === "feature" ? "feature"
+        : (["album", "ep", "mixtape"].includes(releaseType) ? "album" : "song");
+      revalidatePath(`/${prefix}/${slug}`);
+    }
   } catch (err) {
     console.warn("[revalidate-storefront] revalidatePath error (non-fatal)", err?.message);
   }

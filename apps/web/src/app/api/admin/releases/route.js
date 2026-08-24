@@ -26,7 +26,7 @@ export async function GET(req) {
   // ── 1. Wizard releases (new upload system) ────────────────────────────────
   const { data: wizardReleases, error: wizardError } = await admin
     .from("releases")
-    .select("id, slug, status, release_type, release_date, storefront_visible, scheduled_at, cover_art_r2_key, upc, created_at")
+    .select("id, slug, status, release_type, release_date, storefront_visible, scheduled_at, available_at, release_timezone, upcoming_visible, preview_before_release, preorder_enabled, preorder_starts_at, preorder_price_cents, early_access_enabled, early_access_starts_at, early_access_scope, early_access_audiences, published_at, unavailable_at, cover_art_r2_key, upc, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
 

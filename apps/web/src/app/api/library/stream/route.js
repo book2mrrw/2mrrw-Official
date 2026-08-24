@@ -29,6 +29,7 @@ import { createServerTiming } from "@/lib/server/server-timing";
 import { getHybridStreamingFeatureFlags } from "@/lib/feature-flags";
 import { getPlaybackResolverDiagnostics } from "@/lib/playback/playback-resolver-diagnostics";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { resolveReleaseAccessForProduct } from "@/lib/releases/release-availability-server";
 
 export const dynamic = "force-dynamic";
 
@@ -124,9 +125,20 @@ async function buildPreviewStreamResponse(req, user, slug, { timing } = {}) {
 }
 
 async function buildStreamResponse(req, user, slug, { force = false, trackSlug = null, timing } = {}) {
-  const canStream = isAdminUser(user) || await userCanStreamProduct(user.id, slug, user);
+  const releaseAccess = await resolveReleaseAccessForProduct({ slug, user, trackId: trackSlug });
+  const canStream = releaseAccess.availability
+    ? releaseAccess.availability.canPlayFull
+    : (isAdminUser(user) || await userCanStreamProduct(user.id, slug, user));
   timing?.mark("entitlement");
-  if (!canStream) return buildPreviewStreamResponse(req, user, slug, { timing });
+  if (!canStream) {
+    if (releaseAccess.availability && !releaseAccess.availability.visible) {
+      return applyMediaCors(req, NextResponse.json({ error: "Release unavailable", code: "RELEASE_UNAVAILABLE" }, { status: 404 }));
+    }
+    if (releaseAccess.availability && !releaseAccess.availability.canPreview) {
+      return applyMediaCors(req, NextResponse.json({ error: "Playback locked until release", code: "RELEASE_LOCKED" }, { status: 403 }));
+    }
+    return buildPreviewStreamResponse(req, user, slug, { timing });
+  }
 
   const admin = getAdminClient();
 

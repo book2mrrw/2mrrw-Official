@@ -41,6 +41,8 @@ export async function POST(req) {
       price: l.price_cents / 100,
       cover: l.cover_url,
       type: l.product_type === "merch" ? "merch" : "digital",
+      release_id: l.release_id || null,
+      access_type: l.access_type || "purchase",
     }));
 
     const paymentIntent = await getStripe().paymentIntents.create({
