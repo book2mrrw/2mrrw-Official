@@ -13,8 +13,10 @@ function isAdmin(session) {
 export default function AdminUploadPage() {
   const router = useRouter();
   const [checked, setChecked] = useState(false);
+  const [resumeReleaseId, setResumeReleaseId] = useState(null);
 
   useEffect(() => {
+    setResumeReleaseId(new URLSearchParams(window.location.search).get("draft"));
     const sb = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -37,6 +39,7 @@ export default function AdminUploadPage() {
   return (
     <div style={{ minHeight: "100vh", background: "#050505", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
       <UploadWizard
+        initialReleaseId={resumeReleaseId}
         onComplete={() => router.push("/admin/releases")}
         onDismiss={() => router.push("/admin")}
       />

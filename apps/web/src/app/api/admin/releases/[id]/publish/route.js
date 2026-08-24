@@ -72,6 +72,7 @@ export async function POST(req, { params }) {
     price_cents,       // number override
     release_date,
     genre,
+    genre_classifications = null,
     content_rating,
     featured_artists = [],
     produced_by = [],
@@ -383,6 +384,28 @@ export async function POST(req, { params }) {
 
   const productId = product.id;
 
+  // Canonical many-classification taxonomy. The legacy metadata.genre string
+  // remains a display-compatible projection, never the editing authority.
+  if (genre_classifications?.primary) {
+    const classificationRows = [
+      { taxonomy_id: genre_classifications.primary, role: "primary", sort_order: 0 },
+      ...[...new Set(genre_classifications.subgenres || [])]
+        .filter((id) => id && id !== genre_classifications.primary)
+        .map((taxonomy_id, index) => ({ taxonomy_id, role: "subgenre", sort_order: index })),
+      ...[...new Set(genre_classifications.secondary || [])]
+        .filter((id) => id && id !== genre_classifications.primary && !(genre_classifications.subgenres || []).includes(id))
+        .map((taxonomy_id, index) => ({ taxonomy_id, role: "secondary", sort_order: index })),
+    ].map((row) => ({ ...row, release_id: releaseId }));
+    const ids = classificationRows.map((row) => row.taxonomy_id);
+    const { data: validTaxonomy, error: taxonomyError } = await admin.from("genre_taxonomy").select("id").in("id", ids).eq("active", true);
+    if (taxonomyError || (validTaxonomy || []).length !== ids.length) {
+      return NextResponse.json({ error: "BLOCKING: One or more genre classifications are invalid or disabled" }, { status: 422 });
+    }
+    await admin.from("release_genre_classifications").delete().eq("release_id", releaseId);
+    const { error: classificationError } = await admin.from("release_genre_classifications").insert(classificationRows);
+    if (classificationError) return NextResponse.json({ error: `Genre classification failed: ${classificationError.message}` }, { status: 500 });
+  }
+
   // ── 7. For multi-track: upsert catalog_tracks ──────────────────────────────
   if (isMultiTrack && readyTracks.length > 0) {
     const trackRows = readyTracks.map((t, i) => {
@@ -463,6 +486,7 @@ export async function POST(req, { params }) {
   await admin.from("releases").update(releaseUpdate).eq("id", releaseId).catch((err) => {
     console.warn("[publish] release status update error (non-fatal)", err?.message);
   });
+  await admin.from("release_drafts").delete().eq("release_id", releaseId);
 
   // ── 9. Cache invalidation ──────────────────────────────────────────────────
   revalidateStorefront(releaseSlug, releaseType);

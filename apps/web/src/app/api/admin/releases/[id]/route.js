@@ -177,6 +177,16 @@ export async function PATCH(req, { params }) {
   const admin = getAdminClient();
   const errors = [];
 
+  if (body.action === "undo_dump") {
+    const { error } = await admin.from("draft_deletion_jobs").delete().eq("release_id", id).is("finalized_at", null);
+    return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ ok: true, restored: id });
+  }
+  if (body.action === "archive") {
+    const { error } = await admin.from("releases").update({ status: "archived", storefront_visible: false, unavailable_at: new Date().toISOString() }).eq("id", id).in("status", ["scheduled", "published"]);
+    if (!error) await admin.from("products").update({ active: false }).eq("release_id", id);
+    return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ ok: true, archived: id });
+  }
+
   // ── Path A: wizard release ─────────────────────────────────────────────────────
   const { data: release } = await admin
     .from("releases")
@@ -342,6 +352,26 @@ export async function DELETE(req, { params }) {
       .from("releases").select("id, slug, status").eq("id", id).maybeSingle();
 
     if (release) {
+      if (release.status !== "draft") return NextResponse.json({ error: "Only draft, incomplete, or upload-failed releases may be dumped" }, { status: 409 });
+      const [{ data: releaseAssets }, { data: trackAssets }, { data: jobAssets }] = await Promise.all([
+        admin.from("releases").select("cover_art_r2_key,metadata").eq("id", id).single(),
+        admin.from("tracks").select("audio_r2_key,master_r2_key,master_history").eq("release_id", id),
+        admin.from("hls_transcode_jobs").select("source_key").eq("slug", release.slug),
+      ]);
+      const metadata = releaseAssets?.metadata || {};
+      const assetKeys = [...new Set([
+        releaseAssets?.cover_art_r2_key, metadata.animated_cover_r2_key, metadata.preview_r2_key,
+        ...(trackAssets || []).flatMap((track) => [track.audio_r2_key, track.master_r2_key, ...(Array.isArray(track.master_history) ? track.master_history : [])]),
+        ...(jobAssets || []).map((job) => job.source_key),
+      ].filter(Boolean))];
+      const deleteAfter = new Date(Date.now() + 10_000).toISOString();
+      const { data: job, error: stageError } = await admin.from("draft_deletion_jobs").upsert({
+        release_id: id, prior_status: release.status, asset_keys: assetKeys,
+        requested_by: user.id, requested_at: new Date().toISOString(), delete_after: deleteAfter,
+      }, { onConflict: "release_id" }).select("id,delete_after").single();
+      if (stageError) return NextResponse.json({ error: `Failed to stage draft dump: ${stageError.message}` }, { status: 500 });
+      return NextResponse.json({ ok: true, staged: true, job_id: job.id, delete_after: job.delete_after });
+
       // Deactivate any linked product (don't hard-delete — may have purchase history)
       await admin.from("products")
         .update({ active: false, updated_at: new Date().toISOString() })

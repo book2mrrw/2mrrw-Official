@@ -26,7 +26,7 @@ export async function GET(req) {
   // ── 1. Wizard releases (new upload system) ────────────────────────────────
   const { data: wizardReleases, error: wizardError } = await admin
     .from("releases")
-    .select("id, slug, status, release_type, release_date, storefront_visible, scheduled_at, available_at, release_timezone, upcoming_visible, preview_before_release, preorder_enabled, preorder_starts_at, preorder_price_cents, early_access_enabled, early_access_starts_at, early_access_scope, early_access_audiences, published_at, unavailable_at, cover_art_r2_key, upc, created_at")
+    .select("id, slug, status, release_type, release_date, storefront_visible, scheduled_at, available_at, release_timezone, upcoming_visible, preview_before_release, preorder_enabled, preorder_starts_at, preorder_price_cents, early_access_enabled, early_access_starts_at, early_access_scope, early_access_audiences, published_at, unavailable_at, cover_art_r2_key, upc, metadata, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -35,20 +35,26 @@ export async function GET(req) {
   }
 
   const releaseIds = (wizardReleases || []).map((r) => r.id);
+  const { data: pendingDumpJobs } = releaseIds.length
+    ? await admin.from("draft_deletion_jobs").select("release_id").in("release_id", releaseIds).is("finalized_at", null)
+    : { data: [] };
+  const pendingDumpIds = new Set((pendingDumpJobs || []).map((job) => job.release_id));
 
   // Get product title + track counts for wizard releases
-  const [wizardProductsRes, wizardTracksRes] = releaseIds.length > 0
+  const [wizardProductsRes, wizardTracksRes, wizardDraftsRes] = releaseIds.length > 0
     ? await Promise.all([
-        admin.from("products").select("release_id, title, active").in("release_id", releaseIds),
+        admin.from("products").select("release_id, title, active, price_cents").in("release_id", releaseIds),
         admin.from("tracks").select("release_id, upload_status").in("release_id", releaseIds),
+        admin.from("release_drafts").select("release_id,step_index,draft_payload,saved_at").in("release_id", releaseIds),
       ])
-    : [{ data: [] }, { data: [] }];
+    : [{ data: [] }, { data: [] }, { data: [] }];
 
   const productsByRelease = {};
   for (const p of (wizardProductsRes.data || [])) {
     productsByRelease[p.release_id] = p;
   }
   const trackCountByRelease = {};
+  const draftsByRelease = Object.fromEntries((wizardDraftsRes.data || []).map((draft) => [draft.release_id, draft]));
   for (const t of (wizardTracksRes.data || [])) {
     if (!trackCountByRelease[t.release_id]) {
       trackCountByRelease[t.release_id] = { total: 0, ready: 0 };
@@ -57,9 +63,12 @@ export async function GET(req) {
     if (t.upload_status === "ready") trackCountByRelease[t.release_id].ready++;
   }
 
-  const enrichedWizard = (wizardReleases || []).map((r) => ({
+  const enrichedWizard = (wizardReleases || []).filter((r) => !pendingDumpIds.has(r.id)).map((r) => ({
     ...r,
-    title: productsByRelease[r.id]?.title || null,
+    title: productsByRelease[r.id]?.title || draftsByRelease[r.id]?.draft_payload?.data?.title || r.metadata?.draft_title || null,
+    price_cents: productsByRelease[r.id]?.price_cents || (Number(draftsByRelease[r.id]?.draft_payload?.data?.price) * 100 || null),
+    draft_step_index: draftsByRelease[r.id]?.step_index ?? r.metadata?.draft_step_index ?? null,
+    draft_genre: draftsByRelease[r.id]?.draft_payload?.data?.genre || null,
     product_active: productsByRelease[r.id]?.active || false,
     track_counts: trackCountByRelease[r.id] || { total: 0, ready: 0 },
     source: "releases",

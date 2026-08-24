@@ -3,6 +3,7 @@
   "outputDirectory": "apps/web/.next",
   "installCommand": "cd apps/web && npm install --legacy-peer-deps",
   "crons": [
-    { "path": "/api/cron/publish-scheduled", "schedule": "* * * * *" }
+    { "path": "/api/cron/publish-scheduled", "schedule": "* * * * *" },
+    { "path": "/api/cron/finalize-draft-dumps", "schedule": "* * * * *" }
   ]
 }

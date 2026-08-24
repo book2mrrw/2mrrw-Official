@@ -347,7 +347,13 @@ function ReleaseTypeStep({ data, onChange, onNext, loading }) {
 function ReleaseInfoStep({ data, onChange, onNext, onBack, loading }) {
   const isSingle    = data.release_type === "single" || data.release_type === "feature";
   const hasFeatured = data.artist_mode === "featured" || data.release_type === "feature";
-  const GENRES = ["R&B","Hip-Hop","Pop","Alternative R&B","Soul","Neo-Soul","Trap","Rap","Melodic Rap","Pop/R&B","Hiphop/R&B","Electronic","Other"];
+  const [taxonomy, setTaxonomy] = useState([]);
+  useEffect(() => {
+    fetch("/api/admin/genres").then((res) => res.ok ? res.json() : { genres: [] })
+      .then((json) => setTaxonomy(json.genres || [])).catch(() => setTaxonomy([]));
+  }, []);
+  const primaryGenre = taxonomy.find((item) => item.id === data.genre_id);
+  const subgenres = primaryGenre?.subgenres?.filter((item) => item.active) || [];
 
   return (
     <div>
@@ -383,13 +389,39 @@ function ReleaseInfoStep({ data, onChange, onNext, onBack, loading }) {
         <Field label="Original Release Date">
           <Input type="date" value={data.release_date} onChange={(v) => onChange("release_date", v)} />
         </Field>
-        <Field label="Genre">
-          <Select value={data.genre} onChange={(v) => onChange("genre", v)}>
+        <Field label="Primary Genre">
+          <Select value={data.genre_id} onChange={(v) => {
+            onChange("genre_id", v);
+            onChange("genre", taxonomy.find((item) => item.id === v)?.name || "");
+            onChange("subgenre_ids", []);
+          }}>
             <option value="">Select genre…</option>
-            {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
+            {taxonomy.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
           </Select>
         </Field>
       </div>
+
+      {primaryGenre ? (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <Field label="Subgenres">
+            <Select value="" onChange={(v) => v && onChange("subgenre_ids", [...new Set([...data.subgenre_ids, v])])}>
+              <option value="">Select subgenre…</option>
+              {subgenres.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+            </Select>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 8 }}>
+              {subgenres.filter((item) => data.subgenre_ids.includes(item.id)).map((item) => <button type="button" key={item.id} onClick={() => onChange("subgenre_ids", data.subgenre_ids.filter((id) => id !== item.id))} style={{ background: C.accentDim, border: `1px solid ${C.accent}`, color: C.accent, borderRadius: 18, padding: "6px 10px", fontSize: 11, cursor: "pointer" }}>{item.name} Ã—</button>)}
+            </div>
+          </Field>
+          <Field label="Secondary Genres" hint="Multiple broad secondary genres are allowed.">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+              {taxonomy.filter((item) => item.active && item.id !== data.genre_id).map((item) => {
+                const selected = data.secondary_genre_ids.includes(item.id);
+                return <button type="button" key={item.id} onClick={() => onChange("secondary_genre_ids", selected ? data.secondary_genre_ids.filter((id) => id !== item.id) : [...data.secondary_genre_ids, item.id])} style={{ background: selected ? C.accentDim : C.surface2, border: `1px solid ${selected ? C.accent : C.border2}`, color: selected ? C.accent : C.muted, borderRadius: 18, padding: "6px 10px", fontSize: 11, cursor: "pointer" }}>{item.name}</button>;
+              })}
+            </div>
+          </Field>
+        </div>
+      ) : null}
 
       {isSingle && (
         <Field label="Content Rating">
@@ -1336,6 +1368,11 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
           price:              data.price,
           release_date:       data.release_date,
           genre:              data.genre,
+          genre_classifications: {
+            primary: data.genre_id || null,
+            subgenres: data.subgenre_ids || [],
+            secondary: data.secondary_genre_ids || [],
+          },
           content_rating:     data.content_rating,
           featured_artists:   data.featured_artists,
           produced_by:        data.produced_by,
@@ -1507,6 +1544,9 @@ const DEFAULT_DATA = {
   featured_artists:   [],
   release_date:       "",
   genre:              "",
+  genre_id:           "",
+  subgenre_ids:       [],
+  secondary_genre_ids: [],
   content_rating:     "clean",
   price:              "",
   publish_mode:       "immediate",
@@ -1545,7 +1585,7 @@ const STEPS_SINGLE = ["Type", "Info", "Credits", "Audio", "Artwork", "Review"];
 const STEPS_MULTI  = ["Type", "Info", "Credits", "Tracklist", "Details", "Artwork", "Review"];
 
 // ── Main exported component ──────────────────────────────────────────────────────
-export function UploadWizard({ onComplete, onDismiss }) {
+export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null }) {
   const [step,          setStep]          = useState(0);
   const [data,          setData]          = useState(DEFAULT_DATA);
   const [tracks,        setTracks]        = useState([newTrack(1)]);
@@ -1554,8 +1594,31 @@ export function UploadWizard({ onComplete, onDismiss }) {
   const [creatingDraft, setCreatingDraft] = useState(false);
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const uploadSessionIdRef = useRef(null);
+  const latestDraftRef = useRef(null);
 
   useEffect(() => {
+    let cancelled = false;
+    if (initialReleaseId) {
+      fetch(`/api/admin/releases/${initialReleaseId}/draft`)
+        .then(async (res) => { const json = await res.json(); if (!res.ok) throw new Error(json.error || "Failed to resume draft"); return json; })
+        .then(({ release, snapshot }) => {
+          if (cancelled) return;
+          const payload = snapshot?.draft_payload || {};
+          const restoredData = { ...DEFAULT_DATA, ...(payload.data || {}), cover_preview_url: "", cover_video_preview_url: "" };
+          const publicBase = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "").replace(/\/$/, "");
+          if (restoredData.cover_key && publicBase) restoredData.cover_preview_url = `${publicBase}/${restoredData.cover_key}`;
+          if (restoredData.cover_video_key && publicBase) restoredData.cover_video_preview_url = `${publicBase}/${restoredData.cover_video_key}`;
+          uploadSessionIdRef.current = payload.uploadSessionId || crypto.randomUUID();
+          setReleaseId(release.id);
+          setDraftSlug(release.slug);
+          setStep(Number.isInteger(snapshot?.step_index) ? snapshot.step_index : 0);
+          setData(restoredData);
+          if (Array.isArray(payload.tracks) && payload.tracks.length) setTracks(payload.tracks);
+          setSessionHydrated(true);
+        })
+        .catch((error) => { if (!cancelled) { alert(error.message); setSessionHydrated(true); } });
+      return () => { cancelled = true; };
+    }
     try {
       const saved = JSON.parse(sessionStorage.getItem("2mrrw.admin.release-upload") || "null");
       if (!saved?.uploadSessionId) {
@@ -1574,7 +1637,8 @@ export function UploadWizard({ onComplete, onDismiss }) {
     } finally {
       setSessionHydrated(true);
     }
-  }, []);
+    return () => { cancelled = true; };
+  }, [initialReleaseId]);
 
   useEffect(() => {
     if (!sessionHydrated || !uploadSessionIdRef.current) return;
@@ -1587,6 +1651,45 @@ export function UploadWizard({ onComplete, onDismiss }) {
       tracks,
     }));
   }, [sessionHydrated, releaseId, draftSlug, step, data, tracks]);
+
+  useEffect(() => {
+    if (!sessionHydrated || !releaseId) return;
+    latestDraftRef.current = {
+      releaseId,
+      body: {
+        step_index: step,
+        draft_payload: {
+          version: 1,
+          uploadSessionId: uploadSessionIdRef.current,
+          data: { ...data, cover_preview_url: "", cover_video_preview_url: "" },
+          tracks,
+        },
+      },
+    };
+    const timeout = setTimeout(() => {
+      fetch(`/api/admin/releases/${releaseId}/draft`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(latestDraftRef.current.body),
+      }).catch(() => {});
+    }, 450);
+    return () => clearTimeout(timeout);
+  }, [sessionHydrated, releaseId, step, data, tracks]);
+
+  useEffect(() => {
+    const flush = () => {
+      const snapshot = latestDraftRef.current;
+      if (!snapshot) return;
+      fetch(`/api/admin/releases/${snapshot.releaseId}/draft`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(snapshot.body),
+        keepalive: true,
+      }).catch(() => {});
+    };
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, []);
 
   const isMultiTrack = ["album", "ep", "mixtape"].includes(data.release_type);
   const STEPS        = isMultiTrack ? STEPS_MULTI : STEPS_SINGLE;

@@ -349,13 +349,19 @@ function SwipeDeleteRow({ children, onDelete, showBorder }) {
   const currentOffRef  = useRef(0);
   const buzzedRef      = useRef(false);
   const committedRef   = useRef(false);
+  const rowRef         = useRef(null);
+  const revealedRef    = useRef(false);
 
-  const THRESHOLD = 110; // px left-drag before delete commits
+  const thresholds = () => {
+    const width = rowRef.current?.getBoundingClientRect().width || 360;
+    return { reveal: width * 0.28, commit: width * 0.60 };
+  };
 
   const onTouchStart = (e) => {
     if (committedRef.current) return;
     startXRef.current = e.touches[0].clientX;
     buzzedRef.current = false;
+    revealedRef.current = false;
     setDragging(true);
   };
 
@@ -364,15 +370,19 @@ function SwipeDeleteRow({ children, onDelete, showBorder }) {
     const raw = e.touches[0].clientX - startXRef.current;
     if (raw > 6) { startXRef.current = null; setDragging(false); return; } // ignore right-swipe
     const abs = Math.abs(Math.min(raw, 0));
-    // elastic resistance past threshold
-    const clamped = abs <= THRESHOLD ? -abs : -(THRESHOLD + (abs - THRESHOLD) * 0.22);
+    const { reveal, commit } = thresholds();
+    const clamped = abs <= commit ? -abs : -(commit + (abs - commit) * 0.18);
     currentOffRef.current = clamped;
     setOffsetX(clamped);
-    const p = Math.min(1, abs / THRESHOLD);
+    const p = Math.min(1, abs / commit);
     setProgress(p);
+    if (abs >= reveal && !revealedRef.current) {
+      revealedRef.current = true;
+      try { navigator.vibrate?.(16); } catch {}
+    }
     if (p >= 1 && !buzzedRef.current) {
       buzzedRef.current = true;
-      try { navigator.vibrate?.([35, 12, 35]); } catch {}
+      try { navigator.vibrate?.([45, 18, 55]); } catch {}
     }
   };
 
@@ -380,7 +390,7 @@ function SwipeDeleteRow({ children, onDelete, showBorder }) {
     setDragging(false);
     startXRef.current = null;
     if (committedRef.current) return;
-    if (currentOffRef.current <= -THRESHOLD) {
+    if (Math.abs(currentOffRef.current) >= thresholds().commit) {
       committedRef.current = true;
       setOffsetX(-(typeof window !== "undefined" ? window.innerWidth : 600));
       setTimeout(onDelete, 320);
@@ -394,7 +404,7 @@ function SwipeDeleteRow({ children, onDelete, showBorder }) {
   const showLabel   = progress > 0.25;
 
   return (
-    <div style={{
+    <div ref={rowRef} style={{
       position: "relative",
       overflow: "hidden",
       borderBottom: showBorder ? `1px solid ${C.border}` : "none",
@@ -414,7 +424,8 @@ function SwipeDeleteRow({ children, onDelete, showBorder }) {
             color: atThreshold ? C.error : `rgba(255,69,58,${0.35 + progress * 0.55})`,
             transition: dragging ? "none" : "color 0.15s",
           }}>
-            {atThreshold ? "× DELETE" : "slide to delete"}
+            <span style={{ fontSize: 18, marginRight: 7, display: "inline-block", transform: `rotate(${progress * -8}deg) scale(${0.85 + progress * .25})` }}>▰</span>
+            {atThreshold ? "DUMP IT" : "DUMP"}
           </span>
         )}
       </div>
@@ -449,6 +460,7 @@ export default function AdminReleasesPage() {
   const [replacingCover, setReplacingCover] = useState(null); // release object for cover modal
   const [filter,   setFilter]   = useState("all");
   const [deleting, setDeleting] = useState(null); // slug being deleted (for loading state)
+  const [undoDump, setUndoDump] = useState(null);
 
   useEffect(() => {
     const sb = createBrowserClient(
@@ -487,15 +499,31 @@ export default function AdminReleasesPage() {
       const url = rel.source === "catalog"
         ? `/api/admin/releases/${rel.id}?source=catalog`
         : `/api/admin/releases/${rel.id}`;
-      const res = await fetch(url, { method: "DELETE" });
+      const archive = rel.source !== "catalog" && rel.status !== "draft";
+      const res = await fetch(url, archive
+        ? { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "archive" }) }
+        : { method: "DELETE" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Delete failed");
-      await loadReleases();
+      if (json.staged) {
+        setReleases((current) => current.filter((item) => item.id !== rel.id));
+        setUndoDump(rel);
+        setTimeout(() => setUndoDump((current) => current?.id === rel.id ? null : current), 10_000);
+      } else await loadReleases();
     } catch (err) {
       alert(err.message);
     } finally {
       setDeleting(null);
     }
+  };
+
+  const undoDraftDump = async () => {
+    if (!undoDump) return;
+    const rel = undoDump;
+    setUndoDump(null);
+    const res = await fetch(`/api/admin/releases/${rel.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "undo_dump" }) });
+    if (!res.ok) { const json = await res.json(); alert(json.error || "Undo failed"); return; }
+    await loadReleases();
   };
 
   const SLUG_PREFIX = {
@@ -603,7 +631,7 @@ export default function AdminReleasesPage() {
               const isScheduled = rel.status === "scheduled";
               const isDraft = rel.status === "draft";
               const showBorder = i < filtered.length - 1;
-              const swipeable = isDraft || isScheduled;
+              const swipeable = isDraft;
 
               const rowEl = (
                 <div
@@ -619,6 +647,11 @@ export default function AdminReleasesPage() {
                       {rel.title || <span style={{ color: C.muted2, fontStyle: "italic" }}>Untitled</span>}
                     </div>
                     <div style={{ fontSize: 11, color: C.muted2 }}>{rel.slug}</div>
+                    {isDraft && (rel.draft_genre || rel.price_cents || rel.release_date) && (
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>
+                        {[rel.draft_genre, rel.price_cents ? `$${(rel.price_cents / 100).toFixed(2)}` : null, rel.release_date ? `Original: ${new Date(`${rel.release_date}T00:00:00`).toLocaleDateString()}` : null, Number.isInteger(rel.draft_step_index) ? `Step ${rel.draft_step_index + 1}` : null].filter(Boolean).join(" Â· ")}
+                      </div>
+                    )}
                     {isScheduled && rel.scheduled_at && (
                       <div style={{ fontSize: 11, color: C.warn, marginTop: 2 }}>
                         Scheduled: {new Date(rel.scheduled_at).toLocaleString()}
@@ -680,13 +713,13 @@ export default function AdminReleasesPage() {
                     )}
                     {rel.status === "draft" && (
                       <button
-                        onClick={() => router.push("/admin/upload")}
+                        onClick={() => router.push(`/admin/upload?draft=${rel.id}`)}
                         style={{
                           background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 6,
                           padding: "5px 10px", fontSize: 11, color: C.muted2, cursor: "pointer", fontFamily: "inherit",
                         }}
                       >
-                        New Upload
+                        Continue Draft
                       </button>
                     )}
                     {rel.status === "draft" && (
@@ -752,6 +785,12 @@ export default function AdminReleasesPage() {
           onClose={() => { setReplacingCover(null); loadReleases(); }}
         />
       )}
+      {undoDump ? (
+        <div role="status" style={{ position: "fixed", left: "50%", bottom: 26, transform: "translateX(-50%)", zIndex: 1000, display: "flex", alignItems: "center", gap: 18, background: "rgba(12,12,12,.96)", border: `1px solid ${C.accentBorder}`, boxShadow: "0 16px 50px rgba(0,0,0,.55)", borderRadius: 12, padding: "13px 16px", color: C.text, fontSize: 13 }}>
+          <span>Draft dumped</span>
+          <button type="button" onClick={undoDraftDump} style={{ background: "none", border: 0, color: C.accent, fontWeight: 900, cursor: "pointer", letterSpacing: ".06em" }}>UNDO</button>
+        </div>
+      ) : null}
     </div>
   );
 }
