@@ -5,13 +5,14 @@
 
 import { createClient } from "@supabase/supabase-js";
 
-const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } = process.env;
+const { SUPABASE_URL } = process.env;
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || "";
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required");
+if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) {
+  throw new Error("SUPABASE_URL and SUPABASE_SECRET_KEY are required");
 }
 
-export const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+export const db = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 

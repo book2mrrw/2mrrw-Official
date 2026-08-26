@@ -1,16 +1,16 @@
 /**
  * Read-only entitlements vs library_items parity (storefront Supabase).
  *
- *   E2E_SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \
+ *   E2E_SUPABASE_URL=... SUPABASE_SECRET_KEY=... \
  *   node scripts/check-entitlements-parity.mjs
  */
 import { createClient } from "@supabase/supabase-js";
 
 const url = process.env.E2E_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const key = process.env.E2E_SUPABASE_SECRET_KEY || process.env.SUPABASE_SECRET_KEY;
 
 if (!url || !key) {
-  console.error("Set E2E_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY");
+  console.error("Set E2E_SUPABASE_URL and SUPABASE_SECRET_KEY");
   process.exit(1);
 }
 

@@ -54,7 +54,7 @@ const CONTROLS_AUTOHIDE_MS     = 3000;
 
 function SeekBar({ currentTime, duration, buffered, onSeek }) {
   const barRef = useRef(null);
-  const dragging = useRef(false);
+  const [dragging, setDragging] = useState(false);
 
   const getTimeFromPointer = (e) => {
     const rect = barRef.current?.getBoundingClientRect();
@@ -65,16 +65,16 @@ function SeekBar({ currentTime, duration, buffered, onSeek }) {
 
   const onPointerDown = (e) => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    dragging.current = true;
+    setDragging(true);
     onSeek(getTimeFromPointer(e));
   };
   const onPointerMove = (e) => {
-    if (!dragging.current) return;
+    if (!dragging) return;
     onSeek(getTimeFromPointer(e));
   };
   const onPointerUp = (e) => {
-    if (!dragging.current) return;
-    dragging.current = false;
+    if (!dragging) return;
+    setDragging(false);
     onSeek(getTimeFromPointer(e));
     e.currentTarget.releasePointerCapture(e.pointerId);
   };
@@ -137,7 +137,7 @@ function SeekBar({ currentTime, duration, buffered, onSeek }) {
           background: "#fff",
           borderRadius: "50%",
           boxShadow: "0 0 4px rgba(0,0,0,0.6)",
-          transition: dragging.current ? "none" : "left 0.1s linear",
+          transition: dragging ? "none" : "left 0.1s linear",
         }} />
       </div>
     </div>

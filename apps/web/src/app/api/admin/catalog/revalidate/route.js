@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminOrCapability, requireServiceCapability, ServiceCapability } from "@/lib/auth/admin-api-guard";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 
@@ -12,7 +12,7 @@ export async function POST(req) {
   const validSecret = requireServiceCapability(req, ServiceCapability.CATALOG_REVALIDATE).ok;   // INV-ADMIN-3
 
   if (!validSecret) {
-    const user = await getFanSessionUser();
+    const user = await getAdminSessionUser();
     if (!user || !isAdminUser(user)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

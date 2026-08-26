@@ -37,28 +37,12 @@
  * The adapter class itself is importable without React.
  */
 
+import { useSyncExternalStore } from "react";
 import { StoreKey } from "../types/index.js";
 
 // ─── React import guard ──────────────────────────────────────────────────────
 // Lazy: resolved at hook call time, not at module parse time.
 // This lets the adapter class be imported and instantiated in Node tests.
-let _useSyncExternalStore = null;
-
-function _getUseSyncExternalStore() {
-  if (_useSyncExternalStore) return _useSyncExternalStore;
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const react = require("react");
-    _useSyncExternalStore = react.useSyncExternalStore;
-    return _useSyncExternalStore;
-  } catch {
-    throw new Error(
-      "[PlaybackCore] ReactPlaybackAdapter hooks require React 18+. " +
-      "Import this adapter only in React component trees."
-    );
-  }
-}
-
 // ─── Identity selector ───────────────────────────────────────────────────────
 const identity = (x) => x;
 
@@ -92,7 +76,6 @@ export class ReactPlaybackAdapter {
     const getSnapshot  = ()         => store.getSnapshot();
 
     return function useDomainStore(selector = identity) {
-      const useSyncExternalStore = _getUseSyncExternalStore();
       // useSyncExternalStore handles subscribe + getSnapshot.
       // The selector wraps getSnapshot to derive the value.
       // React compares selector results with ===; stable references skip re-renders.

@@ -18,7 +18,10 @@ export function useVisualAssets(releaseSlug, accountState = null) {
   const [assets, setAssets]     = useState(() => _readCache(releaseSlug) ?? []);
   const [isLoading, setLoading] = useState(false);
   const slugRef                 = useRef(releaseSlug);
-  slugRef.current               = releaseSlug;
+
+  useEffect(() => {
+    slugRef.current = releaseSlug;
+  }, [releaseSlug]);
 
   const fetch_ = useCallback(async (slug) => {
     if (!slug) return;

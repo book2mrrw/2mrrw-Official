@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
+import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
 import { geoNaturalEarth1, geoPath, geoGraticule } from "d3-geo";
 import { feature as topoFeature } from "topojson-client";
 import worldTopo from "world-atlas/countries-110m.json";
@@ -475,6 +477,7 @@ function WorldMap({ data, selectedCountry, onCountryClick, mapMode }) {
                 setTooltip({
                   px: e.clientX - rect.left,
                   py: e.clientY - rect.top,
+                  maxLeft: rect.width - 180,
                   name: countryName || "Unknown",
                   a2: a2 || null,
                   fans,
@@ -519,6 +522,7 @@ function WorldMap({ data, selectedCountry, onCountryClick, mapMode }) {
                 setTooltip({
                   px: e.clientX - rect.left,
                   py: e.clientY - rect.top,
+                  maxLeft: rect.width - 180,
                   name: `${dot.city}${dot.state ? `, ${dot.state}` : ""}`,
                   a2: NAME_TO_A2[dot.country] || null,
                   country: dot.country,
@@ -536,7 +540,7 @@ function WorldMap({ data, selectedCountry, onCountryClick, mapMode }) {
       {tooltip && (
         <div style={{
           position: "absolute",
-          left: Math.min(tooltip.px + 14, (svgRef.current?.getBoundingClientRect().width || 800) - 180),
+          left: Math.min(tooltip.px + 14, tooltip.maxLeft),
           top: Math.max(tooltip.py - 60, 8),
           background: C.surface3, border: `1px solid ${C.borderAccent}`,
           borderRadius: 10, padding: "10px 14px",
@@ -799,7 +803,7 @@ export default function AdminGlobalAnalytics() {
   useEffect(() => {
     const sb = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      SUPABASE_PUBLIC_KEY
     );
     sb.auth.getSession().then(({ data: d }) => {
       if ((d.session?.user?.email?.toLowerCase() || "") !== ADMIN_EMAIL) {
@@ -841,7 +845,7 @@ export default function AdminGlobalAnalytics() {
       }}>
         {/* Primary row */}
         <div style={{ maxWidth: 1400, margin: "0 auto", padding: pad, display: "flex", alignItems: "center", gap: 14, height: 50 }}>
-          <a href="/" style={{ fontSize: 12, fontWeight: 900, letterSpacing: 5, color: C.accent, textDecoration: "none" }}>2MRRW</a>
+          <Link href="/" style={{ fontSize: 12, fontWeight: 900, letterSpacing: 5, color: C.accent, textDecoration: "none" }}>2MRRW</Link>
           <div style={{ width: 1, height: 16, background: C.border, flexShrink: 0 }} />
           {!isMobile && <div style={{ fontSize: 12, color: C.muted, fontWeight: 500, whiteSpace: "nowrap" }}>Global Analytics</div>}
           {selectedCountry && (

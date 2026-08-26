@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { requireAdminActor } from "@/lib/auth/admin-api-guard";
 
 const siteUrl = () =>
   process.env.NEXT_PUBLIC_SITE_URL ||
@@ -13,8 +14,8 @@ function hashToken(raw) {
 
 export async function POST(req) {
   try {
-    const gate = await requireAdminActor();   // human administrator only
-  if (!gate.ok) {
+    const gate = await requireAdminActor(); // human administrator only
+    if (!gate.ok) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

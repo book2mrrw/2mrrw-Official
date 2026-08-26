@@ -21,7 +21,7 @@
  *
  * ── Usage — TERMINAL, not the SQL editor ────────────────────────────────────
  *
- *   SUPABASE_URL=...  SUPABASE_SERVICE_ROLE_KEY=...  node e1-otp-concurrency.mjs
+ *   SUPABASE_URL=...  SUPABASE_SECRET_KEY=...  node e1-otp-concurrency.mjs
  *
  * The service role key is required and appropriate here: this certifies a
  * server-side database function, it does not simulate an attacker. (The
@@ -35,10 +35,10 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
 const URL_BASE = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
-const SERVICE  = process.env.SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const SERVICE  = process.env.SUPABASE_SECRET_KEY || "";
 
 if (!URL_BASE || !SERVICE) {
-  console.error("\n  ABORT: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required\n");
+  console.error("\n  ABORT: SUPABASE_URL and SUPABASE_SECRET_KEY are required\n");
   process.exit(2);
 }
 

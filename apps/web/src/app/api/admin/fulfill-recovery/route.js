@@ -2,6 +2,7 @@
 import { getStripe } from "@/lib/commerce/stripe";
 import { fulfillPaymentIntent } from "@/lib/commerce/fulfill-purchase";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { requireAdminOrCapability, ServiceCapability } from "@/lib/auth/admin-api-guard";
 
 export async function POST(req) {
   const gate = await requireAdminOrCapability(req, ServiceCapability.FULFILL_RECOVERY);

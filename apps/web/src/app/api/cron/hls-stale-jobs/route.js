@@ -15,8 +15,10 @@
  * vercel.json schedule: every 10 minutes ("star/10 star star star star")
  */
 
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { emitServerEvent } from "@/lib/observability/server-events";
 
 const STALE_THRESHOLD_MINUTES = 15;
 const MAX_ATTEMPTS = 3;
@@ -28,6 +30,7 @@ function json(data, status = 200) {
 }
 
 export async function GET(req) {
+  const correlationId = req.headers.get("x-correlation-id") || crypto.randomUUID();
   // Vercel sets Authorization: Bearer <CRON_SECRET> on scheduled invocations.
   const auth = req.headers.get("authorization");
   const expected = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
@@ -47,7 +50,7 @@ export async function GET(req) {
     .lt("started_at", staleAfter);
 
   if (fetchErr) {
-    console.error("[cron/hls-stale-jobs] fetch error", fetchErr.message);
+    emitServerEvent("error", "hls_stale_job_discovery_failed", { correlationId }, fetchErr);
     return json({ error: fetchErr.message }, 500);
   }
 
@@ -92,11 +95,14 @@ export async function GET(req) {
   const errors  = results.filter((r) => r.error).map((r) => r.error.message);
 
   if (errors.length) {
-    console.error("[cron/hls-stale-jobs] update errors", errors);
+    emitServerEvent("error", "hls_stale_job_recovery_failed",
+      { correlationId, staleFound: staleJobs.length, errorCount: errors.length }, results.find((result) => result.error)?.error);
     return json({ error: errors.join("; ") }, 500);
   }
 
-  console.log(`[cron/hls-stale-jobs] stale=${staleJobs.length} rescued=${toRescue.length} escalated=${toEscalate.length}`);
+  emitServerEvent(toEscalate.length ? "warn" : "info", "hls_stale_job_recovery_completed",
+    { correlationId, staleFound: staleJobs.length, rescued: toRescue.length,
+      escalated: toEscalate.length, maxAttempts: MAX_ATTEMPTS });
 
   return json({
     staleFound: staleJobs.length,

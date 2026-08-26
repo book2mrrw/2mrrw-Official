@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { createR2SignedPutUrl } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
@@ -40,7 +40,7 @@ function buildR2Key(releaseType, slug, assetType, filename, trackSlug) {
 }
 
 export async function POST(req) {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

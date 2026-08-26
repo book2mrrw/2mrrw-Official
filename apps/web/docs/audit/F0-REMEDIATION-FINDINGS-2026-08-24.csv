@@ -1,0 +1,7 @@
+Finding,Repository Status,Production Status,Principal Evidence,Remaining Gate
+Inconsistent admin guarding,RESOLVED,VERIFY,"Canonical guard inventory tests F0-ADMIN-1/F0-ADMIN-2","Live AAL1 denial and AAL2 admission"
+102 lint errors,RESOLVED,VERIFY,"eslint exits 0 with 0 errors and 260 warnings","Browser and device regression"
+Account deletion orchestration,IMPLEMENTED,DISABLED,"Durable lifecycle saga and F0 certification suite","Schema certification; canaries; retention approval; explicit enablement"
+Disaster recovery proof,BLOCKED,BLOCKED,"DR runbook and fail-closed verifier","Supabase/R2/Stripe drill and measured RPO/RTO"
+Fragmented observability,IMPLEMENTED,VERIFY,"Structured correlated redacted server events across critical workflows","Central sink alerts and reconstruction drill"
+Nondurable bulk-gift limiter,RESOLVED,VERIFY,"Durable atomic fail-closed limiter tests F0-RATE-1/F0-RATE-3","Distributed production concurrency canary"

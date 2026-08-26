@@ -1,6 +1,5 @@
 ﻿import { NextResponse } from "next/server";
-import { getFanSessionUser } from "@/lib/auth/session-user";
-import { isAdminUser } from "@/lib/auth/constants";
+import { requireAdminOrCapability, ServiceCapability } from "@/lib/auth/admin-api-guard";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { resolvePlaybackKey } from "@/lib/playback/resolve-playback-key";
 import { getHybridStreamingFeatureFlags } from "@/lib/feature-flags";
@@ -17,10 +16,7 @@ export const maxDuration = 60;
  * value already locked behind Vercel's Sensitive-var write-only restriction.
  */
 async function isAuthorized(req) {
-  const secret = process.env.BACKFILL_TRIGGER_SECRET;
-  if (secret && req.headers.get("x-backfill-secret") === secret) return true;
-  const user = await getFanSessionUser();
-  return Boolean(user && isAdminUser(user));
+  return (await requireAdminOrCapability(req, ServiceCapability.PLAYBACK_BACKFILL)).ok;
 }
 
 export async function POST(req) {

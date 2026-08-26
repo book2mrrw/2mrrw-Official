@@ -1,0 +1,1194 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-26T01:55:23.609Z",
+  "sourceRoot": "src/app/api",
+  "total": 125,
+  "counts": {
+    "HUMAN_ADMIN": 29,
+    "SERVICE_ONLY": 17,
+    "ADMIN_OR_SERVICE_CAPABILITY": 5,
+    "AUTHENTICATED_USER": 23,
+    "PUBLIC": 51,
+    "DEAD": 0
+  },
+  "routes": [
+    {
+      "route": "/api/access/[token]",
+      "file": "src/app/api/access/[token]/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/account/lifecycle/[requestId]/download",
+      "file": "src/app/api/account/lifecycle/[requestId]/download/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/account/lifecycle",
+      "file": "src/app/api/account/lifecycle/route.js",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/account/state",
+      "file": "src/app/api/account/state/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/admin/analytics/global",
+      "file": "src/app/api/admin/analytics/global/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/analytics",
+      "file": "src/app/api/admin/analytics/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/apply-r2-cors",
+      "file": "src/app/api/admin/apply-r2-cors/route.js",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authority": "ADMIN_OR_SERVICE_CAPABILITY",
+      "evidence": "canonical human MFA guard or exact scoped service capability"
+    },
+    {
+      "route": "/api/admin/backfill-playback-keys",
+      "file": "src/app/api/admin/backfill-playback-keys/route.js",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authority": "ADMIN_OR_SERVICE_CAPABILITY",
+      "evidence": "canonical human MFA guard or exact scoped service capability"
+    },
+    {
+      "route": "/api/admin/catalog/hls-sync-trigger",
+      "file": "src/app/api/admin/catalog/hls-sync-trigger/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/catalog/ingest-trigger",
+      "file": "src/app/api/admin/catalog/ingest-trigger/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/catalog/r2-ingest",
+      "file": "src/app/api/admin/catalog/r2-ingest/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "exact scoped service capability"
+    },
+    {
+      "route": "/api/admin/catalog/revalidate",
+      "file": "src/app/api/admin/catalog/revalidate/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "ADMIN_OR_SERVICE_CAPABILITY",
+      "evidence": "canonical human MFA guard or exact scoped service capability"
+    },
+    {
+      "route": "/api/admin/collector-cards",
+      "file": "src/app/api/admin/collector-cards/route.js",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/diagnostics/entitlements-parity",
+      "file": "src/app/api/admin/diagnostics/entitlements-parity/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "exact scoped service capability"
+    },
+    {
+      "route": "/api/admin/diagnostics/mfa-expiration",
+      "file": "src/app/api/admin/diagnostics/mfa-expiration/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/fulfill-recovery",
+      "file": "src/app/api/admin/fulfill-recovery/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "ADMIN_OR_SERVICE_CAPABILITY",
+      "evidence": "canonical human MFA guard or exact scoped service capability"
+    },
+    {
+      "route": "/api/admin/genres",
+      "file": "src/app/api/admin/genres/route.js",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/gifts",
+      "file": "src/app/api/admin/gifts/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/hls/complete",
+      "file": "src/app/api/admin/hls/complete/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "exact scoped service capability"
+    },
+    {
+      "route": "/api/admin/hls/queue",
+      "file": "src/app/api/admin/hls/queue/route.js",
+      "methods": [
+        "DELETE",
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/hls/status",
+      "file": "src/app/api/admin/hls/status/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/livestream",
+      "file": "src/app/api/admin/livestream/route.js",
+      "methods": [
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/media-diagnostics",
+      "file": "src/app/api/admin/media-diagnostics/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/media/extract-poster",
+      "file": "src/app/api/admin/media/extract-poster/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/media/reconcile-catalog",
+      "file": "src/app/api/admin/media/reconcile-catalog/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/media/refresh-track",
+      "file": "src/app/api/admin/media/refresh-track/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/media/validate",
+      "file": "src/app/api/admin/media/validate/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/releases/[id]/draft",
+      "file": "src/app/api/admin/releases/[id]/draft/route.js",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/releases/[id]/publish",
+      "file": "src/app/api/admin/releases/[id]/publish/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/releases/[id]/replace-master",
+      "file": "src/app/api/admin/releases/[id]/replace-master/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/releases/[id]",
+      "file": "src/app/api/admin/releases/[id]/route.js",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/releases/[id]/status",
+      "file": "src/app/api/admin/releases/[id]/status/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/releases/draft",
+      "file": "src/app/api/admin/releases/draft/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/releases",
+      "file": "src/app/api/admin/releases/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/seed-products",
+      "file": "src/app/api/admin/seed-products/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "ADMIN_OR_SERVICE_CAPABILITY",
+      "evidence": "canonical human MFA guard or exact scoped service capability"
+    },
+    {
+      "route": "/api/admin/shows",
+      "file": "src/app/api/admin/shows/route.js",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/sync/catalog",
+      "file": "src/app/api/admin/sync/catalog/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "exact scoped service capability"
+    },
+    {
+      "route": "/api/admin/sync/drop-notification",
+      "file": "src/app/api/admin/sync/drop-notification/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "exact scoped service capability"
+    },
+    {
+      "route": "/api/admin/twitch/register",
+      "file": "src/app/api/admin/twitch/register/route.js",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/upload/complete",
+      "file": "src/app/api/admin/upload/complete/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/upload/presigned",
+      "file": "src/app/api/admin/upload/presigned/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/visual-assets",
+      "file": "src/app/api/admin/visual-assets/route.js",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/auth/complete-profile",
+      "file": "src/app/api/auth/complete-profile/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/auth/login-step1",
+      "file": "src/app/api/auth/login-step1/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/auth/login-step2",
+      "file": "src/app/api/auth/login-step2/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/auth/lookup-email",
+      "file": "src/app/api/auth/lookup-email/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/auth/lookup-phone",
+      "file": "src/app/api/auth/lookup-phone/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/auth/mfa-session",
+      "file": "src/app/api/auth/mfa-session/route.js",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/auth/signup",
+      "file": "src/app/api/auth/signup/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/catalog/exclusive-drops",
+      "file": "src/app/api/catalog/exclusive-drops/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/catalog/hydrate",
+      "file": "src/app/api/catalog/hydrate/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/catalog/releases",
+      "file": "src/app/api/catalog/releases/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/checkout/session",
+      "file": "src/app/api/checkout/session/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/collector-card/activate",
+      "file": "src/app/api/collector-card/activate/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/collector-card/verify",
+      "file": "src/app/api/collector-card/verify/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/collector/cards/claim",
+      "file": "src/app/api/collector/cards/claim/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/collector/cards",
+      "file": "src/app/api/collector/cards/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/collector/cards/verify",
+      "file": "src/app/api/collector/cards/verify/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/community/circle",
+      "file": "src/app/api/community/circle/route.js",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/community/comments",
+      "file": "src/app/api/community/comments/route.js",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/create-payment-intent",
+      "file": "src/app/api/create-payment-intent/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/cron/account-lifecycle",
+      "file": "src/app/api/cron/account-lifecycle/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    },
+    {
+      "route": "/api/cron/expire-gifts",
+      "file": "src/app/api/cron/expire-gifts/route.js",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    },
+    {
+      "route": "/api/cron/finalize-draft-dumps",
+      "file": "src/app/api/cron/finalize-draft-dumps/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    },
+    {
+      "route": "/api/cron/gift-reminders",
+      "file": "src/app/api/cron/gift-reminders/route.js",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    },
+    {
+      "route": "/api/cron/hls-stale-jobs",
+      "file": "src/app/api/cron/hls-stale-jobs/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    },
+    {
+      "route": "/api/cron/livestream-notifications",
+      "file": "src/app/api/cron/livestream-notifications/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    },
+    {
+      "route": "/api/cron/publish-scheduled",
+      "file": "src/app/api/cron/publish-scheduled/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    },
+    {
+      "route": "/api/cron/purge-stream-events",
+      "file": "src/app/api/cron/purge-stream-events/route.js",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    },
+    {
+      "route": "/api/donations/create-payment-intent",
+      "file": "src/app/api/donations/create-payment-intent/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/get-purchases",
+      "file": "src/app/api/get-purchases/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/gifts/bulk",
+      "file": "src/app/api/gifts/bulk/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/gifts/claim-signup",
+      "file": "src/app/api/gifts/claim-signup/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/gifts/claim/[token]",
+      "file": "src/app/api/gifts/claim/[token]/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/gifts/preview/[token]",
+      "file": "src/app/api/gifts/preview/[token]/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/gifts/purchase",
+      "file": "src/app/api/gifts/purchase/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/gifts/send",
+      "file": "src/app/api/gifts/send/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/gifts/sent",
+      "file": "src/app/api/gifts/sent/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/guest/session",
+      "file": "src/app/api/guest/session/route.js",
+      "methods": [
+        "DELETE",
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/library/hls/key",
+      "file": "src/app/api/library/hls/key/route.js",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/library/hls",
+      "file": "src/app/api/library/hls/route.js",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/library/hls/variant",
+      "file": "src/app/api/library/hls/variant/route.js",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/library",
+      "file": "src/app/api/library/route.js",
+      "methods": [
+        "GET",
+        "OPTIONS",
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/library/stream",
+      "file": "src/app/api/library/stream/route.js",
+      "methods": [
+        "DELETE",
+        "GET",
+        "HEAD",
+        "OPTIONS"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/media/playback",
+      "file": "src/app/api/media/playback/route.js",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/media/preview",
+      "file": "src/app/api/media/preview/route.js",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/media/visual-assets/[slug]",
+      "file": "src/app/api/media/visual-assets/[slug]/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/media/visual",
+      "file": "src/app/api/media/visual/route.js",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/memberships/checkout",
+      "file": "src/app/api/memberships/checkout/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/notifications",
+      "file": "src/app/api/notifications/route.js",
+      "methods": [
+        "GET",
+        "PATCH",
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/notifications/subscribe",
+      "file": "src/app/api/notifications/subscribe/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/notifications/unsubscribe",
+      "file": "src/app/api/notifications/unsubscribe/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/notifications/vapid-key",
+      "file": "src/app/api/notifications/vapid-key/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/ownership/check",
+      "file": "src/app/api/ownership/check/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/playback/events",
+      "file": "src/app/api/playback/events/route.js",
+      "methods": [
+        "OPTIONS",
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/playlists/[id]",
+      "file": "src/app/api/playlists/[id]/route.js",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/playlists/[id]/tracks",
+      "file": "src/app/api/playlists/[id]/tracks/route.js",
+      "methods": [
+        "DELETE",
+        "POST",
+        "PUT"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/playlists",
+      "file": "src/app/api/playlists/route.js",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/printful/products",
+      "file": "src/app/api/printful/products/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/public/events",
+      "file": "src/app/api/public/events/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/public/livestream",
+      "file": "src/app/api/public/livestream/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/public/vault",
+      "file": "src/app/api/public/vault/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/purchase/confirm",
+      "file": "src/app/api/purchase/confirm/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/purchases",
+      "file": "src/app/api/purchases/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/queue",
+      "file": "src/app/api/queue/route.js",
+      "methods": [
+        "GET",
+        "PUT"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/refund",
+      "file": "src/app/api/refund/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/register-user",
+      "file": "src/app/api/register-user/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/save-purchase",
+      "file": "src/app/api/save-purchase/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/shows",
+      "file": "src/app/api/shows/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/signal/active",
+      "file": "src/app/api/signal/active/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/signal/state",
+      "file": "src/app/api/signal/state/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/stream/end",
+      "file": "src/app/api/stream/end/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/stripe/webhook",
+      "file": "src/app/api/stripe/webhook/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    },
+    {
+      "route": "/api/tickets/checkout",
+      "file": "src/app/api/tickets/checkout/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/tickets/my",
+      "file": "src/app/api/tickets/my/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/vault/content",
+      "file": "src/app/api/vault/content/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/vault/media",
+      "file": "src/app/api/vault/media/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/vault/progress",
+      "file": "src/app/api/vault/progress/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/vault/video/captions",
+      "file": "src/app/api/vault/video/captions/route.js",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/vault/video/key",
+      "file": "src/app/api/vault/video/key/route.js",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/vault/video/manifest",
+      "file": "src/app/api/vault/video/manifest/route.js",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/vault/video/variant",
+      "file": "src/app/api/vault/video/variant/route.js",
+      "methods": [
+        "GET",
+        "OPTIONS"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/webhook",
+      "file": "src/app/api/webhook/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    },
+    {
+      "route": "/api/webhooks/stripe",
+      "file": "src/app/api/webhooks/stripe/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    },
+    {
+      "route": "/api/webhooks/twitch",
+      "file": "src/app/api/webhooks/twitch/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    }
+  ]
+}

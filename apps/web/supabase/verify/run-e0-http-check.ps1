@@ -1,7 +1,7 @@
 <#
   Runs the E0 end-to-end escalation check.
 
-  Reads NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY straight from
+  Reads NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY straight from
   apps/web/.env.production.pulled, so neither value has to be typed or pasted
   anywhere. Both are public-by-design (they ship in the client bundle).
 
@@ -42,7 +42,7 @@ function Get-EnvValue([string]$name) {
 # Parameter wins, then the env file. `vercel env pull` writes NAMES with empty
 # values for encrypted vars, so the file is frequently useless — hence -AnonKey.
 $url  = if ($Url)     { $Url }     else { Get-EnvValue 'NEXT_PUBLIC_SUPABASE_URL' }
-$anon = if ($AnonKey) { $AnonKey } else { Get-EnvValue 'NEXT_PUBLIC_SUPABASE_ANON_KEY' }
+$anon = if ($AnonKey) { $AnonKey } else { Get-EnvValue 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY' }
 
 if ([string]::IsNullOrWhiteSpace($url)) {
   Write-Host "ABORT: no Supabase URL. Pass -Url https://<project>.supabase.co" -ForegroundColor Red

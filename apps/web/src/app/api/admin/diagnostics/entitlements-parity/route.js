@@ -1,10 +1,10 @@
 ﻿import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { buildEntitlementsParityReport } from "@/lib/commerce/entitlements-parity";
+import { requireServiceCapability, ServiceCapability } from "@/lib/auth/admin-api-guard";
 
 function authorize(request) {
-  const secret = request.headers.get("x-admin-seed-secret") || request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  return requireServiceCapability(req, ServiceCapability.DIAGNOSTICS_READ).ok;   // INV-ADMIN-3
+  return requireServiceCapability(request, ServiceCapability.DIAGNOSTICS_READ).ok;
 }
 
 export async function GET(request) {

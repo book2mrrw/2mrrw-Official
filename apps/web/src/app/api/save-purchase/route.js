@@ -1,21 +1,13 @@
 import { NextResponse } from "next/server";
 import { retiredRouteGuard } from "@/lib/auth/retired-route";
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(req) {
   const retired = retiredRouteGuard("/api/save-purchase");
   if (retired) return retired;
 
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
-  }
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-
   try {
+    const supabase = getAdminClient();
     const { userId, items } = await req.json();
 
     if (!userId || !items?.length) {

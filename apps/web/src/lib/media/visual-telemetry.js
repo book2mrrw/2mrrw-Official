@@ -7,16 +7,12 @@
  * never throw — this module is safe to call from render error handlers.
  */
 
+import { telemetry } from "@/system/telemetry/telemetry";
+
 /** @type {() => import('@/system/telemetry/telemetry').telemetry | null} */
 function getTelemetry() {
   if (typeof window === "undefined") return null;
-  try {
-    // Lazy require avoids SSR import of PostHog adapter.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return require("@/system/telemetry/telemetry").telemetry;
-  } catch {
-    return null;
-  }
+  return telemetry;
 }
 
 // ── Event type constants ──────────────────────────────────────────────────────

@@ -24,10 +24,9 @@ const POLL_MS = 30_000; // check DB state every 30 seconds
  */
 export function LiveCountdownProvider({ targetDate, children }) {
   // Fallback target from prop (may be overridden by DB goes_live_at).
-  const _initialFallbackMs = targetDate instanceof Date
+  const [fallbackMs] = useState(() => targetDate instanceof Date
     ? targetDate.getTime()
-    : new Date(targetDate || Date.now()).getTime();
-  const fallbackMs = useRef(_initialFallbackMs);
+    : new Date(targetDate || Date.now()).getTime());
 
   const [dbState, setDbState] = useState({ isLive: false, goesLiveAt: null, channel: "callme2mrrw", title: "2MRRW Live" });
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
@@ -38,7 +37,7 @@ export function LiveCountdownProvider({ targetDate, children }) {
 
     async function fetchState() {
       try {
-        const res = await fetch("/api/admin/livestream", { cache: "no-store" });
+        const res = await fetch("/api/public/livestream", { cache: "no-store" });
         if (!res.ok) return;
         const json = await res.json();
         const b = json.broadcast;
@@ -64,7 +63,7 @@ export function LiveCountdownProvider({ targetDate, children }) {
   useEffect(() => {
     const targetMs = dbState.goesLiveAt
       ? new Date(dbState.goesLiveAt).getTime()
-      : fallbackMs.current;
+      : fallbackMs;
 
     const tick = () => setCountdown(computeCountdown(targetMs));
     tick();

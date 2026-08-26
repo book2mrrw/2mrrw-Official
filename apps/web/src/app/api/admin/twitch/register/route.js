@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import {
@@ -16,7 +16,7 @@ const BROADCASTER_LOGIN   = process.env.TWITCH_BROADCASTER_LOGIN || "callme2mrrw
 const WATCHED_EVENT_TYPES = ["stream.online", "stream.offline"];
 
 async function guard(req) {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) {
     return { user: null, err: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }

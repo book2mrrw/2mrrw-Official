@@ -13,7 +13,7 @@ export function useTrackHydration(trackIds = []) {
   const [tracks, setTracks] = useState([]);
   const [isHydrating, setIsHydrating] = useState(false);
   const [hydratedCount, setHydratedCount] = useState(0);
-  const controller = useAbortController([trackIds.join(",")]);
+  const controller = useAbortController(trackIds.join(","));
 
   const hydrate = useCallback(async (ids, signal) => {
     if (!ids?.length) {

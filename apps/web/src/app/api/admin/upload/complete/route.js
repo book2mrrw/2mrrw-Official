@@ -1,11 +1,13 @@
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { headR2ObjectKey } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 import { ADMIN_UPLOAD_CONTRACTS } from "@/lib/media/admin-upload-contract";
+import { emitServerEvent } from "@/lib/observability/server-events";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +26,8 @@ function buildHLSPrefix(releaseType, slug, trackSlug) {
 }
 
 export async function POST(req) {
-  const user = await getFanSessionUser();
+  const correlationId = req.headers.get("x-correlation-id") || crypto.randomUUID();
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -53,7 +56,8 @@ export async function POST(req) {
   try {
     exists = await headR2ObjectKey(key);
   } catch (err) {
-    console.error("[admin/upload/complete] HeadObject error", err?.message);
+    emitServerEvent("error", "admin_upload_storage_verification_failed",
+      { correlationId, releaseId, assetType, objectKey: key }, err);
     return NextResponse.json({ error: "R2 verification failed" }, { status: 502 });
   }
 
@@ -158,6 +162,7 @@ export async function POST(req) {
 
       console.info(`[admin/upload/complete] audio complete key=${key} trackId=${resolvedTrackId}`);
       revalidateStorefront();
+      emitServerEvent("info", "admin_upload_completed", { correlationId, releaseId, assetType, trackId: resolvedTrackId, hlsQueued: !hlsError });
       return NextResponse.json({ ok: true, assetType, trackId: resolvedTrackId, hlsQueued: !hlsError });
     }
 
@@ -187,6 +192,7 @@ export async function POST(req) {
 
       console.info(`[admin/upload/complete] cover complete key=${key} releaseId=${releaseId}`);
       revalidateStorefront();
+      emitServerEvent("info", "admin_upload_completed", { correlationId, releaseId, assetType });
       return NextResponse.json({ ok: true, assetType });
     }
 
@@ -212,6 +218,7 @@ export async function POST(req) {
       }
 
       revalidateStorefront();
+      emitServerEvent("info", "admin_upload_completed", { correlationId, releaseId, assetType });
       return NextResponse.json({ ok: true, assetType });
     }
 
@@ -225,12 +232,14 @@ export async function POST(req) {
       if (error) throw error;
 
       revalidateStorefront();
+      emitServerEvent("info", "admin_upload_completed", { correlationId, releaseId, assetType });
       return NextResponse.json({ ok: true, assetType });
     }
 
     return NextResponse.json({ error: "Unknown assetType" }, { status: 400 });
   } catch (err) {
-    console.error("[admin/upload/complete] DB error", err?.message);
+    emitServerEvent("error", "admin_upload_completion_failed",
+      { correlationId, releaseId, assetType }, err);
     return NextResponse.json({ error: "Failed to record upload completion" }, { status: 500 });
   }
 }

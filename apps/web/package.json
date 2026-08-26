@@ -21,10 +21,13 @@
     "recover:deploy": "node scripts/recovery/recover-deploy.mjs",
     "snapshot:foundation": "node scripts/recovery/create-frontend-snapshot.mjs",
     "recover:checkpoint": "node scripts/recovery/create-frontend-checkpoint.mjs",
+    "verify:dr-readiness": "node scripts/recovery/verify-platform-dr-readiness.mjs",
     "test:batch1": "node --import ./scripts/register-alias.mjs scripts/test-batch1-regression.mjs",
     "test:core-invariants": "node --test src/lib/playback-core/__tests__/invariants.test.js",
-    "test:admin-upload": "node --test src/lib/media/__tests__/admin-upload-hardening.test.js"
-    ,"test:release-lifecycle": "node --test src/lib/releases/__tests__/release-availability.test.js"
+    "test:admin-upload": "node --test src/lib/media/__tests__/admin-upload-hardening.test.js",
+    "test:release-lifecycle": "node --test src/lib/releases/__tests__/release-availability.test.js",
+    "test:auth-security": "node --import ./scripts/register-alias.mjs --test src/lib/auth/__tests__/*.test.js",
+    "test:playback-physical": "node --experimental-loader ./src/lib/playback-core/__tests__/physical/alias-loader.mjs --test src/lib/playback-core/__tests__/physical/differential.test.mjs src/lib/playback-core/__tests__/physical/hardening-b.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1051.0",

@@ -448,9 +448,11 @@ export function AuthProvider({ children }) {
     [invalidateEntitlementSnapshot, refreshAccountState]
   );
 
-  applySessionUserRef.current = applySessionUser;
-  refreshAccountStateRef.current = refreshAccountState;
-  refreshGuestRef.current = refreshGuest;
+  useEffect(() => {
+    applySessionUserRef.current = applySessionUser;
+    refreshAccountStateRef.current = refreshAccountState;
+    refreshGuestRef.current = refreshGuest;
+  }, [applySessionUser, refreshAccountState, refreshGuest]);
 
   useEffect(() => {
     let mounted = true;
@@ -552,6 +554,11 @@ export function AuthProvider({ children }) {
 
 
   const signOut = useCallback(async () => {
+    try {
+      await fetch("/api/auth/mfa-session", { method: "DELETE", credentials: "include" });
+    } catch {
+      /* next guard still fails because the Supabase session binding disappears */
+    }
     try {
       await authSignOut();
     } catch {

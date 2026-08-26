@@ -173,7 +173,10 @@ function LoginForm() {
       verifyFlightRef.current = false;
       setLoading(false);
     }
-  }, [code, loading, applySessionUser, router, nextPath]);
+  }, [
+    code, loading, applySessionUser, router, nextPath,
+    setDigits, setError, setLoading, setMode, setPassword,
+  ]);
 
   // Auto-submit when all digits filled
   useEffect(() => {

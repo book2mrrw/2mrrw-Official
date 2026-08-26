@@ -13,7 +13,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 
@@ -24,7 +24,7 @@ function json(data, status = 200) {
 const JOB_STATUSES = ["pending", "processing", "complete", "failed", "cancelled"];
 
 export async function GET(req) {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) return json({ error: "Forbidden" }, 403);
 
   const { searchParams } = req.nextUrl;

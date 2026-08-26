@@ -1103,24 +1103,36 @@ function PageStorefront({ initialEvents }) {
   // current value without capturing stale closures or adding modal booleans
   // to useCallback deps (which would recreate the callback on every open/close).
   const previewModalOpenRef = useRef(false);
-  previewModalOpenRef.current = previewModalOpen;
   const featureModalOpenRef = useRef(false);
-  featureModalOpenRef.current = featureModalOpen;
   const albumModalOpenRef = useRef(false);
-  albumModalOpenRef.current = albumModalOpen;
 
   // Mirror mutable state into refs so stable callbacks can read current values
   // without capturing state in their deps (which would recreate them on every change).
   const mobileNavOpenRef = useRef(false);
-  mobileNavOpenRef.current = mobileNavOpen;
   const mobileNavClosingRef = useRef(false);
-  mobileNavClosingRef.current = mobileNavClosing;
   const selectedAlbumRef = useRef(null);
-  selectedAlbumRef.current = selectedAlbum;
   const cartRef = useRef([]);
-  cartRef.current = cart;
   const inventoryRef = useRef({});
-  inventoryRef.current = inventory;
+
+  useEffect(() => {
+    previewModalOpenRef.current = previewModalOpen;
+    featureModalOpenRef.current = featureModalOpen;
+    albumModalOpenRef.current = albumModalOpen;
+    mobileNavOpenRef.current = mobileNavOpen;
+    mobileNavClosingRef.current = mobileNavClosing;
+    selectedAlbumRef.current = selectedAlbum;
+    cartRef.current = cart;
+    inventoryRef.current = inventory;
+  }, [
+    albumModalOpen,
+    cart,
+    featureModalOpen,
+    inventory,
+    mobileNavClosing,
+    mobileNavOpen,
+    previewModalOpen,
+    selectedAlbum,
+  ]);
 
   const normalizedSelectedAlbum = useMemo(() => {
     if (!selectedAlbum) return null;
@@ -2036,11 +2048,11 @@ function PageStorefront({ initialEvents }) {
         setMobileNavExpandedGroups(new Set());
       }
     });
-  }, []);
+  }, [setActiveTab]);
 
   const openCollection = useCallback(() => {
     switchTab("mymusic");
-  }, []);
+  }, [switchTab]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;

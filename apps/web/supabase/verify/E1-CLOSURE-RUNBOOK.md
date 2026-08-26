@@ -1,5 +1,22 @@
 # E1 closure runbook
 
+> **Authoritative architecture update — 2026-08-23**
+>
+> The possession-proof guest flow described later in this historical record was
+> superseded by `GUEST-MECHANISM-REMOVAL-PLAN.md`. The platform admits registered
+> identities only. `POST /api/guest/session`, `/api/gifts/redeem`, guest creation
+> helpers, and `guest-proof.js` remain deliberately absent. The surviving guest
+> endpoint is read/clear-only while legacy cookies age out. Reintroducing guest
+> credential minting would violate INV-ID-1 and INV-ID-2. Login OTP remains the
+> registered-user MFA path and uses exact-challenge atomic consumption.
+>
+> The E1 application code reached production on 2026-08-23 in deployment
+> `dpl_CK1UVxbpiRfv4A43vA4NPeaB3FmS`. Current local certification is 158/158
+> auth/security tests and 142/142 Playback Core invariant tests. Production
+> behavior checks, MFA enrollment/recovery verification, required-MFA cutover,
+> E0 live recertification, and service-role rotation remain operator-controlled
+> closure gates; they must not be inferred from an application deployment.
+
 Status as of 2026-08-22, after live certification of the database layer.
 
 | Step | State |
@@ -503,6 +520,21 @@ update every consumer:
 
 Rotation is not optional cleanup — that key bypasses every RLS policy E0 and E1
 established, which is precisely why it was the credential able to run Step 3.
+
+### 2026-08-26 application cutover evidence
+
+- Web runtime now requires `SUPABASE_SECRET_KEY` in production and does not fall
+  back to `SUPABASE_SERVICE_ROLE_KEY`.
+- Vercel Production removed `SUPABASE_SERVICE_ROLE_KEY` and deployment
+  `dpl_HbYTKVGzh8629yuEhZa2DYVRzQHF` reached READY.
+- Live Supabase-backed events, shows, and vault routes returned HTTP 200 after
+  removal; an unauthenticated admin route remained denied with HTTP 401.
+- Fly HLS worker version 19 has only `SUPABASE_SECRET_KEY`; the legacy secret was
+  removed and the worker remained healthy with normal queue polling.
+- Provider closure: the project operator disabled the legacy API keys in the
+  Supabase dashboard on 2026-08-26. Post-deactivation web canaries passed and Fly
+  HLS worker version 19 remained healthy without authentication errors. The final
+  legacy-key-free Vercel deployment is `dpl_5HmGDQC3KiycVDP5QrRNiPUpbBDz`.
 
 ---
 

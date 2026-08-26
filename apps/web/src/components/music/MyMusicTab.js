@@ -865,13 +865,13 @@ function MyMusicTab({
     } catch {
       setDownloadProgress((prev) => ({ ...prev, [item.slug]: "error" }));
     }
-  }, [user?.id]);
+  }, [user]);
 
   const handleRemoveDownload = useCallback((slug) => {
     if (!user?.id || !slug) return;
     removeOfflineCache(user.id, slug);
     setDownloadProgress((prev) => ({ ...prev, [slug]: "idle" }));
-  }, [user?.id]);
+  }, [user]);
 
   useEffect(() => {
     if (user && !loading) {

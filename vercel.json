@@ -4,6 +4,7 @@
   "installCommand": "cd apps/web && npm install --legacy-peer-deps",
   "crons": [
     { "path": "/api/cron/publish-scheduled", "schedule": "* * * * *" },
-    { "path": "/api/cron/finalize-draft-dumps", "schedule": "* * * * *" }
+    { "path": "/api/cron/finalize-draft-dumps", "schedule": "* * * * *" },
+    { "path": "/api/cron/account-lifecycle", "schedule": "*/5 * * * *" }
   ]
 }

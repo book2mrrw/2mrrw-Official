@@ -1,13 +1,13 @@
 ﻿import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 async function guard(req) {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) return { user: null, err: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
 
   const rl = await checkRateLimit(req, {

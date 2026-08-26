@@ -263,6 +263,17 @@ describe("INV-ENT-5: webhook delivery never depends on redirects", () => {
       assert.match(src, /handleStripeWebhook\(req\)/);
     });
   }
+
+  test("E4.1 idempotency authority failure is retryable and fail-closed", () => {
+    const handler = read("lib/commerce/handle-stripe-webhook.js");
+    assert.match(handler, /stripe_webhook_idempotency_claim_failed/);
+    assert.match(handler, /Webhook idempotency authority unavailable/);
+    assert.match(handler, /status:\s*503/);
+    assert.ok(
+      !/idempotency claim failed \(proceeding\)/.test(handler),
+      "fulfillment must never proceed without a durable event claim"
+    );
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 ﻿import { getAdminClient } from "@/lib/supabase/admin";
 import { isCollectorAccessSlug, isMissingCollectorOwnershipsTable, isMissingSupabaseTable, isVaultPassSlug } from "@/lib/commerce/entitlements";
 import { invalidateUserEntitlementCache } from "@/lib/server/entitlement-cache";
+import { emitServerEvent } from "@/lib/observability/server-events";
 
 const MEMBERSHIP_PRODUCT_SLUGS = new Set([
   "inner_circle_membership",
@@ -88,6 +89,12 @@ export async function revokeExtendedEntitlementsForPurchase({ purchaseId, userId
   // Revoke succeeded: wipe tier + per-slug cache for affected slugs so the next
   // play event re-derives access from DB rather than serving a stale grant.
   invalidateUserEntitlementCache(userId, normalizedSlugs).catch(() => {});
+
+  emitServerEvent("warn", "purchase_entitlements_revoked", {
+    purchaseId, userId, slugCount: normalizedSlugs.length,
+    collectorRevoked: collector.revoked || 0, vaultRevoked: vault.revoked || 0,
+    membershipRevoked: membership.revoked === true,
+  });
 
   return {
     entitlements,

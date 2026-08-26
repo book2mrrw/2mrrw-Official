@@ -1,6 +1,6 @@
 ﻿import { NextResponse, after } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import {
@@ -20,7 +20,7 @@ let _lastTwitchSyncMs = 0;
 const TWITCH_SYNC_COOLDOWN_MS = 55_000;
 
 async function guardAdmin(req) {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) {
     return { user: null, err: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
@@ -29,8 +29,10 @@ async function guardAdmin(req) {
   return { user, err: null };
 }
 
-// Public — clients poll to get current live state and countdown target.
-export async function GET() {
+// Admin read. Public clients use /api/public/livestream.
+export async function GET(req) {
+  const { err } = await guardAdmin(req);
+  if (err) return err;
   try {
     const admin = getAdminClient();
     const broadcast = await getCurrentBroadcast(admin);

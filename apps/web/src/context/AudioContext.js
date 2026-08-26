@@ -3,6 +3,8 @@
 import {
   createContext,
   useContext,
+  useEffect,
+  useLayoutEffect,
   useMemo,
   useSyncExternalStore,
   memo,
@@ -65,9 +67,12 @@ export function AudioProvider({ children }) {
   // All thin delegates — stable useMemo identity, [] deps throughout.
   const delegates = usePlaybackDelegates(helperServiceRef, commandServiceRef);
 
-  // Compress 140-line dep listings to 2 lines. Services read live deps at call time.
-  helperServiceRef.current.updateDeps({ ...refs });
-  commandServiceRef.current.updateDeps({ ...refs, ...delegates });
+  // Commit live service dependencies before descendant passive effects or user
+  // events can execute. Render stays pure and aborted renders cannot publish deps.
+  useLayoutEffect(() => {
+    helperServiceRef.current.updateDeps({ ...refs });
+    commandServiceRef.current.updateDeps({ ...refs, ...delegates });
+  });
 
   // Public-facing API callbacks (non-delegate; may do logging + gesture unlock).
   const publicApi = usePlaybackPublicApi({ refs, delegates });
@@ -141,7 +146,8 @@ export function AudioProvider({ children }) {
   ]);
 
   // ─── Debug Render Trace (dev/trace only) ─────────────────────────────────────
-  if (isPlaybackTraceEnabled()) {
+  useEffect(() => {
+    if (!isPlaybackTraceEnabled()) return;
     renderCountRef.current += 1;
     if (state.isPlaying && audioRef.current?.paused) {
       console.warn("[PLAYBACK-DESYNC] render: state.isPlaying but audio.paused", {
@@ -181,7 +187,7 @@ export function AudioProvider({ children }) {
     } else if (changed.length > 0 || renderCountRef.current <= 2) {
       logAudioProviderRender({ renderCount: renderCountRef.current, reasonGuess, changed, deps });
     }
-  }
+  });
 
   return (
     <AudioContext.Provider value={value}>

@@ -2,7 +2,7 @@
  * P1.11 / P4 — Purchase → library_items → entitlements → stream gate (logic + optional live DB + HTTP).
  *
  * Live DB:
- *   E2E_SUPABASE_URL=... E2E_SUPABASE_SERVICE_ROLE_KEY=... \
+ *   E2E_SUPABASE_URL=... E2E_SUPABASE_SECRET_KEY=... \
  *   E2E_USER_ID=... E2E_PRODUCT_SLUG=hour-glass-digital \
  *   node scripts/test-library-stream-e2e.mjs
  *
@@ -14,7 +14,7 @@ import assert from "node:assert/strict";
 import { createClient } from "@supabase/supabase-js";
 
 const url = process.env.E2E_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const key = process.env.E2E_SUPABASE_SECRET_KEY || process.env.SUPABASE_SECRET_KEY;
 const userId = process.env.E2E_USER_ID;
 const productSlug = process.env.E2E_PRODUCT_SLUG;
 const streamBase = (process.env.E2E_STREAM_BASE_URL || "").replace(/\/+$/, "");

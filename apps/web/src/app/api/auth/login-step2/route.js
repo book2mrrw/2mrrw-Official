@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import crypto from "crypto";
 import { cookies } from "next/headers";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { issueMfaAuthority, revokeCurrentMfaAuthority } from "@/lib/auth/mfa-authority";
 
 export const dynamic = "force-dynamic";
 
@@ -141,7 +142,19 @@ export async function POST(req) {
       );
     }
 
-    return NextResponse.json({ ok: true, session: sessionData.session });
+    try {
+      await issueMfaAuthority({ userId: user_id, session: sessionData.session });
+    } catch (authorityError) {
+      await revokeCurrentMfaAuthority("issue_failed").catch(() => {});
+      await supabase.auth.signOut().catch(() => {});
+      console.error("[login-step2] MFA authority:", authorityError?.message);
+      return NextResponse.json(
+        { error: "Could not establish verified session. Please log in again.", expired: true },
+        { status: 503 }
+      );
+    }
+
+    return NextResponse.json({ ok: true, mfaVerified: true });
   } catch (err) {
     console.error("[login-step2]", err?.message);
     return NextResponse.json({ error: "Verification failed" }, { status: 500 });

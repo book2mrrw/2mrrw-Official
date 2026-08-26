@@ -4,6 +4,7 @@ import { normalizeStoragePathForStorefront } from "@/lib/sync/normalize-storage-
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { isAutoGenerateStreamAssetsEnabled } from "@/lib/feature-flags";
 import { maybeGenerateStreamAfterCatalogSync } from "@/lib/media/stream-upload-pipeline";
+import { requireServiceCapability, ServiceCapability } from "@/lib/auth/admin-api-guard";
 
 function authorize(req) {
   return requireServiceCapability(req, ServiceCapability.CATALOG_SYNC).ok;   // INV-ADMIN-3

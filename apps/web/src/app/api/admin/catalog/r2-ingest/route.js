@@ -15,6 +15,7 @@ import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { runR2Ingest } from "@/lib/catalog/r2-ingest-pipeline";
+import { requireServiceCapability, ServiceCapability } from "@/lib/auth/admin-api-guard";
 
 function authorize(req) {
   return requireServiceCapability(req, ServiceCapability.CATALOG_INGEST).ok;   // INV-ADMIN-3

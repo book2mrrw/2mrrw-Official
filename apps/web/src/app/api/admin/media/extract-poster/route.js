@@ -27,7 +27,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getPublicR2Url } from "@/lib/storage/r2";
@@ -39,7 +39,7 @@ function json(data, status = 200) {
 export const dynamic = "force-dynamic";
 
 export async function POST(req) {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) return json({ error: "Forbidden" }, 403);
 
   let body;

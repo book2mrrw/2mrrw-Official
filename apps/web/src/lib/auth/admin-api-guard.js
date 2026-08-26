@@ -40,7 +40,7 @@
 
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
-import { requireMfaAssurance } from "@/lib/auth/assurance";
+import { verifyMfaAuthority } from "@/lib/auth/mfa-authority";
 import crypto from "crypto";
 
 /**
@@ -56,6 +56,9 @@ export const ServiceCapability = Object.freeze({
   DIAGNOSTICS_READ:  "SVC_DIAGNOSTICS_SECRET",
   PRODUCT_SEED:      "SVC_PRODUCT_SEED_SECRET",
   FULFILL_RECOVERY:  "SVC_FULFILL_RECOVERY_SECRET",
+  HLS_COMPLETE:      "HLS_WORKER_API_TOKEN",
+  R2_CORS_CONFIGURE: "SVC_R2_CORS_SECRET",
+  PLAYBACK_BACKFILL: "SVC_PLAYBACK_BACKFILL_SECRET",
 });
 
 /** Constant-time compare that tolerates a length mismatch without throwing. */
@@ -101,9 +104,9 @@ export function requireServiceCapability(req, capability) {
  * Human administrator: real session, not a guest, in admin_principals, and
  * meeting the MFA assurance policy.
  *
- * @returns {Promise<{ ok:boolean, user?:object, assurance?:object, reason?:string }>}
+ * @returns {Promise<{ ok:boolean, user?:object, mfa?:object, reason?:string }>}
  */
-export async function requireAdminActor() {
+export async function requireAdminActor({ recentSeconds = null } = {}) {
   const user = await getFanSessionUser();
   if (!user) return { ok: false, reason: "no_session" };
 
@@ -115,10 +118,23 @@ export async function requireAdminActor() {
 
   // INV-AUTH-1 / INV-AUTH-2 — assurance comes from the provider, so a session
   // obtained through the raw password grant cannot satisfy it.
-  const mfa = await requireMfaAssurance();
-  if (!mfa.ok) return { ok: false, reason: mfa.reason, assurance: mfa.assurance, user };
+  const mfa = await verifyMfaAuthority({ userId: user.id, recentSeconds });
+  if (!mfa.ok) return { ok: false, reason: mfa.reason, mfa, user };
 
-  return { ok: true, user, assurance: mfa.assurance, via: "admin_session" };
+  return { ok: true, user, mfa, via: "admin_session" };
+}
+
+/**
+ * Compatibility adapter for route handlers that historically expected a user
+ * object or null. It preserves that narrow contract while routing every human
+ * admin decision through the canonical identity + MFA boundary above.
+ *
+ * New routes should prefer requireAdminActor() so they can retain the denial
+ * reason and assurance details.
+ */
+export async function getAdminSessionUser(options) {
+  const gate = await requireAdminActor(options);
+  return gate.ok ? gate.user : null;
 }
 
 /**

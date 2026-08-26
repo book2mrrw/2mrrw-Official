@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import {
   VISUAL_ASSET_TYPES,
   VISUAL_PLAYBACK_MODES,
   VISUAL_INTERACTIONS,
   VISUAL_ENTITLEMENT_TIERS,
 } from "@/lib/media/visual-asset-schema";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -20,18 +19,14 @@ export const dynamic = "force-dynamic";
  * mutable, re-assignable attribute and bypassing isAdminUser() entirely.
  * Authority now resolves through the single admin authority path.
  *
- * Also switched from getSession() to getFanSessionUser(), which uses
+ * Also switched from getSession() to getAdminSessionUser(), which uses
  * supabase.auth.getUser() — the session is re-verified against the auth server
  * rather than trusted from the cookie payload.
  */
-async function requireAdmin(cookieStore) {
-  const user = await getFanSessionUser();
+async function requireAdmin() {
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) return null;
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    { cookies: { getAll: () => cookieStore.getAll() } }
-  );
+  return getAdminClient();
 }
 
 /**
@@ -39,8 +34,7 @@ async function requireAdmin(cookieStore) {
  * Returns all (including inactive) visual assets for a release.
  */
 export async function GET(req) {
-  const cookieStore = await cookies();
-  const sb = await requireAdmin(cookieStore);
+  const sb = await requireAdmin();
   if (!sb) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
   const releaseSlug = req.nextUrl.searchParams.get("release_slug");
@@ -62,8 +56,7 @@ export async function GET(req) {
  * Create a new visual asset row.
  */
 export async function POST(req) {
-  const cookieStore = await cookies();
-  const sb = await requireAdmin(cookieStore);
+  const sb = await requireAdmin();
   if (!sb) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
   const body = await req.json().catch(() => null);
@@ -116,8 +109,7 @@ export async function POST(req) {
  * Update an existing visual asset row (partial update).
  */
 export async function PATCH(req) {
-  const cookieStore = await cookies();
-  const sb = await requireAdmin(cookieStore);
+  const sb = await requireAdmin();
   if (!sb) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
   const id = req.nextUrl.searchParams.get("id");
@@ -154,8 +146,7 @@ export async function PATCH(req) {
  * Hard-delete a visual asset row.
  */
 export async function DELETE(req) {
-  const cookieStore = await cookies();
-  const sb = await requireAdmin(cookieStore);
+  const sb = await requireAdmin();
   if (!sb) return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
 
   const id = req.nextUrl.searchParams.get("id");

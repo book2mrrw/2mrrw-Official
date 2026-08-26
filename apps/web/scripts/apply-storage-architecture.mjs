@@ -14,7 +14,7 @@ const env = Object.fromEntries(
 );
 
 const manifest = JSON.parse(readFileSync("storage/digital-assets.manifest.json", "utf8"));
-const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY);
 const bucket = supabase.storage.from(manifest.bucket);
 
 const uploaded = [];

@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getProductCatalog } from "@/lib/commerce/catalog";
+import { requireAdminOrCapability, ServiceCapability } from "@/lib/auth/admin-api-guard";
 
 export async function POST(req) {
   const gate = await requireAdminOrCapability(req, ServiceCapability.PRODUCT_SEED);

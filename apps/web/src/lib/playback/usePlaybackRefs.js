@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useMemo, useSyncExternalStore } from "react";
-import { getAudioEngineRefs, isBrowserPlaybackEnvironment } from "@/lib/playback/audio-engine-runtime";
+import { getAudioEngineRefs } from "@/lib/playback/audio-engine-runtime";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
 import { createPlaybackCommands } from "@/lib/playback/PlaybackCommandService";
 import { createPlaybackHelpers } from "@/lib/playback/PlaybackHelperService";
@@ -17,10 +17,6 @@ import { playbackStateMachine } from "@/media/PlaybackStateMachine";
  */
 export function usePlaybackRefs() {
   // ─── Audio Engine Refs (singleton, sourced from WebAudioEngine) ──────────────
-  const engineRefsRef = useRef(null);
-  if (!engineRefsRef.current || isBrowserPlaybackEnvironment()) {
-    engineRefsRef.current = getAudioEngineRefs();
-  }
   const {
     audioRef,
     queueRef,
@@ -46,7 +42,7 @@ export function usePlaybackRefs() {
     tracePlaybackRef,
     commandHandlersRef,
     hlsEngineRef,
-  } = engineRefsRef.current;
+  } = getAudioEngineRefs();
 
   // ─── SM Context Getter Proxy ─────────────────────────────────────────────────
   // Always-live, never stale — replaces useRef(EMPTY_STATE) + sync useEffect.
@@ -54,10 +50,10 @@ export function usePlaybackRefs() {
 
   // ─── Playback Services ───────────────────────────────────────────────────────
   const commandServiceRef = useRef(null);
-  if (!commandServiceRef.current) commandServiceRef.current = createPlaybackCommands({});
+  if (commandServiceRef.current == null) commandServiceRef.current = createPlaybackCommands({});
 
   const helperServiceRef = useRef(null);
-  if (!helperServiceRef.current) helperServiceRef.current = createPlaybackHelpers({});
+  if (helperServiceRef.current == null) helperServiceRef.current = createPlaybackHelpers({});
 
   // ─── CS (Cinematic Session) Refs ─────────────────────────────────────────────
   const csImgRef = useRef(null);

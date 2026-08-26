@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 // Returns full release detail for the inline editor.
 // Falls through: releases table first (wizard uploads), then products table (catalog).
 export async function GET(req, { params }) {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -148,7 +148,7 @@ export async function GET(req, { params }) {
 // Body: { title?, price?, genre?, release_date?, track_lyrics? [{id, lyrics}] }
 // Handles both wizard releases (releases table) and catalog products (products table).
 export async function PATCH(req, { params }) {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -325,7 +325,7 @@ export async function PATCH(req, { params }) {
 // Catalog products (source=catalog): sets active=false (takedown, preserves purchase history).
 // Query param: ?source=catalog to force catalog path when id is a product id.
 export async function DELETE(req, { params }) {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser({ recentSeconds: 15 * 60 });
   if (!user || !isAdminUser(user)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

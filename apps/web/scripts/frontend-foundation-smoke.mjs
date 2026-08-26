@@ -5,9 +5,10 @@
 
 import { readFileSync, existsSync } from "node:fs";
 import { execSync } from "node:child_process";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 let failures = 0;
 
 function fail(message) {

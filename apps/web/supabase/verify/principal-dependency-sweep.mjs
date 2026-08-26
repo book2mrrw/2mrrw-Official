@@ -35,9 +35,9 @@ import fs from "node:fs";
 import path from "node:path";
 
 const URL_BASE = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const SERVICE = process.env.SUPABASE_SECRET_KEY || "";
 if (!URL_BASE || !SERVICE) {
-  console.error("\n  ABORT: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required\n");
+  console.error("\n  ABORT: SUPABASE_URL and SUPABASE_SECRET_KEY are required\n");
   process.exit(2);
 }
 const db = createClient(URL_BASE, SERVICE, { auth: { persistSession: false } });

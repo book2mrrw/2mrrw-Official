@@ -1,5 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/commerce/stripe";
+import crypto from "node:crypto";
+import { emitServerEvent } from "@/lib/observability/server-events";
 import { fulfillCheckoutSession, fulfillPaymentIntent } from "@/lib/commerce/fulfill-purchase";
 import { revokeExtendedEntitlementsForPurchase } from "@/lib/commerce/revoke-entitlements";
 import {
@@ -112,6 +114,7 @@ async function revokePurchaseByPaymentIntent(paymentIntentId) {
  * Legacy aliases: /api/webhooks/stripe, /api/stripe/webhook
  */
 export async function handleStripeWebhook(req) {
+  const correlationId = req.headers.get("x-correlation-id") || crypto.randomUUID();
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret) {
     console.error(`${LOG_PREFIX} STRIPE_WEBHOOK_SECRET is not set`);
@@ -133,11 +136,11 @@ export async function handleStripeWebhook(req) {
   try {
     event = getStripe().webhooks.constructEvent(body, sig, secret);
   } catch (err) {
-    console.error(`${LOG_PREFIX} signature verification failed:`, err.message);
+    emitServerEvent("warn", "stripe_webhook_signature_rejected", { correlationId });
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  console.log(`${LOG_PREFIX} received`, event.id, event.type);
+  emitServerEvent("info", "stripe_webhook_received", { correlationId, stripeEventId: event.id, stripeEventType: event.type });
 
   const admin = getAdminClient();
 
@@ -149,11 +152,16 @@ export async function handleStripeWebhook(req) {
     .insert({ event_id: event.id });
 
   if (claimError?.code === "23505") {
-    console.log(`${LOG_PREFIX} duplicate event skipped`, event.id, event.type);
+    emitServerEvent("info", "stripe_webhook_duplicate", { correlationId, stripeEventId: event.id, stripeEventType: event.type });
     return NextResponse.json({ received: true, duplicate: true, eventId: event.id, type: event.type });
   }
   if (claimError) {
-    console.warn(`${LOG_PREFIX} idempotency claim failed (proceeding):`, event.id, claimError.message);
+    emitServerEvent("error", "stripe_webhook_idempotency_claim_failed",
+      { correlationId, stripeEventId: event.id, stripeEventType: event.type }, claimError);
+    return NextResponse.json(
+      { error: "Webhook idempotency authority unavailable", eventId: event.id, type: event.type },
+      { status: 503 }
+    );
   }
 
   try {
@@ -316,7 +324,8 @@ export async function handleStripeWebhook(req) {
         console.log(`${LOG_PREFIX} ignored event type: ${event.type}`);
     }
   } catch (err) {
-    console.error(`${LOG_PREFIX} handler error`, event.id, event.type, err.message, err.stack);
+    emitServerEvent("error", "stripe_webhook_processing_failed",
+      { correlationId, stripeEventId: event.id, stripeEventType: event.type }, err);
     // Roll back the claim so Stripe can retry this event.
     await admin.from("processed_stripe_events").delete().eq("event_id", event.id);
     return NextResponse.json(
@@ -325,6 +334,7 @@ export async function handleStripeWebhook(req) {
     );
   }
 
+  emitServerEvent("info", "stripe_webhook_processed", { correlationId, stripeEventId: event.id, stripeEventType: event.type });
   return NextResponse.json({ received: true, eventId: event.id, type: event.type });
 }
 

@@ -83,7 +83,11 @@ export async function checkRateLimit(req, {
   limit = 20,
   windowSeconds = 60,
   identifier,
+  failureMode = "open",
 }) {
+  if (failureMode !== "open" && failureMode !== "closed") {
+    throw new TypeError("failureMode must be 'open' or 'closed'");
+  }
   const now = Date.now();
   const windowMs = windowSeconds * 1000;
   const windowStartMs = Math.floor(now / windowMs) * windowMs;
@@ -109,7 +113,11 @@ export async function checkRateLimit(req, {
     const expiresAt = new Date(windowStartMs + windowMs * 2).toISOString();
     const result = await checkWithSupabase(key, routeKey, identifierHash, windowStart, expiresAt, limit, now);
 
-    if (result.unavailable) return { allowed: true, limited: false, unavailable: true };
+    if (result.unavailable) {
+      return failureMode === "closed"
+        ? { allowed: false, limited: false, unavailable: true, reason: "rate_limit_unavailable" }
+        : { allowed: true, limited: false, unavailable: true };
+    }
 
     if (!result.allowed) {
       const retryAfterSeconds = Math.max(1, Math.ceil((windowStartMs + windowMs - now) / 1000));
@@ -119,6 +127,8 @@ export async function checkRateLimit(req, {
     return { allowed: true, limited: false, remaining: Math.max(0, limit - result.count) };
   } catch (err) {
     console.warn("[rate-limit] Supabase unavailable:", err.message);
-    return { allowed: true, limited: false, unavailable: true };
+    return failureMode === "closed"
+      ? { allowed: false, limited: false, unavailable: true, reason: "rate_limit_unavailable" }
+      : { allowed: true, limited: false, unavailable: true };
   }
 }

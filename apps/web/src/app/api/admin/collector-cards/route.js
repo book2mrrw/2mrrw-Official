@@ -1,7 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import crypto from "crypto";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import {
   grantEntitlementFlag,
@@ -13,7 +13,7 @@ import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
 
 async function requireAdmin() {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) {
     return { error: NextResponse.json({ error: "Admin account required" }, { status: 403 }) };
   }

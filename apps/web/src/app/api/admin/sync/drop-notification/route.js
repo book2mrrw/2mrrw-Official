@@ -1,6 +1,7 @@
 import { NextResponse, after } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { sendPushToSubscribers } from "@/lib/server/web-push";
+import { requireServiceCapability, ServiceCapability } from "@/lib/auth/admin-api-guard";
 
 function authorize(req) {
   return requireServiceCapability(req, ServiceCapability.DROP_NOTIFICATION).ok;   // INV-ADMIN-3

@@ -576,12 +576,12 @@ function GlobalAudioPlayerBar() {
   // This avoids a synchronous setState call in the csMode effect to cancel hold animation.
   const effectiveIsHoldAnimating = isHoldAnimating && !csMode;
   const [sleepSheetOpen, setSleepSheetOpen] = useState(false);
+  const [clockNow, setClockNow] = useState(() => Date.now());
   const [queueSheetOpen, setQueueSheetOpen] = useState(false);
   const [dragQueue, setDragQueue] = useState(null); // { fromIdx, overIdx }
   const queueListRef = useRef(null);
   const queueItemHeightRef = useRef(50);
   const dragGhostRef = useRef(null);
-  const dragPointerYRef = useRef(0);
   const csOverlayImgRef = useRef(null);
   const touchMovedRef = useRef(false);
   const touchStartRef = useRef(null);
@@ -865,16 +865,14 @@ function GlobalAudioPlayerBar() {
   const onQueueDragStart = useCallback((e, fromIdx) => {
     e.stopPropagation();
     e.currentTarget.setPointerCapture(e.pointerId);
-    dragPointerYRef.current = e.clientY;
     const list = queueListRef.current;
     if (list?.firstElementChild) {
       queueItemHeightRef.current = list.firstElementChild.offsetHeight || 50;
     }
-    setDragQueue({ fromIdx, overIdx: fromIdx });
+    setDragQueue({ fromIdx, overIdx: fromIdx, pointerY: e.clientY });
   }, []);
 
   const onQueueDragMove = useCallback((e, trackCount) => {
-    dragPointerYRef.current = e.clientY;
     // Move ghost via direct DOM mutation — no React re-render per frame
     if (dragGhostRef.current) {
       dragGhostRef.current.style.top = `${e.clientY - 24}px`;
@@ -903,10 +901,15 @@ function GlobalAudioPlayerBar() {
   }, [moveInQueue]);
 
   const sleepTimerActive = Boolean(sleepTimerEndsAt || sleepAfterCurrentTrack);
+  useEffect(() => {
+    if (!sleepTimerEndsAt) return undefined;
+    const timer = window.setInterval(() => setClockNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [sleepTimerEndsAt]);
   const sleepTimerLabel = sleepAfterCurrentTrack
     ? "end"
     : sleepTimerEndsAt
-      ? `${Math.max(1, Math.ceil((sleepTimerEndsAt - Date.now()) / 60000))}m`
+      ? `${Math.max(1, Math.ceil((sleepTimerEndsAt - clockNow) / 60000))}m`
       : null;
   const handleOpenSleepSheet = useCallback(() => setSleepSheetOpen(true), []);
   const handleSleepOption = useCallback((minutes) => {
@@ -1061,7 +1064,7 @@ function GlobalAudioPlayerBar() {
             position: "fixed",
             left: 20,
             right: 20,
-            top: dragPointerYRef.current - 24,
+            top: dragQueue.pointerY - 24,
             zIndex: 9999,
             background: "#1c1c1e",
             border: "1px solid rgba(0,255,255,0.4)",

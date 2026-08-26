@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
 async function authorize() {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser();
   return user && isAdminUser(user) ? user : null;
 }
 

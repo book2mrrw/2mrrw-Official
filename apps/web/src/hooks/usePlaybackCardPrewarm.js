@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import {
   buildReleasePrewarmBundle,
   warmReleasePrewarmBundle,
@@ -37,16 +37,18 @@ export function usePlaybackCardPrewarm(
   const configRef = useRef(null);
   const eagerPrimeSlugRef = useRef(null);
 
-  configRef.current = {
-    releaseItem,
-    playItem,
-    catalogLookup,
-    accountState,
-    userId,
-    source,
-    isAlbumCard,
-    isFirstCard,
-  };
+  useLayoutEffect(() => {
+    configRef.current = {
+      releaseItem,
+      playItem,
+      catalogLookup,
+      accountState,
+      userId,
+      source,
+      isAlbumCard,
+      isFirstCard,
+    };
+  }, [accountState, catalogLookup, isAlbumCard, isFirstCard, playItem, releaseItem, source, userId]);
 
   useEffect(() => {
     warmedRef.current = false;

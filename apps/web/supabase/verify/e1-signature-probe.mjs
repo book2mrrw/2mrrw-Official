@@ -12,7 +12,7 @@
 import crypto from "crypto";
 
 const URL_BASE = (process.env.SUPABASE_URL || "").replace(/\/$/, "");
-const SERVICE  = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+const SERVICE  = process.env.SUPABASE_SECRET_KEY || "";
 if (!URL_BASE || !SERVICE) { console.error("ABORT: env"); process.exit(2); }
 
 const sha = (s) => crypto.createHash("sha256").update(String(s)).digest("hex");

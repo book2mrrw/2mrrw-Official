@@ -5,6 +5,7 @@ import { sendTransactionalEmail } from "@/lib/server/email";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import crypto from "crypto";
 import { cookies } from "next/headers";
+import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export async function POST(req) {
     }
 
     const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseAnon = SUPABASE_PUBLIC_KEY;
 
     // Verify credentials via Supabase REST — never returns which field is wrong
     const authRes = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {

@@ -35,7 +35,7 @@ const { tryResolveStreamPlaybackKey } = await import("@/lib/playback/resolve-str
 const { headR2ObjectKey } = await import("@/lib/storage/r2.js");
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const key = process.env.SUPABASE_SECRET_KEY;
 const admin = createClient(url, key, {
   auth: { persistSession: false, autoRefreshToken: false },
 });

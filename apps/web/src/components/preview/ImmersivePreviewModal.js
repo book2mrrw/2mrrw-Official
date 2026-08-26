@@ -716,8 +716,14 @@ function ViewMoreSheet({ title, sub, t, rows, onClose }) {
 }
 
 function SleepTimerSheet({ t, sleepTimerEndsAt, sleepAfterCurrentTrack, setSleepTimer, onClose }) {
+  const [clockNow, setClockNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!sleepTimerEndsAt) return undefined;
+    const timer = window.setInterval(() => setClockNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [sleepTimerEndsAt]);
   const active = sleepTimerEndsAt != null || sleepAfterCurrentTrack;
-  const remaining = sleepTimerEndsAt ? Math.max(0, Math.ceil((sleepTimerEndsAt - Date.now()) / 60000)) : null;
+  const remaining = sleepTimerEndsAt ? Math.max(0, Math.ceil((sleepTimerEndsAt - clockNow) / 60000)) : null;
   const opts = [
     { label: "15 minutes", value: 15 },
     { label: "30 minutes", value: 30 },
@@ -1672,7 +1678,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     if (!album?.slug || savedToLibrary || isPreview) return;
     setSavedToLibrary(true);
     try { await postLibraryAdd(album.slug); } catch { /* best effort */ }
-  }, [album?.slug, savedToLibrary, isPreview]);
+  }, [album, savedToLibrary, isPreview]);
 
   const handleDownload = useCallback(async (tr, e) => {
     e?.stopPropagation();
@@ -1693,7 +1699,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
       setDownloadStates((prev) => ({ ...prev, [slug]: null }));
       setDownloadProgress((prev) => ({ ...prev, [slug]: 0 }));
     }
-  }, [album?.slug, downloadStates, userId]);
+  }, [album, downloadStates, userId]);
 
   const handleEnqueue = useCallback((tr, { playNext: insertNext = false } = {}) => {
     if (!enqueueTrack || !album?.slug) return;
@@ -1721,7 +1727,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
         setDownloadStates((prev) => ({ ...prev, [tr.slug]: null }));
       }
     }
-  }, [album?.slug, downloadStates, isPreview, tracks, userId]);
+  }, [album, downloadStates, isPreview, tracks, userId]);
 
   const handleRemoveFromDownloads = useCallback((tr) => {
     if (!userId || !tr?.slug) return;

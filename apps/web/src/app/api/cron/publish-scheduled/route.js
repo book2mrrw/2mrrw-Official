@@ -1,10 +1,13 @@
+import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
+import { emitServerEvent } from "@/lib/observability/server-events";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req) {
+  const correlationId = req.headers.get("x-correlation-id") || crypto.randomUUID();
   const auth     = req.headers.get("authorization");
   const expected = process.env.CRON_SECRET ? `Bearer ${process.env.CRON_SECRET}` : null;
   if (!expected || auth !== expected) {
@@ -23,7 +26,7 @@ export async function GET(req) {
     .not("available_at", "is", null);
 
   if (fetchErr) {
-    console.error("[cron/publish-scheduled] fetch error", fetchErr.message);
+    emitServerEvent("error", "scheduled_release_discovery_failed", { correlationId }, fetchErr);
     return NextResponse.json({ error: fetchErr.message }, { status: 500 });
   }
 
@@ -48,18 +51,23 @@ export async function GET(req) {
         .update({ active: true })
         .eq("release_id", rel.id);
       if (productErr) {
-        console.warn("[cron/publish-scheduled] products update error (non-fatal)", productErr.message);
+        emitServerEvent("warn", "scheduled_release_product_activation_failed",
+          { correlationId, releaseId: rel.id, releaseSlug: rel.slug }, productErr);
       }
 
       results.push({ id: rel.id, slug: rel.slug, ok: true });
-      console.info(`[cron/publish-scheduled] published id=${rel.id} slug=${rel.slug}`);
+      emitServerEvent("info", "scheduled_release_published",
+        { correlationId, releaseId: rel.id, releaseSlug: rel.slug, releaseType: rel.release_type });
     } catch (err) {
       results.push({ id: rel.id, slug: rel.slug, ok: false, error: err.message });
-      console.error(`[cron/publish-scheduled] failed id=${rel.id}`, err.message);
+      emitServerEvent("error", "scheduled_release_publication_failed",
+        { correlationId, releaseId: rel.id, releaseSlug: rel.slug, releaseType: rel.release_type }, err);
     }
   }
 
   const succeeded = results.filter((r) => r.ok).length;
   if (succeeded > 0) revalidateStorefront();
+  emitServerEvent(succeeded === dueReleases.length ? "info" : "warn", "scheduled_release_batch_completed",
+    { correlationId, due: dueReleases.length, published: succeeded, failed: dueReleases.length - succeeded });
   return NextResponse.json({ published: succeeded, total: dueReleases.length, results });
 }

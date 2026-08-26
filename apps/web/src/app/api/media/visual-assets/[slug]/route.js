@@ -6,6 +6,8 @@ import { getPublicR2Url } from "@/lib/storage/r2";
 
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
+import { getAdminClient } from "@/lib/supabase/admin";
+import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
 
 export const dynamic = "force-dynamic";
 
@@ -31,12 +33,7 @@ export async function GET(req, { params }) {
   // ── Resolve server-side session tier ───────────────────────────────────────
   let serverTier = "public";
   try {
-    const cookieStore = await cookies();
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      { cookies: { getAll: () => cookieStore.getAll() } }
-    );
+    const supabase = getAdminClient();
 
     // INV-ENT-9: admin tier resolves through the single admin authority path,
     // never by matching a mutable email attribute. getFanSessionUser() also
@@ -84,7 +81,7 @@ export async function GET(req, { params }) {
   try {
     const sbAnon = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      SUPABASE_PUBLIC_KEY,
       { cookies: { getAll: () => [] } }
     );
 

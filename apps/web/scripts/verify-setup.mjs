@@ -15,8 +15,8 @@ const env = Object.fromEntries(
 
 const required = [
   "NEXT_PUBLIC_SUPABASE_URL",
-  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-  "SUPABASE_SERVICE_ROLE_KEY",
+  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+  "SUPABASE_SECRET_KEY",
   "STRIPE_SECRET_KEY",
   "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
   "ADMIN_SEED_SECRET",
@@ -35,7 +35,7 @@ if (!siteUrl) {
   console.log("ENV WARN: set NEXT_PUBLIC_SITE_URL or NEXT_PUBLIC_BASE_URL");
 }
 
-const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY);
 
 const tables = [
   "profiles",

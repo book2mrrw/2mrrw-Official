@@ -63,11 +63,8 @@ export function CatalogSurfaceProvider({
   inlineMixtapesAndEps = [],
   children,
 }) {
-  const inlineSinglesStableRef = useRef(null);
-  if (!inlineSinglesStableRef.current) {
-    inlineSinglesStableRef.current = stabilizeCatalogMediaDeterministic(inlineSingles);
-  }
-  const stabilizedInlineSingles = inlineSinglesStableRef.current;
+  const [stabilizedInlineSingles] = useState(() =>
+    stabilizeCatalogMediaDeterministic(inlineSingles));
 
   const [browseSingles, setBrowseSingles] = useState(() => {
     const seed = initialSingles?.length ? initialSingles : inlineSingles;
@@ -75,13 +72,16 @@ export function CatalogSurfaceProvider({
   });
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogHasMore, setCatalogHasMore] = useState(false);
-  const catalogFetchAbort = useAbortController([catalogPage]);
+  const catalogFetchAbort = useAbortController(catalogPage);
   const inlineSeedRef = useRef(stabilizedInlineSingles);
-  inlineSeedRef.current = stabilizedInlineSingles;
   const prevBrowseSinglesLenRef = useRef(0);
   const prevBrowseSinglesRef = useRef(browseSingles);
   const browseSinglesRef = useRef(browseSingles);
-  browseSinglesRef.current = browseSingles;
+
+  useEffect(() => {
+    inlineSeedRef.current = stabilizedInlineSingles;
+    browseSinglesRef.current = browseSingles;
+  }, [browseSingles, stabilizedInlineSingles]);
 
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;

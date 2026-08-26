@@ -202,4 +202,10 @@ export async function revokeAdminPrincipal(userId) {
   if (error) throw error;
   invalidateAdminAuthorityCache(userId);
   await bumpEntitlementGeneration(userId);
+  // Losing administrator authority is also a global MFA compromise boundary.
+  const { error: mfaError } = await admin.rpc("bump_2mrrw_mfa_generation", {
+    p_user_id: userId,
+    p_reason: "admin_privilege_revoked",
+  });
+  if (mfaError) throw mfaError;
 }

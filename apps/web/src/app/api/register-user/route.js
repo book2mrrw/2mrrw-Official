@@ -1,17 +1,13 @@
 import { NextResponse } from "next/server";
 import { retiredRouteGuard } from "@/lib/auth/retired-route";
-import { createClient } from "@supabase/supabase-js";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(req) {
   const retired = retiredRouteGuard("/api/register-user");
   if (retired) return retired;
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-
   try {
+    const supabase = getAdminClient();
     const { name, phone, email } = await req.json();
 
     const { data, error } = await supabase

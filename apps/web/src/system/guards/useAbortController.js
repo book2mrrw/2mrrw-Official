@@ -1,27 +1,23 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo } from "react";
 
 /**
  * AbortController that auto-aborts on unmount and when deps change.
- * @param {unknown[]} deps
+ * @param {unknown} dependencyKey
  */
-export function useAbortController(deps = []) {
-  const controllerRef = useRef(null);
-
-  if (!controllerRef.current) {
-    controllerRef.current = new AbortController();
-  }
+export function useAbortController(dependencyKey) {
+  // The controller is the resource for this dependency generation. Creating it
+  // during memoization avoids mutable-ref reads during render; cleanup aborts
+  // precisely the generation that the completed render committed.
+  const controller = useMemo(() => {
+    void dependencyKey;
+    return new AbortController();
+  }, [dependencyKey]);
 
   useEffect(() => {
-    const prev = controllerRef.current;
-    controllerRef.current = new AbortController();
-    prev?.abort();
-    return () => {
-      controllerRef.current?.abort();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+    return () => controller.abort();
+  }, [controller]);
 
-  return controllerRef.current;
+  return controller;
 }

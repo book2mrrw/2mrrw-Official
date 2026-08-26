@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { runR2Ingest } from "@/lib/catalog/r2-ingest-pipeline";
@@ -8,7 +8,7 @@ import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 export const dynamic = "force-dynamic";
 
 export async function POST() {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

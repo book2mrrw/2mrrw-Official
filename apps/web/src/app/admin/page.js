@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
+import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
 
 const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
 
@@ -41,7 +43,7 @@ export default function AdminPage() {
   useEffect(() => {
     const sb = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      SUPABASE_PUBLIC_KEY
     );
     sb.auth.getSession().then(({ data }) => {
       if (!isAdmin(data.session)) { router.replace("/"); return; }
@@ -156,7 +158,7 @@ export default function AdminPage() {
 
         {/* Footer */}
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20, display: "flex", gap: 24, flexWrap: "wrap" }}>
-          <a href="/" style={{ fontSize: 12, color: C.muted2, textDecoration: "none" }}>← Back to Site</a>
+          <Link href="/" style={{ fontSize: 12, color: C.muted2, textDecoration: "none" }}>← Back to Site</Link>
           <a href="/account" style={{ fontSize: 12, color: C.muted2, textDecoration: "none" }}>Account</a>
         </div>
       </div>

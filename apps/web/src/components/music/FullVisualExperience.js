@@ -104,6 +104,15 @@ function FullVisualExperience({ asset, releaseSlug, coverUrl, onClose }) {
     return () => clearInterval(id);
   }, [isSync, syncOffset]);
 
+  const handleClose = useCallback(() => {
+    const el = videoRef.current;
+    if (el) { el.pause(); el.src = ""; }
+    hlsRef.current?.destroy?.();
+    hlsRef.current = null;
+    globalMediaController.exitFull();
+    onClose?.();
+  }, [onClose]);
+
   // ── Keyboard shortcuts ─────────────────────────────────────────────────────
   useEffect(() => {
     function onKey(e) {
@@ -118,7 +127,7 @@ function FullVisualExperience({ asset, releaseSlug, coverUrl, onClose }) {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [isSync]);
+  }, [handleClose, isSync]);
 
   // ── Controls auto-hide ─────────────────────────────────────────────────────
   function _resetControlsTimer() {
@@ -142,15 +151,6 @@ function FullVisualExperience({ asset, releaseSlug, coverUrl, onClose }) {
       clearTimeout(controlsTimerRef.current);
     };
   }, []);
-
-  const handleClose = useCallback(() => {
-    const el = videoRef.current;
-    if (el) { el.pause(); el.src = ""; }
-    hlsRef.current?.destroy?.();
-    hlsRef.current = null;
-    globalMediaController.exitFull();
-    onClose?.();
-  }, [onClose]);
 
   const handleVideoPlay  = () => setIsPlaying(true);
   const handleVideoPause = () => setIsPlaying(false);

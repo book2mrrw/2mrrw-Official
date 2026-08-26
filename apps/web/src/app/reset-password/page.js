@@ -48,6 +48,15 @@ function ResetForm() {
       const supabase = createClient();
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) { setError(updateError.message || "Update failed"); return; }
+      const resetResponse = await fetch("/api/auth/mfa-session", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+      if (!resetResponse.ok) {
+        setError("Password changed, but security sessions could not be revoked. Contact support before signing in.");
+        return;
+      }
+      await supabase.auth.signOut();
       setDone(true);
       setTimeout(() => router.push("/login"), 2000);
     } catch (err) {

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
+import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
 
 const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
@@ -465,7 +466,7 @@ export default function AdminReleasesPage() {
   useEffect(() => {
     const sb = createBrowserClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+      SUPABASE_PUBLIC_KEY
     );
     sb.auth.getSession().then(({ data: d }) => {
       if (!isAdmin(d.session)) { router.replace("/"); return; }

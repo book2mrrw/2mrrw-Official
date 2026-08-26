@@ -32,8 +32,6 @@ export function useVideoWake({ elementRef, hasVideoAsset, trackId, slug }) {
   const dwellTimer    = useRef(null);
   const observerRef   = useRef(null);
   const isVisible     = useRef(false);
-  const activeTrackId = useRef(trackId);
-  activeTrackId.current = trackId;
 
   const clearDwell = useCallback(() => {
     clearTimeout(dwellTimer.current);
@@ -115,7 +113,7 @@ export function useVideoWake({ elementRef, hasVideoAsset, trackId, slug }) {
       clearDwell();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasVideoAsset, elementRef.current]);
+  }, [hasVideoAsset, elementRef]);
 
   // Gesture activity resets pending wake (gesture = user engaged, don't auto-wake)
   useEffect(() => {

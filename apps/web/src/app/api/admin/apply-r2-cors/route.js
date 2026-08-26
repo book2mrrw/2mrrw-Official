@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { PutBucketCorsCommand, GetBucketCorsCommand } from "@aws-sdk/client-s3";
 import { r2Client } from "@/lib/storage/r2";
-import { getFanSessionUser } from "@/lib/auth/session-user";
-import { isAdminUser } from "@/lib/auth/constants";
+import { requireAdminOrCapability, ServiceCapability } from "@/lib/auth/admin-api-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -42,15 +41,9 @@ const CORS_POLICY = {
   ],
 };
 
-async function isAuthorized(req) {
-  const secret = process.env.BACKFILL_TRIGGER_SECRET;
-  if (secret && req.headers.get("x-backfill-secret") === secret) return true;
-  const user = await getFanSessionUser();
-  return Boolean(user && isAdminUser(user));
-}
-
 export async function POST(req) {
-  if (!(await isAuthorized(req))) {
+  const actor = await requireAdminOrCapability(req, ServiceCapability.R2_CORS_CONFIGURE);
+  if (!actor.ok) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
   if (!R2_BUCKET) {
@@ -69,7 +62,8 @@ export async function POST(req) {
 }
 
 export async function GET(req) {
-  if (!(await isAuthorized(req))) {
+  const actor = await requireAdminOrCapability(req, ServiceCapability.R2_CORS_CONFIGURE);
+  if (!actor.ok) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
   if (!R2_BUCKET) {

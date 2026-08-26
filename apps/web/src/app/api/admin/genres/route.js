@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 
 function slugify(value) {
   return String(value || "").toLowerCase().replace(/&/g, " and ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
-async function adminUser() { const user = await getFanSessionUser(); return user && isAdminUser(user) ? user : null; }
+async function adminUser() { const user = await getAdminSessionUser(); return user && isAdminUser(user) ? user : null; }
 
 export async function GET() {
   if (!await adminUser()) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

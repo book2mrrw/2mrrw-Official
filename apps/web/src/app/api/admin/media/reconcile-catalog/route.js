@@ -22,7 +22,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { getFanSessionUser } from "@/lib/auth/session-user";
+import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import {
   CANONICAL_SINGLES,
@@ -71,7 +71,7 @@ function deriveKeysForRelease(raw) {
 }
 
 export async function GET(req) {
-  const user = await getFanSessionUser();
+  const user = await getAdminSessionUser();
   if (!user || !isAdminUser(user)) return json({ error: "Forbidden" }, 403);
 
   const targetSlug = req.nextUrl.searchParams.get("slug") || null;

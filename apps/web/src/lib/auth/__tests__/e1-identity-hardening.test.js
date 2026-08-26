@@ -294,41 +294,37 @@ describe("INV-ADMIN-3: privileged routes authorise by actor or service credentia
 // INV-AUTH-1 / INV-AUTH-2 — MFA assurance comes from the provider
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("INV-AUTH-1/2: MFA is enforced by session authority, not UI state", () => {
-  const src = read("lib/auth/assurance.js");
-
-  test("F6.1 assurance is read from the provider, not from a cookie", () => {
-    assert.match(src, /mfa\.getAuthenticatorAssuranceLevel\(\)/);
-    assert.ok(!/_2fa_pending/.test(codeOnly(src)),
-      "application cookie state may reflect MFA, never create it");
+describe("INV-AUTH-1/2: custom MFA is durable, session-bound, and fail-closed", () => {
+  const src = read("lib/auth/mfa-authority.js");
+  test("F6.1 opaque authority is hashed and server-backed", () => {
+    assert.match(src, /randomBytes\(32\)/);
+    assert.match(src, /sha256/);
+    assert.match(src, /issue_2mrrw_mfa_authority/);
   });
-
-  test("F6.2 aal2 is what satisfies assurance", () => {
-    assert.match(src, /currentLevel === AssuranceLevel\.AAL2/);
+  test("F6.2 authority binds immutable user and Supabase session", () => {
+    assert.match(src, /session_id/);
+    assert.match(src, /session\.user\?\.id !== userId/);
+    assert.match(src, /p_auth_session_id: sessionId/);
   });
-
-  test("F6.3 an enrolled-but-unverified session is denied", () => {
-    const fn = src.match(/export async function requireMfaAssurance[\s\S]*?\n}/)?.[0];
-    assert.match(fn, /assurance\.enrolled/);
-    assert.match(fn, /mfa_required/);
+  test("F6.3 missing production policy fails closed", () => {
+    assert.match(src, /String\(process\.env\.HUMAN_ADMIN_MFA_REQUIRED \|\| ""\)\.trim\(\)\.toLowerCase\(\) === "true"/);
+    assert.match(src, /custom_mfa_configuration_missing/);
   });
-
-  test("F6.4 unknown assurance is treated as unsatisfied under an active policy", () => {
-    const fn = src.match(/export async function requireMfaAssurance[\s\S]*?\n}/)?.[0];
-    assert.match(fn, /assurance\.unknown/);
-    assert.match(fn, /assurance_unknown/);
-  });
-
-  test("F6.5 the admin boundary consults assurance", () => {
+  test("F6.4 canonical admin boundary requires custom authority, not AAL", () => {
     const guard = read("lib/auth/admin-api-guard.js");
-    assert.match(guard, /requireMfaAssurance\(\)/);
+    assert.match(guard, /verifyMfaAuthority/);
+    assert.doesNotMatch(guard, /requireMfaAssurance|getAuthenticatorAssuranceLevel/);
   });
-
-  test("F6.6 enforcement is staged so admins cannot be locked out before enrolling", () => {
-    assert.match(src, /AdminMfaPolicy/);
-    assert.match(src, /OFF:\s*"off"/);
-    assert.match(src, /ENROLLED:\s*"enrolled"/);
-    assert.match(src, /REQUIRED:\s*"required"/);
+  test("F6.5 only successful login-step2 commits authority", () => {
+    const step2 = read("app/api/auth/login-step2/route.js");
+    const issue = step2.lastIndexOf("issueMfaAuthority");
+    const ok = step2.indexOf('result !== "ok"');
+    assert.ok(issue > ok);
+    assert.match(step2, /mfaVerified: true/);
+  });
+  test("F6.6 sign-out revokes server authority before Supabase sign-out", () => {
+    const context = read("context/AuthContext.js");
+    assert.ok(context.indexOf('/api/auth/mfa-session') < context.indexOf('authSignOut()'));
   });
 });
 

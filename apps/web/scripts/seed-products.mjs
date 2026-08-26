@@ -19,7 +19,7 @@ const env = Object.fromEntries(
     })
 );
 
-const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
+const admin = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY);
 const PRODUCT_CATALOG = getProductCatalog();
 const rows = PRODUCT_CATALOG.map((p) => ({
   slug: p.slug,
