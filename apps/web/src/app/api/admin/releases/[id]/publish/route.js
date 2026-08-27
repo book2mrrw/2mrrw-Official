@@ -259,14 +259,22 @@ export async function POST(req, { params }) {
         }
       }
     }
-    await admin.from("tracks").update(trackUpdateFields).eq("id", track.id).catch((err) => {
-      console.warn("[publish] track audio_r2_key update error (non-fatal)", err?.message);
-    });
+    const { error: trackCanonicalizeError } = await admin
+      .from("tracks")
+      .update(trackUpdateFields)
+      .eq("id", track.id);
+    if (trackCanonicalizeError) {
+      console.error("[publish] track audio key canonicalization failed", trackCanonicalizeError.message);
+      return NextResponse.json(
+        { error: "Publish failed — could not commit the canonical audio identity. Please try again." },
+        { status: 500 }
+      );
+    }
 
     // Update the HLS transcode job queued at upload time (used draft slug/prefix/source_key)
     // Skip jobs currently being processed by the worker — they'll be corrected on next sync
     const newHlsPrefix = buildHLSPrefix(releaseSlug, isMultiTrack ? track.slug : null, hlsFolder);
-    await admin
+    const { error: hlsCanonicalizeError } = await admin
       .from("hls_transcode_jobs")
       .update({
         source_key:    destKey,
@@ -278,10 +286,10 @@ export async function POST(req, { params }) {
         error_message: null,
       })
       .eq("source_key", srcKey)
-      .neq("status", "processing")
-      .catch((err) => {
-        console.warn("[publish] HLS job canonicalize error (non-fatal)", err?.message);
-      });
+      .neq("status", "processing");
+    if (hlsCanonicalizeError) {
+      console.warn("[publish] HLS job canonicalize error (non-fatal)", hlsCanonicalizeError.message);
+    }
 
     // Clean up draft file — non-fatal; leave on failure (worker may still be reading)
     await deleteR2Object(srcKey).catch(() => {});
@@ -300,7 +308,11 @@ export async function POST(req, { params }) {
     if (targetCoverKey !== resolvedCoverKey) {
       try {
         await copyR2Object(resolvedCoverKey, targetCoverKey);
-        await admin.from("releases").update({ cover_art_r2_key: targetCoverKey }).eq("id", releaseId).catch(() => {});
+        const { error: coverKeyUpdateError } = await admin
+          .from("releases")
+          .update({ cover_art_r2_key: targetCoverKey })
+          .eq("id", releaseId);
+        if (coverKeyUpdateError) throw coverKeyUpdateError;
         await deleteR2Object(resolvedCoverKey).catch(() => {});
         canonicalCoverKey = targetCoverKey;
       } catch (err) {
@@ -449,7 +461,18 @@ export async function POST(req, { params }) {
     if (title?.trim()) singleTrackUpdate.title = title.trim();
     if (lyrics)        singleTrackUpdate.lyrics = lyrics;
     if (isrc)          singleTrackUpdate.isrc   = isrc;
-    await admin.from("tracks").update(singleTrackUpdate).eq("id", track_id).catch(() => {});
+    const { error: singleTrackUpdateError } = await admin
+      .from("tracks")
+      .update(singleTrackUpdate)
+      .eq("id", track_id)
+      .eq("release_id", releaseId);
+    if (singleTrackUpdateError) {
+      console.error("[publish] single-track metadata update error", singleTrackUpdateError.message);
+      return NextResponse.json(
+        { error: "Publish failed — could not commit the track metadata. Please try again." },
+        { status: 500 }
+      );
+    }
   }
 
   // ── 8. Update releases row status + canonical slug ─────────────────────────
