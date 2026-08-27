@@ -13,6 +13,8 @@ test("INV-MFA-3/6 authority is opaque, server-only, user and session bound", () 
   assert.match(migration,/enable row level security/g);
   assert.match(migration,/revoke all[\s\S]*anon,authenticated/);
   assert.match(authority,/httpOnly: true/);
+  assert.match(authority,/supabase\.auth\.getClaims\(\)/);
+  assert.doesNotMatch(authority,/supabase\.auth\.getSession\(\)/);
 });
 test("INV-MFA-8 generation revocation is atomic and immediate", () => {
   assert.match(migration,/bump_2mrrw_mfa_generation/);

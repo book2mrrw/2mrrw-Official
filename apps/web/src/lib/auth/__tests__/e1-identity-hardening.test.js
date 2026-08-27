@@ -303,7 +303,9 @@ describe("INV-AUTH-1/2: custom MFA is durable, session-bound, and fail-closed", 
   });
   test("F6.2 authority binds immutable user and Supabase session", () => {
     assert.match(src, /session_id/);
-    assert.match(src, /session\.user\?\.id !== userId/);
+    assert.match(src, /session\?\.user\?\.id !== userId/);
+    assert.match(src, /verifiedClaims\?\.sub !== userId/);
+    assert.match(src, /supabase\.auth\.getClaims\(\)/);
     assert.match(src, /p_auth_session_id: sessionId/);
   });
   test("F6.3 missing production policy fails closed", () => {
