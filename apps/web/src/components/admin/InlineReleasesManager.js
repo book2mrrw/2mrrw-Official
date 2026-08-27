@@ -866,7 +866,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
           <div>
             <h3 style={{ fontSize: 15, fontWeight: 900, color: C.text, marginBottom: 6, marginTop: 0 }}>Replace Master Audio</h3>
             <p style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>
-              Upload WAV / FLAC / AIFF. Old master archived (up to 10 generations). HLS re-queues automatically. Playback cache clears immediately.
+              Upload WAV / FLAC / AIFF. This replaces the current master — the previous audio file is not recoverable after replacing. HLS re-queues automatically. Playback cache clears immediately.
             </p>
 
             {detail.tracks.length === 0 && (

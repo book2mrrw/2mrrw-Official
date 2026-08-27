@@ -38,21 +38,20 @@ export async function GET(req) {
 
   for (const rel of dueReleases) {
     try {
-      // Update release to published + visible
-      const { error: relErr } = await admin
-        .from("releases")
-        .update({ status: "published", storefront_visible: true, published_at: now })
-        .eq("id", rel.id);
-      if (relErr) throw relErr;
+      // Atomic, idempotent cross-table transition (releases.status +
+      // products.active together) — see 20260827000052_atomic_scheduled_release_activation.sql.
+      // Two independent .update() calls here previously let a products write
+      // failure leave the release permanently split-brained (published in
+      // one table, inactive in the other) with only a warning logged.
+      const { data: activation, error: rpcErr } = await admin
+        .rpc("activate_scheduled_release", { p_release_id: rel.id })
+        .single();
+      if (rpcErr) throw rpcErr;
 
-      // Activate products row
-      const { error: productErr } = await admin
-        .from("products")
-        .update({ active: true })
-        .eq("release_id", rel.id);
-      if (productErr) {
-        emitServerEvent("warn", "scheduled_release_product_activation_failed",
-          { correlationId, releaseId: rel.id, releaseSlug: rel.slug }, productErr);
+      if (!activation?.activated) {
+        // Already activated by a prior tick (or no longer due) — not a failure.
+        results.push({ id: rel.id, slug: rel.slug, ok: true, skipped: true });
+        continue;
       }
 
       results.push({ id: rel.id, slug: rel.slug, ok: true });

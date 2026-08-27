@@ -5,6 +5,9 @@ import { getAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
+const VALID_RELEASE_TYPES = new Set(["single", "feature", "album", "ep", "mixtape"]);
+const MULTI_TRACK_TYPES = new Set(["album", "ep", "mixtape"]);
+
 async function authorize() {
   const user = await getAdminSessionUser();
   return user && isAdminUser(user) ? user : null;
@@ -57,6 +60,32 @@ export async function PUT(req, { params }) {
     data: { ...priorData, ...(payload.data || {}) },
     tracks: Array.isArray(payload.tracks) ? payload.tracks : (priorPayload.tracks || []),
   };
+  const data = mergedPayload.data || {};
+
+  // Reject a release-type change that would leave already-uploaded tracks in
+  // a shape the new type's wizard steps never walked through — e.g. Single
+  // (one implicit track) -> EP (a real tracklist), or the reverse. Changing
+  // between two multi-track types (Album/EP/Mixtape) or two single-track
+  // types (Single/Feature) is harmless and stays allowed.
+  const requestedType = data.release_type;
+  if (requestedType && requestedType !== release.release_type) {
+    if (!VALID_RELEASE_TYPES.has(requestedType)) {
+      return NextResponse.json({ error: `"${requestedType}" is not a valid release type` }, { status: 422 });
+    }
+    const oldIsMultiTrack = MULTI_TRACK_TYPES.has(release.release_type);
+    const newIsMultiTrack = MULTI_TRACK_TYPES.has(requestedType);
+    if (oldIsMultiTrack !== newIsMultiTrack) {
+      const { count } = await admin
+        .from("tracks")
+        .select("id", { count: "exact", head: true })
+        .eq("release_id", id);
+      if (count > 0) {
+        return NextResponse.json({
+          error: `Cannot change release type from "${release.release_type}" to "${requestedType}" — ${count} track${count === 1 ? "" : "s"} already uploaded for this draft. Remove the existing track(s) first, then change the type.`,
+        }, { status: 409 });
+      }
+    }
+  }
 
   const savedAt = new Date().toISOString();
   const { error } = await admin.from("release_drafts").upsert({
@@ -72,7 +101,6 @@ export async function PUT(req, { params }) {
   // Fields absent from THIS save fall back to the release's current stored value —
   // never to null — so a step that doesn't happen to carry a previously-set field
   // (e.g. the wizard resending state from a stale render) can't silently clear it.
-  const data = mergedPayload.data || {};
   await admin.from("releases").update({
     release_type: data.release_type || release.release_type,
     release_date: data.release_date ?? release.release_date,

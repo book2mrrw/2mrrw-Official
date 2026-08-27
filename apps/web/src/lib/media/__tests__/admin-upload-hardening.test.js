@@ -225,6 +225,90 @@ describe("draft-list rows are openable without hitting a precise Edit target", (
   });
 });
 
+describe("a pending autosave is flushed on soft navigation away from the wizard, not just on tab close", () => {
+  test("the wizard flushes the latest draft snapshot on unmount, not only on pagehide", () => {
+    const wizard = read("src/components/admin/UploadWizard.js");
+    assert.match(wizard, /const flushPendingDraftSave = useCallback\(\(\) => \{/);
+    assert.match(wizard, /window\.addEventListener\("pagehide", flushPendingDraftSave\);/);
+    assert.match(wizard, /useEffect\(\(\) => \(\) => flushPendingDraftSave\(\), \[flushPendingDraftSave\]\);/);
+  });
+});
+
+describe("release type cannot change mid-draft into a shape existing tracks don't fit", () => {
+  const draftRoute = read("src/app/api/admin/releases/[id]/draft/route.js");
+
+  test("switching single-track <-> multi-track categories is blocked once tracks exist", () => {
+    assert.match(draftRoute, /const oldIsMultiTrack = MULTI_TRACK_TYPES\.has\(release\.release_type\);/);
+    assert.match(draftRoute, /const newIsMultiTrack = MULTI_TRACK_TYPES\.has\(requestedType\);/);
+    assert.match(draftRoute, /if \(oldIsMultiTrack !== newIsMultiTrack\) \{/);
+    assert.match(draftRoute, /status: 409 \}\);/);
+  });
+
+  test("an invalid release_type value is rejected rather than silently stored", () => {
+    assert.match(draftRoute, /if \(!VALID_RELEASE_TYPES\.has\(requestedType\)\) \{/);
+  });
+
+  test("same-category type changes (Single<->Feature, Album<->EP<->Mixtape) remain allowed", () => {
+    assert.match(draftRoute, /MULTI_TRACK_TYPES = new Set\(\["album", "ep", "mixtape"\]\);/);
+    assert.match(draftRoute, /VALID_RELEASE_TYPES = new Set\(\["single", "feature", "album", "ep", "mixtape"\]\);/);
+  });
+});
+
+describe("removing a track in the wizard cannot let it silently reappear at publish", () => {
+  const wizard = read("src/components/admin/UploadWizard.js");
+  const trackRoute = read("src/app/api/admin/releases/[id]/tracks/[trackId]/route.js");
+
+  test("removeTrack calls the server for any track that already has a persisted id", () => {
+    assert.match(wizard, /if \(!track\.id\) \{/);
+    assert.match(wizard, /fetch\(`\/api\/admin\/releases\/\$\{releaseId\}\/tracks\/\$\{track\.id\}`, \{ method: "DELETE" \}\)/);
+    assert.match(wizard, /if \(!res\.ok\) throw new Error\(json\.error \|\| "Failed to remove track"\);/);
+  });
+
+  test("a failed server-side removal keeps the track in the list and surfaces the error, never silently drops it", () => {
+    assert.match(wizard, /setRemoving\(false\);\s*\n\s*setRemoveError\(err\.message\);/);
+    assert.match(wizard, /Could not remove this track: \{removeError\}/);
+  });
+
+  test("the delete route only allows track removal while the release is still a draft", () => {
+    assert.match(trackRoute, /if \(release\.status !== "draft"\) \{/);
+  });
+
+  test("the delete route actually removes the DB row publish() would otherwise still find", () => {
+    assert.match(trackRoute, /await admin\.from\("tracks"\)\.delete\(\)\.eq\("id", trackId\);/);
+  });
+});
+
+describe("scheduled-release activation cannot split-brain releases.status and products.active", () => {
+  test("the cron calls one atomic RPC instead of two independent table updates", () => {
+    const cron = read("src/app/api/cron/publish-scheduled/route.js");
+    assert.match(cron, /admin\s*\.rpc\("activate_scheduled_release", \{ p_release_id: rel\.id \}\)\s*\.single\(\);/);
+    assert.ok(!cron.includes('.from("releases")\n        .update({ status: "published"'),
+      "the old two-write race must not still be present alongside the RPC call");
+  });
+
+  test("the atomic activation function exists as a migration, is idempotent, and is locked to service_role", () => {
+    const migration = read("supabase/migrations/20260827000052_atomic_scheduled_release_activation.sql");
+    assert.match(migration, /create or replace function public\.activate_scheduled_release/);
+    assert.match(migration, /and status = 'scheduled'/);
+    assert.match(migration, /and available_at <= p_now/);
+    assert.match(migration, /revoke all on function public\.activate_scheduled_release\(uuid, timestamptz\) from public, anon, authenticated;/);
+    assert.match(migration, /grant execute on function public\.activate_scheduled_release\(uuid, timestamptz\) to service_role;/);
+  });
+});
+
+describe("the two vercel.json cron manifests cannot silently disagree", () => {
+  test("both files declare the same schedule for every cron path", () => {
+    const root = JSON.parse(read("../../vercel.json"));
+    const web = JSON.parse(read("vercel.json"));
+    const bySchedule = (crons) => Object.fromEntries(crons.map((c) => [c.path, c.schedule]));
+    const rootCrons = bySchedule(root.crons);
+    const webCrons = bySchedule(web.crons);
+    assert.deepEqual(rootCrons, webCrons,
+      "root vercel.json and apps/web/vercel.json must declare identical cron schedules — a prior drift had publish-scheduled at */5 in one file and * * * * * in the other");
+    assert.equal(rootCrons["/api/cron/publish-scheduled"], "* * * * *");
+  });
+});
+
 describe("Albums and Mixtapes & EPs render from the live catalog, not a hardcoded fallback", () => {
   const homeClient = read("src/app/HomeClient.js");
 

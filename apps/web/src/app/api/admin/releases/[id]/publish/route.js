@@ -210,11 +210,9 @@ export async function POST(req, { params }) {
   // resolvePlaybackKey discovers audio by scanning storage_path, which is keyed
   // to the final slug. Copy each audio file to its canonical location now so
   // the audio pipeline can find it immediately after publish.
-  const HLS_FOLDER_MAP = {
-    single: "singles", feature: "features",
-    album: "albums", ep: "mixtapes-and-eps", mixtape: "mixtapes-and-eps",
-  };
-  const hlsFolder = HLS_FOLDER_MAP[releaseType] || "singles";
+  // Same mapping as RELEASE_TYPE_FOLDERS above (typeFolder) — this used to be
+  // a second, independently-maintained copy of the identical table.
+  const hlsFolder = typeFolder;
 
   function extFromKey(k) {
     const i = String(k || "").lastIndexOf(".");

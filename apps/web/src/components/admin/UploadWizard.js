@@ -724,6 +724,8 @@ const iconBtn = {
 function TrackRow({ track, idx, total, albumSlug, data, releaseId, setTracks }) {
   const fileInputRef = useRef(null);
   const xhrRef       = useRef(null);
+  const [removing, setRemoving] = useState(false);
+  const [removeError, setRemoveError] = useState(null);
 
   const updateSelf = (updates) =>
     setTracks((prev) => prev.map((t) => t.tempId === track.tempId ? { ...t, ...updates } : t));
@@ -785,11 +787,34 @@ function TrackRow({ track, idx, total, albumSlug, data, releaseId, setTracks }) 
       return next.map((t, j) => ({ ...t, position: j + 1 }));
     });
 
-  const removeTrack = () =>
-    setTracks((prev) => {
-      const filtered = prev.filter((t) => t.tempId !== track.tempId);
-      return filtered.map((t, j) => ({ ...t, position: j + 1 }));
-    });
+  // A track already persisted server-side (uploaded, so it has a real `id`,
+  // not just a client tempId) must be deleted server-side too — otherwise
+  // publish() reloads every DB row for the release regardless of what the
+  // client currently shows, and a track the admin explicitly removed here
+  // can silently reappear in the published release.
+  const removeTrack = async () => {
+    if (!track.id) {
+      setTracks((prev) => {
+        const filtered = prev.filter((t) => t.tempId !== track.tempId);
+        return filtered.map((t, j) => ({ ...t, position: j + 1 }));
+      });
+      return;
+    }
+    setRemoving(true);
+    setRemoveError(null);
+    try {
+      const res = await fetch(`/api/admin/releases/${releaseId}/tracks/${track.id}`, { method: "DELETE" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Failed to remove track");
+      setTracks((prev) => {
+        const filtered = prev.filter((t) => t.tempId !== track.tempId);
+        return filtered.map((t, j) => ({ ...t, position: j + 1 }));
+      });
+    } catch (err) {
+      setRemoving(false);
+      setRemoveError(err.message);
+    }
+  };
 
   const titleChange = (v) =>
     setTracks((prev) => prev.map((t) => t.tempId === track.tempId
@@ -817,10 +842,17 @@ function TrackRow({ track, idx, total, albumSlug, data, releaseId, setTracks }) 
           <button onClick={moveUp}   disabled={idx === 0}         style={iconBtn} title="Move up">↑</button>
           <button onClick={moveDown} disabled={idx === total - 1} style={iconBtn} title="Move down">↓</button>
           {total > 1 && (
-            <button onClick={removeTrack} style={{ ...iconBtn, color: C.error }} title="Remove track">×</button>
+            <button onClick={removeTrack} disabled={removing} style={{ ...iconBtn, color: C.error, opacity: removing ? 0.5 : 1 }} title="Remove track">
+              {removing ? "…" : "×"}
+            </button>
           )}
         </div>
       </div>
+      {removeError && (
+        <div style={{ fontSize: 11, color: C.error, marginTop: -4, marginBottom: 10 }}>
+          Could not remove this track: {removeError}
+        </div>
+      )}
 
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <div style={{ flex: 1 }}>
@@ -1726,20 +1758,29 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null })
     return () => clearTimeout(timeout);
   }, [sessionHydrated, releaseId, step, data, tracks]);
 
-  useEffect(() => {
-    const flush = () => {
-      const snapshot = latestDraftRef.current;
-      if (!snapshot) return;
-      fetch(`/api/admin/releases/${snapshot.releaseId}/draft`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(snapshot.body),
-        keepalive: true,
-      }).catch(() => {});
-    };
-    window.addEventListener("pagehide", flush);
-    return () => window.removeEventListener("pagehide", flush);
+  const flushPendingDraftSave = useCallback(() => {
+    const snapshot = latestDraftRef.current;
+    if (!snapshot) return;
+    fetch(`/api/admin/releases/${snapshot.releaseId}/draft`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(snapshot.body),
+      keepalive: true,
+    }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    window.addEventListener("pagehide", flushPendingDraftSave);
+    return () => window.removeEventListener("pagehide", flushPendingDraftSave);
+  }, [flushPendingDraftSave]);
+
+  // `pagehide` only fires on a true document unload (tab close/refresh) — it
+  // misses an in-app soft navigation away from this wizard (e.g. the embedded
+  // "My Releases" editor switching its view state, or a router transition),
+  // which previously left an edit made in the last <450ms represented only in
+  // the same-tab sessionStorage mirror, not the server. Flushing on unmount
+  // covers that gap without touching the pagehide path above.
+  useEffect(() => () => flushPendingDraftSave(), [flushPendingDraftSave]);
 
   const isMultiTrack = ["album", "ep", "mixtape"].includes(data.release_type);
   const STEPS        = isMultiTrack ? STEPS_MULTI : STEPS_SINGLE;
