@@ -11,6 +11,7 @@ import {
   useSyncExternalStore,
   useLayoutEffect,
 } from "react";
+import { useRouter } from "next/navigation";
 import {
   getCatalogLoading,
   setCatalogLoading,
@@ -19,9 +20,14 @@ import {
 import { setCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import { setCatalogHasMoreFlag } from "@/lib/storefront/catalog-has-more-store";
 import { commitStorefrontDisplaySingles } from "@/lib/storefront/storefront-display-singles-store";
+import { reconcileCanonicalCatalogPage } from "@/lib/storefront/catalog-page-reconcile";
+import {
+  getCatalogRefreshRevision,
+  getCatalogRefreshServerRevision,
+  subscribeCatalogRefresh,
+} from "@/lib/storefront/catalog-refresh-store";
 import {
   assertSsrClientParity,
-  commitCatalogSinglesDeterministic,
   mergeCatalogTrackDeterministic,
   resolveMedia,
   stabilizeCatalogMediaDeterministic,
@@ -40,14 +46,31 @@ import { useAbortController } from "@/system/guards/useAbortController";
 
 const CatalogSurfaceContext = createContext(null);
 
-function commitBrowseSinglesIfChanged(setBrowseSingles, nextSingles, inlineSeed = []) {
-  setBrowseSingles((prev) => {
-    const committed = commitCatalogSinglesDeterministic(prev, nextSingles);
-    if (!committed?.length && inlineSeed.length > 0) {
-      return commitCatalogSinglesDeterministic(prev, inlineSeed);
+const RESOLVED_MEDIA_FIELDS = [
+  "cover",
+  "video",
+  "visual",
+  "preview",
+  "baseCover",
+  "coverArtType",
+  "csAudio",
+  "csCover",
+];
+
+function mergeCanonicalTrackWithFreshMetadata(prev, incoming, inlineFallback) {
+  const deterministic = mergeCatalogTrackDeterministic(prev, incoming, inlineFallback);
+  const merged = { ...deterministic, ...incoming };
+
+  // The media resolver deliberately freezes stable URLs, but its cache is keyed
+  // only by the media signature. Restore just those resolved media fields after
+  // applying the fresh canonical row so title, price, dates, lyrics, and other
+  // non-media mutations cannot be suppressed by that cache.
+  for (const field of RESOLVED_MEDIA_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(deterministic || {}, field)) {
+      merged[field] = deterministic[field];
     }
-    return committed;
-  });
+  }
+  return merged;
 }
 
 /**
@@ -63,6 +86,7 @@ export function CatalogSurfaceProvider({
   inlineMixtapesAndEps = [],
   children,
 }) {
+  const router = useRouter();
   const [stabilizedInlineSingles] = useState(() =>
     stabilizeCatalogMediaDeterministic(inlineSingles));
 
@@ -70,18 +94,40 @@ export function CatalogSurfaceProvider({
     const seed = initialSingles?.length ? initialSingles : inlineSingles;
     return stabilizeCatalogMediaDeterministic(seed);
   });
-  const [catalogPage, setCatalogPage] = useState(1);
+  const catalogMutationRevision = useSyncExternalStore(
+    subscribeCatalogRefresh,
+    getCatalogRefreshRevision,
+    getCatalogRefreshServerRevision
+  );
+  const [catalogRequest, setCatalogRequest] = useState(() => ({
+    page: 1,
+    revision: catalogMutationRevision,
+  }));
+  const catalogPage = catalogRequest.revision === catalogMutationRevision
+    ? catalogRequest.page
+    : 1;
   const [catalogHasMore, setCatalogHasMore] = useState(false);
-  const catalogFetchAbort = useAbortController(catalogPage);
-  const inlineSeedRef = useRef(stabilizedInlineSingles);
+  const catalogHasMoreForCurrentRevision =
+    catalogRequest.revision === catalogMutationRevision && catalogHasMore;
+  const catalogFetchAbort = useAbortController(
+    `${catalogMutationRevision}:${catalogPage}`
+  );
+  const lastRscRefreshRevisionRef = useRef(catalogMutationRevision);
   const prevBrowseSinglesLenRef = useRef(0);
   const prevBrowseSinglesRef = useRef(browseSingles);
   const browseSinglesRef = useRef(browseSingles);
 
   useEffect(() => {
-    inlineSeedRef.current = stabilizedInlineSingles;
     browseSinglesRef.current = browseSingles;
-  }, [browseSingles, stabilizedInlineSingles]);
+  }, [browseSingles]);
+
+  useEffect(() => {
+    if (lastRscRefreshRevisionRef.current === catalogMutationRevision) return;
+    lastRscRefreshRevisionRef.current = catalogMutationRevision;
+    // Refresh the RSC projection too so features, albums, EPs, and mixtapes
+    // receive the same committed-state update as the paged singles surface.
+    router.refresh();
+  }, [catalogMutationRevision, router]);
 
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
@@ -116,7 +162,10 @@ export function CatalogSurfaceProvider({
     let cancelled = false;
     (async () => {
       if (isUiHydrationTraceEnabled()) {
-        logUiHydrationTrace("CATALOG_SURFACE_REFRESH", { catalogPage });
+        logUiHydrationTrace("CATALOG_SURFACE_REFRESH", {
+          catalogPage,
+          revision: catalogMutationRevision,
+        });
       }
       setCatalogLoading(true);
       try {
@@ -132,35 +181,16 @@ export function CatalogSurfaceProvider({
         }
         if (cancelled) return;
 
-        if (!res.ok) {
-          if (catalogPage === 1) {
-            commitBrowseSinglesIfChanged(
-              setBrowseSingles,
-              stabilizedInlineSingles,
-              inlineSeedRef.current
-            );
-          }
+        if (!res.ok || data?.fallback === true) {
+          // The mounted SSR/static seed is the initial degraded fallback. Once
+          // a canonical snapshot has loaded, retain that last-known-good state
+          // rather than resurrecting an older seed during a transient outage.
           setCatalogHasMore(false);
           setCatalogHasMoreFlag(false);
           return;
         }
 
         const tracks = Array.isArray(data.tracks) ? data.tracks : [];
-        const useInline = data?.fallback === true || (catalogPage === 1 && tracks.length === 0);
-
-        if (useInline) {
-          if (catalogPage === 1) {
-            commitBrowseSinglesIfChanged(
-              setBrowseSingles,
-              stabilizedInlineSingles,
-              inlineSeedRef.current
-            );
-          }
-          setCatalogHasMore(false);
-          setCatalogHasMoreFlag(false);
-          return;
-        }
-
         const staticBySlug = new Map(inlineSingles.map((s) => [s.slug, s]));
         const prevBySlug = new Map(
           (browseSinglesRef.current || []).map((s) => [s.slug, s])
@@ -168,36 +198,24 @@ export function CatalogSurfaceProvider({
         const incoming = tracks.map((t) => {
           const fb = staticBySlug.get(t?.slug);
           const prev = prevBySlug.get(t?.slug);
-          return mergeCatalogTrackDeterministic(prev, t, fb);
+          return mergeCanonicalTrackWithFreshMetadata(prev, t, fb);
         });
-        setBrowseSingles((prev) => {
-          const merged =
-            catalogPage === 1
-              ? [...stabilizedInlineSingles]
-              : [...prev];
-          const seen = new Set(merged.map((s) => s.slug));
-          incoming.forEach((t) => {
-            if (t?.slug && !seen.has(t.slug)) {
-              seen.add(t.slug);
-              merged.push(t);
-            }
-          });
-          const committed = commitCatalogSinglesDeterministic(prev, merged);
-          if (!committed?.length && inlineSeedRef.current.length > 0) {
-            return commitCatalogSinglesDeterministic(prev, inlineSeedRef.current);
-          }
-          return committed;
-        });
+        // A successful page-one response is authoritative even when empty.
+        // Replacement (rather than SSR-seed merging) makes archive/removal
+        // visible immediately in an already-mounted provider.
+        setBrowseSingles((prev) =>
+          reconcileCanonicalCatalogPage(prev, incoming, catalogPage)
+        );
+        setCatalogRequest((current) => (
+          current.revision === catalogMutationRevision && current.page === catalogPage
+            ? current
+            : { page: catalogPage, revision: catalogMutationRevision }
+        ));
         const nextHasMore = Boolean(data.hasMore);
         setCatalogHasMore(nextHasMore);
         setCatalogHasMoreFlag(nextHasMore);
       } catch {
         if (!cancelled && catalogPage === 1) {
-          commitBrowseSinglesIfChanged(
-            setBrowseSingles,
-            stabilizedInlineSingles,
-            inlineSeedRef.current
-          );
           setCatalogHasMore(false);
           setCatalogHasMoreFlag(false);
         }
@@ -213,7 +231,12 @@ export function CatalogSurfaceProvider({
     return () => {
       cancelled = true;
     };
-  }, [catalogPage, catalogFetchAbort.signal, inlineSingles, stabilizedInlineSingles]);
+  }, [
+    catalogPage,
+    catalogFetchAbort.signal,
+    catalogMutationRevision,
+    inlineSingles,
+  ]);
 
   useEffect(() => {
     if (!isPlaybackTraceEnabled()) return;
@@ -231,11 +254,14 @@ export function CatalogSurfaceProvider({
   }, [browseSingles, catalogPage]);
 
   const loadMoreCatalog = useCallback(() => {
-    if (!catalogHasMore || getCatalogLoading()) return;
-    setCatalogPage((p) => p + 1);
-  }, [catalogHasMore]);
+    if (!catalogHasMoreForCurrentRevision || getCatalogLoading()) return;
+    setCatalogRequest({ page: catalogPage + 1, revision: catalogMutationRevision });
+  }, [catalogHasMoreForCurrentRevision, catalogMutationRevision, catalogPage]);
 
-  const displaySingles = browseSingles.length ? browseSingles : stabilizedInlineSingles;
+  // `browseSingles` starts with the SSR/static fallback. After a successful
+  // canonical read it may legitimately be empty; never reinterpret empty as a
+  // reason to resurrect the stale seed.
+  const displaySingles = browseSingles;
 
   const displayFeatures = useMemo(
     () => stabilizeCatalogMediaDeterministic(inlineFeatures),
@@ -245,13 +271,12 @@ export function CatalogSurfaceProvider({
   const catalogPlaybackLookup = useMemo(
     () =>
       buildCatalogPlaybackLookup([
-        ...inlineSingles,
         ...displaySingles,
         ...displayFeatures,
         ...inlineAlbums,
         ...inlineMixtapesAndEps,
       ]),
-    [displaySingles, displayFeatures, inlineSingles, inlineAlbums, inlineMixtapesAndEps]
+    [displaySingles, displayFeatures, inlineAlbums, inlineMixtapesAndEps]
   );
 
   const value = useMemo(
@@ -259,7 +284,7 @@ export function CatalogSurfaceProvider({
       browseSingles,
       displaySingles,
       displayFeatures,
-      catalogHasMore,
+      catalogHasMore: catalogHasMoreForCurrentRevision,
       catalogPage,
       loadMoreCatalog,
       catalogPlaybackLookup,
@@ -268,7 +293,7 @@ export function CatalogSurfaceProvider({
       browseSingles,
       displaySingles,
       displayFeatures,
-      catalogHasMore,
+      catalogHasMoreForCurrentRevision,
       catalogPage,
       loadMoreCatalog,
       catalogPlaybackLookup,
@@ -277,10 +302,8 @@ export function CatalogSurfaceProvider({
 
   useLayoutEffect(() => {
     setCatalogSurfaceRef(value);
-    if (displaySingles?.length) {
-      commitStorefrontDisplaySingles(displaySingles);
-    }
-    setCatalogHasMoreFlag(catalogHasMore);
+    commitStorefrontDisplaySingles(displaySingles);
+    setCatalogHasMoreFlag(catalogHasMoreForCurrentRevision);
   });
 
   return (

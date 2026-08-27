@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
 import { MASTER_AUDIO_ACCEPT, VIDEO_COVER_ACCEPT } from "@/lib/media/admin-upload-contract";
 import { validateLifecycleConfiguration } from "@/lib/releases/release-availability";
+import { signalCatalogMutation } from "@/lib/storefront/catalog-refresh-store";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 function slugify(str) {
@@ -1497,6 +1498,9 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Publish failed");
+      signalCatalogMutation(
+        json.status === "scheduled" ? "release_scheduled" : "release_published"
+      );
       setResult(json);
     } catch (err) {
       setError(err.message);

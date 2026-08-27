@@ -1,10 +1,10 @@
 "use client";
 
-import { catalogSinglesMediaEqual } from "@/lib/media/r2-catalog-media";
-
 /**
  * Phase P9 — pinned Latest Singles list for storefront media rows.
- * Updates only when slug order or media signatures change (not loading/auth).
+ * The provider performs deterministic reconciliation; this store preserves its
+ * exact committed snapshot, including authoritative empty and metadata-only
+ * changes that intentionally keep the same media URLs.
  */
 
 let pinnedSingles = [];
@@ -16,13 +16,7 @@ export function getStorefrontDisplaySingles() {
 
 export function commitStorefrontDisplaySingles(next) {
   const list = Array.isArray(next) ? next : [];
-  if (!list.length) return;
-  if (!pinnedSingles.length) {
-    pinnedSingles = list;
-    listeners.forEach((listener) => listener());
-    return;
-  }
-  if (catalogSinglesMediaEqual(pinnedSingles, list)) return;
+  if (Object.is(pinnedSingles, list)) return;
   pinnedSingles = list;
   listeners.forEach((listener) => listener());
 }

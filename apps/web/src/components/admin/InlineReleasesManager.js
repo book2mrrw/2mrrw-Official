@@ -6,6 +6,7 @@ import { catalogCoverUrl, catalogMotionVideoUrl } from "@/lib/media-urls";
 import { UploadWizard } from "@/components/admin/UploadWizard";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
 import { VIDEO_COVER_ACCEPT, MASTER_AUDIO_ACCEPT } from "@/lib/media/admin-upload-contract";
+import { signalCatalogMutation } from "@/lib/storefront/catalog-refresh-store";
 
 // ── Design tokens ────────────────────────────────────────────────────────────────
 const C = {
@@ -518,6 +519,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
       });
       const json = await res.json();
       if (!res.ok && res.status !== 207) throw new Error(json.errors?.[0] || "Save failed");
+      signalCatalogMutation("release_metadata_updated");
       showMsg("Saved — changes live on storefront");
       onSaved();
     } catch (err) {
@@ -539,6 +541,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
       });
       const json = await res.json();
       if (!res.ok && res.status !== 207) throw new Error(json.errors?.[0] || "Save failed");
+      signalCatalogMutation("release_lyrics_updated");
       showMsg("Lyrics saved");
     } catch (err) {
       showMsg("Error: " + err.message);
@@ -598,6 +601,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
       if (!completeRes.ok) throw new Error(completeData.error || "Upload complete failed");
 
       setState({ status: "done", error: null, pct: 100 });
+      signalCatalogMutation(`${assetType}_updated`);
       showMsg(`${assetType === "cover" ? "Cover" : "Cover video"} updated — live on storefront`);
       onSaved();
     } catch (err) {
@@ -657,6 +661,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json.error || "Replace master failed");
       setAudioPhase("done");
+      signalCatalogMutation("release_master_replaced");
       showMsg("Master replaced — HLS re-queued and playback cache cleared");
       onSaved();
     } catch (err) {

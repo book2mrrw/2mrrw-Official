@@ -215,6 +215,23 @@ async function findStorefrontRelease(slug) {
   return html.includes(slug) || html.includes(encodeURIComponent(slug));
 }
 
+async function findCanonicalCatalogRelease(slug) {
+  // Deterministic pagination, not retry polling: inspect each page once and
+  // stop at the server's canonical hasMore boundary.
+  for (let page = 1; page <= 1_000; page += 1) {
+    const response = await fetch(`${APP_URL}/api/catalog/releases?page=${page}&limit=50`, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache" },
+    });
+    if (!response.ok) throw new Error(`canonical catalog request failed (${response.status})`);
+    const payload = await json(response);
+    const releases = Array.isArray(payload.tracks) ? payload.tracks : [];
+    if (releases.some((release) => release?.slug === slug)) return true;
+    if (!payload.hasMore) return false;
+  }
+  throw new Error("canonical catalog pagination exceeded its certification safety bound");
+}
+
 const email = String(await prompt("Admin email: ")).trim();
 let password = await prompt("Admin password (hidden): ", { secret: true });
 const jar = new Map();
@@ -374,6 +391,9 @@ try {
   const inStorefront = await findStorefrontRelease(RELEASE_SLUG);
   console.log(`IMMEDIATE STOREFRONT PROPAGATION: ${inStorefront ? "PASS" : "FAIL"}`);
   if (!inStorefront) throw new Error("published release was not immediately visible in the storefront response");
+  const inCanonicalCatalog = await findCanonicalCatalogRelease(RELEASE_SLUG);
+  console.log(`CANONICAL CATALOG API PROPAGATION: ${inCanonicalCatalog ? "PASS" : "FAIL"}`);
+  if (!inCanonicalCatalog) throw new Error("published release was absent from the canonical catalog API");
 
   await requireResponse(
     "RELEASE METADATA UPDATE",
@@ -472,6 +492,9 @@ try {
   const stillInStorefront = await findStorefrontRelease(RELEASE_SLUG);
   console.log(`STOREFRONT REVOCATION: ${!stillInStorefront ? "PASS" : "FAIL"}`);
   if (stillInStorefront) throw new Error("archived release remained in the storefront response");
+  const stillInCanonicalCatalog = await findCanonicalCatalogRelease(RELEASE_SLUG);
+  console.log(`CANONICAL CATALOG API REVOCATION: ${!stillInCanonicalCatalog ? "PASS" : "FAIL"}`);
+  if (stillInCanonicalCatalog) throw new Error("archived release remained in the canonical catalog API");
 
   passed = true;
   console.log("RELEASE MANAGEMENT PRODUCTION CERTIFICATION: PASS");
@@ -483,17 +506,37 @@ try {
   if (!passed && releaseId && jar.size > 0) {
     try {
       if (releaseState === "draft") {
-        await request(`/api/admin/releases/${releaseId}`, { method: "DELETE", jar });
+        await requireResponse(
+          "FAILURE CLEANUP DRAFT DELETE",
+          await request(`/api/admin/releases/${releaseId}`, { method: "DELETE", jar }),
+        );
       } else if (releaseState === "published" || releaseState === "scheduled") {
-        await request(`/api/admin/releases/${releaseId}`, {
-          method: "PATCH",
-          jar,
-          body: { action: "archive" },
-        });
+        await requireResponse(
+          "FAILURE CLEANUP ARCHIVE",
+          await request(`/api/admin/releases/${releaseId}`, {
+            method: "PATCH",
+            jar,
+            body: { action: "archive" },
+          }),
+        );
       }
-      console.log("FAILURE CLEANUP: ATTEMPTED");
-    } catch {
-      console.log("FAILURE CLEANUP: MANUAL REVIEW REQUIRED");
+
+      const cleanupInventory = await requireResponse(
+        "FAILURE CLEANUP READBACK",
+        await request("/api/admin/releases", { jar }),
+      );
+      const cleanupRow = (cleanupInventory.releases || []).find((release) => release.id === releaseId);
+      const databaseClean = releaseState === "draft"
+        ? !cleanupRow
+        : cleanupRow?.status === "archived" && cleanupRow?.storefront_visible === false;
+      const storefrontClean = !(await findStorefrontRelease(RELEASE_SLUG));
+      const canonicalCatalogClean = !(await findCanonicalCatalogRelease(RELEASE_SLUG));
+      const verified = databaseClean && storefrontClean && canonicalCatalogClean;
+      console.log(`FAILURE CLEANUP: ${verified ? "VERIFIED" : "FAIL"}`);
+      if (!verified) throw new Error("cleanup readback did not prove the release is non-public");
+    } catch (cleanupError) {
+      console.log(`FAILURE CLEANUP: MANUAL REVIEW REQUIRED (${releaseId}, ${RELEASE_SLUG})`);
+      console.error(`FAILURE CLEANUP ERROR: ${cleanupError.message}`);
     }
   }
 }

@@ -5,8 +5,11 @@
  * the same enriched shape as canonical-catalog.js — so the rest of the
  * storefront can swap between hardcoded fallback and live DB data transparently.
  *
- * All functions return null on error so callers fall back to canonical-catalog.js.
- * Never throws — page.js cannot crash because catalog DB is unavailable.
+ * Full-catalog SSR reads return null on error so page.js can fall back without
+ * crashing. Bounded API reads throw so their route can distinguish a database
+ * outage from a healthy, legitimately empty catalog.
+ * `getStorefrontCatalogFromDB()` never throws, so page.js cannot crash because
+ * the catalog database is unavailable.
  */
 
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -32,11 +35,18 @@ const PRODUCT_COLS = [
 
 const RELEASE_LIFECYCLE_COLS = "id,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,preorder_enabled,preorder_starts_at,preorder_price_cents,early_access_enabled,early_access_starts_at,early_access_scope,early_access_audiences,release_timezone,unavailable_at";
 
-/** Map a raw products row to an enriched storefront release shape. */
-function mapProductRow(row) {
+/** Map a raw products row to the canonical enriched storefront release shape. */
+export function mapProductRow(row) {
   const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
   const lifecycleRow = Array.isArray(row.releases) ? row.releases[0] : row.releases;
   const availability = lifecycleRow ? releaseAvailability(lifecycleRow) : null;
+  const artist = typeof meta.artist === "string"
+    ? meta.artist
+    : typeof meta.artist?.name === "string"
+      ? meta.artist.name
+      : typeof meta.artist_name === "string"
+        ? meta.artist_name
+        : "2MRRW";
 
   // Canonical release type (R2 folder segment): 'singles' | 'features' | 'albums' | 'mixtapes-and-eps'
   const releaseTypeFolder =
@@ -71,13 +81,16 @@ function mapProductRow(row) {
 
   return {
     // Identity
+    id: row.id || row.slug,
     slug: row.slug,
     title: row.title,
     display_title: row.title,
+    artist,
     type: releaseTypeShort,
     release_type: releaseTypeShort,
     release_category: meta.release_category || null,
     release_date: row.release_date || meta.release_date || null,
+    releaseDate: row.release_date || meta.release_date || null,
     release_id: row.release_id || null,
     status: lifecycleRow?.status || (row.active ? "published" : "unavailable"),
     scheduled_publish_at: lifecycleRow?.available_at || lifecycleRow?.scheduled_at || null,
@@ -119,7 +132,68 @@ function mapProductRow(row) {
     csCover: null,
     hasCs: false,
 
+    // CatalogRelease compatibility. Multi-track products replace this with
+    // their set-based catalog_tracks projection below.
+    tracks: [],
     metadata: meta,
+  };
+}
+
+/**
+ * Fetch one bounded, deterministic page of the public singles projection.
+ *
+ * `products.active` is the indexed storefront-listing projection maintained by
+ * publication, scheduling, and archival transactions. The attached lifecycle
+ * row remains the authority for request-time visibility and access semantics.
+ * Database failures throw; a healthy catalog with zero rows returns an empty
+ * page so API callers never confuse an outage with a legitimately empty store.
+ * The no-throw fallback guarantee applies only to the full-catalog SSR reader.
+ */
+export async function getStorefrontSinglesPageFromDB({ offset = 0, limit = 20 } = {}) {
+  const normalizedOffset = Math.max(0, Number.parseInt(String(offset), 10) || 0);
+  const normalizedLimit = Math.min(
+    100,
+    Math.max(1, Number.parseInt(String(limit), 10) || 20)
+  );
+  const admin = getAdminClient();
+  const { data, error, count } = await admin
+    .from("products")
+    .select(`${PRODUCT_COLS}, releases(${RELEASE_LIFECYCLE_COLS})`, { count: "exact" })
+    .eq("product_type", "single")
+    .eq("active", true)
+    .order("release_date", { ascending: false, nullsLast: true })
+    .order("id", { ascending: false })
+    .range(normalizedOffset, normalizedOffset + normalizedLimit - 1);
+
+  if (error) throw error;
+  if (!Number.isInteger(count)) throw new Error("catalog_count_unavailable");
+
+  const projected = (data || []).map(mapProductRow);
+  const suppressed = projected.filter(
+    (release) => release.availability && !release.availability.visible
+  );
+  if (suppressed.length > 0) {
+    // Publication writes maintain `products.active` as the indexed listing
+    // projection, including scheduled/upcoming cards. A cross-table mismatch
+    // must fail closed for that row without taking every healthy release
+    // offline. `total` becomes a conservative upper bound until the invariant
+    // is repaired; `projectionTotal` keeps forward pagination deterministic.
+    console.error("[catalog-db] suppressing active products that are not lifecycle-visible", {
+      products: suppressed.map((release) => ({
+        productId: release.id,
+        releaseId: release.release_id,
+        status: release.status,
+      })),
+    });
+  }
+
+  const releases = projected.filter(
+    (release) => !release.availability || release.availability.visible
+  );
+  return {
+    releases,
+    total: Math.max(normalizedOffset + releases.length, count - suppressed.length),
+    projectionTotal: count,
   };
 }
 

@@ -365,6 +365,53 @@ describe("unpublishing a release is as immediate as publishing it", () => {
   });
 });
 
+describe("the public singles API is a bounded projection of canonical Supabase truth", () => {
+  const route = read("src/app/api/catalog/releases/route.js");
+  const catalogDb = read("src/lib/media/catalog-db.js");
+
+  test("the route cannot fall back to the independent Control System catalog", () => {
+    assert.match(route, /getStorefrontSinglesPageFromDB/);
+    assert.doesNotMatch(route, /control-system|getLatestControlSystemSingles/i);
+    assert.match(route, /export const dynamic = "force-dynamic"/);
+    assert.match(route, /export const revalidate = 0/);
+    assert.match(route, /export const fetchCache = "force-no-store"/);
+    assert.match(route, /"Cache-Control": "no-store, max-age=0"/);
+  });
+
+  test("the bounded DB query has an exact count and reuses the canonical mapper", () => {
+    assert.match(catalogDb, /export async function getStorefrontSinglesPageFromDB/);
+    assert.match(catalogDb, /\{ count: "exact" \}/);
+    assert.match(catalogDb, /\.eq\("product_type", "single"\)/);
+    assert.match(catalogDb, /\.eq\("active", true\)/);
+    assert.match(catalogDb, /\.range\(normalizedOffset, normalizedOffset \+ normalizedLimit - 1\)/);
+    assert.match(catalogDb, /const projected = \(data \|\| \[\]\)\.map\(mapProductRow\)/);
+    assert.match(catalogDb, /const availability = lifecycleRow \? releaseAvailability\(lifecycleRow\) : null/);
+  });
+
+  test("lifecycle-invisible projection mismatches fail closed per row", () => {
+    assert.match(catalogDb, /const releases = projected\.filter/);
+    assert.match(catalogDb, /!release\.availability \|\| release\.availability\.visible/);
+    assert.match(catalogDb, /projectionTotal: count/);
+    assert.doesNotMatch(catalogDb, /throw new Error\("catalog_projection_inconsistent"\)/);
+  });
+
+  test("healthy empty catalogs and database failures are observably different", () => {
+    assert.match(route, /fallback: false/);
+    assert.match(route, /source: "supabase"/);
+    assert.match(route, /error: "catalog_unavailable"/);
+    assert.match(route, /\{ status: 503, headers: NO_STORE_HEADERS \}/);
+  });
+
+  test("web tracks and mobile releases retain compatible response keys", () => {
+    assert.match(route, /tracks,/);
+    assert.match(route, /releases: tracks/);
+    assert.match(route, /releases: \[\]/);
+    assert.match(catalogDb, /id: row\.id \|\| row\.slug/);
+    assert.match(catalogDb, /releaseDate: row\.release_date \|\| meta\.release_date \|\| null/);
+    assert.match(catalogDb, /tracks: \[\]/);
+  });
+});
+
 describe("draft mutations never bust the public storefront cache", () => {
   test("draft-scoped upload/complete and replace-master calls are gated on release status", () => {
     const complete = read("src/app/api/admin/upload/complete/route.js");
