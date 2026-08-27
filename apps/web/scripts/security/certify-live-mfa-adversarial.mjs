@@ -103,7 +103,7 @@ const capturedMfaCookie = [...otpJar.keys()].some((name) => name.includes("2mrrw
 console.log(`SESSION COOKIE CAPTURE: ${capturedAuthCookie && capturedMfaCookie ? "PASS" : "FAIL"}`);
 const stateResponse = await request("/api/auth/mfa-session", { jar: otpJar });
 const state = await stateResponse.json().catch(() => ({}));
-console.log(`SERVER SESSION STATE: authenticated=${Boolean(state.authenticated)} admin=${Boolean(state.admin)} mfa=${Boolean(state.mfaVerified)} reason=${state.mfaReason || "none"}`);
+console.log(`SERVER SESSION STATE: authenticated=${Boolean(state.authenticated)} admin=${Boolean(state.admin)} mfa=${Boolean(state.mfaVerified)} required=${Boolean(state.mfaRequired)}`);
 
 const adminAllowed = await request("/api/admin/releases", { jar: otpJar });
 console.log(`VERIFIED MFA ADMIN ACCESS: ${adminAllowed.ok ? "PASS" : "FAIL"} (${adminAllowed.status})`);

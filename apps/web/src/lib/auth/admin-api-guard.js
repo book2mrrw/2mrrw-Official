@@ -41,6 +41,8 @@
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { verifyMfaAuthority } from "@/lib/auth/mfa-authority";
+import { classifyAdminAuthorityDenial } from "@/lib/auth/admin-authority-diagnostics";
+import { emitServerEvent } from "@/lib/observability/server-events";
 import crypto from "crypto";
 
 /**
@@ -106,22 +108,37 @@ export function requireServiceCapability(req, capability) {
  *
  * @returns {Promise<{ ok:boolean, user?:object, mfa?:object, reason?:string }>}
  */
-export async function requireAdminActor({ recentSeconds = null } = {}) {
+export async function requireAdminActor({ recentSeconds = null, logDenial = true } = {}) {
   const user = await getFanSessionUser();
-  if (!user) return { ok: false, reason: "no_session" };
+  if (!user) return denyAdminAuthority("no_session", { logDenial });
 
   // INV-ADMIN-1 — belt and braces. isAdminUser() also rejects guests, but the
   // admin boundary states it explicitly rather than inheriting it.
-  if (user.isGuest === true) return { ok: false, reason: "guest_principal" };
+  if (user.isGuest === true) return denyAdminAuthority("guest_principal", { user, logDenial });
 
-  if (!isAdminUser(user)) return { ok: false, reason: "not_admin" };
+  if (!isAdminUser(user)) return denyAdminAuthority("not_admin", { user, logDenial });
 
   // INV-AUTH-1 / INV-AUTH-2 — assurance comes from the provider, so a session
   // obtained through the raw password grant cannot satisfy it.
   const mfa = await verifyMfaAuthority({ userId: user.id, recentSeconds });
-  if (!mfa.ok) return { ok: false, reason: mfa.reason, mfa, user };
+  if (!mfa.ok) return denyAdminAuthority(mfa.reason, { user, mfa, logDenial });
 
   return { ok: true, user, mfa, via: "admin_session" };
+}
+
+function denyAdminAuthority(reason, { user = null, mfa = null, logDenial = true } = {}) {
+  const diagnostic = classifyAdminAuthorityDenial(reason);
+  if (logDenial) {
+    emitServerEvent(diagnostic.level, "admin_authority_denied", {
+      code: diagnostic.code,
+      actorId: user?.id || null,
+      configurationState:
+        diagnostic.code === "ADMIN_AUTH_MFA_CONFIGURATION_ERROR"
+          ? mfa?.configurationState || null
+          : undefined,
+    });
+  }
+  return { ok: false, reason, ...(user ? { user } : {}), ...(mfa ? { mfa } : {}) };
 }
 
 /**
@@ -148,10 +165,14 @@ export async function getAdminSessionUser(options) {
  * @param {string} capability a ServiceCapability value
  */
 export async function requireAdminOrCapability(req, capability) {
-  const actor = await requireAdminActor();
+  // A legitimate machine caller has no human session by design. Defer the
+  // human-denial event until both authority paths fail so service traffic does
+  // not create false ADMIN_AUTH_NO_SESSION incidents.
+  const actor = await requireAdminActor({ logDenial: false });
   if (actor.ok) return actor;
   const service = requireServiceCapability(req, capability);
   if (service.ok) return service;
+  denyAdminAuthority(actor.reason, { user: actor.user, mfa: actor.mfa });
   // Report the more actionable reason.
   return {
     ok: false,

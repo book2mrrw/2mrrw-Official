@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
-import { isAdminUser } from "@/lib/auth/constants";
+import { requireAdminActor } from "@/lib/auth/admin-api-guard";
+import { classifyAdminAuthorityDenial } from "@/lib/auth/admin-authority-diagnostics";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { discoverFileByExtensions } from "@/lib/storage/r2";
@@ -8,10 +8,15 @@ import { discoverFileByExtensions } from "@/lib/storage/r2";
 export const dynamic = "force-dynamic";
 
 export async function GET(req) {
-  const user = await getAdminSessionUser();
-  if (!user || !isAdminUser(user)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const gate = await requireAdminActor();
+  if (!gate.ok) {
+    const denial = classifyAdminAuthorityDenial(gate.reason);
+    return NextResponse.json(
+      { error: denial.status === 401 ? "Unauthorized" : "Forbidden" },
+      { status: denial.status }
+    );
   }
+  const user = gate.user;
 
   const rl = await checkRateLimit(req, {
     routeKey: "admin.releases.list",

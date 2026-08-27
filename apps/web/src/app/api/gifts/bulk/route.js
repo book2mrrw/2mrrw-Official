@@ -4,6 +4,7 @@ import { grantLibraryItems } from "@/lib/commerce/entitlements";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { emitServerEvent } from "@/lib/observability/server-events";
+import { classifyAdminAuthorityDenial } from "@/lib/auth/admin-authority-diagnostics";
 
 const BATCH_SIZE = 50;
 const BULK_GIFT_RATE_MAX = 5;
@@ -12,9 +13,10 @@ export async function POST(req) {
   const correlationId = req.headers.get("x-correlation-id") || crypto.randomUUID();
   const gate = await requireAdminActor();
   if (!gate.ok) {
+    const denial = classifyAdminAuthorityDenial(gate.reason);
     return Response.json(
-      { error: "Forbidden", reason: gate.reason },
-      { status: gate.reason === "no_session" ? 401 : 403 }
+      { error: denial.status === 401 ? "Unauthorized" : "Forbidden" },
+      { status: denial.status }
     );
   }
   const user = gate.user;

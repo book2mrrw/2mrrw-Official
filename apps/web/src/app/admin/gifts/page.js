@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
+import { useAuth } from "@/context/AuthContext";
 
 const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "callme2mrrw@gmail.com").toLowerCase();
 
@@ -400,6 +401,7 @@ function GiftsHistory({ gifts, loading }) {
 
 export default function AdminGiftsPage() {
   const router = useRouter();
+  const { signOut } = useAuth();
   const [supabase] = useState(() => {
     if (typeof window === "undefined") return null;
     return createBrowserClient(
@@ -489,7 +491,7 @@ export default function AdminGiftsPage() {
           <div style={s.brand}>2MRRW Admin</div>
           <div style={s.pageTitle}>Gift Management</div>
         </div>
-        <button onClick={() => supabase.auth.signOut()} style={s.signOutBtn}>Sign Out</button>
+        <button onClick={() => void signOut()} style={s.signOutBtn}>Sign Out</button>
       </div>
 
       <div style={s.grid}>
