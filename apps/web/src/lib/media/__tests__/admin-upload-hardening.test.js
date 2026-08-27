@@ -294,6 +294,26 @@ describe("scheduled-release activation cannot split-brain releases.status and pr
     assert.match(migration, /revoke all on function public\.activate_scheduled_release\(uuid, timestamptz\) from public, anon, authenticated;/);
     assert.match(migration, /grant execute on function public\.activate_scheduled_release\(uuid, timestamptz\) to service_role;/);
   });
+
+  test("a products update matching zero (or more than one) rows rolls back the whole activation instead of committing split-brained", () => {
+    // Forward-only correction on top of ...052 — Postgres does not error on an
+    // UPDATE that matches zero rows, so the original version could still
+    // commit releases.status='published' with no corresponding active
+    // product. This asserts the fix: the row count is checked and a mismatch
+    // raises inside the same transaction, rolling back the releases update too.
+    const fix = read("supabase/migrations/20260827000053_activate_scheduled_release_requires_product.sql");
+    assert.match(fix, /create or replace function public\.activate_scheduled_release/);
+    assert.match(fix, /get diagnostics v_product_count = row_count;/);
+    assert.match(fix, /if v_product_count <> 1 then/);
+    assert.match(fix, /raise exception/);
+    assert.match(fix, /grant execute on function public\.activate_scheduled_release\(uuid, timestamptz\) to service_role;/);
+  });
+
+  test("the cron already treats any RPC error as a per-release failure that retries next tick, with no change needed there", () => {
+    const cron = read("src/app/api/cron/publish-scheduled/route.js");
+    assert.match(cron, /if \(rpcErr\) throw rpcErr;/);
+    assert.match(cron, /results\.push\(\{ id: rel\.id, slug: rel\.slug, ok: false, error: err\.message \}\);/);
+  });
 });
 
 describe("the two vercel.json cron manifests cannot silently disagree", () => {
