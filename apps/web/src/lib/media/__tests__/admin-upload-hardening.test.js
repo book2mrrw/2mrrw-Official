@@ -155,6 +155,21 @@ describe("release upload database contract", () => {
   });
 });
 
+describe("publish cannot silently half-succeed", () => {
+  const publish = read("src/app/api/admin/releases/[id]/publish/route.js");
+
+  test("a failed tracklist write blocks publish instead of leaving a live release with no tracks", () => {
+    assert.match(publish, /if \(trackErr\) \{\s*console\.error\("\[publish\] catalog_tracks upsert error"/);
+    assert.ok(!publish.includes('console.error("[publish] catalog_tracks upsert error (non-fatal)"'));
+  });
+
+  test("a failed lifecycle status transition is returned as an error, never told to the admin as success", () => {
+    assert.match(publish, /const \{ error: releaseUpdateErr \} = await admin\s*\.from\("releases"\)\s*\.update\(releaseUpdate\)\s*\.eq\("id", releaseId\);/);
+    assert.match(publish, /if \(releaseUpdateErr\) \{[\s\S]{0,500}status: 500 \}/);
+    assert.ok(!publish.includes('.eq("id", releaseId).catch((err) => {\n    console.warn("[publish] release status update error'));
+  });
+});
+
 describe("reopening a draft never re-requires an already-uploaded asset", () => {
   const wizard = read("src/components/admin/UploadWizard.js");
   const inline = read("src/components/admin/InlineReleasesManager.js");
@@ -207,6 +222,30 @@ describe("draft-list rows are openable without hitting a precise Edit target", (
     const adminPage = read("src/app/admin/releases/page.js");
     assert.match(adminPage, /onClick=\{isDraft \? \(\) => router\.push\(`\/admin\/upload\?draft=\$\{rel\.id\}`\) : undefined\}/);
     assert.match(adminPage, /onClick=\{\(e\) => e\.stopPropagation\(\)\}/);
+  });
+});
+
+describe("Albums and Mixtapes & EPs render from the live catalog, not a hardcoded fallback", () => {
+  const homeClient = read("src/app/HomeClient.js");
+
+  test("PageStorefront receives the DB-backed catalog and shadows the module-level fallback constants", () => {
+    assert.match(homeClient, /<PageStorefront\s*\n\s*initialEvents=\{initialEvents\}\s*\n\s*effectiveAlbums=\{effectiveAlbums\}\s*\n\s*effectiveMixtapes=\{effectiveMixtapes\}/);
+    assert.match(homeClient, /function PageStorefront\(\{ initialEvents, effectiveAlbums, effectiveMixtapes \}\)/);
+    assert.match(homeClient, /const albums = effectiveAlbums;/);
+    assert.match(homeClient, /const mixtapesAndEps = effectiveMixtapes;/);
+  });
+
+  test("effectiveAlbums/effectiveMixtapes are still DB-first with a hardcoded fallback, not the reverse", () => {
+    assert.match(homeClient, /const effectiveAlbums =\s*\n\s*initialCatalog\?\.albums\?\.length > 0/);
+    assert.match(homeClient, /const effectiveMixtapes =\s*\n\s*initialCatalog\?\.mixtapes\?\.length > 0/);
+  });
+});
+
+describe("unpublishing a release is as immediate as publishing it", () => {
+  test("archiving a release revalidates the storefront instead of waiting out the ISR window", () => {
+    const route = read("src/app/api/admin/releases/[id]/route.js");
+    const archiveBlock = route.slice(route.indexOf('if (body.action === "archive")'), route.indexOf('if (body.action === "archive")') + 1000);
+    assert.match(archiveBlock, /revalidateStorefront\(archivedRelease\?\.slug, archivedRelease\?\.release_type\)/);
   });
 });
 

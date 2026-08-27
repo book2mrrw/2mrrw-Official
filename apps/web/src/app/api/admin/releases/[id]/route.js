@@ -183,8 +183,18 @@ export async function PATCH(req, { params }) {
     return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ ok: true, restored: id });
   }
   if (body.action === "archive") {
-    const { error } = await admin.from("releases").update({ status: "archived", storefront_visible: false, unavailable_at: new Date().toISOString() }).eq("id", id).in("status", ["scheduled", "published"]);
+    const { data: archivedRelease, error } = await admin
+      .from("releases")
+      .update({ status: "archived", storefront_visible: false, unavailable_at: new Date().toISOString() })
+      .eq("id", id)
+      .in("status", ["scheduled", "published"])
+      .select("slug, release_type")
+      .maybeSingle();
     if (!error) await admin.from("products").update({ active: false }).eq("release_id", id);
+    // Unpublishing must be as immediate as publishing — this call was missing,
+    // so an archived release kept serving from the stale ISR cache for up to
+    // an hour even though it was already correctly excluded from a fresh query.
+    if (!error) revalidateStorefront(archivedRelease?.slug, archivedRelease?.release_type);
     return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ ok: true, archived: id });
   }
 

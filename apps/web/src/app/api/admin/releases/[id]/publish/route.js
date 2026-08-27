@@ -438,8 +438,16 @@ export async function POST(req, { params }) {
       .from("catalog_tracks")
       .upsert(trackRows, { onConflict: "album_slug,slug" });
 
+    // Blocking: a multi-track release must never be marked live with an
+    // incomplete or missing tracklist. Treating this as non-fatal previously
+    // meant the release could go on to be flipped to published/scheduled below
+    // with zero playable tracks in the storefront's catalog_tracks table.
     if (trackErr) {
-      console.error("[publish] catalog_tracks upsert error (non-fatal)", trackErr.message);
+      console.error("[publish] catalog_tracks upsert error", trackErr.message);
+      return NextResponse.json(
+        { error: `Publish failed — could not save the tracklist: ${trackErr.message}` },
+        { status: 500 }
+      );
     }
   }
 
@@ -483,9 +491,23 @@ export async function POST(req, { params }) {
   if (c_line)            releaseUpdate.c_line = c_line;
   if (p_line)            releaseUpdate.p_line = p_line;
 
-  await admin.from("releases").update(releaseUpdate).eq("id", releaseId).catch((err) => {
-    console.warn("[publish] release status update error (non-fatal)", err?.message);
-  });
+  // Blocking: this is the actual lifecycle transition — the write that makes
+  // releaseAvailability() start returning visible:true. Every prior step in
+  // this request (R2 canonicalization, the products upsert, catalog_tracks)
+  // is preparation for this moment. Treating its failure as non-fatal meant
+  // the admin could be told "Published" while the release silently stayed in
+  // status:"draft" forever, with no visible sign anything was wrong.
+  const { error: releaseUpdateErr } = await admin
+    .from("releases")
+    .update(releaseUpdate)
+    .eq("id", releaseId);
+  if (releaseUpdateErr) {
+    console.error("[publish] release status update error", releaseUpdateErr.message);
+    return NextResponse.json(
+      { error: `Publish failed — the release lifecycle transition did not commit: ${releaseUpdateErr.message}. The release is still a draft; press Publish again once resolved.` },
+      { status: 500 }
+    );
+  }
   await admin.from("release_drafts").delete().eq("release_id", releaseId);
 
   // ── 9. Cache invalidation ──────────────────────────────────────────────────

@@ -993,14 +993,28 @@ export default function HomeClient({ initialEvents, initialCatalog }) {
       inlineAlbums={effectiveAlbums}
       inlineMixtapesAndEps={effectiveMixtapes}
     >
-      <PageStorefront initialEvents={initialEvents} />
+      <PageStorefront
+        initialEvents={initialEvents}
+        effectiveAlbums={effectiveAlbums}
+        effectiveMixtapes={effectiveMixtapes}
+      />
     </CatalogSurfaceProvider>
   );
 }
 
-function PageStorefront({ initialEvents }) {
+function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   const router = useRouter();
   useBlackscreenMountTrace("Page");
+  // Shadows the module-level `albums`/`mixtapesAndEps` hardcoded fallback
+  // constants for the rest of this component: every existing reference below
+  // (search index, section rows, modals, Music tab) now resolves to the
+  // DB-backed catalog computed in HomeClient, with the hardcoded arrays only
+  // as their original fallback-of-last-resort when the DB has no rows of
+  // that type. Previously every one of those references silently resolved to
+  // the always-static module constants — a newly published Album/EP/Mixtape
+  // could never appear on the storefront no matter what.
+  const albums = effectiveAlbums;
+  const mixtapesAndEps = effectiveMixtapes;
   const {
     playTrack,
     playQueue,
