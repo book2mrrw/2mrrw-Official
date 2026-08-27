@@ -158,6 +158,18 @@ describe("release upload database contract", () => {
 describe("publish cannot silently half-succeed", () => {
   const publish = read("src/app/api/admin/releases/[id]/publish/route.js");
 
+  test("Supabase builders are awaited and inspected instead of treated like native Promises", () => {
+    assert.doesNotMatch(
+      publish,
+      /await\s+[A-Za-z_$][\w$]*(?:(?!;)[\s\S])*?\.from\((?:(?!;)[\s\S])*?\.catch\(/,
+      "Supabase query builders do not implement Promise.catch(); destructure and inspect their error result",
+    );
+    assert.match(publish, /if \(trackCanonicalizeError\)/);
+    assert.match(publish, /if \(hlsCanonicalizeError\)/);
+    assert.match(publish, /if \(coverKeyUpdateError\) throw coverKeyUpdateError/);
+    assert.match(publish, /if \(singleTrackUpdateError\)/);
+  });
+
   test("a failed tracklist write blocks publish instead of leaving a live release with no tracks", () => {
     assert.match(publish, /if \(trackErr\) \{\s*console\.error\("\[publish\] catalog_tracks upsert error"/);
     assert.ok(!publish.includes('console.error("[publish] catalog_tracks upsert error (non-fatal)"'));
