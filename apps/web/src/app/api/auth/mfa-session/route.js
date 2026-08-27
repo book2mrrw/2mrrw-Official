@@ -6,6 +6,7 @@ import {
   revokeCurrentMfaAuthority,
   verifyMfaAuthority,
 } from "@/lib/auth/mfa-authority";
+import { emitServerEvent } from "@/lib/observability/server-events";
 
 export const dynamic = "force-dynamic";
 
@@ -22,12 +23,20 @@ export async function GET() {
     authenticated: true,
     admin,
     mfaVerified: Boolean(mfa.ok),
-    mfaReason: mfa.ok ? null : mfa.reason,
+    mfaRequired: Boolean(admin && !mfa.ok),
   }, { headers: { "Cache-Control": "no-store" } });
 }
 export async function DELETE() {
-  await revokeCurrentMfaAuthority("sign_out");
-  return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+  try {
+    await revokeCurrentMfaAuthority("sign_out");
+    return NextResponse.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    emitServerEvent("error", "mfa_authority_revocation_failed", {}, error);
+    return NextResponse.json(
+      { error: "Could not revoke verified session" },
+      { status: 503, headers: { "Cache-Control": "no-store" } }
+    );
+  }
 }
 
 /** Authenticated password/security-reset invalidation. Never grants authority. */

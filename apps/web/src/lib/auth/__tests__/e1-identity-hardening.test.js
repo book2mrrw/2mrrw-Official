@@ -307,8 +307,8 @@ describe("INV-AUTH-1/2: custom MFA is durable, session-bound, and fail-closed", 
     assert.match(src, /p_auth_session_id: sessionId/);
   });
   test("F6.3 missing production policy fails closed", () => {
-    assert.match(src, /String\(process\.env\.HUMAN_ADMIN_MFA_REQUIRED \|\| ""\)\.trim\(\)\.toLowerCase\(\) === "true"/);
-    assert.match(src, /custom_mfa_configuration_missing/);
+    assert.match(src, /resolveHumanAdminMfaPolicy/);
+    assert.match(read("lib/auth/mfa-policy.js"), /custom_mfa_configuration_missing/);
   });
   test("F6.4 canonical admin boundary requires custom authority, not AAL", () => {
     const guard = read("lib/auth/admin-api-guard.js");

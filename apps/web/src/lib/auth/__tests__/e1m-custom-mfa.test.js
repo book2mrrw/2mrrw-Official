@@ -26,14 +26,33 @@ test("INV-MFA-9 OTP replay cannot reach mint boundary", () => {
 });
 test("INV-MFA-10/13 raw password and missing config cannot authorize admin", () => {
   assert.match(authority,/custom_mfa_required/);
-  assert.match(authority,/custom_mfa_configuration_missing/);
+  assert.match(authority,/resolveHumanAdminMfaPolicy/);
   const guard=read("src/lib/auth/admin-api-guard.js");
   assert.match(guard,/verifyMfaAuthority/);
-  assert.match(authority, /String\(process\.env\.HUMAN_ADMIN_MFA_REQUIRED \|\| ""\)\.trim\(\)\.toLowerCase\(\) === "true"/);
 });
 test("INV-MFA-7 sign-out revokes cookie and durable authority", () => {
   assert.match(authority,/revoke_2mrrw_mfa_authority/);
+  assert.match(authority,/if \(error\) throw new Error\("mfa_authority_revoke_failed"\)/);
   assert.match(authority,/cookieOptions\(0\)/);
+});
+
+test("INV-MFA diagnostics are structured and internal reasons stay server-side", () => {
+  const guard = read("src/lib/auth/admin-api-guard.js");
+  const bulk = read("src/app/api/gifts/bulk/route.js");
+  const releases = read("src/app/api/admin/releases/route.js");
+  const state = read("src/app/api/auth/mfa-session/route.js");
+  assert.match(guard, /emitServerEvent\(diagnostic\.level, "admin_authority_denied"/);
+  assert.match(guard, /code: diagnostic\.code/);
+  assert.match(guard, /requireAdminActor\(\{ logDenial: false \}\)/);
+  assert.doesNotMatch(bulk, /reason: gate\.reason/);
+  assert.match(releases, /classifyAdminAuthorityDenial\(gate\.reason\)/);
+  assert.doesNotMatch(state, /mfaReason:/);
+});
+
+test("INV-MFA every admin sign-out surface uses canonical revocation", () => {
+  const giftsPage = read("src/app/admin/gifts/page.js");
+  assert.match(giftsPage, /const \{ signOut \} = useAuth\(\)/);
+  assert.doesNotMatch(giftsPage, /supabase\.auth\.signOut\(\)/);
 });
 
 test("INV-MFA-4 every repository API route is classified exactly once", () => {

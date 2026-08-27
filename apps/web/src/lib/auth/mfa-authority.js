@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { resolveHumanAdminMfaPolicy } from "@/lib/auth/mfa-policy";
 
 export const MFA_AUTHORITY_TTL_SECONDS = 12 * 60 * 60;
 export const RECENT_MFA_SECONDS = 15 * 60;
@@ -20,8 +21,22 @@ export function authSessionId(session) {
   const id = claims(session?.access_token)?.session_id;
   return typeof id === "string" && id.length >= 8 ? id : null;
 }
-export const customMfaRequired = () =>
-  String(process.env.HUMAN_ADMIN_MFA_REQUIRED || "").trim().toLowerCase() === "true";
+export const customMfaRequired = () => resolveHumanAdminMfaPolicy().enforced;
+
+async function classifyRejectedAuthority({ admin, userId, tokenHash, sessionId }) {
+  const { data, error } = await admin
+    .from("mfa_authority_sessions")
+    .select("expires_at, revoked_at")
+    .eq("user_id", userId)
+    .eq("token_hash", tokenHash)
+    .eq("auth_session_id", sessionId)
+    .maybeSingle();
+  if (error || !data || data.revoked_at) return "custom_mfa_invalid";
+  const expiresAt = new Date(data.expires_at).getTime();
+  return Number.isFinite(expiresAt) && expiresAt <= Date.now()
+    ? "custom_mfa_expired"
+    : "custom_mfa_invalid";
+}
 
 export async function issueMfaAuthority({ userId, session }) {
   const sessionId = authSessionId(session);
@@ -38,18 +53,36 @@ export async function issueMfaAuthority({ userId, session }) {
 }
 
 export async function verifyMfaAuthority({ userId, recentSeconds = null } = {}) {
-  if (!customMfaRequired()) return { ok: false, reason: "custom_mfa_configuration_missing" };
-  const token = (await cookies()).get(cookieName())?.value || "";
+  const policy = resolveHumanAdminMfaPolicy();
+  if (policy.failureReason) {
+    return { ok: false, reason: policy.failureReason, configurationState: policy.state };
+  }
+  if (policy.allowsWithoutAuthority) {
+    return { ok: true, authority: null, sessionId: null, policy: policy.state };
+  }
+
+  const store = await cookies();
+  const token = store.get(cookieName())?.value || "";
   if (!token || !userId) return { ok: false, reason: "custom_mfa_required" };
   const supabase = await createClient();
   const { data: { session } } = await supabase.auth.getSession();
   const sessionId = authSessionId(session);
-  if (!session || session.user?.id !== userId || !sessionId) return { ok: false, reason: "custom_mfa_session_mismatch" };
-  const { data, error } = await getAdminClient().rpc("verify_2mrrw_mfa_authority", {
-    p_user_id: userId, p_token_hash: hashToken(token), p_auth_session_id: sessionId,
+  if (!session || session.user?.id !== userId || !sessionId) {
+    store.set(cookieName(), "", cookieOptions(0));
+    return { ok: false, reason: "custom_mfa_session_mismatch" };
+  }
+  const admin = getAdminClient();
+  const tokenHash = hashToken(token);
+  const { data, error } = await admin.rpc("verify_2mrrw_mfa_authority", {
+    p_user_id: userId, p_token_hash: tokenHash, p_auth_session_id: sessionId,
   });
   const authority = Array.isArray(data) ? data[0] : data;
-  if (error || !authority?.authority_id) return { ok: false, reason: "custom_mfa_invalid" };
+  if (error) return { ok: false, reason: "custom_mfa_invalid" };
+  if (!authority?.authority_id) {
+    const reason = await classifyRejectedAuthority({ admin, userId, tokenHash, sessionId });
+    store.set(cookieName(), "", cookieOptions(0));
+    return { ok: false, reason };
+  }
   if (recentSeconds != null) {
     const age = (Date.now() - new Date(authority.verified_at).getTime()) / 1000;
     if (!Number.isFinite(age) || age > recentSeconds) return { ok: false, reason: "recent_custom_mfa_required", authority };
@@ -62,9 +95,12 @@ export async function revokeCurrentMfaAuthority(reason = "sign_out") {
   const name = cookieName();
   const token = store.get(name)?.value || "";
   try {
-    if (token) await getAdminClient().rpc("revoke_2mrrw_mfa_authority", {
-      p_token_hash: hashToken(token), p_reason: reason,
-    });
+    if (token) {
+      const { error } = await getAdminClient().rpc("revoke_2mrrw_mfa_authority", {
+        p_token_hash: hashToken(token), p_reason: reason,
+      });
+      if (error) throw new Error("mfa_authority_revoke_failed");
+    }
   } finally { store.set(name, "", cookieOptions(0)); }
 }
 
