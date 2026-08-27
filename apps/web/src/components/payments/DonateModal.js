@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { loadStripe } from "@stripe/stripe-js";
+import { getStripeClient } from "@/lib/commerce/stripe-client";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "@/components/payments/CheckoutForm";
 import { stripePaymentOverlayStyle, stripePaymentPanelStyle } from "@/components/payments/stripePaymentShell";
@@ -12,8 +12,6 @@ import { ModalErrorBoundary } from "@/system/errors";
 const PRESET_AMOUNTS = [5, 10, 20, 50];
 const MIN_DOLLARS = 1;
 const MAX_DOLLARS = 5000;
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
-
 const OVERLAY_FADE = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.22 } };
 const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
 const MODAL_CENTER = { initial: { opacity: 0, scale: 0.96 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.96 }, transition: SPRING_SOFT };
@@ -160,7 +158,7 @@ export default function DonateModal({ open, onClose, isMobile }) {
                 <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 6 }}>{amountLabel || "One-time support"}</div>
                 <p style={{ fontSize: 12, color: "#777", lineHeight: 1.6, marginBottom: 16 }}>Wallets, Link, and card stay in-app. No redirect.</p>
                 <Elements
-                  stripe={stripePromise}
+                  stripe={getStripeClient()}
                   options={{
                     clientSecret,
                     appearance: {

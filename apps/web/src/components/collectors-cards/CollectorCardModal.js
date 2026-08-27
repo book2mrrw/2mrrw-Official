@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { loadStripe } from "@stripe/stripe-js";
+import { getStripeClient } from "@/lib/commerce/stripe-client";
 import { Elements } from "@stripe/react-stripe-js";
 import { benefitsForCard, editionLabel } from "./collectorCardCatalog";
 import CheckoutForm from "@/components/payments/CheckoutForm";
@@ -12,8 +12,6 @@ import {
   confirmCollectorPurchase,
   createCollectorPaymentIntent,
 } from "@/lib/collectors-cards/purchase";
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
 export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurchaseComplete }) {
   const { currentUser, owns, refreshAccountState, refreshLibrary } = useAuth();
@@ -263,7 +261,7 @@ export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurch
               ${card.price.toFixed(2)} · Wallets, Link, and card stay on this page.
             </div>
             <Elements
-              stripe={stripePromise}
+              stripe={getStripeClient()}
               options={{
                 clientSecret,
                 appearance: {

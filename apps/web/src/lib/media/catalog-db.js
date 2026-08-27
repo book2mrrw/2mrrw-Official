@@ -149,19 +149,37 @@ function mapTrackRow(trackRow, albumSlug, releaseTypeFolder) {
   };
 }
 
-/** Fetch catalog_tracks for a product (by product_id). Returns [] on error. */
-async function fetchTracksForProduct(admin, productId, albumSlug, releaseTypeFolder) {
+/**
+ * Fetch every multi-track product in one indexed query and group it by product.
+ * Catalog size therefore changes result volume, not database round-trip count.
+ */
+async function fetchTracksForProducts(admin, products) {
+  const productIds = products.map((product) => product.id).filter(Boolean);
+  if (productIds.length === 0) return new Map();
   try {
     const { data, error } = await admin
       .from("catalog_tracks")
-      .select("id, slug, title, position, storage_path, preview_path, stream_path, duration_seconds, metadata")
-      .eq("product_id", productId)
+      .select("id, product_id, slug, title, position, storage_path, preview_path, stream_path, duration_seconds, metadata")
+      .in("product_id", productIds)
       .order("position", { ascending: true });
     if (error) throw error;
-    return (data || []).map((row) => mapTrackRow(row, albumSlug, releaseTypeFolder));
+
+    const productById = new Map(products.map((product) => [product.id, product]));
+    const tracksByProductId = new Map(productIds.map((id) => [id, []]));
+    for (const row of data || []) {
+      const product = productById.get(row.product_id);
+      if (!product) continue;
+      tracksByProductId.get(row.product_id).push(
+        mapTrackRow(row, product.slug, product.releaseTypeFolder)
+      );
+    }
+    return tracksByProductId;
   } catch (err) {
-    console.error("[catalog-db] fetchTracksForProduct error", { productId, error: err?.message });
-    return [];
+    console.error("[catalog-db] fetchTracksForProducts error", {
+      productCount: productIds.length,
+      error: err?.message,
+    });
+    return new Map();
   }
 }
 
@@ -189,6 +207,20 @@ export async function getStorefrontCatalogFromDB() {
     if (error) throw error;
     if (!data?.length) return null;
 
+    const multiTrackProducts = data
+      .filter((row) => row.product_type === "album")
+      .map((row) => ({
+        id: row.id,
+        slug: row.slug,
+        releaseTypeFolder:
+          row.release_type ||
+          normalizeReleaseType(
+            row.metadata?.release_type || row.metadata?.release_category || row.product_type
+          ) ||
+          "mixtapes-and-eps",
+      }));
+    const tracksByProductId = await fetchTracksForProducts(admin, multiTrackProducts);
+
     const singles = [];
     const features = [];
     const albums = [];
@@ -212,13 +244,7 @@ export async function getStorefrontCatalogFromDB() {
         // Distinguish true albums from mixtapes/EPs using release_type folder
         const isMixtapeOrEp = releaseTypeFolder === "mixtapes-and-eps";
 
-        // Fetch tracks for this multi-track release
-        const tracks = await fetchTracksForProduct(
-          admin,
-          row.id,
-          row.slug,
-          releaseTypeFolder || "mixtapes-and-eps"
-        );
+        const tracks = tracksByProductId.get(row.id) || [];
 
         const enrichedAlbum = {
           ...enriched,

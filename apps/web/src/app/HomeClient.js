@@ -1,9 +1,10 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition, Suspense } from "react";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
+import { getStripeClient } from "@/lib/commerce/stripe-client";
 const CheckoutForm = dynamic(() => import("@/components/payments/CheckoutForm"), { ssr: false });
 const DonateModal = dynamic(() => import("@/components/payments/DonateModal"), { ssr: false });
 import { stripePaymentOverlayStyle, stripePaymentPanelStyle } from "@/components/payments/stripePaymentShell";
@@ -117,9 +118,6 @@ const MOBILE_NAV_TABS = [
   { id: "shop", label: "Shop" },
   { id: "more", label: "More", more: true },
 ];
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
-
-
 const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
 const MOBILE_NAV_SHEET_MS = 300;
 const OVERLAY_FADE = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.22 } };
@@ -1001,6 +999,7 @@ export default function HomeClient({ initialEvents, initialCatalog }) {
 }
 
 function PageStorefront({ initialEvents }) {
+  const router = useRouter();
   useBlackscreenMountTrace("Page");
   const {
     playTrack,
@@ -2018,7 +2017,7 @@ function PageStorefront({ initialEvents }) {
 
   const switchTab = useCallback((tabId) => {
     if (tabId === "cards") {
-      window.location.assign(COLLECTORS_CARDS_ROUTE);
+      router.push(COLLECTORS_CARDS_ROUTE);
       return;
     }
     // phase11: startTransition — non-urgent UI update
@@ -2084,7 +2083,7 @@ function PageStorefront({ initialEvents }) {
         mainScrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
       }, 0);
     }
-  }, []);
+  }, [router]);
 
   const switchMusicSubTab = sub => {
     // phase11: startTransition — browse sub-tab switch
@@ -3132,7 +3131,7 @@ function PageStorefront({ initialEvents }) {
               }}
             >
               <motion.div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Checkout</motion.div>
-              <Elements stripe={stripePromise} options={{clientSecret,appearance:{theme:"night",variables:{colorPrimary:"#00ffff",colorBackground:"#0a0a0a",colorText:"#ffffff",borderRadius:"8px"}}}}>
+              <Elements stripe={getStripeClient()} options={{clientSecret,appearance:{theme:"night",variables:{colorPrimary:"#00ffff",colorBackground:"#0a0a0a",colorText:"#ffffff",borderRadius:"8px"}}}}>
                 <CheckoutForm onSuccess={handleCheckoutSuccess} requiresShipping={cartRequiresShipping}/>
               </Elements>
               <button onClick={()=>{setClientSecret(null);setCheckingOut(false);}} style={{marginTop:10,width:"100%",padding:10,background:"none",border:"1px solid #333",color:"#777",cursor:"pointer",borderRadius:8}}>Cancel</button>

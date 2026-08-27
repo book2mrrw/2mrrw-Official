@@ -1,5 +1,4 @@
 import "./globals.css";
-import StripeProvider from "./StripeProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import { AuthGateProvider } from "@/context/AuthGateContext";
 import AppAuthRoot from "@/components/auth/AppAuthRoot";
@@ -74,11 +73,9 @@ export default function RootLayout({ children }) {
             <AppAuthRoot>
               <AuthGateProvider>
                 <SessionRecoveryRoot>
-                  <StripeProvider>
-                    <MediaErrorBoundary assetId="app-layout" mediaType="layout">
-                      {children}
-                    </MediaErrorBoundary>
-                  </StripeProvider>
+                  <MediaErrorBoundary assetId="app-layout" mediaType="layout">
+                    {children}
+                  </MediaErrorBoundary>
                 </SessionRecoveryRoot>
               </AuthGateProvider>
             </AppAuthRoot>

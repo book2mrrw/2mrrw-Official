@@ -216,9 +216,7 @@ const HomeStorefront = memo(function HomeStorefront({
         </p>
         <button
           type="button"
-          onClick={() => {
-            window.location.href = COLLECTORS_CARDS_ROUTE;
-          }}
+          onClick={() => router.push(COLLECTORS_CARDS_ROUTE)}
           style={{ padding: "11px 18px", background: "transparent", border: "1px solid rgba(0,255,255,0.35)", borderRadius: 10, color: "#00ffff", fontSize: 12, fontWeight: 700, letterSpacing: 1.5, cursor: "pointer" }}
         >
           View Collector&apos;s Cards →

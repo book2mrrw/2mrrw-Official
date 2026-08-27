@@ -442,10 +442,12 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   // Static cover upload state
   const [coverState,   setCoverState]   = useState({ status: "idle", error: null, pct: 0 });
   const [coverPreview, setCoverPreview] = useState(null);
+  const coverPreviewObjectUrlRef = useRef(null);
 
   // Animated cover video upload state
   const [mp4State,   setMp4State]   = useState({ status: "idle", error: null, pct: 0 });
   const [mp4Preview, setMp4Preview] = useState(null);
+  const mp4PreviewObjectUrlRef = useRef(null);
 
   // Audio replace state
   const [audioReplacing,  setAudioReplacing]  = useState(null);
@@ -454,6 +456,13 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const [audioNewKey,     setAudioNewKey]     = useState(null);
   const [audioError,      setAudioError]      = useState("");
   const audioXhrRef = useRef(null);
+
+  useEffect(() => () => {
+    for (const ref of [coverPreviewObjectUrlRef, mp4PreviewObjectUrlRef]) {
+      if (ref.current) URL.revokeObjectURL(ref.current);
+      ref.current = null;
+    }
+  }, []);
 
   const GENRES = ["R&B","Hip-Hop","Pop","Alternative R&B","Soul","Neo-Soul","Trap","Rap","Melodic Rap","Pop/R&B","Hiphop/R&B","Electronic","Other"];
 
@@ -527,9 +536,11 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
 
   // ── Unified cover upload (still image or cover video) ─────────────────────────
   // presigned → XHR PUT with progress → complete → revalidation fires server-side
-  const uploadAsset = useCallback(async ({ file, assetType, setState, setPreview }) => {
+  const uploadAsset = useCallback(async ({ file, assetType, setState, setPreview, objectUrlRef }) => {
     if (!file || !detail) return;
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
     const previewUrl = URL.createObjectURL(file);
+    objectUrlRef.current = previewUrl;
     setPreview(previewUrl);
 
     try {
@@ -761,7 +772,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
               <Label>Static Cover · JPEG / PNG / WEBP</Label>
               <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
                 <div
-                  onClick={coverState.status !== "uploading" ? () => pickFile("image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp", (f) => uploadAsset({ file: f, assetType: "cover", setState: setCoverState, setPreview: setCoverPreview })) : undefined}
+                  onClick={coverState.status !== "uploading" ? () => pickFile("image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp", (f) => uploadAsset({ file: f, assetType: "cover", setState: setCoverState, setPreview: setCoverPreview, objectUrlRef: coverPreviewObjectUrlRef })) : undefined}
                   style={{
                     width: 120, height: 120, flexShrink: 0, borderRadius: 12,
                     background: C.surface2,
@@ -784,7 +795,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                   <Btn
                     variant="secondary" small
                     disabled={coverState.status === "uploading"}
-                    onClick={() => pickFile("image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp", (f) => uploadAsset({ file: f, assetType: "cover", setState: setCoverState, setPreview: setCoverPreview }))}
+                    onClick={() => pickFile("image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp", (f) => uploadAsset({ file: f, assetType: "cover", setState: setCoverState, setPreview: setCoverPreview, objectUrlRef: coverPreviewObjectUrlRef }))}
                   >
                     {coverState.status === "uploading" ? `Uploading ${coverState.pct}%…` : coverState.status === "done" ? "✓ Replace Again" : "Choose Image"}
                   </Btn>
@@ -823,7 +834,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                   <Btn
                     variant="secondary" small
                     disabled={mp4State.status === "checking" || mp4State.status === "uploading"}
-                    onClick={() => pickFile(VIDEO_COVER_ACCEPT, (f) => uploadAsset({ file: f, assetType: "cover-video", setState: setMp4State, setPreview: setMp4Preview }))}
+                    onClick={() => pickFile(VIDEO_COVER_ACCEPT, (f) => uploadAsset({ file: f, assetType: "cover-video", setState: setMp4State, setPreview: setMp4Preview, objectUrlRef: mp4PreviewObjectUrlRef }))}
                   >
                     {mp4State.status === "checking" ? "Checking duration…" : mp4State.status === "uploading" ? `Uploading ${mp4State.pct}%…` : mp4State.status === "done" ? "✓ Replace Video" : "Upload Cover Video"}
                   </Btn>

@@ -30,6 +30,12 @@ jobs:
           pnpm --filter @2mrrw/auth build
           pnpm --filter @2mrrw/api build
           pnpm --filter @2mrrw/design-system build
+      - name: Lint web
+        working-directory: apps/web
+        run: pnpm lint
+      - name: Playback, authority, upload, and lifecycle invariants
+        working-directory: apps/web
+        run: pnpm test:architecture-critical
       - name: Build web
         working-directory: apps/web
         run: pnpm build

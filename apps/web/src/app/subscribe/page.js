@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { loadStripe } from "@stripe/stripe-js";
+import { useRouter } from "next/navigation";
 import { Elements, ExpressCheckoutElement, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { getStripeClient } from "@/lib/commerce/stripe-client";
 import { useAuth } from "@/context/AuthContext";
 import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 import { stripePaymentOverlayStyle, stripePaymentPanelStyle, stripePaymentFormStyle } from "@/components/payments/stripePaymentShell";
@@ -29,8 +30,6 @@ async function pollSubscriptionAccountState(refreshAccountState, source) {
   }
   return false;
 }
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
 const fadeUp = {
   initial: { opacity: 0, y: 24 },
@@ -63,6 +62,7 @@ const faqs = [
 ];
 
 export default function SubscribePage() {
+  const router = useRouter();
   const { accountState, membership, refreshAccountState, loading: accountLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -127,7 +127,7 @@ export default function SubscribePage() {
       <div style={{position:"fixed",inset:0,pointerEvents:"none",background:"radial-gradient(circle at 50% 12%,rgba(162,89,255,0.16),transparent 38%),radial-gradient(circle at 78% 72%,rgba(0,255,255,0.08),transparent 36%)"}}/>
       <div style={{position:"relative",maxWidth:1120,margin:"0 auto",padding:"28px 20px 80px"}}>
         <nav style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:16,marginBottom:64}}>
-          <button onClick={()=>{window.location.href="/";}} style={{background:"transparent",border:"1px solid #222",color:"#777",borderRadius:999,padding:"9px 14px",fontSize:11,letterSpacing:2,textTransform:"uppercase",cursor:"pointer"}}>Back to 2MRRW</button>
+          <button onClick={() => router.push("/")} style={{background:"transparent",border:"1px solid #222",color:"#777",borderRadius:999,padding:"9px 14px",fontSize:11,letterSpacing:2,textTransform:"uppercase",cursor:"pointer"}}>Back to 2MRRW</button>
           <div style={{fontSize:13,letterSpacing:5,fontWeight:900}}>2MRRW</div>
         </nav>
 
@@ -239,7 +239,7 @@ export default function SubscribePage() {
               <div style={{fontSize:11,color:"#a259ff",letterSpacing:3,marginBottom:12,textTransform:"uppercase"}}>Inner Circle</div>
               <div style={{fontSize:24,fontWeight:950,letterSpacing:"-0.04em",marginBottom:8}}>Complete membership</div>
               <div style={{fontSize:13,color:"#777",lineHeight:1.7,marginBottom:18}}>$7.99/month. Wallets, Link, and card stay inside the site.</div>
-              <Elements stripe={stripePromise} options={{clientSecret:subscriptionClientSecret,appearance:{theme:"night",variables:{colorPrimary:"#a259ff",colorBackground:"#0a0a0a",colorText:"#ffffff",borderRadius:"8px"}}}}>
+              <Elements stripe={getStripeClient()} options={{clientSecret:subscriptionClientSecret,appearance:{theme:"night",variables:{colorPrimary:"#a259ff",colorBackground:"#0a0a0a",colorText:"#ffffff",borderRadius:"8px"}}}}>
                 <SubscriptionPaymentForm onSuccess={handleSubscriptionSuccess}/>
               </Elements>
               <button onClick={closeSubscriptionModal} style={{marginTop:10,width:"100%",padding:10,background:"none",border:"1px solid #333",color:"#777",cursor:"pointer",borderRadius:8}}>Cancel</button>

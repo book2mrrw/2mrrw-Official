@@ -1075,10 +1075,23 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
   const [openLyricsId, setOpenLyricsId] = useState(null);
   const coverInputRef = useRef(null);
   const videoInputRef = useRef(null);
+  const coverPreviewObjectUrlRef = useRef(null);
+  const videoPreviewObjectUrlRef = useRef(null);
+
+  useEffect(() => () => {
+    for (const ref of [coverPreviewObjectUrlRef, videoPreviewObjectUrlRef]) {
+      if (ref.current) URL.revokeObjectURL(ref.current);
+      ref.current = null;
+    }
+  }, []);
 
   const uploadCover = useCallback(async (file) => {
     setCoverState({ status: "uploading", error: null });
+    if (coverPreviewObjectUrlRef.current) {
+      URL.revokeObjectURL(coverPreviewObjectUrlRef.current);
+    }
     const previewUrl = URL.createObjectURL(file);
+    coverPreviewObjectUrlRef.current = previewUrl;
     onChange("cover_preview_url", previewUrl);
     try {
       const { key } = await uploadAssetToR2({
@@ -1109,7 +1122,11 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
 
   const uploadCoverVideo = useCallback(async (file) => {
     setVideoState({ status: "checking", error: null });
+    if (videoPreviewObjectUrlRef.current) {
+      URL.revokeObjectURL(videoPreviewObjectUrlRef.current);
+    }
     const previewUrl = URL.createObjectURL(file);
+    videoPreviewObjectUrlRef.current = previewUrl;
     onChange("cover_video_preview_url", previewUrl);
     try {
       const durationSeconds = await new Promise((resolve, reject) => {
