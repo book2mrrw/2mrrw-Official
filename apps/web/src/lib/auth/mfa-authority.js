@@ -65,9 +65,17 @@ export async function verifyMfaAuthority({ userId, recentSeconds = null } = {}) 
   const token = store.get(cookieName())?.value || "";
   if (!token || !userId) return { ok: false, reason: "custom_mfa_required" };
   const supabase = await createClient();
-  const { data: { session } } = await supabase.auth.getSession();
-  const sessionId = authSessionId(session);
-  if (!session || session.user?.id !== userId || !sessionId) {
+  // The base guard has already authenticated the principal with getUser(). Use
+  // Supabase's verified JWT claims here rather than trusting the cookie-backed
+  // user object returned by getSession(). This binds the MFA authority to the
+  // cryptographically verified subject + session_id without noisy SDK warnings.
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const verifiedClaims = claimsData?.claims;
+  const sessionId = typeof verifiedClaims?.session_id === "string"
+    && verifiedClaims.session_id.length >= 8
+    ? verifiedClaims.session_id
+    : null;
+  if (claimsError || verifiedClaims?.sub !== userId || !sessionId) {
     store.set(cookieName(), "", cookieOptions(0));
     return { ok: false, reason: "custom_mfa_session_mismatch" };
   }
