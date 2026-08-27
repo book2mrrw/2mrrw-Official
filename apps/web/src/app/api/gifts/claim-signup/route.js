@@ -10,6 +10,7 @@ import {
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { hashGiftLinkToken } from "@/lib/gifts/token-hash";
 import { validateEmail } from "@/lib/auth/validation";
+import { persistNewUserProfileOrRollback } from "@/lib/auth/provision-new-user";
 import { buildWelcomeEmail, sendTransactionalEmail } from "@/lib/server/email";
 import { catalogCoverUrl } from "@/lib/media-urls";
 import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
@@ -89,9 +90,10 @@ export async function POST(req) {
 
     const VALID_GENDERS = ["male", "female"];
     const VALID_AGE_RANGES = ["18-25", "25-40", "40-65"];
-    await admin.from("profiles").upsert(
-      {
-        id: newUser.id,
+    const profileProvision = await persistNewUserProfileOrRollback(admin, {
+      userId: newUser.id,
+      logPrefix: "claim-signup",
+      profile: {
         email,
         phone: String(phone || "").trim() || null,
         full_name: String(name || "").trim() || "",
@@ -103,8 +105,13 @@ export async function POST(req) {
         age_range: VALID_AGE_RANGES.includes(age_range) ? age_range : null,
         role: "user",
       },
-      { onConflict: "id" }
-    ).catch(() => {});
+    });
+    if (!profileProvision.ok) {
+      return NextResponse.json(
+        { error: "Account setup could not be completed. Please try again." },
+        { status: 500 }
+      );
+    }
 
     // Sign in server-side — the SSR client writes the auth cookies into the response
     // headers so the browser is immediately authenticated after this API call returns.

@@ -506,9 +506,17 @@ export async function POST(req, { params }) {
   if (c_line)            releaseUpdate.c_line = c_line;
   if (p_line)            releaseUpdate.p_line = p_line;
 
-  await admin.from("releases").update(releaseUpdate).eq("id", releaseId).catch((err) => {
-    console.warn("[publish] release status update error (non-fatal)", err?.message);
-  });
+  const { error: releaseUpdateErr } = await admin
+    .from("releases")
+    .update(releaseUpdate)
+    .eq("id", releaseId);
+  if (releaseUpdateErr) {
+    console.error("[publish] release status update error", releaseUpdateErr.message);
+    return NextResponse.json(
+      { error: "Publish failed — the release lifecycle transition did not commit. The release is still a draft; please try again." },
+      { status: 500 }
+    );
+  }
   await admin.from("release_drafts").delete().eq("release_id", releaseId);
 
   // ── 9. Cache invalidation ──────────────────────────────────────────────────

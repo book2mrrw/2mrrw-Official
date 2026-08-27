@@ -3,6 +3,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { validateEmail } from "@/lib/auth/validation";
+import { persistNewUserProfileOrRollback } from "@/lib/auth/provision-new-user";
 import { buildWelcomeEmail, sendTransactionalEmail } from "@/lib/server/email";
 
 export const dynamic = "force-dynamic";
@@ -59,9 +60,10 @@ export async function POST(req) {
 
     const VALID_GENDERS = ["male", "female"];
     const VALID_AGE_RANGES = ["18-25", "25-40", "40-65"];
-    await admin.from("profiles").upsert(
-      {
-        id: newUser.id,
+    const profileProvision = await persistNewUserProfileOrRollback(admin, {
+      userId: newUser.id,
+      logPrefix: "auth/signup",
+      profile: {
         email,
         phone: String(phone || "").trim() || null,
         full_name: String(name || "").trim() || "",
@@ -73,8 +75,13 @@ export async function POST(req) {
         age_range: VALID_AGE_RANGES.includes(age_range) ? age_range : null,
         role: "user",
       },
-      { onConflict: "id" }
-    ).catch(() => {});
+    });
+    if (!profileProvision.ok) {
+      return NextResponse.json(
+        { error: "Account setup could not be completed. Please try again." },
+        { status: 500 }
+      );
+    }
 
     // Sign in server-side so the SSR client writes auth cookies into the response.
     const supabase = await createClient();
