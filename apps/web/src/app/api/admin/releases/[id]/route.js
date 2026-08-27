@@ -35,7 +35,7 @@ export async function GET(req, { params }) {
   const [releaseRes, productRes, tracksRes] = await Promise.all([
     admin
       .from("releases")
-      .select("id, slug, status, release_type, release_date, scheduled_at, storefront_visible, cover_art_r2_key, upc, created_at")
+      .select("id, slug, status, release_type, release_date, scheduled_at, storefront_visible, cover_art_r2_key, upc, created_at, metadata")
       .eq("id", id)
       .single(),
     admin
@@ -65,11 +65,12 @@ export async function GET(req, { params }) {
         scheduled_at:      release.scheduled_at,
         storefront_visible: release.storefront_visible,
         cover_art_r2_key:  release.cover_art_r2_key,
+        animated_cover_r2_key: release.metadata?.animated_cover_r2_key || null,
       },
       product: {
         title:         product?.title         || null,
         display_title: product?.display_title || null,
-        price_cents:   product?.price_cents   || null,
+        price_cents:   Number.isFinite(product?.price_cents) ? product.price_cents : null,
         genre:         product?.metadata?.genre || null,
       },
       tracks: tracks.map((t) => ({
@@ -228,7 +229,7 @@ export async function PATCH(req, { params }) {
       if (title !== undefined) { updates.title = title; updates.display_title = title; }
       if (price !== undefined && price !== "") {
         const priceCents = Math.round(parseFloat(price) * 100);
-        if (!isNaN(priceCents) && priceCents > 0) updates.price_cents = priceCents;
+        if (!isNaN(priceCents) && priceCents >= 0) updates.price_cents = priceCents;
       }
       if (genre !== undefined) {
         updates.metadata = { ...(currentProduct?.metadata || {}), genre };
@@ -255,7 +256,14 @@ export async function PATCH(req, { params }) {
       return NextResponse.json({ ok: false, errors }, { status: 207 });
     }
 
-    revalidateStorefront(release.slug, release.release_type);
+    // A draft mutation must never bust the storefront ISR cache — only revalidate
+    // once this release is actually (or about to become) publicly visible. Use the
+    // post-update status, not the pre-fetch one, since this same lifecycle branch
+    // can be what flips a release from draft to scheduled/published.
+    const finalStatus = lifecycleUpdates.status || release.status;
+    if (finalStatus !== "draft") {
+      revalidateStorefront(release.slug, release.release_type);
+    }
     return NextResponse.json({ ok: true });
   }
 
@@ -274,7 +282,7 @@ export async function PATCH(req, { params }) {
   if (title !== undefined) { productUpdates.title = title; productUpdates.display_title = title; }
   if (price !== undefined && price !== "") {
     const priceCents = Math.round(parseFloat(price) * 100);
-    if (!isNaN(priceCents) && priceCents > 0) productUpdates.price_cents = priceCents;
+    if (!isNaN(priceCents) && priceCents >= 0) productUpdates.price_cents = priceCents;
   }
 
   const currentMeta = product.metadata || {};
@@ -371,31 +379,6 @@ export async function DELETE(req, { params }) {
       }, { onConflict: "release_id" }).select("id,delete_after").single();
       if (stageError) return NextResponse.json({ error: `Failed to stage draft dump: ${stageError.message}` }, { status: 500 });
       return NextResponse.json({ ok: true, staged: true, job_id: job.id, delete_after: job.delete_after });
-
-      // Deactivate any linked product (don't hard-delete — may have purchase history)
-      await admin.from("products")
-        .update({ active: false, updated_at: new Date().toISOString() })
-        .eq("release_id", id);
-
-      // Also deactivate by slug in case it was ingested without release_id link
-      if (release.slug) {
-        await admin.from("products")
-          .update({ active: false, updated_at: new Date().toISOString() })
-          .eq("slug", release.slug)
-          .is("release_id", null);
-      }
-
-      // Hard-delete tracks
-      await admin.from("tracks").delete().eq("release_id", id);
-
-      // Hard-delete the release row
-      const { error } = await admin.from("releases").delete().eq("id", id);
-      if (error) {
-        return NextResponse.json({ error: `Failed to delete release: ${error.message}` }, { status: 500 });
-      }
-
-      revalidateStorefront();
-      return NextResponse.json({ ok: true, deleted: "wizard_release" });
     }
   }
 

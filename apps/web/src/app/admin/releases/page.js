@@ -636,11 +636,19 @@ export default function AdminReleasesPage() {
 
               const rowEl = (
                 <div
+                  role={isDraft ? "button" : undefined}
+                  tabIndex={isDraft ? 0 : undefined}
+                  aria-label={isDraft ? `Continue draft ${rel.title || "untitled release"}` : undefined}
+                  onClick={isDraft ? () => router.push(`/admin/upload?draft=${rel.id}`) : undefined}
+                  onKeyDown={isDraft ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); router.push(`/admin/upload?draft=${rel.id}`); }
+                  } : undefined}
                   style={{
                     display: "grid",
                     gridTemplateColumns: "1fr 90px 100px 110px 180px",
                     padding: "14px 20px",
                     alignItems: "center",
+                    cursor: isDraft ? "pointer" : "default",
                   }}
                 >
                   <div>
@@ -676,7 +684,10 @@ export default function AdminReleasesPage() {
                     {rel.track_counts.ready}/{rel.track_counts.total} ready
                   </div>
 
-                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}>
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ display: "flex", gap: 6, justifyContent: "flex-end", flexWrap: "wrap" }}
+                  >
                     {isLive && rel.slug && (
                       <a
                         href={prefix + rel.slug}

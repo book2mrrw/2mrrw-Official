@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
 import { MASTER_AUDIO_ACCEPT, VIDEO_COVER_ACCEPT } from "@/lib/media/admin-upload-contract";
+import { validateLifecycleConfiguration } from "@/lib/releases/release-availability";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 function slugify(str) {
@@ -589,7 +590,11 @@ function CreditsStep({ data, onChange, onNext, onBack, isMultiTrack }) {
 
 // ── Step 3a: Audio Upload (single / feature) ─────────────────────────────────────
 function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug }) {
-  const [uploadState, setUploadState] = useState({ status: "idle", progress: 0, error: null });
+  const [uploadState, setUploadState] = useState({
+    status: data.audio_key ? "ready" : "idle",
+    progress: data.audio_key ? 100 : 0,
+    error: null,
+  });
   const xhrRef = useRef(null);
   const audioInputRef = useRef(null);
 
@@ -704,7 +709,7 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
 
       <div style={{ display: "flex", gap: 12 }}>
         <Btn onClick={onBack} variant="secondary">← Back</Btn>
-        <Btn onClick={onNext} disabled={status !== "ready"}>Continue →</Btn>
+        <Btn onClick={onNext} disabled={status !== "ready" && !data.audio_key}>Continue →</Btn>
       </div>
     </div>
   );
@@ -1361,6 +1366,34 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
   }
   if (data.early_access_enabled) {
     checks.push({ label: "Early-access start set", ok: Boolean(data.early_access_starts_local), blocking: true });
+  }
+
+  // Preview the exact same cross-field lifecycle rules the publish endpoint enforces
+  // (future scheduled time, pre-order-before-release, early-access-requires-preorder,
+  // early-access-before-release) so this checklist can never show all-green while the
+  // server is about to reject the same combination.
+  const previewScheduledAt = data.publish_mode === "scheduled" && data.scheduled_date
+    ? wallClockToUtc(data.scheduled_date, data.scheduled_time, data.release_timezone)
+    : null;
+  const previewPreorderStartsAt = data.preorder_enabled && data.preorder_starts_local
+    ? wallClockToUtc(...data.preorder_starts_local.split("T"), data.release_timezone)
+    : null;
+  const previewEarlyAccessStartsAt = data.early_access_enabled && data.early_access_starts_local
+    ? wallClockToUtc(...data.early_access_starts_local.split("T"), data.release_timezone)
+    : null;
+  const lifecycleErrors = validateLifecycleConfiguration({
+    status: data.publish_mode === "scheduled" ? "scheduled" : "published",
+    available_at: previewScheduledAt,
+    preorder_enabled: data.preorder_enabled,
+    preorder_starts_at: previewPreorderStartsAt,
+    preorder_price_cents: data.preorder_enabled && data.preorder_price !== ""
+      ? Math.round(Number(data.preorder_price) * 100) : null,
+    early_access_enabled: data.early_access_enabled,
+    early_access_starts_at: previewEarlyAccessStartsAt,
+    release_timezone: data.release_timezone,
+  });
+  for (const message of lifecycleErrors) {
+    checks.push({ label: message, ok: false, blocking: true });
   }
 
   const hasBlocker = checks.some((c) => c.blocking && !c.ok);

@@ -154,3 +154,74 @@ describe("release upload database contract", () => {
     assert.match(migration, /CREATE UNIQUE INDEX IF NOT EXISTS releases_upload_session_id_uidx/);
   });
 });
+
+describe("reopening a draft never re-requires an already-uploaded asset", () => {
+  const wizard = read("src/components/admin/UploadWizard.js");
+  const inline = read("src/components/admin/InlineReleasesManager.js");
+  const draftRoute = read("src/app/api/admin/releases/[id]/draft/route.js");
+
+  test("single/feature audio step seeds ready state from the persisted key, not idle", () => {
+    assert.ok(wizard.includes('status: data.audio_key ? "ready" : "idle"'),
+      "AudioUploadStep must seed from data.audio_key like ArtworkLyricsStep already does for cover_key");
+    assert.ok(wizard.includes('disabled={status !== "ready" && !data.audio_key}'),
+      "Continue must not be permanently blocked when a draft resumes with audio already attached");
+  });
+
+  test("My Releases editor seeds cover/animated-cover state from persisted keys", () => {
+    assert.ok(inline.includes('status: relStub.cover_art_r2_key ? "done" : "idle"'));
+    assert.ok(inline.includes('status: relStub.metadata?.animated_cover_r2_key ? "done" : "idle"'));
+    assert.ok(inline.includes("catalogMotionVideoUrl"),
+      "an existing animated cover must render as a preview on reopen, not read as absent");
+  });
+
+  test("My Releases editor never clobbers a legitimate $0 price with an empty string", () => {
+    assert.ok(inline.includes("Number.isFinite(d.product?.price_cents)"));
+    assert.ok(!inline.includes("d.product?.price_cents ? (d.product.price_cents / 100).toFixed(2) : \"\""));
+  });
+
+  test("draft autosave never nulls a previously-saved release_date or cover on a partial payload", () => {
+    assert.ok(draftRoute.includes("release_date: data.release_date ?? release.release_date"));
+    assert.ok(draftRoute.includes("cover_art_r2_key: data.cover_key ?? release.cover_art_r2_key"));
+    assert.ok(!draftRoute.includes("release_date: data.release_date || null"));
+    assert.ok(!draftRoute.includes("cover_art_r2_key: data.cover_key || null"));
+  });
+
+  test("draft PUT merges onto the prior snapshot instead of blind-replacing it", () => {
+    assert.ok(draftRoute.includes('data: { ...priorData, ...(payload.data || {}) }'),
+      "an out-of-order or partial save must never erase fields a prior save already persisted");
+  });
+});
+
+describe("draft-list rows are openable without hitting a precise Edit target", () => {
+  test("the My Releases card row is a real interactive element that opens the release", () => {
+    const inline = read("src/components/admin/InlineReleasesManager.js");
+    assert.match(inline, /role="button"[\s\S]{0,80}tabIndex=\{0\}[\s\S]{0,400}onClick=\{\(\) => onEdit\(rel\)\}/);
+    assert.match(inline, /onKeyDown=\{\(e\) => \{\s*if \(e\.key === "Enter" \|\| e\.key === " "\)/);
+  });
+
+  test("row actions stop propagation so they never also open the release", () => {
+    const inline = read("src/components/admin/InlineReleasesManager.js");
+    assert.match(inline, /onClick=\{\(e\) => e\.stopPropagation\(\)\}/);
+    assert.match(inline, /onClick=\{\(e\) => \{ e\.stopPropagation\(\); onEdit\(rel\); \}\}/);
+
+    const adminPage = read("src/app/admin/releases/page.js");
+    assert.match(adminPage, /onClick=\{isDraft \? \(\) => router\.push\(`\/admin\/upload\?draft=\$\{rel\.id\}`\) : undefined\}/);
+    assert.match(adminPage, /onClick=\{\(e\) => e\.stopPropagation\(\)\}/);
+  });
+});
+
+describe("draft mutations never bust the public storefront cache", () => {
+  test("draft-scoped upload/complete and replace-master calls are gated on release status", () => {
+    const complete = read("src/app/api/admin/upload/complete/route.js");
+    const replaceMaster = read("src/app/api/admin/releases/[id]/replace-master/route.js");
+    assert.match(complete, /if \(!audioRelStatus \|\| audioRelStatus\.status !== "draft"\) revalidateStorefront\(\);/);
+    assert.match(complete, /if \(!relRow \|\| relRow\.status !== "draft"\) revalidateStorefront\(\);/);
+    assert.match(replaceMaster, /if \(release\.status !== "draft"\) revalidateStorefront\(\);/);
+  });
+
+  test("the release PATCH route revalidates using the post-update status, not the pre-fetch one", () => {
+    const route = read("src/app/api/admin/releases/[id]/route.js");
+    assert.match(route, /const finalStatus = lifecycleUpdates\.status \|\| release\.status;/);
+    assert.match(route, /if \(finalStatus !== "draft"\) \{\s*revalidateStorefront\(release\.slug, release\.release_type\);/);
+  });
+});

@@ -161,7 +161,11 @@ export async function POST(req) {
       }
 
       console.info(`[admin/upload/complete] audio complete key=${key} trackId=${resolvedTrackId}`);
-      revalidateStorefront();
+      // A draft still under construction must never bust the storefront ISR cache —
+      // only a release that's already public (or a legacy catalog product, which has
+      // no draft state) warrants revalidation on every asset attach.
+      const { data: audioRelStatus } = await admin.from("releases").select("status").eq("id", releaseId).maybeSingle();
+      if (!audioRelStatus || audioRelStatus.status !== "draft") revalidateStorefront();
       emitServerEvent("info", "admin_upload_completed", { correlationId, releaseId, assetType, trackId: resolvedTrackId, hlsQueued: !hlsError });
       return NextResponse.json({ ok: true, assetType, trackId: resolvedTrackId, hlsQueued: !hlsError });
     }
@@ -169,7 +173,7 @@ export async function POST(req) {
     if (assetType === "cover") {
       // Try wizard release (releases table) first
       const { data: relRow } = await admin
-        .from("releases").select("id").eq("id", releaseId).maybeSingle();
+        .from("releases").select("id, status").eq("id", releaseId).maybeSingle();
 
       if (relRow) {
         const { error } = await admin
@@ -191,7 +195,7 @@ export async function POST(req) {
       }
 
       console.info(`[admin/upload/complete] cover complete key=${key} releaseId=${releaseId}`);
-      revalidateStorefront();
+      if (!relRow || relRow.status !== "draft") revalidateStorefront();
       emitServerEvent("info", "admin_upload_completed", { correlationId, releaseId, assetType });
       return NextResponse.json({ ok: true, assetType });
     }
@@ -200,7 +204,7 @@ export async function POST(req) {
       if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > ADMIN_UPLOAD_CONTRACTS["cover-video"].maxDurationSeconds + 0.5) {
         return NextResponse.json({ error: "Cover video must be no longer than 7 minutes" }, { status: 400 });
       }
-      const { data: rel } = await admin.from("releases").select("id, metadata").eq("id", releaseId).maybeSingle();
+      const { data: rel } = await admin.from("releases").select("id, status, metadata").eq("id", releaseId).maybeSingle();
       if (rel) {
         const meta = (rel.metadata && typeof rel.metadata === "object") ? rel.metadata : {};
         const { error } = await admin.from("releases")
@@ -217,13 +221,13 @@ export async function POST(req) {
         if (error) throw error;
       }
 
-      revalidateStorefront();
+      if (!rel || rel.status !== "draft") revalidateStorefront();
       emitServerEvent("info", "admin_upload_completed", { correlationId, releaseId, assetType });
       return NextResponse.json({ ok: true, assetType });
     }
 
     if (assetType === "preview") {
-      const { data: rel } = await admin.from("releases").select("metadata").eq("id", releaseId).single();
+      const { data: rel } = await admin.from("releases").select("status, metadata").eq("id", releaseId).single();
       const meta = (rel?.metadata && typeof rel.metadata === "object") ? rel.metadata : {};
       const { error } = await admin
         .from("releases")
@@ -231,7 +235,7 @@ export async function POST(req) {
         .eq("id", releaseId);
       if (error) throw error;
 
-      revalidateStorefront();
+      if (!rel || rel.status !== "draft") revalidateStorefront();
       emitServerEvent("info", "admin_upload_completed", { correlationId, releaseId, assetType });
       return NextResponse.json({ ok: true, assetType });
     }

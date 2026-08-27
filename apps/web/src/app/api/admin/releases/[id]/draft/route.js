@@ -35,14 +35,33 @@ export async function PUT(req, { params }) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) return NextResponse.json({ error: "draft_payload is required" }, { status: 400 });
 
   const admin = getAdminClient();
-  const { data: release } = await admin.from("releases").select("id,status,metadata").eq("id", id).maybeSingle();
+  const [{ data: release }, { data: existingSnapshot }] = await Promise.all([
+    admin.from("releases").select("id,status,metadata,release_type,release_date,cover_art_r2_key").eq("id", id).maybeSingle(),
+    admin.from("release_drafts").select("draft_payload").eq("release_id", id).maybeSingle(),
+  ]);
   if (!release) return NextResponse.json({ error: "Draft not found" }, { status: 404 });
   if (release.status !== "draft") return NextResponse.json({ error: "Published releases cannot be overwritten as drafts" }, { status: 409 });
+
+  // Merge onto the previously-saved snapshot rather than blind-replacing it. The
+  // wizard always sends its full accumulated `data`/`tracks` object today, but this
+  // route has no way to guarantee that of every caller — an incomplete or
+  // out-of-order-arriving payload must never be able to erase fields a prior save
+  // already persisted (a stale request finishing after a newer one is exactly this
+  // shape). Top-level keys in the incoming payload win; anything it omits falls back
+  // to what's already stored.
+  const priorPayload = existingSnapshot?.draft_payload || {};
+  const priorData = priorPayload.data || {};
+  const mergedPayload = {
+    ...priorPayload,
+    ...payload,
+    data: { ...priorData, ...(payload.data || {}) },
+    tracks: Array.isArray(payload.tracks) ? payload.tracks : (priorPayload.tracks || []),
+  };
 
   const savedAt = new Date().toISOString();
   const { error } = await admin.from("release_drafts").upsert({
     release_id: id,
-    draft_payload: payload,
+    draft_payload: mergedPayload,
     step_index: stepIndex,
     saved_at: savedAt,
     updated_at: savedAt,
@@ -50,11 +69,14 @@ export async function PUT(req, { params }) {
   if (error) return NextResponse.json({ error: `Failed to save draft: ${error.message}` }, { status: 500 });
 
   // Keep list-card metadata and asset references queryable without unpacking the snapshot.
-  const data = payload.data || {};
+  // Fields absent from THIS save fall back to the release's current stored value —
+  // never to null — so a step that doesn't happen to carry a previously-set field
+  // (e.g. the wizard resending state from a stale render) can't silently clear it.
+  const data = mergedPayload.data || {};
   await admin.from("releases").update({
     release_type: data.release_type || release.release_type,
-    release_date: data.release_date || null,
-    cover_art_r2_key: data.cover_key || null,
+    release_date: data.release_date ?? release.release_date,
+    cover_art_r2_key: data.cover_key ?? release.cover_art_r2_key,
     metadata: {
       ...(release.metadata || {}),
       draft_title: data.title || null,

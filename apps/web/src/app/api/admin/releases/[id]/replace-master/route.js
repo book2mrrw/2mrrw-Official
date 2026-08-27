@@ -96,7 +96,8 @@ export async function POST(req, { params }) {
     const trackSlug = isMultiTrack ? folderParts.at(-1) : null;
     await requeue(admin, user, release.slug, release.release_type, trackSlug, newKey, release);
     try { await clearPersistedPlaybackKey(admin, release.slug, trackSlug); } catch {}
-    revalidateStorefront();
+    // A still-drafting release has nothing public to invalidate yet.
+    if (release.status !== "draft") revalidateStorefront();
 
     return NextResponse.json({ ok: true, trackId: trackRow.id, hlsQueued: true, cleanupWarnings });
   }

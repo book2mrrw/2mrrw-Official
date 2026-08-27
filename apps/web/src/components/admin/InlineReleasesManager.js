@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { catalogCoverUrl } from "@/lib/media-urls";
+import { catalogCoverUrl, catalogMotionVideoUrl } from "@/lib/media-urls";
 import { UploadWizard } from "@/components/admin/UploadWizard";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
 import { VIDEO_COVER_ACCEPT, MASTER_AUDIO_ACCEPT } from "@/lib/media/admin-upload-contract";
@@ -350,9 +350,16 @@ function ReleaseListView({ releases, loading, error, filter, onFilter, onRefresh
             return (
               <div
                 key={rel.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${rel.title || "untitled release"}`}
+                onClick={() => onEdit(rel)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onEdit(rel); }
+                }}
                 style={{
                   background: C.surface, border: `1px solid ${C.border}`,
-                  borderRadius: 12, padding: "14px 18px",
+                  borderRadius: 12, padding: "14px 18px", cursor: "pointer",
                   display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap",
                 }}
               >
@@ -392,6 +399,7 @@ function ReleaseListView({ releases, loading, error, filter, onFilter, onRefresh
                       href={prefix + rel.slug}
                       target="_blank"
                       rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
                       style={{
                         background: C.accentDim, border: `1px solid ${C.accentBorder}`,
                         borderRadius: 7, padding: "6px 12px", fontSize: 11, color: C.accent,
@@ -402,7 +410,7 @@ function ReleaseListView({ releases, loading, error, filter, onFilter, onRefresh
                     </a>
                   )}
                   <button
-                    onClick={() => onEdit(rel)}
+                    onClick={(e) => { e.stopPropagation(); onEdit(rel); }}
                     style={{
                       background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 7,
                       padding: "6px 14px", fontSize: 11, color: C.muted, cursor: "pointer",
@@ -439,13 +447,14 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   // Lyrics (keyed by track id)
   const [trackLyrics, setTrackLyrics] = useState({});
 
-  // Static cover upload state
-  const [coverState,   setCoverState]   = useState({ status: "idle", error: null, pct: 0 });
+  // Static cover upload state — seeded "done" when the release already has a
+  // cover, so reopening never implies a re-upload is required.
+  const [coverState,   setCoverState]   = useState({ status: relStub.cover_art_r2_key ? "done" : "idle", error: null, pct: 0 });
   const [coverPreview, setCoverPreview] = useState(null);
   const coverPreviewObjectUrlRef = useRef(null);
 
-  // Animated cover video upload state
-  const [mp4State,   setMp4State]   = useState({ status: "idle", error: null, pct: 0 });
+  // Animated cover video upload state — same persistence rule as cover art.
+  const [mp4State,   setMp4State]   = useState({ status: relStub.metadata?.animated_cover_r2_key ? "done" : "idle", error: null, pct: 0 });
   const [mp4Preview, setMp4Preview] = useState(null);
   const mp4PreviewObjectUrlRef = useRef(null);
 
@@ -476,7 +485,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
         if (d.error) throw new Error(d.error);
         setDetail(d);
         setEditTitle(d.product?.title  || "");
-        setEditPrice(d.product?.price_cents ? (d.product.price_cents / 100).toFixed(2) : "");
+        setEditPrice(Number.isFinite(d.product?.price_cents) ? (d.product.price_cents / 100).toFixed(2) : "");
         setEditGenre(d.product?.genre  || "");
         setEditDate(d.release?.release_date || "");
         const lMap = {};
@@ -484,6 +493,10 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
         setTrackLyrics(lMap);
         // Seed cover preview from stub
         if (relStub.cover_art_r2_key) setCoverPreview(catalogCoverUrl(relStub.cover_art_r2_key));
+        // Seed animated-cover preview from persisted server data so the "already
+        // uploaded" state (and its video player) survives a reopen.
+        const animatedKey = d.release?.animated_cover_r2_key;
+        if (animatedKey) setMp4Preview(catalogMotionVideoUrl(animatedKey));
       })
       .catch((err) => setLoadError(err.message))
       .finally(() => setLoading(false));
@@ -1003,21 +1016,26 @@ export default function InlineReleasesManager() {
 
   if (!isAdmin) return null;
 
-  // ── Upload view ────────────────────────────────────────────────────────────────
+  // ── Upload view (also handles resuming a draft — a draft is a release that
+  // hasn't been published yet, and must go through the exact same full wizard
+  // used to create one, never a limited metadata-only form) ──────────────────────
   if (view === "upload") {
     return (
       <UploadWizard
+        initialReleaseId={editingRelease?.status === "draft" ? editingRelease.id : null}
         onComplete={(result) => {
           setLastResult(result);
+          setEditingRelease(null);
           loadReleases();
           setView("list");
         }}
-        onDismiss={() => setView(releasesLoaded ? "list" : "home")}
+        onDismiss={() => { setEditingRelease(null); setView(releasesLoaded ? "list" : "home"); }}
       />
     );
   }
 
-  // ── Edit view ──────────────────────────────────────────────────────────────────
+  // ── Edit view — published/scheduled releases only. Drafts are routed to the
+  // full wizard above instead (see onEdit below). ─────────────────────────────────
   if (view === "edit" && editingRelease) {
     return (
       <ReleaseEditorPanel
@@ -1038,9 +1056,9 @@ export default function InlineReleasesManager() {
         filter={filter}
         onFilter={setFilter}
         onRefresh={loadReleases}
-        onNew={() => setView("upload")}
+        onNew={() => { setEditingRelease(null); setView("upload"); }}
         onBack={() => setView("home")}
-        onEdit={(rel) => { setEditingRelease(rel); setView("edit"); }}
+        onEdit={(rel) => { setEditingRelease(rel); setView(rel.status === "draft" ? "upload" : "edit"); }}
         lastResult={lastResult}
       />
     );
