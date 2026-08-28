@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -168,4 +169,15 @@ test("2MRRW Radio renders four distinct canonical motion artworks with static fa
   assert.match(source, /<CoverArt/);
   assert.match(source, /baseCover=\{currentSlide\.baseCover \|\| undefined\}/);
   assert.doesNotMatch(source, /<img[\s\S]*src=\{currentSlide\.cover\}/);
+});
+
+test("2MRRW Radio fallback posters are distinct release assets", () => {
+  const posters = ["hourglass.jpg", "w2d.jpg", "artificial.jpg", "turnt.jpg"];
+  const hashes = posters.map((filename) => {
+    const bytes = readFileSync(path.join(process.cwd(), "public/images/singles", filename));
+    assert.ok(bytes.length > 50_000, filename);
+    return createHash("sha256").update(bytes).digest("hex");
+  });
+
+  assert.equal(new Set(hashes).size, posters.length);
 });
