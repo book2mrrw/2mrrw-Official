@@ -559,6 +559,34 @@ export function mergeCanonicalMetadata(item) {
       : {}
     : { title: release.title, display_title: release.title };
 
+  const incomingCover = String(item.cover || "").trim();
+  const canonicalStaticCover = String(release.legacy_cover || "").trim();
+  const sameBundledCoverIgnoringCase = Boolean(
+    incomingCover && canonicalStaticCover &&
+    incomingCover.replace(/^\//, "").toLowerCase() ===
+      canonicalStaticCover.replace(/^\//, "").toLowerCase()
+  );
+  const preferredCover = sameBundledCoverIgnoringCase
+    ? canonicalStaticCover
+    : (incomingCover && (incomingCover.includes("/") || /^https?:\/\//i.test(incomingCover)))
+      ? incomingCover
+      : (release.cover || canonicalStaticCover || incomingCover);
+  const incomingVisual = String(item.visual || "").trim();
+  const preferredVisual = incomingVisual && canonicalStaticCover &&
+    incomingVisual.replace(/^\//, "").toLowerCase() ===
+      canonicalStaticCover.replace(/^\//, "").toLowerCase()
+    ? canonicalStaticCover
+    : (item.visual || release.visual);
+  const incomingVideo = String(item.video || "").trim();
+  const incomingVideoIsConcrete = Boolean(
+    incomingVideo && (
+      /^https?:\/\//i.test(incomingVideo) ||
+      /^\/?api\//i.test(incomingVideo) ||
+      /\.(?:mp4|webm|mov)(?:$|[?#])/i.test(incomingVideo)
+    )
+  );
+  const explicitVideoStem = item.legacy_video_stem ?? release.legacy_video_stem ?? null;
+
   return {
     ...item,
     ...releaseTitleFields,
@@ -566,15 +594,15 @@ export function mergeCanonicalMetadata(item) {
     artwork_path: release.artwork_path || item.artwork_path,
     preview_path: release.preview_path || item.preview_path,
     preview: item.preview || release.preview,
-    // A bare filename from the DB (no path separator, no protocol) is legacy data that
-    // cannot be resolved to a valid URL. Prefer the canonical release cover/visual in
-    // that case. Well-formed paths (starting with "/" or containing "://") are kept.
-    cover: (item.cover && (String(item.cover).includes("/") || /^https?:\/\//i.test(item.cover)))
-      ? item.cover
-      : (release.cover || release.legacy_cover || item.cover),
-    baseCover: item.baseCover || release.legacy_cover || null,
-    visual: item.visual || release.visual,
-    video: item.video || release.video,
+    // Preserve uploaded keys, but canonicalize exact spelling for bundled
+    // case-sensitive static assets such as ad.JPG.
+    cover: preferredCover,
+    baseCover: sameBundledCoverIgnoringCase
+      ? canonicalStaticCover
+      : (item.baseCover || canonicalStaticCover || null),
+    visual: preferredVisual,
+    // A folder-valued video_path is not a media object.
+    video: incomingVideoIsConcrete ? incomingVideo : (release.video || undefined),
     coverArtType: release.coverArtType || item.coverArtType,
     release_date: item.release_date || release.release_date,
     ...(catalog
@@ -587,10 +615,9 @@ export function mergeCanonicalMetadata(item) {
             release.slug,
             item.legacy_cover_stem ?? release.legacy_cover_stem ?? legacyStem
           ),
-          video_legacy: catalog.video_legacy(
-            release.slug,
-            item.legacy_video_stem ?? release.legacy_video_stem ?? legacyStem
-          ),
+          video_legacy: explicitVideoStem
+            ? catalog.video_legacy(release.slug, explicitVideoStem)
+            : null,
           preview_legacy:
             release.preview_legacy ||
             catalog.preview_legacy(

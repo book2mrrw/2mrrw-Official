@@ -1,23 +1,2 @@
 User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /account
-Disallow: /subscribe
-Disallow: /donate
-Disallow: /collector/activate
-
-User-agent: Googlebot
-Allow: /
-Allow: /song/
-Allow: /album/
-Allow: /feature/
-Disallow: /api/
-
-User-agent: Twitterbot
-Allow: /
-Allow: /song/
-Allow: /album/
-Allow: /feature/
-Disallow: /api/
-
-Sitemap: https://2mrrw.com/sitemap.xml
+Disallow: /

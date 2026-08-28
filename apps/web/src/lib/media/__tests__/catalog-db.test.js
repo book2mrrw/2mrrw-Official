@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import test from "node:test";
 
-import { mapProductRow } from "../catalog-db.js";
+import { isConcreteVideoAssetPath, mapProductRow } from "../catalog-db.js";
+import { withR2CatalogMedia } from "../r2-catalog-media.js";
 
 const LIVE_AT = "2026-01-01T00:00:00.000Z";
 
@@ -61,4 +64,78 @@ test("canonical product mapper delegates scheduled visibility to releaseAvailabi
   assert.equal(release.availability.live, false);
   assert.equal(release.availability.visible, true);
   assert.equal(release.availability.canPlayFull, false);
+});
+
+test("folder-valued video_path never asserts that a motion object exists", () => {
+  assert.equal(isConcreteVideoAssetPath("videos/mixtapes-and-eps/tbh/"), false);
+  assert.equal(isConcreteVideoAssetPath("videos/mixtapes-and-eps/tbh/tbh.mp4"), true);
+
+  const mapped = mapProductRow(productRow({
+    slug: "tbh",
+    title: "Tbh",
+    product_type: "album",
+    release_type: "mixtapes-and-eps",
+    cover_url: "/images/albums/tbh.jpg",
+    image_path: "images/mixtapes-and-eps/tbh/",
+    video_path: "videos/mixtapes-and-eps/tbh/",
+    metadata: { release_category: "mixtape" },
+  }));
+
+  assert.equal(mapped.video, undefined);
+  assert.equal(mapped.coverArtType, "image");
+});
+
+test("Love Hz DB row resolves the canonical hyphenated video and a static fallback", () => {
+  const mapped = mapProductRow(productRow({
+    slug: "love-hz-vol-1",
+    title: "Love Hz Vol 1",
+    product_type: "album",
+    release_type: "mixtapes-and-eps",
+    cover_url: "/images/albums/lovehz.jpg",
+    image_path: "images/mixtapes-and-eps/love-hz-vol-1/",
+    video_path: "videos/mixtapes-and-eps/love-hz-vol-1/",
+    metadata: { release_category: "mixtape", r2_ingested: true },
+  }));
+  const resolved = withR2CatalogMedia(mapped);
+
+  assert.match(resolved.video, /videos\/mixtapes-and-eps\/love-hz-vol-1\/love-hz-vol-1\.mp4$/);
+  assert.doesNotMatch(resolved.video, /lovehzvol1\.mp4$/);
+  assert.equal(resolved.baseCover, "/images/albums/lovehz.jpg");
+  assert.equal(resolved.coverArtType, "video");
+});
+
+test("A.D DB row canonicalizes case-sensitive bundled artwork without changing other covers", () => {
+  const ad = withR2CatalogMedia(mapProductRow(productRow({
+    slug: "ad",
+    title: "2MRRW: (A.D)",
+    product_type: "album",
+    release_type: "mixtapes-and-eps",
+    cover_url: "/images/albums/ad.jpg",
+    image_path: "images/mixtapes-and-eps/ad/",
+    video_path: "videos/mixtapes-and-eps/ad/",
+    metadata: { release_category: "mixtape", r2_ingested: true },
+  })));
+  const tbh = withR2CatalogMedia(mapProductRow(productRow({
+    slug: "tbh",
+    title: "T.B.H",
+    product_type: "album",
+    release_type: "mixtapes-and-eps",
+    cover_url: "/images/albums/tbh.jpg",
+    video_path: "videos/mixtapes-and-eps/tbh/",
+    metadata: { release_category: "mixtape" },
+  })));
+
+  assert.equal(ad.cover, "/images/albums/ad.JPG");
+  assert.equal(ad.baseCover, "/images/albums/ad.JPG");
+  assert.equal(ad.video, undefined);
+  assert.equal(tbh.cover, "/images/albums/tbh.jpg");
+  assert.equal(tbh.baseCover, "/images/albums/tbh.jpg");
+});
+
+test("catalog video cards wire a static fallback through both render branches", () => {
+  const source = readFileSync(path.join(process.cwd(), "src/components/home/CatalogGrid.js"), "utf8");
+  assert.match(source, /const staticFallback = mediaItem\?\.baseCover/);
+  assert.match(source, /poster=\{staticFallback \|\| undefined\}/);
+  assert.match(source, /src=\{videoFailed \? staticFallback : coverDisplay\.src\}/);
+  assert.match(source, /baseCover=\{staticFallback\}/);
 });

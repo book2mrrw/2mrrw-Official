@@ -1,5 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import {
+  RouteAccessClass,
+  classifyRouteAccessWithRule,
+} from "../../src/lib/auth/route-access-policy.js";
 
 const root = path.resolve("src/app/api");
 const output = path.resolve("docs/audit/E1M-ROUTE-AUTHORITY-MATRIX-2026-08-25.json");
@@ -15,7 +19,7 @@ function routeName(file) {
   return `/api/${path.relative(root, path.dirname(file)).split(path.sep).join("/")}`.replace(/\/$/, "");
 }
 
-function classify(route, source) {
+function classify(route, source, methods) {
   const hasHuman = /requireAdminActor|getAdminSessionUser/.test(source);
   const hasCombined = /requireAdminOrCapability/.test(source) ||
     (hasHuman && /requireServiceCapability/.test(source));
@@ -31,36 +35,58 @@ function classify(route, source) {
       route.startsWith("/api/webhooks/") || route === "/api/stripe/webhook") {
     return ["SERVICE_ONLY", "cron or signed webhook machine boundary"];
   }
-  if (/getFanSessionUser|requireAuthenticatedUser|auth\.getUser\(|getSessionUser\(/.test(source) ||
-      route === "/api/auth/mfa-session") {
-    return ["AUTHENTICATED_USER", "validated Supabase user session"];
+  const methodPolicies = methods
+    .filter((method) => method !== "OPTIONS")
+    .map((method) => ({ method, ...classifyRouteAccessWithRule(route, method) }));
+  const policyClasses = new Set(methodPolicies.map((item) => item.accessClass));
+
+  if (policyClasses.size === 1 && policyClasses.has(RouteAccessClass.ANONYMOUS_AUTH)) {
+    return ["ANONYMOUS_AUTH", "explicit auth/account/recovery allowlist", methodPolicies];
   }
-  return ["PUBLIC", "public or token-scoped application surface"];
+  if (policyClasses.size === 1 && policyClasses.has(RouteAccessClass.TOKEN_SCOPED)) {
+    return ["TOKEN_SCOPED", "explicit possession-proof boundary", methodPolicies];
+  }
+  if (policyClasses.size === 1 && policyClasses.has(RouteAccessClass.LEGACY_RETIREMENT)) {
+    return ["LEGACY_RETIREMENT", "explicit non-minting retirement surface", methodPolicies];
+  }
+  if (policyClasses.size === 1 && policyClasses.has(RouteAccessClass.SYSTEM_PUBLIC)) {
+    return ["SYSTEM_PUBLIC", "explicit health/system allowlist", methodPolicies];
+  }
+  return [
+    "AUTHENTICATED_USER",
+    /getFanSessionUser|requireAuthenticatedUser|auth\.getUser\(|getSessionUser\(/.test(source)
+      ? "central fail-closed middleware plus direct validated session guard"
+      : "central fail-closed middleware; unknown routes default protected",
+    methodPolicies,
+  ];
 }
 
 const routes = walk(root).sort().map((file) => {
   const route = routeName(file);
   const source = fs.readFileSync(file, "utf8");
-  const [authority, evidence] = classify(route, source);
   const methods = [...source.matchAll(/export\s+(?:async\s+)?function\s+(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\b/g)]
     .map((match) => match[1]);
+  const normalizedMethods = [...new Set(methods)].sort();
+  const [authority, evidence, methodPolicies = []] = classify(route, source, normalizedMethods);
   return {
     route,
     file: path.relative(process.cwd(), file).split(path.sep).join("/"),
-    methods: [...new Set(methods)].sort(),
+    methods: normalizedMethods,
     authority,
     evidence,
+    methodPolicies,
   };
 });
 
 const counts = Object.fromEntries([
   "HUMAN_ADMIN", "SERVICE_ONLY", "ADMIN_OR_SERVICE_CAPABILITY",
-  "AUTHENTICATED_USER", "PUBLIC", "DEAD",
+  "AUTHENTICATED_USER", "ANONYMOUS_AUTH", "TOKEN_SCOPED",
+  "LEGACY_RETIREMENT", "SYSTEM_PUBLIC", "PUBLIC", "DEAD",
 ].map((authority) => [authority, routes.filter((route) => route.authority === authority).length]));
 
 fs.mkdirSync(path.dirname(output), { recursive: true });
 fs.writeFileSync(output, `${JSON.stringify({
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: new Date().toISOString(),
   sourceRoot: "src/app/api",
   total: routes.length,

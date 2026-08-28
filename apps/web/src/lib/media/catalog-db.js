@@ -35,6 +35,11 @@ const PRODUCT_COLS = [
 
 const RELEASE_LIFECYCLE_COLS = "id,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,preorder_enabled,preorder_starts_at,preorder_price_cents,early_access_enabled,early_access_starts_at,early_access_scope,early_access_audiences,release_timezone,unavailable_at";
 
+export function isConcreteVideoAssetPath(value) {
+  const path = String(value || "").trim();
+  return /\.(?:mp4|webm|mov)(?:$|[?#])/i.test(path);
+}
+
 /** Map a raw products row to the canonical enriched storefront release shape. */
 export function mapProductRow(row) {
   const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
@@ -70,7 +75,8 @@ export function mapProductRow(row) {
     : null;
 
   const isSingle = releaseTypeFolder === "singles";
-  const hasVideo = isSingle || Boolean(legacyVideo || row.video_path);
+  // A folder is a discovery hint, not proof that a motion object exists.
+  const hasVideo = isSingle || Boolean(legacyVideo || isConcreteVideoAssetPath(row.video_path));
 
   const visual = hasVideo
     ? visualDiscoveryUrl(releaseTypeFolder, row.slug, {
@@ -117,8 +123,10 @@ export function mapProductRow(row) {
     visual,
     cover: visual || legacyCover || "",
     preview: previewDiscoveryUrl(preview_path),
-    video: isSingle ? visual : (row.video_path || undefined),
-    coverArtType: isSingle ? "video" : (row.video_path ? "video" : "image"),
+    video: hasVideo
+      ? (isConcreteVideoAssetPath(row.video_path) ? row.video_path : visual)
+      : undefined,
+    coverArtType: hasVideo ? "video" : "image",
 
     // Legacy cover for <img> fallback
     baseCover: legacyCover || null,

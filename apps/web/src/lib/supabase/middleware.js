@@ -28,6 +28,16 @@ export async function updateSession(request) {
     }
   );
 
-  await supabase.auth.getUser();
-  return supabaseResponse;
+  const { data, error } = await supabase.auth.getUser();
+  const user = data?.user || null;
+  const email = String(user?.email || "").trim().toLowerCase();
+  const verifiedUser = !error && user?.id && email && !email.endsWith("@guest.2mrrw.local")
+    ? user
+    : null;
+
+  return {
+    response: supabaseResponse,
+    user: verifiedUser,
+    error: error || null,
+  };
 }

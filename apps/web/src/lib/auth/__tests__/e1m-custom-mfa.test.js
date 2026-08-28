@@ -66,6 +66,12 @@ test("INV-MFA-4 every repository API route is classified exactly once", () => {
   const files = walk(path.join(root, "src/app/api"));
   assert.equal(matrix.total, files.length);
   assert.equal(new Set(matrix.routes.map((item) => item.route)).size, files.length);
+  assert.equal(matrix.counts.PUBLIC, 0, "no API may become public by omission");
+  for (const item of matrix.routes.filter(({ authority }) =>
+    ["ANONYMOUS_AUTH", "TOKEN_SCOPED", "LEGACY_RETIREMENT", "SYSTEM_PUBLIC"].includes(authority))) {
+    assert.ok(item.methodPolicies.length > 0, `${item.route} needs an explicit method policy`);
+    assert.ok(item.methodPolicies.every(({ rule }) => rule !== "default-protected"));
+  }
   for (const item of matrix.routes.filter((item) => item.authority === "HUMAN_ADMIN")) {
     assert.match(read(item.file), /requireAdminActor|getAdminSessionUser/);
   }

@@ -11,8 +11,6 @@ import PlaybackNetworkHints from "@/components/system/PlaybackNetworkHints";
 import GlobalMediaControllerMount from "@/components/system/GlobalMediaControllerMount";
 import { MediaErrorBoundary } from "@/system/errors";
 
-const R2 = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
-
 export const viewport = {
   width: "device-width",
   initialScale: 1,
@@ -35,14 +33,14 @@ export const metadata = {
     description: "Official music from 2MRRW — stream, collect, and experience every release.",
     url: "https://www.2mrrw.com",
     siteName: "2MRRW",
-    images: [{ url: `${R2}/images/mixtapes-and-eps/love-hz-vol-1/lovehz.jpg`, width: 1500, height: 1500, alt: "Love Hz Vol. 1 — 2MRRW" }],
+    images: [{ url: "/icons/icon-512.png", width: 512, height: 512, alt: "2MRRW" }],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
     title: "2MRRW",
     description: "Official music from 2MRRW — stream, collect, and experience every release.",
-    images: [`${R2}/images/mixtapes-and-eps/love-hz-vol-1/lovehz.jpg`],
+    images: ["/icons/icon-512.png"],
   },
   icons: {
     apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],

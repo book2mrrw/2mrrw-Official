@@ -19,10 +19,15 @@ test("NAV-01/NAV-02 internal exits use soft navigation", () => {
   assert.match(subscribe, /router\.push\(["']\/["']\)/);
 });
 
-test("BOOT-03/BOOT-04 hydration and guest identity never cover the public shell", () => {
+test("BOOT-03/BOOT-04 hydration is UX-only while server authority gates the consumer shell", () => {
   const rootComponent = read("src/components/auth/AppAuthRoot.js");
+  const middleware = read("middleware.js");
+  const policy = read("src/lib/auth/route-access-policy.js");
   assert.doesNotMatch(rootComponent, /BOOT_PLACEHOLDER|showAuthGate|variant=["']root["']/);
   assert.match(rootComponent, /return children/);
+  assert.match(middleware, /resolveRouteAccessDecision/);
+  assert.match(middleware, /supabase|updateSession/);
+  assert.match(policy, /return \{ accessClass: RouteAccessClass\.AUTHENTICATED_CONSUMER, rule: "default-protected" \}/);
 });
 
 test("BOOT-02/CAT-03 storefront tracks use one set-based query", () => {

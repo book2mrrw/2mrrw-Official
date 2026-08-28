@@ -1,14 +1,18 @@
 {
-  "schemaVersion": 1,
-  "generatedAt": "2026-08-26T01:55:23.609Z",
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-27T23:50:52.470Z",
   "sourceRoot": "src/app/api",
   "total": 126,
   "counts": {
-    "HUMAN_ADMIN": 29,
+    "HUMAN_ADMIN": 30,
     "SERVICE_ONLY": 17,
     "ADMIN_OR_SERVICE_CAPABILITY": 5,
-    "AUTHENTICATED_USER": 23,
-    "PUBLIC": 51,
+    "AUTHENTICATED_USER": 57,
+    "ANONYMOUS_AUTH": 5,
+    "TOKEN_SCOPED": 10,
+    "LEGACY_RETIREMENT": 2,
+    "SYSTEM_PUBLIC": 0,
+    "PUBLIC": 0,
     "DEAD": 0
   },
   "routes": [
@@ -18,8 +22,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "TOKEN_SCOPED",
+      "evidence": "explicit possession-proof boundary",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "TOKEN_SCOPED",
+          "rule": "explicit-possession-proof-route"
+        }
+      ]
     },
     {
       "route": "/api/account/lifecycle/[requestId]/download",
@@ -28,7 +39,14 @@
         "GET"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/account/lifecycle",
@@ -39,7 +57,24 @@
         "POST"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "DELETE",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/account/state",
@@ -48,7 +83,14 @@
         "GET"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/admin/analytics/global",
@@ -57,7 +99,8 @@
         "GET"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/analytics",
@@ -66,7 +109,8 @@
         "GET"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/apply-r2-cors",
@@ -76,7 +120,8 @@
         "POST"
       ],
       "authority": "ADMIN_OR_SERVICE_CAPABILITY",
-      "evidence": "canonical human MFA guard or exact scoped service capability"
+      "evidence": "canonical human MFA guard or exact scoped service capability",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/backfill-playback-keys",
@@ -86,7 +131,8 @@
         "POST"
       ],
       "authority": "ADMIN_OR_SERVICE_CAPABILITY",
-      "evidence": "canonical human MFA guard or exact scoped service capability"
+      "evidence": "canonical human MFA guard or exact scoped service capability",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/catalog/hls-sync-trigger",
@@ -95,7 +141,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/catalog/ingest-trigger",
@@ -104,7 +151,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/catalog/r2-ingest",
@@ -113,7 +161,8 @@
         "POST"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "exact scoped service capability"
+      "evidence": "exact scoped service capability",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/catalog/revalidate",
@@ -122,7 +171,8 @@
         "POST"
       ],
       "authority": "ADMIN_OR_SERVICE_CAPABILITY",
-      "evidence": "canonical human MFA guard or exact scoped service capability"
+      "evidence": "canonical human MFA guard or exact scoped service capability",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/collector-cards",
@@ -132,7 +182,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/diagnostics/entitlements-parity",
@@ -141,7 +192,8 @@
         "GET"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "exact scoped service capability"
+      "evidence": "exact scoped service capability",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/diagnostics/mfa-expiration",
@@ -150,7 +202,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/fulfill-recovery",
@@ -159,7 +212,8 @@
         "POST"
       ],
       "authority": "ADMIN_OR_SERVICE_CAPABILITY",
-      "evidence": "canonical human MFA guard or exact scoped service capability"
+      "evidence": "canonical human MFA guard or exact scoped service capability",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/genres",
@@ -171,7 +225,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/gifts",
@@ -180,7 +235,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/hls/complete",
@@ -189,7 +245,8 @@
         "POST"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "exact scoped service capability"
+      "evidence": "exact scoped service capability",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/hls/queue",
@@ -199,7 +256,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/hls/status",
@@ -208,7 +266,8 @@
         "GET"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/livestream",
@@ -219,7 +278,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/media-diagnostics",
@@ -228,7 +288,8 @@
         "GET"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/media/extract-poster",
@@ -237,7 +298,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/media/reconcile-catalog",
@@ -246,7 +308,8 @@
         "GET"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/media/refresh-track",
@@ -255,7 +318,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/media/validate",
@@ -264,7 +328,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/releases/[id]/draft",
@@ -274,7 +339,8 @@
         "PUT"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/releases/[id]/publish",
@@ -283,7 +349,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/releases/[id]/replace-master",
@@ -292,16 +359,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
-    },
-    {
-      "route": "/api/admin/releases/[id]/tracks/[trackId]",
-      "file": "src/app/api/admin/releases/[id]/tracks/[trackId]/route.js",
-      "methods": [
-        "DELETE"
-      ],
-      "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/releases/[id]",
@@ -312,7 +371,8 @@
         "PATCH"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/releases/[id]/status",
@@ -321,7 +381,18 @@
         "GET"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
+    },
+    {
+      "route": "/api/admin/releases/[id]/tracks/[trackId]",
+      "file": "src/app/api/admin/releases/[id]/tracks/[trackId]/route.js",
+      "methods": [
+        "DELETE"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/releases/draft",
@@ -330,7 +401,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/releases",
@@ -339,7 +411,8 @@
         "GET"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/seed-products",
@@ -348,7 +421,8 @@
         "POST"
       ],
       "authority": "ADMIN_OR_SERVICE_CAPABILITY",
-      "evidence": "canonical human MFA guard or exact scoped service capability"
+      "evidence": "canonical human MFA guard or exact scoped service capability",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/shows",
@@ -360,7 +434,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/sync/catalog",
@@ -369,7 +444,8 @@
         "POST"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "exact scoped service capability"
+      "evidence": "exact scoped service capability",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/sync/drop-notification",
@@ -378,7 +454,8 @@
         "POST"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "exact scoped service capability"
+      "evidence": "exact scoped service capability",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/twitch/register",
@@ -389,7 +466,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/upload/complete",
@@ -398,7 +476,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/upload/presigned",
@@ -407,7 +486,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/admin/visual-assets",
@@ -419,7 +499,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/auth/complete-profile",
@@ -428,7 +509,14 @@
         "POST"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/auth/login-step1",
@@ -436,8 +524,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "ANONYMOUS_AUTH",
+      "evidence": "explicit auth/account/recovery allowlist",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "ANONYMOUS_AUTH",
+          "rule": "explicit-anonymous-auth-api"
+        }
+      ]
     },
     {
       "route": "/api/auth/login-step2",
@@ -445,8 +540,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "ANONYMOUS_AUTH",
+      "evidence": "explicit auth/account/recovery allowlist",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "ANONYMOUS_AUTH",
+          "rule": "explicit-anonymous-auth-api"
+        }
+      ]
     },
     {
       "route": "/api/auth/lookup-email",
@@ -454,8 +556,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "ANONYMOUS_AUTH",
+      "evidence": "explicit auth/account/recovery allowlist",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "ANONYMOUS_AUTH",
+          "rule": "explicit-anonymous-auth-api"
+        }
+      ]
     },
     {
       "route": "/api/auth/lookup-phone",
@@ -463,8 +572,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "ANONYMOUS_AUTH",
+      "evidence": "explicit auth/account/recovery allowlist",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "ANONYMOUS_AUTH",
+          "rule": "explicit-anonymous-auth-api"
+        }
+      ]
     },
     {
       "route": "/api/auth/mfa-session",
@@ -475,7 +591,24 @@
         "POST"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "DELETE",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/auth/signup",
@@ -483,8 +616,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "ANONYMOUS_AUTH",
+      "evidence": "explicit auth/account/recovery allowlist",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "ANONYMOUS_AUTH",
+          "rule": "explicit-anonymous-auth-api"
+        }
+      ]
     },
     {
       "route": "/api/catalog/exclusive-drops",
@@ -492,8 +632,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/catalog/hydrate",
@@ -501,8 +648,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/catalog/releases",
@@ -510,8 +664,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/checkout/session",
@@ -519,8 +680,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/collector-card/activate",
@@ -529,7 +697,14 @@
         "POST"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/collector-card/verify",
@@ -537,8 +712,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "TOKEN_SCOPED",
+      "evidence": "explicit possession-proof boundary",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "TOKEN_SCOPED",
+          "rule": "explicit-possession-proof-route"
+        }
+      ]
     },
     {
       "route": "/api/collector/cards/claim",
@@ -546,8 +728,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/collector/cards",
@@ -555,8 +744,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/collector/cards/verify",
@@ -564,8 +760,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "TOKEN_SCOPED",
+      "evidence": "explicit possession-proof boundary",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "TOKEN_SCOPED",
+          "rule": "explicit-possession-proof-route"
+        }
+      ]
     },
     {
       "route": "/api/community/circle",
@@ -574,8 +777,20 @@
         "GET",
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/community/comments",
@@ -584,8 +799,20 @@
         "GET",
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/create-payment-intent",
@@ -593,8 +820,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/cron/account-lifecycle",
@@ -603,7 +837,8 @@
         "GET"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "cron or signed webhook machine boundary"
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
     },
     {
       "route": "/api/cron/expire-gifts",
@@ -613,7 +848,8 @@
         "POST"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "cron or signed webhook machine boundary"
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
     },
     {
       "route": "/api/cron/finalize-draft-dumps",
@@ -622,7 +858,8 @@
         "GET"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "cron or signed webhook machine boundary"
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
     },
     {
       "route": "/api/cron/gift-reminders",
@@ -632,7 +869,8 @@
         "POST"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "cron or signed webhook machine boundary"
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
     },
     {
       "route": "/api/cron/hls-stale-jobs",
@@ -641,7 +879,8 @@
         "GET"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "cron or signed webhook machine boundary"
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
     },
     {
       "route": "/api/cron/livestream-notifications",
@@ -650,7 +889,8 @@
         "GET"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "cron or signed webhook machine boundary"
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
     },
     {
       "route": "/api/cron/publish-scheduled",
@@ -659,7 +899,8 @@
         "GET"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "cron or signed webhook machine boundary"
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
     },
     {
       "route": "/api/cron/purge-stream-events",
@@ -669,7 +910,8 @@
         "POST"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "cron or signed webhook machine boundary"
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
     },
     {
       "route": "/api/donations/create-payment-intent",
@@ -677,8 +919,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/get-purchases",
@@ -686,8 +935,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/gifts/bulk",
@@ -696,7 +952,8 @@
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
-      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard",
+      "methodPolicies": []
     },
     {
       "route": "/api/gifts/claim-signup",
@@ -704,8 +961,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "TOKEN_SCOPED",
+      "evidence": "explicit possession-proof boundary",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "TOKEN_SCOPED",
+          "rule": "explicit-possession-proof-route"
+        }
+      ]
     },
     {
       "route": "/api/gifts/claim/[token]",
@@ -713,8 +977,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "authority": "TOKEN_SCOPED",
+      "evidence": "explicit possession-proof boundary",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "TOKEN_SCOPED",
+          "rule": "explicit-possession-proof-route"
+        }
+      ]
     },
     {
       "route": "/api/gifts/preview/[token]",
@@ -722,8 +993,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "TOKEN_SCOPED",
+      "evidence": "explicit possession-proof boundary",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "TOKEN_SCOPED",
+          "rule": "explicit-possession-proof-route"
+        }
+      ]
     },
     {
       "route": "/api/gifts/purchase",
@@ -731,8 +1009,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/gifts/send",
@@ -741,7 +1026,14 @@
         "POST"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/gifts/sent",
@@ -750,7 +1042,14 @@
         "GET"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/guest/session",
@@ -759,8 +1058,20 @@
         "DELETE",
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "LEGACY_RETIREMENT",
+      "evidence": "explicit non-minting retirement surface",
+      "methodPolicies": [
+        {
+          "method": "DELETE",
+          "accessClass": "LEGACY_RETIREMENT",
+          "rule": "explicit-retirement-route"
+        },
+        {
+          "method": "GET",
+          "accessClass": "LEGACY_RETIREMENT",
+          "rule": "explicit-retirement-route"
+        }
+      ]
     },
     {
       "route": "/api/library/hls/key",
@@ -769,8 +1080,15 @@
         "GET",
         "OPTIONS"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "TOKEN_SCOPED",
+      "evidence": "explicit possession-proof boundary",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "TOKEN_SCOPED",
+          "rule": "explicit-possession-proof-route"
+        }
+      ]
     },
     {
       "route": "/api/library/hls",
@@ -780,7 +1098,14 @@
         "OPTIONS"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/library/hls/variant",
@@ -789,8 +1114,15 @@
         "GET",
         "OPTIONS"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "TOKEN_SCOPED",
+      "evidence": "explicit possession-proof boundary",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "TOKEN_SCOPED",
+          "rule": "explicit-possession-proof-route"
+        }
+      ]
     },
     {
       "route": "/api/library",
@@ -800,8 +1132,20 @@
         "OPTIONS",
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/library/stream",
@@ -813,7 +1157,24 @@
         "OPTIONS"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "DELETE",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "HEAD",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/media/playback",
@@ -822,8 +1183,15 @@
         "OPTIONS",
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/media/preview",
@@ -832,8 +1200,15 @@
         "GET",
         "OPTIONS"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/media/visual-assets/[slug]",
@@ -842,7 +1217,14 @@
         "GET"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/media/visual",
@@ -851,8 +1233,15 @@
         "GET",
         "OPTIONS"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/memberships/checkout",
@@ -861,7 +1250,14 @@
         "POST"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/notifications",
@@ -871,8 +1267,25 @@
         "PATCH",
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "PATCH",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/notifications/subscribe",
@@ -881,7 +1294,14 @@
         "POST"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/notifications/unsubscribe",
@@ -890,7 +1310,14 @@
         "POST"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/notifications/vapid-key",
@@ -898,8 +1325,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/ownership/check",
@@ -907,8 +1341,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/playback/events",
@@ -917,8 +1358,15 @@
         "OPTIONS",
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/playlists/[id]",
@@ -928,7 +1376,19 @@
         "PATCH"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "DELETE",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "PATCH",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/playlists/[id]/tracks",
@@ -939,7 +1399,24 @@
         "PUT"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "DELETE",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "PUT",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/playlists",
@@ -949,7 +1426,19 @@
         "POST"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/printful/products",
@@ -957,8 +1446,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/public/events",
@@ -966,8 +1462,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/public/livestream",
@@ -975,8 +1478,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/public/vault",
@@ -984,8 +1494,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/purchase/confirm",
@@ -993,8 +1510,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/purchases",
@@ -1002,8 +1526,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/queue",
@@ -1013,7 +1544,19 @@
         "PUT"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        },
+        {
+          "method": "PUT",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/refund",
@@ -1022,7 +1565,14 @@
         "POST"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/register-user",
@@ -1030,8 +1580,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "LEGACY_RETIREMENT",
+      "evidence": "explicit non-minting retirement surface",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "LEGACY_RETIREMENT",
+          "rule": "explicit-retirement-route"
+        }
+      ]
     },
     {
       "route": "/api/save-purchase",
@@ -1039,8 +1596,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/shows",
@@ -1048,8 +1612,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/signal/active",
@@ -1057,8 +1628,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/signal/state",
@@ -1066,8 +1644,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/stream/end",
@@ -1076,7 +1661,14 @@
         "POST"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/stripe/webhook",
@@ -1085,7 +1677,8 @@
         "POST"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "cron or signed webhook machine boundary"
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
     },
     {
       "route": "/api/tickets/checkout",
@@ -1093,8 +1686,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/tickets/my",
@@ -1102,8 +1702,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/vault/content",
@@ -1111,8 +1718,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/vault/media",
@@ -1120,8 +1734,15 @@
       "methods": [
         "GET"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/vault/progress",
@@ -1129,8 +1750,15 @@
       "methods": [
         "POST"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "AUTHENTICATED_USER",
+      "evidence": "central fail-closed middleware; unknown routes default protected",
+      "methodPolicies": [
+        {
+          "method": "POST",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/vault/video/captions",
@@ -1140,7 +1768,14 @@
         "OPTIONS"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/vault/video/key",
@@ -1149,8 +1784,15 @@
         "GET",
         "OPTIONS"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "TOKEN_SCOPED",
+      "evidence": "explicit possession-proof boundary",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "TOKEN_SCOPED",
+          "rule": "explicit-possession-proof-route"
+        }
+      ]
     },
     {
       "route": "/api/vault/video/manifest",
@@ -1160,7 +1802,14 @@
         "OPTIONS"
       ],
       "authority": "AUTHENTICATED_USER",
-      "evidence": "validated Supabase user session"
+      "evidence": "central fail-closed middleware plus direct validated session guard",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "AUTHENTICATED_CONSUMER",
+          "rule": "default-protected"
+        }
+      ]
     },
     {
       "route": "/api/vault/video/variant",
@@ -1169,8 +1818,15 @@
         "GET",
         "OPTIONS"
       ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
+      "authority": "TOKEN_SCOPED",
+      "evidence": "explicit possession-proof boundary",
+      "methodPolicies": [
+        {
+          "method": "GET",
+          "accessClass": "TOKEN_SCOPED",
+          "rule": "explicit-possession-proof-route"
+        }
+      ]
     },
     {
       "route": "/api/webhook",
@@ -1179,7 +1835,8 @@
         "POST"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "cron or signed webhook machine boundary"
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
     },
     {
       "route": "/api/webhooks/stripe",
@@ -1188,7 +1845,8 @@
         "POST"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "cron or signed webhook machine boundary"
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
     },
     {
       "route": "/api/webhooks/twitch",
@@ -1197,7 +1855,8 @@
         "POST"
       ],
       "authority": "SERVICE_ONLY",
-      "evidence": "cron or signed webhook machine boundary"
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
     }
   ]
 }

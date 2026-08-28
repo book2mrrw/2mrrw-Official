@@ -31,10 +31,10 @@ Purpose: live implementation control document. This is not the final closure rep
 
 | Finding | Verified current state / action | Status |
 |---|---|---|
-| BOOT-01 | `middleware.js` still calls `updateSession()` and network-validates nearly every matched request. | OPEN |
+| BOOT-01 | `middleware.js` now validates only protected human requests and enforces the centralized fail-closed route policy. | CLOSED |
 | BOOT-02 | Page requests were already parallel; `catalog-db.js` N+1 track reads replaced with one set-based query. | CLOSED |
-| BOOT-03 | `AppAuthRoot` hydration overlay removed; SSR shell remains visible. | CLOSED |
-| BOOT-04 | Global unauthenticated root gate removed; action gates and server authorization preserved. | CLOSED |
+| BOOT-03 | `AppAuthRoot` remains hydration-only; protected SSR is admitted only after verified server authority. | CLOSED |
+| BOOT-04 | Consumer access is account-gated in middleware and protected Server Components; anonymous access is an explicit allowlist. | CLOSED |
 | BOOT-05 | Google Fonts CSS `@import` remains in `globals.css`. | OPEN |
 | BOOT-06 | `globals.css` remains over 4,000 lines; incremental scoping required. | OPEN |
 | BOOT-07 | Root Stripe provider removed; one payment-scoped cached loader introduced. | CLOSED |
