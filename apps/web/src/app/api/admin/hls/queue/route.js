@@ -22,8 +22,7 @@ import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { resolvePlaybackKey } from "@/lib/playback/resolve-playback-key";
-import { buildHLSPrefix } from "@/lib/hls/derive-key";
-import { segmentDurationForSourceKey } from "@/lib/hls/playback-quality-policy";
+import { enqueueHlsTranscodeJob } from "@/lib/hls/transcode-queue";
 
 const VALID_RELEASE_TYPES = new Set([
   "singles", "albums", "features", "mixtapes-and-eps", "eps", "vault",
@@ -72,6 +71,32 @@ export async function POST(req) {
 
   const admin = getAdminClient();
 
+  if (body.upgradeCatalog === true) {
+    const batchSize = Number.isInteger(body.batchSize)
+      ? Math.max(1, Math.min(50, body.batchSize))
+      : 10;
+    const { data, error } = await admin.rpc("hls_enqueue_profile_upgrades", {
+      p_limit: batchSize,
+      p_queued_by: user.id,
+      p_target_profile_version: 3,
+    });
+    if (error) return json({ error: error.message }, 500);
+    const jobs = (data || []).map((job) => ({
+      slug: job.slug,
+      trackSlug: job.track_slug,
+      jobId: job.id,
+      status: job.status,
+      generation: job.generation,
+      hlsPrefix: job.hls_prefix,
+    }));
+    return json({
+      mode: "catalog-profile-upgrade",
+      targetProfileVersion: 3,
+      queued: jobs.length,
+      jobs,
+    });
+  }
+
   // Normalise to array of track descriptors
   const tracks = Array.isArray(body.tracks)
     ? body.tracks
@@ -103,81 +128,23 @@ export async function POST(req) {
       continue;
     }
 
-    // Segment duration is a canonical media policy, not caller-controlled
-    // tuning. The worker probes the source and enforces the policy again.
-    const segmentDuration = segmentDurationForSourceKey(sourceKey);
-
-    const hlsPrefix = buildHLSPrefix(slug, trackSlug, releaseType);
-
-    // PostgREST upsert onConflict does not accept SQL expressions (e.g. COALESCE).
-    // Use explicit select → insert/update so NULL track_slug is handled correctly
-    // via .is("track_slug", null) and all job states are managed precisely.
-    let existingQuery = admin
-      .from("hls_transcode_jobs")
-      .select("id, status")
-      .eq("slug", slug);
-    existingQuery = trackSlug
-      ? existingQuery.eq("track_slug", trackSlug)
-      : existingQuery.is("track_slug", null);
-    const { data: existing } = await existingQuery.maybeSingle();
-
-    let data, error;
-
-    if (existing) {
-      if (existing.status === "pending" || existing.status === "processing") {
-        // Already in-flight — return current state, don't reset
-        results.push({ slug, trackSlug, jobId: existing.id, status: existing.status });
-        continue;
-      }
-      // Re-queue completed/failed/cancelled jobs with fresh state
-      ({ data, error } = await admin
-        .from("hls_transcode_jobs")
-        .update({
-          source_key:            sourceKey,
-          hls_prefix:            hlsPrefix,
-          release_type:          releaseType,
-          status:                "pending",
-          priority,
-          bitrates,
-          segment_duration_secs: segmentDuration,
-          attempt_count:         0,
-          error_message:         null,
-          worker_id:             null,
-          queued_by:             user.id,
-          started_at:            null,
-          completed_at:          null,
-        })
-        .eq("id", existing.id)
-        .select("id, status")
-        .single());
-    } else {
-      ({ data, error } = await admin
-        .from("hls_transcode_jobs")
-        .insert({
-          slug,
-          track_slug:            trackSlug,
-          release_type:          releaseType,
-          source_key:            sourceKey,
-          hls_prefix:            hlsPrefix,
-          status:                "pending",
-          priority,
-          bitrates,
-          segment_duration_secs: segmentDuration,
-          attempt_count:         0,
-          error_message:         null,
-          worker_id:             null,
-          queued_by:             user.id,
-          started_at:            null,
-          completed_at:          null,
-        })
-        .select("id, status")
-        .single());
-    }
-
-    if (error) {
+    try {
+      const data = await enqueueHlsTranscodeJob(admin, {
+        slug,
+        trackSlug,
+        releaseType,
+        sourceKey,
+        priority,
+        bitrates,
+        queuedBy: user.id,
+        force: body.force === true || t.force === true,
+      });
+      results.push({
+        slug, trackSlug, jobId: data.id, status: data.status,
+        generation: data.generation, hlsPrefix: data.hls_prefix,
+      });
+    } catch (error) {
       errors.push({ slug, trackSlug, error: error.message });
-    } else {
-      results.push({ slug, trackSlug, jobId: data.id, status: data.status });
     }
   }
 

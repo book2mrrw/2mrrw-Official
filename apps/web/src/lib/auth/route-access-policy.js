@@ -68,6 +68,7 @@ const SERVICE_INTERNAL_API_METHODS = new Map([
   ["/api/cron/finalize-draft-dumps", new Set(["GET"])],
   ["/api/cron/gift-reminders", new Set(["GET", "POST"])],
   ["/api/cron/hls-stale-jobs", new Set(["GET"])],
+  ["/api/cron/hls-retired-prefixes", new Set(["GET"])],
   ["/api/cron/livestream-notifications", new Set(["GET"])],
   ["/api/cron/publish-scheduled", new Set(["GET"])],
   ["/api/cron/purge-stream-events", new Set(["GET", "POST"])],

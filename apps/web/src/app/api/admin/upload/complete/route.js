@@ -8,6 +8,7 @@ import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 import { ADMIN_UPLOAD_CONTRACTS } from "@/lib/media/admin-upload-contract";
 import { emitServerEvent } from "@/lib/observability/server-events";
+import { enqueueHlsTranscodeJob } from "@/lib/hls/transcode-queue";
 
 export const dynamic = "force-dynamic";
 
@@ -18,12 +19,6 @@ const RELEASE_TYPE_FOLDERS = {
   ep:      "mixtapes-and-eps",
   mixtape: "mixtapes-and-eps",
 };
-
-function buildHLSPrefix(releaseType, slug, trackSlug) {
-  const folder = RELEASE_TYPE_FOLDERS[releaseType] || "singles";
-  if (trackSlug) return `hls/${folder}/${slug}/${trackSlug}/`;
-  return `hls/${folder}/${slug}/`;
-}
 
 export async function POST(req) {
   const correlationId = req.headers.get("x-correlation-id") || crypto.randomUUID();
@@ -126,34 +121,19 @@ export async function POST(req) {
         }
       }
 
-      // Queue HLS transcode job (check-then-insert to handle COALESCE-based unique index)
-      // jobSlug is always the release slug; trackSlug stored separately in track_slug column
-      const hlsPrefix = buildHLSPrefix(releaseType, slug, trackSlug);
-      const jobSlug = slug;
-      let jobQ = admin.from("hls_transcode_jobs").select("id, status").eq("slug", jobSlug);
-      jobQ = trackSlug ? jobQ.eq("track_slug", trackSlug) : jobQ.is("track_slug", null);
-      const { data: existingJob } = await jobQ.maybeSingle();
-
+      // Upload completion is a new source generation. The currently active HLS
+      // rendition remains live until this immutable generation commits.
       let hlsError = null;
-      if (existingJob) {
-        const { error } = await admin
-          .from("hls_transcode_jobs")
-          .update({ source_key: key, hls_prefix: hlsPrefix, status: "pending", attempt_count: 0, queued_by: user.id })
-          .eq("id", existingJob.id);
-        hlsError = error;
-      } else {
-        const { error } = await admin
-          .from("hls_transcode_jobs")
-          .insert({
-            slug: jobSlug,
-            track_slug: trackSlug || null,
-            release_type: RELEASE_TYPE_FOLDERS[releaseType] || "singles",
-            source_key: key,
-            hls_prefix: hlsPrefix,
-            status: "pending",
-            queued_by: user.id,
-            attempt_count: 0,
-          });
+      try {
+        await enqueueHlsTranscodeJob(admin, {
+          slug,
+          trackSlug: trackSlug || null,
+          releaseType: RELEASE_TYPE_FOLDERS[releaseType] || "singles",
+          sourceKey: key,
+          queuedBy: user.id,
+          force: true,
+        });
+      } catch (error) {
         hlsError = error;
       }
       if (hlsError) {

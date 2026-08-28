@@ -165,7 +165,7 @@ describe("publish cannot silently half-succeed", () => {
       "Supabase query builders do not implement Promise.catch(); destructure and inspect their error result",
     );
     assert.match(publish, /if \(trackCanonicalizeError\)/);
-    assert.match(publish, /if \(hlsCanonicalizeError\)/);
+    assert.match(publish, /catch \(hlsCanonicalizeError\)/);
     assert.match(publish, /if \(coverKeyUpdateError\) throw coverKeyUpdateError/);
     assert.match(publish, /if \(singleTrackUpdateError\)/);
   });

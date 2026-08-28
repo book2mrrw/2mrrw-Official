@@ -42,7 +42,8 @@ export async function GET(req) {
     .select(
       "id, slug, track_slug, release_type, status, priority, bitrates, " +
       "segment_duration_secs, attempt_count, worker_id, error_message, " +
-      "source_key, hls_prefix, queued_by, created_at, started_at, completed_at",
+      "source_key, base_hls_prefix, hls_prefix, generation, target_profile_version, " +
+      "queued_by, created_at, updated_at, started_at, completed_at",
       { count: "exact" }
     )
     .order("created_at", { ascending: false })

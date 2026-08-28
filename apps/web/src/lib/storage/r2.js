@@ -1,6 +1,7 @@
 import {
   CopyObjectCommand,
   DeleteObjectCommand,
+  DeleteObjectsCommand,
   GetObjectCommand,
   HeadBucketCommand,
   HeadObjectCommand,
@@ -227,6 +228,53 @@ export async function deleteR2Object(key) {
   const normalized = String(key || "").replace(/^\//, "");
   if (!R2_BUCKET || !normalized) return;
   await r2Client.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: normalized }));
+}
+
+/**
+ * Delete every object under an exact, prevalidated prefix in bounded R2 batches.
+ * Exclusions protect descendants that are still active (used only while
+ * retiring the pre-generation legacy layout).
+ */
+export async function deleteR2Prefix(prefix, { excludePrefixes = [] } = {}) {
+  const normalized = String(prefix || "").replace(/^\//, "");
+  const depth = normalized.split("/").filter(Boolean).length;
+  if (!R2_BUCKET || !normalized.endsWith("/") || !normalized.startsWith("hls/") ||
+      normalized.includes("..") || depth < 3) {
+    throw new Error("deleteR2Prefix: invalid HLS prefix");
+  }
+
+  const excluded = excludePrefixes
+    .map((value) => String(value || "").replace(/^\//, ""))
+    .filter((value) => value.startsWith(normalized));
+  let continuationToken;
+  let deleted = 0;
+
+  do {
+    const page = await r2Client.send(new ListObjectsV2Command({
+      Bucket: R2_BUCKET,
+      Prefix: normalized,
+      MaxKeys: 1000,
+      ContinuationToken: continuationToken,
+    }));
+    const keys = (page.Contents || [])
+      .map((item) => item.Key)
+      .filter(Boolean)
+      .filter((key) => !excluded.some((protectedPrefix) => key.startsWith(protectedPrefix)));
+
+    if (keys.length) {
+      const result = await r2Client.send(new DeleteObjectsCommand({
+        Bucket: R2_BUCKET,
+        Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: false },
+      }));
+      if (result.Errors?.length) {
+        throw new Error(`R2 rejected ${result.Errors.length} HLS object deletions`);
+      }
+      deleted += keys.length;
+    }
+    continuationToken = page.IsTruncated ? page.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return deleted;
 }
 
 export async function discoverFileByExtensions(prefix, extensionsInPriorityOrder) {

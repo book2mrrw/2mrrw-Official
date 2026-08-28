@@ -1,8 +1,8 @@
 /**
  * POST /api/admin/hls/complete
  *
- * Called by the Fly.io HLS transcoder worker immediately after it has written
- * the hls_manifests row to Supabase. The sole job of this endpoint is to
+ * Called by the Fly.io HLS transcoder worker immediately after the fenced,
+ * atomic generation-cutover RPC has promoted the hls_manifests row. Its job is to
  * invalidate the L1+L2 manifest cache so the NEXT /api/library/hls request
  * for this slug hits the DB and serves the real manifest, rather than waiting
  * up to 24 h for the TTL to expire (which would leave clients stuck on

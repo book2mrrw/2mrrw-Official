@@ -3,7 +3,7 @@ import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { headR2ObjectKey, copyR2Object, deleteR2Object } from "@/lib/storage/r2";
-import { buildHLSPrefix } from "@/lib/hls/derive-key";
+import { enqueueHlsTranscodeJob } from "@/lib/hls/transcode-queue";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 import {
@@ -269,23 +269,24 @@ export async function POST(req, { params }) {
       );
     }
 
-    // Update the HLS transcode job queued at upload time (used draft slug/prefix/source_key)
-    // Skip jobs currently being processed by the worker — they'll be corrected on next sync
-    const newHlsPrefix = buildHLSPrefix(releaseSlug, isMultiTrack ? track.slug : null, hlsFolder);
-    const { error: hlsCanonicalizeError } = await admin
-      .from("hls_transcode_jobs")
-      .update({
-        source_key:    destKey,
-        slug:          releaseSlug,
-        track_slug:    isMultiTrack ? track.slug : null,
-        hls_prefix:    newHlsPrefix,
-        status:        "pending",
-        attempt_count: 0,
-        error_message: null,
-      })
-      .eq("source_key", srcKey)
-      .neq("status", "processing");
-    if (hlsCanonicalizeError) {
+    // Supersede any draft-identity work and enqueue the immutable canonical
+    // generation. A processing draft worker is fenced out by its status change.
+    try {
+      await admin
+        .from("hls_transcode_jobs")
+        .update({ status: "cancelled" })
+        .eq("source_key", srcKey)
+        .in("status", ["pending", "processing", "failed"]);
+      await enqueueHlsTranscodeJob(admin, {
+        slug: releaseSlug,
+        trackSlug: isMultiTrack ? track.slug : null,
+        releaseType: hlsFolder,
+        sourceKey: destKey,
+        priority: 2,
+        queuedBy: user.id,
+        force: true,
+      });
+    } catch (hlsCanonicalizeError) {
       console.warn("[publish] HLS job canonicalize error (non-fatal)", hlsCanonicalizeError.message);
     }
 

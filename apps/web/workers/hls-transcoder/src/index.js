@@ -17,6 +17,7 @@ import { logger }                                              from "./logger.js
 import { claimNextJob, markJobComplete, markJobFailed, updatePosterKey } from "./db.js";
 import { transcode }                                           from "./transcoder.js";
 import { extractPoster }                                       from "./poster.js";
+import { assertClaimedJobContract }                            from "./job-contract.js";
 
 // Unique worker ID per process — shown in hls_transcode_jobs.worker_id
 const WORKER_ID = `fly-${os.hostname()}-${crypto.randomBytes(4).toString("hex")}`;
@@ -47,9 +48,24 @@ async function processJob(job) {
   });
 
   try {
+    assertClaimedJobContract(job);
     const manifest = await transcode({ job });
-    await markJobComplete(job.id, manifest);
-    logger.info("job complete", { jobId: job.id, slug: job.slug, trackSlug: job.track_slug });
+    const completion = await markJobComplete(job, WORKER_ID, manifest);
+    if (!completion.committed) {
+      logger.warn("job superseded before cutover", {
+        jobId: job.id,
+        slug: job.slug,
+        trackSlug: job.track_slug,
+        generation: job.generation,
+      });
+      return;
+    }
+    logger.info("job complete", {
+      jobId: job.id,
+      slug: job.slug,
+      trackSlug: job.track_slug,
+      generation: job.generation,
+    });
 
     // Poster extraction — only for video jobs, non-fatal
     const isVideoJob = manifest.media_kind === "video";
@@ -61,7 +77,7 @@ async function processJob(job) {
           releaseType:     job.release_type,
           durationSeconds: manifest.duration_seconds,
         });
-        await updatePosterKey(job.slug, null, posterKey, "ready");
+        await updatePosterKey(job.slug, null, job.generation, posterKey, "ready");
         logger.info("poster ready", { jobId: job.id, slug: job.slug, posterKey });
       } catch (posterErr) {
         logger.warn("poster extraction failed (non-fatal)", {
@@ -69,13 +85,13 @@ async function processJob(job) {
           slug:    job.slug,
           message: posterErr?.message,
         });
-        await updatePosterKey(job.slug, null, null, "needs_poster").catch(() => {});
+        await updatePosterKey(job.slug, null, job.generation, null, "needs_poster").catch(() => {});
       }
     }
   } catch (err) {
     const message = err?.message ?? String(err);
     logger.error("job failed", { jobId: job.id, slug: job.slug, message });
-    await markJobFailed(job.id, message).catch((dbErr) => {
+    await markJobFailed(job, WORKER_ID, message).catch((dbErr) => {
       logger.error("markJobFailed error", { jobId: job.id, message: dbErr?.message });
     });
   } finally {

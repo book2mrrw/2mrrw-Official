@@ -5,7 +5,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { headR2ObjectKey, deleteR2Object, listR2Objects, isDirectChildObjectKey } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { clearPersistedPlaybackKey } from "@/lib/playback/resolve-playback-key";
-import { buildHLSPrefix } from "@/lib/hls/derive-key";
+import { enqueueHlsTranscodeJob } from "@/lib/hls/transcode-queue";
 import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 
 export const dynamic = "force-dynamic";
@@ -94,7 +94,7 @@ export async function POST(req, { params }) {
     const isMultiTrack = ["album", "ep", "mixtape"].includes(release.release_type);
     const folderParts = newAudioFolder.replace(/\/$/, "").split("/");
     const trackSlug = isMultiTrack ? folderParts.at(-1) : null;
-    await requeue(admin, user, release.slug, release.release_type, trackSlug, newKey, release);
+    await requeue(admin, user, release.slug, release.release_type, trackSlug, newKey);
     try { await clearPersistedPlaybackKey(admin, release.slug, trackSlug); } catch {}
     // A still-drafting release has nothing public to invalidate yet.
     if (release.status !== "draft") revalidateStorefront();
@@ -158,7 +158,7 @@ export async function POST(req, { params }) {
   try { await clearPersistedPlaybackKey(admin, product.slug, trackSlug); } catch {}
 
   // Re-queue HLS transcode job
-  await requeue(admin, user, product.slug, releaseType, trackSlug, newKey, { slug: product.slug, release_type: releaseType });
+  await requeue(admin, user, product.slug, releaseType, trackSlug, newKey);
   revalidateStorefront();
 
   console.info(`[replace-master/catalog] SUCCESS productId=${product.id} slug=${product.slug} newKey=${newKey}`);
@@ -199,47 +199,16 @@ async function removeStaleMasterSiblings(folder, newKey) {
   return warnings;
 }
 
-async function requeue(admin, user, releaseSlug, releaseType, trackSlug, sourceKey, release) {
+async function requeue(admin, user, releaseSlug, releaseType, trackSlug, sourceKey) {
   const typeFolder = RELEASE_TYPE_FOLDERS[releaseType] ||
     RELEASE_TYPE_FOLDERS[releaseType?.replace(/s$/, "")] || "singles";
-  // slug is always the RELEASE slug (matches hls-sync-trigger schema)
-  const jobSlug = releaseSlug;
-  const hlsPrefix = buildHLSPrefix(releaseSlug, trackSlug || null, typeFolder);
-
-  const { data: existingJob } = await admin
-    .from("hls_transcode_jobs")
-    .select("id, status")
-    .eq("slug", jobSlug)
-    .is("track_slug", trackSlug || null)
-    .maybeSingle();
-
-  if (existingJob) {
-    await admin
-      .from("hls_transcode_jobs")
-      .update({
-        source_key: sourceKey,
-        hls_prefix: hlsPrefix,
-        status: "pending",
-        attempt_count: 0,
-        error_message: null,
-        worker_id: null,
-        queued_by: user.id,
-        started_at: null,
-        completed_at: null,
-      })
-      .eq("id", existingJob.id);
-  } else {
-    await admin
-      .from("hls_transcode_jobs")
-      .insert({
-        slug:         jobSlug,
-        track_slug:   trackSlug || null,
-        release_type: typeFolder,
-        source_key:   sourceKey,
-        hls_prefix:   hlsPrefix,
-        status:       "pending",
-        attempt_count: 0,
-        queued_by:    user.id,
-      });
-  }
+  await enqueueHlsTranscodeJob(admin, {
+    slug: releaseSlug,
+    trackSlug: trackSlug || null,
+    releaseType: typeFolder,
+    sourceKey,
+    queuedBy: user.id,
+    priority: 1,
+    force: true,
+  });
 }

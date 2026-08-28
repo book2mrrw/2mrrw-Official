@@ -17,7 +17,7 @@ import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { isAdminUser } from "@/lib/auth/constants";
 import { resolvePlaybackKey, clearPersistedPlaybackKey } from "@/lib/playback/resolve-playback-key";
-import { buildHLSPrefix } from "@/lib/hls/derive-key";
+import { enqueueHlsTranscodeJob } from "@/lib/hls/transcode-queue";
 import { ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { r2Client, R2_BUCKET } from "@/lib/storage/r2";
 
@@ -161,51 +161,24 @@ export async function POST() {
           return;
         }
 
-        const hlsPrefix = buildHLSPrefix(releaseSlug, trackSlug, releaseType);
-
-        if (existing) {
-          const { data, error: upErr } = await admin
-            .from("hls_transcode_jobs")
-            .update({
-              source_key: sourceKey,
-              hls_prefix: hlsPrefix,
-              release_type: releaseType,
-              status: "pending",
-              priority: 3,
-              attempt_count: 0,
-              error_message: null,
-              worker_id: null,
-              queued_by: user.id,
-              started_at: null,
-              completed_at: null,
-            })
-            .eq("id", existing.id)
-            .select("id, status")
-            .single();
-          if (upErr) errors.push({ slug: releaseSlug, trackSlug, error: upErr.message });
-          else results.push({ slug: releaseSlug, trackSlug, jobId: data.id, status: data.status });
-        } else {
-          const { data, error: insErr } = await admin
-            .from("hls_transcode_jobs")
-            .insert({
-              slug: releaseSlug,
-              track_slug: trackSlug,
-              release_type: releaseType,
-              source_key: sourceKey,
-              hls_prefix: hlsPrefix,
-              status: "pending",
-              priority: 3,
-              attempt_count: 0,
-              error_message: null,
-              worker_id: null,
-              queued_by: user.id,
-              started_at: null,
-              completed_at: null,
-            })
-            .select("id, status")
-            .single();
-          if (insErr) errors.push({ slug: releaseSlug, trackSlug, error: insErr.message });
-          else results.push({ slug: releaseSlug, trackSlug, jobId: data.id, status: data.status });
+        try {
+          const data = await enqueueHlsTranscodeJob(admin, {
+            slug: releaseSlug,
+            trackSlug,
+            releaseType,
+            sourceKey,
+            priority: 3,
+            queuedBy: user.id,
+          });
+          results.push({
+            slug: releaseSlug,
+            trackSlug,
+            jobId: data.id,
+            status: data.status,
+            generation: data.generation,
+          });
+        } catch (error) {
+          errors.push({ slug: releaseSlug, trackSlug, error: error.message });
         }
       })
     );

@@ -28,6 +28,7 @@ import {
   segmentDurationForMediaKind,
   selectVideoRenditions,
 } from "./rendition-contract.js";
+import { TRANSCODE_PROFILE_VERSION } from "./job-contract.js";
 
 const FFMPEG_BIN = process.env.FFMPEG_PATH || "ffmpeg";
 const FFPROBE_BIN = process.env.FFPROBE_PATH || "ffprobe";
@@ -305,7 +306,7 @@ export async function transcode({ job }) {
         : {
             audio_codec: probe.streams.find((stream) => stream?.codec_type === "audio")?.codec_name || null,
           },
-      transcode_profile_version: 3,
+      transcode_profile_version: TRANSCODE_PROFILE_VERSION,
     };
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });

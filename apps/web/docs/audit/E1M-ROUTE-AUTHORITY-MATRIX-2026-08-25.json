@@ -1,11 +1,11 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-08-27T23:50:52.470Z",
+  "generatedAt": "2026-08-28T23:15:09.616Z",
   "sourceRoot": "src/app/api",
-  "total": 126,
+  "total": 127,
   "counts": {
     "HUMAN_ADMIN": 30,
-    "SERVICE_ONLY": 17,
+    "SERVICE_ONLY": 18,
     "ADMIN_OR_SERVICE_CAPABILITY": 5,
     "AUTHENTICATED_USER": 57,
     "ANONYMOUS_AUTH": 5,
@@ -867,6 +867,16 @@
       "methods": [
         "GET",
         "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary",
+      "methodPolicies": []
+    },
+    {
+      "route": "/api/cron/hls-retired-prefixes",
+      "file": "src/app/api/cron/hls-retired-prefixes/route.js",
+      "methods": [
+        "GET"
       ],
       "authority": "SERVICE_ONLY",
       "evidence": "cron or signed webhook machine boundary",

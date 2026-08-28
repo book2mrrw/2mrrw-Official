@@ -16,6 +16,33 @@ export const db = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+async function notifyManifestCutover(manifest) {
+  const appUrl = process.env.APP_URL;
+  const workerToken = process.env.HLS_WORKER_API_TOKEN;
+  if (!appUrl || !workerToken) return;
+
+  let lastError = null;
+  for (const delayMs of [0, 500, 2_000]) {
+    if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+    try {
+      const response = await fetch(`${appUrl}/api/admin/hls/complete`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${workerToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ slug: manifest.slug, trackSlug: manifest.track_slug ?? null }),
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (response.ok) return;
+      lastError = new Error(`cache invalidation returned HTTP ${response.status}`);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error("cache invalidation failed");
+}
+
 /**
  * Claim the next pending job atomically.
  * Uses FOR UPDATE SKIP LOCKED — only one worker claims each row.
@@ -31,90 +58,50 @@ export async function claimNextJob(workerId) {
   return Array.isArray(data) ? data[0] : data;
 }
 
-export async function markJobProcessing(jobId, workerId) {
-  const { error } = await db
-    .from("hls_transcode_jobs")
-    .update({ status: "processing", worker_id: workerId, started_at: new Date().toISOString() })
-    .eq("id", jobId);
-  if (error) throw new Error(`markJobProcessing: ${error.message}`);
-}
-
-export async function markJobComplete(jobId, manifest) {
-  // PostgREST's onConflict can't reference expression-based indexes (COALESCE).
-  // INSERT first; on unique constraint violation (23505), UPDATE the existing row.
-  const { error: insErr } = await db.from("hls_manifests").insert(manifest);
-
-  if (insErr) {
-    if (insErr.code === "23505") {
-      let updQ = db
-        .from("hls_manifests")
-        .update({ ...manifest, updated_at: new Date().toISOString() })
-        .eq("slug", manifest.slug);
-      updQ = manifest.track_slug != null
-        ? updQ.eq("track_slug", manifest.track_slug)
-        : updQ.is("track_slug", null);
-      const { error: updErr } = await updQ;
-      if (updErr) throw new Error(`update manifest: ${updErr.message}`);
-    } else {
-      throw new Error(`insert manifest: ${insErr.message}`);
-    }
+export async function markJobComplete(job, workerId, manifest) {
+  const { data, error } = await db.rpc("hls_commit_transcode_job", {
+    p_job_id: job.id,
+    p_worker_id: workerId,
+    p_claim_token: job.claim_token,
+    p_generation: job.generation,
+    p_manifest: manifest,
+  });
+  if (error) throw new Error(`hls_commit_transcode_job: ${error.message}`);
+  if (!data?.committed) {
+    return { committed: false, reason: data?.reason || "superseded" };
   }
-
-  const { error: jErr } = await db
-    .from("hls_transcode_jobs")
-    .update({ status: "complete", completed_at: new Date().toISOString() })
-    .eq("id", jobId);
-  if (jErr) throw new Error(`markJobComplete: ${jErr.message}`);
 
   // Notify the web app to invalidate the L1+L2 manifest cache immediately so
   // the next /api/library/hls request serves the real manifest instead of waiting
   // up to 24h for the TTL to expire.
-  const appUrl = process.env.APP_URL;
-  const workerToken = process.env.HLS_WORKER_API_TOKEN;
-  if (appUrl && workerToken) {
-    fetch(`${appUrl}/api/admin/hls/complete`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${workerToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ slug: manifest.slug, trackSlug: manifest.track_slug ?? null }),
-    }).catch((err) => console.warn("[worker] cache invalidation notify failed", err?.message));
-  }
+  await notifyManifestCutover(manifest).catch((err) => {
+    console.warn("[worker] cache invalidation notify failed", err?.message);
+  });
+
+  return data;
 }
 
-export async function updatePosterKey(slug, trackSlug, posterKey, status = "ready") {
+export async function updatePosterKey(slug, trackSlug, generation, posterKey, status = "ready") {
   let q = db
     .from("hls_manifests")
     .update({ poster_key: posterKey, poster_status: status })
-    .eq("slug", slug);
+    .eq("slug", slug)
+    .eq("active_generation", generation);
   q = trackSlug != null ? q.eq("track_slug", trackSlug) : q.is("track_slug", null);
-  const { error } = await q;
+  const { data, error } = await q.select("id");
   if (error) throw new Error(`updatePosterKey: ${error.message}`);
+  return Boolean(data?.length);
 }
 
-export async function markJobFailed(jobId, errorMessage) {
-  const { data: job } = await db
-    .from("hls_transcode_jobs")
-    .select("attempt_count")
-    .eq("id", jobId)
-    .single();
-
-  const attemptCount = (job?.attempt_count ?? 0) + 1;
-  const maxAttempts  = 3;
-  const nextStatus   = attemptCount >= maxAttempts ? "failed" : "pending";
-
-  const { error } = await db
-    .from("hls_transcode_jobs")
-    .update({
-      status:        nextStatus,
-      error_message: errorMessage,
-      attempt_count: attemptCount,
-      worker_id:     null,
-      started_at:    null,
-      completed_at:  nextStatus === "failed" ? new Date().toISOString() : null,
-    })
-    .eq("id", jobId);
-
-  if (error) throw new Error(`markJobFailed: ${error.message}`);
+export async function markJobFailed(job, workerId, errorMessage) {
+  const { data, error } = await db.rpc("hls_fail_transcode_job", {
+    p_job_id: job.id,
+    p_worker_id: workerId,
+    p_claim_token: job.claim_token,
+    p_generation: job.generation,
+    p_error_message: errorMessage,
+    p_max_attempts: 3,
+  });
+  if (error) throw new Error(`hls_fail_transcode_job: ${error.message}`);
+  return data;
 }
