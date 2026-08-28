@@ -202,6 +202,7 @@ test("production playback startup policy stays short, bounded, and audio-first",
   const mediaPriority = read("src/lib/media/audio-media-priority.js");
   const singles = read("src/components/home/LatestSinglesStyleRow.js");
   const coverArt = read("src/components/ui/CoverArt.js");
+  const ambientBackground = read("src/components/home/AmbientPlaybackBackground.js");
 
   assert.match(policy, /AUDIO_SEGMENT_DURATION_SECONDS\s*=\s*2/);
   assert.match(policy, /AUDIO_FORWARD_BUFFER_SECONDS\s*=\s*30/);
@@ -220,4 +221,8 @@ test("production playback startup policy stays short, bounded, and audio-first",
   assert.match(singles, /removeAttribute\("src"\)/);
   assert.match(coverArt, /audioPriority\.active/);
   assert.match(coverArt, /removeAttribute\("src"\)/);
+  assert.match(ambientBackground, /audioPriority\.startupActive/);
+  assert.match(ambientBackground, /removeAttribute\("src"\)/);
+  assert.doesNotMatch(ambientBackground, /autoPlay/);
+  assert.doesNotMatch(ambientBackground, /preload="auto"/);
 });
