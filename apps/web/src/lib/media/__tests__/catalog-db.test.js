@@ -5,6 +5,7 @@ import test from "node:test";
 
 import { isConcreteVideoAssetPath, mapProductRow } from "../catalog-db.js";
 import { withR2CatalogMedia } from "../r2-catalog-media.js";
+import { catalogStaticCoverDisplay } from "../../../components/home/catalogMedia.js";
 
 const LIVE_AT = "2026-01-01T00:00:00.000Z";
 
@@ -138,4 +139,29 @@ test("catalog video cards wire a static fallback through both render branches", 
   assert.match(source, /poster=\{staticFallback \|\| undefined\}/);
   assert.match(source, /src=\{videoFailed \? staticFallback : coverDisplay\.src\}/);
   assert.match(source, /baseCover=\{staticFallback\}/);
+});
+
+test("2MRRW Radio never assigns canonical video discovery URLs to an image surface", () => {
+  const slides = [
+    ["hour-glass", "/images/singles/hourglass.jpg"],
+    ["w2d", "/images/singles/w2d.jpg"],
+    ["artificial", "/images/singles/artificial.jpg"],
+    ["turnt-me-2-dis", "/images/singles/turnt.jpg"],
+  ];
+
+  for (const [slug, cover] of slides) {
+    const enriched = withR2CatalogMedia({ slug, cover });
+    assert.equal(enriched.coverArtType, "video", slug);
+    assert.match(enriched.cover, /^\/api\/media\/visual\?/, slug);
+
+    const display = catalogStaticCoverDisplay(enriched);
+    assert.equal(display.src, cover, slug);
+    assert.equal(display.baseCover, cover, slug);
+    assert.equal(display.type, "image", slug);
+  }
+
+  const source = readFileSync(path.join(process.cwd(), "src/components/home/RadioCarousel.js"), "utf8");
+  assert.match(source, /catalogStaticCoverDisplay\(currentSlide\)/);
+  assert.match(source, /<CoverArt/);
+  assert.doesNotMatch(source, /<img[\s\S]*src=\{currentSlide\.cover\}/);
 });

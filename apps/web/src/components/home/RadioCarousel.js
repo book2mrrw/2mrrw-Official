@@ -4,8 +4,12 @@ import { memo } from "react";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import ReleaseCardPlayButton from "@/components/music/ReleaseCardPlayButton";
+import CoverArt from "@/components/ui/CoverArt";
 import { resolveContentAccess } from "@/lib/music-access";
-import { withR2CatalogMedia } from "@/components/home/catalogMedia";
+import {
+  catalogStaticCoverDisplay,
+  withR2CatalogMedia,
+} from "@/components/home/catalogMedia";
 
 function RadioCarousel({
   narrow = false,
@@ -26,6 +30,7 @@ function RadioCarousel({
   const infoPad = isMobile ? "20px 16px" : narrow ? "28px 22px" : "36px 32px";
   const titleSize = isMobile ? 18 : narrow ? 24 : 34;
   const radioAccess = resolveContentAccess(currentSlide, accountState);
+  const radioCover = catalogStaticCoverDisplay(currentSlide);
 
   return (
     <div
@@ -53,10 +58,14 @@ function RadioCarousel({
         <div
           style={{ flexShrink: 0, width: coverW, position: "relative", overflow: "hidden" }}
         >
-          <img
-            src={currentSlide.cover}
+          <CoverArt
+            src={radioCover.src}
+            baseCover={radioCover.baseCover}
+            type={radioCover.type}
             alt={currentSlide.title}
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            width="100%"
+            height="100%"
+            style={{ objectFit: "cover", display: "block" }}
           />
           <div
             style={{
