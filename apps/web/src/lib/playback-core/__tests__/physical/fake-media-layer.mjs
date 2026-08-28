@@ -44,6 +44,8 @@ export class FakeMediaRuntime {
     this.queue = [];
     this.queueIndex = -1;
     this.log = [];
+    this.audibleCommitCount = 0;
+    this.beforeAudibleEffect = null;
     /** ms of simulated manifest/stream resolution latency for playTrack */
     this.loadLatencyMs = 0;
     /** set true to make playTrack hang until releaseStall() (stalled-stream scenario) */
@@ -69,6 +71,8 @@ export class FakeMediaRuntime {
     this.queue = [];
     this.queueIndex = -1;
     this.log = [];
+    this.audibleCommitCount = 0;
+    this.beforeAudibleEffect = null;
     this.loadLatencyMs = 0;
     this.stallLoad = false;
   }
@@ -101,8 +105,76 @@ export class FakeMediaRuntime {
   /** Handler bag matching the production commandHandlersRef contract. */
   handlers() {
     const rt = this;
+
+    // This is the harness's HTMLMediaElement.play() boundary. Source assignment,
+    // buffering, and identity changes happen before it; the transport becomes
+    // PLAYING only after the injected Core guard admits the effect. A completely
+    // absent context is the intentional legacy negative-control path.
+    const commitAudibleEffect = (options, mediaIdentity, command) => {
+      const effectAuthority = options?.effectAuthority;
+      const canApplyEffect = options?.canApplyEffect;
+      const authorityMode = options?.effectAuthorityMode ?? null;
+      const guardRequired = options?.effectGuardRequired === true;
+      const hasAuthority = effectAuthority != null;
+      const hasGuard = typeof canApplyEffect === "function";
+
+      const desiredRevision = effectAuthority?.desiredRevision ?? null;
+      rt.log.push({
+        h: "effect_requested",
+        command,
+        mediaIdentity,
+        desiredRevision,
+        authorityMode,
+        at: Date.now(),
+      });
+
+      const beforeEffect = rt.beforeAudibleEffect;
+      rt.beforeAudibleEffect = null;
+      beforeEffect?.({ command, mediaIdentity, desiredRevision, authorityMode });
+
+      if (authorityMode === "LEGACY" && !guardRequired && !hasAuthority && !hasGuard) {
+        rt.log.push({
+          h: "effect_legacy_unguarded",
+          command,
+          mediaIdentity,
+          desiredRevision,
+          at: Date.now(),
+        });
+        rt.log.push({ h: "audio_play", command, mediaIdentity, desiredRevision, at: Date.now() });
+        rt.audibleCommitCount += 1;
+        rt.transport = Transport.PLAYING;
+        return true;
+      }
+
+      let allowed = false;
+      if (hasAuthority && hasGuard) {
+        try {
+          allowed = Boolean(canApplyEffect(effectAuthority, {
+            type: "BECOME_AUDIBLE",
+            mediaIdentity,
+          }));
+        } catch {
+          allowed = false;
+        }
+      }
+
+      rt.log.push({
+        h: allowed ? "effect_allowed" : "effect_denied",
+        command,
+        mediaIdentity,
+        desiredRevision,
+        at: Date.now(),
+      });
+      if (allowed) {
+        rt.log.push({ h: "audio_play", command, mediaIdentity, desiredRevision, at: Date.now() });
+        rt.audibleCommitCount += 1;
+        rt.transport = Transport.PLAYING;
+      }
+      return allowed;
+    };
+
     return {
-      async playTrack(track, _opts = {}) {
+      async playTrack(track, options = {}) {
         const id = track?.id ?? track?.slug ?? null;
         const gen = rt.generation ?? 0;
         rt.log.push({ h: "playTrack", id, at: Date.now() });
@@ -116,10 +188,12 @@ export class FakeMediaRuntime {
         }
         // Test isolation: a load that outlived its test must not mutate state.
         if ((rt.generation ?? 0) !== gen) return false;
+        // Preparation is harmless and may finish after a newer user intent.
+        // Becoming audible is a separate, guarded physical commit below.
         rt.mediaIdentity = id;
         rt.position = 0;
-        rt.transport = Transport.PLAYING;
-        return true;
+        rt.transport = Transport.PAUSED;
+        return commitAudibleEffect(options, id, "PLAY_TRACK");
       },
       async playQueue(tracks, startIndex = 0, _opts = {}) {
         rt.log.push({ h: "playQueue", n: tracks.length, startIndex, at: Date.now() });
@@ -129,6 +203,8 @@ export class FakeMediaRuntime {
         rt.mediaIdentity = t?.id ?? t?.slug ?? null;
         rt.position = 0;
         rt.transport = Transport.PLAYING;
+        rt.log.push({ h: "audio_play", command: "PLAY_QUEUE", mediaIdentity: rt.mediaIdentity, at: Date.now() });
+        rt.audibleCommitCount += 1;
         return true;
       },
       setQueue(tracks, startIndex = 0) {
@@ -140,10 +216,10 @@ export class FakeMediaRuntime {
         rt.log.push({ h: "pause", at: Date.now() });
         rt.transport = Transport.PAUSED;
       },
-      async resume() {
+      async resume(options = {}) {
         rt.log.push({ h: "resume", at: Date.now() });
-        if (rt.mediaIdentity) rt.transport = Transport.PLAYING;
-        return true;
+        if (!rt.mediaIdentity) return false;
+        return commitAudibleEffect(options, rt.mediaIdentity, "RESUME");
       },
       // PRODUCTION SIGNATURE: time only, no identity.
       seek(time) {

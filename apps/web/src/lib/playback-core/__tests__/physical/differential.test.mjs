@@ -58,6 +58,17 @@ describe("DIFF-1 — PLAY A → PAUSE: legacy defect vs Core correction", () => 
     console.log("\n  [DIFF-1.1] LEGACY-ONLY:", JSON.stringify(runtime.snapshot()),
       "\n             order:", runtime.log.map((e) => e.h).join(" → "));
 
+    const order = runtime.log.map((event) => event.h);
+    const requestedAt = order.indexOf("effect_requested");
+    const unguardedAt = order.indexOf("effect_legacy_unguarded");
+    const audibleAt = order.indexOf("audio_play");
+    assert.ok(requestedAt >= 0, "The negative control must reach the physical effect seam.");
+    assert.ok(unguardedAt > requestedAt,
+      "The negative control must explicitly record legacy unguarded authority.");
+    assert.ok(audibleAt > unguardedAt,
+      "The pre-1D defect must commit audibility after its unguarded decision.");
+    assert.equal(runtime.log.filter((event) => event.h === "audio_play").length, 1,
+      "The negative control must prove one real audible commit, not only final state.");
     assert.equal(runtime.transport, Transport.PLAYING,
       "The legacy path is untouched by Slice 1C and must still show the original " +
       "defect. If this ever passes as PAUSED, the legacy pipeline was modified.");
@@ -73,6 +84,14 @@ describe("DIFF-1 — PLAY A → PAUSE: legacy defect vs Core correction", () => 
       "\n             order:", runtime.log.map((e) => e.h).join(" → "),
       "\n             desired:", JSON.stringify(c.desiredState));
 
+    const order = runtime.log.map((event) => event.h);
+    const requestedAt = order.indexOf("effect_requested");
+    const deniedAt = order.indexOf("effect_denied");
+    assert.ok(requestedAt >= 0, "The guarded path must reach the physical effect seam.");
+    assert.ok(deniedAt > requestedAt,
+      "The guarded path must deny the superseded effect at the final boundary.");
+    assert.equal(runtime.log.filter((event) => event.h === "audio_play").length, 0,
+      "A denied Core effect must never produce an audible commit.");
     assert.equal(runtime.mediaIdentity, "track-a", "media identity inherited by PAUSE");
     assert.equal(runtime.transport, Transport.PAUSED,
       "Convergence must correct the post-load PLAYING back to the desired PAUSED.");

@@ -25,6 +25,7 @@ import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
 import { clearPersistedMediaSessionTrack } from "@/lib/media-session-artwork";
 import { PREVIEW_HARD_CAP_SEC } from "@/lib/playback/PlaybackEventHandlers";
+import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 
 /**
  * Attaches Group 5 (transport control) commands to the shared `self` service object.
@@ -86,7 +87,7 @@ export function attachTransportCommands(self) {
     void dispatchPlaybackCommandRef.current?.(PLAYBACK_COMMANDS.VIEWPORT_PAUSE, {}, { serial: false });
   };
 
-  self.resumeInternal = async function resumeInternal() {
+  self.resumeInternal = async function resumeInternal(effectContext = {}) {
     const {
       patchState, updateMediaSession, finalizeStreamSession, initWebAudio,
       tracePlayback, logDirectInternalCallViolation,
@@ -110,7 +111,10 @@ export function attachTransportCommands(self) {
       const resumeAt = (stateRef.current?.currentTime ?? 0) > 0
         ? stateRef.current.currentTime
         : undefined;
-      return self.playTrackInternal(track, resumeAt !== undefined ? { resumeAt } : undefined);
+      return self.playTrackInternal(track, {
+        ...(resumeAt !== undefined ? { resumeAt } : {}),
+        ...effectContext,
+      });
     }
 
     tracePlayback("resumeInternal", "resumeInternal", { slug: track.slug });
@@ -134,7 +138,7 @@ export function attachTransportCommands(self) {
       }
       await resumeWebAudioContextIfSuspended(audioCtxRef);
       if (!(await ensureWebAudioRunning(audioCtxRef))) {
-        const lightOk = await attemptLightweightPlaybackResume("resume_ctx_suspended");
+        const lightOk = await attemptLightweightPlaybackResume("resume_ctx_suspended", effectContext);
         await resumeWebAudioContextIfSuspended(audioCtxRef, "resume-after-light");
         if (!(await ensureWebAudioRunning(audioCtxRef))) {
           reportPlaybackDiagnostic({
@@ -210,7 +214,14 @@ export function attachTransportCommands(self) {
         requestId: activeCommandRef.current?.requestId || null,
         state: stateRef.current,
         context: { source: "resumeInternal" },
+        effectAuthorityMode:
+          effectContext.effectAuthorityMode ?? PhysicalEffectAuthorityMode.CORE_CURRENT,
+        effectGuardRequired: effectContext.effectGuardRequired === true,
+        effectAuthority: effectContext.effectAuthority ?? null,
+        canApplyEffect: effectContext.canApplyEffect,
+        mediaIdentity: track.id ?? track.slug ?? null,
       });
+      if (played === null) return false;
       if (!played || audio.paused) {
         patchState({
           isPlaying: false,

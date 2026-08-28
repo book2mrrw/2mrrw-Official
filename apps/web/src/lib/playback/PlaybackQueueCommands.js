@@ -1,7 +1,7 @@
 "use client";
 
 import { startTransition } from "react";
-import { MARKS, perfMark, perfMeasure } from "@/lib/dev/performanceMarks";
+import { MARKS, PLAYBACK_SCENARIOS, perfMark, perfMeasure } from "@/lib/dev/performanceMarks";
 import { fisherYatesShuffle, playbackQueuesMatch, normalizeTrack } from "@/lib/playback/playback-track-utils";
 
 /**
@@ -43,8 +43,8 @@ export function attachQueueCommands(self) {
 
   self.playNextInternal = async function playNextInternal({ autoAdvance = false } = {}) {
     const {
-      patchState,
-      stateRef, queueRef, queueIndexRef, shuffleRef, repeatModeRef, csModeRef,
+      patchState, requestAuthoritativePlay,
+      stateRef, queueRef, queueIndexRef, shuffleRef, repeatModeRef,
     } = self._deps;
 
     const current = stateRef.current.currentTrack;
@@ -74,26 +74,37 @@ export function attachQueueCommands(self) {
       }
       queueIndexRef.current = nextIndex;
       patchState({ queueIndex: nextIndex });
-      const ok = await self.playTrackInternal(track, { resumeAt: 0 });
-      if (ok && csModeRef.current) await self.applyCSModeToTrack(track);
-      return ok;
+      if (typeof requestAuthoritativePlay !== "function") return false;
+      return requestAuthoritativePlay(track, {
+        resumeAt: 0,
+        ...(autoAdvance
+          ? { playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE }
+          : {}),
+      }, {
+        queueEntries: queue,
+        queueIndex: nextIndex,
+        source: autoAdvance ? "autoplay" : "user",
+        requireCurrentPlaying: autoAdvance,
+        expectedCurrentMediaIdentity: autoAdvance
+          ? (current?.id ?? current?.trackId ?? current?.slug ?? null)
+          : null,
+      });
     }
     return false;
   };
 
   self.playPreviousInternal = async function playPreviousInternal() {
     const {
-      patchState, syncProgressTime, syncPositionState,
-      stateRef, audioRef, queueRef, queueIndexRef, repeatModeRef, csModeRef,
+      patchState,
+      requestAuthoritativePlay, requestAuthoritativeSeek,
+      audioRef, queueRef, queueIndexRef, repeatModeRef,
     } = self._deps;
 
     const queue = queueRef.current;
     const audio = audioRef.current;
     if (audio && audio.currentTime > 3) {
-      audio.currentTime = 0;
-      syncProgressTime(0);
-      syncPositionState(true);
-      return true;
+      if (typeof requestAuthoritativeSeek !== "function") return false;
+      return requestAuthoritativeSeek(0);
     }
     if (!queue.length) return false;
     let prevIndex = queueIndexRef.current - 1;
@@ -112,9 +123,12 @@ export function attachQueueCommands(self) {
       }
       queueIndexRef.current = prevIndex;
       patchState({ queueIndex: prevIndex });
-      const ok = await self.playTrackInternal(track, { resumeAt: 0 });
-      if (ok && csModeRef.current) await self.applyCSModeToTrack(track);
-      return ok;
+      if (typeof requestAuthoritativePlay !== "function") return false;
+      return requestAuthoritativePlay(track, { resumeAt: 0 }, {
+        queueEntries: queue,
+        queueIndex: prevIndex,
+        source: "user",
+      });
     }
     return false;
   };
@@ -147,7 +161,11 @@ export function attachQueueCommands(self) {
   };
 
   self.playQueueInternal = async function playQueueInternal(tracks = [], startIndex = 0, options = {}) {
-    const { logDirectInternalCallViolation, stopAfterEachTrackRef } = self._deps;
+    const {
+      logDirectInternalCallViolation,
+      requestAuthoritativePlay,
+      stopAfterEachTrackRef,
+    } = self._deps;
     logDirectInternalCallViolation("playQueueInternal");
     // autoAdvance defaults to true — singles/features pass false to stop after each track.
     // Preview-only tracks always stop after play; no queue advance for entry-level users.
@@ -157,13 +175,18 @@ export function attachQueueCommands(self) {
     const normalized = self.setQueueInternal(tracks, startIndex);
     if (!normalized.length) return false;
     const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
-    return self.playTrackInternal(normalized[index], {
+    if (typeof requestAuthoritativePlay !== "function") return false;
+    return requestAuthoritativePlay(normalized[index], {
       ...options,
       preserveActiveStream: Boolean(options.preserveActiveStream),
       // An explicit playQueue intent always starts from 0 unless the caller passes an
       // explicit resumeAt (e.g. session-restore). Without this, getSavedPlaybackPosition
       // silently restores a stale mid-track position when the user taps "Play All".
       resumeAt: options.resumeAt != null ? options.resumeAt : 0,
+    }, {
+      queueEntries: normalized,
+      queueIndex: index,
+      source: options.source ?? "user",
     });
   };
 }

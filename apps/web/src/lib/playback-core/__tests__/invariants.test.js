@@ -28,6 +28,8 @@ import assert from "node:assert/strict";
 import { IntentSequencer }         from "../intents/IntentSequencer.js";
 import { IntentFactory }           from "../intents/IntentFactory.js";
 import { AuthorityGate }           from "../authority/AuthorityGate.js";
+import { CoreEpoch }               from "../authority/CoreEpoch.js";
+import { AudibleEffectAuthority }  from "../effects/AudibleEffectAuthority.js";
 import { DomainOwnershipRegistry } from "../ownership/DomainOwnershipRegistry.js";
 import { DomainStore }             from "../state/DomainStore.js";
 import { createDomainStores }      from "../state/createDomainStores.js";
@@ -653,7 +655,10 @@ describe("INV-CORE: PlaybackCore.create() — full wiring", () => {
       authorityGate: makeFullStack().authorityGate,
       logger: null,
     });
-    core._injectExecutionEngine(adapter);
+    core._injectExecutionEngine(adapter, {
+      effectAuthority: core._effectAuthority,
+      disposeInstalledEffectGuard: () => {},
+    });
     assert.equal(core.readiness, CoreReadiness.READY);
     assert.doesNotThrow(() => core.port.play({ trackId: "t1" }));
     core.destroy();
@@ -668,7 +673,10 @@ describe("INV-CORE: PlaybackCore.create() — full wiring", () => {
       authorityGate: makeFullStack().authorityGate,
       logger: null,
     });
-    core._injectExecutionEngine(adapter);
+    core._injectExecutionEngine(adapter, {
+      effectAuthority: core._effectAuthority,
+      disposeInstalledEffectGuard: () => {},
+    });
     assert.ok(events.some((e) => e.type === "CORE_READY"), "CORE_READY must be emitted");
     core.destroy();
   });
@@ -680,8 +688,45 @@ describe("INV-CORE: PlaybackCore.create() — full wiring", () => {
       authorityGate: makeFullStack().authorityGate,
       logger: null,
     });
-    core._injectExecutionEngine(adapter);
+    core._injectExecutionEngine(adapter, {
+      effectAuthority: core._effectAuthority,
+      disposeInstalledEffectGuard: () => {},
+    });
     assert.doesNotThrow(() => core.port.play({ trackId: "t1" }));
+    core.destroy();
+  });
+
+  test("_injectExecutionEngine fails closed when the physical effect guard is missing", () => {
+    const core = PlaybackCore.create({ loggerEnabled: false });
+    const adapter = new PlaybackCoreAdapter({
+      dispatch: () => Promise.resolve(),
+      authorityGate: makeFullStack().authorityGate,
+      logger: null,
+    });
+
+    assert.throws(
+      () => core._injectExecutionEngine(adapter),
+      /Physical effect guard is not installed/,
+    );
+    assert.equal(core.readiness, CoreReadiness.CONSTRUCTING);
+    assert.equal(core._effectGuardInstalled, false);
+    assert.throws(() => core.port.play({ trackId: "t1" }), /not READY|CONSTRUCTING/);
+    core.destroy();
+  });
+
+  test("_injectExecutionEngine fails closed when the current-media guard is missing", () => {
+    const core = PlaybackCore.create({ loggerEnabled: false });
+    const adapter = new PlaybackCoreAdapter({
+      dispatch: () => Promise.resolve(),
+      authorityGate: makeFullStack().authorityGate,
+      logger: null,
+    });
+
+    assert.throws(
+      () => core._injectExecutionEngine(adapter, { effectAuthority: core._effectAuthority }),
+      /Current-media effect guard is not installed/,
+    );
+    assert.equal(core.readiness, CoreReadiness.CONSTRUCTING);
     core.destroy();
   });
 
@@ -1442,10 +1487,17 @@ function makeEngine(initialPhysical) {
   const { intentFactory, authorityGate, logger } = makeFullStack();
   const store = new DesiredStateStore({ logger: null });
   const rt = makeProbeRuntime(initialPhysical);
+  const coreEpoch = new CoreEpoch("test-runtime");
+  const effectAuthority = new AudibleEffectAuthority({
+    coreEpoch,
+    getDesiredState: () => store.current,
+    logger: null,
+  });
   const engine = new ConvergenceEngine({
     desiredStore: store, adapter: rt.adapter, probe: rt.probe, logger: null,
+    effectAuthority,
   });
-  return { engine, store, intentFactory, authorityGate, ...rt };
+  return { engine, store, intentFactory, authorityGate, coreEpoch, effectAuthority, ...rt };
 }
 
 async function drain(engine, ms = 400) {
@@ -1519,6 +1571,23 @@ describe("INV-DESIRED: desired-state convergence", () => {
     assert.equal(store.current.requestedMediaIdentity, "b");
     assert.equal(store.current.positionTarget, null,
       "a fresh PLAY must not inherit the previous track's seek target");
+  });
+
+  test("D2.5 transport intents cannot overwrite selection with stale caller media", () => {
+    const { store, intentFactory } = makeEngine();
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PLAY, trackId: "b",
+      queueEntries: [{ id: "b", slug: "b" }], queueIndex: 0,
+    }));
+    store.apply(intentFactory.create({
+      type: CoreCommandType.PAUSE,
+      queueEntries: [{ id: "a", slug: "a" }],
+      queueIndex: 0,
+    }));
+
+    assert.equal(store.current.requestedMediaIdentity, "b",
+      "PAUSE must inherit Core selection and ignore stale caller media");
+    assert.equal(store.current.desiredTransport, TransportDisposition.PAUSED);
   });
 
   // ── Revision discipline ─────────────────────────────────────────────────────
@@ -1705,13 +1774,183 @@ describe("INV-DESIRED: desired-state convergence", () => {
   test("D-DISPOSE.2 PlaybackCore.destroy() disposes the execution engine", () => {
     const core = PlaybackCore.create({ loggerEnabled: false });
     let disposed = false;
-    core._injectExecutionEngine({ execute: () => null, dispose: () => { disposed = true; } });
+    core._injectExecutionEngine(
+      { execute: () => null, dispose: () => { disposed = true; } },
+      {
+        effectAuthority: core._effectAuthority,
+        disposeInstalledEffectGuard: () => {},
+      },
+    );
     core.destroy();
     assert.ok(disposed, "destroy() must stop the reconciler");
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// INV-EFFECT: last-responsible-moment physical effect authority (Slice 1D)
+
+function makeEffectFixture(overrides = {}) {
+  let desired = Object.freeze({
+    revision: 1,
+    requestedMediaIdentity: "track-a",
+    desiredTransport: TransportDisposition.PLAYING,
+    ...overrides,
+  });
+  const coreEpoch = new CoreEpoch(`effect-${crypto.randomUUID()}`);
+  const logger = new CoreLogger({ enabled: true });
+  const authority = new AudibleEffectAuthority({
+    coreEpoch,
+    getDesiredState: () => desired,
+    logger,
+  });
+  return {
+    authority,
+    coreEpoch,
+    logger,
+    setDesired: (patch) => {
+      desired = Object.freeze({ ...desired, ...patch });
+      return desired;
+    },
+  };
+}
+
+describe("INV-EFFECT: audible physical effect authority", () => {
+  test("E1 current desired revision and media identity are allowed", () => {
+    const fx = makeEffectFixture();
+    const token = fx.authority.capture();
+    assert.equal(fx.authority.canApplyEffect(token, {
+      type: "BECOME_AUDIBLE",
+      mediaIdentity: "track-a",
+    }), true);
+  });
+
+  test("E2/E3 stale revision is denied after harmless preparation", () => {
+    const fx = makeEffectFixture();
+    const token = fx.authority.capture();
+    const prepared = { mediaIdentity: "track-a", ready: true };
+    fx.setDesired({ revision: 2, desiredTransport: TransportDisposition.PAUSED });
+    assert.equal(prepared.ready, true, "preparation may complete");
+    assert.equal(fx.authority.canApplyEffect(token, {
+      type: "BECOME_AUDIBLE",
+      mediaIdentity: prepared.mediaIdentity,
+    }), false, "preparation must not grant audibility");
+  });
+
+  test("E4 current revision with a stale media identity is denied", () => {
+    const fx = makeEffectFixture();
+    const token = fx.authority.capture({ mediaIdentity: "track-a" });
+    fx.setDesired({ requestedMediaIdentity: "track-b" });
+    assert.equal(fx.authority.canApplyEffect(token, {
+      type: "BECOME_AUDIBLE",
+      mediaIdentity: "track-a",
+    }), false);
+  });
+
+  test("E1 current revision is denied when desired transport is PAUSED", () => {
+    const fx = makeEffectFixture({ desiredTransport: TransportDisposition.PAUSED });
+    const token = fx.authority.capture();
+    assert.equal(fx.authority.canApplyEffect(token, {
+      type: "BECOME_AUDIBLE",
+      mediaIdentity: "track-a",
+    }), false);
+  });
+
+  test("E7 a guard exception fails closed and emits a diagnostic", () => {
+    const coreEpoch = new CoreEpoch("effect-throw");
+    const logger = new CoreLogger({ enabled: true });
+    const authority = new AudibleEffectAuthority({
+      coreEpoch,
+      getDesiredState: () => { throw new Error("synthetic guard failure"); },
+      logger,
+    });
+    const token = Object.freeze({
+      coreEpoch: coreEpoch.current,
+      desiredRevision: 1,
+      mediaIdentity: "track-a",
+    });
+    assert.equal(authority.canApplyEffect(token, { mediaIdentity: "track-a" }), false);
+    assert.ok(logger.getHistory().some((event) =>
+      event.type === "AUDIBLE_EFFECT_GUARD_ERROR"));
+  });
+
+  test("E8 epoch rotation invalidates every captured token", () => {
+    const fx = makeEffectFixture();
+    const token = fx.authority.capture();
+    fx.coreEpoch.rotate();
+    assert.equal(fx.authority.canApplyEffect(token, { mediaIdentity: "track-a" }), false);
+  });
+
+  test("E8 disposal permanently invalidates an authority object", () => {
+    const fx = makeEffectFixture();
+    const token = fx.authority.capture();
+    fx.authority.dispose();
+    assert.equal(fx.authority.canApplyEffect(token, { mediaIdentity: "track-a" }), false);
+  });
+
+  test("E8 Core A authority cannot authorize Core B runtime", () => {
+    const a = makeEffectFixture();
+    const b = makeEffectFixture();
+    const tokenA = a.authority.capture();
+    a.authority.dispose();
+    a.coreEpoch.dispose();
+    assert.equal(a.authority.canApplyEffect(tokenA, { mediaIdentity: "track-a" }), false);
+    assert.equal(b.authority.canApplyEffect(tokenA, { mediaIdentity: "track-a" }), false);
+  });
+
+  test("diagnostics record request, allow, and reasoned rejection", () => {
+    const fx = makeEffectFixture();
+    const token = fx.authority.capture();
+    assert.equal(fx.authority.canApplyEffect(token, { mediaIdentity: "track-a" }), true);
+    fx.setDesired({ revision: 2 });
+    assert.equal(fx.authority.canApplyEffect(token, { mediaIdentity: "track-a" }), false);
+    const history = fx.logger.getHistory();
+    assert.ok(history.some((event) => event.type === "AUDIBLE_EFFECT_REQUESTED"));
+    assert.ok(history.some((event) => event.type === "AUDIBLE_EFFECT_ALLOWED"));
+    assert.ok(history.some((event) =>
+      event.type === "AUDIBLE_EFFECT_REJECTED" &&
+      event.reason === "STALE_DESIRED_REVISION"));
+  });
+
+  test("E5 effect permission never grants canonical commit permission", () => {
+    const fx = makeEffectFixture();
+    const token = fx.authority.capture();
+    assert.equal(fx.authority.canApplyEffect(token, { mediaIdentity: "track-a" }), true);
+
+    const stack = makeFullStack();
+    stack.ownershipRegistry.transferToCore(Domain.TRANSPORT);
+    const oldIntent = stack.intentFactory.create({ type: CoreCommandType.PLAY });
+    const currentIntent = stack.intentFactory.create({ type: CoreCommandType.PAUSE });
+    stack.authorityGate.register(oldIntent);
+    stack.authorityGate.register(currentIntent);
+    const commit = stack.commitGate.propose({
+      intent: oldIntent,
+      storeKey: StoreKey.TRANSPORT_STATUS,
+      domain: Domain.TRANSPORT,
+      snapshot: { playing: true },
+    });
+    assert.equal(commit.accepted, false);
+    assert.equal(commit.rejectionReason, CommitRejectionReason.SUPERSEDED);
+  });
+
+  test("E6 commit permission never grants physical effect permission", () => {
+    const stack = makeFullStack();
+    stack.ownershipRegistry.transferToCore(Domain.TRANSPORT);
+    const intent = stack.intentFactory.create({ type: CoreCommandType.PAUSE });
+    stack.authorityGate.register(intent);
+    const commit = stack.commitGate.propose({
+      intent,
+      storeKey: StoreKey.TRANSPORT_STATUS,
+      domain: Domain.TRANSPORT,
+      snapshot: { playing: false },
+    });
+    assert.equal(commit.accepted, true);
+
+    const fx = makeEffectFixture({ desiredTransport: TransportDisposition.PAUSED });
+    const token = fx.authority.capture();
+    assert.equal(fx.authority.canApplyEffect(token, { mediaIdentity: "track-a" }), false);
+  });
+});
+
 // INV-HARDEN-A: DomainStore hardening (Slice 1 preflight)
 //   A1 — JSON clone fallback removed: structuredClone unavailable → explicit throw
 //   A2 — deepFreeze is cycle-safe: cyclic structures do not cause stack overflow

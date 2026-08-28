@@ -28,6 +28,7 @@ import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { correlateBlackscreenPlayback } from "@/lib/diagnostics/playback-trace";
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
+import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 
 // PLAY_QUEUE supersede counter. Increments with every PLAY_QUEUE dispatch.
 // The queued run() for each command checks this at execution time — if a
@@ -56,10 +57,14 @@ function getSilentUnlockEl() {
  *
  * @param {string} type  PLAYBACK_COMMANDS constant or lowercase alias.
  * @param {Record<string, any>} [payload]
- * @param {{ serial?: boolean, cancelActiveStream?: boolean }} [opts]
+ * @param {{ serial?: boolean, cancelActiveStream?: boolean, effectAuthorityMode?: string }} [opts]
  * @returns {Promise<any>}
  */
-export function dispatchPlaybackCommand(type, payload = {}, { serial = true, cancelActiveStream = false } = {}) {
+export function dispatchPlaybackCommand(type, payload = {}, {
+  serial = true,
+  cancelActiveStream = false,
+  effectAuthorityMode = PhysicalEffectAuthorityMode.LEGACY,
+} = {}) {
   const {
     commandRequestIdRef,
     commandQueueRef,
@@ -75,7 +80,13 @@ export function dispatchPlaybackCommand(type, payload = {}, { serial = true, can
   const resolvedType = PLAYBACK_COMMAND_ALIASES[type] || type;
   const requestId = commandRequestIdRef.current + 1;
   commandRequestIdRef.current = requestId;
-  const command = { type: resolvedType, payload, requestId, issuedAt: Date.now() };
+  const command = {
+    type: resolvedType,
+    payload,
+    requestId,
+    issuedAt: Date.now(),
+    effectAuthorityMode,
+  };
   getPlaybackCommandBus().emit("command:issued", { type: resolvedType, requestId });
 
   if (USER_GESTURE_PLAYBACK_COMMANDS.has(resolvedType)) {

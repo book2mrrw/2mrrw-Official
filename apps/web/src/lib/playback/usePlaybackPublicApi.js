@@ -2,6 +2,7 @@
 
 import { useCallback, startTransition, useMemo } from "react";
 import { dispatchPlaybackCommand } from "@/lib/playback/command-dispatcher";
+import { getProductionPlaybackCore } from "@/lib/playback-core/production/wireProductionCore";
 import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
 import {
   normalizeTrack,
@@ -22,6 +23,7 @@ import { savePlaybackSession } from "@/lib/playback/session-memory";
 import { isAudioActuallyAudible } from "@/lib/playback/audibility";
 import { waitAudioSrcReady, playAudioIfNotPaused } from "@/lib/audio/audio-element-utils";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
+import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 import {
   isPlaybackTraceEnabled,
   logPlaybackEvent,
@@ -37,6 +39,10 @@ const REPEAT_MODES = ["off", "one", "all"];
  * Returns a stable useMemo object — identity never changes.
  */
 export function usePlaybackPublicApi({ refs, delegates }) {
+  // Synchronous singleton construction guarantees Core + adapter + physical
+  // effect guard are READY before any descendant can receive a playback event.
+  const playbackCore = getProductionPlaybackCore();
+  const playbackPort = playbackCore.port;
   const {
     stateRef, audioRef, audioCtxRef,
     queueRef, queueIndexRef, repeatModeRef, shuffleRef, csModeRef,
@@ -46,13 +52,49 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     lastUserActionRef, isInAudioVisualViewportRef,
     csHoldSavedRef, csHoldActiveRef, bassFilterRef, webAudioAvailableRef,
     lifecycleRecoveryLockRef, audibilitySampleRef, shuffledOrderRef, shufflePositionRef,
-    sleepTimerRef, listeningUserIdRef, dispatchPlaybackCommandRef,
+    sleepTimerRef, listeningUserIdRef,
   } = refs;
 
   const {
     getCurrentTrackId, clearViewportResume, patchState,
     initWebAudio, pauseForViewport,
   } = delegates;
+
+  const requestAuthoritativePlay = useCallback((track, options = {}, policy = {}) => {
+    const trackIdentity = track?.id ?? track?.trackId ?? track?.slug ?? null;
+    if (!trackIdentity) return false;
+
+    const desired = playbackCore.desiredState;
+    if (policy.requireCurrentPlaying && desired.desiredTransport !== "PLAYING") return false;
+    if (
+      policy.expectedCurrentMediaIdentity &&
+      desired.requestedMediaIdentity !== policy.expectedCurrentMediaIdentity
+    ) {
+      return false;
+    }
+
+    const candidateQueue = Array.isArray(policy.queueEntries)
+      ? policy.queueEntries
+      : queueRef.current;
+    let queueIndex = Number.isInteger(policy.queueIndex) ? policy.queueIndex : -1;
+    if (queueIndex < 0 || queueIndex >= candidateQueue.length) {
+      queueIndex = candidateQueue.findIndex((entry) =>
+        (entry?.id ?? entry?.trackId ?? entry?.slug ?? null) === trackIdentity
+      );
+    }
+    const queueEntries = queueIndex >= 0 ? candidateQueue : [track];
+    if (queueIndex < 0) queueIndex = 0;
+
+    playbackPort.play({
+      trackId: trackIdentity,
+      queueEntries,
+      queueIndex,
+      resumePolicy: options.resumePolicy,
+      options,
+      source: policy.source ?? options.source ?? "user",
+    });
+    return true;
+  }, [playbackCore, playbackPort, queueRef]);
 
   // ─── Repeat / Shuffle ────────────────────────────────────────────────────────
 
@@ -152,25 +194,38 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     []
   );
 
-  const pause = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PAUSE), []);
+  const pause = useCallback(() => {
+    playbackPort.pause();
+  }, [playbackPort]);
 
   const resume = useCallback(() => {
     initWebAudio();
     resumeWebAudioContextFromUserGesture(audioCtxRef, "resume:gesture");
-    return dispatchPlaybackCommand(PLAYBACK_COMMANDS.RESUME);
-  }, [initWebAudio]);
+    return playbackPort.resume();
+  }, [audioCtxRef, initWebAudio, playbackPort]);
 
   const seek = useCallback(
-    (time) => dispatchPlaybackCommand(PLAYBACK_COMMANDS.SEEK, { time }, { serial: false }),
-    []
+    (time) => playbackPort.seek({ positionSeconds: time }),
+    [playbackPort]
   );
 
-  const playPrevious = useCallback(() => dispatchPlaybackCommand(PLAYBACK_COMMANDS.PREV_TRACK), []);
-
-  const stop = useCallback(
-    () => dispatchPlaybackCommand(PLAYBACK_COMMANDS.STOP, {}, { cancelActiveStream: true }),
-    []
+  const playPrevious = useCallback(
+    () => dispatchPlaybackCommand(
+      PLAYBACK_COMMANDS.PREV_TRACK,
+      {},
+      { serial: false, cancelActiveStream: true },
+    ),
+    [],
   );
+
+  const stop = useCallback(() => {
+    playbackPort.pause({ source: "stop" });
+    return dispatchPlaybackCommand(
+      PLAYBACK_COMMANDS.STOP,
+      {},
+      { cancelActiveStream: true },
+    );
+  }, [playbackPort]);
 
   const toggle = useCallback(() => {
     if (stateRef.current.isPlaying) {
@@ -186,8 +241,12 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     perfMark(MARKS.PLAYBACK_TAP);
     initWebAudio();
     resumeWebAudioContextFromUserGesture(audioCtxRef, "playNext:gesture");
-    return dispatchPlaybackCommand(PLAYBACK_COMMANDS.NEXT_TRACK);
-  }, [initWebAudio]);
+    return dispatchPlaybackCommand(
+      PLAYBACK_COMMANDS.NEXT_TRACK,
+      {},
+      { serial: false, cancelActiveStream: true },
+    );
+  }, [audioCtxRef, initWebAudio]);
 
   const playTrack = useCallback((track, options = {}) => {
     if (lifecycleRecoveryLockRef.current && isPlaybackTraceEnabled()) {
@@ -231,12 +290,15 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     perfMark(MARKS.PLAYBACK_TAP);
     initWebAudio();
     resumeWebAudioContextFromUserGesture(audioCtxRef, "playTrack:gesture");
-    return dispatchPlaybackCommand(
-      PLAYBACK_COMMANDS.PLAY_TRACK,
-      { track, options },
-      { serial: true, cancelActiveStream: true }
-    );
-  }, [initWebAudio]);
+    return requestAuthoritativePlay(track, options);
+  }, [
+    audioCtxRef,
+    audioRef,
+    initWebAudio,
+    lifecycleRecoveryLockRef,
+    requestAuthoritativePlay,
+    stateRef,
+  ]);
 
   const playQueue = useCallback((tracks = [], startIndex = 0, options = {}) => {
     resetPlaybackTimingCapture();
@@ -253,12 +315,27 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     perfMark(MARKS.PLAYBACK_TAP);
     initWebAudio();
     resumeWebAudioContextFromUserGesture(audioCtxRef, "playQueue:gesture");
-    return dispatchPlaybackCommand(
-      PLAYBACK_COMMANDS.PLAY_QUEUE,
-      { tracks, startIndex, options: { ...options, preserveActiveStream: sameQueue } },
-      { serial: true, cancelActiveStream: !sameQueue }
+    void dispatchPlaybackCommand(
+      PLAYBACK_COMMANDS.SET_QUEUE,
+      { tracks, startIndex },
+      { serial: false },
     );
-  }, [initWebAudio]);
+    return requestAuthoritativePlay(startTrack, {
+      ...options,
+      preserveActiveStream: sameQueue,
+    }, {
+      queueEntries: tracks,
+      queueIndex: startIndex,
+      source: options.source ?? "user",
+    });
+  }, [
+    audioCtxRef,
+    audioRef,
+    initWebAudio,
+    queueRef,
+    requestAuthoritativePlay,
+    stateRef,
+  ]);
 
   // ─── Queue Mutation ──────────────────────────────────────────────────────────
 
@@ -348,6 +425,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
           requestId: activeCommandRef.current?.requestId || null,
           state: stateRef.current,
           context: { source: stateRef.current?.source || null },
+          effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
         });
       }
     })().catch((error) => {
@@ -412,6 +490,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
             requestId: activeCommandRef.current?.requestId || null,
             state: stateRef.current,
             context: { source: stateRef.current?.source || null },
+            effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
           });
         }
       })().catch((error) => {
@@ -497,11 +576,12 @@ export function usePlaybackPublicApi({ refs, delegates }) {
       lastTrackIdRef.current = getCurrentTrackId();
       resumeEligibleRef.current = true;
       pauseForViewport();
+      playbackPort.pause({ source: "viewport" });
     } else {
       wasPlayingBeforeViewportPauseRef.current = false;
       resumeEligibleRef.current = false;
     }
-  }, [getCurrentTrackId, pauseForViewport]);
+  }, [getCurrentTrackId, pauseForViewport, playbackPort]);
 
   const exitAudioVisualViewport = useCallback(() => {
     isInAudioVisualViewportRef.current = false;
@@ -514,8 +594,8 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     resumeEligibleRef.current = false;
     wasPlayingBeforeViewportPauseRef.current = false;
 
-    void dispatchPlaybackCommandRef.current?.(PLAYBACK_COMMANDS.VIEWPORT_RESUME).catch(() => {});
-  }, [clearViewportResume, shouldAutoResumeViewport]);
+    playbackPort.resume({ source: "viewport" });
+  }, [clearViewportResume, playbackPort, shouldAutoResumeViewport]);
 
   // ─── Stable Return ───────────────────────────────────────────────────────────
   return useMemo(() => ({
@@ -523,7 +603,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     toggleSpaceMode, toggleBassBoost, cycleAtmosphere,
     setSleepTimer,
     setQueue, pause, resume, seek, playPrevious, stop, toggle, playNext,
-    playTrack, playQueue,
+    playTrack, playQueue, requestAuthoritativePlay,
     enqueueTrack, removeFromQueue, moveInQueue,
     beginCsHoldPreview, setCsHoldPlaybackRate, endCsHoldPreview,
     shouldAutoResumeViewport, getCurrentPlaybackSnapshot,

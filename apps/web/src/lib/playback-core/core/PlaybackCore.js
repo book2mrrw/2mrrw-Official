@@ -50,6 +50,8 @@ import { LegacyPlaybackAdapter }   from "../ports/LegacyPlaybackAdapter.js";
 import { ReactPlaybackAdapter }    from "../adapters/ReactPlaybackAdapter.js";
 import { DesiredStateStore }       from "../desired/DesiredStateStore.js";
 import { CoreReadiness }           from "../types/index.js";
+import { CoreEpoch }               from "../authority/CoreEpoch.js";
+import { AudibleEffectAuthority }  from "../effects/AudibleEffectAuthority.js";
 
 export class PlaybackCore {
   #sequencer;
@@ -62,6 +64,10 @@ export class PlaybackCore {
   #logger;
   #authorityGate;
   #desiredStore;
+  #coreEpoch;
+  #effectAuthority;
+  #disposeInstalledEffectGuard = null;
+  #effectGuardInstalled = false;
   #executionEngine = null;
   #destroyed = false;
   #readiness = CoreReadiness.CONSTRUCTING;
@@ -80,6 +86,8 @@ export class PlaybackCore {
     this.#logger            = deps.logger;
     this.#authorityGate     = deps.authorityGate;
     this.#desiredStore      = deps.desiredStore;
+    this.#coreEpoch         = deps.coreEpoch;
+    this.#effectAuthority   = deps.effectAuthority;
 
     this.#logger.emitCoreInitialized({ sessionEpoch: this.#sequencer.sessionEpoch });
   }
@@ -115,6 +123,12 @@ export class PlaybackCore {
     const legacyAdapter = new LegacyPlaybackAdapter({ stores, ownershipRegistry });
     const reactAdapter  = new ReactPlaybackAdapter(stores);
     const desiredStore  = new DesiredStateStore({ logger });
+    const coreEpoch = new CoreEpoch(sequencer.sessionEpoch);
+    const effectAuthority = new AudibleEffectAuthority({
+      coreEpoch,
+      getDesiredState: () => desiredStore.current,
+      logger,
+    });
 
     // Readiness accessor — closed over the PlaybackCore instance (assigned below).
     // The port calls this before accepting any command; before READY it throws
@@ -135,6 +149,8 @@ export class PlaybackCore {
       logger,
       authorityGate,
       desiredStore,
+      coreEpoch,
+      effectAuthority,
     });
     coreRef = core;
     return core;
@@ -147,6 +163,7 @@ export class PlaybackCore {
   get reactAdapter()  { this.#assertAlive(); return this.#reactAdapter; }
   get logger()        { return this.#logger; }
   get sessionEpoch()  { return this.#sequencer.sessionEpoch; }
+  get coreEpoch()     { return this.#coreEpoch.current; }
   /** Current readiness state — CONSTRUCTING until adapter injected, then READY, then DISPOSED. */
   get readiness()     { return this.#readiness; }
 
@@ -162,6 +179,10 @@ export class PlaybackCore {
     // otherwise keep driving the shared media runtime toward this Core's stale
     // desired state after the Core itself is gone.
     this.#executionEngine?.dispose?.();
+    this.#disposeInstalledEffectGuard?.();
+    this.#disposeInstalledEffectGuard = null;
+    this.#effectAuthority.dispose();
+    this.#coreEpoch.dispose();
     this.#logger.emitCoreDestroyed({ sessionEpoch: this.#sequencer.sessionEpoch });
   }
 
@@ -176,8 +197,22 @@ export class PlaybackCore {
    *
    * @param {import('../adapters/PlaybackCoreAdapter.js').PlaybackCoreAdapter} engine
    */
-  _injectExecutionEngine(engine) {
+  _injectExecutionEngine(engine, { effectAuthority = null, disposeInstalledEffectGuard = null } = {}) {
     this.#assertAlive();
+    if (effectAuthority !== this.#effectAuthority) {
+      throw new Error(
+        "[PlaybackCore] Physical effect guard is not installed. " +
+        "Core cannot become READY without its exact effect-authority instance."
+      );
+    }
+    if (typeof disposeInstalledEffectGuard !== "function") {
+      throw new Error(
+        "[PlaybackCore] Current-media effect guard is not installed. " +
+        "Core cannot become READY without the session-wide recovery guard."
+      );
+    }
+    this.#effectGuardInstalled = true;
+    this.#disposeInstalledEffectGuard = disposeInstalledEffectGuard;
     this.#executionEngine = engine;
     this.#commandGateway.setExecutionEngine(engine);
     this.#readiness = CoreReadiness.READY;
@@ -207,6 +242,17 @@ export class PlaybackCore {
    * make the check meaningless. Not part of the public API.
    */
   get _authorityGate() { return this.#authorityGate; }
+  get _effectAuthority() { return this.#effectAuthority; }
+  get _effectGuardInstalled() { return this.#effectGuardInstalled; }
+
+  /** Catastrophic recovery invalidates every token captured by the old runtime. */
+  _rotateCoreEpoch(reason = "runtime-reset") {
+    this.#assertAlive();
+    const previousEpoch = this.#coreEpoch.current;
+    const coreEpoch = this.#coreEpoch.rotate();
+    this.#logger.emit({ type: "CORE_EPOCH_ROTATED", previousEpoch, coreEpoch, reason });
+    return coreEpoch;
+  }
 
   /**
    * Canonical DESIRED execution state store (Slice 1C).

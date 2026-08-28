@@ -82,7 +82,7 @@ export function usePlaybackDelegates(helperServiceRef, commandServiceRef) {
   // Web Audio Init
   const connectWebAudioDownstream        = useCallback(() => helperServiceRef.current.connectWebAudioDownstream(), []);
   const initWebAudio                     = useCallback(() => helperServiceRef.current.initWebAudio(), []);
-  const attemptLightweightPlaybackResume = useCallback((source) => helperServiceRef.current.attemptLightweightPlaybackResume(source), []);
+  const attemptLightweightPlaybackResume = useCallback((source, effectContext) => helperServiceRef.current.attemptLightweightPlaybackResume(source, effectContext), []);
 
   // CS Mode / Stream
   const applyCsToElement                 = useCallback((audio, presentation, resumeAt) => helperServiceRef.current.applyCsToElement(audio, presentation, resumeAt), []);
@@ -115,7 +115,7 @@ export function usePlaybackDelegates(helperServiceRef, commandServiceRef) {
   const playQueueInternal          = useCallback((tracks, startIndex, options) => commandServiceRef.current.playQueueInternal(tracks, startIndex, options), []);
   const pauseInternal              = useCallback((opts) => commandServiceRef.current.pauseInternal(opts), []);
   const pauseForViewport           = useCallback(() => commandServiceRef.current.pauseForViewport(), []);
-  const resumeInternal             = useCallback(() => commandServiceRef.current.resumeInternal(), []);
+  const resumeInternal             = useCallback((effectContext) => commandServiceRef.current.resumeInternal(effectContext), []);
   const seekInternal               = useCallback((time) => commandServiceRef.current.seekInternal(time), []);
   const seekBack                   = useCallback((seconds = 15) => commandServiceRef.current.seekBack(seconds), []);
   const seekForward                = useCallback((seconds = 15) => commandServiceRef.current.seekForward(seconds), []);

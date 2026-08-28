@@ -16,6 +16,7 @@
  */
 
 import { AudioEngineBase, AUDIO_ENGINE_EVENTS } from "@/lib/audio/AudioEngineInterface";
+import { playAudioIfNotPaused } from "@/lib/audio/audio-element-utils";
 
 const MRRW_SOURCE_BOUND = Symbol.for("2mrrw.mediaElementSourceBound");
 const VOL_KEY = "2mrrw-vol";
@@ -358,11 +359,14 @@ export class WebAudioEngine extends AudioEngineBase {
    * to avoid DOMException on iOS and Chrome autoplay-policy browsers.
    * @returns {Promise<void>}
    */
-  async play() {
+  async play(effectContext = {}) {
     const el = this._boundElement;
     if (!el) return;
     await this.resume();
-    await el.play();
+    return playAudioIfNotPaused(el, true, {
+      command: "WEB_AUDIO_ENGINE_PLAY",
+      ...effectContext,
+    });
   }
 
   /** Pause playback without unloading the track src. */

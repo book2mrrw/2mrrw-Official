@@ -14,10 +14,147 @@ import { createPlaybackError } from "@/lib/playback/playback-errors";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { catalogPreviewAudioUrl } from "@/lib/media-urls";
 import { isSiteApiMediaPath } from "@/lib/media/site-api-url";
+import {
+  PhysicalEffectAuthorityMode,
+  getCurrentPhysicalEffectGuard,
+} from "@/lib/audio/physical-effect-authority";
 
 export const RESTORE_MIN_POSITION_SEC = 5;
 export const RESTORE_NEAR_END_BUFFER_SEC = 3;
 export const AUDIO_SRC_READY_TIMEOUT_MS = 12000;
+export const PHYSICAL_EFFECT_BECOME_AUDIBLE = "BECOME_AUDIBLE";
+
+/**
+ * Generic, injected physical-effect guard. This module deliberately knows
+ * nothing about Playback Core; it only evaluates the opaque authority and
+ * read-only predicate supplied by the caller.
+ *
+ * Legacy behavior must be explicitly classified. An unclassified, partially
+ * installed, or broken protected path fails closed.
+ */
+function canBecomeAudible({
+  effectAuthorityMode = null,
+  effectGuardRequired = false,
+  effectAuthority,
+  canApplyEffect,
+  mediaIdentity,
+  command,
+  requestId,
+  state,
+  context,
+} = {}) {
+  const hasAuthority = effectAuthority != null;
+  const hasGuard = typeof canApplyEffect === "function";
+  const isCurrentCoreEffect =
+    effectAuthorityMode === PhysicalEffectAuthorityMode.CORE_CURRENT;
+  const isCapturedCoreEffect =
+    effectAuthorityMode === PhysicalEffectAuthorityMode.CORE || effectGuardRequired;
+  const resolvedMediaIdentity =
+    mediaIdentity ??
+    state?.currentTrack?.id ??
+    state?.currentTrack?.trackId ??
+    state?.currentTrack?.slug ??
+    null;
+
+  if (isCurrentCoreEffect) {
+    const currentGuard = getCurrentPhysicalEffectGuard();
+    if (!currentGuard) {
+      reportPlaybackDiagnostic({
+        level: "error",
+        code: "PHYSICAL_EFFECT_GUARD_UNAVAILABLE",
+        command: command || "PLAY",
+        requestId: requestId ?? null,
+        state,
+        context: {
+          effectType: PHYSICAL_EFFECT_BECOME_AUDIBLE,
+          mediaIdentity: resolvedMediaIdentity,
+          authorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
+          ...(context || {}),
+        },
+      });
+      return false;
+    }
+    try {
+      const allowed = currentGuard.canApplyCurrentEffect({
+        type: PHYSICAL_EFFECT_BECOME_AUDIBLE,
+        mediaIdentity: resolvedMediaIdentity,
+      });
+      if (!allowed) {
+        reportPlaybackDiagnostic({
+          level: "warn",
+          code: "PHYSICAL_EFFECT_DENIED",
+          command: command || "PLAY",
+          requestId: requestId ?? null,
+          state,
+          context: {
+            effectType: PHYSICAL_EFFECT_BECOME_AUDIBLE,
+            mediaIdentity: resolvedMediaIdentity,
+            authorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
+            ...(context || {}),
+          },
+        });
+      }
+      return Boolean(allowed);
+    } catch (error) {
+      reportPlaybackDiagnostic({
+        level: "error",
+        code: "PHYSICAL_EFFECT_GUARD_ERROR",
+        command: command || "PLAY",
+        requestId: requestId ?? null,
+        state,
+        error,
+        context: {
+          effectType: PHYSICAL_EFFECT_BECOME_AUDIBLE,
+          mediaIdentity: resolvedMediaIdentity,
+          authorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
+          ...(context || {}),
+        },
+      });
+      return false;
+    }
+  }
+
+  if (!isCapturedCoreEffect || !hasAuthority || !hasGuard) {
+    reportPlaybackDiagnostic({
+      level: "error",
+      code: "PHYSICAL_EFFECT_GUARD_UNAVAILABLE",
+      command: command || "PLAY",
+      requestId: requestId ?? null,
+      state,
+      context: { effectType: PHYSICAL_EFFECT_BECOME_AUDIBLE, mediaIdentity: resolvedMediaIdentity, ...(context || {}) },
+    });
+    return false;
+  }
+
+  try {
+    const allowed = canApplyEffect(effectAuthority, {
+      type: PHYSICAL_EFFECT_BECOME_AUDIBLE,
+      mediaIdentity: resolvedMediaIdentity,
+    });
+    if (!allowed) {
+      reportPlaybackDiagnostic({
+        level: "warn",
+        code: "PHYSICAL_EFFECT_DENIED",
+        command: command || "PLAY",
+        requestId: requestId ?? null,
+        state,
+        context: { effectType: PHYSICAL_EFFECT_BECOME_AUDIBLE, mediaIdentity: resolvedMediaIdentity, ...(context || {}) },
+      });
+    }
+    return Boolean(allowed);
+  } catch (error) {
+    reportPlaybackDiagnostic({
+      level: "error",
+      code: "PHYSICAL_EFFECT_GUARD_ERROR",
+      command: command || "PLAY",
+      requestId: requestId ?? null,
+      state,
+      error,
+      context: { effectType: PHYSICAL_EFFECT_BECOME_AUDIBLE, mediaIdentity: resolvedMediaIdentity, ...(context || {}) },
+    });
+    return false;
+  }
+}
 
 function normalizePlaybackSrc(src) {
   if (!src || typeof src !== "string") return "";
@@ -179,9 +316,23 @@ function isAudioElementPlaying(audio) {
   return Boolean(audio && !audio.paused && !audio.ended);
 }
 
-async function loadAudioSrcAndPlay(audio, src, { signal, command, requestId, state, context } = {}) {
+async function loadAudioSrcAndPlay(audio, src, {
+  signal,
+  command,
+  requestId,
+  state,
+  context,
+  effectAuthority,
+  canApplyEffect,
+  effectGuardRequired,
+  effectAuthorityMode,
+  mediaIdentity,
+} = {}) {
   await waitAudioSrcReady(audio, src, { signal });
   try {
+    if (!canBecomeAudible({ effectAuthorityMode, effectGuardRequired, effectAuthority, canApplyEffect, mediaIdentity, command, requestId, state, context })) {
+      return null;
+    }
     perfMark(MARKS.PLAYBACK_AUDIO_PLAY_CALL);
     await audio.play();
     perfMark(MARKS.PLAYBACK_PLAY_PROMISE_RESOLVED);
@@ -206,7 +357,18 @@ async function loadAudioSrcAndPlay(audio, src, { signal, command, requestId, sta
 const ABORT_RETRY_DELAY_MS = 300;
 const ABORT_MAX_RETRIES = 2;
 
-async function playAudioIfNotPaused(audio, isPlaying, { command, requestId, state, context, signal } = {}) {
+async function playAudioIfNotPaused(audio, isPlaying, {
+  command,
+  requestId,
+  state,
+  context,
+  signal,
+  effectAuthority,
+  canApplyEffect,
+  effectGuardRequired,
+  effectAuthorityMode,
+  mediaIdentity,
+} = {}) {
   if (!isPlaying) return true;
   if (!audio.paused) return true;
 
@@ -223,6 +385,11 @@ async function playAudioIfNotPaused(audio, isPlaying, { command, requestId, stat
 
   for (let attempt = 0; attempt <= ABORT_MAX_RETRIES; attempt++) {
     try {
+      // INV-EFFECT-1: check immediately before every real play() attempt,
+      // including iOS AbortError retries. Preparation above remains harmless.
+      if (!canBecomeAudible({ effectAuthorityMode, effectGuardRequired, effectAuthority, canApplyEffect, mediaIdentity, command, requestId, state, context })) {
+        return null;
+      }
       perfMark(MARKS.PLAYBACK_AUDIO_PLAY_CALL);
       await audio.play();
       perfMark(MARKS.PLAYBACK_PLAY_PROMISE_RESOLVED);
@@ -312,6 +479,7 @@ export {
   isAudioElementPlaying,
   loadAudioSrcAndPlay,
   playAudioIfNotPaused,
+  canBecomeAudible,
   isFlatPreviewCdnSrc,
   getTrackPreviewSrc,
   isLikelyIOS,

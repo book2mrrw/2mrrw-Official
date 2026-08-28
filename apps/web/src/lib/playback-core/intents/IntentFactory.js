@@ -53,6 +53,7 @@ export class IntentFactory {
     if (payload.positionSeconds !== undefined) intent.positionSeconds = payload.positionSeconds;
     if (payload.queueEntries  !== undefined) intent.queueEntries   = payload.queueEntries;
     if (payload.queueIndex    !== undefined) intent.queueIndex     = payload.queueIndex;
+    if (payload.options       !== undefined) intent.options        = payload.options;
     if (payload.fromIndex     !== undefined) intent.fromIndex      = payload.fromIndex;
     if (payload.toIndex       !== undefined) intent.toIndex        = payload.toIndex;
 
@@ -73,6 +74,7 @@ export class IntentFactory {
  * @property {number} [positionSeconds]
  * @property {Array}  [queueEntries]
  * @property {number} [queueIndex]
+ * @property {object} [options]
  * @property {number} [fromIndex]
  * @property {number} [toIndex]
  */

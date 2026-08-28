@@ -24,6 +24,7 @@ import {
 } from "@/lib/playback/stream-client";
 import { writeAvailabilityCache } from "@/lib/media/availability-cache";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
+import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 import {
   waitAudioSrcReady,
@@ -535,6 +536,7 @@ export function createPlaybackEventHandlers({
               requestId: activeCommandRef.current?.requestId || null,
               state: stateRef.current,
               context: { source: "onPause_os_suspend" },
+              effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
             });
           }
         }, 0);
@@ -661,6 +663,7 @@ export function createPlaybackEventHandlers({
               requestId: activeCommandRef.current?.requestId || null,
               state: stateRef.current,
               context: { source: "onPause_canplay_interrupt" },
+              effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
             });
           }
         };
@@ -865,6 +868,7 @@ export function createPlaybackEventHandlers({
           requestId: activeCommandRef.current?.requestId || null,
           state: stateRef.current,
           context: { source: "finishEnded_repeat_one" },
+          effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
         });
         return;
       }
@@ -1106,6 +1110,7 @@ export function createPlaybackEventHandlers({
           requestId: activeCommandRef.current?.requestId || null,
           state: stateRef.current,
           context: { source: "onError_stream_retry" },
+          effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
         });
         if (!retryPlayed || audio.paused) {
           patchState({
