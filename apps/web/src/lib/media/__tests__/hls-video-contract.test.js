@@ -13,6 +13,10 @@ describe("HLS video rendition contract", () => {
   const image = read("workers/hls-transcoder/Dockerfile");
   const master = read("src/app/api/vault/video/manifest/route.js");
   const variant = read("src/app/api/vault/video/variant/route.js");
+  const audioMaster = read("src/app/api/library/hls/route.js");
+  const audioVariant = read("src/app/api/library/hls/variant/route.js");
+  const manifestContract = read("src/lib/hls/manifest-contract.js");
+  const manifestCache = read("src/lib/server/hls-manifest-cache.js");
   const migration = read("supabase/migrations/20260828000054_hls_rendition_metadata.sql");
 
   test("worker probes the source once and chooses media kind from streams", () => {
@@ -32,18 +36,32 @@ describe("HLS video rendition contract", () => {
   });
 
   test("master playlist advertises measured rendition facts", () => {
-    assert.match(master, /rendition_metadata/);
+    assert.match(master, /getRenditionStreamMetadata/);
     assert.match(master, /AVERAGE-BANDWIDTH/);
     assert.match(master, /RESOLUTION=/);
     assert.match(master, /FRAME-RATE=/);
-    assert.match(master, /metadata\.peak_bandwidth/);
-    assert.match(master, /metadata\.codecs/);
+    assert.match(manifestContract, /rendition_metadata/);
+    assert.match(manifestContract, /metadata\.peak_bandwidth/);
+    assert.match(manifestContract, /safeCodecs\(metadata\.codecs/);
   });
 
   test("variant playlist prefers exact encoded segment durations", () => {
-    assert.match(variant, /segment_durations/);
+    assert.match(variant, /getExactSegmentDurations/);
     assert.match(variant, /exactDurations/);
     assert.match(variant, /#EXT-X-INDEPENDENT-SEGMENTS/);
+    assert.match(manifestContract, /segment_durations/);
+  });
+
+  test("audio playlists consume the same measured manifest contract", () => {
+    assert.match(audioMaster, /HLS_MANIFEST_SELECT_FIELDS/);
+    assert.match(audioMaster, /getRenditionStreamMetadata/);
+    assert.match(audioMaster, /AVERAGE-BANDWIDTH/);
+    assert.match(audioMaster, /media_kind !== "audio"/);
+    assert.doesNotMatch(audioMaster, /CHANNELS=/);
+    assert.match(audioVariant, /HLS_MANIFEST_SELECT_FIELDS/);
+    assert.match(audioVariant, /getExactSegmentDurations/);
+    assert.match(audioVariant, /#EXT-X-INDEPENDENT-SEGMENTS/);
+    assert.match(manifestCache, /MANIFEST_CACHE_SCHEMA_VERSION = 2/);
   });
 
   test("migration is additive, constrained, and versioned", () => {
@@ -58,4 +76,3 @@ describe("HLS video rendition contract", () => {
     assert.match(migration, /jsonb_typeof\(rendition_metadata\) = 'object'/);
   });
 });
-

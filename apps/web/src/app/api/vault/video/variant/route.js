@@ -17,6 +17,10 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { getOrFetchManifest } from "@/lib/server/hls-manifest-cache";
 import { deriveHLSIV } from "@/lib/hls/derive-key";
+import {
+  HLS_MANIFEST_SELECT_FIELDS,
+  getExactSegmentDurations,
+} from "@/lib/hls/manifest-contract";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +66,7 @@ export async function GET(req) {
       const admin = getAdminClient();
       const { data, error } = await admin
         .from("hls_manifests")
-        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts, poster_key, vtt_key, media_kind, segment_durations, rendition_metadata, source_metadata, transcode_profile_version")
+        .select(HLS_MANIFEST_SELECT_FIELDS)
         .eq("slug", contentSlug)
         .is("track_slug", null)
         .maybeSingle();
@@ -85,10 +89,7 @@ export async function GET(req) {
   const segCount   = (manifest.segment_counts?.[bitrate]) ?? 0;
   const segDuration = manifest.segment_duration_secs ?? 6;
   const totalDur   = manifest.duration_seconds ?? 0;
-  const exactDurations = Array.isArray(manifest.segment_durations?.[bitrate])
-    && manifest.segment_durations[bitrate].length === segCount
-    ? manifest.segment_durations[bitrate]
-    : null;
+  const exactDurations = getExactSegmentDurations(manifest, bitrate, segCount);
 
   if (segCount === 0) {
     return cors(req, NextResponse.json({ error: "No segments for this bitrate" }, { status: 404 }));

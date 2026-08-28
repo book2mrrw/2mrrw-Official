@@ -21,6 +21,10 @@ import { signVariantToken } from "@/lib/hls/token";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { getOrFetchManifest } from "@/lib/server/hls-manifest-cache";
 import { resolveReleaseAccessForProduct } from "@/lib/releases/release-availability-server";
+import {
+  HLS_MANIFEST_SELECT_FIELDS,
+  getRenditionStreamMetadata,
+} from "@/lib/hls/manifest-contract";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +89,7 @@ export async function GET(req) {
       const admin = getAdminClient();
       let q = admin
         .from("hls_manifests")
-        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts")
+        .select(HLS_MANIFEST_SELECT_FIELDS)
         .eq("slug", slug);
       q = effectiveTrackSlug ? q.eq("track_slug", effectiveTrackSlug) : q.is("track_slug", null);
       const { data, error } = await q.maybeSingle();
@@ -100,6 +104,9 @@ export async function GET(req) {
   // No manifest → track not yet transcoded; client falls back to progressive download
   if (!manifest) {
     return cors(req, NextResponse.json({ error: "HLS not available for this track" }, { status: 404 }));
+  }
+  if (manifest.media_kind && manifest.media_kind !== "audio") {
+    return cors(req, NextResponse.json({ error: "Audio HLS not available for this track" }, { status: 404 }));
   }
 
   const bitrates = manifest.bitrates ?? ["320k", "160k", "96k"];
@@ -121,16 +128,21 @@ export async function GET(req) {
 
   for (let i = 0; i < bitrates.length; i++) {
     const br        = bitrates[i];
-    const bandwidth = BITRATE_BANDWIDTH[br] ?? 160_000;
+    const stream = getRenditionStreamMetadata(manifest, br, {
+      fallbackBandwidth: BITRATE_BANDWIDTH[br] ?? 160_000,
+      fallbackCodecs: "mp4a.40.2",
+    });
     const token     = variantTokens[i];
     const params    = new URLSearchParams({ slug, bitrate: br, token });
     if (effectiveTrackSlug) params.set("trackSlug", effectiveTrackSlug);
     const variantUrl = `${origin}/api/library/hls/variant?${params}`;
 
-    lines.push(
-      `#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth},CODECS="mp4a.40.2",CHANNELS="2"`,
-      variantUrl
-    );
+    const attributes = [`BANDWIDTH=${stream.bandwidth}`];
+    if (stream.averageBandwidth) {
+      attributes.push(`AVERAGE-BANDWIDTH=${stream.averageBandwidth}`);
+    }
+    attributes.push(`CODECS="${stream.codecs}"`);
+    lines.push(`#EXT-X-STREAM-INF:${attributes.join(",")}`, variantUrl);
   }
 
   return cors(

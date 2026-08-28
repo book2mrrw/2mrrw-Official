@@ -43,6 +43,7 @@ function getRedis() {
 const L1_TTL_MS  = 5 * 60 * 1_000; // 5 min — in-process, hot path
 const L2_TTL_S   = 86_400;          // 24 h  — cross-instance, manifests are immutable
 const L1_MAX     = 500;
+const MANIFEST_CACHE_SCHEMA_VERSION = 2;
 
 // Sentinel stored in Redis for "confirmed not found" — prevents repeated DB hits
 // for tracks without HLS manifests while keeping the TTL short (5 min) so newly
@@ -59,7 +60,7 @@ const _inflight = new Map();
 
 function cacheKey(slug, trackSlug) {
   // Normalize null/undefined trackSlug to a stable sentinel for the key.
-  return `hls:manifest:v1:${slug}:${trackSlug ?? "__null__"}`;
+  return `hls:manifest:v${MANIFEST_CACHE_SCHEMA_VERSION}:${slug}:${trackSlug ?? "__null__"}`;
 }
 
 function evict() {
@@ -148,9 +149,9 @@ export async function invalidateManifestCache(slug, trackSlug) {
  * share a single factory invocation during a cache miss, collapsing a cold-start
  * thundering herd into exactly one DB round-trip.
  *
- * The factory must return the complete manifest row (all fields: bitrates,
- * segment_duration_secs, duration_seconds, hls_prefix, segment_counts), or null
- * if no manifest exists for this track. Both routes extract only the fields they need.
+ * The factory must return the complete row defined by HLS_MANIFEST_SELECT_FIELDS,
+ * or null if no manifest exists for this track. Every playlist route uses that
+ * canonical field set so a cache entry is never route-dependent.
  *
  * @param {string} slug
  * @param {string|null} trackSlug

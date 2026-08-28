@@ -20,6 +20,10 @@ import { verifyVariantToken, signKeyToken } from "@/lib/hls/token";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { getOrFetchManifest } from "@/lib/server/hls-manifest-cache";
+import {
+  HLS_MANIFEST_SELECT_FIELDS,
+  getExactSegmentDurations,
+} from "@/lib/hls/manifest-contract";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +78,7 @@ export async function GET(req) {
       const admin = getAdminClient();
       let q = admin
         .from("hls_manifests")
-        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts")
+        .select(HLS_MANIFEST_SELECT_FIELDS)
         .eq("slug", slug);
       q = effectiveTrackSlug ? q.eq("track_slug", effectiveTrackSlug) : q.is("track_slug", null);
       const { data, error } = await q.maybeSingle();
@@ -88,11 +92,15 @@ export async function GET(req) {
   if (!manifest) {
     return cors(req, NextResponse.json({ error: "Manifest not found" }, { status: 404 }));
   }
+  if (manifest.media_kind && manifest.media_kind !== "audio") {
+    return cors(req, NextResponse.json({ error: "Audio manifest not found" }, { status: 404 }));
+  }
 
   const prefix      = manifest.hls_prefix;
   const segCount    = (manifest.segment_counts?.[bitrate]) ?? 0;
   const segDuration = manifest.segment_duration_secs ?? 6;
   const totalDur    = manifest.duration_seconds ?? 0;
+  const exactDurations = getExactSegmentDurations(manifest, bitrate, segCount);
 
   if (segCount === 0) {
     return cors(req, NextResponse.json({ error: "No segments for this bitrate" }, { status: 404 }));
@@ -113,6 +121,7 @@ export async function GET(req) {
     "#EXTM3U",
     "#EXT-X-VERSION:3",
     `#EXT-X-TARGETDURATION:${segDuration}`,
+    "#EXT-X-INDEPENDENT-SEGMENTS",
     "#EXT-X-PLAYLIST-TYPE:VOD",
     "",
     `#EXT-X-KEY:METHOD=AES-128,URI="${keyUrl}",IV=0x${ivHex}`,
@@ -123,9 +132,12 @@ export async function GET(req) {
     const segNum  = String(i + 1).padStart(5, "0");
     const segUrl  = `${R2_CDN}/${prefix}${bitrate}/seg_${segNum}.ts`;
     const isLast  = i === segCount - 1;
-    const segDur  = isLast && totalDur > 0
-      ? Math.max(0.001, totalDur - (segDuration * i)).toFixed(6)
-      : segDuration.toFixed(6);
+    const exactDuration = exactDurations?.[i];
+    const segDur = exactDuration
+      ? exactDuration.toFixed(6)
+      : isLast && totalDur > 0
+        ? Math.max(0.001, totalDur - (segDuration * i)).toFixed(6)
+        : segDuration.toFixed(6);
 
     lines.push(`#EXTINF:${segDur},`, segUrl);
   }

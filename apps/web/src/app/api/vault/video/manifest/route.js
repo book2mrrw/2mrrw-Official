@@ -29,6 +29,12 @@ import { getUserVaultAccess } from "@/lib/vault/access";
 import { signVaultVideoVariantToken } from "@/lib/hls/vault-video-token";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { getOrFetchManifest } from "@/lib/server/hls-manifest-cache";
+import {
+  HLS_MANIFEST_SELECT_FIELDS,
+  getRenditionStreamMetadata,
+  positiveFrameRate,
+  positiveInteger,
+} from "@/lib/hls/manifest-contract";
 
 export const dynamic = "force-dynamic";
 
@@ -42,16 +48,6 @@ const BITRATE_BANDWIDTH = {
   "160k":    180_000,
   "96k":     108_000,
 };
-
-function positiveInteger(value, fallback) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : fallback;
-}
-
-function positiveFrameRate(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed.toFixed(3) : null;
-}
 
 function cors(req, res) {
   return applyMediaCors(req, res);
@@ -119,7 +115,7 @@ export async function GET(req) {
     manifest = await getOrFetchManifest(contentSlug, null, async () => {
       const { data, error } = await admin
         .from("hls_manifests")
-        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts, poster_key, vtt_key, media_kind, segment_durations, rendition_metadata, source_metadata, transcode_profile_version")
+        .select(HLS_MANIFEST_SELECT_FIELDS)
         .eq("slug", contentSlug)
         .is("track_slug", null)
         .maybeSingle();
@@ -170,25 +166,23 @@ export async function GET(req) {
 
   for (let i = 0; i < bitrates.length; i++) {
     const br        = bitrates[i];
-    const fallbackBandwidth = BITRATE_BANDWIDTH[br] ?? 2_000_000;
-    const metadata = manifest.rendition_metadata?.[br] || {};
-    const averageBandwidth = positiveInteger(metadata.average_bandwidth, null);
-    const bandwidth = positiveInteger(metadata.peak_bandwidth, fallbackBandwidth);
+    const stream = getRenditionStreamMetadata(manifest, br, {
+      fallbackBandwidth: BITRATE_BANDWIDTH[br] ?? 2_000_000,
+      fallbackCodecs: "avc1.64001f,mp4a.40.2",
+    });
+    const metadata = stream.metadata;
     const width = positiveInteger(metadata.width, null);
     const height = positiveInteger(metadata.height, null);
     const frameRate = positiveFrameRate(metadata.frame_rate);
-    const codecs = typeof metadata.codecs === "string" && metadata.codecs
-      ? metadata.codecs
-      : "avc1.64001f,mp4a.40.2";
     const token     = variantTokens[i];
     const params    = new URLSearchParams({ slug: contentSlug, bitrate: br, token });
     const variantUrl = `${origin}/api/vault/video/variant?${params}`;
 
     // Version-2 manifests use measured attributes from the completed files.
     // Legacy rows retain conservative fallbacks until they are re-transcoded.
-    const attributes = [`BANDWIDTH=${bandwidth}`];
-    if (averageBandwidth) attributes.push(`AVERAGE-BANDWIDTH=${averageBandwidth}`);
-    attributes.push(`CODECS="${codecs}"`);
+    const attributes = [`BANDWIDTH=${stream.bandwidth}`];
+    if (stream.averageBandwidth) attributes.push(`AVERAGE-BANDWIDTH=${stream.averageBandwidth}`);
+    attributes.push(`CODECS="${stream.codecs}"`);
     if (width && height) attributes.push(`RESOLUTION=${width}x${height}`);
     if (frameRate) attributes.push(`FRAME-RATE=${frameRate}`);
     if (vttKey) attributes.push('SUBTITLES="subs"');
