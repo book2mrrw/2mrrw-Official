@@ -58,6 +58,7 @@ export function reduceDesiredState(state, intent) {
       return next({
         requestedMediaIdentity: identityOf(entry),
         requestedMediaEntry:    entry,
+        requestedOptions:       intent.options ?? null,
         desiredTransport:       TransportDisposition.PLAYING,
         positionTarget:         null,
         resumePolicy:           intent.resumePolicy ?? null,

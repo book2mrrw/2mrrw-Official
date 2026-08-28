@@ -54,6 +54,7 @@ import { PlaybackCoreAdapter }     from "../adapters/PlaybackCoreAdapter.js";
 import { ConvergenceEngine }       from "../convergence/ConvergenceEngine.js";
 import { createRuntimePhysicalProbe } from "../convergence/PhysicalStateProbe.js";
 import { CoreLiveCommandScope }    from "../types/index.js";
+import { installCurrentPhysicalEffectGuard } from "@/lib/audio/physical-effect-authority";
 
 /** @type {PlaybackCore | null} */
 let _core = null;
@@ -84,6 +85,7 @@ export function buildWiredCore({
     dispatch,
     authorityGate: core._authorityGate,
     logger: core.logger,
+    effectAuthority: core._effectAuthority,
     liveScope,
   });
 
@@ -95,11 +97,24 @@ export function buildWiredCore({
     adapter,
     probe,
     logger: core.logger,
+    effectAuthority: core._effectAuthority,
     liveScope,
   });
 
   // Synchronous injection — Core is READY before this function returns.
-  core._injectExecutionEngine(engine);
+  const disposeInstalledEffectGuard = installCurrentPhysicalEffectGuard(
+    core._effectAuthority,
+  );
+  try {
+    core._injectExecutionEngine(engine, {
+      effectAuthority: core._effectAuthority,
+      disposeInstalledEffectGuard,
+    });
+  } catch (error) {
+    disposeInstalledEffectGuard();
+    core.destroy();
+    throw error;
+  }
   return core;
 }
 

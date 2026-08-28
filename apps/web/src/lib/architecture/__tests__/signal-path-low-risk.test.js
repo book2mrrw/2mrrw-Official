@@ -84,3 +84,110 @@ test("UI-01 Recently Played stays compact without resizing adjacent My Music she
   assert.match(recentlyPlayed, /aspectRatio: "1"/);
   assert.match(recentlyAdded, /width: 130/);
 });
+
+test("SLICE-1D production PLAY/PAUSE/RESUME/SEEK enter Playback Core", () => {
+  const publicApi = read("src/lib/playback/usePlaybackPublicApi.js");
+  const keyboard = read("src/lib/playback/keyboard-shortcuts.js");
+  const audioContext = read("src/context/AudioContext.js");
+
+  assert.match(publicApi, /getProductionPlaybackCore/);
+  assert.match(publicApi, /playbackPort\.play\(/);
+  assert.match(publicApi, /playbackPort\.pause\(/);
+  assert.match(publicApi, /playbackPort\.resume\(/);
+  assert.match(publicApi, /playbackPort\.seek\(/);
+  assert.match(publicApi, /requestAuthoritativePlay/);
+  assert.match(audioContext, /requestAuthoritativePlay:\s*publicApi\.requestAuthoritativePlay/);
+  assert.doesNotMatch(
+    publicApi,
+    /dispatchPlaybackCommand\(\s*PLAYBACK_COMMANDS\.(?:PLAY_TRACK|PAUSE|RESUME|SEEK)/,
+  );
+
+  assert.match(keyboard, /getProductionPlaybackCore/);
+  assert.match(keyboard, /playbackCore\.port\.pause\(/);
+  assert.match(keyboard, /playbackCore\.port\.resume\(/);
+  assert.match(keyboard, /playbackCore\.port\.seek\(/);
+});
+
+test("SLICE-1D Core authority mode survives payload loss to the executor", () => {
+  const adapter = read("src/lib/playback-core/adapters/PlaybackCoreAdapter.js");
+  const dispatcher = read("src/lib/playback/command-dispatcher.js");
+  const executor = read("src/lib/playback/command-executor.js");
+  const stream = read("src/lib/playback/PlaybackStreamCommands.js");
+  const transport = read("src/lib/playback/PlaybackTransportCommands.js");
+
+  assert.match(adapter, /effectAuthorityMode:\s*PhysicalEffectAuthorityMode\.CORE/);
+  assert.match(dispatcher, /effectAuthorityMode/);
+  assert.match(dispatcher, /const command = \{[\s\S]*effectAuthorityMode/);
+  assert.match(executor, /command\.effectAuthorityMode === PhysicalEffectAuthorityMode\.CORE/);
+  assert.match(stream, /\.\.\.physicalEffectContext/);
+  assert.match(transport, /effectContext\.effectAuthorityMode\s*\?\?\s*PhysicalEffectAuthorityMode\.CORE_CURRENT/);
+});
+
+test("SLICE-1D active-deck modules have no raw play() bypass", () => {
+  const activeDeckFiles = [
+    "src/lib/audio/WebAudioEngine.js",
+    "src/lib/playback/PlaybackCSCommands.js",
+    "src/lib/playback/PlaybackEventHandlers.js",
+    "src/lib/playback/PlaybackHelperService.js",
+    "src/lib/playback/PlaybackQueueCommands.js",
+    "src/lib/playback/PlaybackRecoveryCommands.js",
+    "src/lib/playback/PlaybackStreamCommands.js",
+    "src/lib/playback/PlaybackTransportCommands.js",
+    "src/lib/playback/usePlaybackEffects.js",
+    "src/lib/playback/usePlaybackPublicApi.js",
+  ];
+
+  for (const relativePath of activeDeckFiles) {
+    const executableSource = read(relativePath)
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "")
+      // This is an intent submission, not a physical media-element effect.
+      .replace(/\b(?:playbackCore\.port|playbackPort)\.play\s*\(/g, "governedCorePlay(");
+    assert.doesNotMatch(
+      executableSource,
+      /\b[A-Za-z_$][\w$]*\.play\s*\(/,
+      `${relativePath} must use the governed audio-element leaf`,
+    );
+    assert.doesNotMatch(
+      executableSource,
+      /effectAuthorityMode:\s*(?:"LEGACY"|PhysicalEffectAuthorityMode\.LEGACY)/,
+      `${relativePath} must not bypass the session's Core effect authority`,
+    );
+  }
+});
+
+test("SLICE-1D legacy queue navigation promotes every new selection through Core", () => {
+  const queueCommands = read("src/lib/playback/PlaybackQueueCommands.js");
+  const publicApi = read("src/lib/playback/usePlaybackPublicApi.js");
+  const reducer = read("src/lib/playback-core/desired/DesiredStateReducer.js");
+
+  assert.doesNotMatch(queueCommands, /self\.playTrackInternal\(/);
+  assert.match(queueCommands, /requestAuthoritativePlay/);
+  assert.match(publicApi, /PLAYBACK_COMMANDS\.SET_QUEUE/);
+  assert.doesNotMatch(
+    publicApi,
+    /dispatchPlaybackCommand\(\s*PLAYBACK_COMMANDS\.PLAY_QUEUE/,
+  );
+  assert.doesNotMatch(reducer, /intent\.mediaEntry|optionalExecutionTargetPatch/);
+});
+
+test("SLICE-1D protected transport keeps dependency direction Core -> media", () => {
+  const protectedTransportFiles = [
+    "src/lib/audio/audio-element-utils.js",
+    "src/lib/audio/physical-effect-authority.js",
+    "src/lib/audio/WebAudioEngine.js",
+    "src/lib/playback/PlaybackStreamCommands.js",
+    "src/lib/playback/PlaybackTransportCommands.js",
+    "src/lib/playback/PlaybackQueueCommands.js",
+    "src/lib/playback/command-dispatcher.js",
+    "src/lib/playback/command-executor.js",
+  ];
+
+  for (const relativePath of protectedTransportFiles) {
+    assert.doesNotMatch(
+      read(relativePath),
+      /(?:@\/lib\/playback-core|\.\.\/playback-core|from\s+["'][^"']*playback-core)/,
+      `${relativePath} must not import Playback Core internals`,
+    );
+  }
+});

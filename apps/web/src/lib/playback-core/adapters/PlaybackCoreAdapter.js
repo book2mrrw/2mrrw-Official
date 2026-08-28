@@ -37,12 +37,14 @@
  */
 
 import { CoreLiveCommandScope } from "../types/index.js";
+import { PhysicalEffectAuthorityMode } from "../../audio/physical-effect-authority.js";
 
 export class PlaybackCoreAdapter {
   #dispatch;
   #authorityGate;
   #logger;
   #liveScope;
+  #effectAuthority;
 
   /**
    * @param {object} deps
@@ -56,7 +58,7 @@ export class PlaybackCoreAdapter {
    *   (PLAY/PAUSE/RESUME/SEEK). Anything mapped but outside this set is refused
    *   with CORE_ADAPTER_OUT_OF_SCOPE and never reaches the dispatcher.
    */
-  constructor({ dispatch, authorityGate, logger, liveScope = CoreLiveCommandScope }) {
+  constructor({ dispatch, authorityGate, logger, effectAuthority = null, liveScope = CoreLiveCommandScope }) {
     if (typeof dispatch !== "function") {
       throw new TypeError("[PlaybackCoreAdapter] dispatch must be a function. " +
         "Pass dispatchPlaybackCommand from @/lib/playback/command-dispatcher (production) " +
@@ -66,6 +68,7 @@ export class PlaybackCoreAdapter {
     this.#authorityGate = authorityGate;
     this.#logger     = logger;
     this.#liveScope  = liveScope;
+    this.#effectAuthority = effectAuthority;
   }
 
   /**
@@ -139,19 +142,44 @@ export class PlaybackCoreAdapter {
    * @param {{kind: string, entry?: object, position?: number, resumePolicy?: string}} step
    * @returns {Promise<any>}
    */
-  dispatchStep(step) {
+  dispatchStep(step, authority) {
+    const audibleEffectContext = this.#effectAuthority
+      ? {
+          effectAuthorityMode: PhysicalEffectAuthorityMode.CORE,
+          effectGuardRequired: true,
+          effectAuthority: authority,
+          canApplyEffect: (candidate, effect) =>
+            this.#effectAuthority.canApplyEffect(candidate, effect),
+        }
+      : {};
     switch (step.kind) {
       case "LOAD":
         return Promise.resolve(this.#dispatch("PLAY_TRACK", {
           track: step.entry,
-          options: { resumePolicy: step.resumePolicy ?? undefined },
-        }));
+          options: {
+            ...(step.options || {}),
+            resumePolicy: step.resumePolicy ?? step.options?.resumePolicy,
+            ...audibleEffectContext,
+          },
+        }, { effectAuthorityMode: PhysicalEffectAuthorityMode.CORE }));
       case "SEEK":
-        return Promise.resolve(this.#dispatch("SEEK", { time: step.position }));
+        return Promise.resolve(this.#dispatch(
+          "SEEK",
+          { time: step.position },
+          { effectAuthorityMode: PhysicalEffectAuthorityMode.CORE },
+        ));
       case "PAUSE":
-        return Promise.resolve(this.#dispatch("PAUSE", {}));
+        return Promise.resolve(this.#dispatch(
+          "PAUSE",
+          {},
+          { effectAuthorityMode: PhysicalEffectAuthorityMode.CORE },
+        ));
       case "RESUME":
-        return Promise.resolve(this.#dispatch("RESUME", {}));
+        return Promise.resolve(this.#dispatch(
+          "RESUME",
+          audibleEffectContext,
+          { effectAuthorityMode: PhysicalEffectAuthorityMode.CORE },
+        ));
       default:
         this.#logger?.emit({ type: "CORE_ADAPTER_UNKNOWN_COMMAND", commandType: step.kind });
         return Promise.resolve(null);

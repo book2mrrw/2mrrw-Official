@@ -12,6 +12,7 @@ import { getAudioEngineRuntime } from "./audio-engine-runtime";
 import { isSamePlaybackTrack } from "@/lib/music-playback";
 import { PLAYBACK_ORCHESTRATION_EVENTS } from "@/media/PlaybackStateMachine";
 import { PLAYBACK_COMMANDS } from "./playback-commands";
+import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 
 /**
  * Execute a single playback command against the current handler bag.
@@ -31,7 +32,13 @@ export async function executePlaybackCommand(command) {
   switch (command.type) {
     case PLAYBACK_COMMANDS.PLAY_TRACK: {
       const track = command.payload.track;
-      const opts = command.payload.options || {};
+      const opts = {
+        ...(command.payload.options || {}),
+        effectAuthorityMode: command.effectAuthorityMode,
+        effectGuardRequired:
+          command.effectAuthorityMode === PhysicalEffectAuthorityMode.CORE ||
+          command.payload.options?.effectGuardRequired === true,
+      };
       // Replace the queue with a single-item queue unless the caller explicitly
       // opts out (retry/recovery flows) or the track is already in the current queue.
       // Without this, playing a single or feature while an album queue is active
@@ -56,7 +63,16 @@ export async function executePlaybackCommand(command) {
       h.pause({ interrupt: true });
       return true;
     case PLAYBACK_COMMANDS.RESUME:
-      return h.resume();
+      return h.resume({
+        ...(command.payload || {}),
+        effectAuthorityMode:
+          command.effectAuthorityMode === PhysicalEffectAuthorityMode.CORE
+            ? PhysicalEffectAuthorityMode.CORE
+            : PhysicalEffectAuthorityMode.CORE_CURRENT,
+        effectGuardRequired:
+          command.effectAuthorityMode === PhysicalEffectAuthorityMode.CORE ||
+          command.payload?.effectGuardRequired === true,
+      });
     case PLAYBACK_COMMANDS.RECOVER: {
       tracePlaybackRef.current?.("recovery", "executePlaybackCommand", {
         command: "RECOVER",

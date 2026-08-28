@@ -39,6 +39,7 @@ export const TransportDisposition = Object.freeze({
  * @property {number}      revision               monotonically increasing, Core-owned
  * @property {string|null} requestedMediaIdentity transport-execution target (NOT Selection ownership)
  * @property {object|null} requestedMediaEntry    full track object for the legacy PLAY_TRACK payload
+ * @property {object|null} requestedOptions       execution options preserved through convergence
  * @property {string}      desiredTransport       TransportDisposition
  * @property {number|null} positionTarget         explicit seek target; null = "whatever the load yields"
  * @property {string|null} resumePolicy           carried through to the legacy handler
@@ -51,6 +52,7 @@ export function initialDesiredExecutionState() {
     revision:               0,
     requestedMediaIdentity: null,
     requestedMediaEntry:    null,
+    requestedOptions:       null,
     desiredTransport:       TransportDisposition.IDLE,
     positionTarget:         null,
     resumePolicy:           null,

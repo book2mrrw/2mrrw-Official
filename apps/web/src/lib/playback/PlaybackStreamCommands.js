@@ -2,6 +2,7 @@
 
 import { playbackStateMachine, PLAYBACK_ORCHESTRATION_EVENTS } from "@/media/PlaybackStateMachine";
 import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
+import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 import { MARKS, perfMark, recordAudioContextState, PLAYBACK_SCENARIOS } from "@/lib/dev/performanceMarks";
 import { writeAvailabilityCache } from "@/lib/media/availability-cache";
 import {
@@ -157,7 +158,13 @@ export function attachStreamCommands(self) {
       });
     }
     if (!(await ensureWebAudioRunning(audioCtxRef))) {
-      const lightOk = await attemptLightweightPlaybackResume("playTrack_ctx_suspended");
+      const lightOk = await attemptLightweightPlaybackResume("playTrack_ctx_suspended", {
+        effectAuthorityMode: options.effectAuthorityMode,
+        effectGuardRequired: options.effectGuardRequired === true,
+        effectAuthority: options.effectAuthority ?? null,
+        canApplyEffect: options.canApplyEffect,
+        mediaIdentity: track.id ?? track.slug ?? null,
+      });
       await resumeWebAudioContextIfSuspended(audioCtxRef, "playTrack-after-light");
       if (!(await ensureWebAudioRunning(audioCtxRef))) {
         const transportIntact = getPlaybackTransportHealth().intact;
@@ -221,6 +228,22 @@ export function attachStreamCommands(self) {
       src: presentation.src,
       cover: presentation.cover,
     };
+    const physicalEffectContext =
+      options.effectAuthorityMode === "CORE" ||
+      options.effectGuardRequired === true ||
+      options.effectAuthority != null ||
+      typeof options.canApplyEffect === "function"
+        ? {
+            effectAuthorityMode: options.effectAuthorityMode,
+            effectGuardRequired: options.effectGuardRequired === true,
+            effectAuthority: options.effectAuthority ?? null,
+            canApplyEffect: options.canApplyEffect,
+            mediaIdentity: nextTrack.id ?? nextTrack.slug ?? null,
+          }
+        : {
+            effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
+            mediaIdentity: nextTrack.id ?? nextTrack.slug ?? null,
+          };
 
     const coverToPreload = nextTrack.cover || nextTrack.baseCover;
     const coverPreloadOptions = { coverArtType: nextTrack.coverArtType };
@@ -514,6 +537,7 @@ export function attachStreamCommands(self) {
           requestId,
           state: stateRef.current,
           context: { source: "signed_stream_swap" },
+          ...physicalEffectContext,
         });
       }
       const liveTrack = stateRef.current.currentTrack;
@@ -997,7 +1021,9 @@ export function attachStreamCommands(self) {
           state: stateRef.current,
           context: { source: nextTrack.source },
           signal: streamAbortController.signal,
+          ...physicalEffectContext,
         });
+        if (startedPlay === null) return false;
         if (!startedPlay) {
           patchState({
             isPlaying: false,
@@ -1074,7 +1100,9 @@ export function attachStreamCommands(self) {
           state: stateRef.current,
           context: { source: nextTrack.source, sameTrack: true },
           signal: streamAbortController.signal,
+          ...physicalEffectContext,
         });
+        if (played === null) return false;
         if (!played) {
           patchState({
             isPlaying: false,
@@ -1277,7 +1305,13 @@ export function attachStreamCommands(self) {
         error: null,
         accessDenied: false,
       });
-      if (!audio.paused) await playAudioIfNotPaused(audio, stateRef.current.isPlaying);
+      if (!audio.paused) {
+        await playAudioIfNotPaused(audio, stateRef.current.isPlaying, {
+          effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
+          state: stateRef.current,
+          mediaIdentity: track.id ?? track.slug ?? null,
+        });
+      }
       return true;
     } catch (err) {
       if (err?.name === "AbortError" || err?.code === "AUDIO_SRC_ABORTED") return false;

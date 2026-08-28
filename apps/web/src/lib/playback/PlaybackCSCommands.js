@@ -1,6 +1,7 @@
 "use client";
 
 import { waitAudioSrcReady, playAudioIfNotPaused } from "@/lib/audio/audio-element-utils";
+import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 import { normalizeTrack, resolvePlaybackPresentation } from "@/lib/playback/playback-track-utils";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 
@@ -97,6 +98,7 @@ export function attachCSCommands(self) {
           requestId: activeCommandRef.current?.requestId || null,
           state: stateRef.current,
           context: { source: "applyCSModeToTrack" },
+          effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
         });
       }
       syncPositionState(true);

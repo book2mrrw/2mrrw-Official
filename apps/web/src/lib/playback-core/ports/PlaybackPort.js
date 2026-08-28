@@ -62,11 +62,11 @@ export class PlaybackPort {
    * @param {number}  [params.queueIndex]     - index of trackId within queueEntries
    * @param {string}  [params.source]         - "user" | "system" | "autoplay"
    */
-  play({ trackId, resumePolicy = ResumePolicy.RESUME_IF_AVAILABLE, queueEntries, queueIndex, source = "user" } = {}) {
+  play({ trackId, resumePolicy = ResumePolicy.RESUME_IF_AVAILABLE, queueEntries, queueIndex, options, source = "user" } = {}) {
     this.#assertReady("play");
     this.#commandGateway.dispatch(
       CoreCommandType.PLAY,
-      { trackId, resumePolicy, queueEntries, queueIndex },
+      { trackId, resumePolicy, queueEntries, queueIndex, options },
       source,
     );
   }

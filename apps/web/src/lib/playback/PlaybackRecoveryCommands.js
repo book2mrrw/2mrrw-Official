@@ -2,6 +2,7 @@
 
 import { playbackStateMachine, PLAYBACK_ORCHESTRATION_EVENTS } from "@/media/PlaybackStateMachine";
 import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
+import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 import { recordAudioContextState } from "@/lib/dev/performanceMarks";
 import {
   isLibraryStreamSrc,
@@ -198,6 +199,7 @@ export function attachRecoveryCommands(self) {
             requestId: activeCommandRef.current?.requestId || null,
             state: stateRef.current,
             context: { reason, hard: true, audibilityAttempt: attempt + 1 },
+            effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
           });
           audibleAfterResume = await waitForPlaybackAudibility(audibilityParams);
           if (audibleAfterResume) break;
@@ -356,7 +358,10 @@ export function attachRecoveryCommands(self) {
         source: "requestPlaybackRecovery",
         slug: stateRef.current.currentTrack?.slug ?? null,
       });
-      return attemptLightweightPlaybackResume(`recovery_suppressed:${reason}`).then(
+      return attemptLightweightPlaybackResume(
+        `recovery_suppressed:${reason}`,
+        { effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT },
+      ).then(
         (lightOk) => {
           if (lightOk) {
             armLifecycleRecoverySuppression("requestPlaybackRecovery", reason);
@@ -521,7 +526,10 @@ export function attachRecoveryCommands(self) {
           reason,
           slug: stateRef.current.currentTrack?.slug ?? null,
         });
-        const lightOk = await attemptLightweightPlaybackResume(trigger);
+        const lightOk = await attemptLightweightPlaybackResume(
+          trigger,
+          { effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT },
+        );
         if (lightOk) {
           const health = evaluateLifecyclePlaybackHealth({
             resumeAfter: true,

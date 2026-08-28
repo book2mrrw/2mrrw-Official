@@ -67,15 +67,20 @@ export function AudioProvider({ children }) {
   // All thin delegates — stable useMemo identity, [] deps throughout.
   const delegates = usePlaybackDelegates(helperServiceRef, commandServiceRef);
 
+  // Public-facing API callbacks (non-delegate; may do logging + gesture unlock).
+  const publicApi = usePlaybackPublicApi({ refs, delegates });
+
   // Commit live service dependencies before descendant passive effects or user
   // events can execute. Render stays pure and aborted renders cannot publish deps.
   useLayoutEffect(() => {
     helperServiceRef.current.updateDeps({ ...refs });
-    commandServiceRef.current.updateDeps({ ...refs, ...delegates });
+    commandServiceRef.current.updateDeps({
+      ...refs,
+      ...delegates,
+      requestAuthoritativePlay: publicApi.requestAuthoritativePlay,
+      requestAuthoritativeSeek: publicApi.seek,
+    });
   });
-
-  // Public-facing API callbacks (non-delegate; may do logging + gesture unlock).
-  const publicApi = usePlaybackPublicApi({ refs, delegates });
 
   // All useEffects — void hook; no re-renders driven from here.
   usePlaybackEffects({ refs, delegates, publicApi, state, user, authLoading, entitlementAccountState });

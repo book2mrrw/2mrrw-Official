@@ -28,8 +28,9 @@
  *     PAUSE. Self-healing rather than order-dependent.
  *
  * INVARIANTS ENFORCED HERE:
- *   INV-DESIRED-1  Every physical effect is revalidated against the latest
- *                  desired revision AT THE EFFECT BOUNDARY, not only at intent time.
+ *   INV-DESIRED-1  Before dispatching physical convergence work, Core
+ *                  revalidates that the planned desired revision is current.
+ *                  Last-moment audibility is governed separately by INV-EFFECT-1.
  *   INV-DESIRED-3  Convergence never proceeds toward a stale revision. If the
  *                  revision advances mid-step, the plan is discarded and re-planned.
  *   INV-DESIRED-4  Emergency PAUSE bypasses the EXECUTION QUEUE but not
@@ -63,6 +64,7 @@ export class ConvergenceEngine {
   #probe;
   #logger;
   #liveScope;
+  #effectAuthority;
 
   #inFlight = 0;
   #converging = false;
@@ -80,14 +82,16 @@ export class ConvergenceEngine {
    * @param {import('../diagnostics/CoreLogger.js').CoreLogger} [deps.logger]
    * @param {Set<string>} [deps.liveScope]
    */
-  constructor({ desiredStore, adapter, probe, logger, liveScope = CoreLiveCommandScope }) {
+  constructor({ desiredStore, adapter, probe, logger, effectAuthority, liveScope = CoreLiveCommandScope }) {
     if (!desiredStore) throw new TypeError("[ConvergenceEngine] desiredStore is required");
     if (!adapter)      throw new TypeError("[ConvergenceEngine] adapter is required");
+    if (!effectAuthority) throw new TypeError("[ConvergenceEngine] effectAuthority is required");
     this.#store     = desiredStore;
     this.#adapter   = adapter;
     this.#probe     = assertProbe(probe);
     this.#logger    = logger;
     this.#liveScope = liveScope;
+    this.#effectAuthority = effectAuthority;
   }
 
   /** Current desired revision — convenience for diagnostics and tests. */
@@ -193,7 +197,12 @@ export class ConvergenceEngine {
     if (!desired.requestedMediaIdentity) return null;
 
     if (physical.mediaIdentity !== desired.requestedMediaIdentity) {
-      return { kind: ConvergenceStep.LOAD, entry: desired.requestedMediaEntry, resumePolicy: desired.resumePolicy };
+      return {
+        kind: ConvergenceStep.LOAD,
+        entry: desired.requestedMediaEntry,
+        options: desired.requestedOptions,
+        resumePolicy: desired.resumePolicy,
+      };
     }
 
     if (
@@ -218,12 +227,12 @@ export class ConvergenceEngine {
   }
 
   /**
-   * Dispatch a step, revalidating the desired revision at the effect boundary.
+   * Dispatch a step, revalidating the desired revision at the dispatch boundary.
    * Tracks in-flight count so convergence runs only once everything has settled.
    */
   #dispatchTracked(step, revisionAtPlan, origin) {
     if (this.#disposed) return Promise.resolve(null);
-    // INV-DESIRED-1 / INV-DESIRED-3 — effect-boundary revalidation.
+    // INV-DESIRED-1 / INV-DESIRED-3 — dispatch-boundary revalidation.
     if (this.#store.revision !== revisionAtPlan) {
       this.#logger?.emit({
         type: "CONVERGENCE_STEP_SKIPPED_STALE",
@@ -236,7 +245,11 @@ export class ConvergenceEngine {
     if (step.kind === ConvergenceStep.SEEK) this.#seekSettledRevision = revisionAtPlan;
 
     this.#inFlight += 1;
-    const settled = Promise.resolve(this.#adapter.dispatchStep(step))
+    const authority = this.#effectAuthority.capture({
+      desiredRevision: revisionAtPlan,
+      mediaIdentity: this.#store.current.requestedMediaIdentity,
+    });
+    const settled = Promise.resolve(this.#adapter.dispatchStep(step, authority))
       .catch((err) => {
         this.#logger?.emit({
           type: "CONVERGENCE_STEP_ERROR", step: step.kind, error: err?.message ?? String(err),
@@ -282,7 +295,12 @@ export class ConvergenceEngine {
   static #stepForIntent(intent, state) {
     switch (intent.type) {
       case CoreCommandType.PLAY:
-        return { kind: ConvergenceStep.LOAD, entry: state.requestedMediaEntry, resumePolicy: state.resumePolicy };
+        return {
+          kind: ConvergenceStep.LOAD,
+          entry: state.requestedMediaEntry,
+          options: state.requestedOptions,
+          resumePolicy: state.resumePolicy,
+        };
       case CoreCommandType.PAUSE:
         return { kind: ConvergenceStep.PAUSE };
       case CoreCommandType.RESUME:

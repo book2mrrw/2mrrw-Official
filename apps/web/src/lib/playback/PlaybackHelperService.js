@@ -9,6 +9,7 @@ import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
 import { LIFECYCLE_AUDIO_TRUTH_STATES, PREVIEW_HARD_CAP_SEC } from "@/lib/playback/PlaybackEventHandlers";
 import { notifyMediaEngineBridge } from "@/media/mediaEngineBridge";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
+import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 import {
   resumeWebAudioContextIfSuspended,
   ensureWebAudioRunning,
@@ -1249,7 +1250,15 @@ export function createPlaybackHelpers(initialDeps) {
             const stillUserStopped =
               self._deps.userIntentPausedRef.current || self._deps.userPausedRef.current;
             if (!stillHasIntent || stillUserStopped || !elem || !elem.paused) return;
-            void elem.play().catch(() => {
+            void playAudioIfNotPaused(elem, true, {
+              command: PLAYBACK_COMMANDS.RECOVER,
+              requestId: self._deps.activeCommandRef.current?.requestId || null,
+              state: current,
+              context: { source: "audio_context_reconnect" },
+              effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
+              mediaIdentity: current.currentTrack?.id ?? current.currentTrack?.slug ?? null,
+            }).then((played) => {
+              if (played) return;
               void playbackStateMachine.transition(
                 PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
                 { reason: "audio_context_reconnect_stall", resumeAfter: true }
@@ -1301,7 +1310,7 @@ export function createPlaybackHelpers(initialDeps) {
       }
     },
 
-    async attemptLightweightPlaybackResume(source) {
+    async attemptLightweightPlaybackResume(source, effectContext = {}) {
       const audio = self._deps.audioRef.current;
       const track = self._deps.stateRef.current.currentTrack;
       if (
@@ -1336,6 +1345,13 @@ export function createPlaybackHelpers(initialDeps) {
             requestId: self._deps.activeCommandRef.current?.requestId || null,
             state: self._deps.stateRef.current,
             context: { source, lightweight: true },
+            effectAuthorityMode:
+              effectContext.effectAuthorityMode ?? PhysicalEffectAuthorityMode.CORE_CURRENT,
+            effectGuardRequired: effectContext.effectGuardRequired === true,
+            effectAuthority: effectContext.effectAuthority ?? null,
+            canApplyEffect: effectContext.canApplyEffect,
+            mediaIdentity:
+              effectContext.mediaIdentity ?? track.id ?? track.slug ?? null,
           });
         }
 

@@ -19,6 +19,7 @@ import {
 } from "@/lib/playback/audibility";
 import { resetPlaybackTelemetry } from "@/lib/control-system/playback";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
+import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 import { AUDIO_ENGINE_EVENTS } from "@/lib/audio/AudioEngineInterface";
 import {
   createPlaybackEventHandlers,
@@ -47,7 +48,10 @@ import {
 import { logPlayback } from "@/lib/observability/client-log";
 import { savePlaybackSession, fetchQueueFromServer, loadPlaybackSession } from "@/lib/playback/session-memory";
 import { savePlaybackPosition } from "@/lib/playback/position-memory";
-import { isNearEndRestorePosition } from "@/lib/audio/audio-element-utils";
+import {
+  isNearEndRestorePosition,
+  playAudioIfNotPaused,
+} from "@/lib/audio/audio-element-utils";
 import { resolveTrackAccess, libraryStreamRedirectSrc } from "@/lib/music-access";
 import {
   fetchLibraryStream,
@@ -404,7 +408,14 @@ export function usePlaybackEffects({
             !userIntentPausedRef.current &&
             !userPausedRef.current
           ) {
-            void _audio.play().catch(() => {});
+            void playAudioIfNotPaused(_audio, true, {
+              command: PLAYBACK_COMMANDS.RECOVER,
+              requestId: activeCommandRef.current?.requestId || null,
+              state: _s,
+              context: { source: "gesture_os_interruption_recovery" },
+              effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
+              mediaIdentity: _s.currentTrack?.id ?? _s.currentTrack?.slug ?? null,
+            });
           }
         }
       };
@@ -676,7 +687,10 @@ export function usePlaybackEffects({
                 !userPausedRef.current &&
                 !userIntentPausedRef.current
               ) {
-                void attemptLightweightPlaybackResume("os_suspended_recovery");
+                void attemptLightweightPlaybackResume(
+                  "os_suspended_recovery",
+                  { effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT },
+                );
               }
             }
           };
@@ -1092,7 +1106,10 @@ export function usePlaybackEffects({
             }
 
             if (transport.intact && resumeAfter) {
-              const lightOk = await attemptLightweightPlaybackResume("visibility_return");
+              const lightOk = await attemptLightweightPlaybackResume(
+                "visibility_return",
+                { effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT },
+              );
               if (lightOk) {
                 logLifecycleTransportHealthy({
                   source: "visibility_return",

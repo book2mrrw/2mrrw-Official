@@ -21,6 +21,7 @@ import { dispatchPlaybackCommand } from "./command-dispatcher";
 import { PLAYBACK_COMMANDS } from "./playback-commands";
 import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
 import { getAudioEngineRuntime } from "./audio-engine-runtime";
+import { getProductionPlaybackCore } from "@/lib/playback-core/production/wireProductionCore";
 
 const INTERACTIVE_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT", "BUTTON"]);
 
@@ -46,16 +47,17 @@ function handleKey(e) {
 
   const audio = getAudioElement();
   const engine = getWebAudioEngine();
+  const playbackCore = getProductionPlaybackCore();
 
   switch (e.code) {
     case "Space": {
       e.preventDefault();
       if (!audio) return;
       if (audio.paused) {
-        void dispatchPlaybackCommand(PLAYBACK_COMMANDS.RESUME);
+        playbackCore.port.resume();
         engine.resumeSync();
       } else {
-        void dispatchPlaybackCommand(PLAYBACK_COMMANDS.PAUSE);
+        playbackCore.port.pause();
       }
       break;
     }
@@ -64,10 +66,14 @@ function handleKey(e) {
       e.preventDefault();
       if (!audio) return;
       if (e.shiftKey) {
-        void dispatchPlaybackCommand(PLAYBACK_COMMANDS.PREV_TRACK);
+        void dispatchPlaybackCommand(
+          PLAYBACK_COMMANDS.PREV_TRACK,
+          {},
+          { serial: false, cancelActiveStream: true },
+        );
       } else {
         const next = Math.max(0, (audio.currentTime || 0) - 10);
-        void dispatchPlaybackCommand(PLAYBACK_COMMANDS.SEEK, { time: next }, { serial: false });
+        playbackCore.port.seek({ positionSeconds: next });
       }
       break;
     }
@@ -76,11 +82,15 @@ function handleKey(e) {
       e.preventDefault();
       if (!audio) return;
       if (e.shiftKey) {
-        void dispatchPlaybackCommand(PLAYBACK_COMMANDS.NEXT_TRACK);
+        void dispatchPlaybackCommand(
+          PLAYBACK_COMMANDS.NEXT_TRACK,
+          {},
+          { serial: false, cancelActiveStream: true },
+        );
       } else {
         const dur = isFinite(audio.duration) ? audio.duration : 0;
         const next = Math.min(dur, (audio.currentTime || 0) + 10);
-        void dispatchPlaybackCommand(PLAYBACK_COMMANDS.SEEK, { time: next }, { serial: false });
+        playbackCore.port.seek({ positionSeconds: next });
       }
       break;
     }
