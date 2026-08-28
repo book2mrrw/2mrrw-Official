@@ -31,6 +31,7 @@ import { clearMediaResolverCaches } from "@/lib/media/cache-invalidation";
 import { buildHLSPrefix } from "@/lib/hls/derive-key";
 import { r2Client, R2_BUCKET, listR2Objects } from "@/lib/storage/r2";
 import { invalidateManifestCache } from "@/lib/server/hls-manifest-cache";
+import { AUDIO_SEGMENT_DURATION_SECONDS } from "@/lib/hls/playback-quality-policy";
 
 const VALID_RELEASE_TYPES = new Set([
   "singles", "albums", "features", "mixtapes-and-eps", "eps",
@@ -203,7 +204,7 @@ export async function POST(req) {
       status:                "pending",
       priority:              1, // highest — manual refresh overrides queue ordering
       bitrates:              DEFAULT_BITRATES,
-      segment_duration_secs: 6,
+      segment_duration_secs: AUDIO_SEGMENT_DURATION_SECONDS,
       attempt_count:         0,
       error_message:         null,
       worker_id:             null,

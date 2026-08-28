@@ -7,6 +7,21 @@ import {
   positiveFrameRate,
   safeCodecs,
 } from "../manifest-contract.js";
+import {
+  AUDIO_FORWARD_BUFFER_SECONDS,
+  AUDIO_INITIAL_BANDWIDTH_ESTIMATE,
+  AUDIO_MAX_FORWARD_BUFFER_SECONDS,
+  AUDIO_PREFETCH_BUFFER_SECONDS,
+  AUDIO_SEGMENT_DURATION_SECONDS,
+  AUDIO_STARTUP_BUFFER_SECONDS,
+  VIDEO_SEGMENT_DURATION_SECONDS,
+  isLikelyVideoSourceKey,
+  segmentDurationForSourceKey,
+} from "../playback-quality-policy.js";
+import {
+  parseHlsSegments,
+  parseHlsStartupVariantUrl,
+} from "../../audio/hls-segment-prefetcher.js";
 
 describe("canonical HLS manifest contract", () => {
   test("all playlist routes receive the complete cached row shape", () => {
@@ -78,5 +93,57 @@ describe("canonical HLS manifest contract", () => {
     assert.deepEqual(getExactSegmentDurations(manifest, "96k", 2), [6.013, 5.99]);
     assert.equal(getExactSegmentDurations(manifest, "96k", 3), null);
     assert.equal(getExactSegmentDurations({ segment_durations: { "96k": [6, 0] } }, "96k", 2), null);
+  });
+});
+
+describe("production HLS quality policy", () => {
+  test("uses short media-specific segments and a bounded audio buffer", () => {
+    assert.equal(AUDIO_SEGMENT_DURATION_SECONDS, 2);
+    assert.equal(VIDEO_SEGMENT_DURATION_SECONDS, 4);
+    assert.equal(AUDIO_STARTUP_BUFFER_SECONDS, 1.5);
+    assert.equal(AUDIO_PREFETCH_BUFFER_SECONDS, 6);
+    assert.equal(AUDIO_FORWARD_BUFFER_SECONDS, 30);
+    assert.equal(AUDIO_MAX_FORWARD_BUFFER_SECONDS, 45);
+    assert.equal(AUDIO_INITIAL_BANDWIDTH_ESTIMATE, 250_000);
+  });
+
+  test("queue hints distinguish video masters without trusting request tuning", () => {
+    assert.equal(isLikelyVideoSourceKey("vault/drop/master.MOV"), true);
+    assert.equal(isLikelyVideoSourceKey("audio/single/master.m4a"), false);
+    assert.equal(segmentDurationForSourceKey("vault/drop/master.webm"), 4);
+    assert.equal(segmentDurationForSourceKey("audio/single/master.wav"), 2);
+  });
+
+  test("prefetch selects the middle startup rendition by measured bandwidth", () => {
+    const master = [
+      "#EXTM3U",
+      "#EXT-X-STREAM-INF:BANDWIDTH=365000,CODECS=\"mp4a.40.2\"",
+      "high.m3u8",
+      "#EXT-X-STREAM-INF:BANDWIDTH=182000,CODECS=\"mp4a.40.2\"",
+      "middle.m3u8",
+      "#EXT-X-STREAM-INF:BANDWIDTH=108000,CODECS=\"mp4a.40.2\"",
+      "low.m3u8",
+    ].join("\n");
+    assert.equal(
+      parseHlsStartupVariantUrl(master, "https://app.example/api/master.m3u8"),
+      "https://app.example/api/middle.m3u8"
+    );
+  });
+
+  test("prefetch parser preserves exact fragment durations and canonical URLs", () => {
+    const playlist = [
+      "#EXTM3U",
+      "#EXTINF:2.013967,",
+      "https://cdn.example/seg_00001.ts",
+      "#EXTINF:1.990756,",
+      "seg_00002.ts",
+    ].join("\n");
+    assert.deepEqual(
+      parseHlsSegments(playlist, "https://cdn.example/hls/playlist.m3u8"),
+      [
+        { url: "https://cdn.example/seg_00001.ts", duration: 2.013967 },
+        { url: "https://cdn.example/hls/seg_00002.ts", duration: 1.990756 },
+      ]
+    );
   });
 });

@@ -23,7 +23,7 @@
  * Safari guard: isHlsJsActive() in scheduleNextTrackPreload ensures this
  * function is never called on Safari (native HLS, no hls.js).
  *
- * URL resolution: both _parseFirstVariantUrl and _parseSegmentUrls resolve
+ * URL resolution: both _parseStartupVariantUrl and _parseSegments resolve
  * relative URLs against the final response URL (Response.url, post-redirect).
  * CDN HLS playlists overwhelmingly use absolute URLs, but relative paths in
  * dev/staging or after CDN URL rewrites are now handled correctly.
@@ -36,11 +36,14 @@
  */
 
 import { setSegment, clearSegmentCache } from "./hls-segment-cache";
+import {
+  AUDIO_INITIAL_BANDWIDTH_ESTIMATE,
+  AUDIO_PREFETCH_BUFFER_SECONDS,
+} from "@/lib/hls/playback-quality-policy";
 
-// Number of segments to prefetch — 3 × 6 s/segment = 18 s of audio.
-// Enough to satisfy the 3-second buffer gate instantly and give hls.js
-// time to download remaining segments before the buffer runs dry.
-const MAX_PRELOAD_SEGS = 3;
+// Safety bound for malformed playlists. Normal profile-v3 audio needs three
+// 2-second fragments; legacy 6-second playlists need only one.
+const MAX_PRELOAD_SEGS = 6;
 
 let _activeKey = null;
 let _activeController = null;
@@ -88,11 +91,10 @@ export async function prefetchHlsSegmentsForTrack(slug, trackSlug = null) {
     const masterText = await masterResp.text();
     if (signal.aborted) return;
 
-    // 2. Pick the first variant URL from the master playlist.
-    //    The server emits variants in descending bitrate order (320k first),
-    //    matching hls.js's startLevel: -1 choice on high-bandwidth connections.
-    //    Relative variant URLs are resolved against masterBaseUrl.
-    const variantUrl = _parseFirstVariantUrl(masterText, masterBaseUrl);
+    // 2. Pick the startup rendition closest to the player's conservative
+    //    initial bandwidth estimate. This aligns prefetch with hls.js instead
+    //    of always downloading the largest fragment before bandwidth is known.
+    const variantUrl = parseHlsStartupVariantUrl(masterText, masterBaseUrl);
     if (!variantUrl) return;
 
     // 3. Fetch the variant (media) playlist.
@@ -114,14 +116,20 @@ export async function prefetchHlsSegmentsForTrack(slug, trackSlug = null) {
     //    Segment URLs are public Cloudflare CDN URLs — AES-128 encrypted,
     //    usable by anyone, decryptable only with the key from /api/library/hls/key.
     //    Relative segment URLs are resolved against variantBaseUrl.
-    const segUrls = _parseSegmentUrls(variantText, variantBaseUrl);
-    for (let i = 0; i < Math.min(MAX_PRELOAD_SEGS, segUrls.length); i++) {
+    const segments = parseHlsSegments(variantText, variantBaseUrl);
+    let prefetchedSeconds = 0;
+    for (let i = 0; i < Math.min(MAX_PRELOAD_SEGS, segments.length); i++) {
+      if (prefetchedSeconds >= AUDIO_PREFETCH_BUFFER_SECONDS) break;
       if (signal.aborted) break;
       try {
-        const segResp = await fetch(segUrls[i], { signal });
+        const segment = segments[i];
+        const segResp = await fetch(segment.url, { signal });
         if (!segResp.ok || signal.aborted) break;
         const buf = await segResp.arrayBuffer();
-        if (!signal.aborted) setSegment(segUrls[i], buf);
+        if (!signal.aborted) {
+          setSegment(segment.url, buf);
+          prefetchedSeconds += segment.duration;
+        }
       } catch {
         break; // non-fatal — hls.js falls back to CDN on cache miss
       }
@@ -149,17 +157,36 @@ export async function prefetchHlsSegmentsForTrack(slug, trackSlug = null) {
  * @param {string} baseUrl  Final URL of the master playlist response (Response.url)
  * @returns {string|null}
  */
-function _parseFirstVariantUrl(masterM3U8, baseUrl) {
+export function parseHlsStartupVariantUrl(masterM3U8, baseUrl) {
+  const variants = [];
+  let pendingBandwidth = null;
   for (const line of masterM3U8.split("\n")) {
     const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
-    try {
-      return new URL(t, baseUrl).href;
-    } catch {
-      // Malformed line — skip and keep looking
+    if (!t) continue;
+    if (t.startsWith("#EXT-X-STREAM-INF:")) {
+      const match = t.match(/(?:^|[:,])BANDWIDTH=(\d+)/);
+      pendingBandwidth = match ? Number(match[1]) : null;
+      continue;
     }
+    if (t.startsWith("#")) continue;
+    try {
+      variants.push({
+        url: new URL(t, baseUrl).href,
+        bandwidth: Number.isFinite(pendingBandwidth) ? pendingBandwidth : null,
+      });
+    } catch {
+      // Malformed line — skip and keep looking.
+    }
+    pendingBandwidth = null;
   }
-  return null;
+  if (!variants.length) return null;
+  const measured = variants.filter((variant) => Number.isFinite(variant.bandwidth));
+  if (!measured.length) return variants[0].url;
+  const withinEstimate = measured
+    .filter((variant) => variant.bandwidth <= AUDIO_INITIAL_BANDWIDTH_ESTIMATE)
+    .sort((a, b) => b.bandwidth - a.bandwidth);
+  if (withinEstimate.length) return withinEstimate[0].url;
+  return measured.sort((a, b) => a.bandwidth - b.bandwidth)[0].url;
 }
 
 /**
@@ -171,19 +198,27 @@ function _parseFirstVariantUrl(masterM3U8, baseUrl) {
  * @param {string} baseUrl  Final URL of the variant playlist response (Response.url)
  * @returns {string[]}
  */
-function _parseSegmentUrls(variantM3U8, baseUrl) {
-  const urls = [];
+export function parseHlsSegments(variantM3U8, baseUrl) {
+  const segments = [];
+  let pendingDuration = 0;
   for (const line of variantM3U8.split("\n")) {
     const t = line.trim();
-    if (!t || t.startsWith("#")) continue;
+    if (!t) continue;
+    if (t.startsWith("#EXTINF:")) {
+      const duration = Number.parseFloat(t.slice("#EXTINF:".length).split(",")[0]);
+      pendingDuration = Number.isFinite(duration) && duration > 0 ? duration : 0;
+      continue;
+    }
+    if (t.startsWith("#")) continue;
     try {
       const url = new URL(t, baseUrl).href;
       if (url.startsWith("http://") || url.startsWith("https://")) {
-        urls.push(url);
+        segments.push({ url, duration: pendingDuration || 0 });
       }
     } catch {
       // Skip unparseable lines
     }
+    pendingDuration = 0;
   }
-  return urls;
+  return segments;
 }

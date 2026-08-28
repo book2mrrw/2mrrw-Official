@@ -134,12 +134,17 @@ test("A.D DB row canonicalizes case-sensitive bundled artwork without changing o
   assert.equal(tbh.baseCover, "/images/albums/tbh.jpg");
 });
 
-test("catalog video cards wire a static fallback through both render branches", () => {
+test("catalog video cards delegate fallback and decoder budgeting to CoverArt", () => {
   const source = readFileSync(path.join(process.cwd(), "src/components/home/CatalogGrid.js"), "utf8");
+  const coverArt = readFileSync(path.join(process.cwd(), "src/components/ui/CoverArt.js"), "utf8");
   assert.match(source, /const staticFallback = mediaItem\?\.baseCover/);
-  assert.match(source, /poster=\{staticFallback \|\| undefined\}/);
-  assert.match(source, /src=\{videoFailed \? staticFallback : coverDisplay\.src\}/);
+  assert.match(source, /src=\{coverDisplay\.src\}/);
   assert.match(source, /baseCover=\{staticFallback\}/);
+  assert.match(source, /type=\{coverDisplay\.type \|\| mediaItem\.coverArtType\}/);
+  assert.doesNotMatch(source, /<video/);
+  assert.match(coverArt, /poster=\{poster \|\| undefined\}/);
+  assert.match(coverArt, /preload="none"/);
+  assert.match(coverArt, /VRM\.requestPlay/);
 });
 
 test("2MRRW Radio renders four distinct canonical motion artworks with static failure posters", () => {

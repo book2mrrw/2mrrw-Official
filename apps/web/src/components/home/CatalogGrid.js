@@ -37,7 +37,6 @@ function CatalogCardCoverSurface({
   onHintPlay,
   accountState,
 }) {
-  const [videoFailed,      setVideoFailed]      = useState(false);
   const [momentActive,     setMomentActive]     = useState(false);
   const [fullVisualOpen,   setFullVisualOpen]   = useState(false);
   const [momentScale,      setMomentScale]      = useState(1);
@@ -162,25 +161,13 @@ function CatalogCardCoverSurface({
       {...artHandlers}
     >
       {/* Animated cover art / static cover */}
-      {!videoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video" ? (
-        <video
-          src={mediaItem?.video || mediaItem?.visual || undefined}
-          poster={staticFallback || undefined}
-          autoPlay muted loop playsInline preload="auto"
-          webkit-playsinline="true"
-          onError={() => setVideoFailed(true)}
-          onStalled={() => setVideoFailed(true)}
-          style={{ backgroundColor: "#0a0a0a", width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block", transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s", pointerEvents: "none" }}
-        />
-      ) : (
-        <CoverArt
-          src={videoFailed ? staticFallback : coverDisplay.src}
-          baseCover={staticFallback}
-          type={videoFailed ? "image" : (coverDisplay.type || mediaItem.coverArtType)}
-          alt="" width="100%" height="auto"
-          style={{ aspectRatio: "1/1", transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s", display: "block" }}
-        />
-      )}
+      <CoverArt
+        src={coverDisplay.src}
+        baseCover={staticFallback}
+        type={coverDisplay.type || mediaItem.coverArtType}
+        alt="" width="100%" height="auto"
+        style={{ aspectRatio: "1/1", transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s", display: "block" }}
+      />
 
       {/* Visual Moment overlay — renders over cover during hold */}
       {hasVisualMoment && primaryAsset && (

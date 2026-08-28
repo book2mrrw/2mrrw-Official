@@ -25,20 +25,12 @@ import {
   measureBandwidth,
   normalizedVideoSource,
   parseMediaPlaylist,
+  segmentDurationForMediaKind,
   selectVideoRenditions,
 } from "./rendition-contract.js";
 
 const FFMPEG_BIN = process.env.FFMPEG_PATH || "ffmpeg";
 const FFPROBE_BIN = process.env.FFPROBE_PATH || "ffprobe";
-const DEFAULT_SEGMENT_DURATION = 6;
-
-function segmentDurationForJob(job) {
-  const value = Number(job?.segment_duration_secs);
-  return Number.isInteger(value) && value >= 2 && value <= 10
-    ? value
-    : DEFAULT_SEGMENT_DURATION;
-}
-
 function deriveKey(slug, trackSlug) {
   const secret = process.env.HLS_MASTER_SECRET;
   if (!secret) throw new Error("HLS_MASTER_SECRET is required");
@@ -205,8 +197,6 @@ export async function transcode({ job }) {
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `hls-${jobId}-`));
   const sourcePath = path.join(tmpDir, "source-media");
-  const segmentDuration = segmentDurationForJob(job);
-
   try {
     const sourceStream = await downloadStream(sourceKey);
     await pipeline(sourceStream, fs.createWriteStream(sourcePath));
@@ -219,6 +209,9 @@ export async function transcode({ job }) {
     }
 
     const mediaKind = videoSource ? "video" : "audio";
+    // The worker is the final authority because it probes the actual source.
+    // Queue metadata cannot force pathological segment sizes.
+    const segmentDuration = segmentDurationForMediaKind(mediaKind);
     const { key, iv } = deriveKey(slug, trackSlug);
     const keyInfoFile = await writeKeyInfoFile(tmpDir, key, iv);
     const segmentCounts = {};
@@ -312,7 +305,7 @@ export async function transcode({ job }) {
         : {
             audio_codec: probe.streams.find((stream) => stream?.codec_type === "audio")?.codec_name || null,
           },
-      transcode_profile_version: 2,
+      transcode_profile_version: 3,
     };
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });

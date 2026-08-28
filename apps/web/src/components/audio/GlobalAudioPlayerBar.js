@@ -212,16 +212,37 @@ function MiniCoverHit({
     elementRef: coverRef,
   });
 
-  // Set video src imperatively to avoid re-mount flicker on track change.
+  // Record the next visual identity without starting a media request. Audio is
+  // the critical path; the animated cover is attached only after playback has
+  // settled so it cannot contend with manifests, keys, or the first fragment.
   useLayoutEffect(() => {
     const el = videoRef.current;
     if (!el || !animatedCoverUrl) return;
     if (el.getAttribute("data-src") !== animatedCoverUrl) {
       el.setAttribute("data-src", animatedCoverUrl);
-      el.src = animatedCoverUrl;
+      if (!el.paused) el.pause();
+      el.removeAttribute("src");
       el.load();
     }
   }, [animatedCoverUrl]);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el || !animatedCoverUrl || !isPlaying) return;
+    const timer = setTimeout(() => {
+      if (el.getAttribute("data-src") !== animatedCoverUrl) return;
+      if (el.src !== animatedCoverUrl) {
+        el.src = animatedCoverUrl;
+        el.preload = "auto";
+        el.load();
+      }
+      el.play().catch(() => {});
+    }, 1000);
+    return () => {
+      clearTimeout(timer);
+      if (!el.paused) el.pause();
+    };
+  }, [animatedCoverUrl, isPlaying]);
 
   const letter = (title && String(title).trim()[0]) || "♪";
   const showVideo = Boolean(animatedCoverUrl) && !videoFailed;
@@ -253,11 +274,11 @@ function MiniCoverHit({
       {showVideo ? (
         <video
           ref={videoRef}
-          autoPlay
           loop
           muted
           playsInline
-          preload="auto"
+          preload="none"
+          poster={baseCoverUrl || undefined}
           className="player-bar-cover-img player-bar-cover-img--base"
           onError={() => markFailed(videoAssetKey)}
         />

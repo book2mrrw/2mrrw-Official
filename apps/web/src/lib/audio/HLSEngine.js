@@ -29,6 +29,12 @@ let _prefetchLoaderClass = null;
 import { isPlaybackTraceEnabled } from "@/lib/diagnostics/playback-trace";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 import { createPrefetchLoaderClass } from "./hls-prefetch-loader";
+import {
+  AUDIO_FORWARD_BUFFER_SECONDS,
+  AUDIO_INITIAL_BANDWIDTH_ESTIMATE,
+  AUDIO_MAX_BUFFER_BYTES,
+  AUDIO_MAX_FORWARD_BUFFER_SECONDS,
+} from "@/lib/hls/playback-quality-policy";
 
 async function importHls() {
   if (typeof window === "undefined") return null;
@@ -169,21 +175,19 @@ export class HLSEngine {
       lowLatencyMode:             false,
 
       // Buffer targets — music is VOD, prioritise uninterrupted playback over low latency
-      maxBufferLength:            60,         // seconds of forward buffer
-      maxMaxBufferLength:         120,
-      maxBufferSize:              20 * 1000 * 1000, // 20 MB — music is mono/stereo; 60 MB was 3× excess
-      backBufferLength:           30,
+      maxBufferLength:            AUDIO_FORWARD_BUFFER_SECONDS,
+      maxMaxBufferLength:         AUDIO_MAX_FORWARD_BUFFER_SECONDS,
+      maxBufferSize:              AUDIO_MAX_BUFFER_BYTES,
+      backBufferLength:           15,
 
       // ABR — let hls.js pick the starting level via its bandwidth estimate rather
       // than assuming index 0 = highest bitrate. Master playlist ordering is not
       // guaranteed; startLevel: -1 is ordering-independent. The MANIFEST_PARSED
       // handler below remaps _currentLevel by actual bitrate after the manifest lands.
       startLevel:                 -1,
-      // 500 Kbps conservative start: hls.js probes real bandwidth and upgrades quickly
-      // (abrBandWidthUpFactor: 0.7), but a 3 Mbps cold-start estimate selected 320k
-      // immediately and caused multi-second stalls on 3G/slow WiFi before the first
-      // segment arrived. 500 Kbps starts at 96k, buffers instantly, then climbs to 320k.
-      abrEwmaDefaultEstimate:     500_000,
+      // Conservative middle-rendition start: hls.js measures the first fragment
+      // and upgrades quickly without making the largest fragment a prerequisite.
+      abrEwmaDefaultEstimate:     AUDIO_INITIAL_BANDWIDTH_ESTIMATE,
       abrBandWidthFactor:         0.95,
       abrBandWidthUpFactor:       0.7,
 

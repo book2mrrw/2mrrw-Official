@@ -46,6 +46,7 @@ import { preloadCoverImage } from "@/lib/media/preload";
 import { getHLSEngine } from "@/lib/audio/HLSEngine";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 import { getQualityLevel as getHLSQualityLevel } from "@/lib/audio/network-quality";
+import { AUDIO_STARTUP_BUFFER_SECONDS } from "@/lib/hls/playback-quality-policy";
 import { getResolvedCdnUrl, setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
 import { preloadCsAssets } from "@/lib/audio/cs-assets";
 import { isSamePlaybackTrack } from "@/lib/music-playback";
@@ -881,29 +882,14 @@ export function attachStreamCommands(self) {
           const srcReadyTimeout = isLibraryStreamRedirectSrc(syncSrc) ? 12000 : AUDIO_SRC_READY_TIMEOUT_MS;
           await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: srcReadyTimeout });
         }
-        // Industry-level buffer gate: require readyState >= 4 (HAVE_ENOUGH_DATA) AND
-        // at least 5 s buffered ahead of currentTime before starting playback.
-        //
-        // Why both conditions together:
-        //   • readyState 4 alone fires optimistically when signed URLs share HTTP cache
-        //     with the preload element — real decode buffer can still be < 1 s, causing
-        //     the audible "plays → silence → continues" pattern at 2–3 s in.
-        //   • 5 s ahead covers one full HLS segment (6 s) and gives the decoder enough
-        //     runway to absorb mobile bandwidth variance without stalling.
-        //   • 8 s timeout cap: if network hasn't buffered 5 s in 8 s we start anyway
-        //     (graceful degradation beats infinite spinner). The cap will NOT fire if the
-        //     browser has literally no data yet (readyState 0) — it extends up to 12 s
-        //     in that case to avoid starting into guaranteed silence.
-        //   • Cache-warm preloaded streams pass both conditions in < 5 ms.
+        // Decode-aware startup gate. HLS begins after one complete canonical
+        // fragment; progressive files retain a deeper runway because byte-range
+        // buffering is less predictable across browsers and origins.
         if (!isSameTrack && !streamAbortController.signal.aborted) {
-          // Buffer gate: do not call play() until 3 s of decoded audio is ahead
-          // of currentTime at readyState >= 3 (HAVE_FUTURE_DATA). 3 s covers half
-          // an HLS segment (segments are ~6 s) — the decoder has a full segment's
-          // runway before needing the next one, eliminating the play→stall→resume
-          // double-play pattern caused by starting with only a partial segment
-          // in the buffer. On typical connections this gate clears in < 500 ms.
-          // readyState >= 4 + 5 s caused 5+ second start delays — not used.
-          const MIN_BUF = 3;
+          // Require HAVE_FUTURE_DATA plus the media-specific forward runway.
+          // One canonical 2-second HLS fragment is enough to begin. Progressive
+          // files keep the deeper gate because their buffering is less bounded.
+          const MIN_BUF = hlsDidLoad ? AUDIO_STARTUP_BUFFER_SECONDS : 3;
           const goodBuffer = () => {
             try {
               const buf = audio.buffered;
@@ -945,7 +931,7 @@ export function attachStreamCommands(self) {
               //   more seconds for canplaythrough (browser confirms stall-free playback),
               //   then start regardless as a graceful-degradation last resort.
               //
-              //   isReady() (readyState ≥ 3 AND ≥ 3 s buffered): gate satisfied — fire now.
+              //   isReady(): decoder and media-specific runway are ready — fire now.
               const capId = setTimeout(() => {
                 if (streamAbortController.signal.aborted) { done(); return; }
                 if (isReady()) { done(); return; }

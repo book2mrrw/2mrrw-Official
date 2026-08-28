@@ -191,3 +191,22 @@ test("SLICE-1D protected transport keeps dependency direction Core -> media", ()
     );
   }
 });
+
+test("production playback startup policy stays short, bounded, and audio-first", () => {
+  const policy = read("src/lib/hls/playback-quality-policy.js");
+  const engine = read("src/lib/audio/HLSEngine.js");
+  const stream = read("src/lib/playback/PlaybackStreamCommands.js");
+  const prefetcher = read("src/lib/audio/hls-segment-prefetcher.js");
+  const overlay = read("src/components/music/VisualMomentOverlay.js");
+  const playerBar = read("src/components/audio/GlobalAudioPlayerBar.js");
+
+  assert.match(policy, /AUDIO_SEGMENT_DURATION_SECONDS\s*=\s*2/);
+  assert.match(policy, /AUDIO_FORWARD_BUFFER_SECONDS\s*=\s*30/);
+  assert.match(engine, /maxBufferLength:\s*AUDIO_FORWARD_BUFFER_SECONDS/);
+  assert.match(engine, /abrEwmaDefaultEstimate:\s*AUDIO_INITIAL_BANDWIDTH_ESTIMATE/);
+  assert.match(stream, /hlsDidLoad\s*\?\s*AUDIO_STARTUP_BUFFER_SECONDS\s*:\s*3/);
+  assert.match(prefetcher, /prefetchedSeconds\s*>=\s*AUDIO_PREFETCH_BUFFER_SECONDS/);
+  assert.match(overlay, /preload="none"/);
+  assert.match(playerBar, /const timer = setTimeout/);
+  assert.match(playerBar, /preload="none"/);
+});

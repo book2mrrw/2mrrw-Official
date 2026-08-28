@@ -72,10 +72,14 @@ function VisualMomentOverlay({ active, asset, releaseSlug, onSwipeUp, onVideoErr
   // ── Video lifecycle ────────────────────────────────────────────────────────
   useLayoutEffect(() => {
     const el = videoRef.current;
-    if (!el || !src) return;
-    el.src = src;
-    el.load();
-  }, [src]);
+    if (!el || !src || !active) return;
+    if (el.getAttribute("data-src") !== src) {
+      el.setAttribute("data-src", src);
+      el.src = src;
+      el.preload = "auto";
+      el.load();
+    }
+  }, [active, src]);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -121,8 +125,8 @@ function VisualMomentOverlay({ active, asset, releaseSlug, onSwipeUp, onVideoErr
 
   // Cleanup VRM on unmount
   useEffect(() => {
+    const el = videoRef.current;
     return () => {
-      const el = videoRef.current;
       if (el) {
         VRM.requestPause(el);
         VRM.unregister(el);
@@ -155,7 +159,7 @@ function VisualMomentOverlay({ active, asset, releaseSlug, onSwipeUp, onVideoErr
         ref={videoRef}
         loop
         playsInline
-        preload="auto"
+        preload="none"
         poster={poster || undefined}
         onError={handleError}
         webkit-playsinline="true"

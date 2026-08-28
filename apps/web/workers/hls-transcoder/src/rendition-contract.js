@@ -4,6 +4,14 @@
  */
 
 export const AUDIO_RENDITION_LABELS = Object.freeze(["320k", "160k", "96k"]);
+export const AUDIO_SEGMENT_DURATION_SECONDS = 2;
+export const VIDEO_SEGMENT_DURATION_SECONDS = 4;
+
+export function segmentDurationForMediaKind(mediaKind) {
+  if (mediaKind === "audio") return AUDIO_SEGMENT_DURATION_SECONDS;
+  if (mediaKind === "video") return VIDEO_SEGMENT_DURATION_SECONDS;
+  throw new Error(`Unsupported HLS media kind: ${mediaKind}`);
+}
 
 export const VIDEO_RENDITIONS = Object.freeze([
   Object.freeze({

@@ -23,6 +23,7 @@ import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { resolvePlaybackKey } from "@/lib/playback/resolve-playback-key";
 import { buildHLSPrefix } from "@/lib/hls/derive-key";
+import { segmentDurationForSourceKey } from "@/lib/hls/playback-quality-policy";
 
 const VALID_RELEASE_TYPES = new Set([
   "singles", "albums", "features", "mixtapes-and-eps", "eps", "vault",
@@ -91,8 +92,6 @@ export async function POST(req) {
     const bitrates    = Array.isArray(t.bitrates)
       ? t.bitrates.filter((b) => VALID_BITRATES.includes(b))
       : VALID_BITRATES;
-    const segmentDuration = Number.isInteger(t.segmentDurationSecs) ? t.segmentDurationSecs : 6;
-
     if (!slug) {
       errors.push({ slug: t.slug, error: "slug required" });
       continue;
@@ -103,6 +102,10 @@ export async function POST(req) {
       errors.push({ slug, trackSlug, error: "Could not resolve source audio key from R2" });
       continue;
     }
+
+    // Segment duration is a canonical media policy, not caller-controlled
+    // tuning. The worker probes the source and enforces the policy again.
+    const segmentDuration = segmentDurationForSourceKey(sourceKey);
 
     const hlsPrefix = buildHLSPrefix(slug, trackSlug, releaseType);
 

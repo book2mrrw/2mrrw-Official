@@ -1,14 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  AUDIO_SEGMENT_DURATION_SECONDS,
+  VIDEO_SEGMENT_DURATION_SECONDS,
   buildVideoFfmpegArgs,
   fitWithin,
   measureBandwidth,
   normalizedVideoSource,
   parseFrameRate,
   parseMediaPlaylist,
+  segmentDurationForMediaKind,
   selectVideoRenditions,
 } from "../src/rendition-contract.js";
+
+test("worker enforces canonical segment duration after probing media kind", () => {
+  assert.equal(AUDIO_SEGMENT_DURATION_SECONDS, 2);
+  assert.equal(VIDEO_SEGMENT_DURATION_SECONDS, 4);
+  assert.equal(segmentDurationForMediaKind("audio"), 2);
+  assert.equal(segmentDurationForMediaKind("video"), 4);
+  assert.throws(() => segmentDurationForMediaKind("unknown"));
+});
 
 test("frame-rate parser accepts rational and decimal rates", () => {
   assert.equal(parseFrameRate("30000/1001").toFixed(3), "29.970");
