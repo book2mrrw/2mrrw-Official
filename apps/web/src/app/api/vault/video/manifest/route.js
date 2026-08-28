@@ -43,6 +43,16 @@ const BITRATE_BANDWIDTH = {
   "96k":     108_000,
 };
 
+function positiveInteger(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : fallback;
+}
+
+function positiveFrameRate(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed.toFixed(3) : null;
+}
+
 function cors(req, res) {
   return applyMediaCors(req, res);
 }
@@ -109,7 +119,7 @@ export async function GET(req) {
     manifest = await getOrFetchManifest(contentSlug, null, async () => {
       const { data, error } = await admin
         .from("hls_manifests")
-        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts, poster_key, vtt_key")
+        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts, poster_key, vtt_key, media_kind, segment_durations, rendition_metadata, source_metadata, transcode_profile_version")
         .eq("slug", contentSlug)
         .is("track_slug", null)
         .maybeSingle();
@@ -124,6 +134,9 @@ export async function GET(req) {
   // No manifest → content not yet transcoded to HLS; client falls back to content_url
   if (!manifest) {
     return cors(req, NextResponse.json({ error: "HLS not available for this content" }, { status: 404 }));
+  }
+  if (manifest.media_kind && manifest.media_kind !== "video") {
+    return cors(req, NextResponse.json({ error: "Video HLS not available for this content" }, { status: 404 }));
   }
 
   const bitrates  = manifest.bitrates ?? ["320k", "160k", "96k"];
@@ -157,17 +170,31 @@ export async function GET(req) {
 
   for (let i = 0; i < bitrates.length; i++) {
     const br        = bitrates[i];
-    const bandwidth = BITRATE_BANDWIDTH[br] ?? 2_000_000;
+    const fallbackBandwidth = BITRATE_BANDWIDTH[br] ?? 2_000_000;
+    const metadata = manifest.rendition_metadata?.[br] || {};
+    const averageBandwidth = positiveInteger(metadata.average_bandwidth, null);
+    const bandwidth = positiveInteger(metadata.peak_bandwidth, fallbackBandwidth);
+    const width = positiveInteger(metadata.width, null);
+    const height = positiveInteger(metadata.height, null);
+    const frameRate = positiveFrameRate(metadata.frame_rate);
+    const codecs = typeof metadata.codecs === "string" && metadata.codecs
+      ? metadata.codecs
+      : "avc1.64001f,mp4a.40.2";
     const token     = variantTokens[i];
     const params    = new URLSearchParams({ slug: contentSlug, bitrate: br, token });
     const variantUrl = `${origin}/api/vault/video/variant?${params}`;
 
-    // Video streams include both video and audio tracks (AVC + AAC)
-    const infAttrs = vttKey
-      ? `BANDWIDTH=${bandwidth},CODECS="avc1.64001f,mp4a.40.2",SUBTITLES="subs"`
-      : `BANDWIDTH=${bandwidth},CODECS="avc1.64001f,mp4a.40.2"`;
+    // Version-2 manifests use measured attributes from the completed files.
+    // Legacy rows retain conservative fallbacks until they are re-transcoded.
+    const attributes = [`BANDWIDTH=${bandwidth}`];
+    if (averageBandwidth) attributes.push(`AVERAGE-BANDWIDTH=${averageBandwidth}`);
+    attributes.push(`CODECS="${codecs}"`);
+    if (width && height) attributes.push(`RESOLUTION=${width}x${height}`);
+    if (frameRate) attributes.push(`FRAME-RATE=${frameRate}`);
+    if (vttKey) attributes.push('SUBTITLES="subs"');
+    attributes.push("CLOSED-CAPTIONS=NONE");
 
-    lines.push(`#EXT-X-STREAM-INF:${infAttrs}`, variantUrl);
+    lines.push(`#EXT-X-STREAM-INF:${attributes.join(",")}`, variantUrl);
   }
 
   // Response headers include X-Poster-URL for player pre-loading the poster image

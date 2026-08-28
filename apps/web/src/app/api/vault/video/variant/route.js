@@ -62,7 +62,7 @@ export async function GET(req) {
       const admin = getAdminClient();
       const { data, error } = await admin
         .from("hls_manifests")
-        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts")
+        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts, poster_key, vtt_key, media_kind, segment_durations, rendition_metadata, source_metadata, transcode_profile_version")
         .eq("slug", contentSlug)
         .is("track_slug", null)
         .maybeSingle();
@@ -77,11 +77,18 @@ export async function GET(req) {
   if (!manifest) {
     return cors(req, NextResponse.json({ error: "Manifest not found" }, { status: 404 }));
   }
+  if (manifest.media_kind && manifest.media_kind !== "video") {
+    return cors(req, NextResponse.json({ error: "Video manifest not found" }, { status: 404 }));
+  }
 
   const prefix     = manifest.hls_prefix;
   const segCount   = (manifest.segment_counts?.[bitrate]) ?? 0;
   const segDuration = manifest.segment_duration_secs ?? 6;
   const totalDur   = manifest.duration_seconds ?? 0;
+  const exactDurations = Array.isArray(manifest.segment_durations?.[bitrate])
+    && manifest.segment_durations[bitrate].length === segCount
+    ? manifest.segment_durations[bitrate]
+    : null;
 
   if (segCount === 0) {
     return cors(req, NextResponse.json({ error: "No segments for this bitrate" }, { status: 404 }));
@@ -101,6 +108,7 @@ export async function GET(req) {
     "#EXTM3U",
     "#EXT-X-VERSION:3",
     `#EXT-X-TARGETDURATION:${segDuration}`,
+    "#EXT-X-INDEPENDENT-SEGMENTS",
     "#EXT-X-PLAYLIST-TYPE:VOD",
     "",
     `#EXT-X-KEY:METHOD=AES-128,URI="${keyUrl}",IV=0x${ivHex}`,
@@ -111,9 +119,12 @@ export async function GET(req) {
     const segNum  = String(i + 1).padStart(5, "0");
     const segUrl  = `${R2_CDN}/${prefix}${bitrate}/seg_${segNum}.ts`;
     const isLast  = i === segCount - 1;
-    const segDur  = isLast && totalDur > 0
-      ? Math.max(0.001, totalDur - (segDuration * i)).toFixed(6)
-      : segDuration.toFixed(6);
+    const exactDuration = Number(exactDurations?.[i]);
+    const segDur = Number.isFinite(exactDuration) && exactDuration > 0
+      ? exactDuration.toFixed(6)
+      : isLast && totalDur > 0
+        ? Math.max(0.001, totalDur - (segDuration * i)).toFixed(6)
+        : segDuration.toFixed(6);
 
     lines.push(`#EXTINF:${segDur},`, segUrl);
   }

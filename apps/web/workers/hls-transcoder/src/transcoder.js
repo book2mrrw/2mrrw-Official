@@ -1,21 +1,14 @@
 /**
- * HLS transcoder.
+ * Production HLS transcoder.
  *
- * Given a source audio stream from R2, produces AES-128 encrypted HLS segments
- * for three bitrate tiers (320k / 160k / 96k) using fMP4 (CMAF) containers.
+ * The source object is downloaded exactly once, probed, and routed into one of
+ * two explicit pipelines:
+ *   audio -> AAC-LC MPEG-TS renditions
+ *   video -> source-aware H.264/AAC MPEG-TS renditions
  *
- * Pipeline per bitrate:
- *   R2 download stream → FFmpeg stdin → fMP4 segmenter → AES-128 key file + segments → R2
- *
- * All three bitrates are transcoded serially to avoid saturating the CPU
- * on a single Fly.io machine. Parallelising across machines is handled by
- * the job queue — separate jobs per track.
- *
- * FFmpeg flags:
- *   -hls_segment_type fmp4      → CMAF-compatible fMP4 segments (required for HLS v7)
- *   -hls_flags independent_segments → #EXT-X-INDEPENDENT-SEGMENTS for seek correctness
- *   -hls_key_info_file          → AES-128 encryption at the muxer level
- *   -hls_time 6                 → 6-second target segment duration (music streaming standard)
+ * The video ladder never upscales and never creates duplicate resolutions.
+ * Every rendition is measured after encoding so the manifest API can advertise
+ * real bandwidth, resolution, frame rate, and codec metadata.
  */
 
 import { spawn } from "child_process";
@@ -26,201 +19,302 @@ import crypto from "crypto";
 import { pipeline } from "stream/promises";
 import { logger } from "./logger.js";
 import { downloadStream, upload } from "./r2.js";
+import {
+  AUDIO_RENDITION_LABELS,
+  buildVideoFfmpegArgs,
+  measureBandwidth,
+  normalizedVideoSource,
+  parseMediaPlaylist,
+  selectVideoRenditions,
+} from "./rendition-contract.js";
 
-const FFMPEG_BIN  = process.env.FFMPEG_PATH || "ffmpeg";
-const SEG_DURATION = 6; // seconds
+const FFMPEG_BIN = process.env.FFMPEG_PATH || "ffmpeg";
+const FFPROBE_BIN = process.env.FFPROBE_PATH || "ffprobe";
+const DEFAULT_SEGMENT_DURATION = 6;
 
-/**
- * Derive the AES-128 key and IV for a track.
- * Must match derive-key.js used by /api/library/hls/key.
- * Both use HMAC-SHA256(HLS_MASTER_SECRET, purpose)[0:16].
- */
+function segmentDurationForJob(job) {
+  const value = Number(job?.segment_duration_secs);
+  return Number.isInteger(value) && value >= 2 && value <= 10
+    ? value
+    : DEFAULT_SEGMENT_DURATION;
+}
+
 function deriveKey(slug, trackSlug) {
-  const secret  = process.env.HLS_MASTER_SECRET;
+  const secret = process.env.HLS_MASTER_SECRET;
   if (!secret) throw new Error("HLS_MASTER_SECRET is required");
 
-  const canonical  = trackSlug ? `${slug}:${trackSlug}` : slug;
-  const keyInput   = `2mrrw:hls:${canonical}:key`;
-  const ivInput    = `2mrrw:hls:${canonical}:iv`;
-
-  const key = crypto.createHmac("sha256", secret).update(keyInput).digest().slice(0, 16);
-  const iv  = crypto.createHmac("sha256", secret).update(ivInput).digest().slice(0, 16);
+  const canonical = trackSlug ? `${slug}:${trackSlug}` : slug;
+  const key = crypto.createHmac("sha256", secret)
+    .update(`2mrrw:hls:${canonical}:key`).digest().slice(0, 16);
+  const iv = crypto.createHmac("sha256", secret)
+    .update(`2mrrw:hls:${canonical}:iv`).digest().slice(0, 16);
   return { key, iv };
 }
 
-/**
- * Write a temporary key-info file for FFmpeg's -hls_key_info_file flag.
- * Format (three lines):
- *   <key URI that hls.js will fetch>
- *   <local path to the raw key bytes>
- *   <IV as 32-char hex>
- *
- * The key URI is a placeholder — the actual URL is embedded in the playlist
- * by the variant manifest route, not by FFmpeg.
- */
 async function writeKeyInfoFile(tmpDir, key, iv) {
-  const keyFile    = path.join(tmpDir, "enc.key");
+  const keyFile = path.join(tmpDir, "enc.key");
   const keyInfoFile = path.join(tmpDir, "enc.keyinfo");
-  const ivHex      = iv.toString("hex");
-
   fs.writeFileSync(keyFile, key);
-  // Key URI placeholder — the variant manifest route replaces this with the real signed URL
-  fs.writeFileSync(keyInfoFile, `placeholder\n${keyFile}\n${ivHex}\n`);
-
+  fs.writeFileSync(keyInfoFile, `placeholder\n${keyFile}\n${iv.toString("hex")}\n`);
   return keyInfoFile;
 }
 
-/**
- * Run FFmpeg for a single bitrate, segmenting into fMP4 chunks.
- * Returns { initPath, segmentPaths, durationSeconds }.
- */
-async function transcodeOneBitrate({ sourceStream, bitrate, slug, trackSlug, tmpDir, keyInfoFile }) {
+async function runProcess(command, args, label) {
+  await new Promise((resolve, reject) => {
+    const proc = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stderr = "";
+    proc.stdout.on("data", () => {});
+    proc.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+      if (stderr.length > 64_000) stderr = stderr.slice(-32_000);
+    });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${label} exited ${code}:\n${stderr.slice(-4000)}`));
+    });
+  });
+}
+
+async function probeSource(sourcePath) {
+  const args = ["-v", "error", "-show_streams", "-show_format", "-of", "json", sourcePath];
+  const output = await new Promise((resolve, reject) => {
+    const proc = spawn(FFPROBE_BIN, args, { stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (chunk) => { stdout += chunk.toString(); });
+    proc.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
+    proc.on("error", reject);
+    proc.on("close", (code) => {
+      if (code === 0) resolve(stdout);
+      else reject(new Error(`ffprobe exited ${code}: ${stderr.slice(-2000)}`));
+    });
+  });
+  let parsed;
+  try {
+    parsed = JSON.parse(output);
+  } catch {
+    throw new Error("ffprobe returned invalid JSON");
+  }
+  if (!Array.isArray(parsed.streams) || parsed.streams.length === 0) {
+    throw new Error("Source contains no decodable media streams");
+  }
+  return parsed;
+}
+
+function collectSegments(bitrateDir) {
+  return fs.readdirSync(bitrateDir)
+    .filter((file) => /^seg_\d{5}\.ts$/.test(file))
+    .sort()
+    .map((file) => path.join(bitrateDir, file));
+}
+
+function encodedRenditionResult({ bitrateDir, playlistPath }) {
+  const playlist = parseMediaPlaylist(fs.readFileSync(playlistPath, "utf8"));
+  const segmentPaths = collectSegments(bitrateDir);
+  const bandwidth = measureBandwidth(segmentPaths, playlist.durations, fs.statSync);
+  return { ...playlist, ...bandwidth, segmentPaths };
+}
+
+async function encodeAudioRendition({
+  sourcePath, bitrate, tmpDir, keyInfoFile, segmentDuration, slug, trackSlug,
+}) {
   const bitrateDir = path.join(tmpDir, bitrate);
   fs.mkdirSync(bitrateDir, { recursive: true });
-
-  const segPattern  = path.join(bitrateDir, "seg_%05d.ts");
+  const segmentPattern = path.join(bitrateDir, "seg_%05d.ts");
   const playlistPath = path.join(bitrateDir, "playlist.m3u8");
+  const kbps = Number.parseInt(bitrate.replace("k", ""), 10);
+  if (!AUDIO_RENDITION_LABELS.includes(bitrate) || !Number.isFinite(kbps)) {
+    throw new Error(`Unsupported audio rendition: ${bitrate}`);
+  }
 
-  const kbps = bitrate.replace("k", "");
-
-  const ffmpegArgs = [
-    // Input: piped from stdin (R2 download stream)
-    "-i", "pipe:0",
-
-    // Audio codec: AAC-LC, the universally compatible choice for HLS
-    "-c:a", "aac",
-    "-b:a", `${kbps}k`,
-    "-ac", "2",           // stereo
-    "-ar", "44100",       // 44.1 kHz — CD quality sample rate
-
-    // Output: HLS with MPEG-TS segments (fMP4 AES-128 is not implemented in FFmpeg)
-    "-f", "hls",
-    "-hls_time", String(SEG_DURATION),
-    "-hls_segment_filename", segPattern,
-    "-hls_playlist_type", "vod",
-    "-hls_flags", "independent_segments",
-
-    // AES-128 encryption — supported for MPEG-TS
-    "-hls_key_info_file", keyInfoFile,
-
-    // Write playlist
-    playlistPath,
+  const args = [
+    "-y", "-i", sourcePath,
+    "-map", "0:a:0", "-map_metadata", "-1", "-vn", "-sn", "-dn",
+    "-c:a", "aac", "-profile:a", "aac_low", "-b:a", `${kbps}k`,
+    "-ac", "2", "-ar", "44100",
+    "-f", "hls", "-hls_time", String(segmentDuration),
+    "-hls_segment_filename", segmentPattern,
+    "-hls_playlist_type", "vod", "-hls_flags", "independent_segments",
+    "-hls_key_info_file", keyInfoFile, playlistPath,
   ];
 
-  logger.info("ffmpeg start", { bitrate, slug, trackSlug });
+  logger.info("ffmpeg audio start", { bitrate, slug, trackSlug });
+  await runProcess(FFMPEG_BIN, args, `ffmpeg audio ${bitrate}`);
+  return encodedRenditionResult({ bitrateDir, playlistPath });
+}
 
-  await new Promise((resolve, reject) => {
-    const proc = spawn(FFMPEG_BIN, ffmpegArgs, { stdio: ["pipe", "pipe", "pipe"] });
-
-    let stderr = "";
-    proc.stderr.on("data", (d) => { stderr += d.toString(); });
-    proc.stdout.on("data", () => {}); // unused but must drain
-
-    // Pipe source audio into FFmpeg
-    pipeline(sourceStream, proc.stdin).catch((err) => {
-      // FFmpeg closes stdin when done — ignore EPIPE at end of stream
-      if (err.code !== "EPIPE") {
-        logger.warn("stdin pipeline error", { code: err.code, message: err.message });
-      }
-    });
-
-    proc.on("close", (code) => {
-      if (code !== 0) {
-        const tail = stderr.slice(-2000); // last 2000 chars of FFmpeg output
-        logger.error("ffmpeg failed", { code, bitrate, tail });
-        reject(new Error(`FFmpeg exited ${code} for bitrate ${bitrate}:\n${tail}`));
-      } else {
-        resolve();
-      }
-    });
-
-    proc.on("error", reject);
+async function encodeVideoRendition({
+  sourcePath, rendition, source, tmpDir, keyInfoFile, segmentDuration, slug,
+}) {
+  const bitrateDir = path.join(tmpDir, rendition.label);
+  fs.mkdirSync(bitrateDir, { recursive: true });
+  const segmentPattern = path.join(bitrateDir, "seg_%05d.ts");
+  const playlistPath = path.join(bitrateDir, "playlist.m3u8");
+  const args = buildVideoFfmpegArgs({
+    inputPath: sourcePath,
+    playlistPath,
+    segmentPattern,
+    keyInfoFile,
+    rendition,
+    source,
+    segmentDuration,
   });
 
-  // Parse duration from the generated playlist
-  const playlistText  = fs.readFileSync(playlistPath, "utf8");
-  const durationSeconds = parseDuration(playlistText);
-
-  // Collect segment paths in order
-  const entries = fs.readdirSync(bitrateDir)
-    .filter((f) => f.endsWith(".ts"))
-    .sort();
-  const segmentPaths = entries.map((f) => path.join(bitrateDir, f));
-
-  logger.info("ffmpeg done", { bitrate, segments: segmentPaths.length, durationSeconds });
-
-  return { segmentPaths, durationSeconds };
+  logger.info("ffmpeg video start", {
+    bitrate: rendition.label,
+    slug,
+    width: rendition.width,
+    height: rendition.height,
+    frameRate: source.frameRate,
+  });
+  await runProcess(FFMPEG_BIN, args, `ffmpeg video ${rendition.label}`);
+  return encodedRenditionResult({ bitrateDir, playlistPath });
 }
 
-/** Sum all #EXTINF durations from an HLS playlist string */
-function parseDuration(playlistText) {
-  let total = 0;
-  for (const line of playlistText.split("\n")) {
-    if (line.startsWith("#EXTINF:")) {
-      const val = parseFloat(line.replace("#EXTINF:", "").replace(",", ""));
-      if (!isNaN(val)) total += val;
-    }
+async function uploadSegments(prefix, bitrate, segmentPaths) {
+  for (let index = 0; index < segmentPaths.length; index++) {
+    const segmentNumber = String(index + 1).padStart(5, "0");
+    await upload(
+      `${prefix}${bitrate}/seg_${segmentNumber}.ts`,
+      fs.readFileSync(segmentPaths[index]),
+      "video/mp2t"
+    );
   }
-  return total;
 }
 
-/**
- * Main entry point called by index.js per job.
- *
- * 1. Downloads source audio from R2 once per bitrate (three serial passes).
- * 2. Transcodes to fMP4 segments with AES-128 encryption.
- * 3. Uploads init.mp4 + all seg_XXXXX.m4s to R2.
- * 4. Returns manifest metadata for DB upsert.
- */
+function audioLabelsForJob(job) {
+  const requested = Array.isArray(job?.bitrates)
+    ? job.bitrates.filter((label) => AUDIO_RENDITION_LABELS.includes(label))
+    : [];
+  return requested.length ? requested : [...AUDIO_RENDITION_LABELS];
+}
+
+/** Main worker entry point. */
 export async function transcode({ job }) {
-  const { id: jobId, slug, track_slug: trackSlug, source_key: sourceKey,
-          hls_prefix: prefix, bitrates = ["320k", "160k", "96k"] } = job;
+  const {
+    id: jobId,
+    slug,
+    track_slug: trackSlug,
+    source_key: sourceKey,
+    hls_prefix: prefix,
+  } = job;
+  if (!jobId || !slug || !sourceKey || !prefix) {
+    throw new Error("Transcode job is missing id, slug, source_key, or hls_prefix");
+  }
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `hls-${jobId}-`));
+  const sourcePath = path.join(tmpDir, "source-media");
+  const segmentDuration = segmentDurationForJob(job);
 
   try {
-    const { key, iv } = deriveKey(slug, trackSlug);
-    const keyInfoFile = await writeKeyInfoFile(tmpDir, key, iv);
+    const sourceStream = await downloadStream(sourceKey);
+    await pipeline(sourceStream, fs.createWriteStream(sourcePath));
 
-    const segmentCounts = {};
-    let durationSeconds = 0;
-
-    for (const bitrate of bitrates) {
-      logger.info("transcode bitrate", { jobId, bitrate });
-
-      // Fresh download per bitrate — streaming, not buffered
-      const sourceStream = await downloadStream(sourceKey);
-
-      const { segmentPaths, durationSeconds: dur } = await transcodeOneBitrate({
-        sourceStream, bitrate, slug, trackSlug, tmpDir, keyInfoFile,
-      });
-
-      // Upload MPEG-TS segments
-      for (let i = 0; i < segmentPaths.length; i++) {
-        const segNum = String(i + 1).padStart(5, "0");
-        const segKey = `${prefix}${bitrate}/seg_${segNum}.ts`;
-        await upload(segKey, fs.readFileSync(segmentPaths[i]), "video/mp2t");
-      }
-
-      segmentCounts[bitrate] = segmentPaths.length;
-      if (dur > durationSeconds) durationSeconds = dur; // use the longest (all should match)
-
-      logger.info("bitrate uploaded", { bitrate, segments: segmentPaths.length });
+    const probe = await probeSource(sourcePath);
+    const videoSource = normalizedVideoSource(probe);
+    const hasAudio = probe.streams.some((stream) => stream?.codec_type === "audio");
+    if (!videoSource && !hasAudio) {
+      throw new Error("Source contains neither a video stream nor an audio stream");
     }
 
-    // Manifest metadata returned to index.js for DB upsert
+    const mediaKind = videoSource ? "video" : "audio";
+    const { key, iv } = deriveKey(slug, trackSlug);
+    const keyInfoFile = await writeKeyInfoFile(tmpDir, key, iv);
+    const segmentCounts = {};
+    const segmentDurations = {};
+    const renditionMetadata = {};
+    let durationSeconds = 0;
+    let targetDuration = segmentDuration;
+    let outputBitrates = [];
+
+    if (videoSource) {
+      const renditions = selectVideoRenditions(videoSource, job.bitrates);
+      if (!renditions.length) throw new Error("No compatible video renditions selected");
+      outputBitrates = renditions.map((rendition) => rendition.label);
+
+      for (const rendition of renditions) {
+        const result = await encodeVideoRendition({
+          sourcePath, rendition, source: videoSource, tmpDir, keyInfoFile,
+          segmentDuration, slug,
+        });
+        await uploadSegments(prefix, rendition.label, result.segmentPaths);
+        segmentCounts[rendition.label] = result.segmentPaths.length;
+        segmentDurations[rendition.label] = result.durations;
+        durationSeconds = Math.max(durationSeconds, result.durationSeconds);
+        targetDuration = Math.max(targetDuration, result.targetDuration);
+        renditionMetadata[rendition.label] = {
+          media_kind: "video",
+          width: rendition.width,
+          height: rendition.height,
+          frame_rate: Number(videoSource.frameRate.toFixed(3)),
+          video_codec: "h264",
+          audio_codec: videoSource.hasAudio ? "aac" : null,
+          codecs: videoSource.hasAudio ? `${rendition.codec},mp4a.40.2` : rendition.codec,
+          video_bitrate_kbps: rendition.videoKbps,
+          audio_bitrate_kbps: videoSource.hasAudio ? rendition.audioKbps : null,
+          average_bandwidth: result.averageBandwidth,
+          peak_bandwidth: result.peakBandwidth,
+          total_bytes: result.totalBytes,
+        };
+      }
+    } else {
+      outputBitrates = audioLabelsForJob(job);
+      for (const bitrate of outputBitrates) {
+        const result = await encodeAudioRendition({
+          sourcePath, bitrate, tmpDir, keyInfoFile, segmentDuration, slug, trackSlug,
+        });
+        await uploadSegments(prefix, bitrate, result.segmentPaths);
+        segmentCounts[bitrate] = result.segmentPaths.length;
+        segmentDurations[bitrate] = result.durations;
+        durationSeconds = Math.max(durationSeconds, result.durationSeconds);
+        targetDuration = Math.max(targetDuration, result.targetDuration);
+        const kbps = Number.parseInt(bitrate, 10);
+        renditionMetadata[bitrate] = {
+          media_kind: "audio",
+          audio_codec: "aac",
+          codecs: "mp4a.40.2",
+          sample_rate: 44100,
+          channels: 2,
+          audio_bitrate_kbps: kbps,
+          average_bandwidth: result.averageBandwidth,
+          peak_bandwidth: result.peakBandwidth,
+          total_bytes: result.totalBytes,
+        };
+      }
+    }
+
+    logger.info("transcode complete", {
+      jobId, slug, trackSlug, mediaKind, bitrates: outputBitrates, durationSeconds,
+    });
+
     return {
       slug,
-      track_slug:            trackSlug ?? null,
-      release_type:          job.release_type,
-      hls_prefix:            prefix,
-      bitrates,
-      segment_duration_secs: SEG_DURATION,
-      duration_seconds:      durationSeconds,
-      segment_counts:        segmentCounts,
+      track_slug: trackSlug ?? null,
+      release_type: job.release_type,
+      hls_prefix: prefix,
+      bitrates: outputBitrates,
+      segment_duration_secs: targetDuration,
+      duration_seconds: durationSeconds,
+      segment_counts: segmentCounts,
+      segment_durations: segmentDurations,
+      media_kind: mediaKind,
+      rendition_metadata: renditionMetadata,
+      source_metadata: videoSource
+        ? {
+            width: videoSource.width,
+            height: videoSource.height,
+            frame_rate: Number(videoSource.frameRate.toFixed(3)),
+            video_codec: videoSource.sourceVideoCodec,
+            audio_codec: videoSource.sourceAudioCodec,
+            has_audio: videoSource.hasAudio,
+          }
+        : {
+            audio_codec: probe.streams.find((stream) => stream?.codec_type === "audio")?.codec_name || null,
+          },
+      transcode_profile_version: 2,
     };
   } finally {
-    // Always clean up temp files — segments can be 50–200 MB per bitrate
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 }

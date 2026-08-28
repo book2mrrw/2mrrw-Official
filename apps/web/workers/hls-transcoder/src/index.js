@@ -18,9 +18,6 @@ import { claimNextJob, markJobComplete, markJobFailed, updatePosterKey } from ".
 import { transcode }                                           from "./transcoder.js";
 import { extractPoster }                                       from "./poster.js";
 
-// Bitrates that indicate a video job (not audio-only)
-const VIDEO_BITRATES = new Set(["4000k", "2000k", "1000k", "720k"]);
-
 // Unique worker ID per process — shown in hls_transcode_jobs.worker_id
 const WORKER_ID = `fly-${os.hostname()}-${crypto.randomBytes(4).toString("hex")}`;
 
@@ -55,7 +52,7 @@ async function processJob(job) {
     logger.info("job complete", { jobId: job.id, slug: job.slug, trackSlug: job.track_slug });
 
     // Poster extraction — only for video jobs, non-fatal
-    const isVideoJob = job.bitrates?.some((b) => VIDEO_BITRATES.has(b));
+    const isVideoJob = manifest.media_kind === "video";
     if (isVideoJob && !job.track_slug) {
       try {
         const posterKey = await extractPoster({
