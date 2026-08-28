@@ -99,19 +99,61 @@ describe('A: HLSEngine — stale-renewal race guard', () => {
       'SSR path must assign manifest URL to audioEl.src');
   });
 
-  test('external callers (no _version, defaults to -1) bypass guard entirely', async () => {
+  test('external callers retain the current manifest ownership version', async () => {
     const engine = new HLSEngine();
     engine._manifestVersion = 999; // any value — guard must not fire
     const mockAudio = { src: null };
 
-    // External callers omit _version; it defaults to -1; -1 >= 0 is false → guard skipped
+    // External callers omit _version; loadTrack snapshots the current ownership
+    // version before its asynchronous import boundary and validates it afterward.
     const result = await engine.loadTrack(
       'https://example.com/master.m3u8',
       mockAudio,
       // _version omitted
     );
 
-    assert.equal(result, true, 'no _version (external caller) must bypass guard');
+    assert.equal(result, true, 'an external caller with unchanged ownership must load');
+  });
+
+  test('detach immediately settles and clears a superseded manifest load lease', () => {
+    const engine = new HLSEngine();
+    let cancellationCount = 0;
+    let detachCount = 0;
+    let destroyCount = 0;
+    const generationBefore = engine._loadGeneration;
+
+    engine._pendingLoadCancel = () => { cancellationCount++; };
+    engine._hls = {
+      detachMedia() { detachCount++; },
+      destroy() { destroyCount++; },
+    };
+
+    engine.detach();
+    engine.detach();
+
+    assert.equal(cancellationCount, 1,
+      'the superseded promise must settle exactly once');
+    assert.equal(detachCount, 1, 'the superseded hls.js instance must detach exactly once');
+    assert.equal(destroyCount, 1, 'the superseded hls.js instance must destroy exactly once');
+    assert.equal(engine._pendingLoadCancel, null, 'no stale cancellation callback may survive');
+    assert.equal(engine._loadGeneration, generationBefore + 2,
+      'each detach must monotonically invalidate load ownership');
+  });
+
+  test('a stale load generation cannot claim a successor hls.js instance', () => {
+    const engine = new HLSEngine();
+    const predecessor = {};
+    const successor = {};
+
+    engine._loadGeneration = 41;
+    engine._hls = successor;
+
+    assert.equal(engine._ownsLoadAttempt(predecessor, 41), false,
+      'instance identity must reject a predecessor from the current generation');
+    assert.equal(engine._ownsLoadAttempt(successor, 40), false,
+      'generation identity must reject an expired lease on the successor instance');
+    assert.equal(engine._ownsLoadAttempt(successor, 41), true,
+      'only the exact current generation and instance may mutate the engine');
   });
 
   test('detach() increments _manifestVersion, invalidating concurrent in-flight renewals', () => {

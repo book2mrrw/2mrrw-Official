@@ -78,6 +78,15 @@ export class HLSEngine {
     /** @type {number} Per-track-load counter for HMAC-token renewal attempts (max 2) */
     this._renewalAttempts = 0;
     /**
+     * Monotonic ownership lease for each manifest load attempt. Every detach,
+     * replacement, and destroy invalidates the previous generation before a
+     * successor can attach. Async callbacks must prove both generation and
+     * hls-instance identity before touching the singleton engine.
+     */
+    this._loadGeneration = 0;
+    /** @type {(() => void)|null} Settles an in-flight manifest promise as superseded. */
+    this._pendingLoadCancel = null;
+    /**
      * Monotonically increasing generation counter. Incremented by detach() whenever
      * a new track takes ownership of the engine. In-flight renewals capture this value
      * at launch and abort if it has changed by the time they reach _destroyHls() or
@@ -96,6 +105,17 @@ export class HLSEngine {
     return lvl ? Math.round(lvl.bitrate / 1000) : null;
   }
 
+  _invalidateLoadAttempt() {
+    this._loadGeneration++;
+    const cancel = this._pendingLoadCancel;
+    this._pendingLoadCancel = null;
+    cancel?.();
+  }
+
+  _ownsLoadAttempt(hls, generation) {
+    return !this._destroyed && this._loadGeneration === generation && this._hls === hls;
+  }
+
   /**
    * Attach hls.js to the audio element and start loading the manifest.
    *
@@ -110,14 +130,18 @@ export class HLSEngine {
    */
   async loadTrack(manifestUrl, audioEl, { startPosition = 0, _version = -1 } = {}) {
     if (this._destroyed) return false;
+    const requestedManifestVersion = _version >= 0 ? _version : this._manifestVersion;
     // Stale-renewal guard (pre-await): if detach() was called between the renewal
     // firing and this point, abort immediately without touching any engine state.
-    if (_version >= 0 && this._manifestVersion !== _version) return false;
+    if (this._manifestVersion !== requestedManifestVersion) return false;
 
     const Hls = await importHls();
 
     // Safari handles HLS natively via src= — no hls.js needed
     if (!Hls || !Hls.isSupported()) {
+      // Native HLS still owns the singleton media element. Invalidate any prior
+      // hls.js attempt before handing that element to AVPlayer.
+      this._destroyHls();
       // Assign the manifest URL directly — Safari's native HLS player takes over
       audioEl.src = manifestUrl;
       this._audioEl = audioEl;
@@ -128,10 +152,11 @@ export class HLSEngine {
     // Stale-renewal guard (post-await): importHls() is async; detach() may have
     // fired while we were awaiting. Abort before _destroyHls() so we never destroy
     // the successor track's hls.js instance.
-    if (_version >= 0 && this._manifestVersion !== _version) return false;
+    if (this._manifestVersion !== requestedManifestVersion) return false;
 
     // Tear down any existing instance before reusing
     this._destroyHls();
+    const loadGeneration = this._loadGeneration;
 
     // Fragment loader: serves pre-fetched segment bytes from the in-memory cache
     // (hls-segment-cache) with zero CDN latency. Falls through to the default
@@ -194,23 +219,40 @@ export class HLSEngine {
       let settled = false;
       let safetyTimerId = null;
       let networkRecoveryAttempted = false;
+      let cancelLoad = null;
+
+      const ownsLoad = () => this._ownsLoadAttempt(hls, loadGeneration);
 
       const settle = (value) => {
         if (settled) return;
         settled = true;
         clearTimeout(safetyTimerId);
+        if (this._pendingLoadCancel === cancelLoad) {
+          this._pendingLoadCancel = null;
+        }
         resolve(value);
       };
+
+      cancelLoad = () => settle(false);
+      this._pendingLoadCancel = cancelLoad;
 
       // 5 s hard cap — belt-and-suspenders in case hls.js events are suppressed.
       safetyTimerId = setTimeout(() => {
         if (settled) return;
+        if (!ownsLoad()) {
+          settle(false);
+          return;
+        }
         this._destroyHls();
         this.onFallback?.();
         settle(false);
       }, 5000);
 
       hls.on(Hls.Events.ERROR, (_, data) => {
+        if (!ownsLoad()) {
+          settle(false);
+          return;
+        }
         if (isPlaybackTraceEnabled()) {
           console.log("[PLAY-CHAIN] hls.js error", {
             fatal: data.fatal,
@@ -329,6 +371,10 @@ export class HLSEngine {
       });
 
       hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+        if (!ownsLoad()) {
+          settle(false);
+          return;
+        }
         const levels = data.levels || [];
         if (isPlaybackTraceEnabled()) {
           console.log("[PLAY-CHAIN] hls.js MANIFEST_PARSED", {
@@ -359,6 +405,7 @@ export class HLSEngine {
       // the actual adaptation automatically (abrBandWidthFactor: 0.95); this listener
       // logs the event so bandwidth degradation is visible in production diagnostics.
       hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+        if (!ownsLoad()) return;
         const levels = hls.levels || [];
         const level = levels[data.level];
         const bitrateKbps = level ? Math.round(level.bitrate / 1000) : null;
@@ -378,6 +425,7 @@ export class HLSEngine {
 
       if (isPlaybackTraceEnabled()) {
         hls.on(Hls.Events.FRAG_LOADED, (_, data) => {
+          if (!ownsLoad()) return;
           console.log("[PLAY-CHAIN] hls.js FRAG_LOADED", {
             sn: data.frag?.sn,
             duration: data.frag?.duration,
@@ -386,6 +434,7 @@ export class HLSEngine {
           });
         });
         hls.on(Hls.Events.BUFFER_APPENDED, (_, data) => {
+          if (!ownsLoad()) return;
           const buf = audioEl.buffered;
           const bufferedEnd = buf?.length ? buf.end(buf.length - 1).toFixed(2) : "0";
           console.log("[PLAY-CHAIN] hls.js BUFFER_APPENDED", {
@@ -395,6 +444,7 @@ export class HLSEngine {
           });
         });
         hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+          if (!ownsLoad()) return;
           console.log("[PLAY-CHAIN] hls.js MEDIA_ATTACHED", {
             readyState: audioEl.readyState,
             src: audioEl.src ? audioEl.src.slice(0, 60) : null,
@@ -402,12 +452,12 @@ export class HLSEngine {
         });
       }
 
-      hls.loadSource(manifestUrl);
-      hls.attachMedia(audioEl);
-
       this._hls         = hls;
       this._audioEl     = audioEl;
       this._manifestUrl = manifestUrl;
+
+      hls.loadSource(manifestUrl);
+      hls.attachMedia(audioEl);
     });
   }
 
@@ -444,6 +494,9 @@ export class HLSEngine {
   }
 
   _destroyHls() {
+    // Invalidate ownership before destroying the media attachment. Any queued
+    // timeout/event from the old instance then becomes observational only.
+    this._invalidateLoadAttempt();
     if (this._hls) {
       try { this._hls.detachMedia(); } catch {}
       try { this._hls.destroy();     } catch {}
@@ -458,6 +511,7 @@ export class HLSEngine {
     this._manifestUrl        = null;
     this._renewalAttempts    = 0;
     this._manifestVersion    = 0;
+    this._pendingLoadCancel  = null;
     this.onFallback          = null;
     this.onError             = null;
     this.onSegmentFatalError = null;
