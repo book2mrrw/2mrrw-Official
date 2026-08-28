@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "deploy:prod": "vercel deploy --prod --yes",
+    "deploy:prod": "vercel deploy --prod --yes --project artist-platform",
     "test:foundation": "node scripts/frontend-foundation-smoke.mjs",
     "test:playback-resolver-fallback": "node --import ./scripts/register-alias.mjs scripts/test-playback-resolver-fallback.mjs",
     "test:direct-preview-cdn": "node --import ./scripts/register-alias.mjs scripts/test-direct-preview-cdn.mjs",
