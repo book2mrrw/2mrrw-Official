@@ -67,3 +67,20 @@ test("BOOT-07/SYS-01 Stripe has one explicit, payment-scoped loader", () => {
     assert.match(source, /getStripeClient/);
   }
 });
+
+test("UI-01 Recently Played stays compact without resizing adjacent My Music shelves", () => {
+  const source = read("src/components/music/MyMusicTab.js");
+  const recentlyPlayedStart = source.indexOf("function RecentlyPlayedSection");
+  const recentlyAddedStart = source.indexOf("function RecentlyAddedRow");
+
+  assert.ok(recentlyPlayedStart >= 0, "Recently Played section must exist");
+  assert.ok(recentlyAddedStart > recentlyPlayedStart, "Recently Added must follow Recently Played");
+
+  const recentlyPlayed = source.slice(recentlyPlayedStart, recentlyAddedStart);
+  const recentlyAdded = source.slice(recentlyAddedStart);
+
+  assert.match(recentlyPlayed, /const cardWidth = isMobile \? 144 : 164/);
+  assert.match(recentlyPlayed, /flex: `0 0 \$\{cardWidth\}px`/);
+  assert.match(recentlyPlayed, /aspectRatio: "1"/);
+  assert.match(recentlyAdded, /width: 130/);
+});

@@ -472,25 +472,49 @@ function RecentlyPlayedSection({
 
   if (!groups.length) return null;
 
-  const cardWidth = isMobile ? 204 : 224;
+  // Recently Played is intentionally denser than the collection shelves:
+  // Spotify-scale artwork keeps history scannable without dominating My Music.
+  const cardWidth = isMobile ? 144 : 164;
 
   return (
-    <section style={{ marginBottom: 32 }}>
-      <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase", fontWeight: 700, marginBottom: 12 }}>
+    <section style={{ marginBottom: 28 }}>
+      <div style={{ fontSize: 11, color: "#666", letterSpacing: 1.8, textTransform: "uppercase", fontWeight: 700, marginBottom: 10 }}>
         Recently Played
       </div>
       <div style={{
         display: "flex",
-        gap: 12,
+        gap: 10,
         overflowX: "auto",
-        paddingBottom: 8,
+        paddingBottom: 6,
         scrollSnapType: "x mandatory",
         WebkitOverflowScrolling: "touch",
         overscrollBehaviorX: "contain",
         touchAction: "pan-x pan-y",
       }}>
         {groups.map(({ key, release, coverDisplay, tracks }, groupIdx) => (
-          <div key={key} style={{ flex: `0 0 ${cardWidth}px`, width: cardWidth, scrollSnapAlign: "start", background: "#0a0a0a", border: "1px solid #1a1a1a", borderRadius: 14, overflow: "hidden" }}>
+          <div
+            key={key}
+            style={{
+              flex: `0 0 ${cardWidth}px`,
+              width: cardWidth,
+              scrollSnapAlign: "start",
+              background: "#121212",
+              border: "1px solid #1f1f1f",
+              borderRadius: 10,
+              overflow: "hidden",
+              transition: "background 160ms ease, border-color 160ms ease, transform 160ms ease",
+            }}
+            onMouseEnter={(event) => {
+              event.currentTarget.style.background = "#181818";
+              event.currentTarget.style.borderColor = "#2a2a2a";
+              event.currentTarget.style.transform = "translateY(-2px)";
+            }}
+            onMouseLeave={(event) => {
+              event.currentTarget.style.background = "#121212";
+              event.currentTarget.style.borderColor = "#1f1f1f";
+              event.currentTarget.style.transform = "translateY(0)";
+            }}
+          >
             <CoverArt
               src={coverDisplay.src}
               type={coverDisplay.type}
@@ -499,26 +523,26 @@ function RecentlyPlayedSection({
               style={{ aspectRatio: "1", display: "block" }}
               loadPriority={groupIdx === 0 ? "high" : "normal"}
             />
-            <div style={{ padding: "10px 12px 14px" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#ccc" }}>{release.title}</div>
+            <div style={{ padding: "9px 10px 10px" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.25, marginBottom: 7, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "#eee" }}>{release.title}</div>
               {tracks.map((track) => {
                 const isActive = activeSlug === track.slug;
                 const history = listeningMap?.get(track.slug);
                 const showBar = history && history.positionSeconds > 0 && history.durationSeconds > 0 && !history.completed;
                 const barPct = showBar ? Math.min(100, (history.positionSeconds / history.durationSeconds) * 100) : 0;
                 return (
-                  <div key={track.slug} style={{ marginBottom: 6 }}>
+                  <div key={track.slug} style={{ marginBottom: 5 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <button type="button" onClick={() => { if (isActive && isPlaying) { onToggle?.(); } else { onPlayTrack(track); } }} style={{ width: 22, height: 22, borderRadius: "50%", background: "#00ffff", color: "#000", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <button type="button" aria-label={`${isActive && isPlaying ? "Pause" : "Play"} ${track.title}`} onClick={() => { if (isActive && isPlaying) { onToggle?.(); } else { onPlayTrack(track); } }} style={{ width: 20, height: 20, borderRadius: "50%", background: "#00ffff", color: "#000", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: isActive ? "0 0 0 2px rgba(0,255,255,0.16)" : "none" }}>
                         {isActive && isPlaying
-                          ? <svg viewBox="0 0 24 24" fill="currentColor" width={9} height={9}><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-                          : <svg viewBox="0 0 24 24" fill="currentColor" width={9} height={9} style={{ marginLeft: 1 }}><path d="M8 5v14l11-7z"/></svg>
+                          ? <svg viewBox="0 0 24 24" fill="currentColor" width={8} height={8}><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                          : <svg viewBox="0 0 24 24" fill="currentColor" width={8} height={8} style={{ marginLeft: 1 }}><path d="M8 5v14l11-7z"/></svg>
                         }
                       </button>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 11, fontWeight: isActive ? 700 : 500, color: isActive ? "#00ffff" : "#bbb", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{track.title}</div>
+                        <div style={{ fontSize: 10.5, lineHeight: 1.25, fontWeight: isActive ? 700 : 500, color: isActive ? "#00ffff" : "#aaa", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{track.title}</div>
                         {showBar && (
-                          <div style={{ height: 2, background: "rgba(255,255,255,0.1)", borderRadius: 1, marginTop: 3, overflow: "hidden" }}>
+                          <div style={{ height: 2, background: "rgba(255,255,255,0.1)", borderRadius: 1, marginTop: 2, overflow: "hidden" }}>
                             <div style={{ width: `${barPct}%`, height: "100%", background: "#00ffff", borderRadius: 1 }} />
                           </div>
                         )}
