@@ -36,29 +36,3 @@ export function catalogCoverDisplay(item) {
   }
   return { src, type };
 }
-
-/**
- * Artwork contract for surfaces that intentionally render a still image.
- * Canonical enrichment may promote `cover` to a motion discovery URL; those
- * URLs must never be assigned to an <img>. Prefer the preserved static cover,
- * while retaining the media-aware display as a last-resort fallback.
- */
-export function catalogStaticCoverDisplay(item) {
-  const resolved = withR2CatalogMedia(item);
-  const staticCover = String(resolved?.baseCover || "").trim();
-  if (staticCover) {
-    const normalized = staticCover.replace(/^\//, "");
-    const src = catalogVisualMediaUrl(normalized) || catalogCoverUrl(normalized);
-    return {
-      src,
-      type: "image",
-      baseCover: src,
-    };
-  }
-
-  const fallback = catalogCoverDisplay(resolved);
-  return {
-    ...fallback,
-    baseCover: resolved?.baseCover || null,
-  };
-}

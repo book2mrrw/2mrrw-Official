@@ -7,7 +7,7 @@ import ReleaseCardPlayButton from "@/components/music/ReleaseCardPlayButton";
 import CoverArt from "@/components/ui/CoverArt";
 import { resolveContentAccess } from "@/lib/music-access";
 import {
-  catalogStaticCoverDisplay,
+  catalogCoverDisplay,
   withR2CatalogMedia,
 } from "@/components/home/catalogMedia";
 
@@ -30,7 +30,7 @@ function RadioCarousel({
   const infoPad = isMobile ? "20px 16px" : narrow ? "28px 22px" : "36px 32px";
   const titleSize = isMobile ? 18 : narrow ? 24 : 34;
   const radioAccess = resolveContentAccess(currentSlide, accountState);
-  const radioCover = catalogStaticCoverDisplay(currentSlide);
+  const radioCover = catalogCoverDisplay(currentSlide);
 
   return (
     <div
@@ -60,7 +60,7 @@ function RadioCarousel({
         >
           <CoverArt
             src={radioCover.src}
-            baseCover={radioCover.baseCover}
+            baseCover={currentSlide.baseCover || undefined}
             type={radioCover.type}
             alt={currentSlide.title}
             width="100%"
