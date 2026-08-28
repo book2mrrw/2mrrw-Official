@@ -199,6 +199,9 @@ test("production playback startup policy stays short, bounded, and audio-first",
   const prefetcher = read("src/lib/audio/hls-segment-prefetcher.js");
   const overlay = read("src/components/music/VisualMomentOverlay.js");
   const playerBar = read("src/components/audio/GlobalAudioPlayerBar.js");
+  const mediaPriority = read("src/lib/media/audio-media-priority.js");
+  const singles = read("src/components/home/LatestSinglesStyleRow.js");
+  const coverArt = read("src/components/ui/CoverArt.js");
 
   assert.match(policy, /AUDIO_SEGMENT_DURATION_SECONDS\s*=\s*2/);
   assert.match(policy, /AUDIO_FORWARD_BUFFER_SECONDS\s*=\s*30/);
@@ -209,4 +212,12 @@ test("production playback startup policy stays short, bounded, and audio-first",
   assert.match(overlay, /preload="none"/);
   assert.match(playerBar, /const timer = setTimeout/);
   assert.match(playerBar, /preload="none"/);
+  assert.match(stream, /beginAudioStartupPriority\(\)/);
+  assert.match(stream, /audioMediaPriorityLease\?\.promoteToPlayback\(\)/);
+  assert.match(stream, /audioMediaPriorityLease\?\.release\(\)/);
+  assert.match(mediaPriority, /leaseGeneration !== generation/);
+  assert.match(singles, /audioPriority\.active/);
+  assert.match(singles, /removeAttribute\("src"\)/);
+  assert.match(coverArt, /audioPriority\.active/);
+  assert.match(coverArt, /removeAttribute\("src"\)/);
 });

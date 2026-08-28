@@ -1,6 +1,6 @@
 "use client";
 
-import { forwardRef, memo, useMemo, useEffect, useRef, useState } from "react";
+import { forwardRef, memo, useMemo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useMountEnterAnimation } from "@/hooks/useMountEnterAnimation";
 import {
   isUiHydrationTraceEnabled,
@@ -17,6 +17,7 @@ import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
 import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import { getMediaSignature } from "@/lib/media/media-determinism";
 import { useArtworkGesture } from "@/hooks/useArtworkGesture";
+import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
 
 /** Phase P9 — MP4/cover surface; skips reconcile when only entitlement chrome changes. */
 const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface({
@@ -27,6 +28,31 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
   const videoRef = useRef(null);
   const assignedSrc = cardMedia === "video" ? mediaItem?.video || null : null;
   const [coverVideoFailed, setCoverVideoFailed] = useState(false);
+  const audioPriority = useAudioMediaPriority();
+  const coverVideoSrc = !coverVideoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video"
+    ? mediaItem?.video || mediaItem?.visual || null
+    : null;
+  const activeVideoSrc = cardMedia === "video" ? assignedSrc : coverVideoSrc;
+
+  useLayoutEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (audioPriority.active || !activeVideoSrc) {
+      if (!el.paused) el.pause();
+      el.preload = "none";
+      if (el.hasAttribute("src")) {
+        el.removeAttribute("src");
+        el.load();
+      }
+      return;
+    }
+    if (el.getAttribute("src") !== activeVideoSrc) {
+      el.src = activeVideoSrc;
+      el.preload = "auto";
+      el.load();
+    }
+    if (!document.hidden && el.paused) el.play().catch(() => {});
+  }, [activeVideoSrc, audioPriority.active]);
 
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
@@ -66,13 +92,11 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
       <video
         ref={videoRef}
         data-single-carousel
-        src={assignedSrc || undefined}
         poster={mediaItem.cover || undefined}
-        autoPlay
         muted
         loop
         playsInline
-        preload="auto"
+        preload="none"
         webkit-playsinline="true"
         style={{
           backgroundColor: "#0a0a0a",
@@ -88,19 +112,16 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
     );
   }
 
-  if (!coverVideoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video") {
-    const coverVideoSrc = mediaItem?.video || mediaItem?.visual || null;
+  if (coverVideoSrc) {
     return (
       <video
         ref={videoRef}
         data-single-carousel
-        src={coverVideoSrc || undefined}
         poster={mediaItem.cover || undefined}
-        autoPlay
         muted
         loop
         playsInline
-        preload="auto"
+        preload="none"
         webkit-playsinline="true"
         onError={() => setCoverVideoFailed(true)}
         style={{
