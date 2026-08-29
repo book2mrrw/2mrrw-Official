@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
+import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
 
 const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
 
@@ -17,7 +18,7 @@ export default function AdminShowsPage() {
 
   useEffect(() => {
     const sb = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_URL,
       SUPABASE_PUBLIC_KEY
     );
     sb.auth.getSession().then(({ data }) => {

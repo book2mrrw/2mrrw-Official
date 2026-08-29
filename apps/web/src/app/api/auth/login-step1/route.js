@@ -6,6 +6,7 @@ import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import crypto from "crypto";
 import { cookies } from "next/headers";
 import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
+import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export async function POST(req) {
       return NextResponse.json({ error: "Email and password required" }, { status: 400 });
     }
 
-    const supabaseUrl  = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseUrl  = SUPABASE_URL;
     const supabaseAnon = SUPABASE_PUBLIC_KEY;
 
     // Verify credentials via Supabase REST — never returns which field is wrong

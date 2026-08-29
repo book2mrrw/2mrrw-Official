@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createBrowserClient } from "@supabase/ssr";
 import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
+import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
 import { geoNaturalEarth1, geoPath, geoGraticule } from "d3-geo";
 import { feature as topoFeature } from "topojson-client";
 import worldTopo from "world-atlas/countries-110m.json";
@@ -802,7 +803,7 @@ export default function AdminGlobalAnalytics() {
 
   useEffect(() => {
     const sb = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_URL,
       SUPABASE_PUBLIC_KEY
     );
     sb.auth.getSession().then(({ data: d }) => {

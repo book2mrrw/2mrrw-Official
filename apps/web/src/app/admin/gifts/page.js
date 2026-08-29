@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
+import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
 import { useAuth } from "@/context/AuthContext";
 
 const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "callme2mrrw@gmail.com").toLowerCase();
@@ -405,7 +406,7 @@ export default function AdminGiftsPage() {
   const [supabase] = useState(() => {
     if (typeof window === "undefined") return null;
     return createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_URL,
       SUPABASE_PUBLIC_KEY
     );
   });

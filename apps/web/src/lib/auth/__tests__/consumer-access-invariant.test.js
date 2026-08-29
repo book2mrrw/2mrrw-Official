@@ -10,9 +10,21 @@ import {
   resolveRouteAccessDecision,
   sanitizeReturnTo,
 } from "../route-access-policy.js";
+import { normalizeSupabaseUrl } from "../../supabase/supabase-url.js";
 
 const root = process.cwd();
 const read = (relativePath) => readFileSync(path.join(root, relativePath), "utf8");
+
+test("Supabase URLs strip invisible-prefix deployment corruption centrally", () => {
+  assert.equal(
+    normalizeSupabaseUrl("\uFEFF  https://project.supabase.co/  "),
+    "https://project.supabase.co"
+  );
+  assert.equal(
+    normalizeSupabaseUrl("\u200Bhttps://project.supabase.co"),
+    "https://project.supabase.co"
+  );
+});
 
 test("CONSUMER_ACCESS_INVARIANT protects every consumer page by default", () => {
   for (const route of [

@@ -1,10 +1,11 @@
 import { createBrowserClient } from "@supabase/ssr";
 import { SUPABASE_AUTH_STORAGE_KEY } from "@/lib/supabase/auth-storage-key";
 import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
+import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
 
 export function createClient() {
   return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
+    SUPABASE_URL,
     SUPABASE_PUBLIC_KEY,
     {
       auth: {

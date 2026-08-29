@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
 
 let _adminClient = null;
 
@@ -18,7 +19,7 @@ export function getSupabaseSecretKey() {
  */
 export function getAdminClient() {
   if (_adminClient) return _adminClient;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = SUPABASE_URL;
   const key = getSupabaseSecretKey();
   if (!url || !key) throw new Error("Missing Supabase admin credentials");
   _adminClient = createClient(url, key, {

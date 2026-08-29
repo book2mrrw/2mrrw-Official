@@ -8,6 +8,7 @@ import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
+import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
 
 export const dynamic = "force-dynamic";
 
@@ -80,7 +81,7 @@ export async function GET(req, { params }) {
   let rows = [];
   try {
     const sbAnon = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_URL,
       SUPABASE_PUBLIC_KEY,
       { cookies: { getAll: () => [] } }
     );

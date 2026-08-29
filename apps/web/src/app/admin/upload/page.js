@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
+import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
 import { UploadWizard } from "@/components/admin/UploadWizard";
 
 const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
@@ -19,7 +20,7 @@ export default function AdminUploadPage() {
   useEffect(() => {
     setResumeReleaseId(new URLSearchParams(window.location.search).get("draft"));
     const sb = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_URL,
       SUPABASE_PUBLIC_KEY
     );
     sb.auth.getSession().then(({ data }) => {

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
+import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
 import {
   VISUAL_ASSET_TYPES,
   VISUAL_PLAYBACK_MODES,
@@ -57,7 +58,7 @@ export default function AdminVisualLayerPage() {
 
   useEffect(() => {
     const sb = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      SUPABASE_URL,
       SUPABASE_PUBLIC_KEY
     );
     sb.auth.getSession().then(({ data }) => {
