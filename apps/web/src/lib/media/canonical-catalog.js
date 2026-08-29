@@ -585,8 +585,8 @@ export function mergeCanonicalMetadata(item) {
     cover: canonicalCover || ((item.cover && (String(item.cover).includes("/") || /^https?:\/\//i.test(item.cover)))
       ? item.cover
       : (release.cover || release.legacy_cover || item.cover)),
-    baseCover: item.baseCover || release.legacy_cover || null,
-    visual: item.visual || release.visual,
+    baseCover: canonicalCover || item.baseCover || release.legacy_cover || null,
+    visual: canonicalCover || item.visual || release.visual,
     video: canonicalVideo || item.video || release.video,
     coverArtType: release.coverArtType || item.coverArtType,
     release_date: item.release_date || release.release_date,
