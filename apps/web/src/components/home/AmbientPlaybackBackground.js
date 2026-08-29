@@ -1,9 +1,49 @@
 "use client";
 
+import { useLayoutEffect, useRef } from "react";
 import { resolveCoverMediaType } from "@/components/ui/CoverArt";
+import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
 
 const VIDEO_BLUR_DESKTOP = "blur(120px) saturate(1.2) brightness(0.15)";
 const VIDEO_BLUR_MOBILE = "blur(72px) saturate(1.2) brightness(0.15)";
+
+function AmbientVideoLayer({ src, style }) {
+  const videoRef = useRef(null);
+  const audioPriority = useAudioMediaPriority();
+
+  useLayoutEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (audioPriority.startupActive || !src) {
+      if (!el.paused) el.pause();
+      el.preload = "none";
+      if (el.hasAttribute("src")) {
+        el.removeAttribute("src");
+        el.load();
+      }
+      return;
+    }
+    if (el.getAttribute("src") !== src) {
+      el.src = src;
+      el.preload = "auto";
+      el.load();
+    }
+    if (!document.hidden && el.paused) el.play().catch(() => {});
+  }, [audioPriority.startupActive, src]);
+
+  return (
+    <video
+      ref={videoRef}
+      loop
+      muted
+      playsInline
+      preload="none"
+      aria-hidden
+      onError={(event) => { event.currentTarget.style.display = "none"; }}
+      style={style}
+    />
+  );
+}
 
 export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobile = false }) {
   if (!currentTrack?.cover) return null;
@@ -44,15 +84,8 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobi
   return (
     <>
       {resolveCoverMediaType(baseSrc, baseType) === "video" ? (
-        <video
+        <AmbientVideoLayer
           src={baseSrc}
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="auto"
-          aria-hidden
-          onError={(e) => { e.currentTarget.style.display = "none"; }}
           style={{ ...mediaStyle, opacity: showCs ? 0 : 0.4 }}
         />
       ) : (
@@ -67,15 +100,8 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobi
       )}
       {csSrc &&
         (resolveCoverMediaType(csSrc, csType) === "video" ? (
-          <video
+          <AmbientVideoLayer
             src={csSrc}
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="auto"
-            aria-hidden
-            onError={(e) => { e.currentTarget.style.display = "none"; }}
             style={{ ...mediaStyle, opacity: showCs ? 0.4 : 0 }}
           />
         ) : (

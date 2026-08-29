@@ -6,6 +6,8 @@
  * active decoders. IO prewarm and Audio Visuals remain separate surfaces.
  */
 
+import { getAudioMediaPrioritySnapshot } from "@/lib/media/audio-media-priority";
+
 const CAROUSEL_VIDEO_SELECTOR = "video[data-single-carousel]";
 
 function carouselCardRect(video) {
@@ -31,6 +33,10 @@ export function isStorefrontCarouselCardInView(video) {
  */
 export function ensureStorefrontCarouselVideosPlaying(row) {
   if (!row || document.hidden) return false;
+  if (getAudioMediaPrioritySnapshot().active) {
+    pauseStorefrontCarouselVideos(row);
+    return false;
+  }
   let anyCarouselInView = false;
   row.querySelectorAll(CAROUSEL_VIDEO_SELECTOR).forEach((video) => {
     if (isStorefrontCarouselCardInView(video)) anyCarouselInView = true;

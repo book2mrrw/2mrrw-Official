@@ -49,6 +49,7 @@ import { getQualityLevel as getHLSQualityLevel } from "@/lib/audio/network-quali
 import { getResolvedCdnUrl, setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
 import { preloadCsAssets } from "@/lib/audio/cs-assets";
 import { isSamePlaybackTrack } from "@/lib/music-playback";
+import { beginAudioStartupPriority } from "@/lib/media/audio-media-priority";
 import {
   PREVIEW_HARD_CAP_SEC,
   SPURIOUS_ENDED_GUARD_MS,
@@ -737,6 +738,13 @@ export function attachStreamCommands(self) {
 
     preloadCsAssets(normalized, { csImgRef, csVidRef, csAudioRef });
 
+    // Claim foreground network/decoder priority at play intent, before HLS
+    // manifests or segments are requested. The generation-bound lease ensures
+    // an older, aborted request cannot release a newer request's authority.
+    const audioMediaPriorityLease = !isSameTrack
+      ? beginAudioStartupPriority()
+      : null;
+
     try {
       if (isPlaybackTraceEnabled()) {
         logPlaybackEvent({
@@ -1035,6 +1043,7 @@ export function attachStreamCommands(self) {
           void updateMediaSession({ ...nextTrack, src: syncSrc }, { playing: false });
           return false;
         }
+        audioMediaPriorityLease?.promoteToPlayback();
         // Apply position restore directly — audio.duration is available at readyState >= 1
         // (canplay fires after loadedmetadata, so duration is always known here).
         // The previous loadedmetadata listener approach silently failed because the event
@@ -1150,6 +1159,8 @@ export function attachStreamCommands(self) {
       });
       void updateMediaSession(nextTrack, { playing: false });
       return false;
+    } finally {
+      audioMediaPriorityLease?.release();
     }
   };
 

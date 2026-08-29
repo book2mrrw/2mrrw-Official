@@ -7,6 +7,7 @@ import ArtworkSkeleton from "@/ui/skeletons/ArtworkSkeleton";
 import { resolveCoverMediaType } from "@/lib/media/cover-media-type";
 import { VRM } from "@/lib/media/video-resource-manager";
 import { logVisualVideoError, logVisualVideoFallback, logVisualImageError } from "@/lib/media/visual-telemetry";
+import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
 export { resolveCoverMediaType };
 
 // Fallback levels for the artwork pipeline
@@ -174,20 +175,43 @@ function VideoArt({ src, poster, className, touchProps, baseStyle, onError }) {
   const videoRef = useRef(null);
   const prevSrcRef = useRef(null);
   const inViewRef = useRef(false);
+  const audioPriority = useAudioMediaPriority();
+  const audioPriorityRef = useRef(audioPriority.active);
+
+  useLayoutEffect(() => {
+    audioPriorityRef.current = audioPriority.active;
+  }, [audioPriority.active]);
 
   // Imperative src update. For offscreen elements, defer el.load() to the
   // IntersectionObserver callback so the browser does not pre-fetch invisible media.
   useLayoutEffect(() => {
     const el = videoRef.current;
-    if (!el || src === prevSrcRef.current) return;
+    if (!el) return;
+    if (audioPriority.active) {
+      VRM.requestPause(el);
+      if (!el.paused) el.pause();
+      el.preload = "none";
+      if (el.hasAttribute("src")) {
+        el.removeAttribute("src");
+        el.load();
+      }
+      prevSrcRef.current = null;
+      return;
+    }
+    if (src === prevSrcRef.current) return;
     prevSrcRef.current = src;
     el.src = src;
     if (inViewRef.current) {
       el.preload = "auto";
       el.load();
+      VRM.requestPlay(
+        el,
+        () => { if (el.paused && !el.ended) el.play().catch(() => {}); },
+        () => { if (!el.paused) el.pause(); }
+      );
     }
     // Offscreen: IO will call load() when the element enters rootMargin.
-  }, [src]);
+  }, [src, audioPriority.active]);
 
   // Viewport-aware decoder management via VideoResourceManager (VRM).
   // Carousel videos use data-single-carousel and are managed by
@@ -212,6 +236,7 @@ function VideoArt({ src, poster, className, touchProps, baseStyle, onError }) {
       ([entry]) => {
         if (entry.isIntersecting) {
           inViewRef.current = true;
+          if (audioPriorityRef.current) return;
           el.preload = "auto";
           // Load if src was set while offscreen (readyState 0 = HAVE_NOTHING).
           if (el.readyState === 0 && el.src) el.load();
