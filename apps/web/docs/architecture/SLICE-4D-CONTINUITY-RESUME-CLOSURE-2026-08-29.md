@@ -211,7 +211,11 @@ Everything on the happy path is byte-for-byte preserved: session-restore's repea
 
 The "120+ stale continuity candidates" test initially used a 1-item live queue, where `SelectionAuthority.next()` is its own detected no-op (unchanged state never bumps `selectionVersion`), making genuine staleness impossible to exercise. Fixed by using a 3-item live queue so every `next()` call genuinely advances state and genuinely invalidates the previously-captured context.
 
-## 39. Blocker to Slice 4D closure
+## 39. Commit created
+
+One closure commit for this slice: `e98a249`, subject `feat(playback): harden continuity and resume authority`.
+
+## 40. Blocker to Slice 4D closure
 
 None for the domain this slice certifies. The one open item (16 — device certification) is explicitly permitted by the spec's own "BLOCKED — MANUAL DEVICE CERTIFICATION" framing rather than treated as a closure blocker, since it requires physical devices this environment does not have access to.
 
