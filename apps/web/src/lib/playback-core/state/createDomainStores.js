@@ -93,22 +93,11 @@ const INITIAL_CAPABILITY = Object.freeze({
   playbackTier:              "entry",
 });
 
-// Slice 4D — bookkeeping about the last VALIDATED continuity candidate, not a
-// second canonical copy of Selection/Transport truth. Selection restoration
-// still commits exclusively through SelectionAuthority; position restoration
-// still lands through the existing SEEK/resumePolicy path. This store only
-// records what ContinuityAuthority most recently accepted, for observability
-// and for "is there anything to restore" checks — restoring FROM it always
-// re-validates against current authority at proposal time (INV-CONT-1/2/3).
 const INITIAL_CONTINUITY = Object.freeze({
-  schemaVersion:          null,
-  mediaIdentity:          null,
-  releaseId:              null,
-  trackId:                null,
-  savedPositionSeconds:   null,
+  savedPositionSeconds: null,
   sessionPositionSeconds: null,
-  capturedAt:             null,
-  validatedAt:            null,
+  releaseId: null,
+  trackId:   null,
 });
 
 const INITIAL_DIAGNOSTICS = Object.freeze({

@@ -54,7 +54,6 @@ import { CoreEpoch }               from "../authority/CoreEpoch.js";
 import { AudibleEffectAuthority }  from "../effects/AudibleEffectAuthority.js";
 import { TransportAuthority }      from "../transport/TransportAuthority.js";
 import { SelectionAuthority }      from "../selection/SelectionAuthority.js";
-import { ContinuityAuthority }     from "../continuity/ContinuityAuthority.js";
 
 export class PlaybackCore {
   #sequencer;
@@ -71,7 +70,6 @@ export class PlaybackCore {
   #effectAuthority;
   #transportAuthority;
   #selectionAuthority;
-  #continuityAuthority;
   #disposeInstalledEffectGuard = null;
   #effectGuardInstalled = false;
   #executionEngine = null;
@@ -96,7 +94,6 @@ export class PlaybackCore {
     this.#effectAuthority   = deps.effectAuthority;
     this.#transportAuthority = deps.transportAuthority;
     this.#selectionAuthority = deps.selectionAuthority;
-    this.#continuityAuthority = deps.continuityAuthority;
 
     this.#logger.emitCoreInitialized({ sessionEpoch: this.#sequencer.sessionEpoch });
   }
@@ -166,28 +163,6 @@ export class PlaybackCore {
       logger,
     });
 
-    // Continuity gets its own AuthorityGate + CommitGate pair too, for the
-    // same reason Selection does — an unrelated continuity-candidate
-    // validation must never supersede an in-flight Transport or Selection
-    // intent. It holds a reference to selectionAuthority so it can delegate
-    // (never re-implement) atomic Selection restoration.
-    const continuityAuthorityGate = new AuthorityGate();
-    const continuityCommitGate = new CommitGate({
-      authorityGate: continuityAuthorityGate,
-      ownershipRegistry,
-      stores,
-      logger,
-    });
-    const continuityAuthority = new ContinuityAuthority({
-      commitGate: continuityCommitGate,
-      continuityAuthorityGate,
-      coreEpoch,
-      stores,
-      logger,
-      selectionAuthority,
-      desiredStore,
-    });
-
     // Readiness accessor — closed over the PlaybackCore instance (assigned below).
     // The port calls this before accepting any command; before READY it throws
     // explicitly rather than silently dropping the command.
@@ -211,7 +186,6 @@ export class PlaybackCore {
       effectAuthority,
       transportAuthority,
       selectionAuthority,
-      continuityAuthority,
     });
     coreRef = core;
     return core;
@@ -307,7 +281,6 @@ export class PlaybackCore {
   get _effectAuthority() { return this.#effectAuthority; }
   get _transportAuthority() { return this.#transportAuthority; }
   get _selectionAuthority() { return this.#selectionAuthority; }
-  get _continuityAuthority() { return this.#continuityAuthority; }
   get _ownershipMap() { return this.#ownershipRegistry.getOwnershipMap(); }
   get _effectGuardInstalled() { return this.#effectGuardInstalled; }
 

@@ -85,17 +85,6 @@ export const CommitRejectionReason = Object.freeze({
   SELECTION_VERSION_STALE:  "SELECTION_VERSION_STALE",
   /** Selection: the proposed snapshot fails structural/coherence validation. */
   SELECTION_INVALID:        "SELECTION_INVALID",
-  /** Continuity: the runtime epoch rotated since this candidate was captured. */
-  CONTINUITY_EPOCH_MISMATCH: "CONTINUITY_EPOCH_MISMATCH",
-  /** Continuity: the persisted candidate's schemaVersion is missing, corrupt, or unsupported. */
-  CONTINUITY_SCHEMA_INVALID: "CONTINUITY_SCHEMA_INVALID",
-  /** Continuity: the candidate fails structural validation (not a schema problem). */
-  CONTINUITY_INVALID:        "CONTINUITY_INVALID",
-  /** Continuity: a newer PLAY/PAUSE/RESUME/SEEK has landed since this position
-   * restore was captured (DesiredStateStore.revision advanced) — the seek/pause
-   * authority the user currently has moved on, even for the same track and the
-   * same CoreEpoch. Distinct from CONTINUITY_EPOCH_MISMATCH (whole-runtime reset). */
-  CONTINUITY_POSITION_SUPERSEDED: "CONTINUITY_POSITION_SUPERSEDED",
 });
 
 // ─── Selection transition types (Slice 3) ─────────────────────────────────────
@@ -118,23 +107,6 @@ export const SelectionTransitionType = Object.freeze({
   SET_TRAVERSAL_POLICY: "SET_TRAVERSAL_POLICY",
   UPDATE_NOW_PLAYING_REPRESENTATION: "UPDATE_NOW_PLAYING_REPRESENTATION",
   UPDATE_QUEUE_REPRESENTATION:       "UPDATE_QUEUE_REPRESENTATION",
-});
-
-// ─── Continuity transition types (Slice 4D) ───────────────────────────────────
-// Continuity does not hold its own copy of canonical Selection/Transport truth.
-// It validates a persisted candidate and, when accepted, PROPOSES into the
-// domain that actually owns the field (SelectionAuthority for queue/track,
-// the existing SEEK/TransportMode path for position/volume/rate). What
-// ContinuityAuthority itself commits (via its own dedicated CommitGate, same
-// pattern as every other domain) is bookkeeping about the last validated
-// candidate — never a second copy of canonical Selection or Transport state.
-
-export const ContinuityTransitionType = Object.freeze({
-  VALIDATE_CANDIDATE:      "VALIDATE_CANDIDATE",
-  PROPOSE_SELECTION_RESTORE: "PROPOSE_SELECTION_RESTORE",
-  VALIDATE_POSITION_RESTORE: "VALIDATE_POSITION_RESTORE",
-  COMMIT_SNAPSHOT:         "COMMIT_SNAPSHOT",
-  CLEAR_SNAPSHOT:          "CLEAR_SNAPSHOT",
 });
 
 // ─── Core readiness lifecycle ─────────────────────────────────────────────────

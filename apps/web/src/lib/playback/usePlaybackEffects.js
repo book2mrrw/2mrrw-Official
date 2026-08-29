@@ -81,13 +81,9 @@ import { registerPlaybackKeyboardShortcuts } from "@/lib/playback/keyboard-short
 import { reportTransportMode } from "@/lib/playback/transport-observation-port.js";
 import {
   proposeSelection,
+  captureSelectionContext,
   getCanonicalSelection,
 } from "@/lib/playback/selection-port.js";
-import {
-  beginContinuitySelectionRestore,
-  validateContinuityCandidate,
-  proposeContinuitySelectionRestore,
-} from "@/lib/playback/continuity-port.js";
 
 const GESTURE_UNLOCK_EVENTS = ["touchstart", "touchend", "click", "keydown"];
 const AUDIBILITY_WATCHDOG_MS = 1250;
@@ -181,38 +177,25 @@ export function usePlaybackEffects({
     if (sessionRestoredRef.current) return;
     sessionRestoredRef.current = true;
 
-    // Captured BEFORE any async fetch below (INV-CONT-2). If the user makes
-    // any Selection of their own while this restore is in flight, Selection's
-    // own selectionVersionAtCapture check denies the late restore
-    // (INV-SELECTION-11); ContinuityAuthority additionally denies it if the
-    // whole Core runtime was torn down/replaced in between (INV-CONT-15) —
-    // two independent gates, not one re-implemented twice.
-    const restoreCapture = beginContinuitySelectionRestore({ source: "session-restore" });
+    // Captured BEFORE any async fetch below. If the user makes any Selection
+    // of their own while this restore is in flight, selectionVersionAtCapture
+    // no longer matches at resolution time and the restore is rejected —
+    // late restore can never overwrite a newer user choice (INV-SELECTION-11).
+    const restoreContext = captureSelectionContext({ source: "session-restore" });
 
     function applySession(session) {
-      if (!restoreCapture) return; // no Continuity sink installed — fail closed, not open
       if (!session?.queue?.length) return;
       const valid = session.queue.filter((t) => t?.slug && t?.src);
       if (!valid.length) return;
       const idx = Math.max(0, Math.min(session.queueIndex ?? 0, valid.length - 1));
-
-      // Persisted state is evidence, not truth (INV-CONT-1) — it passes
-      // through schema validation before ContinuityAuthority ever sees it as
-      // a restore proposal. Repeat is intentionally NOT restored from the
-      // persisted value (reset to "off") — an existing, preserved product
-      // decision (shuffle IS restored) predating this slice; not something
-      // Slice 4D redesigns.
-      const { ok, candidate } = validateContinuityCandidate({
-        schemaVersion: typeof session.v === "number" ? session.v : undefined,
-        persistedAt: session.savedAt,
-        selection: { queue: valid, queueIndex: idx, repeatMode: "off", shuffle: Boolean(session.shuffle) },
-        source: "session-restore",
-      });
-      if (!ok) return;
-
-      const result = proposeContinuitySelectionRestore(candidate, restoreCapture);
+      const result = proposeSelection("restoreSelection", [{
+        queue: valid,
+        queueIndex: idx,
+        repeatMode: "off",
+        shuffle: Boolean(session.shuffle),
+      }], restoreContext);
       if (!result.accepted) return;
-      const restoredTrack = result.selectionResult.snapshot.nowPlaying;
+      const restoredTrack = result.snapshot.nowPlaying;
       patchState({
         isPlaying: false,
         playbackState: "idle",
