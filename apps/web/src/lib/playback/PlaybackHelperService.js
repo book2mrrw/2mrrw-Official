@@ -73,6 +73,7 @@ import {
   reportTransportTimeline,
   subscribeCanonicalTransportStatus,
   subscribeCanonicalTransportTimeline,
+  captureTransportObservationContext,
 } from "@/lib/playback/transport-observation-port.js";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 import {
@@ -282,12 +283,27 @@ export function createPlaybackHelpers(initialDeps) {
         self._deps.continuitySnapshotRef.current = snapshot;
         self.setContinuityFrozenUi(true);
 
-        // Freeze progress display: push frozen position to SM then force-deliver to consumers
-        // despite the freeze gate (one-time bypass via forceProgressNotifyRef).
-        playbackStateMachine.updateContext({
-          currentTime: snapshot.playbackPosition,
-          duration: snapshot.duration,
-        });
+        // Freeze progress display: push the frozen position into canonical
+        // Transport Timeline, then force-deliver to consumers despite the
+        // freeze gate (one-time bypass via forceProgressNotifyRef).
+        //
+        // SLICE 4D ADDENDUM: this must go through reportTransportTimeline
+        // directly with a context captured HERE, stamped with the frozen
+        // track's own mediaIdentity — not playbackStateMachine.updateContext(),
+        // whose compatibility shim always captures a context fresh at push
+        // time (@/lib/playback/transport-observation-port.js's default
+        // parameter). A fresh-at-push context can never be "stale" by
+        // construction, which silently defeated TransportAuthority's own
+        // pre-existing MEDIA_IDENTITY_MISMATCH/DESIRED_REVISION_MISMATCH
+        // gates for exactly the case they exist to catch: old lifecycle work
+        // (this frozen snapshot) finishing after Core has already moved on to
+        // a different track. Capturing the context now, tied to this
+        // snapshot's own track, lets that already-canonical gate correctly
+        // deny the push if it turns out to be stale by the time it commits.
+        reportTransportTimeline(
+          { position: snapshot.playbackPosition, duration: snapshot.duration },
+          captureTransportObservationContext({ mediaIdentity: snapshot.trackId }),
+        );
         self.notifyProgressListeners({ force: true });
 
         logPlaybackContinuitySnapshotCaptured({

@@ -185,6 +185,7 @@ export class PlaybackCore {
       stores,
       logger,
       selectionAuthority,
+      desiredStore,
     });
 
     // Readiness accessor — closed over the PlaybackCore instance (assigned below).

@@ -91,6 +91,11 @@ export const CommitRejectionReason = Object.freeze({
   CONTINUITY_SCHEMA_INVALID: "CONTINUITY_SCHEMA_INVALID",
   /** Continuity: the candidate fails structural validation (not a schema problem). */
   CONTINUITY_INVALID:        "CONTINUITY_INVALID",
+  /** Continuity: a newer PLAY/PAUSE/RESUME/SEEK has landed since this position
+   * restore was captured (DesiredStateStore.revision advanced) — the seek/pause
+   * authority the user currently has moved on, even for the same track and the
+   * same CoreEpoch. Distinct from CONTINUITY_EPOCH_MISMATCH (whole-runtime reset). */
+  CONTINUITY_POSITION_SUPERSEDED: "CONTINUITY_POSITION_SUPERSEDED",
 });
 
 // ─── Selection transition types (Slice 3) ─────────────────────────────────────

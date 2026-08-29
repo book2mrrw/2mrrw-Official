@@ -221,6 +221,142 @@ None for the domain this slice certifies. The one open item (16 — device certi
 
 ---
 
+# ADDENDUM (2026-08-29) — Same-Track Seek Authority + Lifecycle Truth Authority
+
+Two blockers kept Slice 4D OPEN after the initial closure. Both are now resolved. No Selection semantics, queue traversal, repeat, shuffle, HLS, WebAudio, Capability Engine, or Media Identity code was touched. `desiredRevision` (Slice 1C's pre-existing, already-canonical "what does the user currently want" counter) is the authority used for both fixes — no new sequence counter was created.
+
+## 1–2. Exact same-track restore→seek defect analysis and negative-control trace
+
+`ContinuityAuthority.validatePositionRestore()` checked only `context.coreEpoch` (whole-runtime reset) and `mediaIdentity` (selection moved to a different track). Neither check can see "same track, same runtime, but the user has since SEEK'd/PAUSE'd/PLAY'd" — the exact race the original closure's test suite never exercised (it tested a CoreEpoch-rotation race instead of a same-track-newer-seek race). A standalone negative-control replica of the pre-addendum logic (`epochAndIdentityOnlyValidate`, `continuity-authority.test.js`) proves this concretely: given same track "A", same CoreEpoch, and a restore target of 30s, after the user has since seeked to 90s, the pre-addendum checks alone **wrongly accept** the stale 30s restore (test: *"NEGATIVE CONTROL: media-identity + CoreEpoch alone cannot deny a same-track stale seek"*, PASS — defect reproduced in isolation, never touching production code).
+
+## 3. Fixed production trace
+
+The identical scenario run against the real, fixed `ContinuityAuthority` (test: *"FIXED: the same same-track/same-epoch scenario is denied..."*) is **denied**, `rejectionReason: CONTINUITY_POSITION_SUPERSEDED`. PASS.
+
+## 4. Authority context used to invalidate old position restores
+
+`captureContext()` now additionally stamps `desiredRevisionAtCapture: this.#desiredStore.revision` (Slice 1C's `DesiredStateStore.revision` — the same counter the real SEEK/PAUSE/RESUME/PLAY path already advances via `DesiredStateReducer`, which bumps it on every one of those four intents, unconditionally). `validatePositionRestore()` rejects with the new `CommitRejectionReason.CONTINUITY_POSITION_SUPERSEDED` whenever `context.desiredRevisionAtCapture !== this.#desiredStore.revision`, checked independently of (in addition to) the pre-existing CoreEpoch check.
+
+## 5. Why this authority is correct and not a duplicate counter
+
+`desiredRevision` already exists, is already Core-owned, and already means precisely "what does the user currently want" (per `DesiredStateStore.js`'s own header comment, which explicitly distinguishes it from `sequence` and `commitVersion`). `TransportAuthority.observeTimeline()`'s own `#validateContext` already checks `context.desiredRevision !== desired.revision` for exactly this reason. Reusing it for Continuity's position-restore gate is the minimal, already-established mechanism the addendum required preferring over inventing a new one — and `types/index.js`'s own pre-existing Slice 4D header comment (written before this addendum, during the original closure) already documented the plan as "the existing SEEK/TransportMode path for position/volume/rate," which this addendum completes rather than redesigns.
+
+## 6. Immediate seek-path result
+
+`AudioPhase10Bridge.js`'s immediate-engine-stable branch calls `attemptSeek()` → `validateContinuityPositionRestore(candidate, {currentMediaIdentity, context: restoreCapture.continuityContext})` before every seek — unchanged code, now automatically covered because `continuityContext` (from `beginContinuitySelectionRestore()`) carries the new `desiredRevisionAtCapture` field for free. Certified by continuity-authority.test.js races A/B/C/E/F (all operate on exactly this call shape).
+
+## 7. Deferred/failsafe seek-path result
+
+Same `attemptSeek()` function serves both the immediate and the up-to-5-second deferred/failsafe branch (`signal-path-low-risk.test.js`'s pre-existing static test already asserts `seek(targetTime)` — the old unconditional call — does not appear, and `validateContinuityPositionRestore(` does). No code change was needed here this addendum — the fix lives entirely inside `ContinuityAuthority`, so both call sites inherit it identically.
+
+## 8. restore30→userSeek90 result
+
+Race A: PASS. Late restore denied; `core._desiredStore.current.positionTarget` remains 90 (the user's real SEEK), never reverts to 30.
+
+## 9. restore30→userPause result
+
+Race B: PASS. `CONTINUITY_POSITION_SUPERSEDED` — PAUSE advances `desiredRevision` unconditionally (even with no media/position change), so a restore captured before it is denied.
+
+## 10. Valid unsuperseded restore result
+
+Race E: PASS. No intervening authority change → restore accepted, `position: 30` returned unchanged.
+
+## 11. computeLifecycleAudioTruthState pre-migration authority graph
+
+`stateRef/audioRef/lifecycleInBackgroundRef/playbackIntentBeforeHideRef/userPausedRef/isRecoveringRef/recoveryInFlightRef` (physical + legacy lifecycle facts) → local decision tree → `lifecycleAudioTruthStateRef` (local) **and** `playbackStateMachine.updateContext({currentTime, duration})` on Phase 21C freeze entry/release → (via PSM's `_CORE_TRANSPORT_KEYS` compatibility forwarding, unconditional whenever `currentTime`/`duration` keys are present) → `reportTransportTimeline({position, duration})` with **no explicit context**, defaulting to a context captured fresh at push time → `TransportAuthority.observeTimeline()`'s canonical commit.
+
+## 12. Exact responsibilities discovered
+
+1. **Transport health evaluation** (`evaluatePlaybackTransportHealth`) — reads physical facts only, writes nothing.
+2. **Lifecycle truth-state classification** (the `USER_PAUSED`/`RECOVERING`/`OS_SUSPENDED`/`USER_PLAYING` decision tree) — writes only `lifecycleAudioTruthStateRef`, a local presentation ref.
+3. **Phase 21C freeze-capture push** — writes canonical `TransportTimeline.position`/`duration` via the always-fresh-context tunnel described above. **This was the actual defect**: the pushed DATA is a frozen/stale snapshot, but the CONTEXT validating it is captured fresh at push time, so it can never be judged stale no matter how much time or how many intervening intents have passed — silently defeating `TransportAuthority`'s own pre-existing `DESIRED_REVISION_MISMATCH`/`MEDIA_IDENTITY_MISMATCH` gates for exactly the case they exist to catch.
+4. **Freeze-release push** — also writes canonical `TransportTimeline`, but using values read fresh from `stateRef`/`el` at release time; captured and applied in the same synchronous instant, so it was never actually vulnerable to this defect class (confirmed by analysis, not merely assumed — the release condition and the values it pushes are computed in the same synchronous call, with no async gap for staleness to accrue in).
+
+## 13. Post-migration authority graph
+
+Responsibilities 1–2 unchanged (no canonical write). Responsibility 3 (freeze-capture push) now: build snapshot → `captureTransportObservationContext({mediaIdentity: snapshot.trackId})` (captured in the same synchronous instant, tied to the snapshot's own track) → `reportTransportTimeline({position, duration}, capturedContext)` → `TransportAuthority.observeTimeline()`'s **unmodified**, pre-existing `#validateContext` (CoreEpoch + `desiredRevision` + `sourceIntentId` + `mediaIdentity`) now actually protects this write, because the context is no longer captured too late to mean anything. Responsibility 4 (release push) unchanged — analysis in item 12 showed it was never the vulnerable half.
+
+## 14. Final classification of every responsibility
+
+| Responsibility | Classification |
+|---|---|
+| Transport health evaluation | PHYSICAL_OBSERVATION |
+| Lifecycle truth-state classification | EXECUTION_HELPER (local ref only, no canonical write) |
+| Phase 21C freeze-capture push | CORE-DERIVED PROJECTION (writes through TransportAuthority's own canonical gate, properly protected) |
+| Phase 21C freeze-release push | CORE-DERIVED PROJECTION (already correct; values read fresh at push time) |
+
+No responsibility in `computeLifecycleAudioTruthState()` retains independent canonical-truth-writing authority — every canonical write flows through `TransportAuthority.observeTimeline()`'s own gate, which now actually validates what it receives.
+
+## 15. Remaining LEGACY_AUTHORITY continuity rows
+
+**0.** Mechanically certified: static test *"SLICE-4D ADDENDUM: zero LEGACY_AUTHORITY rows remain in the certified Continuity writer matrix"* parses every row of the writer-matrix CSV and asserts the CURRENT OWNER column is never the bare string `LEGACY_AUTHORITY`. The matrix itself documents the actual authority path for both reclassified rows (item 24 of the original closure report's matrix), not merely a relabeled column.
+
+## 16. background→pause→foreground result
+
+PASS, via Slice 2's pre-existing (unmodified) certified suite — *"PLAY -> PAUSE -> late playing cannot leave PAUSED"* — re-run and still green. This is the Transport-level guarantee this race exercises; it did not need a new test because Slice 2 already certified it in general form and nothing in this addendum touches Transport's own status-observation logic (only the timeline/position half).
+
+## 17. background/loadA→selectB→foreground result
+
+PASS, via Slice 2's pre-existing certified suite — *"PLAY -> PAUSE -> PLAY rejects the old pause observation"* and *"old recovery completion cannot overwrite a newer PLAY"* (Transport-level: A cannot regain authority once B supersedes it) — plus Slice 3/4D's existing Selection/Continuity-level equivalents (*"PLAY A -> PLAY B race resolves deterministically to B"*, *"1. restore A -> user selects B -> late A restore is denied, B remains canonical"*). All re-run and still green; no new test needed for this race specifically.
+
+## 18. Stale lifecycle-computation result
+
+PASS — this is the one race that needed a new test, and got one: *"SLICE-4D ADDENDUM: a timeline push captured for an old track is denied once Core has moved on to a new PLAY"* (`transport-authority.test.js`). Old lifecycle work (a freeze-capture push captured for track A) cannot overwrite current Core truth once Core has moved to track B — denied with `DESIRED_REVISION_MISMATCH` (PLAY always advances `desiredRevision`, and `requestedMediaIdentity` can only ever change together with a revision bump in this reducer, so the revision gate alone is sufficient; the explicit `mediaIdentity` stamp added by this fix is a self-consistency improvement — the pushed identity now describes the same snapshot the pushed position came from — rather than an independently load-bearing gate under today's reducer). A companion test confirms the happy path is unaffected (no regression when nothing superseded the freeze), and a third confirms the gate also fires on a bare PAUSE with no media change (proving the general "any newer intent" claim, not just PLAY).
+
+## 19. Continuity test total
+
+**38** (`continuity-authority.test.js`) — up from 31 at original closure (+7: negative control, fixed-production-trace, races A/B/C/E/F). Race D (restore A:30 → select B → late A denied) is Selection's own pre-existing race, re-certified, not re-tested here — position restore has no independent media-identity authority of its own to duplicate that assertion against.
+
+## 20. Playback Core total
+
+`test:core-invariants`: **260/260** — up from 250/250 (+7 continuity, +3 transport-authority.test.js additions: the same-old-track-denied test, the happy-path-unaffected test, and the PAUSE-supersedes test).
+
+## 21. Slice 1D regression total
+
+Physical suite: **47/47**, unchanged. No physical/DOM-event test needed modification — this addendum's fixes are both pure logic-layer (Continuity's revision check, Transport's context-capture timing), with no new physical/DOM interaction.
+
+## 22. Slice 2 regression total
+
+`transport-authority.test.js`: **25/25** (22 prior + 3 new). Every pre-existing Slice 2 assertion (`PLAY -> physical playing`, `PLAY -> PAUSE -> late playing cannot leave PAUSED`, `100+ interleaved command contexts`, etc.) re-run unmodified and still green — the new tests were appended, none of the existing ones were touched.
+
+## 23. Slice 3 regression total
+
+Selection suite (within `test:core-invariants`): unchanged from original Slice 4D closure — no Selection file was touched by this addendum.
+
+## 24. Critical aggregate
+
+**689/689** (260 core-invariants + 47 physical + 247 auth + 83 upload + 23 release-lifecycle + 29 signal-path-contracts) — up from 677/677 at original closure. signal-path-contracts rose from 27 to 29 (+2 new static tests for this addendum: the freeze-capture wiring test and the zero-LEGACY_AUTHORITY-rows CSV test).
+
+## 25. Build
+
+`npm run build`: **PASS**, exit code 0. Turbopack production compilation, TypeScript check, all routes generated, no errors.
+
+## 26. Lint
+
+`npm run lint`: **PASS** — 0 errors, 241 warnings, identical count to before this addendum. Every touched file (`ContinuityAuthority.js`, `PlaybackCore.js`, `types/index.js`, `PlaybackHelperService.js`, both test files, the writer-matrix CSV) spot-checked against the warning list — none appear.
+
+## 27. Updated writer matrix
+
+[SLICE-4D-CONTINUITY-WRITER-MATRIX-2026-08-29.csv](./SLICE-4D-CONTINUITY-WRITER-MATRIX-2026-08-29.csv) — `PlaybackHelperService.js`'s single LEGACY_AUTHORITY row split into two, each reclassified with its actual authority path documented (item 14 above), not merely relabeled.
+
+## 28. Original Slice 4D commit hash
+
+`e98a249` (`feat(playback): harden continuity and resume authority`), doc-update `0a50be3`.
+
+## 29. Addendum commit hash
+
+Recorded after this document is committed (see the closing commit immediately following this report in git history).
+
+## 30. Unresolved Slice 4D blocker count
+
+**0.** Both blockers (same-track stale position restore; `computeLifecycleAudioTruthState()` LEGACY_AUTHORITY classification) are resolved, tested, and regression-clean.
+
+## 31. Scope discipline
+
+Not touched: Capability Engine, HLS, WebAudio topology, Media Identity, ingest/publication, predictive scheduling, dual-deck handoff. Slice 1D/2/3 and the original Slice 4D candidate/schema work are unmodified except for the two precise, minimal edits this addendum required (`ContinuityAuthority.captureContext`/`validatePositionRestore`, and `PlaybackHelperService.js`'s freeze-capture push). Device certification remains **BLOCKED — MANUAL DEVICE CERTIFICATION** for Desktop Chrome/Safari Desktop/iOS Safari/Android Chrome, unchanged from the original closure — no ad hoc Playwright framework was invented.
+
+---
+
 # SLICE 4D CLOSED
 
 Do not begin Slice 5.

@@ -324,3 +324,80 @@ test("high-resolution observations publish a throttled presentation timeline", (
     core.destroy();
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SLICE 4D ADDENDUM — computeLifecycleAudioTruthState() (Phase 21C continuity
+// freeze, PlaybackHelperService.js) captures the frozen position/duration
+// once, synchronously, but must never let that captured snapshot overwrite
+// canonical Transport truth once Core has moved on to different media. The
+// fix (PlaybackHelperService.js) captures an explicit context — via
+// captureTransportObservationContext({mediaIdentity}) — stamped with the
+// FROZEN TRACK'S OWN identity at the moment of capture, instead of letting
+// reportTransportTimeline default to a context captured fresh at push time
+// (which can never be "stale" by construction, silently defeating this exact
+// gate). These tests certify the underlying observeTimeline() gate the fix
+// relies on — same mechanism, exercised directly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("SLICE-4D ADDENDUM: a timeline push captured for an old track is denied once Core has moved on to a new PLAY (desiredRevision alone is sufficient)", () => {
+  const core = createTransportCore();
+  play(core, "track-a");
+  // Mirrors PlaybackHelperService.js's fix: capture a context stamped with
+  // the frozen track's OWN identity at the moment the freeze snapshot is taken.
+  const frozenContext = core._transportAuthority.captureContext({ mediaIdentity: "track-a" });
+
+  // Core moves on to a different track entirely before the frozen push commits.
+  play(core, "track-b");
+
+  const result = core._transportAuthority.observeTimeline(
+    { position: 30, duration: 200 },
+    frozenContext,
+  );
+  assert.equal(result.accepted, false);
+  // PLAY always advances desiredRevision (DesiredStateReducer's PLAY case),
+  // and requestedMediaIdentity can only ever change together with a revision
+  // bump in this reducer — so DESIRED_REVISION_MISMATCH alone already fully
+  // covers this race; it fires before MEDIA_IDENTITY_MISMATCH is even
+  // reached. The explicit mediaIdentity stamp this fix adds is a
+  // self-consistency improvement (the pushed identity now describes the same
+  // snapshot the pushed position came from, rather than whatever Core's
+  // CURRENT desired identity happens to claim) rather than an independently
+  // load-bearing gate under today's reducer.
+  assert.equal(result.rejectionReason, "DESIRED_REVISION_MISMATCH");
+  core.destroy();
+});
+
+test("SLICE-4D ADDENDUM: the same freeze-push scenario is accepted when nothing superseded it (no regression to the happy path)", () => {
+  const core = createTransportCore();
+  play(core, "track-a");
+  const frozenContext = core._transportAuthority.captureContext({ mediaIdentity: "track-a" });
+
+  const result = core._transportAuthority.observeTimeline(
+    { position: 30, duration: 200 },
+    frozenContext,
+  );
+  assert.equal(result.accepted, true);
+  assert.equal(core._transportAuthority.timelineSnapshot.position, 30);
+  core.destroy();
+});
+
+test("SLICE-4D ADDENDUM: a freeze-push context captured before a PAUSE is also denied — the freeze mechanism inherits the full staleness gate, not just media-identity", () => {
+  const core = createTransportCore();
+  play(core, "track-a");
+  const frozenContext = core._transportAuthority.captureContext({ mediaIdentity: "track-a" });
+
+  core.port.pause({ source: "user" }); // same track, no identity change
+
+  const result = core._transportAuthority.observeTimeline(
+    { position: 30, duration: 200 },
+    frozenContext,
+  );
+  // desiredRevision advanced (PAUSE always bumps it) but the captured context
+  // pins the revision from BEFORE the pause — this is intentionally denied by
+  // the pre-existing DESIRED_REVISION_MISMATCH gate too, proving the freeze
+  // mechanism inherits Core's full staleness protection, not just the
+  // media-identity half of it.
+  assert.equal(result.accepted, false);
+  assert.equal(result.rejectionReason, "DESIRED_REVISION_MISMATCH");
+  core.destroy();
+});

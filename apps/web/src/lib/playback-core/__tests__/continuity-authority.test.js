@@ -11,6 +11,21 @@ function track(id) {
 
 function createContinuityCore() {
   const core = PlaybackCore.create({ loggerEnabled: false });
+  // A real (if minimal) execution engine so core.port.play/pause/resume/seek
+  // genuinely advance DesiredStateStore.revision through the same pipeline
+  // production uses (CommandGateway -> IntentFactory -> execution engine),
+  // exactly mirroring transport-authority.test.js's createTransportCore().
+  const engine = {
+    execute(intent) {
+      core._desiredStore.apply(intent);
+      return Promise.resolve(true);
+    },
+    dispose() {},
+  };
+  core._injectExecutionEngine(engine, {
+    effectAuthority: core._effectAuthority,
+    disposeInstalledEffectGuard: () => {},
+  });
   core._transferDomainToCore(Domain.SELECTION);
   core._transferDomainToCore(Domain.CONTINUITY);
   return core;
@@ -422,6 +437,147 @@ test("position restore never mutates TransportTimeline — it only returns a val
   // this test's core, which is itself the point: validatePositionRestore has
   // no dependency on Transport at all.
   assert.equal(core._ownershipMap[Domain.TRANSPORT], DomainOwner.LEGACY);
+  core.destroy();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SLICE 4D ADDENDUM — same-track seek authority (media identity + CoreEpoch
+// alone cannot express "same track, same runtime, but the user has since
+// SEEK'd/PAUSE'd/PLAY'd"). validatePositionRestore additionally pins
+// DesiredStateStore.revision (Slice 1C's already-canonical "what does the
+// user currently want" counter — the same one the real SEEK/PAUSE/RESUME/PLAY
+// path advances) at capture time and denies a restore whose capture no
+// longer matches the current revision.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test("NEGATIVE CONTROL: media-identity + CoreEpoch alone cannot deny a same-track stale seek (reproduces the pre-addendum defect class)", () => {
+  // A standalone replica of ONLY the two checks the pre-addendum
+  // validatePositionRestore performed — proves those two checks alone are
+  // insufficient for this race, in isolation, never touching production code.
+  function epochAndIdentityOnlyValidate(candidate, { currentMediaIdentity, context, coreEpochNow }) {
+    if (context && context.coreEpoch !== coreEpochNow) {
+      return { accepted: false, rejectionReason: "CONTINUITY_EPOCH_MISMATCH" };
+    }
+    if (
+      candidate.mediaIdentity != null &&
+      currentMediaIdentity != null &&
+      candidate.mediaIdentity !== currentMediaIdentity
+    ) {
+      return { accepted: false, rejectionReason: "CONTINUITY_INVALID" };
+    }
+    return { accepted: true, position: candidate.positionSeconds };
+  }
+
+  const coreEpochNow = "epoch-1";
+  const context = { coreEpoch: coreEpochNow }; // captured when the restore began
+  // Same track (A), same CoreEpoch — but the user has since SEEK'd to 90.
+  // Epoch+identity alone have no way to see that; they wrongly accept.
+  const result = epochAndIdentityOnlyValidate(
+    { positionSeconds: 30, mediaIdentity: "A" },
+    { currentMediaIdentity: "A", context, coreEpochNow },
+  );
+  assert.equal(result.accepted, true, "defect reproduced: epoch+identity-only validation wrongly accepts a superseded same-track restore");
+});
+
+test("FIXED: the same same-track/same-epoch scenario is denied by the real ContinuityAuthority once a newer SEEK has landed", () => {
+  const core = createContinuityCore();
+  const authority = core._continuityAuthority;
+  core._selectionAuthority.setQueueAndSelect([track("A")], 0);
+
+  const context = authority.captureContext({ source: "recovery-event" }); // restore begins, target 30
+  core.port.seek({ positionSeconds: 90, source: "user" }); // user seeks the SAME track to 90
+
+  const result = authority.validatePositionRestore(
+    { positionSeconds: 30, mediaIdentity: "A" },
+    { currentMediaIdentity: "A", context },
+  );
+  assert.equal(result.accepted, false);
+  assert.equal(result.rejectionReason, "CONTINUITY_POSITION_SUPERSEDED");
+  core.destroy();
+});
+
+test("A. restore 30 -> user seek 90 -> late restore denied; final desired position target follows 90", () => {
+  const core = createContinuityCore();
+  const authority = core._continuityAuthority;
+  core._selectionAuthority.setQueueAndSelect([track("A")], 0);
+  const context = authority.captureContext({ source: "recovery-event" });
+
+  core.port.seek({ positionSeconds: 90 });
+  assert.equal(core._desiredStore.current.positionTarget, 90);
+
+  const result = authority.validatePositionRestore({ positionSeconds: 30, mediaIdentity: "A" }, { currentMediaIdentity: "A", context });
+  assert.equal(result.accepted, false);
+  // The late restore never got to propose anything — desired state still
+  // reflects the user's 90, not the stale 30.
+  assert.equal(core._desiredStore.current.positionTarget, 90);
+  core.destroy();
+});
+
+test("B. restore 30 -> user PAUSE -> late restore cannot create an execution effect inconsistent with current desired truth", () => {
+  const core = createContinuityCore();
+  const authority = core._continuityAuthority;
+  core._selectionAuthority.setQueueAndSelect([track("A")], 0);
+  const context = authority.captureContext({ source: "recovery-event" });
+
+  core.port.pause({ source: "user" }); // no media/position change, but desiredRevision still advances
+
+  const result = authority.validatePositionRestore({ positionSeconds: 30, mediaIdentity: "A" }, { currentMediaIdentity: "A", context });
+  assert.equal(result.accepted, false);
+  assert.equal(result.rejectionReason, "CONTINUITY_POSITION_SUPERSEDED");
+  core.destroy();
+});
+
+test("C. restore 30 -> user PLAY (re-selects/re-starts) -> restore is evaluated against the latest applicable revision", () => {
+  const core = createContinuityCore();
+  const authority = core._continuityAuthority;
+  core._selectionAuthority.setQueueAndSelect([track("A")], 0);
+  const context = authority.captureContext({ source: "recovery-event" });
+
+  core.port.play({ trackId: "A", source: "user" });
+
+  const result = authority.validatePositionRestore({ positionSeconds: 30, mediaIdentity: "A" }, { currentMediaIdentity: "A", context });
+  assert.equal(result.accepted, false);
+  assert.equal(result.rejectionReason, "CONTINUITY_POSITION_SUPERSEDED");
+  core.destroy();
+});
+
+// D. restore A:30 -> select B -> late A restore denied is Selection's own
+// race (already certified by test "1. restore A -> user selects B -> late A
+// restore is denied..." above) — position restore has no independent
+// media-identity authority of its own to re-certify here.
+
+test("E. restore 30 -> no intervening authority change -> restore allowed", () => {
+  const core = createContinuityCore();
+  const authority = core._continuityAuthority;
+  core._selectionAuthority.setQueueAndSelect([track("A")], 0);
+  const context = authority.captureContext({ source: "recovery-event" });
+
+  const result = authority.validatePositionRestore({ positionSeconds: 30, mediaIdentity: "A" }, { currentMediaIdentity: "A", context });
+  assert.equal(result.accepted, true);
+  assert.equal(result.position, 30);
+  core.destroy();
+});
+
+test("F. two concurrent restore positions race — whichever actually seeks first makes the other stale, deterministically", () => {
+  const core = createContinuityCore();
+  const authority = core._continuityAuthority;
+  core._selectionAuthority.setQueueAndSelect([track("A")], 0);
+
+  const capturedFirst = authority.captureContext({ source: "session-restore" });
+  const capturedSecond = authority.captureContext({ source: "recovery-event" });
+  // Both captured at the same revision — neither is stale relative to the
+  // other yet. The FIRST to actually execute its seek is the one that
+  // advances desiredRevision, which deterministically makes the second one
+  // stale the moment IT is validated afterward — there is no ambiguity about
+  // which one "wins", because winning IS the act of advancing authority.
+  const resultFirst = authority.validatePositionRestore({ positionSeconds: 30, mediaIdentity: "A" }, { currentMediaIdentity: "A", context: capturedFirst });
+  assert.equal(resultFirst.accepted, true);
+  core.port.seek({ positionSeconds: resultFirst.position }); // first restore's seek actually executes
+
+  const resultSecond = authority.validatePositionRestore({ positionSeconds: 45, mediaIdentity: "A" }, { currentMediaIdentity: "A", context: capturedSecond });
+  assert.equal(resultSecond.accepted, false);
+  assert.equal(resultSecond.rejectionReason, "CONTINUITY_POSITION_SUPERSEDED");
+  assert.equal(core._desiredStore.current.positionTarget, 30, "the second (now-stale) restore must never reach the physical seek");
   core.destroy();
 });
 

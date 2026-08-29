@@ -25,6 +25,14 @@
  *     position is safe to hand to that pipeline, never mutates the physical
  *     clock or TransportTimeline itself (INV-CONT-6/7).
  *
+ *     Media identity + CoreEpoch alone cannot express "same track, same
+ *     runtime, but the user has since SEEK'd/PAUSE'd/PLAY'd" — a captured
+ *     position context also pins `DesiredStateStore.revision` (Slice 1C's
+ *     already-canonical "what does the user currently want" counter, the
+ *     same authority the real SEEK/PAUSE/RESUME/PLAY path advances) and a
+ *     restore whose capture no longer matches the current revision is
+ *     denied, never re-validated against a re-derived target.
+ *
  * What THIS class commits, through its own dedicated CommitGate (same
  * one-writer-per-domain pattern as Selection/Transport), is bookkeeping about
  * the last VALIDATED candidate (Domain.CONTINUITY) — never a second canonical
@@ -51,16 +59,18 @@ export class ContinuityAuthority {
   #stores;
   #logger;
   #selectionAuthority;
+  #desiredStore;
   #sequence = 0;
   #metrics = { proposals: 0, accepted: 0, rejected: 0 };
 
-  constructor({ commitGate, continuityAuthorityGate, coreEpoch, stores, logger, selectionAuthority }) {
+  constructor({ commitGate, continuityAuthorityGate, coreEpoch, stores, logger, selectionAuthority, desiredStore }) {
     this.#commitGate = commitGate;
     this.#continuityAuthorityGate = continuityAuthorityGate;
     this.#coreEpoch = coreEpoch;
     this.#stores = stores;
     this.#logger = logger;
     this.#selectionAuthority = selectionAuthority;
+    this.#desiredStore = desiredStore;
   }
 
   get snapshot() {
@@ -78,6 +88,12 @@ export class ContinuityAuthority {
   captureContext(meta = {}) {
     return Object.freeze({
       coreEpoch: this.#coreEpoch.current,
+      // Pins Slice 1C's already-canonical "what does the user currently
+      // want" counter at the moment of capture. PLAY/PAUSE/RESUME/SEEK all
+      // advance it (unconditionally — see DesiredStateReducer), so any of
+      // those landing before this capture resolves makes it stale, even for
+      // the exact same media identity and the exact same CoreEpoch.
+      desiredRevisionAtCapture: this.#desiredStore?.revision ?? null,
       source: meta.source ?? "unknown",
       requestId: meta.requestId ?? null,
       capturedAt: Date.now(),
@@ -153,6 +169,20 @@ export class ContinuityAuthority {
   validatePositionRestore(candidate, { currentMediaIdentity, context } = {}) {
     if (context && context.coreEpoch !== this.#coreEpoch.current) {
       return { accepted: false, rejectionReason: CommitRejectionReason.CONTINUITY_EPOCH_MISMATCH };
+    }
+    // Same track, same CoreEpoch is NOT enough on its own: a user SEEK, PAUSE,
+    // RESUME, or PLAY landing after this context was captured means the
+    // user's current execution intent has moved on, and this restore's
+    // target position no longer describes it. Checked independently of the
+    // CoreEpoch gate above — a whole-runtime reset is a different failure
+    // mode than "the same runtime kept running and something newer happened".
+    if (
+      context &&
+      Number.isInteger(context.desiredRevisionAtCapture) &&
+      this.#desiredStore &&
+      context.desiredRevisionAtCapture !== this.#desiredStore.revision
+    ) {
+      return { accepted: false, rejectionReason: CommitRejectionReason.CONTINUITY_POSITION_SUPERSEDED };
     }
     const position = candidate?.positionSeconds;
     if (!Number.isFinite(position) || position < RESTORE_MIN_POSITION_SEC) {

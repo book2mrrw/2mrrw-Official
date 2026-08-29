@@ -498,6 +498,30 @@ test("SLICE-4D page-load session restore is captured before its async fetch and 
   );
 });
 
+test("SLICE-4D ADDENDUM: the Phase 21C continuity-freeze capture stamps an explicit, snapshot-tied Transport context instead of a fresh-at-push default", () => {
+  const helper = read("src/lib/playback/PlaybackHelperService.js");
+  assert.match(helper, /captureTransportObservationContext/);
+  const captureIdx = helper.indexOf("self._deps.continuitySnapshotRef.current = snapshot;");
+  assert.ok(captureIdx >= 0, "freeze-capture assignment must exist");
+  const pushIdx = helper.indexOf("reportTransportTimeline(", captureIdx);
+  assert.ok(pushIdx >= 0 && pushIdx - captureIdx < 2000, "the freeze-capture push must call reportTransportTimeline shortly after capturing the snapshot");
+  const pushCallEnd = helper.indexOf(");", pushIdx);
+  const pushCall = helper.slice(pushIdx, pushCallEnd);
+  assert.match(pushCall, /captureTransportObservationContext\(\s*\{\s*mediaIdentity:\s*snapshot\.trackId\s*\}\s*\)/);
+});
+
+test("SLICE-4D ADDENDUM: zero LEGACY_AUTHORITY rows remain in the certified Continuity writer matrix", () => {
+  const csv = read("docs/architecture/SLICE-4D-CONTINUITY-WRITER-MATRIX-2026-08-29.csv");
+  const rows = csv.trim().split("\n").slice(1); // skip header
+  for (const row of rows) {
+    // Column 5 (CURRENT OWNER) is never a bare, unquoted LEGACY_AUTHORITY value.
+    // A simple split on "," is safe here because every field containing a
+    // comma in this file is quoted, and column 5 itself never is.
+    const cols = row.split(",");
+    assert.notEqual(cols[4], "LEGACY_AUTHORITY", `row starting "${cols[0]}" must not remain classified LEGACY_AUTHORITY`);
+  }
+});
+
 test("SLICE-4D restore never grants protected playback; entitlement is always re-checked downstream", () => {
   // Selection is a pure sequencing domain — it has no isPlaying/playing field
   // at all, so restoring Selection (via Continuity) can never by itself start
