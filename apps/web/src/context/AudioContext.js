@@ -86,15 +86,11 @@ export function AudioProvider({ children }) {
   usePlaybackEffects({ refs, delegates, publicApi, state, user, authLoading, entitlementAccountState });
 
   // SM orchestration channel — drives playbackOrchestrationState consumers only.
-  const playbackOrchestrationState = useSyncExternalStore(
-    (onStoreChange) => playbackStateMachine.subscribe(() => onStoreChange()),
-    () => playbackStateMachine.getState(),
-    () => playbackStateMachine.getState()
-  );
 
   // ─── Context Value ───────────────────────────────────────────────────────────
   // publicApi and delegates are useMemo([], []) — identity never changes.
-  // Only state, playbackOrchestrationState, and local React state values cause recomputes.
+  // Full orchestration is intentionally excluded. Embedding it here would make
+  // every useAudioPlayer consumer subscribe to unrelated engine transitions.
   const value = useMemo(() => {
     const { currentTime: _t, playbackNetworkState: _n, isBuffering: _b, ...playbackState } = state;
     const transport = playbackStateMachine.getTransportSnapshot();
@@ -104,8 +100,6 @@ export function AudioProvider({ children }) {
       playbackNetworkState: transport.playbackNetworkState,
       isBuffering: transport.isBuffering,
       // Orchestration
-      playbackOrchestrationState,
-      subscribePlaybackOrchestration: playbackStateMachine.subscribe,
       dispatchPlaybackCommand,
       // Stable refs exposed to consumers
       audioRef,
@@ -147,7 +141,7 @@ export function AudioProvider({ children }) {
       hintUpcomingPlay:        delegates.hintUpcomingPlay,
     };
   }, [
-    state, playbackOrchestrationState, publicApi, delegates, uiState,
+    state, publicApi, delegates, uiState,
   ]);
 
   // ─── Debug Render Trace (dev/trace only) ─────────────────────────────────────

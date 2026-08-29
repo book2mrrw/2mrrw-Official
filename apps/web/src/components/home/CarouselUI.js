@@ -1,7 +1,6 @@
 "use client";
 
 import { memo, useState, useRef } from "react";
-import { useMountEnterAnimation, useSlugEnterAnimation } from "@/hooks/useMountEnterAnimation";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
@@ -14,21 +13,22 @@ import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 import { useArtworkGesture } from "@/hooks/useArtworkGesture";
 function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singleIndex, singles, prevSingle, nextSingle, goToSingle, onSingleClick, addToCart, addVinylToCart, buttonHoverIn, buttonHoverOut, accountState, userId, isAdmin, onGift, onLibraryChange }) {
   const [previewHover, setPreviewHover] = useState(false);
-  const [coverVideoFailed, setCoverVideoFailed] = useState(false);
   const carouselCoverRef = useRef(null);
   const { handlers: carouselGesture } = useArtworkGesture({
     slug: currentSingle?.slug || "",
     elementRef: carouselCoverRef,
   });
-  const { shouldAnimate: shouldAnimateCover } = useMountEnterAnimation();
-  const shouldAnimateTitle = useSlugEnterAnimation(currentSingle?.slug);
   const access = currentSingleAccess || (currentSingle ? resolveContentAccess(currentSingle, accountState) : null);
   const overlayPlayLabel = access?.canStream ? "Listen" : "Preview";
   const coverDisplay = catalogCoverDisplay(currentSingle);
   // Use video directly from the resolved item — mirrors LatestSinglesStyleRow pipeline.
-  const coverVideoSrc = (!coverVideoFailed && (currentSingle?.video || currentSingle?.visual) && (currentSingle?.coverArtType === "video" || coverDisplay?.type === "video"))
+  const coverVideoSrc = ((currentSingle?.video || currentSingle?.visual) && (currentSingle?.coverArtType === "video" || coverDisplay?.type === "video"))
     ? (currentSingle.video || currentSingle.visual)
     : null;
+  const primaryCoverSrc = coverVideoSrc || coverDisplay.src;
+  const primaryCoverType = coverVideoSrc ? "video" : coverDisplay.type || "image";
+  const staticCover = currentSingle?.baseCover || currentSingle?.cover ||
+    (coverDisplay.type === "image" ? coverDisplay.src : undefined);
   const currentLibraryItem = accountState?.library?.find(
     (lib) => lib.slug === currentSingle?.slug
   );
@@ -50,39 +50,20 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           <button onClick={prevSingle} style={{width:44,height:44,borderRadius:"50%",background:"rgba(255,255,255,0.06)",border:"1px solid #2a2a2a",color:"#555",fontSize:22,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>‹</button>
           <div ref={carouselCoverRef} style={{flex:1,position:"relative",aspectRatio:"1/1"}} onMouseEnter={()=>{setPreviewHover(true);hintCurrentSingle();}} onMouseLeave={()=>setPreviewHover(false)} onTouchStart={hintCurrentSingle} onPointerDown={carouselGesture.onPointerDown} onPointerMove={carouselGesture.onPointerMove} onPointerUp={carouselGesture.onPointerUp} onPointerCancel={carouselGesture.onPointerCancel} onLostPointerCapture={carouselGesture.onLostPointerCapture}>
-            {coverVideoSrc ? (
-              <video
-                key={coverVideoSrc}
-                src={coverVideoSrc}
-                poster={currentSingle?.baseCover || currentSingle?.cover || undefined}
-                autoPlay muted loop playsInline preload="auto"
-                webkit-playsinline="true"
-                onError={() => setCoverVideoFailed(true)}
-                style={{
-                  width: "100%", height: "100%", objectFit: "cover", display: "block",
-                  borderRadius: 14, boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
-                  transition: "filter 0.3s",
-                  filter: previewHover ? "brightness(0.55)" : "brightness(1)",
-                  animation: shouldAnimateCover ? "fadeInCover 0.4s ease forwards" : undefined,
-                  pointerEvents: "none",
-                }}
-              />
-            ) : (
-              <CoverArt
-                src={coverDisplay.src}
-                type={coverDisplay.type || "image"}
-                alt=""
-                width="100%"
-                height="100%"
-                borderRadius={14}
-                style={{
-                  boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
-                  transition: "filter 0.3s",
-                  filter: previewHover ? "brightness(0.55)" : "brightness(1)",
-                  animation: shouldAnimateCover ? "fadeInCover 0.4s ease forwards" : undefined,
-                }}
-              />
-            )}
+            <CoverArt
+              src={primaryCoverSrc}
+              baseCover={staticCover}
+              type={primaryCoverType}
+              alt=""
+              width="100%"
+              height="100%"
+              borderRadius={14}
+              style={{
+                boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
+                transition: "filter 0.3s",
+                filter: previewHover ? "brightness(0.55)" : "brightness(1)",
+              }}
+            />
             <div onClick={()=>onSingleClick?.(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:8,borderRadius:14,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
               <div style={{width:56,height:56,borderRadius:"50%",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(8px)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center"}}><svg viewBox="0 0 24 24" fill="white" width="24" height="24" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg></div>
               <div style={{fontSize:11,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>{overlayPlayLabel}</div>
@@ -95,40 +76,20 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
       )}
       {!isMobile && (
         <div ref={carouselCoverRef} style={{flexShrink:0,width:large?340:300,height:large?340:300,position:"relative"}} onMouseEnter={()=>{setPreviewHover(true);hintCurrentSingle();}} onMouseLeave={()=>setPreviewHover(false)} onTouchStart={hintCurrentSingle} onPointerDown={carouselGesture.onPointerDown} onPointerMove={carouselGesture.onPointerMove} onPointerUp={carouselGesture.onPointerUp} onPointerCancel={carouselGesture.onPointerCancel} onLostPointerCapture={carouselGesture.onLostPointerCapture}>
-          {coverVideoSrc ? (
-            <video
-              key={coverVideoSrc}
-              src={coverVideoSrc}
-              poster={currentSingle?.baseCover || currentSingle?.cover || undefined}
-              autoPlay muted loop playsInline preload="auto"
-              webkit-playsinline="true"
-              onError={() => setCoverVideoFailed(true)}
-              style={{
-                width: "100%", height: "100%", objectFit: "cover", display: "block",
-                borderRadius: large ? 18 : 16,
-                boxShadow: large ? "0 10px 50px rgba(0,0,0,0.7)" : "0 8px 40px rgba(0,0,0,0.6)",
-                transition: "filter 0.3s",
-                filter: previewHover ? "brightness(0.55)" : "brightness(1)",
-                animation: shouldAnimateCover ? "fadeInCover 0.4s ease forwards" : undefined,
-                pointerEvents: "none",
-              }}
-            />
-          ) : (
-            <CoverArt
-              src={coverDisplay.src}
-              type={coverDisplay.type || "image"}
-              alt=""
-              width="100%"
-              height="100%"
-              borderRadius={large ? 18 : 16}
-              style={{
-                boxShadow: large ? "0 10px 50px rgba(0,0,0,0.7)" : "0 8px 40px rgba(0,0,0,0.6)",
-                transition: "filter 0.3s",
-                filter: previewHover ? "brightness(0.55)" : "brightness(1)",
-                animation: shouldAnimateCover ? "fadeInCover 0.4s ease forwards" : undefined,
-              }}
-            />
-          )}
+          <CoverArt
+            src={primaryCoverSrc}
+            baseCover={staticCover}
+            type={primaryCoverType}
+            alt=""
+            width="100%"
+            height="100%"
+            borderRadius={large ? 18 : 16}
+            style={{
+              boxShadow: large ? "0 10px 50px rgba(0,0,0,0.7)" : "0 8px 40px rgba(0,0,0,0.6)",
+              transition: "filter 0.3s",
+              filter: previewHover ? "brightness(0.55)" : "brightness(1)",
+            }}
+          />
           <div onClick={()=>onSingleClick?.(currentSingle)} style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,borderRadius:large?18:16,cursor:"pointer",opacity:previewHover?1:0,transition:"opacity 0.25s"}}>
             <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(0,0,0,0.55)",backdropFilter:"blur(8px)",border:"1.5px solid rgba(255,255,255,0.25)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 30px rgba(0,0,0,0.5)"}}><svg viewBox="0 0 24 24" fill="white" width="28" height="28" style={{marginLeft:3}}><path d="M8 5v14l11-7z"/></svg></div>
             <div style={{fontSize:12,fontWeight:700,letterSpacing:2,color:"rgba(255,255,255,0.85)",textTransform:"uppercase"}}>{overlayPlayLabel}</div>
@@ -136,7 +97,7 @@ function CarouselUI({ large, isMobile, currentSingle, currentSingleAccess, singl
         </div>
       )}
       <div style={{flex:1,display:"flex",flexDirection:"column",gap:isMobile?10:large?14:12}}>
-        <div className={isMobile?"song-title-turquoise-glow":"hero-title-glow"} style={{fontSize:isMobile?22:large?30:26,fontWeight:900,letterSpacing:2,animation:shouldAnimateTitle?"fadeInUp 0.35s ease forwards":undefined}}>{currentSingle.title}</div>
+        <div className={isMobile?"song-title-turquoise-glow":"hero-title-glow"} style={{fontSize:isMobile?22:large?30:26,fontWeight:900,letterSpacing:2}}>{currentSingle.title}</div>
         <div style={{fontSize:13,color:"#555",letterSpacing:1,display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <span>SINGLE{large&&!isMobile?` · ${singleIndex+1} of ${singles.length}`:""}</span>
           <MusicAccessBadge access={access} label={access?.badge} compact />

@@ -15,7 +15,7 @@ import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actio
 /**
  * Phase P7 — music-tab catalog subscription isolated from PageStorefront reconcile.
  */
-const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
+const MusicTabPanel = memo(function MusicTabPanel({
   activeTab,
   isMobile,
   singleIndex,
@@ -227,6 +227,30 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
   }
 
   return null;
+});
+
+const MUSIC_TAB_IDS = Object.freeze(["singles", "albums", "mixtapes", "mymusic"]);
+
+/**
+ * Keep-alive boundary for catalog tabs. Every surface owns one stable DOM and
+ * media tree for the full storefront session; tab selection changes only
+ * visibility and interactivity.
+ */
+const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels(props) {
+  return MUSIC_TAB_IDS.map((tabId) => {
+    const active = props.activeTab === tabId;
+    return (
+      <section
+        key={tabId}
+        data-persistent-tab={tabId}
+        aria-hidden={!active}
+        inert={!active ? true : undefined}
+        style={{ display: active ? undefined : "none" }}
+      >
+        <MusicTabPanel {...props} activeTab={tabId} />
+      </section>
+    );
+  });
 });
 
 export default MusicTabCatalogPanels;

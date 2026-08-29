@@ -1,17 +1,14 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import dynamic from "next/dynamic";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { useAudioPlayer } from "@/context/AudioContext";
+import CoverArt from "@/components/ui/CoverArt";
+import { usePagePlaybackActions } from "@/hooks/usePagePlaybackActions";
 
 const VaultVideoPlayer = dynamic(
   () => import("@/components/vault/VaultVideoPlayer").then((m) => m.VaultVideoPlayer ?? m.default),
   { ssr: false }
 );
-
-const ITEM_HEIGHT = 220;
-const OVERSCAN = 3;
 
 const PLAY_BTN_STYLE = {
   position: "absolute",
@@ -36,57 +33,44 @@ const PLAY_ICON_STYLE = {
 };
 
 /**
- * Virtualized vault shelf — preserves item markup; container only windowed.
+ * Persistent vault shelf. CSS containment bounds layout and paint work while
+ * every row keeps its DOM and media identity throughout scrolling.
  */
 export function VaultUnlockedShelf({ sections = [] }) {
-  const parentRef = useRef(null);
   const [activeItem, setActiveItem] = useState(null);
-  const { pause } = useAudioPlayer();
-
-  const virtualizer = useVirtualizer({
-    count: sections.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => ITEM_HEIGHT,
-    overscan: OVERSCAN,
-  });
+  const { pause } = usePagePlaybackActions();
 
   if (!sections.length) return null;
 
   return (
     <>
     <div
-      ref={parentRef}
-      className="vault-unlocked-shelf vault-unlocked-shelf--virtual"
+      className="vault-unlocked-shelf"
       aria-label="Vault shelves"
       style={{ maxHeight: "min(70vh, 720px)", overflowY: "auto" }}
     >
-      <div
-        style={{
-          height: virtualizer.getTotalSize(),
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {virtualizer.getVirtualItems().map((virtualRow) => {
-          const item = sections[virtualRow.index];
+        {sections.map((item, index) => {
           return (
             <article
-              key={item.slug || item.id || virtualRow.key}
-              data-index={virtualRow.index}
-              ref={virtualizer.measureElement}
+              key={item.slug || item.id}
+              data-index={index}
               className={`vault-unlocked-object${item.metadata?.glowEffect || item.feature ? " vault-unlocked-object--glow" : ""}`}
               data-media={item.mediaType || item.behavior || "mixed"}
               style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
                 width: "100%",
-                transform: `translateY(${virtualRow.start}px)`,
+                contain: "layout style paint",
               }}
             >
               <div className="vault-unlocked-object__spine" aria-hidden />
               {item.cover ? (
-                <img src={item.cover} alt="" className="vault-unlocked-object__cover" loading="lazy" />
+                <CoverArt
+                  src={item.cover}
+                  baseCover={item.baseCover || undefined}
+                  type={item.coverArtType || "image"}
+                  alt=""
+                  className="vault-unlocked-object__cover"
+                  loadPriority="high"
+                />
               ) : (
                 <div className="vault-unlocked-object__cover vault-unlocked-object__cover--placeholder" />
               )}
@@ -126,7 +110,6 @@ export function VaultUnlockedShelf({ sections = [] }) {
             </article>
           );
         })}
-      </div>
     </div>
 
     {activeItem ? (

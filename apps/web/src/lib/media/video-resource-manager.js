@@ -1,14 +1,14 @@
 /**
- * VideoResourceManager — centralized decoder budget for all non-carousel animated artwork.
+ * VideoResourceManager — decoder budget for user-invoked video experiences.
  *
  * Priority tiers (lower number = higher priority):
- *   PRIORITY_SYSTEM  1  Ambient background, GlobalAudioPlayerBar
+ *   PRIORITY_SYSTEM  1  User-invoked system video
  *   PRIORITY_HERO    2  HeroSection, immersive player full-screen
- *   PRIORITY_VISIBLE 3  CoverArt in viewport
- *   PRIORITY_NEAR    4  CoverArt within 150px rootMargin (preloading)
+ *   PRIORITY_VISIBLE 3  Visible non-cover visual experience
+ *   PRIORITY_NEAR    4  Near-viewport non-cover visual experience
  *
- * Carousel videos (data-single-carousel) are EXCLUDED — they are managed by
- * storefront-persistent-media.js and must never be touched here.
+ * Animated cover art intentionally does not enter this eviction budget.
+ * persistent-visual-lifecycle.js keeps those product surfaces moving.
  *
  * Budget is derived from navigator.deviceMemory / hardwareConcurrency on first call.
  * Tests can override with setBudgetForTesting().

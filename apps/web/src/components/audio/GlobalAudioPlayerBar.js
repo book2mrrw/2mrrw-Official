@@ -26,6 +26,7 @@ import {
 import { resolvePlayerDisplayTitle } from "@/lib/playback/resolve-player-display-title";
 import { useArtworkGesture, isArtworkGestureActive } from "@/hooks/useArtworkGesture";
 import { interactiveMediaState, PLAYBACK_MODE } from "@/media/InteractiveMediaState";
+import { createPersistentVisualLifecycle } from "@/lib/media/persistent-visual-lifecycle";
 
 const PREVIEW_MAX_SEC = 15;
 
@@ -205,6 +206,7 @@ function MiniCoverHit({
 
   const videoRef  = useRef(null);
   const coverRef  = useRef(null);
+  const showVideo = Boolean(animatedCoverUrl) && !videoFailed;
 
   // Interactive artwork gesture — Slow/Screw/Chop/Filter on the mini player cover
   const { handlers: artGesture } = useArtworkGesture({
@@ -212,40 +214,17 @@ function MiniCoverHit({
     elementRef: coverRef,
   });
 
-  // Record the next visual identity without starting a media request. Audio is
-  // the critical path; the animated cover is attached only after playback has
-  // settled so it cannot contend with manifests, keys, or the first fragment.
   useLayoutEffect(() => {
     const el = videoRef.current;
-    if (!el || !animatedCoverUrl) return;
-    if (el.getAttribute("data-src") !== animatedCoverUrl) {
-      el.setAttribute("data-src", animatedCoverUrl);
-      if (!el.paused) el.pause();
-      el.removeAttribute("src");
-      el.load();
-    }
-  }, [animatedCoverUrl]);
-
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el || !animatedCoverUrl || !isPlaying) return;
-    const timer = setTimeout(() => {
-      if (el.getAttribute("data-src") !== animatedCoverUrl) return;
-      if (el.src !== animatedCoverUrl) {
-        el.src = animatedCoverUrl;
-        el.preload = "auto";
-        el.load();
-      }
-      el.play().catch(() => {});
-    }, 1000);
+    if (!el || !showVideo) return undefined;
+    const lifecycle = createPersistentVisualLifecycle(el);
+    lifecycle.setSource(animatedCoverUrl);
     return () => {
-      clearTimeout(timer);
-      if (!el.paused) el.pause();
+      lifecycle.dispose();
     };
-  }, [animatedCoverUrl, isPlaying]);
+  }, [animatedCoverUrl, showVideo]);
 
   const letter = (title && String(title).trim()[0]) || "♪";
-  const showVideo = Boolean(animatedCoverUrl) && !videoFailed;
   const staticLayerUrl = showVideo ? null : (baseCoverUrl || csCoverUrl || null);
   const showStaticLayer = !showVideo && Boolean(staticLayerUrl) && !baseFailed;
   const overlayUrl = baseCoverUrl && csCoverUrl && hasCs ? csCoverUrl : null;
@@ -277,7 +256,7 @@ function MiniCoverHit({
           loop
           muted
           playsInline
-          preload="none"
+          preload="auto"
           poster={baseCoverUrl || undefined}
           className="player-bar-cover-img player-bar-cover-img--base"
           onError={() => markFailed(videoAssetKey)}

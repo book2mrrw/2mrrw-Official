@@ -1,6 +1,7 @@
 "use client";
 
 import { useReducedMotion } from "framer-motion";
+import CoverArt from "@/components/ui/CoverArt";
 
 export function CollectorCardItem({ card, remaining, onSelect, isMobile }) {
   const reduceMotion = useReducedMotion();
@@ -45,37 +46,15 @@ export function CollectorCardItem({ card, remaining, onSelect, isMobile }) {
           }}
         >
           {/* Cover art */}
-          {card.faceType === "video" && card.videoSrc ? (
-            <video
-              autoPlay
-              muted
-              loop
-              playsInline
-              preload="auto"
-              src={card.videoSrc}
-              poster={card.artwork}
-              onError={(e) => { e.currentTarget.style.display = "none"; }}
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
-            />
-          ) : (
-            <img
-              src={card.artwork}
-              alt=""
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
-            />
-          )}
+          <CoverArt
+            src={card.faceType === "video" && card.videoSrc ? card.videoSrc : card.artwork}
+            baseCover={card.artwork || undefined}
+            type={card.faceType === "video" && card.videoSrc ? "video" : "image"}
+            alt=""
+            width="100%"
+            height="100%"
+            style={{ position: "absolute", inset: 0, objectFit: "cover" }}
+          />
 
           {/* Top accent strip — card header band */}
           <div

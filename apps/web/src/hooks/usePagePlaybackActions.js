@@ -14,6 +14,7 @@ export function usePagePlaybackActions() {
       pause: () => getPagePlaybackActionsBridge()?.pause?.(),
       toggle: () => getPagePlaybackActionsBridge()?.toggle?.(),
       seek: (...args) => getPagePlaybackActionsBridge()?.seek?.(...args),
+      hintUpcomingPlay: (...args) => getPagePlaybackActionsBridge()?.hintUpcomingPlay?.(...args),
       enterAudioVisualViewport: () =>
         getPagePlaybackActionsBridge()?.enterAudioVisualViewport?.(),
       exitAudioVisualViewport: () =>

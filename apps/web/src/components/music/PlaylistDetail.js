@@ -5,6 +5,7 @@ import { useAudioPlayer } from "@/context/AudioContext";
 import { useAuth } from "@/context/AuthContext";
 import { resolvePlaylistTracks } from "@/lib/playlists";
 import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
+import CoverArt from "@/components/ui/CoverArt";
 
 export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobile }) {
   const { playQueue, toggleShuffle, shuffle, toggleRepeat, repeatMode, hintUpcomingPlay } = useAudioPlayer();
@@ -87,7 +88,17 @@ export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobi
             }}
           >
             <span style={{ fontSize: 11, color: "#444", width: 20 }}>{i + 1}</span>
-            {track.cover && <img src={track.cover} alt="" style={{ width: 40, height: 40, borderRadius: 6, objectFit: "cover" }} />}
+            {track.cover && (
+              <CoverArt
+                src={track.cover}
+                baseCover={track.baseCover || undefined}
+                type={track.coverArtType || "image"}
+                alt=""
+                width={40}
+                height={40}
+                borderRadius={6}
+              />
+            )}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700 }}>{track.title}</div>
             </div>

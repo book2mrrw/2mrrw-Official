@@ -715,24 +715,14 @@ function OwnedReleaseList({
                 onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); (onOpenAlbumTracklist || onOpenAlbum)?.(merged); } }}
                 style={{ position: "relative", cursor: "pointer" }}
               >
-                {(merged.video || merged.visual) && coverDisplay?.type === "video" ? (
-                  <video
-                    src={merged.video || merged.visual}
-                    poster={merged.baseCover || merged.cover || undefined}
-                    autoPlay muted loop playsInline preload="auto"
-                    webkit-playsinline="true"
-                    onError={(e) => { e.currentTarget.style.display = "none"; }}
-                    style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block", pointerEvents: "none" }}
-                  />
-                ) : (
-                  <CoverArt
-                    src={coverDisplay.src}
-                    type={coverDisplay.type || "image"}
-                    alt=""
-                    width="100%"
-                    style={{ aspectRatio: "1/1", display: "block" }}
-                  />
-                )}
+                <CoverArt
+                  src={coverDisplay.src}
+                  baseCover={merged.baseCover || merged.cover || undefined}
+                  type={coverDisplay.type || "image"}
+                  alt=""
+                  width="100%"
+                  style={{ aspectRatio: "1/1", display: "block" }}
+                />
                 {access?.badge && (
                   <div style={{ position: "absolute", top: 8, left: 8 }}>
                     <MusicAccessBadge label={access.badge} compact />

@@ -1,7 +1,6 @@
 "use client";
 
-import { forwardRef, memo, useMemo, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useMountEnterAnimation } from "@/hooks/useMountEnterAnimation";
+import { forwardRef, memo, useMemo, useEffect, useRef } from "react";
 import {
   isUiHydrationTraceEnabled,
   logUiHydrationTrace,
@@ -17,7 +16,6 @@ import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
 import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import { getMediaSignature } from "@/lib/media/media-determinism";
 import { useArtworkGesture } from "@/hooks/useArtworkGesture";
-import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
 
 /** Phase P9 — MP4/cover surface; skips reconcile when only entitlement chrome changes. */
 const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface({
@@ -25,34 +23,15 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
   cardMedia,
   coverDisplay,
 }) {
-  const videoRef = useRef(null);
   const assignedSrc = cardMedia === "video" ? mediaItem?.video || null : null;
-  const [coverVideoFailed, setCoverVideoFailed] = useState(false);
-  const audioPriority = useAudioMediaPriority();
-  const coverVideoSrc = !coverVideoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video"
+  const coverVideoSrc = (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video"
     ? mediaItem?.video || mediaItem?.visual || null
     : null;
   const activeVideoSrc = cardMedia === "video" ? assignedSrc : coverVideoSrc;
-
-  useLayoutEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    if (audioPriority.active || !activeVideoSrc) {
-      if (!el.paused) el.pause();
-      el.preload = "none";
-      if (el.hasAttribute("src")) {
-        el.removeAttribute("src");
-        el.load();
-      }
-      return;
-    }
-    if (el.getAttribute("src") !== activeVideoSrc) {
-      el.src = activeVideoSrc;
-      el.preload = "auto";
-      el.load();
-    }
-    if (!document.hidden && el.paused) el.play().catch(() => {});
-  }, [activeVideoSrc, audioPriority.active]);
+  const surfaceSrc = activeVideoSrc || coverDisplay?.src || mediaItem?.cover || null;
+  const surfaceType = activeVideoSrc ? "video" : coverDisplay?.type || "image";
+  const staticFallback = mediaItem?.baseCover || mediaItem?.cover ||
+    (coverDisplay?.type === "image" ? coverDisplay.src : null);
 
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
@@ -71,77 +50,11 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
     });
   }, [mediaItem?.slug, assignedSrc, cardMedia]);
 
-  useEffect(() => {
-    if (!isUiHydrationTraceEnabled() || cardMedia !== "video") return;
-    const el = videoRef.current;
-    if (!el) return;
-    const onError = () => {
-      logUiHydrationTrace("MEDIA_ELEMENT_ERROR", {
-        slug: mediaItem?.slug ?? null,
-        src: el.getAttribute("src"),
-        currentSrc: el.currentSrc || null,
-        error: el.error ? { code: el.error.code, message: el.error.message } : null,
-      });
-    };
-    el.addEventListener("error", onError);
-    return () => el.removeEventListener("error", onError);
-  }, [mediaItem?.slug, assignedSrc, cardMedia]);
-
-  if (cardMedia === "video") {
-    return (
-      <video
-        ref={videoRef}
-        data-single-carousel
-        poster={mediaItem.cover || undefined}
-        muted
-        loop
-        playsInline
-        preload="none"
-        webkit-playsinline="true"
-        style={{
-          backgroundColor: "#0a0a0a",
-          width: "100%",
-          aspectRatio: "1/1",
-          objectFit: "cover",
-          display: "block",
-          borderRadius: "13px 13px 0 0",
-          transition: "transform 0.3s, filter 0.3s",
-          pointerEvents: "none",
-        }}
-      />
-    );
-  }
-
-  if (coverVideoSrc) {
-    return (
-      <video
-        ref={videoRef}
-        data-single-carousel
-        poster={mediaItem.cover || undefined}
-        muted
-        loop
-        playsInline
-        preload="none"
-        webkit-playsinline="true"
-        onError={() => setCoverVideoFailed(true)}
-        style={{
-          backgroundColor: "#0a0a0a",
-          width: "100%",
-          aspectRatio: "1/1",
-          objectFit: "cover",
-          display: "block",
-          borderRadius: "13px 13px 0 0",
-          transition: "transform 0.3s, filter 0.3s",
-          pointerEvents: "none",
-        }}
-      />
-    );
-  }
-
   return (
     <CoverArt
-      src={coverDisplay.src}
-      type={coverDisplay.type || "image"}
+      src={surfaceSrc}
+      baseCover={staticFallback || undefined}
+      type={surfaceType}
       alt=""
       width="100%"
       height="auto"
@@ -153,11 +66,13 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
       }}
     />
   );
-}, (prev, next) => getMediaSignature(prev.mediaItem) === getMediaSignature(next.mediaItem));
+}, (prev, next) =>
+  prev.cardMedia === next.cardMedia &&
+  getMediaSignature(prev.mediaItem) === getMediaSignature(next.mediaItem)
+);
 
 const SinglesStyleCard = memo(function SinglesStyleCard({
   item,
-  index,
   isMobile,
   onGift,
   onCardClick,
@@ -190,8 +105,6 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
   }, [cardMedia, catalogPlaybackLookup, mediaItem]);
   const coverDisplay = useMemo(() => catalogCoverDisplay(mediaItem), [mediaItem]);
   const playItemResolved = useMemo(() => withR2CatalogMedia(playItem), [playItem]);
-  const { shouldAnimate } = useMountEnterAnimation();
-
   return (
     <PlaybackPrewarmCardShell
       releaseItem={mediaItem}
@@ -205,13 +118,11 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
       enabled={showPlayActions}
       data-single-card={cardMedia === "video" ? true : undefined}
       onClick={() => onCardClick?.(mediaItem)}
-      className={shouldAnimate ? "catalog-card-enter" : undefined}
       style={{
         flex: "0 0 auto",
         width: isMobile ? 160 : 200,
         cursor: "pointer",
         scrollSnapAlign: "start",
-        animationDelay: `${index * 0.09}s`,
         background: "#0a0a0a",
         borderRadius: 14,
         border: "1px solid #1a1a1a",

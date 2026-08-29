@@ -5,6 +5,7 @@ import { Reorder, useDragControls } from "framer-motion";
 import { usePlaylists } from "@/hooks/usePlaylists";
 import PlaylistCard from "@/components/music/PlaylistCard";
 import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
+import CoverArt from "@/components/ui/CoverArt";
 
 const COVER_GRADIENT = "linear-gradient(135deg, rgba(0,255,255,0.12), rgba(162,89,255,0.12))";
 
@@ -387,10 +388,13 @@ function PlaylistSection({
 
         <div style={{ display: "flex", flexDirection: "column", alignItems: isMobile ? "stretch" : "flex-start", gap: 16, marginBottom: 20 }}>
           {cover ? (
-            <img
+            <CoverArt
               src={cover}
               alt=""
-              style={{ width: 180, height: 180, borderRadius: 12, objectFit: "cover", alignSelf: "center" }}
+              width={180}
+              height={180}
+              borderRadius={12}
+              style={{ alignSelf: "center" }}
             />
           ) : (
             <div
@@ -557,7 +561,15 @@ function PlaylistSection({
                 }}
               >
                 {track.cover && (
-                  <img src={track.cover} alt="" style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }} />
+                  <CoverArt
+                    src={track.cover}
+                    baseCover={track.baseCover || undefined}
+                    type={track.coverArtType || "image"}
+                    alt=""
+                    width={36}
+                    height={36}
+                    borderRadius={6}
+                  />
                 )}
                 <span style={{ flex: 1 }}>{track.title}</span>
                 <span style={{ color: "#00ffff", fontSize: 18 }}>+</span>

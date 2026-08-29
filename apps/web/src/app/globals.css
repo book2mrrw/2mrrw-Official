@@ -4023,20 +4023,6 @@ body.is-player-modal-open::before {
 }
 
 /* Phase 14C: catalog card enter — keyframes only (no inline opacity:0 on re-render) */
-@keyframes catalogCardFadeInUp {
-  from {
-    opacity: 0;
-    transform: translateY(22px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-.catalog-card-enter {
-  animation: catalogCardFadeInUp 0.5s ease forwards;
-  animation-fill-mode: forwards;
-}
 .modal-immersive--first-listen .art-lbl {
   animation: title-intro 2s ease-out 1s both;
 }

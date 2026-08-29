@@ -7,6 +7,7 @@ import { benefitsForCard, editionLabel } from "./collectorCardCatalog";
 import CheckoutForm from "@/components/payments/CheckoutForm";
 import { stripePaymentOverlayStyle, stripePaymentPanelStyle } from "@/components/payments/stripePaymentShell";
 import { useAuth } from "@/context/AuthContext";
+import CoverArt from "@/components/ui/CoverArt";
 import {
   cartLineFromCard,
   confirmCollectorPurchase,
@@ -123,38 +124,15 @@ export function CollectorCardModal({ card, remaining, onClose, isMobile, onPurch
         {!clientSecret && (
           <>
             <div style={{ position: "relative", marginBottom: 16 }}>
-              {card.faceType === "video" && card.videoSrc ? (
-                <video
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  preload="auto"
-                  data-cinematic-video="true"
-                  src={card.videoSrc}
-                  poster={card.artwork}
-                  onError={(e) => { e.currentTarget.style.display = "none"; }}
-                  style={{
-                    width: "100%",
-                    height: 220,
-                    objectFit: "cover",
-                    borderRadius: 14,
-                    display: "block",
-                  }}
-                />
-              ) : (
-                <img
-                  src={card.artwork}
-                  alt=""
-                  style={{
-                    width: "100%",
-                    height: 220,
-                    objectFit: "cover",
-                    borderRadius: 14,
-                    display: "block",
-                  }}
-                />
-              )}
+              <CoverArt
+                src={card.faceType === "video" && card.videoSrc ? card.videoSrc : card.artwork}
+                baseCover={card.artwork || undefined}
+                type={card.faceType === "video" && card.videoSrc ? "video" : "image"}
+                alt=""
+                width="100%"
+                height={220}
+                borderRadius={14}
+              />
             </div>
 
             <h2

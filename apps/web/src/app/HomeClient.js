@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition, Suspense } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, memo, startTransition, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -24,13 +24,6 @@ const VaultUnlockedRoom = dynamic(
 const AlbumTracklistSheet = dynamic(() => import("@/components/music/AlbumTracklistSheet"), { ssr: false });
 import { getPageAuthRef } from "@/lib/storefront/page-auth-ref";
 import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
-import {
-  ensureStorefrontCarouselVideosPlaying,
-  isStorefrontCarouselMediaHealthy,
-  pauseStorefrontCarouselVideos,
-  pauseStorefrontCarouselVideosWhenDocumentHidden,
-  syncMobileHeroWithStorefrontCarousel,
-} from "@/lib/storefront/storefront-persistent-media";
 import { releaseRetainedOfflineBlobUrls } from "@/lib/offline-cache";
 import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 import PageAuthRefSync from "@/components/storefront/PageAuthRefSync";
@@ -1002,6 +995,24 @@ export default function HomeClient({ initialEvents, initialCatalog }) {
   );
 }
 
+/**
+ * Retain each tab's complete React/DOM/media identity for the storefront
+ * session. Inactive surfaces are non-interactive and non-visible, but are
+ * never destroyed merely because navigation selected another tab.
+ */
+function PersistentTabMount({ id, active, children }) {
+  return (
+    <section
+      data-persistent-tab={id}
+      aria-hidden={!active}
+      inert={!active ? true : undefined}
+      style={{ display: active ? undefined : "none" }}
+    >
+      {children}
+    </section>
+  );
+}
+
 function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   const router = useRouter();
   useBlackscreenMountTrace("Page");
@@ -1106,10 +1117,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   const isMobileRef        = useRef(false);
   const uiScrollLogRef     = useRef(0);
   const prevActiveTabRef   = useRef("home");
-  const homeScrollSavedRef = useRef({ scrollTop: 0, singlesScrollLeft: 0 });
+  const activeTabIdentityRef = useRef("home");
+  const tabScrollPositionsRef = useRef(new Map([["home", 0]]));
+  const homeSinglesScrollLeftRef = useRef(0);
   const homeStorefrontMountCountRef = useRef(0);
-  const prevActiveTabForHomeScrollRef = useRef("home");
-  const carouselMediaHealthyRef = useRef(false);
   const eventsLoadedRef = useRef(false);
 
   // Kept in sync with modal state each render so callbacks can read the
@@ -1165,23 +1176,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
   const searchIndex = useMemo(() => buildSearchIndex(singles, albums, mixtapesAndEps), []);
   const searchResults = useMemo(() => searchCatalog(searchIndex, searchQuery), [searchIndex, searchQuery]);
-
-  const ensureStorefrontCarouselMedia = useCallback(() => {
-    const row = singlesRowRef.current;
-    if (!row) return;
-    if (getPagePlaybackActionsBridge()?.isPlaying) return;
-    if (isStorefrontCarouselMediaHealthy(row)) {
-      carouselMediaHealthyRef.current = true;
-      return;
-    }
-    const anyCarouselInView = ensureStorefrontCarouselVideosPlaying(row);
-    carouselMediaHealthyRef.current = isStorefrontCarouselMediaHealthy(row);
-    syncMobileHeroWithStorefrontCarousel(
-      heroVideoRef.current,
-      anyCarouselInView,
-      isMobileRef.current
-    );
-  }, []);
 
   // ── AUDIO VISUALS VIEWPORT (music pause/resume via AudioContext) ───────────
   const handleAudioVisualsFocused = useCallback(() => {
@@ -1305,43 +1299,18 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     };
   }, []);
 
-  useEffect(() => {
-    const prev = prevActiveTabForHomeScrollRef.current;
-    const next = activeTab;
-    if (prev === "home" && next !== "home") {
-      const el = mainScrollRef.current;
-      const row = singlesRowRef.current;
-      homeScrollSavedRef.current = {
-        scrollTop: el?.scrollTop ?? 0,
-        singlesScrollLeft: row?.scrollLeft ?? 0,
-      };
-      if (isPlaybackTraceEnabled()) {
-        logUiChurn("HOME_TAB_HIDDEN", {
-          to: next,
-          scrollTop: homeScrollSavedRef.current.scrollTop,
-          singlesScrollLeft: homeScrollSavedRef.current.singlesScrollLeft,
-        });
-      }
+  useLayoutEffect(() => {
+    const el = mainScrollRef.current;
+    if (el) el.scrollTop = tabScrollPositionsRef.current.get(activeTab) ?? 0;
+    if (activeTab === "home" && singlesRowRef.current) {
+      singlesRowRef.current.scrollLeft = homeSinglesScrollLeftRef.current;
     }
-    if (prev !== "home" && next === "home") {
-      if (isPlaybackTraceEnabled()) {
-        logUiChurn("HOME_TAB_VISIBLE", { from: prev });
-      }
-      const { scrollTop, singlesScrollLeft } = homeScrollSavedRef.current;
-      requestAnimationFrame(() => {
-        const el = mainScrollRef.current;
-        const row = singlesRowRef.current;
-        if (el) el.scrollTop = scrollTop;
-        if (row) row.scrollLeft = singlesScrollLeft;
-        if (isPlaybackTraceEnabled()) {
-          logUiChurn("HOME_SCROLL_RESTORED", {
-            scrollTop,
-            singlesScrollLeft,
-          });
-        }
+    if (isPlaybackTraceEnabled()) {
+      logUiChurn("TAB_SURFACE_RESTORED", {
+        tab: activeTab,
+        scrollTop: el?.scrollTop ?? 0,
       });
     }
-    prevActiveTabForHomeScrollRef.current = next;
   }, [activeTab]);
 
   useEffect(() => {
@@ -1391,33 +1360,16 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
   useEffect(() => {
     if (activeTab !== "home") return undefined;
-    let debounceTimer;
-    const onLayoutChange = () => {
-      window.clearTimeout(debounceTimer);
-      debounceTimer = window.setTimeout(ensureStorefrontCarouselMedia, 100);
-    };
-    const row = singlesRowRef.current;
-    const mainScroll = mainScrollRef.current;
-    row?.addEventListener("scroll", onLayoutChange, { passive: true });
-    mainScroll?.addEventListener("scroll", onLayoutChange, { passive: true });
-    ensureStorefrontCarouselMedia();
     const onVisibility = () => {
       if (document.hidden) {
-        pauseStorefrontCarouselVideosWhenDocumentHidden(singlesRowRef.current);
         releaseRetainedOfflineBlobUrls();
-      } else if (!getPagePlaybackActionsBridge()?.isPlaying) {
-        window.clearTimeout(debounceTimer);
-        debounceTimer = window.setTimeout(ensureStorefrontCarouselMedia, 150);
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      window.clearTimeout(debounceTimer);
-      row?.removeEventListener("scroll", onLayoutChange);
-      mainScroll?.removeEventListener("scroll", onLayoutChange);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [activeTab, ensureStorefrontCarouselMedia]);
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "vault" && activeTab !== "innercircle") return;
@@ -1536,7 +1488,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       Object.values(ambientRefs.current).forEach((a) => {
         try { a.pause(); } catch { /* non-fatal */ }
       });
-      pauseStorefrontCarouselVideos(singlesRowRef.current);
     };
     // Pause once immediately if playback is already active on mount.
     if (document.hidden || getPagePlaybackActionsBridge()?.isPlaying) {
@@ -2034,6 +1985,16 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       router.push(COLLECTORS_CARDS_ROUTE);
       return;
     }
+    const previousTab = activeTabIdentityRef.current;
+    if (previousTab === tabId) return;
+    tabScrollPositionsRef.current.set(
+      previousTab,
+      mainScrollRef.current?.scrollTop ?? 0
+    );
+    if (previousTab === "home") {
+      homeSinglesScrollLeftRef.current = singlesRowRef.current?.scrollLeft ?? 0;
+    }
+    activeTabIdentityRef.current = tabId;
     // phase11: startTransition — non-urgent UI update
     startTransition(() => {
       setActiveTab(tabId);
@@ -2405,7 +2366,12 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               </div>
 
               {/* ══ MUSIC TAB ══ */}
-              {(activeTab==="singles"||activeTab==="albums"||activeTab==="mixtapes"||activeTab==="mymusic") && (
+              <div
+                data-persistent-tab-group="music"
+                aria-hidden={!(activeTab==="singles"||activeTab==="albums"||activeTab==="mixtapes"||activeTab==="mymusic")}
+                inert={!(activeTab==="singles"||activeTab==="albums"||activeTab==="mixtapes"||activeTab==="mymusic") ? true : undefined}
+                style={{display:(activeTab==="singles"||activeTab==="albums"||activeTab==="mixtapes"||activeTab==="mymusic") ? undefined : "none"}}
+              >
                 <EntitlementSurfaceIsland islandId="music-tab">
                   {(ent) => (
                     <AuthSurfaceIsland islandId="music-tab" onGiftRequest={setGiftSheetRelease}>
@@ -2506,10 +2472,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     </AuthSurfaceIsland>
                   )}
                 </EntitlementSurfaceIsland>
-              )}
+              </div>
 
               {/* ══ SHOP ══ */}
-              {activeTab==="shop" && (
+              <PersistentTabMount id="shop" active={activeTab==="shop"}>
                 <>
                   <h2 className="section-heading" style={{marginBottom:16}}>Merch</h2>
                   {printfulLoading ? <div style={{padding:"60px 0",textAlign:"center",fontSize:13,color:"#333",letterSpacing:2}}>Loading products…</div> : (
@@ -2519,21 +2485,22 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     </>
                   )}
                 </>
-              )}
+              </PersistentTabMount>
 
               {/* ══ VAULT ══ */}
-              {activeTab==="vault" && (
+              <PersistentTabMount id="vault" active={activeTab==="vault"}>
                 <>
                   <h2 className="section-heading">Vault</h2>
                   <div style={{marginTop:28,background:"#0d0d0d",border:"1px solid #1a1a1a",borderRadius:isMobile?14:20,padding:isMobile?"36px 24px":"48px 40px",textAlign:"center",maxWidth:520}}>
                     <p style={{fontSize:13,color:"#555",letterSpacing:1,lineHeight:1.8,margin:0}}>The Vault remains empty for now. Exclusive drops will be listed here when they launch.</p>
                   </div>
                 </>
-              )}
+              </PersistentTabMount>
 
               {/* ══ SHOWS ══ */}
               <AuthSurfaceIsland islandId="shows-tab">
-                {(auth) => activeTab==="shows" && (
+                {(auth) => (
+                  <PersistentTabMount id="shows" active={activeTab==="shows"}>
                   <>
                     <h2 className="section-heading" style={{marginBottom:20}}>Shows & Events</h2>
 
@@ -2592,12 +2559,14 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
                     {auth.userId && <MyTicketsPanel userId={auth.userId} />}
                   </>
+                  </PersistentTabMount>
                 )}
               </AuthSurfaceIsland>
 
               {/* ══ LIVE ══ */}
               <AuthSurfaceIsland islandId="live-tab">
-                {(auth) => activeTab==="live" && (
+                {(auth) => (
+                  <PersistentTabMount id="live" active={activeTab==="live"}>
                   <>
                     <h2 className="section-heading">2MRRW LIVE</h2>
                     {auth.isAdminStable && <InlineLiveAdmin />}
@@ -2609,16 +2578,17 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                       />
                     </LiveCountdownProvider>
                   </>
+                  </PersistentTabMount>
                 )}
               </AuthSurfaceIsland>
 
               {/* ══ HELP & SUPPORT ══ */}
-              {activeTab==="help" && (
+              <PersistentTabMount id="help" active={activeTab==="help"}>
                 <PageAuthHelpSupport />
-              )}
+              </PersistentTabMount>
 
               {/* ══ BLOG ══ */}
-              {activeTab==="blog" && (
+              <PersistentTabMount id="blog" active={activeTab==="blog"}>
                 <>
                   {blogPost ? (
                     <div>
@@ -2653,10 +2623,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     </>
                   )}
                 </>
-              )}
+              </PersistentTabMount>
 
               {/* ══ VISION ══ */}
-              {activeTab==="vision" && (
+              <PersistentTabMount id="vision" active={activeTab==="vision"}>
                 <>
                   <h2 className="section-heading">Vision</h2>
                   <div style={{background:"linear-gradient(135deg,#080808,#0e0e0e)",border:"1px solid #1a1a1a",borderRadius:24,padding:isMobile?"28px 20px":"48px 40px",marginBottom:28,textAlign:"center",position:"relative",overflow:"hidden"}}>
@@ -2676,10 +2646,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   </div>
                   <div style={{marginTop:32,padding:"28px 30px",borderTop:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:13,color:"#555",lineHeight:2}}>You are not just a listener.<br/><span style={{color:"#00ffff",fontWeight:700}}>You are early.</span></div></div>
                 </>
-              )}
+              </PersistentTabMount>
 
               {/* ══ CIRCLE ══ */}
-              {activeTab==="circle" && (
+              <PersistentTabMount id="circle" active={activeTab==="circle"}>
                 <PageAuthSessionBridge circleSubmissions={circleSubmissions} accountCircleByline={readAccountCircleByline()}>
                 {(pa) => (
                 <>
@@ -2717,10 +2687,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 </>
                 )}
                 </PageAuthSessionBridge>
-              )}
+              </PersistentTabMount>
 
               {/* ══ INNER CIRCLE ══ */}
-              {activeTab==="innercircle" && (
+              <PersistentTabMount id="innercircle" active={activeTab==="innercircle"}>
                 <PageAuthSessionBridge circleSubmissions={circleSubmissions} accountCircleByline={readAccountCircleByline()}>
                 {(pa) => (
                 <>
@@ -2789,10 +2759,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 </>
                 )}
                 </PageAuthSessionBridge>
-              )}
+              </PersistentTabMount>
 
               {/* ══ ACCOUNT ══ */}
-              {activeTab==="account" && (
+              <PersistentTabMount id="account" active={activeTab==="account"}>
                 <PageAuthSessionBridge circleSubmissions={circleSubmissions} accountCircleByline={readAccountCircleByline()}>
                 {(pa) => (
                 <>
@@ -2839,14 +2809,14 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 </>
                 )}
                 </PageAuthSessionBridge>
-              )}
+              </PersistentTabMount>
 
               {/* ══ MANAGE RELEASES (admin only) ══ */}
-              {activeTab === "manage-releases" && (
+              <PersistentTabMount id="manage-releases" active={activeTab === "manage-releases"}>
                 <AuthSurfaceIsland islandId="manage-releases-tab">
                   {(auth) => auth.isAdminStable ? <InlineReleasesManager /> : null}
                 </AuthSurfaceIsland>
-              )}
+              </PersistentTabMount>
 
             </div>{/* end tab panel */}
             </ScrollPaddingShell>
@@ -3040,7 +3010,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
         .singles-row::-webkit-scrollbar-thumb,.mixtapes-eps-row::-webkit-scrollbar-thumb,.albums-row::-webkit-scrollbar-thumb,.features-row::-webkit-scrollbar-thumb,.products-row::-webkit-scrollbar-thumb,.videos-row::-webkit-scrollbar-thumb{background:#00ffff;border-radius:4px;}
         @keyframes pulse{0%{transform:scale(1);opacity:1}50%{transform:scale(1.05);opacity:.85}100%{transform:scale(1);opacity:1}}
         @keyframes fadeInUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:translateY(0)}}
-        @keyframes fadeInCover{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
         @keyframes expandDown{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
         @keyframes flowIdlePulse{0%{opacity:.4}50%{opacity:.9}100%{opacity:.4}}
         @keyframes flowIdleDot{0%{opacity:.15;transform:scale(.8)}50%{opacity:.7;transform:scale(1.2)}100%{opacity:.15;transform:scale(.8)}}

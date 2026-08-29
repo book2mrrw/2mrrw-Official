@@ -1,10 +1,11 @@
 "use client";
 
-import { useAudioPlayer } from "@/context/AudioContext";
+import CoverArt from "@/components/ui/CoverArt";
+import { usePagePlaybackActions } from "@/hooks/usePagePlaybackActions";
 import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
 
 export default function ContinueListening({ lastPlayed, accountState, userId, isAdmin = false, isMobile }) {
-  const { playTrack, hintUpcomingPlay } = useAudioPlayer();
+  const { playTrack, hintUpcomingPlay } = usePagePlaybackActions();
   if (!lastPlayed?.slug) return null;
 
   const track = toPlaybackTrack(lastPlayed, { ...accountState, userId, isAdmin }, "continue");
@@ -26,7 +27,15 @@ export default function ContinueListening({ lastPlayed, accountState, userId, is
       }}
     >
       {lastPlayed.cover && (
-        <img src={lastPlayed.cover} alt="" style={{ width: 52, height: 52, borderRadius: 10, objectFit: "cover" }} />
+        <CoverArt
+          src={lastPlayed.cover}
+          baseCover={lastPlayed.baseCover || undefined}
+          type={lastPlayed.coverArtType || "image"}
+          alt=""
+          width={52}
+          height={52}
+          borderRadius={10}
+        />
       )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 10, color: "#555", letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>

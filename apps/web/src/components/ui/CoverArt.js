@@ -1,19 +1,23 @@
 "use client";
+/* eslint-disable @next/next/no-img-element -- explicit decoded-image cache and stable DOM layers */
 
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { imagePipeline } from "@/media/imagePipeline";
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
 import ArtworkSkeleton from "@/ui/skeletons/ArtworkSkeleton";
 import { resolveCoverMediaType } from "@/lib/media/cover-media-type";
-import { VRM } from "@/lib/media/video-resource-manager";
-import { logVisualVideoError, logVisualVideoFallback, logVisualImageError } from "@/lib/media/visual-telemetry";
-import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
+import { createPersistentVisualLifecycle } from "@/lib/media/persistent-visual-lifecycle";
+import {
+  logVisualImageError,
+  logVisualVideoError,
+  logVisualVideoFallback,
+} from "@/lib/media/visual-telemetry";
+
 export { resolveCoverMediaType };
 
-// Fallback levels for the artwork pipeline
-const FL_PRIMARY = 0;    // show primary source (video or image)
-const FL_STATIC = 1;     // video failed → show static baseCover
-const FL_DARK = 2;       // everything failed → dark placeholder
+const FL_PRIMARY = 0;
+const FL_STATIC = 1;
+const FL_DARK = 2;
 
 function DarkPlaceholder({ className, width, height, borderRadius, style }) {
   return (
@@ -28,6 +32,135 @@ function DarkPlaceholder({ className, width, height, borderRadius, style }) {
         ...style,
       }}
     />
+  );
+}
+
+/** Keep the last paintable image while the next asset identity warms. */
+function useReadyImageSource(src, priority = "normal") {
+  const [readySrc, setReadySrc] = useState(src || null);
+  const requestedSrcRef = useRef(src || null);
+
+  useEffect(() => {
+    requestedSrcRef.current = src || null;
+    if (!src || src === readySrc) return undefined;
+
+    let cancelled = false;
+    imagePipeline
+      .preload(src, priority, { coverArtType: "image" })
+      .then(() => {
+        if (!cancelled && requestedSrcRef.current === src) setReadySrc(src);
+      })
+      .catch(() => {
+        // Preserve the last valid paint. The media error boundary owns fallback.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [priority, readySrc, src]);
+
+  return readySrc;
+}
+
+function PersistentImage({
+  src,
+  alt,
+  className,
+  touchProps,
+  baseStyle,
+  onError,
+  loadPriority,
+}) {
+  const readySrc = useReadyImageSource(src, loadPriority);
+  if (!readySrc) return null;
+  return (
+    <img
+      src={readySrc}
+      alt={alt}
+      decoding="async"
+      draggable={false}
+      className={className}
+      {...touchProps}
+      onError={onError}
+      style={baseStyle}
+      data-persistent-media="image"
+    />
+  );
+}
+
+function VideoArt({ src, poster, alt, className, touchProps, baseStyle, onError }) {
+  const videoRef = useRef(null);
+  const lifecycleRef = useRef(null);
+  const initialSrcRef = useRef(src);
+  const readyPoster = useReadyImageSource(poster, "high");
+
+  useLayoutEffect(() => {
+    const element = videoRef.current;
+    if (!element) return undefined;
+    const lifecycle = createPersistentVisualLifecycle(element);
+    lifecycleRef.current = lifecycle;
+    lifecycle.setSource(initialSrcRef.current);
+    return () => {
+      lifecycle.dispose();
+      lifecycleRef.current = null;
+    };
+  }, []);
+
+  useLayoutEffect(() => {
+    lifecycleRef.current?.setSource(src);
+  }, [src]);
+
+  return (
+    <div
+      className={className}
+      {...touchProps}
+      style={{
+        ...baseStyle,
+        position: baseStyle.position ?? "relative",
+        overflow: "hidden",
+        background: "#1a1a1a",
+      }}
+      data-persistent-media="video"
+    >
+      {readyPoster ? (
+        <img
+          src={readyPoster}
+          alt={alt}
+          decoding="async"
+          draggable={false}
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            borderRadius: "inherit",
+          }}
+        />
+      ) : null}
+      <video
+        ref={videoRef}
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+        poster={readyPoster || undefined}
+        onError={onError}
+        aria-hidden
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          borderRadius: "inherit",
+          opacity: 0,
+          transition: "opacity 180ms ease",
+          pointerEvents: "none",
+        }}
+      />
+    </div>
   );
 }
 
@@ -47,21 +180,18 @@ function CoverArt({
   skeleton = false,
   loadPriority = "normal",
 }) {
-  // Failure state is keyed to the src that triggered it.
-  // When src changes the old failure is automatically ignored — no manual reset needed.
   const [failedSrc, setFailedSrc] = useState(null);
   const [fallbackLevel, setFallbackLevel] = useState(FL_PRIMARY);
-
-  const eff = failedSrc === src ? fallbackLevel : FL_PRIMARY;
+  const effectiveLevel = failedSrc === src ? fallbackLevel : FL_PRIMARY;
 
   const handleVideoError = useCallback(() => {
     setFailedSrc(src);
     setFallbackLevel(FL_STATIC);
     logVisualVideoError({ src, context: "CoverArt" });
     if (baseCover) logVisualVideoFallback({ src, context: "CoverArt" });
-  }, [src, baseCover]);
+  }, [baseCover, src]);
 
-  const handleImgError = useCallback(() => {
+  const handleImageError = useCallback(() => {
     setFailedSrc(src);
     setFallbackLevel(FL_DARK);
     logVisualImageError({ src, context: "CoverArt" });
@@ -71,7 +201,7 @@ function CoverArt({
     if (!src || skeleton) return;
     perfMark(MARKS.ARTWORK_DECODE_START);
     imagePipeline.preload(src, loadPriority, { coverArtType: type });
-  }, [src, type, skeleton, loadPriority]);
+  }, [loadPriority, skeleton, src, type]);
 
   if (skeleton && src) {
     return (
@@ -92,7 +222,7 @@ function CoverArt({
     );
   }
 
-  if (!src || eff === FL_DARK) {
+  if (!src || effectiveLevel === FL_DARK) {
     return (
       <DarkPlaceholder
         className={className}
@@ -105,7 +235,6 @@ function CoverArt({
   }
 
   const mediaType = resolveCoverMediaType(src, type);
-
   const baseStyle = {
     width: width ?? "100%",
     height: height ?? "100%",
@@ -114,12 +243,10 @@ function CoverArt({
     objectFit: "cover",
     ...style,
   };
-
   const touchProps = { onClick, onTouchStart, onTouchEnd };
 
   if (mediaType === "video") {
-    if (eff === FL_STATIC) {
-      // Primary video failed — fall back to static baseCover image
+    if (effectiveLevel === FL_STATIC) {
       if (!baseCover) {
         return (
           <DarkPlaceholder
@@ -132,15 +259,14 @@ function CoverArt({
         );
       }
       return (
-        <img
+        <PersistentImage
           src={baseCover}
           alt={alt}
-          decoding="async"
-          draggable={false}
           className={className}
-          {...touchProps}
-          onError={handleImgError}
-          style={baseStyle}
+          touchProps={touchProps}
+          baseStyle={baseStyle}
+          onError={handleImageError}
+          loadPriority="high"
         />
       );
     }
@@ -149,6 +275,7 @@ function CoverArt({
       <VideoArt
         src={src}
         poster={baseCover || undefined}
+        alt={alt}
         className={className}
         touchProps={touchProps}
         baseStyle={baseStyle}
@@ -158,124 +285,45 @@ function CoverArt({
   }
 
   return (
-    <img
+    <PersistentImage
       src={src}
       alt={alt}
-      decoding="async"
-      draggable={false}
       className={className}
-      {...touchProps}
-      onError={handleImgError}
-      style={baseStyle}
+      touchProps={touchProps}
+      baseStyle={baseStyle}
+      onError={handleImageError}
+      loadPriority={loadPriority}
     />
   );
 }
 
-function VideoArt({ src, poster, className, touchProps, baseStyle, onError }) {
-  const videoRef = useRef(null);
-  const prevSrcRef = useRef(null);
-  const inViewRef = useRef(false);
-  const audioPriority = useAudioMediaPriority();
-  const audioPriorityRef = useRef(audioPriority.active);
-
-  useLayoutEffect(() => {
-    audioPriorityRef.current = audioPriority.active;
-  }, [audioPriority.active]);
-
-  // Imperative src update. For offscreen elements, defer el.load() to the
-  // IntersectionObserver callback so the browser does not pre-fetch invisible media.
-  useLayoutEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    if (audioPriority.active) {
-      VRM.requestPause(el);
-      if (!el.paused) el.pause();
-      el.preload = "none";
-      if (el.hasAttribute("src")) {
-        el.removeAttribute("src");
-        el.load();
-      }
-      prevSrcRef.current = null;
-      return;
-    }
-    if (src === prevSrcRef.current) return;
-    prevSrcRef.current = src;
-    el.src = src;
-    if (inViewRef.current) {
-      el.preload = "auto";
-      el.load();
-      VRM.requestPlay(
-        el,
-        () => { if (el.paused && !el.ended) el.play().catch(() => {}); },
-        () => { if (!el.paused) el.pause(); }
-      );
-    }
-    // Offscreen: IO will call load() when the element enters rootMargin.
-  }, [src, audioPriority.active]);
-
-  // Viewport-aware decoder management via VideoResourceManager (VRM).
-  // Carousel videos use data-single-carousel and are managed by
-  // storefront-persistent-media.js — this observer never touches them.
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-
-    VRM.register(el, VRM.PRIORITY_NEAR);
-
-    if (typeof IntersectionObserver === "undefined") {
-      // Old-browser fallback: load and request play immediately.
-      el.preload = "auto";
-      if (el.src) el.load();
-      VRM.requestPlay(el, () => el.play().catch(() => {}), () => {
-        if (!el.paused) el.pause();
-      });
-      return () => VRM.unregister(el);
-    }
-
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          inViewRef.current = true;
-          if (audioPriorityRef.current) return;
-          el.preload = "auto";
-          // Load if src was set while offscreen (readyState 0 = HAVE_NOTHING).
-          if (el.readyState === 0 && el.src) el.load();
-          VRM.requestPlay(
-            el,
-            () => { if (el.paused && !el.ended) el.play().catch(() => {}); },
-            () => { if (!el.paused) el.pause(); }
-          );
-        } else {
-          inViewRef.current = false;
-          VRM.requestPause(el);
-          el.preload = "none";
-          if (!el.paused) el.pause();
-        }
-      },
-      { rootMargin: "150px 0px", threshold: 0 }
-    );
-    obs.observe(el);
-
-    return () => {
-      obs.disconnect();
-      VRM.unregister(el);
-    };
-  }, []);
-
-  return (
-    <video
-      ref={videoRef}
-      loop
-      muted
-      playsInline
-      preload="none"
-      poster={poster || undefined}
-      onError={onError}
-      className={className}
-      {...touchProps}
-      style={baseStyle}
-    />
-  );
+function shallowStyleEqual(left, right) {
+  if (left === right) return true;
+  if (!left || !right) return !left && !right;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  return leftKeys.every((key) => left[key] === right[key]);
 }
 
-export default memo(CoverArt);
+function coverArtPropsEqual(previous, next) {
+  const stableKeys = [
+    "src",
+    "baseCover",
+    "type",
+    "alt",
+    "width",
+    "height",
+    "borderRadius",
+    "className",
+    "skeleton",
+    "loadPriority",
+    "onClick",
+    "onTouchStart",
+    "onTouchEnd",
+  ];
+  return stableKeys.every((key) => previous[key] === next[key]) &&
+    shallowStyleEqual(previous.style, next.style);
+}
+
+export default memo(CoverArt, coverArtPropsEqual);

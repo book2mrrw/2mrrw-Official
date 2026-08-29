@@ -278,11 +278,14 @@ function CatalogGrid({
               }}
             >
               <div className="release-card-cover release-card-cover--locked">
-                <img
+                <CoverArt
                   src={coverDisplay.src || mediaItem.cover}
+                  baseCover={mediaItem.baseCover || mediaItem.cover || undefined}
+                  type={coverDisplay.type || mediaItem.coverArtType || "image"}
                   alt=""
                   className="release-card-cover-img--blur"
-                  style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block" }}
+                  width="100%"
+                  style={{ aspectRatio: "1/1", objectFit: "cover", display: "block" }}
                 />
                 <div className="release-card-upcoming-overlay">
                   <div className="release-card-lock-icon">

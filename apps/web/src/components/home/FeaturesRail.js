@@ -1,7 +1,6 @@
 "use client";
 
-import { memo, useMemo, useEffect, useRef, useState } from "react";
-import { useMountEnterAnimation } from "@/hooks/useMountEnterAnimation";
+import { memo, useMemo, useEffect, useRef } from "react";
 import {
   isUiHydrationTraceEnabled,
   logUiHydrationTrace,
@@ -17,7 +16,6 @@ import { useArtworkGesture } from "@/hooks/useArtworkGesture";
 
 const FeatureCard = memo(function FeatureCard({
   item,
-  index,
   isMobile,
   onGift,
   onOpenFeature,
@@ -33,10 +31,7 @@ const FeatureCard = memo(function FeatureCard({
   );
   const showPlayActions = itemHasPlayableAudio(mediaItem, access);
   const coverDisplay = useMemo(() => catalogCoverDisplay(mediaItem), [mediaItem]);
-  const videoRef = useRef(null);
   const featureCoverRef = useRef(null);
-  const [videoFailed, setVideoFailed] = useState(false);
-  const { shouldAnimate } = useMountEnterAnimation();
   const { handlers: featureGesture } = useArtworkGesture({
     slug: item?.slug || "",
     elementRef: featureCoverRef,
@@ -57,8 +52,6 @@ const FeatureCard = memo(function FeatureCard({
         background: "#0a0a0a",
         borderRadius: 14,
         border: "1px solid #1a1a1a",
-        opacity: shouldAnimate ? 0 : 1,
-        animation: shouldAnimate ? `fadeInUp 0.5s ease ${index * 0.09}s forwards` : undefined,
         transition: "border-color 0.25s",
         position: "relative",
       }}
@@ -95,39 +88,16 @@ const FeatureCard = memo(function FeatureCard({
           transition: "filter .25s ease",
         }}
       >
-        {!videoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video" ? (
-          <video
-            ref={videoRef}
-            src={mediaItem?.video || mediaItem?.visual || undefined}
-            poster={mediaItem.cover || undefined}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="auto"
-            webkit-playsinline="true"
-            onError={() => setVideoFailed(true)}
-            style={{
-              backgroundColor: "#0a0a0a",
-              width: "100%",
-              aspectRatio: "1/1",
-              objectFit: "cover",
-              display: "block",
-              borderRadius: "13px 13px 0 0",
-              pointerEvents: "none",
-            }}
-          />
-        ) : (
-          <CoverArt
-            src={coverDisplay.src}
-            type={coverDisplay.type || "image"}
-            alt=""
-            width="100%"
-            height="auto"
-            borderRadius="13px 13px 0 0"
-            style={{ aspectRatio: "1/1", display: "block" }}
-          />
-        )}
+        <CoverArt
+          src={coverDisplay.src}
+          baseCover={mediaItem.baseCover || mediaItem.cover || undefined}
+          type={coverDisplay.type || "image"}
+          alt=""
+          width="100%"
+          height="auto"
+          borderRadius="13px 13px 0 0"
+          style={{ aspectRatio: "1/1", display: "block" }}
+        />
         {access?.lifecycle && access.lifecycle.phase !== "live" ? (
           <div style={{ position: "absolute", left: 10, bottom: 10, fontSize: 9, fontWeight: 900, letterSpacing: 1.2, color: access.lifecycle.earlyEligible ? "#00ffff" : "#fff", background: "rgba(0,0,0,.78)", border: "1px solid rgba(162,89,255,.55)", borderRadius: 20, padding: "5px 8px", pointerEvents: "none" }}>
             {access.lifecycle.earlyEligible ? "EARLY ACCESS" : access.lifecycle.preorderOpen ? "PRE-ORDER" : "UPCOMING"}

@@ -85,6 +85,19 @@ test("UI-01 Recently Played stays compact without resizing adjacent My Music she
   assert.match(recentlyAdded, /width: 130/);
 });
 
+test("UI-02 tab navigation retains mounted surfaces and per-tab scroll identity", () => {
+  const home = read("src/app/HomeClient.js");
+  const musicTabs = read("src/components/storefront/MusicTabCatalogPanels.js");
+
+  assert.match(home, /function PersistentTabMount/);
+  assert.match(home, /tabScrollPositionsRef\.current\.set/);
+  assert.match(home, /tabScrollPositionsRef\.current\.get\(activeTab\)/);
+  assert.doesNotMatch(home, /\{activeTab==="(?:shop|vault|help|blog|vision|circle|innercircle|account)"\s*&&\s*\(/);
+  assert.match(musicTabs, /MUSIC_TAB_IDS\.map/);
+  assert.match(musicTabs, /data-persistent-tab=\{tabId\}/);
+  assert.doesNotMatch(musicTabs, /if \(!mountedTabsRef\.current\.has/);
+});
+
 test("SLICE-1D production PLAY/PAUSE/RESUME/SEEK enter Playback Core", () => {
   const publicApi = read("src/lib/playback/usePlaybackPublicApi.js");
   const keyboard = read("src/lib/playback/keyboard-shortcuts.js");
@@ -199,7 +212,7 @@ test("production playback startup policy stays short, bounded, and audio-first",
   const prefetcher = read("src/lib/audio/hls-segment-prefetcher.js");
   const overlay = read("src/components/music/VisualMomentOverlay.js");
   const playerBar = read("src/components/audio/GlobalAudioPlayerBar.js");
-  const mediaPriority = read("src/lib/media/audio-media-priority.js");
+  const persistentVisual = read("src/lib/media/persistent-visual-lifecycle.js");
   const singles = read("src/components/home/LatestSinglesStyleRow.js");
   const coverArt = read("src/components/ui/CoverArt.js");
   const ambientBackground = read("src/components/home/AmbientPlaybackBackground.js");
@@ -211,18 +224,21 @@ test("production playback startup policy stays short, bounded, and audio-first",
   assert.match(stream, /hlsDidLoad\s*\?\s*AUDIO_STARTUP_BUFFER_SECONDS\s*:\s*3/);
   assert.match(prefetcher, /prefetchedSeconds\s*>=\s*AUDIO_PREFETCH_BUFFER_SECONDS/);
   assert.match(overlay, /preload="none"/);
-  assert.match(playerBar, /const timer = setTimeout/);
-  assert.match(playerBar, /preload="none"/);
-  assert.match(stream, /beginAudioStartupPriority\(\)/);
-  assert.match(stream, /audioMediaPriorityLease\?\.promoteToPlayback\(\)/);
-  assert.match(stream, /audioMediaPriorityLease\?\.release\(\)/);
-  assert.match(mediaPriority, /leaseGeneration !== generation/);
-  assert.match(singles, /audioPriority\.active/);
-  assert.match(singles, /removeAttribute\("src"\)/);
-  assert.match(coverArt, /audioPriority\.active/);
-  assert.match(coverArt, /removeAttribute\("src"\)/);
-  assert.match(ambientBackground, /audioPriority\.startupActive/);
-  assert.match(ambientBackground, /removeAttribute\("src"\)/);
+  assert.match(playerBar, /createPersistentVisualLifecycle/);
+  assert.doesNotMatch(playerBar, /const timer = setTimeout|removeAttribute\("src"\)|\.load\(\)/);
+  assert.doesNotMatch(stream, /audio-media-priority|beginAudioStartupPriority|audioMediaPriorityLease/);
+  assert.match(singles, /<CoverArt/);
+  assert.doesNotMatch(singles, /useAudioMediaPriority|removeAttribute\("src"\)|\.load\(\)/);
+  assert.match(coverArt, /createPersistentVisualLifecycle/);
+  assert.match(coverArt, /data-persistent-media="video"/);
+  assert.doesNotMatch(coverArt, /useAudioMediaPriority|removeAttribute\("src"\)|\.load\(\)/);
+  assert.match(persistentVisual, /video\.play\(\)/);
+  assert.doesNotMatch(
+    persistentVisual,
+    /subscribeAudioMediaPriority|IntersectionObserver|VRM\.|video\.pause\(|removeAttribute\("src"\)|\.load\(\)/
+  );
+  assert.match(ambientBackground, /<CoverArt/);
+  assert.doesNotMatch(ambientBackground, /useAudioMediaPriority|removeAttribute\("src"\)|\.load\(\)/);
   assert.doesNotMatch(ambientBackground, /autoPlay/);
   assert.doesNotMatch(ambientBackground, /preload="auto"/);
 });
