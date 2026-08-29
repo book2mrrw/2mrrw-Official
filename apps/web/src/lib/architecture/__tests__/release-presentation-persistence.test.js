@@ -28,6 +28,18 @@ test("viewport and audio priority cannot discard a ready release cover source", 
   assert.match(coverArt, /presentationSnapshot\?\.coverReady/);
 });
 
+test("latest-single artwork videos never expose native mobile playback controls", () => {
+  const latest = read("src/components/home/LatestSinglesStyleRow.js");
+  const styles = read("src/app/globals.css");
+
+  assert.equal((latest.match(/className="release-card-artwork-video"/g) || []).length, 2);
+  assert.equal((latest.match(/controls=\{false\}/g) || []).length, 2);
+  assert.equal((latest.match(/disablePictureInPicture/g) || []).length, 2);
+  assert.equal((latest.match(/disableRemotePlayback/g) || []).length, 2);
+  assert.match(styles, /\.release-card-artwork-video::\-webkit-media-controls-overlay-play-button/);
+  assert.match(styles, /\.release-card-artwork-video::\-webkit-media-controls-start-playback-button/);
+});
+
 test("release presentation diagnostics cover the required lifecycle", () => {
   const registry = read("src/lib/storefront/release-presentation-registry.js");
   for (const event of [

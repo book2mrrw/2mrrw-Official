@@ -4037,6 +4037,16 @@ body.is-player-modal-open::before {
   animation: catalogCardFadeInUp 0.5s ease forwards;
   animation-fill-mode: forwards;
 }
+
+/* Release-card videos are artwork, never standalone video players. */
+.release-card-artwork-video::-webkit-media-controls,
+.release-card-artwork-video::-webkit-media-controls-panel,
+.release-card-artwork-video::-webkit-media-controls-overlay-play-button,
+.release-card-artwork-video::-webkit-media-controls-start-playback-button {
+  display: none !important;
+  -webkit-appearance: none;
+}
+
 .modal-immersive--first-listen .art-lbl {
   animation: title-intro 2s ease-out 1s both;
 }

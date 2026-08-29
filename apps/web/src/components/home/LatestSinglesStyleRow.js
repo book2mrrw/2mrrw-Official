@@ -104,11 +104,15 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
     return (
       <video
         ref={videoRef}
+        className="release-card-artwork-video"
         data-single-carousel
         poster={mediaItem.cover || undefined}
         muted
         loop
         playsInline
+        controls={false}
+        disablePictureInPicture
+        disableRemotePlayback
         preload="none"
         webkit-playsinline="true"
         onLoadedMetadata={coverLifecycle.onVideoLoadedMetadata}
@@ -131,11 +135,15 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
     return (
       <video
         ref={videoRef}
+        className="release-card-artwork-video"
         data-single-carousel
         poster={mediaItem.cover || undefined}
         muted
         loop
         playsInline
+        controls={false}
+        disablePictureInPicture
+        disableRemotePlayback
         preload="none"
         webkit-playsinline="true"
         onLoadedMetadata={coverLifecycle.onVideoLoadedMetadata}
