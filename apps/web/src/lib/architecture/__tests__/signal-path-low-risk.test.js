@@ -385,6 +385,39 @@ test("SLICE-3 Core is the sole canonical Selection writer", () => {
   }
 });
 
+test("SLICE-3 ADDENDUM: canonical Selection bridge subscribes lazily, never at module construction", () => {
+  // PlaybackStateMachine is a module-load-time singleton, constructed long
+  // before getProductionPlaybackCore() ever wires and installs the Selection
+  // sink (that happens inside a hook body, during AudioProvider's render).
+  // Subscribing to Core Selection inside the constructor would permanently
+  // bind to "no sink installed" — see selection-bridge-lifecycle.test.mjs for
+  // the full regression proof (negative control + real lifecycle).
+  const stateMachine = read("src/media/PlaybackStateMachine.js");
+
+  const ctorMatch = stateMachine.match(/class PlaybackStateMachine \{\s*constructor\(\) \{[\s\S]*?\r?\n  \}\r?\n/);
+  assert.ok(ctorMatch, "could not isolate PlaybackStateMachine's constructor body");
+  const constructorBody = ctorMatch[0];
+  assert.doesNotMatch(constructorBody, /subscribeCanonicalSelection/, "constructor must not subscribe to Core Selection eagerly");
+  assert.doesNotMatch(constructorBody, /_ensureSelectionBridgeSubscribed\(/, "constructor must not establish the Selection bridge eagerly");
+
+  // Exactly one production call site for the real subscription — inside the
+  // lazy bridge method itself, never duplicated elsewhere.
+  const subscribeCallCount = (stateMachine.match(/subscribeCanonicalSelection\(/g) || []).length;
+  assert.equal(subscribeCallCount, 1);
+  assert.match(stateMachine, /_ensureSelectionBridgeSubscribed\(\)\s*\{[\s\S]*?subscribeCanonicalSelection/);
+
+  // The bridge is established only from real subscriber entry points, not
+  // from imperative reads (getContext/getContextSnapshot must stay eager-safe).
+  assert.match(stateMachine, /subscribeContext\(listener\)\s*\{\s*this\._ensureSelectionBridgeSubscribed\(\);/);
+  assert.match(stateMachine, /subscribeIdentity\(listener\)\s*\{\s*this\._ensureSelectionBridgeSubscribed\(\);/);
+  const getContextDefAt = stateMachine.indexOf("getContext() {");
+  assert.ok(getContextDefAt >= 0, "could not locate getContext() method definition");
+  assert.doesNotMatch(
+    stateMachine.slice(getContextDefAt, getContextDefAt + 200),
+    /_ensureSelectionBridgeSubscribed/,
+  );
+});
+
 test("SLICE-2 timeline keeps the physical clock and throttles only presentation commits", () => {
   const helper = read("src/lib/playback/PlaybackHelperService.js");
   const handlers = read("src/lib/playback/PlaybackEventHandlers.js");
