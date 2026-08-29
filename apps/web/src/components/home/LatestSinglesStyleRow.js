@@ -197,9 +197,8 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
             ${Number(mediaItem.price).toFixed(2)}
           </div>
         ) : null}
-        {showPlayActions || access?.showCart ? (
-          <div onClick={(e) => e.stopPropagation()}>
-            <ReleaseCardActions
+        <div data-persistent-card-actions="true" onClick={(e) => e.stopPropagation()}>
+          <ReleaseCardActions
               item={playItemResolved}
               accountState={entitlementAccountState}
               userId={userId}
@@ -221,9 +220,8 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
               cartLabel={access?.lifecycle?.preorderOpen
                 ? access.lifecycle.earlyAccessEnabled ? "Preorder Early Access" : "Preorder"
                 : "+ Cart"}
-            />
-          </div>
-        ) : null}
+          />
+        </div>
       </div>
     </PlaybackPrewarmCardShell>
   );

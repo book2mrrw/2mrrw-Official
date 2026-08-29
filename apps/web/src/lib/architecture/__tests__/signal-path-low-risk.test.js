@@ -98,6 +98,37 @@ test("UI-02 tab navigation retains mounted surfaces and per-tab scroll identity"
   assert.doesNotMatch(musicTabs, /if \(!mountedTabsRef\.current\.has/);
 });
 
+test("UI-03 release actions and Audio Visual controls retain stable DOM identity", () => {
+  const actions = read("src/components/music/ReleaseCardPlayButton.js");
+  const latestRow = read("src/components/home/LatestSinglesStyleRow.js");
+  const features = read("src/components/home/FeaturesRail.js");
+  const catalog = read("src/components/home/CatalogGrid.js");
+  const audioVisuals = read("src/components/home/AudioVisualsSection.js");
+  const homeCatalog = read("src/components/storefront/HomeStorefrontCatalogMedia.js");
+
+  assert.match(actions, /data-persistent-release-actions="true"/);
+  assert.match(actions, /data-release-action-slot="playback"/);
+  assert.match(actions, /data-release-action-slot="library"/);
+  assert.match(actions, /data-release-action-slot="purchase"/);
+  assert.match(actions, /data-release-action-icon="play"/);
+  assert.match(actions, /data-release-action-icon="pause"/);
+  assert.doesNotMatch(actions, /\{showPlay\s*\?\s*<ReleaseCardPlayButton/);
+
+  assert.match(latestRow, /data-persistent-card-actions="true"/);
+  assert.match(features, /data-persistent-card-actions="true"/);
+  assert.match(catalog, /data-persistent-card-actions="true"/);
+  assert.match(homeCatalog, /id="home-mixtapes-eps"[\s\S]*source="home_mixtape_ep_card"[\s\S]*cardMedia="cover"/);
+
+  assert.match(audioVisuals, /data-persistent-audio-visual-player="true"/);
+  assert.match(audioVisuals, /data-persistent-audio-visual-poster="true"/);
+  assert.match(audioVisuals, /data-persistent-audio-visual-control="true"/);
+  assert.match(audioVisuals, /data-audio-visual-icon="play"/);
+  assert.match(audioVisuals, /data-audio-visual-icon="pause"/);
+  assert.doesNotMatch(audioVisuals, /key=\{featuredId\}/);
+  assert.doesNotMatch(audioVisuals, /\{isActive\s*&&\s*\(/);
+  assert.doesNotMatch(audioVisuals, /\{!isActive\s*&&\s*\(/);
+});
+
 test("SLICE-1D production PLAY/PAUSE/RESUME/SEEK enter Playback Core", () => {
   const publicApi = read("src/lib/playback/usePlaybackPublicApi.js");
   const keyboard = read("src/lib/playback/keyboard-shortcuts.js");

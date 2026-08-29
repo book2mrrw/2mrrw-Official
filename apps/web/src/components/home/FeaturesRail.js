@@ -121,9 +121,8 @@ const FeatureCard = memo(function FeatureCard({
           style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}
           onClick={(e) => e.stopPropagation()}
         >
-          {showPlayActions || access?.showCart ? (
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <ReleaseCardActions
+          <div data-persistent-card-actions="true" style={{ flex: 1, minWidth: 0 }}>
+            <ReleaseCardActions
                 item={mediaItem}
                 accountState={entitlementAccountState}
                 userId={userId}
@@ -145,9 +144,8 @@ const FeatureCard = memo(function FeatureCard({
                 cartLabel={access?.lifecycle?.preorderOpen
                   ? access.lifecycle.earlyAccessEnabled ? "Preorder Early Access" : "Preorder"
                   : "+ Cart"}
-              />
-            </div>
-          ) : null}
+            />
+          </div>
         </div>
       </div>
     </PlaybackPrewarmCardShell>

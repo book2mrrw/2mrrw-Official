@@ -372,14 +372,15 @@ function CatalogGrid({
             ) : null}
             {access?.showPrice && <div style={{fontSize:isMobile?12:13,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${mediaItem.price.toFixed(2)}</div>}
             <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}} onClick={type==="albums"?e=>e.stopPropagation():undefined}>
-              {showPlayActions && type==="albums" ? (
-                <div style={{flex:1,minWidth:0}}>
+              {type==="albums" ? (
+                <div data-persistent-card-actions="true" style={{flex:1,minWidth:0}}>
                   <ReleaseCardActions
                     item={withR2CatalogMedia(playItem)}
                     accountState={accountState}
                     userId={userId}
                     isAdmin={isAdmin}
                     source="home_album_card"
+                    showPlay={showPlayActions}
                     showCart={Boolean(access?.showCart)}
                     onLibraryChange={onLibraryChange}
                     onPlayClick={(e) => {
@@ -395,9 +396,19 @@ function CatalogGrid({
                     cartLabel="+ Cart"
                   />
                 </div>
-              ) : access?.showCart ? (
-                <button onClick={()=>addToCart(mediaItem)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>
-              ) : null}
+              ) : (
+                <button
+                  data-persistent-card-actions="true"
+                  aria-hidden={!access?.showCart}
+                  disabled={!access?.showCart}
+                  onClick={()=>addToCart(mediaItem)}
+                  onMouseEnter={buttonHoverIn}
+                  onMouseLeave={buttonHoverOut}
+                  style={{flex:1,padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:access?.showCart?"pointer":"default",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600,minWidth:72,visibility:access?.showCart?"visible":"hidden",pointerEvents:access?.showCart?"auto":"none"}}
+                >
+                  Add to Cart
+                </button>
+              )}
             </div>
           </div>
         </PlaybackPrewarmCardShell>

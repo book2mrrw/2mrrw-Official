@@ -11,7 +11,7 @@ import { catalogPreviewAudioUrl } from "@/lib/media-urls";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 
-export default function ReleaseCardPlayButton({ item, accountState, userId, isAdmin = false, source = "home_card", onPlayClick }) {
+export default function ReleaseCardPlayButton({ item, accountState, userId, isAdmin = false, source = "home_card", onPlayClick, available = true }) {
   const { currentTrackId, currentTrackSlug, isPlaying } = usePlaybackIdentity();
   const upgradeTimerRef = useRef(null);
   const lastTapRef = useRef(0);
@@ -116,6 +116,10 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, isAd
     <button
       type="button"
       aria-label={playAriaLabel}
+      aria-hidden={!available}
+      disabled={!available}
+      data-release-action="playback"
+      data-playback-state={showPause ? "pause" : "play"}
       onClick={handlePlay}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -137,18 +141,35 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, isAd
           : "0 0 8px rgba(0,255,255,0.18), 0 0 2px rgba(0,255,255,0.08)",
         transition: "all 0.2s",
         touchAction: "manipulation",
+        visibility: available ? "visible" : "hidden",
+        pointerEvents: available ? "auto" : "none",
       }}
     >
-      {showPause ? (
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <span style={{ position: "relative", width: 14, height: 14, display: "block" }}>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+          aria-hidden
+          data-release-action-icon="pause"
+          style={{ position: "absolute", inset: 0, opacity: showPause ? 1 : 0 }}
+        >
           <rect x="2" y="1.5" width="3.5" height="11" rx="1.2" fill="#00ffff" />
           <rect x="8.5" y="1.5" width="3.5" height="11" rx="1.2" fill="#00ffff" />
         </svg>
-      ) : (
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden style={{ marginLeft: 2 }}>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+          aria-hidden
+          data-release-action-icon="play"
+          style={{ position: "absolute", inset: 0, marginLeft: 2, opacity: showPause ? 0 : 1 }}
+        >
           <path d="M3 1.5L13 7L3 12.5V1.5Z" fill="#00ffff" />
         </svg>
-      )}
+      </span>
     </button>
   );
 }
@@ -173,30 +194,43 @@ export function ReleaseCardActions({
   );
 
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      {showPlay ? <ReleaseCardPlayButton item={item} accountState={accountState} userId={userId} isAdmin={isAdmin} source={source} onPlayClick={onPlayClick} /> : null}
-      {showPlay ? <span onClick={(e) => e.stopPropagation()}>
+    <div
+      data-persistent-release-actions="true"
+      style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 44 }}
+    >
+      <span data-release-action-slot="playback" style={{ display: "inline-flex", flexShrink: 0 }}>
+        <ReleaseCardPlayButton item={item} accountState={accountState} userId={userId} isAdmin={isAdmin} source={source} onPlayClick={onPlayClick} available={showPlay} />
+      </span>
+      <span
+        data-release-action-slot="library"
+        aria-hidden={!showPlay}
+        onClick={(e) => e.stopPropagation()}
+        style={{ display: "inline-flex", flexShrink: 0, visibility: showPlay ? "visible" : "hidden", pointerEvents: showPlay ? "auto" : "none" }}
+      >
         <MusicPlusButton track={item} userId={userId} access={access} onLibraryChange={onLibraryChange} />
-      </span> : null}
-      {showCart ? (
-        <button
-          type="button"
-          onClick={onAddToCart}
-          style={{
-            flex: 1,
-            height: 44,
-            padding: "7px 0",
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: "pointer",
-            borderRadius: 7,
-            transition: "0.2s",
-            ...cartButtonStyle,
-          }}
-        >
-          {cartLabel}
-        </button>
-      ) : null}
+      </span>
+      <button
+        type="button"
+        aria-hidden={!showCart}
+        disabled={!showCart}
+        data-release-action-slot="purchase"
+        onClick={onAddToCart}
+        style={{
+          flex: 1,
+          height: 44,
+          padding: "7px 0",
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: showCart ? "pointer" : "default",
+          borderRadius: 7,
+          transition: "0.2s",
+          visibility: showCart ? "visible" : "hidden",
+          pointerEvents: showCart ? "auto" : "none",
+          ...cartButtonStyle,
+        }}
+      >
+        {cartLabel}
+      </button>
     </div>
   );
 }
