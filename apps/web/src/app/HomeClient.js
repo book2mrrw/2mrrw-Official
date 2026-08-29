@@ -2307,7 +2307,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
           <div
             ref={mainScrollRef}
             data-main-scroll
-            style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:0,WebkitOverflowScrolling:"touch"}}
+            style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:0}}
           >
             <HeroIsland
               isMobile={isMobile}

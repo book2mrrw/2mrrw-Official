@@ -115,6 +115,7 @@ export default function MusicPlusButton({
     <>
       <button
         type="button"
+        data-release-action="library"
         className={className}
         aria-label="More actions"
         aria-expanded={open}

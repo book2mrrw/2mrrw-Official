@@ -313,6 +313,7 @@ function CatalogGrid({
 
         return (
         <PlaybackPrewarmCardShell
+          data-scroll-persistent-card="release"
           key={mediaItem.slug}
           releaseItem={mediaItem}
           playItem={playItem}

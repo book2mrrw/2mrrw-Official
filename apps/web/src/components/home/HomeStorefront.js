@@ -2,7 +2,6 @@
 
 import { memo, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import styles from "./HomeStorefront.module.css";
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
 import AudioVisualsSection from "@/components/home/AudioVisualsSection";
@@ -82,16 +81,16 @@ const HomeStorefront = memo(function HomeStorefront({
         )}
       </div>
 
-      <motion.div style={{ marginTop: 20, marginBottom: 4 }}>
-        <motion.div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
+      <div style={{ marginTop: 20, marginBottom: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
           <h2 className="section-heading" style={{ margin: 0 }}>Latest Singles</h2>
           <AdminIngestButton />
-        </motion.div>
-        <motion.div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
           <button type="button" className={styles.collBtn} onClick={onOpenCollection} aria-label="Open my music collection">
             MY COLLECTION
           </button>
-        </motion.div>
+        </div>
 
         <HomeStorefrontCatalogMedia
           isMobile={isMobile}
@@ -116,7 +115,7 @@ const HomeStorefront = memo(function HomeStorefront({
           liveStreamDate={liveStreamDate}
           liveStreamTime={liveStreamTime}
         />
-      </motion.div>
+      </div>
 
       <div style={{ marginTop: 28, marginBottom: 28 }}>
         <h2 className="section-heading" style={{ marginBottom: 14 }}>2MRRW RADIO</h2>

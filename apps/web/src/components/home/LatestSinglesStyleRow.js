@@ -107,6 +107,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
   const playItemResolved = useMemo(() => withR2CatalogMedia(playItem), [playItem]);
   return (
     <PlaybackPrewarmCardShell
+      data-scroll-persistent-card="release"
       releaseItem={mediaItem}
       playItem={playItem}
       catalogPlaybackLookup={catalogPlaybackLookup}

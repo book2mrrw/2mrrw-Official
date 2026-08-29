@@ -5,6 +5,7 @@ import { memo } from "react";
 function LivePanel({ liveIsLive, liveStreamDate, liveStreamTime, liveCountdown }) {
   return (
     <div
+      data-persistent-live-surface="desktop-countdown"
       style={{
         background: "linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",
         border: "1px solid rgba(0,255,255,0.15)",

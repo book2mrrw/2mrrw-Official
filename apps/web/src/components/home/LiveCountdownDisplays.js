@@ -23,6 +23,7 @@ export const LiveCountdownMobileHomeStrip = memo(function LiveCountdownMobileHom
   const { liveIsLive, liveCountdown } = useLiveCountdown();
   return (
     <div
+      data-persistent-live-surface="mobile-countdown"
       style={{
         marginTop: 14,
         background: "linear-gradient(135deg,rgba(8,8,8,0.92),rgba(13,13,13,0.95))",
@@ -103,7 +104,7 @@ export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection({
 }) {
   const { liveIsLive, liveCountdown } = useLiveCountdown();
   return (
-    <div id="home-live">
+    <div id="home-live" data-persistent-live-surface="home-live">
       <h2 className="section-heading" style={{ marginBottom: 16 }}>
         2MRRW LIVE
       </h2>
@@ -224,7 +225,7 @@ export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
   const twitchSrc = `https://player.twitch.tv/?channel=${channel}&parent=${twitchParent}&autoplay=true&muted=false`;
 
   return (
-    <>
+    <div data-scroll-persistent-surface="2mrrw-live-tab" data-persistent-live-surface="live-tab">
       {/* Header card — countdown when offline, LIVE NOW when live */}
       <div
         style={{
@@ -294,22 +295,26 @@ export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
           transition: "border-color 0.4s",
         }}
       >
-        <div style={{ position: "relative", paddingBottom: "56.25%", background: "#050505" }}>
-          {liveIsLive && isProduction ? (
-            <iframe
-              src={twitchSrc}
-              title="2MRRW Live Stream"
-              allowFullScreen
-              allow="autoplay; fullscreen"
-              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
-            />
-          ) : (
-            <div
-              style={{
-                position: "absolute", inset: 0, display: "flex", flexDirection: "column",
-                alignItems: "center", justifyContent: "center", gap: 16,
-              }}
-            >
+        <div data-persistent-live-frame="true" style={{ position: "relative", paddingBottom: "56.25%", background: "#050505", isolation: "isolate" }}>
+          <iframe
+            src={liveIsLive && isProduction ? twitchSrc : undefined}
+            title="2MRRW Live Stream"
+            allowFullScreen
+            allow="autoplay; fullscreen"
+            data-persistent-live-player="true"
+            aria-hidden={!(liveIsLive && isProduction)}
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none", opacity: liveIsLive && isProduction ? 1 : 0, pointerEvents: liveIsLive && isProduction ? "auto" : "none", backfaceVisibility: "hidden", transform: "translate3d(0,0,0)" }}
+          />
+          <div
+            data-persistent-live-placeholder="true"
+            aria-hidden={liveIsLive && isProduction}
+            style={{
+              position: "absolute", inset: 0, display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center", gap: 16,
+              opacity: liveIsLive && isProduction ? 0 : 1,
+              pointerEvents: liveIsLive && isProduction ? "none" : "auto",
+            }}
+          >
               <div
                 style={{
                   width: 70, height: 70, borderRadius: "50%", border: "1px solid #222",
@@ -326,8 +331,7 @@ export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
               </div>
               <div style={{ fontSize: 14, color: "#333", fontWeight: 700, letterSpacing: 2 }}>OFFLINE</div>
               <div style={{ fontSize: 12, color: "#2a2a2a" }}>Stream will appear here when live</div>
-            </div>
-          )}
+          </div>
         </div>
         <div style={{ padding: "16px 20px", borderTop: "1px solid #111" }}>
           <div style={{ fontSize: 13, color: "#444" }}>
@@ -337,6 +341,6 @@ export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
           </div>
         </div>
       </div>
-    </>
+    </div>
   );
 });

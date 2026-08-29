@@ -139,7 +139,7 @@ export default function ReleaseCardPlayButton({ item, accountState, userId, isAd
         boxShadow: showPause
           ? "0 0 16px rgba(0,255,255,0.55), 0 0 6px rgba(0,255,255,0.25)"
           : "0 0 8px rgba(0,255,255,0.18), 0 0 2px rgba(0,255,255,0.08)",
-        transition: "all 0.2s",
+        transition: "background 0.2s, border-color 0.2s, box-shadow 0.2s",
         touchAction: "manipulation",
         visibility: available ? "visible" : "hidden",
         pointerEvents: available ? "auto" : "none",
@@ -223,7 +223,7 @@ export function ReleaseCardActions({
           fontWeight: 600,
           cursor: showCart ? "pointer" : "default",
           borderRadius: 7,
-          transition: "0.2s",
+          transition: "background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s",
           visibility: showCart ? "visible" : "hidden",
           pointerEvents: showCart ? "auto" : "none",
           ...cartButtonStyle,

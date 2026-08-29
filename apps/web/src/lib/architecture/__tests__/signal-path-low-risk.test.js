@@ -129,6 +129,46 @@ test("UI-03 release actions and Audio Visual controls retain stable DOM identity
   assert.doesNotMatch(audioVisuals, /\{!isActive\s*&&\s*\(/);
 });
 
+test("UI-04 the canonical scroller retains release, embedded-video, and live compositor surfaces", () => {
+  const home = read("src/app/HomeClient.js");
+  const css = read("src/app/globals.css");
+  const storefront = read("src/components/home/HomeStorefront.js");
+  const latestRow = read("src/components/home/LatestSinglesStyleRow.js");
+  const features = read("src/components/home/FeaturesRail.js");
+  const catalog = read("src/components/home/CatalogGrid.js");
+  const actions = read("src/components/music/ReleaseCardPlayButton.js");
+  const coverArt = read("src/components/ui/CoverArt.js");
+  const audioVisuals = read("src/components/home/AudioVisualsSection.js");
+  const live = read("src/components/home/LiveCountdownDisplays.js");
+  const livePanel = read("src/components/home/LivePanel.js");
+  const scrollShell = read("src/components/storefront/ScrollPaddingShell.js");
+
+  assert.match(home, /data-main-scroll/);
+  assert.doesNotMatch(home, /data-main-scroll[\s\S]{0,160}WebkitOverflowScrolling/);
+  assert.match(css, /\[data-main-scroll\][\s\S]*will-change:\s*scroll-position/);
+  assert.match(css, /\[data-persistent-media\][\s\S]*content-visibility:\s*visible\s*!important/);
+  assert.match(css, /\[data-persistent-release-actions\]/);
+  assert.match(css, /\[data-persistent-audio-visual-player\]/);
+  assert.match(css, /\[data-persistent-live-player\]/);
+
+  for (const source of [latestRow, features, catalog]) {
+    assert.match(source, /data-scroll-persistent-card="release"/);
+  }
+  assert.doesNotMatch(actions, /transition:\s*"all/);
+  assert.doesNotMatch(coverArt, /transition:\s*"opacity 180ms ease"/);
+
+  assert.match(audioVisuals, /data-scroll-persistent-surface="audio-visuals-player"/);
+  assert.match(audioVisuals, /data-persistent-audio-visual-frame="true"/);
+  assert.match(live, /data-persistent-live-surface="home-live"/);
+  assert.match(live, /data-persistent-live-player="true"/);
+  assert.match(livePanel, /data-persistent-live-surface="desktop-countdown"/);
+
+  assert.doesNotMatch(storefront, /from "framer-motion"/);
+  assert.doesNotMatch(storefront, /<motion\./);
+  assert.doesNotMatch(scrollShell, /from "framer-motion"/);
+  assert.doesNotMatch(scrollShell, /<motion\./);
+});
+
 test("SLICE-1D production PLAY/PAUSE/RESUME/SEEK enter Playback Core", () => {
   const publicApi = read("src/lib/playback/usePlaybackPublicApi.js");
   const keyboard = read("src/lib/playback/keyboard-shortcuts.js");

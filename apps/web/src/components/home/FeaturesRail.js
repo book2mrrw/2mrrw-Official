@@ -39,6 +39,7 @@ const FeatureCard = memo(function FeatureCard({
 
   return (
     <PlaybackPrewarmCardShell
+      data-scroll-persistent-card="release"
       releaseItem={mediaItem}
       playItem={mediaItem}
       accountState={entitlementAccountState}

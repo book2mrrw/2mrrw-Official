@@ -136,6 +136,7 @@ function VideoArt({ src, poster, alt, className, touchProps, baseStyle, onError 
             objectFit: "cover",
             borderRadius: "inherit",
           }}
+          data-persistent-media-layer="poster"
         />
       ) : null}
       <video
@@ -148,6 +149,7 @@ function VideoArt({ src, poster, alt, className, touchProps, baseStyle, onError 
         poster={readyPoster || undefined}
         onError={onError}
         aria-hidden
+        data-persistent-media-layer="motion"
         style={{
           position: "absolute",
           inset: 0,
@@ -156,7 +158,6 @@ function VideoArt({ src, poster, alt, className, touchProps, baseStyle, onError 
           objectFit: "cover",
           borderRadius: "inherit",
           opacity: 0,
-          transition: "opacity 180ms ease",
           pointerEvents: "none",
         }}
       />

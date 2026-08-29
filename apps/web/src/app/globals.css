@@ -1807,6 +1807,79 @@ body.is-player-modal-open::before {
   background: radial-gradient(ellipse 90% 70% at 50% 40%, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.88));
 }
 
+/*
+ * Scroll-persistence contract
+ * ---------------------------
+ * The application scrolls inside `data-main-scroll`, not the document. Keep a
+ * retained scroll raster for that one canonical scroller and give product
+ * media, release controls, embedded players, and live surfaces stable
+ * compositor identities. These rules never toggle from scroll, intersection,
+ * or playback state; state changes are painted inside the retained layers.
+ */
+[data-main-scroll] {
+  contain: layout paint style;
+  isolation: isolate;
+  overflow-anchor: none;
+  overscroll-behavior-y: contain;
+  will-change: scroll-position;
+}
+
+[data-scroll-persistent-surface],
+[data-scroll-persistent-card],
+[data-persistent-release-actions],
+[data-release-action],
+[data-release-action-slot],
+[data-scroll-persistent-control],
+[data-persistent-audio-visual-control],
+[data-persistent-live-surface] {
+  content-visibility: visible !important;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+}
+
+[data-scroll-persistent-surface],
+[data-scroll-persistent-card],
+[data-persistent-live-surface] {
+  contain: layout style;
+  position: relative;
+  isolation: isolate;
+}
+
+[data-persistent-release-actions] {
+  position: relative;
+  z-index: 2;
+}
+
+[data-release-action],
+[data-release-action-slot],
+[data-scroll-persistent-control] {
+  content-visibility: visible !important;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+}
+
+[data-persistent-media],
+[data-persistent-media] > img,
+[data-persistent-media] > video,
+[data-persistent-audio-visual-frame],
+[data-persistent-audio-visual-player],
+[data-persistent-audio-visual-poster],
+[data-persistent-audio-visual-poster] > img,
+[data-persistent-live-frame],
+[data-persistent-live-placeholder],
+[data-persistent-live-player] {
+  contain: layout paint style;
+  content-visibility: visible !important;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+}
+
 .player-immersive-atmosphere {
   position: fixed;
   inset: 0;

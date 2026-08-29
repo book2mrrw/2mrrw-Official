@@ -6,6 +6,7 @@ import GiftButton from "@/components/gifts/GiftButton";
 export default function GiftOverlayButton({ onClick, style = {} }) {
   return (
     <div
+      data-release-action="gift"
       style={{
         position: "absolute",
         top: 8,

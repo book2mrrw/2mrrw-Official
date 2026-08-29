@@ -159,7 +159,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
   }, [onAudioVisualsFocused, startAudioVisualPlayback]);
 
   return (
-    <div ref={sectionRef}>
+    <div ref={sectionRef} data-scroll-persistent-surface="audio-visuals-player">
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: isMobile ? 12 : 20, marginTop: isMobile ? 24 : 32 }}>
         <h2 className="section-heading" style={{ margin: 0, fontSize: isMobile ? 17 : 22 }}>Audio Visuals</h2>
         <span style={{ fontSize: 10, color: "#333", letterSpacing: 3, textTransform: "uppercase", fontWeight: 700 }}>Official Visuals</span>
@@ -168,7 +168,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
       {isMobile ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 16, overflow: "hidden" }}>
-            <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "#000" }}>
+            <div data-persistent-audio-visual-frame="true" style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "#000", isolation: "isolate" }}>
               <iframe
                 ref={iframeRef}
                 src={hasEntered ? iframeSrc : undefined}
@@ -177,7 +177,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
                 data-persistent-audio-visual-player="true"
-                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none", opacity: hasEntered ? 1 : 0, pointerEvents: hasEntered ? "auto" : "none" }}
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none", opacity: hasEntered ? 1 : 0, pointerEvents: hasEntered ? "auto" : "none", backfaceVisibility: "hidden", transform: "translate3d(0,0,0)" }}
               />
               <div
                 data-persistent-audio-visual-poster="true"
@@ -250,7 +250,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
       ) : (
         <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
           <div style={{ flex: "1 1 0", minWidth: 0, background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 20, overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.5)" }}>
-            <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "#000" }}>
+            <div data-persistent-audio-visual-frame="true" style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "#000", isolation: "isolate" }}>
               <iframe
                 ref={iframeRef}
                 src={hasEntered ? iframeSrc : undefined}
@@ -259,7 +259,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
                 data-persistent-audio-visual-player="true"
-                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none", opacity: hasEntered ? 1 : 0, pointerEvents: hasEntered ? "auto" : "none" }}
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none", opacity: hasEntered ? 1 : 0, pointerEvents: hasEntered ? "auto" : "none", backfaceVisibility: "hidden", transform: "translate3d(0,0,0)" }}
               />
               <div
                 data-persistent-audio-visual-poster="true"
