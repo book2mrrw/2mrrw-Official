@@ -240,6 +240,38 @@ One closure commit for this slice, subject `feat(playback): migrate atomic selec
 
 None. Every absolute closure condition passes.
 
+---
+
+# ADDENDUM (2026-08-29) — Production Selection Wiring / Initialization Order Certification
+
+Item 51's known blind spot — PlaybackStateMachine's lazy Selection-bridge
+initialization ordering — now has deterministic regression coverage. No Selection
+semantics, queue traversal, repeat, shuffle, Transport, physical effect authority,
+HLS, WebAudio, continuity, capability, or media identity code was touched.
+
+**New file:** `apps/web/src/lib/playback-core/__tests__/physical/selection-bridge-lifecycle.test.mjs` (8 tests), added to the `test:playback-physical` npm script.
+**New static test:** "SLICE-3 ADDENDUM: canonical Selection bridge subscribes lazily, never at module construction" in `signal-path-low-risk.test.js`.
+
+1. **Negative-control result:** PASS. A subscription established before any sink is installed (the exact shape of the original defect) is proven to permanently miss a real Selection commit that lands after wiring — reproducing the defect class exactly, in isolation, disposed before the real-lifecycle tests run.
+2. **Actual production-order lifecycle tested:** `playbackStateMachine` (the real singleton) is imported at module top — constructed before any test body runs, exactly matching production's module-evaluation-before-hook-body-wiring order. A Core instance is then built and its Selection sink installed inside a test body, standing in for `wireProductionCore.js`'s Selection half (Transport wiring, unrelated to this defect class, is exercised elsewhere).
+3. **PSM-before-Core result:** PASS. `playbackStateMachine._selectionUnsub === null` confirmed both before Core exists and after the sink installs but before any real subscriber attaches.
+4. **Lazy bridge installation result:** PASS. The bridge attaches only on the first real `subscribeContext()`/`subscribeIdentity()` call, and only after that call.
+5. **Duplicate-subscription result:** PASS. A wrapped `subscribe` counter proves exactly one underlying Core bridge subscription exists regardless of how many PSM-level context/identity listeners attach.
+6. **Unsubscribe/resubscribe result:** PASS. Unsubscribing every PSM listener leaves the bridge itself intact (a deliberate, documented choice — the bridge is reference-counted at setup only, matching Core's own session-singleton lifetime); resubscribing resumes reactive updates immediately, still on the same one bridge subscription.
+7. **Atomic compatibility projection result:** PASS. The first commit after wiring updates `currentTrack`/`queue`/`queueIndex` together; `currentTrack === queue[queueIndex]` holds on every observed snapshot; three repeated commits in sequence never leave a stale read.
+8. **Stale/obsolete bridge result:** Characterized, not invented. `getProductionPlaybackCore()` is an explicit session singleton (`resetProductionPlaybackCore()` is documented "Production code must never call this"), so runtime Core replacement does not occur in production. A test exercising that boundary anyway proves PSM's guard (`_selectionUnsub` already set) does not rebind to a replacement Core — an accepted limitation given the real lifecycle, verified so a future change cannot silently regress it unnoticed.
+9. **Static eager-subscription prevention test:** PASS. Asserts `subscribeCanonicalSelection` and `_ensureSelectionBridgeSubscribed(` do not appear inside the constructor body, that exactly one call site exists (inside the lazy bridge method), and that `subscribeContext`/`subscribeIdentity` are the only two entry points that establish it.
+10. **New Selection test total:** 8 (lifecycle) + 1 (static) = 9 new tests, 0 failures.
+11. **Playback Core total:** unchanged at 219/219 (this addendum's tests live in the physical suite, not core-invariants).
+12. **Slice 1D regression total:** physical suite now 47/47 (39 prior + 8 new), 0 regressions.
+13. **Slice 2 regression total:** unchanged, still green — `transport-authority.test.js` 11/11, Slice 2 signal-path assertions 5/5.
+14. **Critical aggregate:** **641/641** (219 core-invariants + 47 physical + 247 auth + 83 upload + 23 release-lifecycle + 22 signal-path-contracts).
+15. **Build:** PASS, exit code 0.
+16. **Lint:** PASS — 0 errors, 241 warnings (unchanged from pre-addendum; no new warnings).
+17. **Original Slice 3 commit hash:** `a74c8f04` (`feat(playback): migrate atomic selection domain to core`).
+18. **Addendum commit hash:** `cf4052f9` (`test(playback): certify Selection bridge lazy-init ordering (Slice 3 addendum)`).
+19. **Unresolved Slice 3 blocker count:** 0.
+
 # SLICE 3 CLOSED
 
 Do not begin Slice 4.
