@@ -62,6 +62,8 @@ import { CoreLiveCommandScope, Domain } from "../types/index.js";
 import { installCurrentPhysicalEffectGuard } from "@/lib/audio/physical-effect-authority";
 import { installTransportObservationSink } from "@/lib/playback/transport-observation-port";
 import { installSelectionAuthoritySink } from "@/lib/playback/selection-port";
+import { installContinuityAuthoritySink } from "@/lib/playback/continuity-port";
+import { buildContinuityCandidate } from "../continuity/continuity-candidate.js";
 
 const SELECTION_TRANSITION_METHODS = new Set([
   "setQueueAndSelect", "selectIndex", "selectMedia", "next", "previous",
@@ -74,6 +76,7 @@ const SELECTION_TRANSITION_METHODS = new Set([
 let _core = null;
 let _disposeTransportSink = null;
 let _disposeSelectionSink = null;
+let _disposeContinuitySink = null;
 
 /**
  * Build a Core instance already wired to the real production dispatcher.
@@ -164,6 +167,27 @@ export function buildWiredCore({
       subscribe: (fn) => selection.subscribe(fn),
       getMetrics: () => selection.metrics,
     });
+
+    // Slice 4D final ownership transfer. ContinuityAuthority never becomes
+    // canonical Selection/Transport authority itself — it validates candidates
+    // and delegates into SelectionAuthority (already transferred above) or the
+    // existing seek/resumePolicy path. What transfers here is bookkeeping
+    // about the last validated candidate (Domain.CONTINUITY), which the
+    // architecture already scaffolded as a distinct domain since Slice 0.
+    core._transferDomainToCore(Domain.CONTINUITY);
+    const continuity = core._continuityAuthority;
+    _disposeContinuitySink?.();
+    _disposeContinuitySink = installContinuityAuthoritySink({
+      captureContext: (meta) => continuity.captureContext(meta),
+      validateCandidate: (raw) => buildContinuityCandidate(raw),
+      beginSelectionRestore: (meta) => continuity.beginSelectionRestore(meta),
+      proposeSelectionRestore: (candidate, captured) => continuity.proposeSelectionRestore(candidate, captured),
+      validatePositionRestore: (candidate, policy) => continuity.validatePositionRestore(candidate, policy),
+      clearSnapshot: (context) => continuity.clearSnapshot(context),
+      getSnapshot: () => continuity.snapshot,
+      subscribe: (fn) => continuity.subscribe(fn),
+      getMetrics: () => continuity.metrics,
+    });
   } catch (error) {
     disposeInstalledEffectGuard();
     core.destroy();
@@ -193,6 +217,8 @@ export function resetProductionPlaybackCore() {
   _disposeTransportSink = null;
   _disposeSelectionSink?.();
   _disposeSelectionSink = null;
+  _disposeContinuitySink?.();
+  _disposeContinuitySink = null;
   _core?.destroy();
   _core = null;
 }
