@@ -13,6 +13,7 @@
     "test:direct-preview-cdn": "node --import ./scripts/register-alias.mjs scripts/test-direct-preview-cdn.mjs",
     "backfill:stream-assets": "node --import ./scripts/register-alias.mjs scripts/backfill-stream-assets.mjs",
     "backfill:playback-keys": "node --import ./scripts/register-alias.mjs scripts/backfill-playback-keys.mjs",
+    "rollout:hls-profile": "node scripts/hls-profile-rollout.mjs",
     "check:frontend-guardrails": "node scripts/check-frontend-guardrails.mjs",
     "verify:foundation": "node scripts/recovery/verify-foundation.mjs",
     "recover:foundation": "node scripts/recovery/recover-foundation.mjs",
