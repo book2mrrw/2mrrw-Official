@@ -14,6 +14,12 @@ import { itemHasPlayableAudio, resolveContentAccess } from "@/lib/music-access";
 import { catalogCoverDisplay, withR2CatalogMedia } from "@/components/home/catalogMedia";
 import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
 import { useArtworkGesture } from "@/hooks/useArtworkGesture";
+import {
+  createReleasePresentationIdentity,
+  entitlementPresentationIdentity,
+  useReleaseCoverLifecycle,
+  useReleasePresentationLifecycle,
+} from "@/hooks/useReleasePresentation";
 
 const FeatureCard = memo(function FeatureCard({
   item,
@@ -33,10 +39,40 @@ const FeatureCard = memo(function FeatureCard({
   );
   const showPlayActions = itemHasPlayableAudio(mediaItem, access);
   const coverDisplay = useMemo(() => catalogCoverDisplay(mediaItem), [mediaItem]);
+  const presentationIdentity = useMemo(
+    () => createReleasePresentationIdentity(
+      mediaItem,
+      "home_feature_card",
+      coverDisplay?.type === "video"
+        ? mediaItem?.video || mediaItem?.visual || coverDisplay?.src
+        : coverDisplay?.src
+    ),
+    [mediaItem, coverDisplay]
+  );
+  const entitlementIdentity = useMemo(
+    () => entitlementPresentationIdentity({
+      accountState: entitlementAccountState,
+      userId,
+      isAdmin: isAdminStable,
+      access,
+    }),
+    [entitlementAccountState, userId, isAdminStable, access]
+  );
+  const coverLifecycle = useReleaseCoverLifecycle(
+    presentationIdentity,
+    coverDisplay?.type === "video"
+      ? mediaItem?.video || mediaItem?.visual || coverDisplay?.src
+      : coverDisplay?.src
+  );
   const videoRef = useRef(null);
   const featureCoverRef = useRef(null);
   const [videoFailed, setVideoFailed] = useState(false);
-  const { shouldAnimate } = useMountEnterAnimation();
+  const { shouldAnimate } = useMountEnterAnimation(true, presentationIdentity);
+  useReleasePresentationLifecycle({
+    identity: presentationIdentity,
+    entitlementIdentity,
+    controlsReady: true,
+  });
   const { handlers: featureGesture } = useArtworkGesture({
     slug: item?.slug || "",
     elementRef: featureCoverRef,
@@ -50,6 +86,7 @@ const FeatureCard = memo(function FeatureCard({
       userId={userId}
       source="home_feature_card"
       enabled={showPlayActions}
+      data-release-presentation-key={presentationIdentity.key || undefined}
       style={{
         flex: "0 0 auto",
         width: isMobile ? 160 : 220,
@@ -106,6 +143,8 @@ const FeatureCard = memo(function FeatureCard({
             playsInline
             preload="auto"
             webkit-playsinline="true"
+            onLoadedMetadata={coverLifecycle.onVideoLoadedMetadata}
+            onLoadedData={coverLifecycle.onVideoLoadedData}
             onError={() => setVideoFailed(true)}
             style={{
               backgroundColor: "#0a0a0a",
@@ -120,7 +159,9 @@ const FeatureCard = memo(function FeatureCard({
         ) : (
           <CoverArt
             src={coverDisplay.src}
+            baseCover={mediaItem?.baseCover || undefined}
             type={coverDisplay.type || "image"}
+            presentationIdentity={presentationIdentity}
             alt=""
             width="100%"
             height="auto"

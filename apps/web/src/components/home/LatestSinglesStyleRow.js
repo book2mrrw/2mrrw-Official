@@ -18,12 +18,19 @@ import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import { getMediaSignature } from "@/lib/media/media-determinism";
 import { useArtworkGesture } from "@/hooks/useArtworkGesture";
 import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
+import {
+  createReleasePresentationIdentity,
+  entitlementPresentationIdentity,
+  useReleaseCoverLifecycle,
+  useReleasePresentationLifecycle,
+} from "@/hooks/useReleasePresentation";
 
 /** Phase P9 — MP4/cover surface; skips reconcile when only entitlement chrome changes. */
 const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface({
   mediaItem,
   cardMedia,
   coverDisplay,
+  presentationIdentity,
 }) {
   const videoRef = useRef(null);
   const assignedSrc = cardMedia === "video" ? mediaItem?.video || null : null;
@@ -33,17 +40,23 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
     ? mediaItem?.video || mediaItem?.visual || null
     : null;
   const activeVideoSrc = cardMedia === "video" ? assignedSrc : coverVideoSrc;
+  const coverLifecycle = useReleaseCoverLifecycle(presentationIdentity, activeVideoSrc || coverDisplay?.src);
 
   useLayoutEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (audioPriority.active || !activeVideoSrc) {
+    if (!activeVideoSrc) {
       if (!el.paused) el.pause();
       el.preload = "none";
       if (el.hasAttribute("src")) {
         el.removeAttribute("src");
         el.load();
       }
+      return;
+    }
+    if (audioPriority.active) {
+      if (!el.paused) el.pause();
+      el.preload = "none";
       return;
     }
     if (el.getAttribute("src") !== activeVideoSrc) {
@@ -98,6 +111,8 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
         playsInline
         preload="none"
         webkit-playsinline="true"
+        onLoadedMetadata={coverLifecycle.onVideoLoadedMetadata}
+        onLoadedData={coverLifecycle.onVideoLoadedData}
         style={{
           backgroundColor: "#0a0a0a",
           width: "100%",
@@ -123,6 +138,8 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
         playsInline
         preload="none"
         webkit-playsinline="true"
+        onLoadedMetadata={coverLifecycle.onVideoLoadedMetadata}
+        onLoadedData={coverLifecycle.onVideoLoadedData}
         onError={() => setCoverVideoFailed(true)}
         style={{
           backgroundColor: "#0a0a0a",
@@ -141,7 +158,9 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
   return (
     <CoverArt
       src={coverDisplay.src}
+      baseCover={mediaItem?.baseCover || undefined}
       type={coverDisplay.type || "image"}
+      presentationIdentity={presentationIdentity}
       alt=""
       width="100%"
       height="auto"
@@ -189,8 +208,34 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
     return mediaItem;
   }, [cardMedia, catalogPlaybackLookup, mediaItem]);
   const coverDisplay = useMemo(() => catalogCoverDisplay(mediaItem), [mediaItem]);
+  const presentationIdentity = useMemo(
+    () => createReleasePresentationIdentity(
+      mediaItem,
+      `${source}:${cardMedia}`,
+      cardMedia === "video"
+        ? mediaItem?.video || null
+        : coverDisplay?.type === "video"
+          ? mediaItem?.video || mediaItem?.visual || coverDisplay?.src
+          : coverDisplay?.src
+    ),
+    [mediaItem, source, cardMedia, coverDisplay]
+  );
+  const entitlementIdentity = useMemo(
+    () => entitlementPresentationIdentity({
+      accountState: entitlementAccountState,
+      userId,
+      isAdmin: isAdminStable,
+      access,
+    }),
+    [entitlementAccountState, userId, isAdminStable, access]
+  );
   const playItemResolved = useMemo(() => withR2CatalogMedia(playItem), [playItem]);
-  const { shouldAnimate } = useMountEnterAnimation();
+  const { shouldAnimate } = useMountEnterAnimation(true, presentationIdentity);
+  useReleasePresentationLifecycle({
+    identity: presentationIdentity,
+    entitlementIdentity,
+    controlsReady: true,
+  });
 
   return (
     <PlaybackPrewarmCardShell
@@ -204,6 +249,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
       isFirstCard={isFirstCard}
       enabled={showPlayActions}
       data-single-card={cardMedia === "video" ? true : undefined}
+      data-release-presentation-key={presentationIdentity.key || undefined}
       onClick={() => onCardClick?.(mediaItem)}
       className={shouldAnimate ? "catalog-card-enter" : undefined}
       style={{
@@ -257,6 +303,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
           mediaItem={mediaItem}
           cardMedia={cardMedia}
           coverDisplay={coverDisplay}
+          presentationIdentity={presentationIdentity}
         />
         {access?.lifecycle && access.lifecycle.phase !== "live" ? (
           <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end", padding: 10, background: "linear-gradient(transparent 45%,rgba(0,0,0,.82))", pointerEvents: "none" }}>

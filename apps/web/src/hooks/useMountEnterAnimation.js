@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { isReleasePresentationReady } from "@/lib/storefront/release-presentation-registry";
 
 /**
  * Phase R1 — run enter animation/CSS class only once per component mount,
  * not on auth/catalog/entitlement parent re-renders.
  */
-export function useMountEnterAnimation(active = true) {
-  const [shouldAnimate, setShouldAnimate] = useState(active);
+export function useMountEnterAnimation(active = true, presentationIdentity = null) {
+  const [shouldAnimate, setShouldAnimate] = useState(
+    () => active && !isReleasePresentationReady(presentationIdentity)
+  );
 
   useEffect(() => {
     if (!active) return undefined;

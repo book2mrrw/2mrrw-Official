@@ -8,6 +8,11 @@ import { resolveCoverMediaType } from "@/lib/media/cover-media-type";
 import { VRM } from "@/lib/media/video-resource-manager";
 import { logVisualVideoError, logVisualVideoFallback, logVisualImageError } from "@/lib/media/visual-telemetry";
 import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
+import { useReleaseCoverLifecycle } from "@/hooks/useReleasePresentation";
+import {
+  getReleasePresentation,
+  recordReleasePresentationEvent,
+} from "@/lib/storefront/release-presentation-registry";
 export { resolveCoverMediaType };
 
 // Fallback levels for the artwork pipeline
@@ -46,20 +51,41 @@ function CoverArt({
   onTouchEnd,
   skeleton = false,
   loadPriority = "normal",
+  presentationIdentity = null,
 }) {
   // Failure state is keyed to the src that triggered it.
   // When src changes the old failure is automatically ignored — no manual reset needed.
   const [failedSrc, setFailedSrc] = useState(null);
   const [fallbackLevel, setFallbackLevel] = useState(FL_PRIMARY);
 
-  const eff = failedSrc === src ? fallbackLevel : FL_PRIMARY;
+  const presentationSnapshot = presentationIdentity
+    ? getReleasePresentation(presentationIdentity)
+    : null;
+  const persistedStaticFallback = Boolean(
+    baseCover &&
+      presentationSnapshot?.coverReady &&
+      presentationSnapshot.coverResolvedUrl === baseCover
+  );
+  const eff = persistedStaticFallback
+    ? FL_STATIC
+    : failedSrc === src
+      ? fallbackLevel
+      : FL_PRIMARY;
+  const coverLifecycle = useReleaseCoverLifecycle(presentationIdentity, src);
 
   const handleVideoError = useCallback(() => {
+    if (presentationIdentity?.key && baseCover) {
+      recordReleasePresentationEvent(
+        { ...presentationIdentity, coverAssetIdentity: src },
+        "COVER_REQUEST",
+        { url: baseCover, fallbackFor: src }
+      );
+    }
     setFailedSrc(src);
     setFallbackLevel(FL_STATIC);
     logVisualVideoError({ src, context: "CoverArt" });
     if (baseCover) logVisualVideoFallback({ src, context: "CoverArt" });
-  }, [src, baseCover]);
+  }, [src, baseCover, presentationIdentity]);
 
   const handleImgError = useCallback(() => {
     setFailedSrc(src);
@@ -73,7 +99,7 @@ function CoverArt({
     imagePipeline.preload(src, loadPriority, { coverArtType: type });
   }, [src, type, skeleton, loadPriority]);
 
-  if (skeleton && src) {
+  if (skeleton && src && !presentationSnapshot?.coverReady) {
     return (
       <ArtworkSkeleton
         src={src}
@@ -88,6 +114,9 @@ function CoverArt({
         onClick={onClick}
         onTouchStart={onTouchStart}
         onTouchEnd={onTouchEnd}
+        onImageLoad={coverLifecycle.onImageLoad}
+        onVideoLoadedMetadata={coverLifecycle.onVideoLoadedMetadata}
+        onVideoLoadedData={coverLifecycle.onVideoLoadedData}
       />
     );
   }
@@ -139,6 +168,7 @@ function CoverArt({
           draggable={false}
           className={className}
           {...touchProps}
+          onLoad={(event) => coverLifecycle.onImageLoad(event, baseCover)}
           onError={handleImgError}
           style={baseStyle}
         />
@@ -153,6 +183,9 @@ function CoverArt({
         touchProps={touchProps}
         baseStyle={baseStyle}
         onError={handleVideoError}
+        onLoadedMetadata={coverLifecycle.onVideoLoadedMetadata}
+        onLoadedData={coverLifecycle.onVideoLoadedData}
+        retainLoadedSource={Boolean(presentationIdentity?.key)}
       />
     );
   }
@@ -165,13 +198,24 @@ function CoverArt({
       draggable={false}
       className={className}
       {...touchProps}
+      onLoad={coverLifecycle.onImageLoad}
       onError={handleImgError}
       style={baseStyle}
     />
   );
 }
 
-function VideoArt({ src, poster, className, touchProps, baseStyle, onError }) {
+function VideoArt({
+  src,
+  poster,
+  className,
+  touchProps,
+  baseStyle,
+  onError,
+  onLoadedMetadata,
+  onLoadedData,
+  retainLoadedSource,
+}) {
   const videoRef = useRef(null);
   const prevSrcRef = useRef(null);
   const inViewRef = useRef(false);
@@ -191,11 +235,11 @@ function VideoArt({ src, poster, className, touchProps, baseStyle, onError }) {
       VRM.requestPause(el);
       if (!el.paused) el.pause();
       el.preload = "none";
-      if (el.hasAttribute("src")) {
+      if (!retainLoadedSource && el.hasAttribute("src")) {
         el.removeAttribute("src");
         el.load();
+        prevSrcRef.current = null;
       }
-      prevSrcRef.current = null;
       return;
     }
     if (src === prevSrcRef.current) return;
@@ -211,7 +255,7 @@ function VideoArt({ src, poster, className, touchProps, baseStyle, onError }) {
       );
     }
     // Offscreen: IO will call load() when the element enters rootMargin.
-  }, [src, audioPriority.active]);
+  }, [src, audioPriority.active, retainLoadedSource]);
 
   // Viewport-aware decoder management via VideoResourceManager (VRM).
   // Carousel videos use data-single-carousel and are managed by
@@ -270,6 +314,8 @@ function VideoArt({ src, poster, className, touchProps, baseStyle, onError }) {
       playsInline
       preload="none"
       poster={poster || undefined}
+      onLoadedMetadata={onLoadedMetadata}
+      onLoadedData={onLoadedData}
       onError={onError}
       className={className}
       {...touchProps}

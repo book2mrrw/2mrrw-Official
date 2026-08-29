@@ -5,7 +5,19 @@ import { resolveCoverMediaType } from "@/lib/media/cover-media-type";
 import SkeletonBase from "./SkeletonBase";
 import ProgressiveReveal from "./ProgressiveReveal";
 
-function VideoArt({ src, baseCover, width, height, borderRadius, onClick, onTouchStart, onTouchEnd, onLoaded, onError }) {
+function VideoArt({
+  src,
+  baseCover,
+  width,
+  height,
+  borderRadius,
+  onClick,
+  onTouchStart,
+  onTouchEnd,
+  onLoaded,
+  onLoadedMetadata,
+  onError,
+}) {
   const videoRef = useRef(null);
   const prevSrcRef = useRef(null);
 
@@ -26,6 +38,7 @@ function VideoArt({ src, baseCover, width, height, borderRadius, onClick, onTouc
       playsInline
       preload="auto"
       poster={baseCover || undefined}
+      onLoadedMetadata={onLoadedMetadata}
       onCanPlay={onLoaded}
       onError={onError}
       onClick={onClick}
@@ -55,6 +68,9 @@ export default function ArtworkSkeleton({
   onClick,
   onTouchStart,
   onTouchEnd,
+  onImageLoad,
+  onVideoLoadedMetadata,
+  onVideoLoadedData,
 }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -102,7 +118,11 @@ export default function ArtworkSkeleton({
             onClick={onClick}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
-            onLoaded={() => setLoaded(true)}
+            onLoaded={(event) => {
+              setLoaded(true);
+              onVideoLoadedData?.(event);
+            }}
+            onLoadedMetadata={onVideoLoadedMetadata}
             onError={() => setFailed(true)}
           />
         ) : (
@@ -111,7 +131,10 @@ export default function ArtworkSkeleton({
             alt={alt}
             decoding="async"
             draggable={false}
-            onLoad={() => setLoaded(true)}
+            onLoad={(event) => {
+              setLoaded(true);
+              onImageLoad?.(event);
+            }}
             onError={() => setFailed(true)}
             onClick={onClick}
             onTouchStart={onTouchStart}

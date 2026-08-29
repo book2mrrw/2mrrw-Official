@@ -17,9 +17,24 @@ import { CountdownTimer } from "@/components/music/CountdownTimer";
 import { useArtworkGesture }       from "@/hooks/useArtworkGesture";
 import { useVisualAssets } from "@/hooks/useVisualAssets";
 import { globalMediaController } from "@/media/visualEngine/GlobalMediaController";
+import {
+  createReleasePresentationIdentity,
+  entitlementPresentationIdentity,
+  useReleaseCoverLifecycle,
+  useReleasePresentationLifecycle,
+} from "@/hooks/useReleasePresentation";
 
 const VisualMomentOverlay  = dynamic(() => import("@/components/music/VisualMomentOverlay"),  { ssr: false });
 const FullVisualExperience = dynamic(() => import("@/components/music/FullVisualExperience"), { ssr: false });
+
+function ReleasePresentationProbe({ identity, entitlementIdentity }) {
+  useReleasePresentationLifecycle({
+    identity,
+    entitlementIdentity,
+    controlsReady: true,
+  });
+  return null;
+}
 
 /**
  * Release card cover surface with Visual Moment gesture support.
@@ -36,6 +51,7 @@ function CatalogCardCoverSurface({
   onCardClick,
   onHintPlay,
   accountState,
+  presentationIdentity,
 }) {
   const [videoFailed,      setVideoFailed]      = useState(false);
   const [momentActive,     setMomentActive]     = useState(false);
@@ -47,6 +63,12 @@ function CatalogCardCoverSurface({
 
   const { assets, primaryAsset } = useVisualAssets(mediaItem?.slug, accountState);
   const hasVisualMoment = Boolean(primaryAsset);
+  const coverLifecycle = useReleaseCoverLifecycle(
+    presentationIdentity,
+    coverDisplay?.type === "video"
+      ? mediaItem?.video || mediaItem?.visual || coverDisplay?.src
+      : coverDisplay?.src
+  );
 
   // Stable refs to avoid stale closures in IntersectionObserver / timer callbacks
   const primaryAssetRef   = useRef(primaryAsset);
@@ -165,14 +187,17 @@ function CatalogCardCoverSurface({
           poster={mediaItem.cover || undefined}
           autoPlay muted loop playsInline preload="auto"
           webkit-playsinline="true"
+          onLoadedMetadata={coverLifecycle.onVideoLoadedMetadata}
+          onLoadedData={coverLifecycle.onVideoLoadedData}
           onError={() => setVideoFailed(true)}
-          onStalled={() => setVideoFailed(true)}
           style={{ backgroundColor: "#0a0a0a", width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block", transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s", pointerEvents: "none" }}
         />
       ) : (
         <CoverArt
           src={coverDisplay.src}
+          baseCover={mediaItem?.baseCover || undefined}
           type={coverDisplay.type || mediaItem.coverArtType}
+          presentationIdentity={presentationIdentity}
           alt="" width="100%" height="auto"
           style={{ aspectRatio: "1/1", transition: "transform 0.3s, filter 0.3s, box-shadow 0.3s", display: "block" }}
         />
@@ -258,6 +283,19 @@ function CatalogGrid({
         const mediaItem = withR2CatalogMedia(item);
         const coverDisplay = catalogCoverDisplay(mediaItem);
         const access = resolveContentAccess(mediaItem, accountState);
+        const presentationIdentity = createReleasePresentationIdentity(
+          mediaItem,
+          `home_catalog:${type}`,
+          coverDisplay?.type === "video"
+            ? mediaItem?.video || mediaItem?.visual || coverDisplay?.src
+            : coverDisplay?.src
+        );
+        const entitlementIdentity = entitlementPresentationIdentity({
+          accountState,
+          userId,
+          isAdmin,
+          access,
+        });
         const showPlayActions = itemHasPlayableAudio(mediaItem, access);
         const playItem =
           type === "albums" ? albumCardPlaybackItem(mediaItem, catalogPlaybackLookup) : mediaItem;
@@ -275,6 +313,7 @@ function CatalogGrid({
           return (
             <div
               key={mediaItem.slug}
+              data-release-presentation-key={presentationIdentity.key || undefined}
               className="release-card release-card--upcoming"
               onClick={() => onCardClick?.(mediaItem)}
               style={{
@@ -286,9 +325,16 @@ function CatalogGrid({
                 border: "1px solid #1a1a1a",
               }}
             >
+              <ReleasePresentationProbe
+                identity={presentationIdentity}
+                entitlementIdentity={entitlementIdentity}
+              />
               <div className="release-card-cover release-card-cover--locked">
-                <img
+                <CoverArt
                   src={coverDisplay.src || mediaItem.cover}
+                  baseCover={mediaItem?.baseCover || undefined}
+                  type={coverDisplay.type || mediaItem.coverArtType}
+                  presentationIdentity={presentationIdentity}
                   alt=""
                   className="release-card-cover-img--blur"
                   style={{ width: "100%", aspectRatio: "1/1", objectFit: "cover", display: "block" }}
@@ -328,10 +374,15 @@ function CatalogGrid({
           source={type === "albums" ? "home_album_card" : "home_card"}
           isAlbumCard={type === "albums"}
           enabled={showPlayActions}
+          data-release-presentation-key={presentationIdentity.key || undefined}
           style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"}
           onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}
         >
+          <ReleasePresentationProbe
+            identity={presentationIdentity}
+            entitlementIdentity={entitlementIdentity}
+          />
           {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(mediaItem)} /> : null}
           <CatalogCardCoverSurface
             mediaItem={mediaItem}
@@ -340,6 +391,7 @@ function CatalogGrid({
             hoverOut={hoverOut}
             onCardClick={onCardClick}
             accountState={accountState}
+            presentationIdentity={presentationIdentity}
             onHintPlay={() => {
               const track = toPlaybackTrack(withR2CatalogMedia(playItem), { ...accountState, userId, isAdmin }, type === "albums" ? "home_album_card" : "home_card");
               if (!track?.src) return;
