@@ -13,6 +13,38 @@ const musicVideos = [
   { id: "mv-3", title: "W.2.D", youtubeId: "jsrA1SL3_GU", description: "Official Music Video" },
 ];
 
+function PersistentPlayPauseGlyph({ active, size = 16, color = "white" }) {
+  return (
+    <span
+      data-persistent-play-pause-glyph="true"
+      style={{ position: "relative", display: "block", width: size, height: size, flexShrink: 0 }}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill={color}
+        width={size}
+        height={size}
+        aria-hidden
+        data-audio-visual-icon="pause"
+        style={{ position: "absolute", inset: 0, opacity: active ? 1 : 0 }}
+      >
+        <path d="M6 19h4V5H6zm8-14v14h4V5z" />
+      </svg>
+      <svg
+        viewBox="0 0 24 24"
+        fill={color}
+        width={size}
+        height={size}
+        aria-hidden
+        data-audio-visual-icon="play"
+        style={{ position: "absolute", inset: 0, marginLeft: 1, opacity: active ? 0 : 1 }}
+      >
+        <path d="M8 5v14l11-7z" />
+      </svg>
+    </span>
+  );
+}
+
 const AudioVisualsSection = memo(function AudioVisualsSection({
   isMobile,
   onAudioVisualsFocused,
@@ -137,19 +169,22 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 16, overflow: "hidden" }}>
             <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "#000" }}>
-              {hasEntered ? (
-                <iframe
-                  key={featuredId}
-                  ref={iframeRef}
-                  src={iframeSrc}
-                  title={featuredVid.title}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
-                />
-              ) : (
-                <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", cursor: "pointer" }} onClick={handlePlaceholderClick}>
+              <iframe
+                ref={iframeRef}
+                src={hasEntered ? iframeSrc : undefined}
+                title={featuredVid.title}
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                data-persistent-audio-visual-player="true"
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none", opacity: hasEntered ? 1 : 0, pointerEvents: hasEntered ? "auto" : "none" }}
+              />
+              <div
+                data-persistent-audio-visual-poster="true"
+                aria-hidden={hasEntered}
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", cursor: hasEntered ? "default" : "pointer", opacity: hasEntered ? 0 : 1, pointerEvents: hasEntered ? "none" : "auto" }}
+                onClick={handlePlaceholderClick}
+              >
                   <img
                     src={`https://img.youtube.com/vi/${featuredId}/mqdefault.jpg`}
                     alt={featuredVid.title}
@@ -157,11 +192,10 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
                   />
                   <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.35)" }}>
                     <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(0,0,0,0.7)", border: "2px solid rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg viewBox="0 0 24 24" fill="white" width="22" height="22" style={{ marginLeft: 3 }}><path d="M8 5v14l11-7z" /></svg>
+                      <PersistentPlayPauseGlyph active={false} size={22} />
                     </div>
                   </div>
-                </div>
-              )}
+              </div>
             </div>
             <div style={{ padding: "12px 14px" }}>
               <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1 }}>{featuredVid.title}</div>
@@ -195,13 +229,15 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
                       alt={vid.title}
                       style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }}
                     />
-                    {isActive && (
-                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)" }}>
-                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#00ffff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <svg viewBox="0 0 24 24" fill="#000" width="12" height="12"><path d="M6 19h4V5H6zm8-14v14h4V5z" /></svg>
-                        </div>
+                    <div
+                      data-persistent-audio-visual-control="true"
+                      data-active={isActive ? "true" : "false"}
+                      style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isActive ? "rgba(0,0,0,0.45)" : "rgba(0,0,0,0.14)" }}
+                    >
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: isActive ? "#00ffff" : "rgba(0,0,0,0.68)", border: isActive ? "none" : "1px solid rgba(255,255,255,0.32)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        <PersistentPlayPauseGlyph active={isActive} size={12} color={isActive ? "#000" : "white"} />
                       </div>
-                    )}
+                    </div>
                   </div>
                   <div style={{ padding: "8px 10px" }}>
                     <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.3, color: isActive ? "#00ffff" : "white" }}>{vid.title}</div>
@@ -215,22 +251,22 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
         <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
           <div style={{ flex: "1 1 0", minWidth: 0, background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 20, overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.5)" }}>
             <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "#000" }}>
-              {hasEntered ? (
-                <iframe
-                  key={featuredId}
-                  ref={iframeRef}
-                  src={iframeSrc}
-                  title={featuredVid.title}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
-                />
-              ) : (
-                <div
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", cursor: "pointer" }}
-                  onClick={handlePlaceholderClick}
-                >
+              <iframe
+                ref={iframeRef}
+                src={hasEntered ? iframeSrc : undefined}
+                title={featuredVid.title}
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                data-persistent-audio-visual-player="true"
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none", opacity: hasEntered ? 1 : 0, pointerEvents: hasEntered ? "auto" : "none" }}
+              />
+              <div
+                data-persistent-audio-visual-poster="true"
+                aria-hidden={hasEntered}
+                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", cursor: hasEntered ? "default" : "pointer", opacity: hasEntered ? 0 : 1, pointerEvents: hasEntered ? "none" : "auto" }}
+                onClick={handlePlaceholderClick}
+              >
                   <img
                     src={`https://img.youtube.com/vi/${featuredId}/maxresdefault.jpg`}
                     alt={featuredVid.title}
@@ -249,11 +285,10 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
                         e.currentTarget.style.transform = "scale(1)";
                       }}
                     >
-                      <svg viewBox="0 0 24 24" fill="white" width="32" height="32" style={{ marginLeft: 4 }}><path d="M8 5v14l11-7z" /></svg>
+                      <PersistentPlayPauseGlyph active={false} size={32} />
                     </div>
                   </div>
-                </div>
-              )}
+              </div>
             </div>
             <div style={{ padding: "16px 20px" }}>
               <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: 1, marginBottom: 4 }}>{featuredVid.title}</div>
@@ -298,38 +333,13 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
                         alt={vid.title}
                         style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                       />
-                      {isActive && (
-                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }}>
-                          <svg viewBox="0 0 24 24" fill="#00ffff" width="16" height="16"><path d="M6 19h4V5H6zm8-14v14h4V5z" /></svg>
-                        </div>
-                      )}
-                      {!isActive && (
-                        <div
-                          style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0)", transition: "background 0.2s" }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "rgba(0,0,0,0.4)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "rgba(0,0,0,0)";
-                          }}
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="rgba(255,255,255,0)"
-                            width="16"
-                            height="16"
-                            style={{ transition: "fill 0.2s" }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.fill = "white";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.fill = "rgba(255,255,255,0)";
-                            }}
-                          >
-                            <path d="M8 5v14l11-7z" />
-                          </svg>
-                        </div>
-                      )}
+                      <div
+                        data-persistent-audio-visual-control="true"
+                        data-active={isActive ? "true" : "false"}
+                        style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: isActive ? "rgba(0,0,0,0.5)" : "rgba(0,0,0,0.18)", transition: "background 0.2s" }}
+                      >
+                        <PersistentPlayPauseGlyph active={isActive} size={16} color={isActive ? "#00ffff" : "rgba(255,255,255,0.88)"} />
+                      </div>
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div
@@ -346,9 +356,12 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
                         {vid.title}
                       </div>
                       <div style={{ fontSize: 10, color: "#444", marginTop: 2, lineHeight: 1.3 }}>{vid.description}</div>
-                      {isActive && (
-                        <div style={{ fontSize: 8, color: "#00ffff", letterSpacing: 2.5, marginTop: 4, fontWeight: 700, textTransform: "uppercase" }}>Now Playing</div>
-                      )}
+                      <div
+                        aria-hidden={!isActive}
+                        style={{ minHeight: 10, fontSize: 8, color: "#00ffff", letterSpacing: 2.5, marginTop: 4, fontWeight: 700, textTransform: "uppercase", opacity: isActive ? 1 : 0 }}
+                      >
+                        Now Playing
+                      </div>
                     </div>
                   </div>
                 </div>
