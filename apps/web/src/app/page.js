@@ -1,9 +1,13 @@
 ﻿import { getAdminClient } from "@/lib/supabase/admin";
 import { getStorefrontCatalogFromDB } from "@/lib/media/catalog-db";
 import HomeClient from "./HomeClient";
+import { redirect } from "next/navigation";
+import { requireConsumerPrincipal } from "@/lib/auth/consumer-authority";
+import { loginRedirectPath } from "@/lib/auth/route-access-policy";
 
 // Revalidate the page every hour so events stay fresh without a full rebuild.
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const FALLBACK_EVENTS = [
   { id:"evt-1", name:"2MRRW Live – Dallas",  location:"Dallas, TX",      date:"2026-05-10", time:"8:00 PM", price:25.00, tickets:50 },
@@ -40,6 +44,9 @@ async function fetchEvents() {
 }
 
 export default async function Page() {
+  const principal = await requireConsumerPrincipal();
+  if (!principal) redirect(loginRedirectPath("/"));
+
   // Fetch in parallel — catalog DB failure is non-fatal (HomeClient falls back to hardcoded arrays).
   const [events, initialCatalog] = await Promise.all([
     fetchEvents(),

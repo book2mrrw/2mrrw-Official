@@ -1940,7 +1940,13 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   }, []);
 
   const handleSignOut = async () => {
-    await getPageAuthRef().signOut?.();
+    try {
+      await getPageAuthRef().signOut?.();
+    } finally {
+      setAccountSubTab("overview");
+      router.replace("/login");
+      router.refresh();
+    }
   };
 
   const refreshLiveEvents = useCallback(async () => {

@@ -1,13 +1,18 @@
 ﻿import DeepLinkRedirect from "@/components/music/DeepLinkRedirect";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { requireConsumerPrincipal } from "@/lib/auth/consumer-authority";
+import { loginRedirectPath } from "@/lib/auth/route-access-policy";
+import { redirect } from "next/navigation";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const R2_CDN = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://pub-643e4a94e0184b1fabf6522cfbb16f75.r2.dev";
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://2mrrw.com";
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
+  if (!(await requireConsumerPrincipal())) redirect(loginRedirectPath(`/feature/${slug}`));
   try {
     const admin = getAdminClient();
     const { data } = await admin
@@ -53,6 +58,8 @@ export async function generateMetadata({ params }) {
   }
 }
 
-export default function FeatureDeepLinkPage() {
+export default async function FeatureDeepLinkPage({ params }) {
+  const { slug } = await params;
+  if (!(await requireConsumerPrincipal())) redirect(loginRedirectPath(`/feature/${slug}`));
   return <DeepLinkRedirect type="feature" />;
 }

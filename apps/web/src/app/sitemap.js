@@ -1,10 +1,15 @@
 ﻿import { getAdminClient } from "@/lib/supabase/admin";
 
-export const revalidate = 3600;
+import { requireConsumerPrincipal } from "@/lib/auth/consumer-authority";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://2mrrw.com";
 
 export default async function sitemap() {
+  if (!(await requireConsumerPrincipal())) return [];
+
   const staticRoutes = [
     { url: BASE_URL, lastModified: new Date(), changeFrequency: "daily", priority: 1 },
   ];

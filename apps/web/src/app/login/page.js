@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { getAuthenticatedUser } from "@/auth/authService";
 import { useAuth } from "@/context/AuthContext";
 import { validateEmail } from "@/lib/auth/validation";
+import { sanitizeReturnTo } from "@/lib/auth/route-access-policy";
 import { createClient } from "@/lib/supabase/client";
 
 const CODE_LENGTH = 6;
@@ -45,7 +46,12 @@ function LoginForm() {
   const autoSubmitRef   = useRef(false);
   const inputsRef       = useRef([]);
 
-  const nextPath = giftToken ? `/gift/${giftToken}` : returnTo?.startsWith("/") ? returnTo : "/?tab=mymusic";
+  const nextPath = giftToken
+    ? `/gift/${encodeURIComponent(giftToken)}`
+    : sanitizeReturnTo(returnTo, "/?tab=mymusic");
+  const createAccountHref = giftToken
+    ? `/join?gift=${encodeURIComponent(giftToken)}`
+    : `/join?returnTo=${encodeURIComponent(nextPath)}`;
 
   useEffect(() => {
     let mounted = true;
@@ -245,7 +251,7 @@ function LoginForm() {
             <Link href="/forgot-password" style={{ color: "#555", fontSize: 13 }}>
               Forgot password?
             </Link>
-            <Link href={giftToken ? `/join?gift=${giftToken}` : "/join"} style={{ color: "#777", fontSize: 13 }}>
+            <Link href={createAccountHref} style={{ color: "#777", fontSize: 13 }}>
               Create account
             </Link>
           </div>

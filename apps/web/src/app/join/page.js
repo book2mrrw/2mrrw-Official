@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { validateEmail } from "@/lib/auth/validation";
+import { sanitizeReturnTo } from "@/lib/auth/route-access-policy";
 
 const VALID_GENDERS   = ["male", "female"];
 const VALID_AGE_RANGES = ["18-25", "25-40", "40-65"];
@@ -113,6 +114,7 @@ function JoinForm() {
   const searchParams = useSearchParams();
   const { applySessionUser } = useAuth();
   const giftToken    = searchParams.get("gift") || "";
+  const returnTo     = searchParams.get("returnTo") || "";
 
   const [name,        setName]        = useState("");
   const [email,       setEmail]       = useState("");
@@ -155,7 +157,12 @@ function JoinForm() {
     if (!isUS) setStateField("");
   }, [isUS]);
 
-  const nextPath = giftToken ? `/gift/${giftToken}` : "/?tab=mymusic";
+  const nextPath = giftToken
+    ? `/gift/${encodeURIComponent(giftToken)}`
+    : sanitizeReturnTo(returnTo, "/?tab=mymusic");
+  const signInHref = giftToken
+    ? `/login?gift=${encodeURIComponent(giftToken)}`
+    : `/login?returnTo=${encodeURIComponent(nextPath)}`;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -396,7 +403,7 @@ function JoinForm() {
 
         {error ? <div style={{ color: "#ff4d4d", fontSize: 13 }}>{error}</div> : null}
         {existsHint ? (
-          <Link href={giftToken ? `/login?gift=${giftToken}` : "/login"} style={{ color: "#00ffff", fontSize: 13 }}>
+          <Link href={signInHref} style={{ color: "#00ffff", fontSize: 13 }}>
             Sign in instead →
           </Link>
         ) : null}
@@ -409,7 +416,7 @@ function JoinForm() {
           {loading ? "Creating account…" : "Create Account"}
         </button>
 
-        <Link href={giftToken ? `/login?gift=${giftToken}` : "/login"} style={{ color: "#777", fontSize: 13, textAlign: "center", marginTop: 4 }}>
+        <Link href={signInHref} style={{ color: "#777", fontSize: 13, textAlign: "center", marginTop: 4 }}>
           Already have an account? Sign in
         </Link>
       </form>
