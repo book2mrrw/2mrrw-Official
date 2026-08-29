@@ -1,6 +1,7 @@
 import { FlatList, View, Text } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
 import { ReleaseCard } from '@/components/releases/ReleaseCard';
+import { useViewableReleaseIds } from '@/hooks/useViewableReleaseIds';
 import { fetchHydratedCatalog } from '@/lib/api/catalog';
 import { colors } from '@2mrrw/design-system';
 
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function LibraryList({ userId }: Props) {
+  const { viewableIds, onViewableItemsChanged, viewabilityConfig } = useViewableReleaseIds();
   const { data, isLoading } = useQuery({
     queryKey: ['library', userId],
     queryFn: () => fetchHydratedCatalog([]),
@@ -43,7 +45,11 @@ export function LibraryList({ userId }: Props) {
       numColumns={2}
       contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140 }}
       columnWrapperStyle={{ gap: 12, marginBottom: 12 }}
-      renderItem={({ item }) => <ReleaseCard release={item} />}
+      renderItem={({ item }) => (
+        <ReleaseCard release={item} active={viewableIds.has(item.id)} />
+      )}
+      onViewableItemsChanged={onViewableItemsChanged}
+      viewabilityConfig={viewabilityConfig}
       showsVerticalScrollIndicator={false}
     />
   );

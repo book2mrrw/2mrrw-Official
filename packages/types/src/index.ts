@@ -143,6 +143,7 @@ export interface AccountState {
 export type ReleaseType =
   | 'album'
   | 'ep'
+  | 'mixtape'
   | 'single'
   | 'feature'
   | 'vault'
@@ -154,6 +155,8 @@ export interface CatalogRelease {
   title: string;
   artist: string;
   cover: string | null;
+  baseCover?: string | null;
+  video?: string | null;
   coverArtType: CoverArtType;
   type: ReleaseType;
   releaseDate: string | null;

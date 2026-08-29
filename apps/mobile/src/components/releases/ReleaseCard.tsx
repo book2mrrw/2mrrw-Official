@@ -1,17 +1,18 @@
 import { View, Text, Pressable, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Image } from 'expo-image';
 import type { CatalogRelease } from '@2mrrw/types';
 import { colors } from '@2mrrw/design-system';
+import { ReleaseArtwork } from './ReleaseArtwork';
 
 const { width } = Dimensions.get('window');
 const CARD_SIZE = (width - 44) / 2;
 
 interface Props {
   release: CatalogRelease;
+  active?: boolean;
 }
 
-export function ReleaseCard({ release }: Props) {
+export function ReleaseCard({ release, active = false }: Props) {
   const router = useRouter();
 
   return (
@@ -19,11 +20,12 @@ export function ReleaseCard({ release }: Props) {
       onPress={() => router.push(`/release/${release.slug}`)}
       style={{ width: CARD_SIZE }}
     >
-      <Image
-        source={{ uri: release.cover ?? undefined }}
-        style={{ width: CARD_SIZE, height: CARD_SIZE, borderRadius: 10 }}
-        contentFit="cover"
-        transition={200}
+      <ReleaseArtwork
+        release={release}
+        width={CARD_SIZE}
+        height={CARD_SIZE}
+        borderRadius={10}
+        active={active}
       />
       <Text
         numberOfLines={1}

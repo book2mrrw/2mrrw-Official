@@ -2,9 +2,9 @@ import { ScrollView, View, Text, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchReleaseBySlug } from '@/lib/api/catalog';
+import { ReleaseArtwork } from '@/components/releases/ReleaseArtwork';
 import { TrackRow } from '@/components/releases/TrackRow';
 import { usePlaybackStore } from '@/stores/playback-store';
 import { formatDuration } from '@2mrrw/core';
@@ -34,11 +34,11 @@ export default function ReleaseScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 140 }}>
         {/* Header */}
         <View className="relative">
-          <Image
-            source={{ uri: release?.cover ?? undefined }}
-            style={{ width: '100%', height: 300 }}
-            contentFit="cover"
-          />
+          {release ? (
+            <ReleaseArtwork release={release} width="100%" height={300} />
+          ) : (
+            <View style={{ width: '100%', height: 300 }} />
+          )}
           <Pressable
             onPress={() => router.back()}
             className="absolute top-4 left-4 bg-black/40 rounded-full p-2"

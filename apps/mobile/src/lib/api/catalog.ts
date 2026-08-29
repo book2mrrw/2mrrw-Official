@@ -5,7 +5,7 @@ const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? '';
 
 export async function fetchCatalogReleases(): Promise<{ releases: CatalogRelease[] }> {
   const { data: { session } } = await supabase.auth.getSession();
-  const res = await fetch(`${API_BASE}/api/catalog/releases`, {
+  const res = await fetch(`${API_BASE}/api/catalog/releases?view=platform`, {
     headers: {
       ...(session?.access_token
         ? { Authorization: `Bearer ${session.access_token}` }

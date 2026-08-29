@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getStorefrontSinglesPageFromDB } from "@/lib/media/catalog-db";
+import {
+  getStorefrontCatalogFromDB,
+  getStorefrontSinglesPageFromDB,
+} from "@/lib/media/catalog-db";
+import { toMobileCatalogReleases } from "@/lib/media/mobile-catalog-projection";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -13,6 +17,36 @@ const NO_STORE_HEADERS = {
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
+  const view = searchParams.get("view");
+
+  if (view === "platform") {
+    try {
+      const catalog = await getStorefrontCatalogFromDB();
+      if (!catalog) throw new Error("catalog_unavailable");
+      const releases = toMobileCatalogReleases(catalog, request.nextUrl.origin);
+
+      return NextResponse.json({
+        releases,
+        total: releases.length,
+        fallback: false,
+        source: "supabase",
+      }, { headers: NO_STORE_HEADERS });
+    } catch (error) {
+      console.error("[catalog/releases] mobile platform read failed", {
+        error: error?.message,
+      });
+      return NextResponse.json(
+        {
+          error: "catalog_unavailable",
+          releases: [],
+          total: 0,
+          fallback: true,
+        },
+        { status: 503, headers: NO_STORE_HEADERS }
+      );
+    }
+  }
+
   const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
   const limit = Math.min(
     MAX_LIMIT,

@@ -3,9 +3,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import { ReleaseCard } from '@/components/releases/ReleaseCard';
 import { fetchCatalogReleases } from '@/lib/api/catalog';
+import { useViewableReleaseIds } from '@/hooks/useViewableReleaseIds';
 import type { CatalogRelease } from '@2mrrw/types';
 
 export default function ReleasesScreen() {
+  const { viewableIds, onViewableItemsChanged, viewabilityConfig } = useViewableReleaseIds();
   const { data, isLoading } = useQuery({
     queryKey: ['catalog', 'releases'],
     queryFn: fetchCatalogReleases,
@@ -29,7 +31,11 @@ export default function ReleasesScreen() {
         numColumns={2}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 140 }}
         columnWrapperStyle={{ gap: 12, marginBottom: 12 }}
-        renderItem={({ item }) => <ReleaseCard release={item} />}
+        renderItem={({ item }) => (
+          <ReleaseCard release={item} active={viewableIds.has(item.id)} />
+        )}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         showsVerticalScrollIndicator={false}
       />
     </SafeAreaView>

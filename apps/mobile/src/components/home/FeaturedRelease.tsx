@@ -1,9 +1,9 @@
 import { View, Text, Pressable, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlaybackStore } from '@/stores/playback-store';
+import { ReleaseArtwork } from '@/components/releases/ReleaseArtwork';
 import type { CatalogRelease } from '@2mrrw/types';
 import { colors } from '@2mrrw/design-system';
 
@@ -30,11 +30,10 @@ export function FeaturedRelease({ release, loading }: Props) {
       style={{ marginHorizontal: 16, marginBottom: 24 }}
     >
       <View style={{ borderRadius: 16, overflow: 'hidden' }}>
-        <Image
-          source={{ uri: release.cover ?? undefined }}
-          style={{ width: width - 32, height: width - 32 }}
-          contentFit="cover"
-          transition={400}
+        <ReleaseArtwork
+          release={release}
+          width={width - 32}
+          height={width - 32}
         />
         <LinearGradient
           colors={['transparent', 'rgba(10,10,10,0.9)']}

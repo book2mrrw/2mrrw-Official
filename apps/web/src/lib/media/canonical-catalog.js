@@ -542,14 +542,11 @@ export function mergeCanonicalMetadata(item) {
   // The catalog database still contains two stale aliases: Love Hz's old
   // animation filename and a lower-cased A.D artwork extension. Both aliases
   // 404 on their case-sensitive production origins.
-  const canonicalCover =
-    release.slug === "ad" && /(?:^|\/)images\/albums\/ad\.jpg(?:$|[?#])/i.test(String(item.cover || ""))
-      ? release.legacy_cover
-      : null;
-  const canonicalVideo =
-    release.slug === "love-hz-vol-1" && /\/lovehzvol1\.mp4(?:$|[?#])/i.test(String(item.video || ""))
-      ? release.video
-      : null;
+  // These two legacy records still carry non-existent, case-sensitive aliases
+  // in the database. Keep one canonical media authority for every renderer and
+  // transport until the records themselves are corrected.
+  const canonicalCover = release.slug === "ad" ? release.legacy_cover : null;
+  const canonicalVideo = release.slug === "love-hz-vol-1" ? release.video : null;
 
   const releaseType = release.release_type || item.release_type;
   const normalizedType = normalizeReleaseType(releaseType);
