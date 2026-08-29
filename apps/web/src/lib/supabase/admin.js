@@ -2,8 +2,12 @@ import { createClient } from "@supabase/supabase-js";
 
 let _adminClient = null;
 
+export function normalizeServerEnvironmentValue(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 export function getSupabaseSecretKey() {
-  return process.env.SUPABASE_SECRET_KEY || "";
+  return normalizeServerEnvironmentValue(process.env.SUPABASE_SECRET_KEY);
 }
 
 /**
@@ -18,7 +22,7 @@ export function getSupabaseSecretKey() {
  */
 export function getAdminClient() {
   if (_adminClient) return _adminClient;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const url = normalizeServerEnvironmentValue(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const key = getSupabaseSecretKey();
   if (!url || !key) throw new Error("Missing Supabase admin credentials");
   _adminClient = createClient(url, key, {

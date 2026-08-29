@@ -15,7 +15,8 @@ function sanitize(value, depth = 0) {
 export function emitServerEvent(level, event, data = {}, error = null) {
   const severity = LEVELS.has(level) ? level : "info";
   const payload = sanitize({ schema: "2mrrw.server-event.v1", event, severity,
-    timestamp: new Date().toISOString(), service: "web", ...data });
+    timestamp: new Date().toISOString(), service: "web", ...data,
+    ...(error ? { error: sanitize(error) } : {}) });
   const fn = severity === "fatal" ? console.error : console[severity] || console.info;
   fn(JSON.stringify(payload));
   if (error && ["error", "fatal"].includes(severity)) {
