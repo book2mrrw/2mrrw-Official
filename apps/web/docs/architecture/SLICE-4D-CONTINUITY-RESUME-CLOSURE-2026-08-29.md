@@ -345,7 +345,7 @@ Selection suite (within `test:core-invariants`): unchanged from original Slice 4
 
 ## 29. Addendum commit hash
 
-Recorded after this document is committed (see the closing commit immediately following this report in git history).
+`39529dd` (`fix(playback): close Slice 4D same-track seek race and lifecycle-freeze authority gap`).
 
 ## 30. Unresolved Slice 4D blocker count
 
