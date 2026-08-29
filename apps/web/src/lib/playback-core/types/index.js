@@ -73,12 +73,40 @@ export const CommitRejectionReason = Object.freeze({
   INVALID_INTENT:           "INVALID_INTENT",
   /** Deck B: media environment epoch changed since preparation began. */
   EPOCH_MISMATCH:           "EPOCH_MISMATCH",
-  /** Deck B: queue version changed since preparation began. */
+  /** Deck B: queue version changed since preparation began (future Deck B/prediction contract — distinct from Selection's selectionVersion). */
   QUEUE_VERSION_MISMATCH:   "QUEUE_VERSION_MISMATCH",
   /** Deck B: capability version changed since preparation began. */
   CAPABILITY_MISMATCH:      "CAPABILITY_MISMATCH",
   /** Deck B: prediction generation changed since preparation began. */
   PREDICTION_MISMATCH:      "PREDICTION_MISMATCH",
+  /** Selection: the runtime epoch rotated since this proposal was captured. */
+  SELECTION_EPOCH_MISMATCH: "SELECTION_EPOCH_MISMATCH",
+  /** Selection: selectionVersion advanced since this proposal captured its base. */
+  SELECTION_VERSION_STALE:  "SELECTION_VERSION_STALE",
+  /** Selection: the proposed snapshot fails structural/coherence validation. */
+  SELECTION_INVALID:        "SELECTION_INVALID",
+});
+
+// ─── Selection transition types (Slice 3) ─────────────────────────────────────
+// Named canonical transitions accepted by SelectionAuthority. Selection commits
+// never accept arbitrary state patches — every commit is produced by exactly one
+// of these named, validated transitions.
+
+export const SelectionTransitionType = Object.freeze({
+  SET_QUEUE_AND_SELECT: "SET_QUEUE_AND_SELECT",
+  SELECT_INDEX:         "SELECT_INDEX",
+  SELECT_MEDIA:         "SELECT_MEDIA",
+  NEXT:                 "NEXT",
+  PREVIOUS:             "PREVIOUS",
+  REMOVE_ITEM:          "REMOVE_ITEM",
+  INSERT_ITEM:          "INSERT_ITEM",
+  REORDER_QUEUE:        "REORDER_QUEUE",
+  REPLACE_QUEUE:        "REPLACE_QUEUE",
+  CLEAR_QUEUE:          "CLEAR_QUEUE",
+  RESTORE_SELECTION:    "RESTORE_SELECTION",
+  SET_TRAVERSAL_POLICY: "SET_TRAVERSAL_POLICY",
+  UPDATE_NOW_PLAYING_REPRESENTATION: "UPDATE_NOW_PLAYING_REPRESENTATION",
+  UPDATE_QUEUE_REPRESENTATION:       "UPDATE_QUEUE_REPRESENTATION",
 });
 
 // ─── Core readiness lifecycle ─────────────────────────────────────────────────
@@ -142,11 +170,14 @@ export const CoreLiveCommandScope = Object.freeze(new Set([
 // (transport is split into three hot/cold stores).
 
 export const StoreKey = Object.freeze({
-  NOW_PLAYING:       "nowPlaying",
+  // Slice 3: NowPlaying + Queue + QueueIndex form ONE atomic Selection domain.
+  // A prior scaffold kept NOW_PLAYING and QUEUE as two separate dormant stores;
+  // that would have allowed tearing (a subscriber observing nowPlaying committed
+  // but queue not yet committed). They are unified into one SELECTION store.
+  SELECTION:         "selection",
   TRANSPORT_STATUS:  "transportStatus",
   TRANSPORT_TIMELINE:"transportTimeline",
   TRANSPORT_MODE:    "transportMode",
-  QUEUE:             "queue",
   CAPABILITY:        "capability",
   CONTINUITY:        "continuity",
   DIAGNOSTICS:       "diagnostics",

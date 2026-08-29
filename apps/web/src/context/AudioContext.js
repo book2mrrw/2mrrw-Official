@@ -28,6 +28,7 @@ import {
   useProductionTransportStatus,
   useProductionTransportTimeline,
 } from "@/lib/playback-core/production/useProductionTransport";
+import { useProductionSelection } from "@/lib/playback-core/production/useProductionSelection";
 
 // ─── Module Constants ─────────────────────────────────────────────────────────
 
@@ -67,6 +68,7 @@ export function AudioProvider({ children }) {
   const { user, loading: authLoading } = useAuth();
   const entitlementAccountState = useEntitlementAccountState();
   const canonicalTransport = useProductionTransportStatus();
+  const canonicalSelection = useProductionSelection();
 
   // All refs + local state in one stable bag. State values trigger AudioProvider
   // re-renders via the normal React useState mechanism.
@@ -95,7 +97,20 @@ export function AudioProvider({ children }) {
       canonicalTransport.loading ||
       canonicalTransport.recovering,
     error: canonicalTransport.error,
-  }), [legacyState, canonicalTransport]);
+    // Slice 3 — direct Core Selection subscription (NowPlaying + Queue +
+    // QueueIndex + traversal policy commit atomically; this is one snapshot,
+    // never a torn read across the three).
+    currentTrack: canonicalSelection.nowPlaying,
+    currentTrackId:
+      canonicalSelection.nowPlaying?.id ??
+      canonicalSelection.nowPlaying?.trackId ??
+      canonicalSelection.nowPlaying?.slug ??
+      null,
+    queue: canonicalSelection.queue,
+    queueIndex: canonicalSelection.queueIndex,
+    repeatMode: canonicalSelection.repeatMode,
+    shuffle: canonicalSelection.shuffle,
+  }), [legacyState, canonicalTransport, canonicalSelection]);
 
   // All thin delegates — stable useMemo identity, [] deps throughout.
   const delegates = usePlaybackDelegates(helperServiceRef, commandServiceRef);

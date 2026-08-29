@@ -53,6 +53,7 @@ import { CoreReadiness }           from "../types/index.js";
 import { CoreEpoch }               from "../authority/CoreEpoch.js";
 import { AudibleEffectAuthority }  from "../effects/AudibleEffectAuthority.js";
 import { TransportAuthority }      from "../transport/TransportAuthority.js";
+import { SelectionAuthority }      from "../selection/SelectionAuthority.js";
 
 export class PlaybackCore {
   #sequencer;
@@ -68,6 +69,7 @@ export class PlaybackCore {
   #coreEpoch;
   #effectAuthority;
   #transportAuthority;
+  #selectionAuthority;
   #disposeInstalledEffectGuard = null;
   #effectGuardInstalled = false;
   #executionEngine = null;
@@ -91,6 +93,7 @@ export class PlaybackCore {
     this.#coreEpoch         = deps.coreEpoch;
     this.#effectAuthority   = deps.effectAuthority;
     this.#transportAuthority = deps.transportAuthority;
+    this.#selectionAuthority = deps.selectionAuthority;
 
     this.#logger.emitCoreInitialized({ sessionEpoch: this.#sequencer.sessionEpoch });
   }
@@ -141,6 +144,25 @@ export class PlaybackCore {
       logger,
     });
 
+    // Selection gets its OWN AuthorityGate + CommitGate pair (sharing the same
+    // stores/ownershipRegistry/logger) so an unrelated Selection action can
+    // never supersede an in-flight Transport intent, or vice versa. See
+    // SelectionAuthority.js's header for the full rationale.
+    const selectionAuthorityGate = new AuthorityGate();
+    const selectionCommitGate = new CommitGate({
+      authorityGate: selectionAuthorityGate,
+      ownershipRegistry,
+      stores,
+      logger,
+    });
+    const selectionAuthority = new SelectionAuthority({
+      commitGate: selectionCommitGate,
+      selectionAuthorityGate,
+      coreEpoch,
+      stores,
+      logger,
+    });
+
     // Readiness accessor — closed over the PlaybackCore instance (assigned below).
     // The port calls this before accepting any command; before READY it throws
     // explicitly rather than silently dropping the command.
@@ -163,6 +185,7 @@ export class PlaybackCore {
       coreEpoch,
       effectAuthority,
       transportAuthority,
+      selectionAuthority,
     });
     coreRef = core;
     return core;
@@ -257,6 +280,7 @@ export class PlaybackCore {
   get _authorityGate() { return this.#authorityGate; }
   get _effectAuthority() { return this.#effectAuthority; }
   get _transportAuthority() { return this.#transportAuthority; }
+  get _selectionAuthority() { return this.#selectionAuthority; }
   get _ownershipMap() { return this.#ownershipRegistry.getOwnershipMap(); }
   get _effectGuardInstalled() { return this.#effectGuardInstalled; }
 

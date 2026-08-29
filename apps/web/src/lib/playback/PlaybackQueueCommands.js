@@ -2,39 +2,39 @@
 
 import { startTransition } from "react";
 import { MARKS, PLAYBACK_SCENARIOS, perfMark, perfMeasure } from "@/lib/dev/performanceMarks";
-import { fisherYatesShuffle, playbackQueuesMatch, normalizeTrack } from "@/lib/playback/playback-track-utils";
+import { playbackQueuesMatch, normalizeTrack } from "@/lib/playback/playback-track-utils";
+import { proposeSelection, getCanonicalSelection } from "@/lib/playback/selection-port.js";
+
+/** A queue entry with no resolvable `src` can never be played — traversal
+ * (NEXT/PREVIOUS) must skip over it rather than stall or throw. */
+function isPlayableEntry(entry) {
+  return Boolean(entry?.src);
+}
 
 /**
  * Attaches Group 4 (queue management) commands to the shared `self` service object.
+ *
+ * Slice 3: the actual queue/index/traversal DECISION lives in SelectionAuthority.
+ * These functions propose named transitions through the Selection port and
+ * then act on the returned canonical snapshot — they no longer read or write
+ * queueRef/queueIndexRef directly (those refs remain valid read-only
+ * projections, kept in sync by usePlaybackEffects Effect 8). Shuffle
+ * traversal state (order/position) is now Core-internal — no legacy ref
+ * mirrors it at all.
  */
 export function attachQueueCommands(self) {
   self.setQueueInternal = function setQueueInternal(tracks = [], startIndex = 0) {
-    const {
-      patchState, tracePlayback, logDirectInternalCallViolation,
-      stateRef, queueRef, queueIndexRef, shuffledOrderRef, shufflePositionRef,
-    } = self._deps;
+    const { tracePlayback, logDirectInternalCallViolation } = self._deps;
 
     logDirectInternalCallViolation("setQueueInternal");
     const normalized = (tracks || []).map(normalizeTrack).filter((t) => t.src);
     const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
-    const sameTracks = playbackQueuesMatch(normalized, queueRef.current);
-    queueRef.current = normalized;
-    queueIndexRef.current = normalized.length ? index : -1;
-    // New queue → discard stale shuffle permutation.
-    if (!sameTracks) {
-      shuffledOrderRef.current = null;
-      shufflePositionRef.current = 0;
-    }
+    const before = getCanonicalSelection();
+    const sameTracks = playbackQueuesMatch(normalized, before.queue);
     tracePlayback("queueReset", "setQueue", { length: normalized.length, index, sameTracks });
     perfMark(MARKS.QUEUE_UPDATE_START);
     startTransition(() => {
-      if (sameTracks) {
-        if (queueIndexRef.current !== stateRef.current.queueIndex) {
-          patchState({ queueIndex: queueIndexRef.current });
-        }
-      } else {
-        patchState({ queue: normalized, queueIndex: queueIndexRef.current });
-      }
+      proposeSelection("setQueueAndSelect", [normalized, index]);
       perfMark(MARKS.QUEUE_UPDATE_END);
       perfMeasure("queue-update", MARKS.QUEUE_UPDATE_START, MARKS.QUEUE_UPDATE_END);
     });
@@ -42,122 +42,65 @@ export function attachQueueCommands(self) {
   };
 
   self.playNextInternal = async function playNextInternal({ autoAdvance = false } = {}) {
-    const {
-      patchState, requestAuthoritativePlay,
-      stateRef, queueRef, queueIndexRef, shuffleRef, repeatModeRef,
-    } = self._deps;
+    const { requestAuthoritativePlay, stateRef } = self._deps;
 
     const current = stateRef.current.currentTrack;
     if (autoAdvance && current?.metadata?.access?.previewOnly) {
       return false;
     }
-    const queue = queueRef.current;
-    if (!queue.length) return false;
-    let nextIndex = queueIndexRef.current + 1;
-    if (shuffleRef.current && queue.length > 1) {
-      nextIndex = self.advanceShuffleOrder(queue, queueIndexRef.current);
-    } else if (nextIndex >= queue.length) {
-      if (repeatModeRef.current === "all") nextIndex = 0;
-      else return false;
+    const before = getCanonicalSelection();
+    const result = proposeSelection("next", [{
+      repeatMode: before.repeatMode,
+      shuffle: before.shuffle,
+      autoAdvance,
+      isPlayable: isPlayableEntry,
+    }]);
+    if (!result.accepted || result.unchanged || result.endOfQueue || !result.snapshot.nowPlaying) {
+      return false;
     }
-    let attempts = 0;
-    while (attempts < queue.length) {
-      const track = queue[nextIndex];
-      if (!track?.src) {
-        nextIndex += 1;
-        if (nextIndex >= queue.length) {
-          if (repeatModeRef.current === "all") nextIndex = 0;
-          else return false;
-        }
-        attempts += 1;
-        continue;
-      }
-      queueIndexRef.current = nextIndex;
-      patchState({ queueIndex: nextIndex });
-      if (typeof requestAuthoritativePlay !== "function") return false;
-      return requestAuthoritativePlay(track, {
-        resumeAt: 0,
-        ...(autoAdvance
-          ? { playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE }
-          : {}),
-      }, {
-        queueEntries: queue,
-        queueIndex: nextIndex,
-        source: autoAdvance ? "autoplay" : "user",
-        requireCurrentPlaying: autoAdvance,
-        expectedCurrentMediaIdentity: autoAdvance
-          ? (current?.id ?? current?.trackId ?? current?.slug ?? null)
-          : null,
-      });
-    }
-    return false;
+    if (typeof requestAuthoritativePlay !== "function") return false;
+    return requestAuthoritativePlay(result.snapshot.nowPlaying, {
+      resumeAt: 0,
+      ...(autoAdvance
+        ? { playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE }
+        : {}),
+    }, {
+      queueEntries: result.snapshot.queue,
+      queueIndex: result.snapshot.queueIndex,
+      alreadySelected: true,
+      source: autoAdvance ? "autoplay" : "user",
+      requireCurrentPlaying: autoAdvance,
+      expectedCurrentMediaIdentity: autoAdvance
+        ? (current?.id ?? current?.trackId ?? current?.slug ?? null)
+        : null,
+    });
   };
 
   self.playPreviousInternal = async function playPreviousInternal() {
     const {
-      patchState,
-      requestAuthoritativePlay, requestAuthoritativeSeek,
-      audioRef, queueRef, queueIndexRef, repeatModeRef,
+      requestAuthoritativePlay, requestAuthoritativeSeek, audioRef,
     } = self._deps;
 
-    const queue = queueRef.current;
     const audio = audioRef.current;
     if (audio && audio.currentTime > 3) {
       if (typeof requestAuthoritativeSeek !== "function") return false;
       return requestAuthoritativeSeek(0);
     }
-    if (!queue.length) return false;
-    let prevIndex = queueIndexRef.current - 1;
-    if (prevIndex < 0) prevIndex = repeatModeRef.current === "all" ? queue.length - 1 : 0;
-    let attempts = 0;
-    while (attempts < queue.length) {
-      const track = queue[prevIndex];
-      if (!track?.src) {
-        prevIndex -= 1;
-        if (prevIndex < 0) {
-          if (repeatModeRef.current === "all") prevIndex = queue.length - 1;
-          else return false;
-        }
-        attempts += 1;
-        continue;
-      }
-      queueIndexRef.current = prevIndex;
-      patchState({ queueIndex: prevIndex });
-      if (typeof requestAuthoritativePlay !== "function") return false;
-      return requestAuthoritativePlay(track, { resumeAt: 0 }, {
-        queueEntries: queue,
-        queueIndex: prevIndex,
-        source: "user",
-      });
+    const before = getCanonicalSelection();
+    const result = proposeSelection("previous", [{
+      repeatMode: before.repeatMode,
+      isPlayable: isPlayableEntry,
+    }]);
+    if (!result.accepted || result.unchanged || !result.snapshot.nowPlaying) {
+      return false;
     }
-    return false;
-  };
-
-  // Advance the Fisher-Yates shuffle permutation and return the next queue index.
-  // Generates a new permutation when the current one is exhausted (repeat-all semantics).
-  self.advanceShuffleOrder = function advanceShuffleOrder(queue, currentIndex) {
-    const { shuffledOrderRef, shufflePositionRef } = self._deps;
-    if (!shuffledOrderRef.current || shuffledOrderRef.current.length !== queue.length) {
-      const indices = Array.from({ length: queue.length }, (_, i) => i);
-      shuffledOrderRef.current = fisherYatesShuffle(indices);
-      // Ensure the current track is not the first to be played in the new order.
-      const ci = shuffledOrderRef.current.indexOf(currentIndex);
-      if (ci === 0 && queue.length > 1) {
-        shuffledOrderRef.current[0] = shuffledOrderRef.current[1];
-        shuffledOrderRef.current[1] = currentIndex;
-      }
-      shufflePositionRef.current = 0;
-    }
-    const nextPos = shufflePositionRef.current + 1;
-    if (nextPos >= shuffledOrderRef.current.length) {
-      // All tracks played — reshuffle for next cycle.
-      const indices = Array.from({ length: queue.length }, (_, i) => i);
-      shuffledOrderRef.current = fisherYatesShuffle(indices);
-      shufflePositionRef.current = 0;
-    } else {
-      shufflePositionRef.current = nextPos;
-    }
-    return shuffledOrderRef.current[shufflePositionRef.current];
+    if (typeof requestAuthoritativePlay !== "function") return false;
+    return requestAuthoritativePlay(result.snapshot.nowPlaying, { resumeAt: 0 }, {
+      queueEntries: result.snapshot.queue,
+      queueIndex: result.snapshot.queueIndex,
+      alreadySelected: true,
+      source: "user",
+    });
   };
 
   self.playQueueInternal = async function playQueueInternal(tracks = [], startIndex = 0, options = {}) {
@@ -176,7 +119,8 @@ export function attachQueueCommands(self) {
     if (!normalized.length) return false;
     const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
     if (typeof requestAuthoritativePlay !== "function") return false;
-    return requestAuthoritativePlay(normalized[index], {
+    const result = getCanonicalSelection();
+    return requestAuthoritativePlay(result.nowPlaying ?? normalized[index], {
       ...options,
       preserveActiveStream: Boolean(options.preserveActiveStream),
       // An explicit playQueue intent always starts from 0 unless the caller passes an
@@ -184,8 +128,9 @@ export function attachQueueCommands(self) {
       // silently restores a stale mid-track position when the user taps "Play All".
       resumeAt: options.resumeAt != null ? options.resumeAt : 0,
     }, {
-      queueEntries: normalized,
-      queueIndex: index,
+      queueEntries: result.queue,
+      queueIndex: result.queueIndex,
+      alreadySelected: true,
       source: options.source ?? "user",
     });
   };

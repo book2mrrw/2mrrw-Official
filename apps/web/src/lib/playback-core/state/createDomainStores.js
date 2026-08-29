@@ -23,12 +23,23 @@ import { StoreKey } from "../types/index.js";
 // ─── Initial snapshots ────────────────────────────────────────────────────────
 // All null / zero / false initial states. Populated by Core during execution.
 
-const INITIAL_NOW_PLAYING = Object.freeze({
-  trackId:   null,
-  releaseId: null,
-  title:     null,
-  artist:    null,
-  cover:     null,
+// Slice 3 — the atomic Selection snapshot. NowPlaying + Queue + QueueIndex
+// commit together through SelectionAuthority; a subscriber can never observe
+// one field ahead of the others. Repeat/shuffle are queue-traversal policy —
+// they migrate with Selection, per the original Slice 2 deferral in
+// INITIAL_TRANSPORT_MODE below. shuffleOrder/shufflePosition are internal
+// traversal state (not part of any public compatibility shape) needed so NEXT
+// produces a deterministic, non-repeating shuffle sequence for the active queue.
+const INITIAL_SELECTION = Object.freeze({
+  nowPlaying:      null,
+  queue:           Object.freeze([]),
+  queueIndex:      -1,
+  repeatMode:      "off",
+  shuffle:         false,
+  shuffleOrder:    null,
+  shufflePosition: 0,
+  selectionVersion: 0,
+  updatedAt:       0,
 });
 
 const INITIAL_TRANSPORT_STATUS = Object.freeze({
@@ -72,12 +83,6 @@ const INITIAL_TRANSPORT_MODE = Object.freeze({
   updatedAt:            0,
 });
 
-const INITIAL_QUEUE = Object.freeze({
-  queueId: null,
-  entries: [],
-  index:   -1,
-});
-
 const INITIAL_CAPABILITY = Object.freeze({
   fingerprint:               null,
   canStreamFull:             false,
@@ -113,11 +118,10 @@ const INITIAL_DIAGNOSTICS = Object.freeze({
  */
 export function createDomainStores() {
   const stores = new Map([
-    [StoreKey.NOW_PLAYING,        new DomainStore("nowPlaying",        INITIAL_NOW_PLAYING)],
+    [StoreKey.SELECTION,          new DomainStore("selection",         INITIAL_SELECTION)],
     [StoreKey.TRANSPORT_STATUS,   new DomainStore("transportStatus",   INITIAL_TRANSPORT_STATUS)],
     [StoreKey.TRANSPORT_TIMELINE, new DomainStore("transportTimeline", INITIAL_TRANSPORT_TIMELINE)],
     [StoreKey.TRANSPORT_MODE,     new DomainStore("transportMode",     INITIAL_TRANSPORT_MODE)],
-    [StoreKey.QUEUE,              new DomainStore("queue",             INITIAL_QUEUE)],
     [StoreKey.CAPABILITY,         new DomainStore("capability",        INITIAL_CAPABILITY)],
     [StoreKey.CONTINUITY,         new DomainStore("continuity",        INITIAL_CONTINUITY)],
     [StoreKey.DIAGNOSTICS,        new DomainStore("diagnostics",       INITIAL_DIAGNOSTICS)],

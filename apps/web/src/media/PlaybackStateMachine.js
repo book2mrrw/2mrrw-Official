@@ -51,6 +51,11 @@ import {
   reportTransportObservation,
   reportTransportTimeline,
 } from "@/lib/playback/transport-observation-port.js";
+import {
+  getCanonicalSelection,
+  subscribeCanonicalSelection,
+  proposeSelection,
+} from "@/lib/playback/selection-port.js";
 
 export const PLAYBACK_ORCHESTRATION_STATES = Object.freeze({
   IDLE: "IDLE",
@@ -92,12 +97,29 @@ const RECOVERY_EVENTS = new Set([
 
 const _PROGRESS_KEYS  = new Set(["currentTime", "duration"]);
 const _TRANSPORT_KEYS = new Set(["playbackNetworkState", "isBuffering"]);
-const _IDENTITY_KEYS  = new Set(["currentTrackId", "currentTrack", "isPlaying"]);
 const _UI_KEYS        = new Set(["sleepTimerEndsAt", "sleepAfterCurrentTrack", "crossfadeEnabled", "previewEnded", "continuityFrozen"]);
 const _CORE_TRANSPORT_KEYS = new Set([
   "isPlaying", "playbackState", "isBuffering", "playbackNetworkState",
   "currentTime", "duration",
 ]);
+// Slice 3: NowPlaying identity is Core-owned. A patch carrying either of these
+// keys is never stored on `this.context` — it is forwarded as a representation
+// proposal (same identity, refreshed fields) to SelectionAuthority. Any patch
+// whose identity does not match canonical NowPlaying is rejected there, not
+// here — PSM does not duplicate that judgment.
+const _CORE_SELECTION_IDENTITY_KEYS = new Set(["currentTrack", "currentTrackId"]);
+
+function coreSelectionProjection() {
+  const sel = getCanonicalSelection();
+  return {
+    currentTrack:  sel.nowPlaying,
+    currentTrackId: sel.nowPlaying?.id ?? sel.nowPlaying?.trackId ?? sel.nowPlaying?.slug ?? null,
+    queue:         sel.queue,
+    queueIndex:    sel.queueIndex,
+    repeatMode:    sel.repeatMode,
+    shuffle:       sel.shuffle,
+  };
+}
 
 function toLegacyPlaybackState(status) {
   if (status.status === "ENDED" && status.endReason === "preview") return "ended_preview";
@@ -145,8 +167,14 @@ function coreTransportProjection() {
  *   currentTime: number, duration: number
  * }} PlaybackContext
  */
+// Slice 3: currentTrackId/currentTrack/queue/queueIndex/repeatMode/shuffle are
+// Core-owned via SelectionAuthority. These defaults exist only so a
+// PlaybackStateMachine instance is well-shaped before the first Core
+// projection is composed (see coreSelectionProjection()) — getContext() and
+// getContextSnapshot() always return the live Core-derived values, never
+// these fields directly off `this.context`.
 export const INITIAL_PLAYBACK_CONTEXT = Object.freeze({
-  // Track identity
+  // Track identity — Core-projected (see coreSelectionProjection)
   currentTrackId: null,
   currentTrack: null,
   source: null,
@@ -162,11 +190,11 @@ export const INITIAL_PLAYBACK_CONTEXT = Object.freeze({
   streamRetryable: false,
   streamConflict: null,
 
-  // Queue
+  // Queue — Core-projected (see coreSelectionProjection)
   queue: [],
   queueIndex: -1,
 
-  // Modes
+  // Modes — repeatMode/shuffle are Core-projected (see coreSelectionProjection)
   repeatMode: "off",
   shuffle: false,
   csMode: false,
@@ -245,6 +273,54 @@ class PlaybackStateMachine {
     this._identityListeners  = new Set();
     /** @type {Set<Function>} UI preference / session state listeners. */
     this._uiListeners        = new Set();
+    /** @type {(() => void) | null} Bridge to Core Selection — established lazily, see below. */
+    this._selectionUnsub = null;
+
+    this._contextSnapshot = this._composeContextSnapshot(this.context);
+  }
+
+  /** Merge business-only context with the live Core Selection projection. */
+  _composeContextSnapshot(businessContext) {
+    return Object.freeze({ ...businessContext, ...coreSelectionProjection() });
+  }
+
+  /**
+   * Slice 3: NowPlaying/Queue/QueueIndex/repeatMode/shuffle are Core-owned.
+   * This bridge is what keeps usePlaybackContext()/usePlaybackIdentity() — and
+   * every legacy consumer built on them — reactive to Selection commits,
+   * without each call site needing to know Core exists.
+   *
+   * Established LAZILY, on first subscribe, rather than in the constructor:
+   * `playbackStateMachine` is a module-load-time singleton, constructed long
+   * before `getProductionPlaybackCore()` ever wires and installs the
+   * Selection sink (that happens inside a hook body, during AudioProvider's
+   * render). Subscribing eagerly at construction time would bind to "no sink
+   * installed yet" permanently. The first real subscribeContext()/
+   * subscribeIdentity() call is guaranteed to happen only after React has
+   * rendered AudioProvider at least once (subscribe functions passed to
+   * useSyncExternalStore run in a commit-phase effect, after render), so by
+   * then Core is already wired. Idempotent and reference-counted at the
+   * PSM level (one bridge subscription total, no matter how many React
+   * consumers subscribe) — cheap even with many simultaneous identity
+   * subscribers (e.g. one per visible catalog row).
+   */
+  _ensureSelectionBridgeSubscribed() {
+    if (this._selectionUnsub) return;
+    this._selectionUnsub = subscribeCanonicalSelection(() => this._onCoreSelectionCommit());
+  }
+
+  /** Fired synchronously whenever Core's Selection DomainStore commits. */
+  _onCoreSelectionCommit() {
+    this._contextSnapshot = this._composeContextSnapshot(this.context);
+    this._emitContext();
+    const prev = this._identitySnapshot;
+    const projection = coreSelectionProjection();
+    const nextTrackId = projection.currentTrackId;
+    const nextSlug = projection.currentTrack?.slug ?? null;
+    if (prev.currentTrackId !== nextTrackId || prev.currentTrackSlug !== nextSlug) {
+      this._identitySnapshot = Object.freeze({ ...prev, currentTrackId: nextTrackId, currentTrackSlug: nextSlug });
+      this._emitIdentity();
+    }
   }
 
   // ── Orchestration API (original Phase 15 — unchanged) ─────────────────────
@@ -506,13 +582,16 @@ class PlaybackStateMachine {
     const keys = Object.keys(patch);
     if (!keys.length) return;
 
-    // Slice 2 compatibility input: legacy services still submit their established
-    // patch shapes, but Transport fields are observations/results. They are never
-    // stored by PSM and can only become truth through Core's commit authority.
+    // Slice 2/3 compatibility input: legacy services still submit their established
+    // patch shapes, but Transport fields are observations/results and NowPlaying-
+    // identity fields are representation proposals. Neither is stored by PSM —
+    // both can only become truth through Core's respective commit authority.
     const transportPatch = {};
+    const selectionPatch = {};
     const businessPatch = {};
     for (const [key, value] of Object.entries(patch)) {
       if (_CORE_TRANSPORT_KEYS.has(key)) transportPatch[key] = value;
+      else if (_CORE_SELECTION_IDENTITY_KEYS.has(key)) selectionPatch[key] = value;
       else businessPatch[key] = value;
     }
     const projection = coreTransportProjection();
@@ -531,6 +610,14 @@ class PlaybackStateMachine {
         duration: transportPatch.duration,
       });
     }
+    if (Object.keys(selectionPatch).length) {
+      // `currentTrack` is always the authoritative shape when present (a full
+      // track object); a lone `currentTrackId` becomes a minimal identity patch.
+      const representation = "currentTrack" in selectionPatch
+        ? selectionPatch.currentTrack
+        : { id: selectionPatch.currentTrackId };
+      proposeSelection("updateNowPlayingRepresentation", [representation]);
+    }
 
     patch = businessPatch;
     const businessKeys = Object.keys(patch);
@@ -543,7 +630,6 @@ class PlaybackStateMachine {
     let notifyMain      = false;
     let notifyTransport = false;
     let notifyProgress  = false;
-    let notifyIdentity  = false;
     let notifyUI        = false;
 
     for (const key of businessKeys) {
@@ -551,9 +637,6 @@ class PlaybackStateMachine {
         notifyProgress = true;
       } else if (_TRANSPORT_KEYS.has(key)) {
         notifyTransport = true;
-      } else if (_IDENTITY_KEYS.has(key)) {
-        notifyIdentity = true;
-        notifyMain = true;
       } else if (_UI_KEYS.has(key)) {
         notifyUI = true;
       } else {
@@ -579,7 +662,7 @@ class PlaybackStateMachine {
     }
 
     if (notifyMain) {
-      this._contextSnapshot = Object.freeze(next);
+      this._contextSnapshot = this._composeContextSnapshot(next);
       this._emitContext();
     }
     if (_transportChanged) {
@@ -593,20 +676,6 @@ class PlaybackStateMachine {
           duration: next.duration ?? 0,
         });
         this._emitProgress();
-      }
-    }
-    if (notifyIdentity) {
-      const prevId = this._identitySnapshot;
-      const nextTrackId  = next.currentTrackId ?? null;
-      const nextSlug     = next.currentTrack?.slug ?? null;
-      const nextPlaying  = Boolean(next.isPlaying);
-      if (prevId.currentTrackId !== nextTrackId || prevId.currentTrackSlug !== nextSlug || prevId.isPlaying !== nextPlaying) {
-        this._identitySnapshot = Object.freeze({
-          currentTrackId: nextTrackId,
-          currentTrackSlug: nextSlug,
-          isPlaying: nextPlaying,
-        });
-        this._emitIdentity();
       }
     }
     if (notifyUI) {
@@ -623,7 +692,7 @@ class PlaybackStateMachine {
 
   /** @returns {PlaybackContext} Live mutable context — read-only, never mutate directly. */
   getContext() {
-    return Object.assign({}, this.context, coreTransportProjection());
+    return Object.assign({}, this.context, coreTransportProjection(), coreSelectionProjection());
   }
 
   /** @returns {Readonly<PlaybackContext>} Frozen snapshot for useSyncExternalStore. */
@@ -637,6 +706,7 @@ class PlaybackStateMachine {
    * @returns {() => void} unsubscribe
    */
   subscribeContext(listener) {
+    this._ensureSelectionBridgeSubscribed();
     this._contextListeners.add(listener);
     return () => this._contextListeners.delete(listener);
   }
@@ -678,9 +748,10 @@ class PlaybackStateMachine {
 
   /** @returns {Readonly<{currentTrackId:string|null, currentTrackSlug:string|null, isPlaying:boolean}>} */
   getIdentitySnapshot() {
-    // Selection identity remains legacy-owned through Slice 2. Canonical
-    // isPlaying is joined by the React compatibility hook from Core's separate
-    // Transport subscription, preserving stable external-store snapshots here.
+    // currentTrackId/currentTrackSlug are Core-owned (Slice 3) and kept live by
+    // _onCoreSelectionCommit(). Canonical isPlaying is joined by the React
+    // compatibility hook from Core's separate Transport subscription,
+    // preserving stable external-store snapshots here.
     return this._identitySnapshot;
   }
 
@@ -690,6 +761,7 @@ class PlaybackStateMachine {
    * @returns {() => void} unsubscribe
    */
   subscribeIdentity(listener) {
+    this._ensureSelectionBridgeSubscribed();
     this._identityListeners.add(listener);
     return () => this._identityListeners.delete(listener);
   }
@@ -720,7 +792,9 @@ class PlaybackStateMachine {
     const savedCf = this._uiSnapshot.crossfadeEnabled;
     const fresh = Object.assign({}, INITIAL_PLAYBACK_CONTEXT, { crossfadeEnabled: savedCf });
     this.context = fresh;
-    this._contextSnapshot  = Object.freeze(fresh);
+    // Selection reset is a real canonical commit, not a local field zero-out.
+    proposeSelection("clearQueue", []);
+    this._contextSnapshot  = this._composeContextSnapshot(fresh);
     this._transportSnapshot = Object.freeze({ isBuffering: false, playbackNetworkState: "idle" });
     this._progressSnapshot  = Object.freeze({ currentTime: 0, duration: 0 });
     this._identitySnapshot  = Object.freeze({ currentTrackId: null, currentTrackSlug: null, isPlaying: false });

@@ -15,11 +15,10 @@
  *   - TransportTimeline updates arrive ~4Hz. All other domains update rarely.
  *
  * HOOK SIGNATURES (stable across all 13 slices):
- *   useNowPlaying(selector?)
+ *   useSelection(selector?)
  *   useTransportStatus(selector?)
  *   useTransportTimeline(selector?)
  *   useTransportMode(selector?)
- *   useQueue(selector?)
  *   useCapability(selector?)
  *   useContinuity(selector?)
  *   useDiagnostics(selector?)
@@ -91,7 +90,7 @@ export class ReactPlaybackAdapter {
   // Each is a stable function reference — safe to call inside React components.
 
   /** @type {(selector?: (s: object) => any) => any} */
-  get useNowPlaying()        { return this.#makeHook(StoreKey.NOW_PLAYING); }
+  get useSelection()         { return this.#makeHook(StoreKey.SELECTION); }
 
   /** @type {(selector?: (s: object) => any) => any} */
   get useTransportStatus()   { return this.#makeHook(StoreKey.TRANSPORT_STATUS); }
@@ -105,9 +104,6 @@ export class ReactPlaybackAdapter {
 
   /** @type {(selector?: (s: object) => any) => any} */
   get useTransportMode()     { return this.#makeHook(StoreKey.TRANSPORT_MODE); }
-
-  /** @type {(selector?: (s: object) => any) => any} */
-  get useQueue()             { return this.#makeHook(StoreKey.QUEUE); }
 
   /** @type {(selector?: (s: object) => any) => any} */
   get useCapability()        { return this.#makeHook(StoreKey.CAPABILITY); }

@@ -387,7 +387,7 @@ export function attachTransportCommands(self) {
       stopProgressRaf, stopKeepAlivePing, clearViewportResume,
       stateRef, audioRef, streamMetaRef, activeStreamAbortRef,
       hlsEngineRef, skipPauseInterruptionRef, lastUserActionRef, userPausedRef,
-      queueRef, queueIndexRef, csModeRef, csUsingAlternateSrcRef,
+      csModeRef, csUsingAlternateSrcRef,
     } = self._deps;
 
     tracePlayback("stopInternal", "stopInternal");
@@ -424,9 +424,9 @@ export function attachTransportCommands(self) {
     }
     streamMetaRef.current = null;
     // Reset SM context to initial values — fires all channels (context/transport/progress/identity).
+    // resetContext() itself clears canonical Selection (SelectionAuthority.clearQueue);
+    // queueRef/queueIndexRef are synced from that commit by usePlaybackEffects Effect 8.
     playbackStateMachine.resetContext();
-    queueRef.current = [];
-    queueIndexRef.current = -1;
     clearPersistedMediaSessionTrack();
     if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
       navigator.mediaSession.metadata = null;

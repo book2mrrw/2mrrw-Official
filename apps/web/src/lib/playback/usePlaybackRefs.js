@@ -80,11 +80,13 @@ export function usePlaybackRefs() {
   const listeningProgressRef = useRef({ slug: null, recorded30s: false });
 
   // ─── Queue / Shuffle Refs ────────────────────────────────────────────────────
+  // repeatModeRef/shuffleRef remain a read-only projection mirror of Core
+  // Selection (see usePlaybackEffects Effect 8) — shuffle traversal state
+  // itself (shuffleOrder/shufflePosition) is Core-internal, owned entirely by
+  // SelectionAuthority; no legacy ref mirrors it.
   const repeatModeRef = useRef("off");
   const shuffleRef = useRef(false);
   const csModeRef = useRef(false);
-  const shuffledOrderRef = useRef(null);
-  const shufflePositionRef = useRef(0);
   const stopAfterEachTrackRef = useRef(false);
 
   // ─── User Intent / Pause Refs ────────────────────────────────────────────────
@@ -196,7 +198,7 @@ export function usePlaybackRefs() {
     sessionRestoredRef, sessionSaveTimerRef, sessionUnlockedRef,
     listeningUserIdRef, listeningProgressRef,
     // Queue/shuffle refs
-    repeatModeRef, shuffleRef, csModeRef, shuffledOrderRef, shufflePositionRef,
+    repeatModeRef, shuffleRef, csModeRef,
     stopAfterEachTrackRef,
     // User intent/pause refs
     userPausedRef, userIntentPausedRef, pausedDuringCurrentLoadRef,

@@ -338,13 +338,51 @@ test("SLICE-2 production UI consumes Core Transport without legacy-domain mixing
   );
 });
 
-test("SLICE-2 production ownership is TRANSPORT=CORE and SELECTION=LEGACY", () => {
+test("SLICE-3 production ownership is TRANSPORT=CORE and SELECTION=CORE", () => {
   const wiring = read("src/lib/playback-core/production/wireProductionCore.js");
   const registry = read("src/lib/playback-core/ownership/DomainOwnershipRegistry.js");
   assert.match(wiring, /_transferDomainToCore\(Domain\.TRANSPORT\)/);
-  assert.doesNotMatch(wiring, /_transferDomainToCore\(Domain\.SELECTION\)/);
+  assert.match(wiring, /_transferDomainToCore\(Domain\.SELECTION\)/);
   assert.doesNotMatch(registry, /^\s*transferToLegacy\s*\(/m);
+  // Registry still DEFAULTS every domain to LEGACY — production wiring is what
+  // transfers TRANSPORT and SELECTION; CAPABILITY/CONTINUITY/MEDIA_PREPARATION
+  // remain LEGACY, unaffected by Slice 3.
   assert.match(registry, /\[Domain\.SELECTION,\s*DomainOwner\.LEGACY\]/);
+  assert.doesNotMatch(registry, /transferToCore\(Domain\.SELECTION\)/);
+});
+
+test("SLICE-3 Core is the sole canonical Selection writer", () => {
+  const commitGate = read("src/lib/playback-core/commands/CommitGate.js");
+  const stateMachine = read("src/media/PlaybackStateMachine.js");
+  const authority = read("src/lib/playback-core/selection/SelectionAuthority.js");
+  const productionFiles = fs.readdirSync(path.join(root, "src/lib/playback-core"), { recursive: true })
+    .filter((entry) => typeof entry === "string" && entry.endsWith(".js") && !entry.includes("__tests__"));
+
+  const directCommitCallers = productionFiles.filter((entry) => {
+    const source = read(path.join("src/lib/playback-core", entry));
+    return /\._applyCommit\(/.test(source);
+  });
+  assert.deepEqual(directCommitCallers, [path.join("commands", "CommitGate.js")]);
+  assert.match(authority, /#commitGate\.propose\(/);
+  assert.match(authority, /domain:\s*Domain\.SELECTION/);
+  assert.match(stateMachine, /_CORE_SELECTION_IDENTITY_KEYS/);
+  assert.match(stateMachine, /coreSelectionProjection/);
+  assert.doesNotMatch(stateMachine, /\._applyCommit\(/);
+
+  const protectedSelectionFiles = [
+    "src/lib/playback/PlaybackQueueCommands.js",
+    "src/lib/playback/PlaybackTransportCommands.js",
+    "src/lib/playback/PlaybackStreamCommands.js",
+    "src/lib/playback/command-dispatcher.js",
+    "src/lib/playback/command-executor.js",
+  ];
+  for (const relativePath of protectedSelectionFiles) {
+    assert.doesNotMatch(
+      read(relativePath),
+      /(?:@\/lib\/playback-core|\.\.\/playback-core|from\s+["'][^"']*playback-core)/,
+      `${relativePath} must not import Playback Core internals`,
+    );
+  }
 });
 
 test("SLICE-2 timeline keeps the physical clock and throttles only presentation commits", () => {

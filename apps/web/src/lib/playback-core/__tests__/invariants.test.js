@@ -893,14 +893,18 @@ describe("INV-TYPES: Type constants — completeness and immutability", () => {
     }
   });
 
-  test("StoreKey has all 8 store keys", () => {
+  test("StoreKey has all 7 store keys", () => {
+    // Slice 3: NOW_PLAYING and QUEUE were unified into one atomic SELECTION
+    // store (NowPlaying + Queue + QueueIndex commit together — two separate
+    // stores would have allowed tearing). 8 keys -> 7.
     const expected = [
-      "NOW_PLAYING", "TRANSPORT_STATUS", "TRANSPORT_TIMELINE",
-      "TRANSPORT_MODE", "QUEUE", "CAPABILITY", "CONTINUITY", "DIAGNOSTICS",
+      "SELECTION", "TRANSPORT_STATUS", "TRANSPORT_TIMELINE",
+      "TRANSPORT_MODE", "CAPABILITY", "CONTINUITY", "DIAGNOSTICS",
     ];
     for (const k of expected) {
       assert.ok(k in StoreKey, `StoreKey.${k} must exist`);
     }
+    assert.equal(Object.keys(StoreKey).length, 7);
   });
 
   test("type constant objects are frozen", () => {

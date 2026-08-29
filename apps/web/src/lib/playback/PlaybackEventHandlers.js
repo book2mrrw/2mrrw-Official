@@ -79,6 +79,7 @@ import {
   reportTransportTimeline,
   takePhysicalObservationContext,
 } from "@/lib/playback/transport-observation-port.js";
+import { proposeSelection } from "@/lib/playback/selection-port.js";
 
 // ── Exported constants ─────────────────────────────────────────────────────────
 // Defined here because handler logic is their primary consumer.
@@ -938,8 +939,6 @@ export function createPlaybackEventHandlers({
     patchState({ playbackState: "ending" });
 
     const repeatMode = repeatModeRef.current;
-    const queue = queueRef.current;
-    const queueIndex = queueIndexRef.current;
     const endedTrackSlug = track?.slug;
     if (!endedTrackSlug) return;
 
@@ -985,102 +984,68 @@ export function createPlaybackEventHandlers({
         return;
       }
 
-      if (queue.length > 0) {
-        let nextIndex = queueIndex + 1;
-        if (shuffleRef.current && queue.length > 1) {
-          nextIndex = advanceShuffleOrder(queue, queueIndex);
-        } else if (nextIndex >= queue.length) {
-          if (repeatMode === "all") nextIndex = 0;
-          else {
-            // End of queue, no repeat: wrap silently to track 1, stay paused
-            const firstTrack = queue[0];
-            queueIndexRef.current = 0;
-            skipPauseInterruptionRef.current = true;
-            audio.removeAttribute("src");
-            audio.load();
-            patchState({
-              isPlaying: false,
-              playbackState: "paused",
-              queueIndex: 0,
-              currentTrack: firstTrack || track,
-              currentTrackId: firstTrack?.id || firstTrack?.trackId || null,
-            });
-            syncProgressTime(0);
-            patchUI({ previewEnded: false });
-            if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
-              navigator.mediaSession.playbackState = "paused";
-            }
-            void updateMediaSession(firstTrack || track, { playing: false });
-            return;
-          }
+      // Selection authority computes the next track (repeat/shuffle policy,
+      // skip-invalid, wraparound) and commits it atomically — this handler no
+      // longer duplicates that decision inline.
+      const advance = proposeSelection("next", [{
+        repeatMode,
+        shuffle: shuffleRef.current,
+        autoAdvance: true,
+        isPlayable: (entry) => Boolean(entry?.src),
+      }]);
+
+      if (advance.accepted && advance.endOfQueue) {
+        // End of queue, no repeat: Selection wrapped silently to track 1;
+        // stay paused (matches manual NEXT's non-wrap-but-play semantics —
+        // auto-advance never leaves the player mid-queue with nothing loaded).
+        const firstTrack = advance.snapshot.nowPlaying;
+        skipPauseInterruptionRef.current = true;
+        audio.removeAttribute("src");
+        audio.load();
+        patchState({ isPlaying: false, playbackState: "paused" });
+        syncProgressTime(0);
+        patchUI({ previewEnded: false });
+        if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
+          navigator.mediaSession.playbackState = "paused";
         }
-        let attempts = 0;
-        while (attempts < queue.length) {
-          const nextTrack = queue[nextIndex];
-          if (!nextTrack?.src) {
-            nextIndex += 1;
-            if (nextIndex >= queue.length) {
-              if (repeatMode === "all") nextIndex = 0;
-              else {
-                const firstTrack = queue[0];
-                queueIndexRef.current = 0;
-                skipPauseInterruptionRef.current = true;
-                audio.removeAttribute("src");
-                audio.load();
-                patchState({
-                  isPlaying: false,
-                  playbackState: "paused",
-                  queueIndex: 0,
-                  currentTrack: firstTrack || track,
-                  currentTrackId: firstTrack?.id || firstTrack?.trackId || null,
-                });
-                syncProgressTime(0);
-                patchUI({ previewEnded: false });
-                if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
-                  navigator.mediaSession.playbackState = "paused";
-                }
-                void updateMediaSession(firstTrack || track, { playing: false });
-                return;
-              }
-            }
-            attempts += 1;
-            continue;
-          }
-          queueIndexRef.current = nextIndex;
-          patchState({ queueIndex: nextIndex });
-          resetPlaybackTimingCapture();
-          setPlaybackScenario(PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE, { source: "ended-handler" });
-          // Block any spurious second `ended` from the audio element while
-          // playTrackInternal is still setting up the next track's src. Without
-          // this, a fast second `ended` (e.g. from a src swap race) sees the same
-          // endedTrackSlug and calls playTrackRef a second time.
-          spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
-          perfMark(MARKS.PLAYBACK_TAP);
-          if (isPlaybackTraceEnabled()) {
-            const preloadEl = nextTrackPreloadRef.current;
-            logPlaybackEvent({
-              type: "tracklist:auto-advance",
-              source: "onEnded",
-              trackId: nextTrack.slug,
-              extra: {
-                endedSlug: endedTrackSlug,
-                nextSlug: nextTrack.slug,
-                nextIndex,
-                queueLength: queue.length,
-                preloadReadyState: preloadEl?.readyState ?? -1,
-                preloadSrcTail: preloadEl?.src ? preloadEl.src.slice(-80) : null,
-                preloadCurrentSrcTail: preloadEl?.currentSrc ? preloadEl.currentSrc.slice(-80) : null,
-              },
-            });
-          }
-          void playTrackRef.current?.(nextTrack, {
-            resumeAt: 0,
-            playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE,
-          }).then((ok) => {
-            if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
+        void updateMediaSession(firstTrack || track, { playing: false });
+        return;
+      }
+
+      if (advance.accepted && !advance.unchanged && advance.snapshot.nowPlaying) {
+        const nextTrack = advance.snapshot.nowPlaying;
+        resetPlaybackTimingCapture();
+        setPlaybackScenario(PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE, { source: "ended-handler" });
+        // Block any spurious second `ended` from the audio element while
+        // playTrackInternal is still setting up the next track's src. Without
+        // this, a fast second `ended` (e.g. from a src swap race) sees the same
+        // endedTrackSlug and calls playTrackRef a second time.
+        spuriousEndedGuardRef.current = Date.now() + SPURIOUS_ENDED_GUARD_MS;
+        perfMark(MARKS.PLAYBACK_TAP);
+        if (isPlaybackTraceEnabled()) {
+          const preloadEl = nextTrackPreloadRef.current;
+          logPlaybackEvent({
+            type: "tracklist:auto-advance",
+            source: "onEnded",
+            trackId: nextTrack.slug,
+            extra: {
+              endedSlug: endedTrackSlug,
+              nextSlug: nextTrack.slug,
+              nextIndex: advance.snapshot.queueIndex,
+              queueLength: advance.snapshot.queue.length,
+              preloadReadyState: preloadEl?.readyState ?? -1,
+              preloadSrcTail: preloadEl?.src ? preloadEl.src.slice(-80) : null,
+              preloadCurrentSrcTail: preloadEl?.currentSrc ? preloadEl.currentSrc.slice(-80) : null,
+            },
           });
-          return;
         }
+        void playTrackRef.current?.(nextTrack, {
+          resumeAt: 0,
+          playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE,
+        }).then((ok) => {
+          if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
+        });
+        return;
       }
 
       patchState({ isPlaying: false, playbackState: "idle" });
@@ -1254,20 +1219,20 @@ export function createPlaybackEventHandlers({
 
     // Auto-advance past unrecoverable track errors (missing file, 404, expired URL) to match
     // Spotify/Apple Music behavior — the queue never stops because one file is unavailable.
-    // Only skip when in a multi-track queue where auto-advance makes sense.
-    const errQueue = queueRef.current;
-    const errQueueIdx = queueIndexRef.current;
-    if (!stopAfterEachTrackRef.current && errQueue.length > 0) {
-      let skipIdx = errQueueIdx + 1;
-      while (skipIdx < errQueue.length) {
-        const skipTrack = errQueue[skipIdx];
-        if (skipTrack?.src) {
-          queueIndexRef.current = skipIdx;
-          patchState({ queueIndex: skipIdx });
-          void playTrackRef.current?.(skipTrack, { resumeAt: 0, playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE });
-          return;
-        }
-        skipIdx += 1;
+    // Routed through the same SelectionAuthority NEXT traversal onEnded uses, so
+    // repeat/shuffle policy is honored consistently rather than a third
+    // independent skip-forward implementation.
+    if (!stopAfterEachTrackRef.current) {
+      const advance = proposeSelection("next", [{
+        repeatMode: repeatModeRef.current,
+        shuffle: shuffleRef.current,
+        autoAdvance: true,
+        isPlayable: (entry) => Boolean(entry?.src),
+      }]);
+      if (advance.accepted && !advance.unchanged && !advance.endOfQueue && advance.snapshot.nowPlaying) {
+        const skipTrack = advance.snapshot.nowPlaying;
+        void playTrackRef.current?.(skipTrack, { resumeAt: 0, playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE });
+        return;
       }
     }
 

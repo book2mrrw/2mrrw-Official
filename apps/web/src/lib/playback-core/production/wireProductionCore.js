@@ -36,14 +36,20 @@
  *   This property is asserted by the physical certification suite.
  *
  * PRODUCTION SCOPE (Slice 1B — locked):
- *   Live routing is restricted to PLAY / PAUSE / RESUME / SEEK via
- *   CoreLiveCommandScope. NEXT / PREVIOUS / SET_QUEUE / REORDER_QUEUE remain
- *   dormant contract infrastructure until the Selection Domain migration,
- *   because NowPlaying + Queue + QueueIndex must transfer together.
+ *   Live routing through PlaybackPort/CommandGateway/ConvergenceEngine is
+ *   restricted to PLAY / PAUSE / RESUME / SEEK via CoreLiveCommandScope.
+ *   NEXT / PREVIOUS / SET_QUEUE / REORDER_QUEUE remain dormant on that path —
+ *   production Selection-triggering UI never called PlaybackPort.next()/
+ *   previous()/setQueue() (it calls dispatchPlaybackCommand's NEXT_TRACK/
+ *   PREV_TRACK/SET_QUEUE directly). Slice 3 therefore wires SelectionAuthority
+ *   through its own dedicated seam (selection-port.js) below, independent of
+ *   this command pipeline, exactly as Slice 2 wired TransportAuthority through
+ *   transport-observation-port.js rather than through PlaybackPort.
  *
- * OWNERSHIP (Slice 2):
- *   PlaybackCore owns USER INTENT AUTHORITY and canonical TRANSPORT.
- *   PSM retains SELECTION and exposes only Core-derived compatibility fields.
+ * OWNERSHIP (Slice 3):
+ *   PlaybackCore owns USER INTENT AUTHORITY, canonical TRANSPORT, and
+ *   canonical SELECTION. PSM exposes only Core-derived compatibility fields
+ *   for both.
  */
 
 import { dispatchPlaybackCommand } from "@/lib/playback/command-dispatcher";
@@ -55,10 +61,19 @@ import { createRuntimePhysicalProbe } from "../convergence/PhysicalStateProbe.js
 import { CoreLiveCommandScope, Domain } from "../types/index.js";
 import { installCurrentPhysicalEffectGuard } from "@/lib/audio/physical-effect-authority";
 import { installTransportObservationSink } from "@/lib/playback/transport-observation-port";
+import { installSelectionAuthoritySink } from "@/lib/playback/selection-port";
+
+const SELECTION_TRANSITION_METHODS = new Set([
+  "setQueueAndSelect", "selectIndex", "selectMedia", "next", "previous",
+  "removeItem", "insertItem", "reorderQueue", "replaceQueue", "clearQueue",
+  "restoreSelection", "setTraversalPolicy",
+  "updateNowPlayingRepresentation", "updateQueueRepresentation",
+]);
 
 /** @type {PlaybackCore | null} */
 let _core = null;
 let _disposeTransportSink = null;
+let _disposeSelectionSink = null;
 
 /**
  * Build a Core instance already wired to the real production dispatcher.
@@ -111,7 +126,7 @@ export function buildWiredCore({
       effectAuthority: core._effectAuthority,
       disposeInstalledEffectGuard,
     });
-    // Slice 2 final ownership transfer. All legacy producers use the injected
+    // Slice 2 ownership transfer. All legacy producers use the injected
     // observation seam; Core is the sole canonical Transport writer from here.
     core._transferDomainToCore(Domain.TRANSPORT);
     const transport = core._transportAuthority;
@@ -128,6 +143,26 @@ export function buildWiredCore({
       subscribeTimeline: (fn) => transport.subscribeTimeline(fn),
       subscribeMode: (fn) => transport.subscribeMode(fn),
       getMetrics: () => transport.metrics,
+    });
+
+    // Slice 3 final ownership transfer. NowPlaying + Queue + QueueIndex move
+    // together, atomically, through SelectionAuthority from here.
+    core._transferDomainToCore(Domain.SELECTION);
+    const selection = core._selectionAuthority;
+    _disposeSelectionSink?.();
+    _disposeSelectionSink = installSelectionAuthoritySink({
+      captureContext: (meta) => selection.captureContext(meta),
+      propose: (transitionName, args, context) => {
+        if (!SELECTION_TRANSITION_METHODS.has(transitionName)) {
+          throw new TypeError(`[SelectionBridge] unknown transition "${transitionName}"`);
+        }
+        return context
+          ? selection[transitionName](...args, context)
+          : selection[transitionName](...args);
+      },
+      getSnapshot: () => selection.snapshot,
+      subscribe: (fn) => selection.subscribe(fn),
+      getMetrics: () => selection.metrics,
     });
   } catch (error) {
     disposeInstalledEffectGuard();
@@ -156,6 +191,8 @@ export function getProductionPlaybackCore() {
 export function resetProductionPlaybackCore() {
   _disposeTransportSink?.();
   _disposeTransportSink = null;
+  _disposeSelectionSink?.();
+  _disposeSelectionSink = null;
   _core?.destroy();
   _core = null;
 }

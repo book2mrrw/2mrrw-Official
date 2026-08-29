@@ -31,6 +31,7 @@ import {
   logTrackSwitchAfterUnlock,
   getPlaybackTraceContext,
 } from "@/lib/diagnostics/playback-trace";
+import { proposeSelection, getCanonicalSelection } from "@/lib/playback/selection-port.js";
 
 const REPEAT_MODES = ["off", "one", "all"];
 
@@ -45,13 +46,13 @@ export function usePlaybackPublicApi({ refs, delegates }) {
   const playbackPort = playbackCore.port;
   const {
     stateRef, audioRef, audioCtxRef,
-    queueRef, queueIndexRef, repeatModeRef, shuffleRef, csModeRef,
+    queueRef, repeatModeRef, shuffleRef, csModeRef,
     userPausedRef, userIntentPausedRef,
     skipPauseInterruptionRef, activeStreamAbortRef, activeCommandRef,
     wasPlayingBeforeViewportPauseRef, resumeEligibleRef, lastTrackIdRef,
     lastUserActionRef, isInAudioVisualViewportRef,
     csHoldSavedRef, csHoldActiveRef, bassFilterRef, webAudioAvailableRef,
-    lifecycleRecoveryLockRef, audibilitySampleRef, shuffledOrderRef, shufflePositionRef,
+    lifecycleRecoveryLockRef, audibilitySampleRef,
     sleepTimerRef, listeningUserIdRef,
   } = refs;
 
@@ -73,45 +74,56 @@ export function usePlaybackPublicApi({ refs, delegates }) {
       return false;
     }
 
-    const candidateQueue = Array.isArray(policy.queueEntries)
-      ? policy.queueEntries
-      : queueRef.current;
-    let queueIndex = Number.isInteger(policy.queueIndex) ? policy.queueIndex : -1;
-    if (queueIndex < 0 || queueIndex >= candidateQueue.length) {
-      queueIndex = candidateQueue.findIndex((entry) =>
-        (entry?.id ?? entry?.trackId ?? entry?.slug ?? null) === trackIdentity
-      );
+    // Selection commits ONCE, here, before Transport ever hears about the
+    // track — never after. A caller that already committed the Selection
+    // itself (queue-traversal commands: NEXT/PREVIOUS/playQueue) sets
+    // alreadySelected so this does not needlessly re-propose it.
+    let selection;
+    if (policy.alreadySelected) {
+      selection = getCanonicalSelection();
+    } else if (Array.isArray(policy.queueEntries)) {
+      const result = proposeSelection("setQueueAndSelect", [
+        policy.queueEntries,
+        Number.isInteger(policy.queueIndex) ? policy.queueIndex : 0,
+      ]);
+      if (!result.accepted) return false;
+      selection = result.snapshot;
+    } else {
+      const result = proposeSelection("selectMedia", [
+        track,
+        { preferredIndex: Number.isInteger(policy.queueIndex) ? policy.queueIndex : undefined },
+      ]);
+      if (!result.accepted) return false;
+      selection = result.snapshot;
     }
-    const queueEntries = queueIndex >= 0 ? candidateQueue : [track];
-    if (queueIndex < 0) queueIndex = 0;
 
     playbackPort.play({
       trackId: trackIdentity,
-      queueEntries,
-      queueIndex,
+      queueEntries: selection.queue,
+      queueIndex: selection.queueIndex,
       resumePolicy: options.resumePolicy,
       options,
       source: policy.source ?? options.source ?? "user",
     });
     return true;
-  }, [playbackCore, playbackPort, queueRef]);
+  }, [playbackCore, playbackPort]);
 
   // ─── Repeat / Shuffle ────────────────────────────────────────────────────────
 
   const setRepeatMode = useCallback((mode) => {
     const next = REPEAT_MODES.includes(mode) ? mode : "off";
-    repeatModeRef.current = next;
-    patchState({ repeatMode: next });
+    proposeSelection("setTraversalPolicy", [{ repeatMode: next }]);
+    const selection = getCanonicalSelection();
     const userId = listeningUserIdRef.current;
-    if (userId && queueRef.current.length) {
+    if (userId && selection.queue.length) {
       savePlaybackSession(userId, {
-        queue: queueRef.current,
-        queueIndex: queueIndexRef.current,
-        shuffle: shuffleRef.current,
+        queue: selection.queue,
+        queueIndex: selection.queueIndex,
+        shuffle: selection.shuffle,
         repeatMode: next,
       });
     }
-  }, [patchState]);
+  }, []);
 
   const toggleRepeat = useCallback(() => {
     const order = ["off", "one", "all"];
@@ -122,22 +134,18 @@ export function usePlaybackPublicApi({ refs, delegates }) {
   }, [setRepeatMode]);
 
   const setShuffle = useCallback((enabled) => {
-    shuffleRef.current = Boolean(enabled);
-    if (!enabled) {
-      shuffledOrderRef.current = null;
-      shufflePositionRef.current = 0;
-    }
-    patchState({ shuffle: Boolean(enabled) });
+    proposeSelection("setTraversalPolicy", [{ shuffle: Boolean(enabled) }]);
+    const selection = getCanonicalSelection();
     const userId = listeningUserIdRef.current;
-    if (userId && queueRef.current.length) {
+    if (userId && selection.queue.length) {
       savePlaybackSession(userId, {
-        queue: queueRef.current,
-        queueIndex: queueIndexRef.current,
+        queue: selection.queue,
+        queueIndex: selection.queueIndex,
         shuffle: Boolean(enabled),
-        repeatMode: repeatModeRef.current,
+        repeatMode: selection.repeatMode,
       });
     }
-  }, [patchState]);
+  }, []);
 
   const toggleShuffle = useCallback(() => {
     setShuffle(!shuffleRef.current);
@@ -342,50 +350,23 @@ export function usePlaybackPublicApi({ refs, delegates }) {
   const enqueueTrack = useCallback((track, { playNext: pn = false } = {}) => {
     const normalized = normalizeTrack(track);
     if (!normalized?.src) return;
-    const current = [...queueRef.current];
-    if (!current.length) {
-      queueRef.current = [normalized];
-      queueIndexRef.current = 0;
-      startTransition(() => patchState({ queue: [normalized], queueIndex: 0 }));
-      return;
-    }
-    if (pn) {
-      const insertAt = Math.max(0, queueIndexRef.current + 1);
-      current.splice(insertAt, 0, normalized);
-    } else {
-      current.push(normalized);
-    }
-    queueRef.current = current;
-    startTransition(() => patchState({ queue: current }));
-  }, [patchState]);
+    startTransition(() => {
+      proposeSelection("insertItem", [normalized, { playNext: pn }]);
+    });
+  }, []);
 
   const removeFromQueue = useCallback((index) => {
-    const current = [...queueRef.current];
-    if (index < 0 || index >= current.length) return;
-    if (index === queueIndexRef.current) return;
-    current.splice(index, 1);
-    const newIndex = index < queueIndexRef.current ? queueIndexRef.current - 1 : queueIndexRef.current;
-    queueRef.current = current;
-    queueIndexRef.current = newIndex;
-    startTransition(() => patchState({ queue: current, queueIndex: newIndex }));
-  }, [patchState]);
+    startTransition(() => {
+      proposeSelection("removeItem", [index]);
+    });
+  }, []);
 
   const moveInQueue = useCallback((from, to) => {
     if (from === to) return;
-    const current = [...queueRef.current];
-    if (from < 0 || from >= current.length) return;
-    if (to < 0 || to >= current.length) return;
-    if (from === queueIndexRef.current) return;
-    const [item] = current.splice(from, 1);
-    current.splice(to, 0, item);
-    const playingIdx = queueIndexRef.current;
-    let newIndex = playingIdx;
-    if (from < playingIdx && to >= playingIdx) newIndex = playingIdx - 1;
-    else if (from > playingIdx && to <= playingIdx) newIndex = playingIdx + 1;
-    queueRef.current = current;
-    queueIndexRef.current = newIndex;
-    startTransition(() => patchState({ queue: current, queueIndex: newIndex }));
-  }, [patchState]);
+    startTransition(() => {
+      proposeSelection("reorderQueue", [from, to]);
+    });
+  }, []);
 
   // ─── CS Hold Preview ─────────────────────────────────────────────────────────
 

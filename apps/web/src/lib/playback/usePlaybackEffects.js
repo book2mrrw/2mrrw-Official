@@ -79,6 +79,11 @@ import {
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 import { registerPlaybackKeyboardShortcuts } from "@/lib/playback/keyboard-shortcuts";
 import { reportTransportMode } from "@/lib/playback/transport-observation-port.js";
+import {
+  proposeSelection,
+  captureSelectionContext,
+  getCanonicalSelection,
+} from "@/lib/playback/selection-port.js";
 
 const GESTURE_UNLOCK_EVENTS = ["touchstart", "touchend", "click", "keydown"];
 const AUDIBILITY_WATCHDOG_MS = 1250;
@@ -135,7 +140,7 @@ export function usePlaybackEffects({
     startProgressRaf, stopProgressRaf, startKeepAlivePing, stopKeepAlivePing,
     startPositionSaveTimer, stopPositionSaveTimer, startStallRecovery, stopStallRecovery,
     emitBackgroundPlaybackDiagnostics, emitPhase21AudibleSnapshot,
-    scheduleNextTrackPreload, advanceShuffleOrder,
+    scheduleNextTrackPreload,
     armLifecycleRecoverySuppression, evaluateLifecyclePlaybackHealth,
     attemptLightweightPlaybackResume, readIsAudiblyPlaying,
     computeLifecycleAudioTruthState, getAudibilityParams, getPlaybackTransportHealth,
@@ -172,22 +177,26 @@ export function usePlaybackEffects({
     if (sessionRestoredRef.current) return;
     sessionRestoredRef.current = true;
 
+    // Captured BEFORE any async fetch below. If the user makes any Selection
+    // of their own while this restore is in flight, selectionVersionAtCapture
+    // no longer matches at resolution time and the restore is rejected —
+    // late restore can never overwrite a newer user choice (INV-SELECTION-11).
+    const restoreContext = captureSelectionContext({ source: "session-restore" });
+
     function applySession(session) {
       if (!session?.queue?.length) return;
       const valid = session.queue.filter((t) => t?.slug && t?.src);
       if (!valid.length) return;
       const idx = Math.max(0, Math.min(session.queueIndex ?? 0, valid.length - 1));
-      queueRef.current = valid;
-      queueIndexRef.current = idx;
-      shuffleRef.current = Boolean(session.shuffle);
-      repeatModeRef.current = "off";
-      const restoredTrack = valid[idx] || null;
-      patchState({
+      const result = proposeSelection("restoreSelection", [{
         queue: valid,
         queueIndex: idx,
-        currentTrack: restoredTrack,
-        shuffle: Boolean(session.shuffle),
         repeatMode: "off",
+        shuffle: Boolean(session.shuffle),
+      }], restoreContext);
+      if (!result.accepted) return;
+      const restoredTrack = result.snapshot.nowPlaying;
+      patchState({
         isPlaying: false,
         playbackState: "idle",
       });
@@ -237,8 +246,10 @@ export function usePlaybackEffects({
   useEffect(() => {
     entitlementAccountStateRef.current = entitlementAccountState;
 
-    const queue = queueRef.current;
+    const selectionBefore = getCanonicalSelection();
+    const queue = selectionBefore.queue;
     if (!queue.length) return;
+    const originalCurrentTrack = selectionBefore.nowPlaying;
 
     let changed = false;
     const updated = queue.map((track) => {
@@ -265,30 +276,31 @@ export function usePlaybackEffects({
     });
 
     if (!changed) return;
-    queueRef.current = updated;
-    patchState({ queue: updated });
+    // Same length, same identities/order as the current queue — a
+    // representation refresh, not a Selection change. nowPlaying is kept in
+    // sync by SelectionAuthority in the SAME atomic commit.
+    const result = proposeSelection("updateQueueRepresentation", [updated]);
+    if (!result.accepted) return;
 
-    const currentTrack = stateRef.current.currentTrack;
-    if (currentTrack?.slug) {
-      const wasPreviewOnly = currentTrack.metadata?.access?.previewOnly;
-      const updatedCurrent = updated.find((t) => t.slug === currentTrack.slug);
+    if (originalCurrentTrack?.slug) {
+      const wasPreviewOnly = originalCurrentTrack.metadata?.access?.previewOnly;
+      const updatedCurrent = result.snapshot.nowPlaying;
       if (wasPreviewOnly && updatedCurrent?.metadata?.access?.canStream) {
         const policy = entitlementAccountState?.playbackPolicy;
         if (!policy || policy === "PURCHASE_LIBRARY") {
           // Purchaser tier: the audio element is on the preview URL and needs a full
           // stream src-swap. upgradeToFullStream handles the handoff correctly.
-          const upgradeSlug = currentTrack.slug;
+          const upgradeSlug = originalCurrentTrack.slug;
           setTimeout(() => {
             if (stateRef.current.currentTrack?.slug === upgradeSlug) {
               void dispatchPlaybackCommandRef.current?.("upgradeStream");
             }
           }, 500);
-        } else {
-          // FULL_CATALOG / UNRESTRICTED (Subscriber, Collector, Admin): the queue
-          // src was already corrected to libraryStreamRedirectSrc above. Patch
-          // currentTrack directly — no audio element src-swap needed or wanted.
-          patchState({ currentTrack: updatedCurrent });
         }
+        // FULL_CATALOG / UNRESTRICTED (Subscriber, Collector, Admin): the queue
+        // src was already corrected to libraryStreamRedirectSrc above, and
+        // nowPlaying was refreshed atomically in the same commit — no
+        // separate currentTrack write needed or wanted.
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -534,7 +546,7 @@ export function usePlaybackEffects({
       startPositionSaveTimer, stopPositionSaveTimer, startStallRecovery, stopStallRecovery,
       updateMediaSession, finalizeStreamSession, recordLocalListening,
       tracePlayback, emitPhase21AudibleSnapshot, emitBackgroundPlaybackDiagnostics,
-      scheduleNextTrackPreload, advanceShuffleOrder,
+      scheduleNextTrackPreload,
       // SM UI channel write path
       patchUI,
     });

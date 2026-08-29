@@ -111,7 +111,6 @@ export function usePlaybackDelegates(helperServiceRef, commandServiceRef) {
   const setQueueInternal           = useCallback((tracks, startIndex) => commandServiceRef.current.setQueueInternal(tracks, startIndex), []);
   const playNextInternal           = useCallback((opts) => commandServiceRef.current.playNextInternal(opts), []);
   const playPreviousInternal       = useCallback(() => commandServiceRef.current.playPreviousInternal(), []);
-  const advanceShuffleOrder        = useCallback((queue, currentIndex) => commandServiceRef.current.advanceShuffleOrder(queue, currentIndex), []);
   const playQueueInternal          = useCallback((tracks, startIndex, options) => commandServiceRef.current.playQueueInternal(tracks, startIndex, options), []);
   const pauseInternal              = useCallback((opts) => commandServiceRef.current.pauseInternal(opts), []);
   const pauseForViewport           = useCallback(() => commandServiceRef.current.pauseForViewport(), []);
@@ -154,7 +153,7 @@ export function usePlaybackDelegates(helperServiceRef, commandServiceRef) {
     releaseLifecycleRecoveryLock, clearBfcacheRecoveryInProgress, beginBfcacheRecoveryInProgress,
     requestPlaybackRecovery, runCoalescedLifecycleRecovery, resumePlaybackTransport,
     applyCSModeToTrack, toggleCSMode, setQueueInternal, playNextInternal, playPreviousInternal,
-    advanceShuffleOrder, playQueueInternal, pauseInternal, pauseForViewport,
+    playQueueInternal, pauseInternal, pauseForViewport,
     resumeInternal, seekInternal, seekBack, seekForward, setPlaybackRateInternal,
     resumeTrackAtPosition, resumeFromViewport, stopInternal,
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
