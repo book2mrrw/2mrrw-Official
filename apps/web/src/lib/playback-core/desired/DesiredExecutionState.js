@@ -18,7 +18,8 @@
  *
  * OWNERSHIP:
  *   Core owns:  USER INTENT AUTHORITY + DESIRED EXECUTION STATE
- *   PSM owns:   CANONICAL PHYSICAL / ORCHESTRATION TRANSPORT STATE
+ *   Core owns:  CANONICAL TRANSPORT STATE from authorized observations
+ *   PSM owns:   SELECTION + legacy execution orchestration only
  *   Desired state is not canonical physical state. Physical state is permitted to
  *   lag desired state (INV-DESIRED-3); it may never converge toward a stale revision.
  *

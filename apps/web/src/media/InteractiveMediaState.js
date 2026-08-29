@@ -11,7 +11,8 @@
  *   generationId   (increments on every significant state change)
  *
  * Authority contract:
- *   PlaybackStateMachine = authoritative over audio (currentTime, queue, identity)
+ *   Playback Core = authoritative over Transport and presentation timeline
+ *   PlaybackStateMachine = authoritative over Selection (queue and identity)
  *   InteractiveMediaState = authoritative over gesture-driven and visual state
  *   GlobalMediaController = authoritative over visual asset activation (from previous session)
  *

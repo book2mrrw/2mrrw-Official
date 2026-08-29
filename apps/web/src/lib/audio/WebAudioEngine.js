@@ -541,6 +541,7 @@ export class WebAudioEngine extends AudioEngineBase {
       ["playing",        () => this._emit(E.BUFFERED)],
       ["canplay",        () => this._emit(E.CANPLAY)],
       ["canplaythrough", () => this._emit(E.CANPLAYTHROUGH)],
+      ["seeking",        () => this._emit(E.SEEKING,        { currentTime: el.currentTime })],
       ["seeked",         () => this._emit(E.SEEKED,         { currentTime: el.currentTime })],
       ["timeupdate",     () => this._emit(E.TIMEUPDATE,     { currentTime: el.currentTime, duration: el.duration || 0 })],
       ["durationchange", () => this._emit(E.DURATIONCHANGE, { duration: Number.isFinite(el.duration) ? el.duration : 0 })],

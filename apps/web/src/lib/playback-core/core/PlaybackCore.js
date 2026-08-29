@@ -52,6 +52,7 @@ import { DesiredStateStore }       from "../desired/DesiredStateStore.js";
 import { CoreReadiness }           from "../types/index.js";
 import { CoreEpoch }               from "../authority/CoreEpoch.js";
 import { AudibleEffectAuthority }  from "../effects/AudibleEffectAuthority.js";
+import { TransportAuthority }      from "../transport/TransportAuthority.js";
 
 export class PlaybackCore {
   #sequencer;
@@ -66,6 +67,7 @@ export class PlaybackCore {
   #desiredStore;
   #coreEpoch;
   #effectAuthority;
+  #transportAuthority;
   #disposeInstalledEffectGuard = null;
   #effectGuardInstalled = false;
   #executionEngine = null;
@@ -88,6 +90,7 @@ export class PlaybackCore {
     this.#desiredStore      = deps.desiredStore;
     this.#coreEpoch         = deps.coreEpoch;
     this.#effectAuthority   = deps.effectAuthority;
+    this.#transportAuthority = deps.transportAuthority;
 
     this.#logger.emitCoreInitialized({ sessionEpoch: this.#sequencer.sessionEpoch });
   }
@@ -129,6 +132,14 @@ export class PlaybackCore {
       getDesiredState: () => desiredStore.current,
       logger,
     });
+    const transportAuthority = new TransportAuthority({
+      commitGate,
+      authorityGate,
+      desiredStore,
+      coreEpoch,
+      stores,
+      logger,
+    });
 
     // Readiness accessor — closed over the PlaybackCore instance (assigned below).
     // The port calls this before accepting any command; before READY it throws
@@ -151,6 +162,7 @@ export class PlaybackCore {
       desiredStore,
       coreEpoch,
       effectAuthority,
+      transportAuthority,
     });
     coreRef = core;
     return core;
@@ -182,6 +194,7 @@ export class PlaybackCore {
     this.#disposeInstalledEffectGuard?.();
     this.#disposeInstalledEffectGuard = null;
     this.#effectAuthority.dispose();
+    this.#transportAuthority.destroy();
     this.#coreEpoch.dispose();
     this.#logger.emitCoreDestroyed({ sessionEpoch: this.#sequencer.sessionEpoch });
   }
@@ -243,6 +256,8 @@ export class PlaybackCore {
    */
   get _authorityGate() { return this.#authorityGate; }
   get _effectAuthority() { return this.#effectAuthority; }
+  get _transportAuthority() { return this.#transportAuthority; }
+  get _ownershipMap() { return this.#ownershipRegistry.getOwnershipMap(); }
   get _effectGuardInstalled() { return this.#effectGuardInstalled; }
 
   /** Catastrophic recovery invalidates every token captured by the old runtime. */

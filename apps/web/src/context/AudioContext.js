@@ -24,11 +24,32 @@ import { usePlaybackRefs } from "@/lib/playback/usePlaybackRefs";
 import { usePlaybackDelegates } from "@/lib/playback/usePlaybackDelegates";
 import { usePlaybackPublicApi } from "@/lib/playback/usePlaybackPublicApi";
 import { usePlaybackEffects } from "@/lib/playback/usePlaybackEffects";
+import {
+  useProductionTransportStatus,
+  useProductionTransportTimeline,
+} from "@/lib/playback-core/production/useProductionTransport";
 
 // ─── Module Constants ─────────────────────────────────────────────────────────
 
 const AudioContext = createContext(null);
 const STORE_LINK_HREF = "/subscribe";
+
+function legacyPlaybackStateFromCore(status) {
+  if (status.status === "ENDED" && status.endReason === "preview") return "ended_preview";
+  switch (status.status) {
+    case "IDLE": return "idle";
+    case "LOADING": return "loading";
+    case "BUFFERING":
+    case "PLAYING": return "playing";
+    case "PAUSED": return "paused";
+    case "SEEKING": return "seeking";
+    case "ENDED": return "ending";
+    case "ERROR": return "paused";
+    case "RECOVERING": return "recovering";
+    case "DEGRADED": return "paused";
+    default: return null;
+  }
+}
 
 const AudioProviderSubtree = memo(function AudioProviderSubtree({ children }) {
   return children;
@@ -45,6 +66,7 @@ export function AudioProvider({ children }) {
   useBlackscreenMountTrace("AudioProvider");
   const { user, loading: authLoading } = useAuth();
   const entitlementAccountState = useEntitlementAccountState();
+  const canonicalTransport = useProductionTransportStatus();
 
   // All refs + local state in one stable bag. State values trigger AudioProvider
   // re-renders via the normal React useState mechanism.
@@ -58,11 +80,22 @@ export function AudioProvider({ children }) {
 
   // SM context channel — drives full AudioProvider re-renders on queue/track changes.
   // Wrapper arrow preserves `this` on subscribeContext; getContextSnapshot returns frozen snapshot.
-  const state = useSyncExternalStore(
+  const legacyState = useSyncExternalStore(
     (cb) => playbackStateMachine.subscribeContext(cb),
     () => playbackStateMachine.getContextSnapshot(),
     () => playbackStateMachine.getContextSnapshot()
   );
+  const state = useMemo(() => ({
+    ...legacyState,
+    isPlaying: canonicalTransport.playing,
+    playbackState: legacyPlaybackStateFromCore(canonicalTransport),
+    playbackNetworkState: canonicalTransport.networkState,
+    isBuffering:
+      canonicalTransport.buffering ||
+      canonicalTransport.loading ||
+      canonicalTransport.recovering,
+    error: canonicalTransport.error,
+  }), [legacyState, canonicalTransport]);
 
   // All thin delegates — stable useMemo identity, [] deps throughout.
   const delegates = usePlaybackDelegates(helperServiceRef, commandServiceRef);
@@ -92,13 +125,25 @@ export function AudioProvider({ children }) {
   // Full orchestration is intentionally excluded. Embedding it here would make
   // every useAudioPlayer consumer subscribe to unrelated engine transitions.
   const value = useMemo(() => {
-    const { currentTime: _t, playbackNetworkState: _n, isBuffering: _b, ...playbackState } = state;
-    const transport = playbackStateMachine.getTransportSnapshot();
+    const {
+      currentTime: _t,
+      duration: _d,
+      isPlaying: _playing,
+      playbackState: _playbackState,
+      playbackNetworkState: _network,
+      isBuffering: _buffering,
+      ...selectionAndPresentation
+    } = state;
     return {
       // SM context fields (excluding high-frequency channels — those come from transport)
-      ...playbackState,
-      playbackNetworkState: transport.playbackNetworkState,
-      isBuffering: transport.isBuffering,
+      ...selectionAndPresentation,
+      isPlaying: canonicalTransport.playing,
+      playbackState: legacyPlaybackStateFromCore(canonicalTransport),
+      playbackNetworkState: canonicalTransport.networkState,
+      isBuffering:
+        canonicalTransport.buffering ||
+        canonicalTransport.loading ||
+        canonicalTransport.recovering,
       // Orchestration
       dispatchPlaybackCommand,
       // Stable refs exposed to consumers
@@ -141,7 +186,7 @@ export function AudioProvider({ children }) {
       hintUpcomingPlay:        delegates.hintUpcomingPlay,
     };
   }, [
-    state, publicApi, delegates, uiState,
+    state, publicApi, delegates, uiState, canonicalTransport,
   ]);
 
   // ─── Debug Render Trace (dev/trace only) ─────────────────────────────────────
@@ -204,20 +249,24 @@ export function useAudioPlayer() {
   return value;
 }
 
-const SERVER_PLAYBACK_PROGRESS_SNAPSHOT = Object.freeze({ currentTime: 0, duration: 0 });
-
 /** Subscribe to high-frequency playback progress without re-rendering the full AudioContext tree. */
 export function usePlaybackProgress() {
-  const { subscribeProgress, getProgressSnapshot } = useAudioPlayer();
-  return useSyncExternalStore(subscribeProgress, getProgressSnapshot, () => SERVER_PLAYBACK_PROGRESS_SNAPSHOT);
+  const timeline = useProductionTransportTimeline();
+  return useMemo(() => ({
+    currentTime: timeline.position,
+    duration: timeline.duration,
+  }), [timeline.position, timeline.duration]);
 }
-
-const SERVER_PLAYBACK_TRANSPORT_SNAPSHOT = Object.freeze({ playbackNetworkState: "idle", isBuffering: false });
 
 /** Transport/network fields without AudioProvider reconcile (Phase P1). */
 export function usePlaybackTransport() {
-  const { subscribeTransport, getTransportSnapshot } = useAudioPlayer();
-  return useSyncExternalStore(subscribeTransport, getTransportSnapshot, () => SERVER_PLAYBACK_TRANSPORT_SNAPSHOT);
+  const status = useProductionTransportStatus();
+  return useMemo(() => ({
+    playbackNetworkState: status.networkState,
+    isBuffering: status.buffering || status.loading || status.recovering,
+    status: status.status,
+    error: status.error,
+  }), [status.networkState, status.buffering, status.loading, status.recovering, status.status, status.error]);
 }
 
 const SERVER_PLAYBACK_IDENTITY_SNAPSHOT = Object.freeze({
@@ -233,5 +282,11 @@ const SERVER_PLAYBACK_IDENTITY_SNAPSHOT = Object.freeze({
  */
 export function usePlaybackIdentity() {
   const { subscribeIdentity, getIdentitySnapshot } = useAudioPlayer();
-  return useSyncExternalStore(subscribeIdentity, getIdentitySnapshot, () => SERVER_PLAYBACK_IDENTITY_SNAPSHOT);
+  const selection = useSyncExternalStore(subscribeIdentity, getIdentitySnapshot, () => SERVER_PLAYBACK_IDENTITY_SNAPSHOT);
+  const status = useProductionTransportStatus();
+  return useMemo(() => ({
+    currentTrackId: selection.currentTrackId,
+    currentTrackSlug: selection.currentTrackSlug,
+    isPlaying: status.playing,
+  }), [selection.currentTrackId, selection.currentTrackSlug, status.playing]);
 }

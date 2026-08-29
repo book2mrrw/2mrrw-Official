@@ -36,9 +36,10 @@
  *   INV-DESIRED-4  Emergency PAUSE bypasses the EXECUTION QUEUE but not
  *                  DESIRED-STATE AUTHORITY — it still advances the revision first.
  *
- * OWNERSHIP: unchanged. Core owns intent authority + desired state. PSM remains
- * the canonical physical transport authority. Corrections are expressed as legacy
- * commands; Core never writes canonical transport state.
+ * OWNERSHIP after Slice 2: Core owns intent authority, desired state, and
+ * canonical Transport. PSM remains the physical executor/orchestrator and owns
+ * Selection. Corrections are expressed as legacy commands; their physical facts
+ * return through the injected Core Transport observation seam.
  */
 
 import { TransportDisposition } from "../desired/DesiredExecutionState.js";

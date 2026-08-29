@@ -13,11 +13,6 @@ export { mapContextTrackToMediaTrack, mapMediaTrackToPlayInput } from "@/media/t
 
 
 
-function readElementPlaying(audioRef) {
-  const el = audioRef?.current;
-  return Boolean(el && !el.paused && !el.ended);
-}
-
 let _cachedMediaEngineState = null;
 
 function tracksEqual(a, b) {
@@ -96,20 +91,10 @@ function getMediaEngineSnapshot() {
 export function mapAudioContextToMediaEngine(audio) {
   const currentTrack = mapContextTrackToMediaTrack(audio.currentTrack);
   const bridge = getMediaEngineBridge();
-  const audiblyPlaying = audio.getIsAudiblyPlaying?.();
-  const bridgePlaying = bridge?.getState?.()?.isPlaying;
+  const isPlaying = Boolean(audio.isPlaying);
   // audiblyPlaying returns false both when "confirmed silent" and "not yet sampled".
   // Only let it override isPlaying when it positively confirms audible output.
   // Otherwise fall back to React's isPlaying (playback intent) → bridge → element.
-  const isPlaying =
-    audiblyPlaying === true
-      ? true
-      : audio.isPlaying ?? (
-          typeof bridgePlaying === "boolean"
-            ? bridgePlaying
-            : readElementPlaying(audio.audioRef)
-        );
-
   return {
     state: {
       currentTrack,

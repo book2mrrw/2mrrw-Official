@@ -41,10 +41,9 @@
  *   dormant contract infrastructure until the Selection Domain migration,
  *   because NowPlaying + Queue + QueueIndex must transfer together.
  *
- * OWNERSHIP (unchanged):
- *   PlaybackCore owns USER INTENT AUTHORITY.
- *   PSM remains the canonical physical / orchestration transport authority.
- *   This module does not transfer any domain to Core ownership.
+ * OWNERSHIP (Slice 2):
+ *   PlaybackCore owns USER INTENT AUTHORITY and canonical TRANSPORT.
+ *   PSM retains SELECTION and exposes only Core-derived compatibility fields.
  */
 
 import { dispatchPlaybackCommand } from "@/lib/playback/command-dispatcher";
@@ -53,11 +52,13 @@ import { PlaybackCore }            from "../core/PlaybackCore.js";
 import { PlaybackCoreAdapter }     from "../adapters/PlaybackCoreAdapter.js";
 import { ConvergenceEngine }       from "../convergence/ConvergenceEngine.js";
 import { createRuntimePhysicalProbe } from "../convergence/PhysicalStateProbe.js";
-import { CoreLiveCommandScope }    from "../types/index.js";
+import { CoreLiveCommandScope, Domain } from "../types/index.js";
 import { installCurrentPhysicalEffectGuard } from "@/lib/audio/physical-effect-authority";
+import { installTransportObservationSink } from "@/lib/playback/transport-observation-port";
 
 /** @type {PlaybackCore | null} */
 let _core = null;
+let _disposeTransportSink = null;
 
 /**
  * Build a Core instance already wired to the real production dispatcher.
@@ -110,6 +111,24 @@ export function buildWiredCore({
       effectAuthority: core._effectAuthority,
       disposeInstalledEffectGuard,
     });
+    // Slice 2 final ownership transfer. All legacy producers use the injected
+    // observation seam; Core is the sole canonical Transport writer from here.
+    core._transferDomainToCore(Domain.TRANSPORT);
+    const transport = core._transportAuthority;
+    _disposeTransportSink?.();
+    _disposeTransportSink = installTransportObservationSink({
+      captureContext: (meta) => transport.captureContext(meta),
+      observe: (type, payload, context) => transport.observe(type, payload, context),
+      observeTimeline: (payload, context, options) => transport.observeTimeline(payload, context, options),
+      observeMode: (payload, context) => transport.observeMode(payload, context),
+      getStatusSnapshot: () => transport.statusSnapshot,
+      getTimelineSnapshot: () => transport.timelineSnapshot,
+      getModeSnapshot: () => transport.modeSnapshot,
+      subscribeStatus: (fn) => transport.subscribeStatus(fn),
+      subscribeTimeline: (fn) => transport.subscribeTimeline(fn),
+      subscribeMode: (fn) => transport.subscribeMode(fn),
+      getMetrics: () => transport.metrics,
+    });
   } catch (error) {
     disposeInstalledEffectGuard();
     core.destroy();
@@ -135,6 +154,8 @@ export function getProductionPlaybackCore() {
  * sessionEpoch (Invariant 17).
  */
 export function resetProductionPlaybackCore() {
+  _disposeTransportSink?.();
+  _disposeTransportSink = null;
   _core?.destroy();
   _core = null;
 }

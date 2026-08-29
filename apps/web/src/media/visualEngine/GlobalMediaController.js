@@ -8,14 +8,15 @@
  *   - Provide video→audio synchronization helpers for synced visual modes
  *
  * Authority hierarchy:
- *   PlaybackStateMachine = authoritative over audio
+ *   Playback Core = authoritative over Transport
+ *   PlaybackStateMachine = authoritative over Selection
  *   GlobalMediaController = authoritative over visual/video state
  *
  * This module is pure JS — no React, no hooks. React components subscribe via subscribe().
  * Audio operations flow through callbacks registered by the React audio bridge hook.
  */
 
-import { playbackStateMachine } from "@/media/PlaybackStateMachine";
+import { getCanonicalTransportTimeline } from "@/lib/playback/transport-observation-port.js";
 
 export const MEDIA_MODE = /** @type {const} */ ({
   AUDIO:        'audio',
@@ -57,7 +58,7 @@ function createGlobalMediaController() {
 
   function _audioPos() {
     try {
-      return playbackStateMachine.getTransportSnapshot?.()?.currentTime ?? 0;
+      return getCanonicalTransportTimeline().position ?? 0;
     } catch {
       return 0;
     }

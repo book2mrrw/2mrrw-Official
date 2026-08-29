@@ -276,6 +276,87 @@ test("SLICE-1D protected transport keeps dependency direction Core -> media", ()
   }
 });
 
+test("SLICE-2 Core is the sole canonical Transport writer", () => {
+  const commitGate = read("src/lib/playback-core/commands/CommitGate.js");
+  const stateMachine = read("src/media/PlaybackStateMachine.js");
+  const authority = read("src/lib/playback-core/transport/TransportAuthority.js");
+  const productionFiles = fs.readdirSync(path.join(root, "src/lib/playback-core"), { recursive: true })
+    .filter((entry) => typeof entry === "string" && entry.endsWith(".js") && !entry.includes("__tests__"));
+
+  const directCommitCallers = productionFiles.filter((entry) => {
+    const source = read(path.join("src/lib/playback-core", entry));
+    return /\._applyCommit\(/.test(source);
+  });
+  assert.deepEqual(directCommitCallers, [path.join("commands", "CommitGate.js")]);
+  assert.match(authority, /#commitGate\.propose\(/);
+  assert.match(authority, /domain:\s*Domain\.TRANSPORT/);
+  assert.match(stateMachine, /_CORE_TRANSPORT_KEYS/);
+  assert.match(stateMachine, /patch\s*=\s*businessPatch/);
+  assert.doesNotMatch(stateMachine, /this\.context\s*=\s*Object\.assign\([^\n]*coreTransportProjection/);
+  assert.doesNotMatch(stateMachine, /\._applyCommit\(/);
+  assert.doesNotMatch(commitGate, /catch[\s\S]{0,120}PlaybackStateMachine/);
+});
+
+test("SLICE-2 physical media events are injected observations, not authority", () => {
+  const engine = read("src/lib/audio/WebAudioEngine.js");
+  const handlers = read("src/lib/playback/PlaybackEventHandlers.js");
+  const port = read("src/lib/playback/transport-observation-port.js");
+
+  for (const domEvent of [
+    "play", "pause", "waiting", "stalled", "playing", "seeking",
+    "seeked", "ended", "error",
+  ]) {
+    assert.match(engine, new RegExp(`\\["${domEvent}"`), `${domEvent} must be forwarded`);
+  }
+  for (const observation of [
+    "PHYSICAL_PLAY", "PHYSICAL_PAUSE", "PHYSICAL_WAITING", "PHYSICAL_STALLED",
+    "PHYSICAL_PLAYING", "PHYSICAL_SEEKING", "PHYSICAL_SEEKED",
+    "PHYSICAL_ENDED", "PHYSICAL_ERROR",
+  ]) {
+    assert.match(handlers, new RegExp(`TO\\.${observation}`), `${observation} must reach Core`);
+  }
+  assert.doesNotMatch(engine, /playback-core|TransportAuthority|CommitGate/);
+  assert.match(port, /installTransportObservationSink/);
+  assert.match(port, /TRANSPORT_AUTHORITY_UNAVAILABLE/);
+});
+
+test("SLICE-2 production UI consumes Core Transport without legacy-domain mixing", () => {
+  const context = read("src/context/AudioContext.js");
+  const globalPlayer = read("src/components/audio/GlobalAudioPlayerBar.js");
+  const mediaEngine = read("src/media/useMediaEngine.js");
+
+  assert.match(context, /useProductionTransportStatus/);
+  assert.match(context, /useProductionTransportTimeline/);
+  assert.doesNotMatch(context, /playbackStateMachine\.getTransportSnapshot/);
+  assert.doesNotMatch(context, /playbackStateMachine\.getProgressSnapshot/);
+  assert.match(globalPlayer, /useProductionTransportStatus/);
+  assert.doesNotMatch(globalPlayer, /usePlaybackStateMachine/);
+  assert.match(mediaEngine, /const isPlaying = Boolean\(audio\.isPlaying\)/);
+  assert.doesNotMatch(
+    mediaEngine.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, ""),
+    /readElementPlaying|bridgePlaying|audiblyPlaying/,
+  );
+});
+
+test("SLICE-2 production ownership is TRANSPORT=CORE and SELECTION=LEGACY", () => {
+  const wiring = read("src/lib/playback-core/production/wireProductionCore.js");
+  const registry = read("src/lib/playback-core/ownership/DomainOwnershipRegistry.js");
+  assert.match(wiring, /_transferDomainToCore\(Domain\.TRANSPORT\)/);
+  assert.doesNotMatch(wiring, /_transferDomainToCore\(Domain\.SELECTION\)/);
+  assert.doesNotMatch(registry, /^\s*transferToLegacy\s*\(/m);
+  assert.match(registry, /\[Domain\.SELECTION,\s*DomainOwner\.LEGACY\]/);
+});
+
+test("SLICE-2 timeline keeps the physical clock and throttles only presentation commits", () => {
+  const helper = read("src/lib/playback/PlaybackHelperService.js");
+  const handlers = read("src/lib/playback/PlaybackEventHandlers.js");
+  const authority = read("src/lib/playback-core/transport/TransportAuthority.js");
+  assert.match(helper, /const t = audio\.currentTime \|\| 0/);
+  assert.match(handlers, /position:\s*audio\.currentTime \|\| 0/);
+  assert.match(authority, /PRESENTATION_TIMELINE_INTERVAL_MS = 250/);
+  assert.doesNotMatch(authority, /position\s*\+=|setInterval\([^)]*position/);
+});
+
 test("production playback startup policy stays short, bounded, and audio-first", () => {
   const policy = read("src/lib/hls/playback-quality-policy.js");
   const engine = read("src/lib/audio/HLSEngine.js");

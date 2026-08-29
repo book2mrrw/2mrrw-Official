@@ -66,6 +66,14 @@ import { prefetchHlsSegmentsForTrack } from "@/lib/audio/hls-segment-prefetcher"
 import { evictOverflowingCaches } from "@/lib/playback/playback-cache-manager";
 import { isHlsJsActive } from "@/lib/audio/HLSEngine";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
+import {
+  getCanonicalTransportStatus,
+  getCanonicalTransportTimeline,
+  reportTransportMode,
+  reportTransportTimeline,
+  subscribeCanonicalTransportStatus,
+  subscribeCanonicalTransportTimeline,
+} from "@/lib/playback/transport-observation-port.js";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 import {
   isPlaybackTraceEnabled,
@@ -575,7 +583,8 @@ export function createPlaybackHelpers(initialDeps) {
     // ─── Progress / Continuity ───────────────────────────────────────────────
 
     getProgressSnapshot() {
-      return playbackStateMachine.getProgressSnapshot();
+      const timeline = getCanonicalTransportTimeline();
+      return Object.freeze({ currentTime: timeline.position, duration: timeline.duration });
     },
 
     getContinuitySnapshot() {
@@ -595,7 +604,7 @@ export function createPlaybackHelpers(initialDeps) {
     // Progress subscription — delegates to SM with continuity-freeze gate.
     // The forceProgressNotifyRef flag opens the gate for one notification (Phase 21C freeze push).
     subscribeProgress(listener) {
-      return playbackStateMachine.subscribeProgress(() => {
+      return subscribeCanonicalTransportTimeline(() => {
         if (
           !self._deps.continuityFrozenRef.current ||
           self._deps.forceProgressNotifyRef.current
@@ -667,11 +676,15 @@ export function createPlaybackHelpers(initialDeps) {
     },
 
     getTransportSnapshot() {
-      return playbackStateMachine.getTransportSnapshot();
+      const status = getCanonicalTransportStatus();
+      return Object.freeze({
+        isBuffering: status.buffering || status.loading || status.recovering,
+        playbackNetworkState: status.networkState,
+      });
     },
 
     subscribeTransport(listener) {
-      return playbackStateMachine.subscribeTransport(() => {
+      return subscribeCanonicalTransportStatus(() => {
         listener();
         notifyMediaEngineBridge();
       });
@@ -696,7 +709,7 @@ export function createPlaybackHelpers(initialDeps) {
 
     syncProgressTime(time) {
       if (!Number.isFinite(time)) return;
-      playbackStateMachine.updateContext({ currentTime: time });
+      reportTransportTimeline({ position: time, observedAt: Date.now() });
       // SM fires progress channel automatically — notifies consumers without a React re-render.
     },
 
@@ -1667,6 +1680,7 @@ export function createPlaybackHelpers(initialDeps) {
       const engine = getWebAudioEngine();
       engine.setUserVolume(level);
       self._deps.userVolumeRef.current = engine.getUserVolume();
+      reportTransportMode({ volume: self._deps.userVolumeRef.current });
     },
   };
 

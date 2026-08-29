@@ -78,6 +78,7 @@ import {
 } from "@/lib/playback/audio-engine-runtime";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 import { registerPlaybackKeyboardShortcuts } from "@/lib/playback/keyboard-shortcuts";
+import { reportTransportMode } from "@/lib/playback/transport-observation-port.js";
 
 const GESTURE_UNLOCK_EVENTS = ["touchstart", "touchend", "click", "keydown"];
 const AUDIBILITY_WATCHDOG_MS = 1250;
@@ -538,7 +539,8 @@ export function usePlaybackEffects({
       patchUI,
     });
     const { onPlay, onPause, onTime, onDuration, onEnded, onError, onEmptied,
-            onWaiting, onStalled, onPlaying, onCanPlayThrough } = handlers;
+            onWaiting, onStalled, onPlaying, onCanPlayThrough,
+            onSeeking, onSeeked } = handlers;
 
     const detachPlaybackDevTelemetry = attachPlaybackElementDevTelemetry(audio);
 
@@ -558,6 +560,10 @@ export function usePlaybackEffects({
       audioEngine.on(E.STALLED,        onStalled),
       audioEngine.on(E.BUFFERED,       onPlaying),
       audioEngine.on(E.CANPLAYTHROUGH, onCanPlayThrough),
+      audioEngine.on(E.SEEKING,        onSeeking),
+      audioEngine.on(E.SEEKED,         onSeeked),
+      audioEngine.on(E.VOLUME,         ({ volume } = {}) => reportTransportMode({ volume })),
+      audioEngine.on(E.RATE_CHANGE,    ({ playbackRate } = {}) => reportTransportMode({ playbackRate })),
     ];
 
     const onOnline = () => {

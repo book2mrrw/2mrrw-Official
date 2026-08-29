@@ -2,11 +2,11 @@
  * AudioEngineInterface — platform-agnostic contract for audio execution.
  *
  * Architecture (B+C):
- *   PlaybackStateMachine  — authoritative business logic, platform-agnostic
- *          │ transitions drive
+ *   Playback Core         — authoritative Transport truth
+ *   PlaybackStateMachine  — legacy Selection and execution orchestration
+ *          │ commands drive / observations return through the injected seam
  *   AudioEngine           — executor layer, platform-specific
- *          │ emits events back to SM
- *   AudioContext.js       — thin React adapter (~300 lines, subscribes to SM)
+ *   AudioContext.js       — React adapter subscribing to Core Transport
  *
  * Implementations:
  *   WebAudioEngine    (apps/web)  — HTMLAudioElement + Web Audio API graph
@@ -56,6 +56,7 @@
  *   "canplay"       — can start playing    (some data buffered)
  *   "canplaythrough"— sufficient data buffered to play through without stalling
  *   "seeked"        — seek complete        { currentTime: number }
+ *   "seeking"       — committed physical seek began { currentTime: number }
  *   "durationchange"— duration available   { duration: number }
  *   "loadedmetadata"— metadata loaded      { duration: number }
  *   "emptied"       — src cleared (element unloaded)
@@ -75,6 +76,7 @@ export const AUDIO_ENGINE_EVENTS = Object.freeze({
   CANPLAY:        "canplay",
   CANPLAYTHROUGH: "canplaythrough",
   SEEKED:         "seeked",
+  SEEKING:        "seeking",
   DURATIONCHANGE: "durationchange",
   LOADEDMETADATA: "loadedmetadata",
   EMPTIED:        "emptied",

@@ -72,6 +72,13 @@ import {
 import { classifySourceUrl, isDirectlyBufferable } from "@/lib/playback/audio-source-resolver";
 import { normalizePlaybackSrc } from "@/lib/audio/audio-element-utils";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
+import {
+  TRANSPORT_OBSERVATION as TO,
+  captureTransportObservationContext,
+  reportTransportObservation,
+  reportTransportTimeline,
+  takePhysicalObservationContext,
+} from "@/lib/playback/transport-observation-port.js";
 
 // ── Exported constants ─────────────────────────────────────────────────────────
 // Defined here because handler logic is their primary consumer.
@@ -100,7 +107,7 @@ function _clearAudibilityWatchdog() {
   }
 }
 
-function _startAudibilityWatchdog(audioRef, stateRef, patchState) {
+function _startAudibilityWatchdog(audioRef, stateRef, activeCommandRef, patchState) {
   _clearAudibilityWatchdog();
   _audWatchdogLastTime = audioRef.current?.currentTime ?? 0;
   _audWatchdogId = setInterval(() => {
@@ -110,6 +117,11 @@ function _startAudibilityWatchdog(audioRef, stateRef, patchState) {
     // Confirm audibility: time is advancing AND buffer is ready.
     if (t !== _audWatchdogLastTime && el.readyState >= 3) {
       _clearAudibilityWatchdog();
+      reportTransportObservation(
+        TO.PHYSICAL_PLAYING,
+        { evidence: "advancing_clock" },
+        physicalObservationContext(stateRef, activeCommandRef, "audibility-watchdog"),
+      );
       if (stateRef.current?.isBuffering) {
         patchState({ isBuffering: false, playbackNetworkState: "playing" });
         playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_END);
@@ -121,6 +133,15 @@ function _startAudibilityWatchdog(audioRef, stateRef, patchState) {
 
 export const PREVIEW_HARD_CAP_SEC = 15;
 export const SPURIOUS_ENDED_GUARD_MS = 1200;
+
+function physicalObservationContext(stateRef, activeCommandRef, source) {
+  const track = stateRef.current?.currentTrack;
+  return captureTransportObservationContext({
+    mediaIdentity: track?.id ?? track?.trackId ?? track?.slug ?? null,
+    requestId: activeCommandRef.current?.requestId ?? null,
+    source,
+  });
+}
 
 // ── Factory ────────────────────────────────────────────────────────────────────
 
@@ -254,6 +275,7 @@ export function createPlaybackEventHandlers({
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   const onWaiting = () => {
+    const observationContext = physicalObservationContext(stateRef, activeCommandRef, "audio.waiting");
     recentStallTimeRef.current = Date.now();
     startStallRecovery();
     if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
@@ -261,16 +283,18 @@ export function createPlaybackEventHandlers({
       bufferShowTimerRef.current = null;
       const el = audioRef.current;
       const networkState = el && !el.played?.length ? "loading_stream" : "buffering";
+      reportTransportObservation(TO.PHYSICAL_WAITING, { networkState }, observationContext);
       patchState({ isBuffering: true, playbackNetworkState: networkState });
       playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_START);
       // Start the audibility watchdog. If the browser fails to fire 'playing' (iOS
       // Safari after an HLS source swap), the watchdog detects currentTime advancing
       // and clears isBuffering exactly as onPlaying would.
-      _startAudibilityWatchdog(audioRef, stateRef, patchState);
+      _startAudibilityWatchdog(audioRef, stateRef, activeCommandRef, patchState);
     }, 500);
   };
 
   const onStalled = () => {
+    const observationContext = physicalObservationContext(stateRef, activeCommandRef, "audio.stalled");
     recentStallTimeRef.current = Date.now();
     startStallRecovery();
     if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
@@ -278,6 +302,7 @@ export function createPlaybackEventHandlers({
       bufferShowTimerRef.current = null;
       const el = audioRef.current;
       const networkState = el && !el.played?.length ? "loading_stream" : "buffering";
+      reportTransportObservation(TO.PHYSICAL_STALLED, { networkState }, observationContext);
       patchState({ isBuffering: true, playbackNetworkState: networkState });
       playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_START);
     }, 500);
@@ -290,6 +315,11 @@ export function createPlaybackEventHandlers({
     }
     _clearAudibilityWatchdog();
     stopStallRecovery();
+    reportTransportObservation(
+      TO.PHYSICAL_PLAYING,
+      {},
+      physicalObservationContext(stateRef, activeCommandRef, "audio.playing"),
+    );
     patchState({ isBuffering: false, playbackNetworkState: "playing" });
     playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_END);
     perfMark(MARKS.PLAYBACK_AUDIBLE);
@@ -304,6 +334,11 @@ export function createPlaybackEventHandlers({
     }
     _clearAudibilityWatchdog();
     stopStallRecovery();
+    reportTransportObservation(
+      TO.PHYSICAL_CANPLAY,
+      { readiness: "HAVE_ENOUGH_DATA" },
+      physicalObservationContext(stateRef, activeCommandRef, "audio.canplaythrough"),
+    );
     perfMark(MARKS.PLAYBACK_CANPLAYTHROUGH);
     patchState({ isBuffering: false, playbackNetworkState: "playing" });
     playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.BUFFER_END);
@@ -321,6 +356,11 @@ export function createPlaybackEventHandlers({
     }
     _clearAudibilityWatchdog();
     userPausedRef.current = false;
+    reportTransportObservation(
+      TO.PHYSICAL_PLAY,
+      {},
+      physicalObservationContext(stateRef, activeCommandRef, "audio.play"),
+    );
 
     if (stateRef.current.source === "library_stream") {
       const audio_ = audioRef.current;
@@ -465,6 +505,12 @@ export function createPlaybackEventHandlers({
       sBeforePause.hasStarted &&
       !userInitiated &&
       !wasViewportPause;
+    reportTransportObservation(
+      TO.PHYSICAL_PAUSE,
+      { interruption: !userInitiated && !wasViewportPause },
+      takePhysicalObservationContext(audio, "pause") ??
+        physicalObservationContext(stateRef, activeCommandRef, "audio.pause"),
+    );
     if (wasPlayingBeforePause) {
       playbackIntentBeforeHideRef.current = true;
       logPlaybackIntentCaptured({
@@ -683,6 +729,15 @@ export function createPlaybackEventHandlers({
     }
     persistPlayback("progress");
     syncPositionState(false);
+    reportTransportTimeline({
+      position: audio.currentTime || 0,
+      duration: isFinite(audio.duration) ? audio.duration : 0,
+      bufferedEnd: (() => {
+        try { return audio.buffered?.length ? audio.buffered.end(audio.buffered.length - 1) : 0; }
+        catch { return 0; }
+      })(),
+      observedAt: Date.now(),
+    }, physicalObservationContext(stateRef, activeCommandRef, "audio.timeupdate"));
 
     const track = stateRef.current.currentTrack;
     const previewOnly = track?.metadata?.access?.previewOnly;
@@ -772,7 +827,33 @@ export function createPlaybackEventHandlers({
     }
   };
 
-  const onDuration = () => patchState({ duration: isFinite(audio.duration) ? audio.duration : 0 });
+  const onDuration = () => {
+    const duration = isFinite(audio.duration) ? audio.duration : 0;
+    reportTransportTimeline(
+      { position: audio.currentTime || 0, duration, observedAt: Date.now() },
+      physicalObservationContext(stateRef, activeCommandRef, "audio.durationchange"),
+      { force: true },
+    );
+    patchState({ duration });
+  };
+
+  const onSeeking = () => {
+    const context = physicalObservationContext(stateRef, activeCommandRef, "audio.seeking");
+    reportTransportObservation(TO.PHYSICAL_SEEKING, {}, context);
+    reportTransportTimeline({ position: audio.currentTime || 0 }, context, { force: true });
+  };
+
+  const onSeeked = () => {
+    const context = physicalObservationContext(stateRef, activeCommandRef, "audio.seeked");
+    reportTransportTimeline({
+      position: audio.currentTime || 0,
+      duration: isFinite(audio.duration) ? audio.duration : 0,
+    }, context, { force: true });
+    reportTransportObservation(TO.PHYSICAL_SEEKED, {
+      playing: !audio.paused,
+      position: audio.currentTime || 0,
+    }, context);
+  };
 
   const onEnded = () => {
     const track = stateRef.current.currentTrack;
@@ -795,6 +876,12 @@ export function createPlaybackEventHandlers({
       syncProgressTime(audio.currentTime);
       return;
     }
+
+    reportTransportObservation(
+      TO.PHYSICAL_ENDED,
+      { endReason: previewOnly ? "preview" : "natural" },
+      physicalObservationContext(stateRef, activeCommandRef, "audio.ended"),
+    );
 
     if (previewOnly) {
       // If a session upgrade is already queued for this track, fire it now instead
@@ -1014,6 +1101,11 @@ export function createPlaybackEventHandlers({
     const slug = track?.slug || streamMetaRef.current?.slug;
     const at = new Date().toISOString();
     const mediaError = audio.error;
+    reportTransportObservation(
+      TO.PHYSICAL_ERROR,
+      { error: mediaError?.message || `MEDIA_ERROR_${mediaError?.code ?? "UNKNOWN"}` },
+      physicalObservationContext(stateRef, activeCommandRef, "audio.error"),
+    );
     reportPlaybackDiagnostic({
       level: "warn",
       code: "AUDIO_ELEMENT_ERROR",
@@ -1208,5 +1300,7 @@ export function createPlaybackEventHandlers({
     onStalled,
     onPlaying,
     onCanPlayThrough,
+    onSeeking,
+    onSeeked,
   };
 }

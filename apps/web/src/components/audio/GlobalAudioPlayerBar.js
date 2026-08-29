@@ -4,7 +4,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, useMem
 import Link from "next/link";
 import { resolveAbsoluteArtworkUrl } from "@/lib/media-session-artwork";
 import { SignaturePlayRing, useImmersivePlayback, usePlayerBodyState } from "@/components/player/ImmersivePlayerEngine";
-import { usePlaybackStateMachine } from "@/media/PlaybackStateMachine";
+import { useProductionTransportStatus } from "@/lib/playback-core/production/useProductionTransport";
 import { useAudioPlayer, usePlaybackIdentity, usePlaybackTransport } from "@/context/AudioContext";
 import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
 import {
@@ -517,7 +517,7 @@ const MiniPlayerDock = forwardRef(function MiniPlayerDock({
 function GlobalAudioPlayerBar() {
   useBlackscreenMountTrace("GlobalAudioPlayerBar");
   useRenderTracker("GlobalAudioPlayerBar");
-  const playbackOrchestrationState = usePlaybackStateMachine();
+  const playbackOrchestrationState = useProductionTransportStatus((status) => status.status);
   const playback = useImmersivePlayback();
   const { continuityFrozen, getContinuitySnapshot } = useAudioPlayer();
   // usePlaybackIdentity uses useSyncExternalStore — it updates synchronously, in the

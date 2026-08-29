@@ -151,3 +151,23 @@ export const StoreKey = Object.freeze({
   CONTINUITY:        "continuity",
   DIAGNOSTICS:       "diagnostics",
 });
+
+// Canonical Transport status is a single coherent state. Presentation booleans
+// (`playing`, `buffering`, etc.) are derived by TransportAuthority at commit time;
+// no caller may independently combine contradictory flags.
+export const TransportStatus = Object.freeze({
+  IDLE:       "IDLE",
+  LOADING:    "LOADING",
+  BUFFERING:  "BUFFERING",
+  PLAYING:    "PLAYING",
+  PAUSED:     "PAUSED",
+  SEEKING:    "SEEKING",
+  ENDED:      "ENDED",
+  ERROR:      "ERROR",
+  RECOVERING: "RECOVERING",
+  DEGRADED:   "DEGRADED",
+});
+
+// Typed facts/results accepted by the Transport observation boundary. Physical
+// producers know only this generic vocabulary; they never import Core internals.
+export { TRANSPORT_OBSERVATION as TransportObservationType } from "../../playback/transport-observation-port.js";

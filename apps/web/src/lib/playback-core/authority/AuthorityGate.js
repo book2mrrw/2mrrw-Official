@@ -28,6 +28,7 @@ export class AuthorityGate {
   #authoritativeSequence = 0;
   #authoritativeIntentId = null;
   #totalRegistered = 0;
+  #authoritativeIntent = null;
 
   /**
    * Register a new intent as the sole authority.
@@ -51,6 +52,7 @@ export class AuthorityGate {
     }
     this.#authoritativeSequence = intent.sequence;
     this.#authoritativeIntentId = intent.intentId;
+    this.#authoritativeIntent = intent;
     this.#totalRegistered += 1;
   }
 
@@ -77,6 +79,11 @@ export class AuthorityGate {
   /** The intentId of the currently authoritative intent (for diagnostics). */
   get authoritativeIntentId() {
     return this.#authoritativeIntentId;
+  }
+
+  /** Frozen intent currently holding commit authority. Read-only. */
+  get authoritativeIntent() {
+    return this.#authoritativeIntent;
   }
 
   /** Total number of intents ever registered (for diagnostics). */

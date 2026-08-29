@@ -26,6 +26,11 @@ import { sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
 import { clearPersistedMediaSessionTrack } from "@/lib/media-session-artwork";
 import { PREVIEW_HARD_CAP_SEC } from "@/lib/playback/PlaybackEventHandlers";
 import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
+import {
+  captureTransportObservationContext,
+  markPhysicalObservationContext,
+  reportTransportMode,
+} from "@/lib/playback/transport-observation-port.js";
 
 /**
  * Attaches Group 5 (transport control) commands to the shared `self` service object.
@@ -56,7 +61,22 @@ export function attachTransportCommands(self) {
     }
 
     tracePlayback("pauseInternal", "pauseInternal", { fromViewport, userInitiated, interrupt });
-    audioRef.current?.pause();
+    const pauseElement = audioRef.current;
+    if (pauseElement) {
+      markPhysicalObservationContext(
+        pauseElement,
+        "pause",
+        captureTransportObservationContext({
+          mediaIdentity:
+            self._deps.stateRef.current?.currentTrack?.id ??
+            self._deps.stateRef.current?.currentTrack?.trackId ??
+            self._deps.stateRef.current?.currentTrack?.slug ?? null,
+          requestId: self._deps.activeCommandRef.current?.requestId ?? null,
+          source: "pauseInternal",
+        }),
+      );
+      pauseElement.pause();
+    }
 
     // When stall recovery has already paused the audio element, audio.pause() is a
     // no-op that fires no 'pause' event — so onPause never runs and the SM is never
@@ -307,6 +327,7 @@ export function attachTransportCommands(self) {
     if (!audio || !Number.isFinite(rate) || rate <= 0) return;
     tracePlayback("setPlaybackRateInternal", "setPlaybackRateInternal", { rate });
     audio.playbackRate = rate;
+    reportTransportMode({ playbackRate: rate });
     if (typeof audio.preservesPitch !== "undefined") audio.preservesPitch = true;
     if (typeof audio.webkitPreservePitch !== "undefined") audio.webkitPreservePitch = true;
   };

@@ -43,6 +43,14 @@
  */
 
 import { useSyncExternalStore } from "react";
+import {
+  TRANSPORT_OBSERVATION as TransportObservationType,
+  getCanonicalTransportStatus,
+  getCanonicalTransportTimeline,
+  captureTransportObservationContext,
+  reportTransportObservation,
+  reportTransportTimeline,
+} from "@/lib/playback/transport-observation-port.js";
 
 export const PLAYBACK_ORCHESTRATION_STATES = Object.freeze({
   IDLE: "IDLE",
@@ -86,6 +94,40 @@ const _PROGRESS_KEYS  = new Set(["currentTime", "duration"]);
 const _TRANSPORT_KEYS = new Set(["playbackNetworkState", "isBuffering"]);
 const _IDENTITY_KEYS  = new Set(["currentTrackId", "currentTrack", "isPlaying"]);
 const _UI_KEYS        = new Set(["sleepTimerEndsAt", "sleepAfterCurrentTrack", "crossfadeEnabled", "previewEnded", "continuityFrozen"]);
+const _CORE_TRANSPORT_KEYS = new Set([
+  "isPlaying", "playbackState", "isBuffering", "playbackNetworkState",
+  "currentTime", "duration",
+]);
+
+function toLegacyPlaybackState(status) {
+  if (status.status === "ENDED" && status.endReason === "preview") return "ended_preview";
+  switch (status.status) {
+    case "IDLE": return "idle";
+    case "LOADING": return "loading";
+    case "BUFFERING":
+    case "PLAYING": return "playing";
+    case "PAUSED": return "paused";
+    case "SEEKING": return "seeking";
+    case "ENDED": return "ending";
+    case "ERROR": return "paused";
+    case "RECOVERING": return "recovering";
+    case "DEGRADED": return "paused";
+    default: return null;
+  }
+}
+
+function coreTransportProjection() {
+  const status = getCanonicalTransportStatus();
+  const timeline = getCanonicalTransportTimeline();
+  return {
+    isPlaying: status.playing,
+    playbackState: toLegacyPlaybackState(status),
+    isBuffering: status.buffering || status.loading || status.recovering,
+    playbackNetworkState: status.networkState,
+    currentTime: timeline.position,
+    duration: timeline.duration,
+  };
+}
 
 /**
  * Initial playback context — mirrors AudioContext.js EMPTY_STATE.
@@ -177,7 +219,7 @@ class PlaybackStateMachine {
     // Read crossfadeEnabled from localStorage at singleton init (browser-only singleton).
     const _cfStored = typeof window !== "undefined" && window.localStorage.getItem("2mrrw_crossfade") === "1";
 
-    /** @type {PlaybackContext} The authoritative playback business state. */
+    /** @type {PlaybackContext} Canonical only for domains not yet migrated. */
     this.context = Object.assign({}, INITIAL_PLAYBACK_CONTEXT, { crossfadeEnabled: _cfStored });
 
     // Frozen snapshots — useSyncExternalStore requires a stable reference that only
@@ -266,6 +308,11 @@ class PlaybackStateMachine {
     switch (event) {
       // ── Track load ──────────────────────────────────────────────────────────
       case E.LOAD_START:
+        reportTransportObservation(
+          TransportObservationType.EXECUTION_LOADING,
+          { networkState: "loading_stream" },
+          captureTransportObservationContext({ source: "psm.LOAD_START" }),
+        );
         if (this.state !== S.RECOVERING) {
           this._setState(S.LOADING);
         }
@@ -284,6 +331,11 @@ class PlaybackStateMachine {
         return true;
 
       case E.PLAY_PAUSE:
+        reportTransportObservation(
+          TransportObservationType.EXECUTION_RESULT,
+          { isPlaying: false, playbackState: "paused" },
+          captureTransportObservationContext({ source: "psm.PLAY_PAUSE" }),
+        );
         if (this.state !== S.RECOVERING) {
           this._setState(S.PAUSED);
         }
@@ -319,6 +371,11 @@ class PlaybackStateMachine {
       // ── Stop / reset ────────────────────────────────────────────────────────
       case E.STOP:
       case E.RESET:
+        reportTransportObservation(
+          TransportObservationType.LEGACY_PROJECTION,
+          { isPlaying: false, playbackState: "idle", playbackNetworkState: "idle" },
+          captureTransportObservationContext({ source: `psm.${event}` }),
+        );
         this._setState(S.IDLE);
         return true;
 
@@ -369,9 +426,22 @@ class PlaybackStateMachine {
     const resumeAfter = Boolean(payload.resumeAfter);
 
     this._setState(PLAYBACK_ORCHESTRATION_STATES.RECOVERING);
+    const recoveryObservationContext = captureTransportObservationContext({
+      source: "psm.recovery",
+    });
+    reportTransportObservation(
+      TransportObservationType.RECOVERY_STARTED,
+      { networkState: "recovering" },
+      recoveryObservationContext,
+    );
 
     const executor = this.recoverExecutor;
     if (!executor) {
+      reportTransportObservation(
+        TransportObservationType.RECOVERY_FAILED,
+        { error: reason },
+        recoveryObservationContext,
+      );
       this.transition(PLAYBACK_ORCHESTRATION_EVENTS.RECOVER_FAILED, { reason });
       return Promise.resolve(false);
     }
@@ -380,16 +450,31 @@ class PlaybackStateMachine {
       try {
         const ok = await executor(reason, { resumeAfter });
         if (ok) {
+          reportTransportObservation(
+            TransportObservationType.RECOVERY_COMPLETED,
+            { playing: resumeAfter },
+            recoveryObservationContext,
+          );
           this.transition(PLAYBACK_ORCHESTRATION_EVENTS.RECOVER_COMPLETE, {
             playing: resumeAfter,
           });
         } else {
+          reportTransportObservation(
+            TransportObservationType.RECOVERY_FAILED,
+            { error: resumeAfter ? `${reason}:audibility_or_resume` : reason },
+            recoveryObservationContext,
+          );
           this.transition(PLAYBACK_ORCHESTRATION_EVENTS.RECOVER_FAILED, {
             reason: resumeAfter ? `${reason}:audibility_or_resume` : reason,
           });
         }
         return ok;
       } catch {
+        reportTransportObservation(
+          TransportObservationType.RECOVERY_FAILED,
+          { error: reason },
+          recoveryObservationContext,
+        );
         this.transition(PLAYBACK_ORCHESTRATION_EVENTS.RECOVER_FAILED, { reason });
         return false;
       } finally {
@@ -421,6 +506,36 @@ class PlaybackStateMachine {
     const keys = Object.keys(patch);
     if (!keys.length) return;
 
+    // Slice 2 compatibility input: legacy services still submit their established
+    // patch shapes, but Transport fields are observations/results. They are never
+    // stored by PSM and can only become truth through Core's commit authority.
+    const transportPatch = {};
+    const businessPatch = {};
+    for (const [key, value] of Object.entries(patch)) {
+      if (_CORE_TRANSPORT_KEYS.has(key)) transportPatch[key] = value;
+      else businessPatch[key] = value;
+    }
+    const projection = coreTransportProjection();
+    const statusPatch = {};
+    for (const key of ["isPlaying", "playbackState", "isBuffering", "playbackNetworkState"]) {
+      if (key in transportPatch && transportPatch[key] !== projection[key]) {
+        statusPatch[key] = transportPatch[key];
+      }
+    }
+    if (Object.keys(statusPatch).length) {
+      reportTransportObservation(TransportObservationType.LEGACY_PROJECTION, statusPatch);
+    }
+    if ("currentTime" in transportPatch || "duration" in transportPatch) {
+      reportTransportTimeline({
+        position: transportPatch.currentTime,
+        duration: transportPatch.duration,
+      });
+    }
+
+    patch = businessPatch;
+    const businessKeys = Object.keys(patch);
+    if (!businessKeys.length) return;
+
     const prev = this.context;
     const next = Object.assign({}, prev, patch);
     this.context = next;
@@ -431,7 +546,7 @@ class PlaybackStateMachine {
     let notifyIdentity  = false;
     let notifyUI        = false;
 
-    for (const key of keys) {
+    for (const key of businessKeys) {
       if (_PROGRESS_KEYS.has(key)) {
         notifyProgress = true;
       } else if (_TRANSPORT_KEYS.has(key)) {
@@ -508,7 +623,7 @@ class PlaybackStateMachine {
 
   /** @returns {PlaybackContext} Live mutable context — read-only, never mutate directly. */
   getContext() {
-    return this.context;
+    return Object.assign({}, this.context, coreTransportProjection());
   }
 
   /** @returns {Readonly<PlaybackContext>} Frozen snapshot for useSyncExternalStore. */
@@ -528,7 +643,11 @@ class PlaybackStateMachine {
 
   /** @returns {Readonly<{isBuffering:boolean, playbackNetworkState:string}>} */
   getTransportSnapshot() {
-    return this._transportSnapshot;
+    const status = getCanonicalTransportStatus();
+    return Object.freeze({
+      isBuffering: status.buffering || status.loading || status.recovering,
+      playbackNetworkState: status.networkState,
+    });
   }
 
   /**
@@ -543,7 +662,8 @@ class PlaybackStateMachine {
 
   /** @returns {Readonly<{currentTime:number, duration:number}>} */
   getProgressSnapshot() {
-    return this._progressSnapshot;
+    const timeline = getCanonicalTransportTimeline();
+    return Object.freeze({ currentTime: timeline.position, duration: timeline.duration });
   }
 
   /**
@@ -558,6 +678,9 @@ class PlaybackStateMachine {
 
   /** @returns {Readonly<{currentTrackId:string|null, currentTrackSlug:string|null, isPlaying:boolean}>} */
   getIdentitySnapshot() {
+    // Selection identity remains legacy-owned through Slice 2. Canonical
+    // isPlaying is joined by the React compatibility hook from Core's separate
+    // Transport subscription, preserving stable external-store snapshots here.
     return this._identitySnapshot;
   }
 
@@ -608,6 +731,13 @@ class PlaybackStateMachine {
     this._emitIdentity();
     this._emitUI();
     this._setState(PLAYBACK_ORCHESTRATION_STATES.IDLE);
+    reportTransportObservation(TransportObservationType.LEGACY_PROJECTION, {
+      isPlaying: false,
+      playbackState: "idle",
+      isBuffering: false,
+      playbackNetworkState: "idle",
+    });
+    reportTransportTimeline({ position: 0, duration: 0 }, null, { force: true });
   }
 
   /**

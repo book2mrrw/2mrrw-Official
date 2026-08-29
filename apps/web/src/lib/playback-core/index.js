@@ -33,6 +33,8 @@ export {
   StoreKey,
   CommitRejectionReason,
   DiagnosticEventType,
+  TransportStatus,
+  TransportObservationType,
 } from "./types/index.js";
 
 // ─── Adapter classes (for migration and React integration) ───────────────────
