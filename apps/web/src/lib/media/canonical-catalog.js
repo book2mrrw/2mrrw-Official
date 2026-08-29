@@ -538,6 +538,19 @@ export function mergeCanonicalMetadata(item) {
   const release = getCanonicalReleaseBySlug(item.slug);
   if (!release) return item;
 
+  // Preserve the exact, case-sensitive production keys for legacy releases.
+  // The catalog database still contains two stale aliases: Love Hz's old
+  // animation filename and a lower-cased A.D artwork extension. Both aliases
+  // 404 on their case-sensitive production origins.
+  const canonicalCover =
+    release.slug === "ad" && /(?:^|\/)images\/albums\/ad\.jpg(?:$|[?#])/i.test(String(item.cover || ""))
+      ? release.legacy_cover
+      : null;
+  const canonicalVideo =
+    release.slug === "love-hz-vol-1" && /\/lovehzvol1\.mp4(?:$|[?#])/i.test(String(item.video || ""))
+      ? release.video
+      : null;
+
   const releaseType = release.release_type || item.release_type;
   const normalizedType = normalizeReleaseType(releaseType);
   const catalog = normalizedType ? CANONICAL_CATALOG[normalizedType] : null;
@@ -569,12 +582,12 @@ export function mergeCanonicalMetadata(item) {
     // A bare filename from the DB (no path separator, no protocol) is legacy data that
     // cannot be resolved to a valid URL. Prefer the canonical release cover/visual in
     // that case. Well-formed paths (starting with "/" or containing "://") are kept.
-    cover: (item.cover && (String(item.cover).includes("/") || /^https?:\/\//i.test(item.cover)))
+    cover: canonicalCover || ((item.cover && (String(item.cover).includes("/") || /^https?:\/\//i.test(item.cover)))
       ? item.cover
-      : (release.cover || release.legacy_cover || item.cover),
+      : (release.cover || release.legacy_cover || item.cover)),
     baseCover: item.baseCover || release.legacy_cover || null,
     visual: item.visual || release.visual,
-    video: item.video || release.video,
+    video: canonicalVideo || item.video || release.video,
     coverArtType: release.coverArtType || item.coverArtType,
     release_date: item.release_date || release.release_date,
     ...(catalog
