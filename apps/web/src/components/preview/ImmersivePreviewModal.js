@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
+import { useReducedMotion } from "framer-motion";
 import { useCoverPalette } from "@/hooks/useCoverPalette";
 import { useMediaEngine } from "@/media/useMediaEngine";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
@@ -331,17 +332,39 @@ function useBeat(playing) {
   return beat;
 }
 
-function useModalAnim() {
+function useModalAnim(open = true, persistent = false) {
   const [mounted, setMounted] = useState(false);
   const [closing, setClosing] = useState(false);
   useEffect(() => {
+    if (persistent || !open) return undefined;
+    let r2 = null;
     const r1 = requestAnimationFrame(() => {
-      const r2 = requestAnimationFrame(() => setMounted(true));
-      return () => cancelAnimationFrame(r2);
+      r2 = requestAnimationFrame(() => setMounted(true));
     });
-    return () => cancelAnimationFrame(r1);
-  }, []);
-  return { mounted, closing, setClosing };
+    return () => {
+      cancelAnimationFrame(r1);
+      if (r2 != null) cancelAnimationFrame(r2);
+    };
+  }, [open, persistent]);
+  return {
+    mounted: persistent ? open : mounted,
+    closing: persistent ? false : closing,
+    setClosing,
+  };
+}
+
+function PersistentCoverVideo({ active, ...props }) {
+  const videoRef = useRef(null);
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (active) {
+      void video.play().catch(() => {});
+    } else if (!video.paused) {
+      video.pause();
+    }
+  }, [active]);
+  return <video ref={videoRef} {...props} />;
 }
 
 function Scene({ coverUrl, t }) {
@@ -1036,6 +1059,8 @@ export function SingleModal({
   onGift,
   onLibraryChange,
   releaseDetail,
+  open = true,
+  persistent = false,
 }) {
   const coverSrc = trackCoverSrc(track || {});
   const isVideo = (track?.coverArtType || track?.coverType) === "video";
@@ -1058,20 +1083,31 @@ export function SingleModal({
     toggleShuffle,
     toggleRepeat,
     setSleepTimer,
-  } = useMediaEngine();
+  } = useMediaEngine({ active: open });
 
-  const { mounted, closing, setClosing } = useModalAnim();
-  const beat = useBeat(isPlaying);
+  const { mounted, closing, setClosing } = useModalAnim(open, persistent);
+  const prefersReducedMotion = useReducedMotion();
+  const beat = useBeat(open && isPlaying);
   const [sheet, setSheet] = useState(null);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [coverVideoFailed, setCoverVideoFailed] = useState(false);
+  const closeTimerRef = useRef(null);
 
-  usePlayerBodyState({ modalOpen: true });
+  const renderedOpen = open || closing;
+  usePlayerBodyState({ modalOpen: renderedOpen });
 
   useEffect(() => {
+    if (!renderedOpen) return undefined;
     registerModal("immersive-preview-modal");
     return () => unregisterModal("immersive-preview-modal");
-  }, []);
+  }, [renderedOpen]);
+
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    },
+    []
+  );
 
   const engineDur = engineDuration > 0 ? engineDuration : duration;
   const displayDuration = isPreview ? PREVIEW_CAP_SEC : engineDur;
@@ -1100,10 +1136,19 @@ export function SingleModal({
   }, [editorial, track, creditRows, fullDur]);
 
   const close = useCallback(() => {
+    if (closing || !renderedOpen) return;
     setSheet(null);
+    if (persistent) {
+      onClose?.();
+      return;
+    }
     setClosing(true);
-    setTimeout(onClose, 340);
-  }, [onClose, setClosing]);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      onClose?.();
+    }, prefersReducedMotion ? 0 : 340);
+  }, [closing, onClose, persistent, prefersReducedMotion, renderedOpen, setClosing]);
 
   const singleCoverRef = useRef(null);
   const { handlers: singleCoverGesture } = useArtworkGesture({
@@ -1112,6 +1157,7 @@ export function SingleModal({
   });
 
   const isVisible = mounted && !closing;
+  const hiddenSheetTransform = "translate3d(0,100%,0)";
   const priceLabel = track?.price || track?.priceLabel || "";
   const entitlementAccountState = useEntitlementAccountState();
   const showSubscribeCta = useMemo(
@@ -1121,21 +1167,46 @@ export function SingleModal({
 
   return (
     <div
+      data-persistent-modal={persistent ? "true" : undefined}
+      role={renderedOpen ? "dialog" : undefined}
+      aria-modal={renderedOpen ? "true" : undefined}
+      aria-hidden={!renderedOpen}
+      inert={!renderedOpen ? true : undefined}
+      aria-label={`${track?.title || "Release"} details`}
       style={{
         position: "fixed",
         inset: 0,
         zIndex: 9000,
         display: "flex",
         alignItems: "flex-end",
-        background: isVisible ? "rgba(0,0,0,.88)" : "rgba(0,0,0,0)",
-        backdropFilter: isVisible ? "blur(7px)" : "blur(0px)",
-        WebkitBackdropFilter: isVisible ? "blur(7px)" : "blur(0px)",
-        transition: "background .35s ease, backdrop-filter .35s ease",
+        background: "transparent",
+        visibility: renderedOpen ? "visible" : "hidden",
+        pointerEvents: renderedOpen ? "auto" : "none",
+        transition: persistent
+          ? renderedOpen
+            ? "visibility 0s"
+            : `visibility 0s linear ${prefersReducedMotion ? 0 : 340}ms`
+          : undefined,
       }}
       onClick={(e) => e.target === e.currentTarget && close()}
     >
       <div
+        aria-hidden="true"
         style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          opacity: isVisible ? 1 : 0,
+          background: "rgba(0,0,0,.88)",
+          backdropFilter: "blur(7px)",
+          WebkitBackdropFilter: "blur(7px)",
+          transition: prefersReducedMotion ? "none" : "opacity .35s ease",
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
           width: "100%",
           maxWidth: 430,
           margin: "0 auto",
@@ -1146,12 +1217,14 @@ export function SingleModal({
           flexDirection: "column",
           background: t.dark,
           boxShadow: `0 0 70px ${t.glowDim}, 0 -10px 60px rgba(0,0,0,.85)`,
-          willChange: "transform",
+          willChange: mounted && !closing ? "auto" : "transform",
           backfaceVisibility: "hidden",
-          transform: closing ? "translateY(100%)" : mounted ? "translateY(0)" : "translateY(100%)",
-          transition: closing
-            ? "transform .34s cubic-bezier(.55,0,1,.45)"
-            : "transform .44s cubic-bezier(.22,1,.36,1)",
+          transform: mounted && !closing ? "translate3d(0,0,0) scale(1)" : hiddenSheetTransform,
+          transition: prefersReducedMotion
+            ? "none"
+            : closing
+              ? "transform .34s cubic-bezier(.55,0,1,.45)"
+              : "transform .48s cubic-bezier(.16,1,.3,1)",
           ...vars,
         }}
       >
@@ -1166,9 +1239,9 @@ export function SingleModal({
         >
           {/* Full-bleed cover art — jpg or mp4 loop */}
           {isVideo && !coverVideoFailed ? (
-            <video
+            <PersistentCoverVideo
+              active={renderedOpen}
               src={coverSrc}
-              autoPlay
               loop
               muted
               playsInline
@@ -1434,7 +1507,16 @@ export function SingleModal({
   );
 }
 
-function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex, otherReleases, onReleaseClick }) {
+function AlbumModalView({
+  album,
+  access = "preview",
+  open = true,
+  persistent = false,
+  onClose,
+  onPlayTrackAtIndex,
+  otherReleases,
+  onReleaseClick,
+}) {
   const coverSrc = trackCoverSrc(album);
   const isVideo = (album?.coverArtType || album?.coverType) === "video";
   const palette = useCoverPalette(coverSrc, album?.coverArtType || album?.coverType || "image");
@@ -1455,7 +1537,8 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     const h = Math.floor(m / 60);
     return h > 0 ? `${h}h ${m % 60}m` : `${m}m`;
   }, [totalRuntimeSec]);
-  const { mounted, closing, setClosing } = useModalAnim();
+  const { mounted, closing, setClosing } = useModalAnim(open, persistent);
+  const prefersReducedMotion = useReducedMotion();
   // Store only the ID — derive the full track object. This decouples selection identity
   // from list referencing and eliminates the need for an effect to sync selection when tracks changes.
   const [activeTrackId, setActiveTrackId] = useState(() => tracks[0]?.id ?? null);
@@ -1494,6 +1577,7 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const swipeRef = useRef({});
   const albumCoverRef = useRef(null);
+  const closeTimerRef = useRef(null);
 
   const {
     state: { isPlaying, currentTime, duration: engineDuration, currentTrack: engineTrack, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack, queue: engineQueue, queueIndex: engineQueueIndex },
@@ -1510,16 +1594,25 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
     removeFromQueue,
     moveInQueue,
     setPlaybackRate,
-  } = useMediaEngine();
+  } = useMediaEngine({ active: open });
   const { setShuffle } = useAudioPlayer();
-  const beat = useBeat(isPlaying);
+  const beat = useBeat(open && isPlaying);
 
-  usePlayerBodyState({ modalOpen: true });
+  const renderedOpen = open || closing;
+  usePlayerBodyState({ modalOpen: renderedOpen });
 
   useEffect(() => {
+    if (!renderedOpen) return undefined;
     registerModal("immersive-album-modal");
     return () => unregisterModal("immersive-album-modal");
-  }, []);
+  }, [renderedOpen]);
+
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    },
+    []
+  );
 
   // Sync tracklist highlight when the engine auto-advances to the next track.
   // "adjust state when external source changes" render-time pattern — causes one extra
@@ -1553,10 +1646,19 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   const displayCurrent =
     isPreview && activeTrack && !activeTrack?.free ? Math.min(currentTime, PREVIEW_CAP_SEC) : currentTime;
   const close = useCallback(() => {
+    if (closing || !renderedOpen) return;
     setSheet(null);
+    if (persistent) {
+      onClose?.();
+      return;
+    }
     setClosing(true);
-    setTimeout(onClose, 340);
-  }, [onClose, setClosing]);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(() => {
+      closeTimerRef.current = null;
+      onClose?.();
+    }, prefersReducedMotion ? 0 : 340);
+  }, [closing, onClose, persistent, prefersReducedMotion, renderedOpen, setClosing]);
 
   const showPlaybackNotice = useCallback((message) => {
     if (!message) return;
@@ -1787,24 +1889,50 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
   }, [setPlaybackRate]);
 
   const isVisible = mounted && !closing;
+  const hiddenSheetTransform = "translate3d(0,100%,0)";
 
   return (
     <div
+      data-persistent-modal={persistent ? "true" : undefined}
+      role={renderedOpen ? "dialog" : undefined}
+      aria-modal={renderedOpen ? "true" : undefined}
+      aria-hidden={!renderedOpen}
+      inert={!renderedOpen ? true : undefined}
+      aria-label={`${album?.title || "Release"} details`}
       style={{
         position: "fixed",
         inset: 0,
         zIndex: 9000,
         display: "flex",
         alignItems: "flex-end",
-        background: isVisible ? "rgba(0,0,0,.88)" : "rgba(0,0,0,0)",
-        backdropFilter: isVisible ? "blur(7px)" : "blur(0px)",
-        WebkitBackdropFilter: isVisible ? "blur(7px)" : "blur(0px)",
-        transition: "background .35s ease, backdrop-filter .35s ease",
+        background: "transparent",
+        visibility: renderedOpen ? "visible" : "hidden",
+        pointerEvents: renderedOpen ? "auto" : "none",
+        transition: persistent
+          ? renderedOpen
+            ? "visibility 0s"
+            : `visibility 0s linear ${prefersReducedMotion ? 0 : 340}ms`
+          : undefined,
       }}
       onClick={(e) => e.target === e.currentTarget && close()}
     >
       <div
+        aria-hidden="true"
         style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          opacity: isVisible ? 1 : 0,
+          background: "rgba(0,0,0,.88)",
+          backdropFilter: "blur(7px)",
+          WebkitBackdropFilter: "blur(7px)",
+          transition: prefersReducedMotion ? "none" : "opacity .35s ease",
+        }}
+      />
+      <div
+        style={{
+          position: "relative",
+          zIndex: 1,
           width: "100%",
           maxWidth: 430,
           margin: "0 auto",
@@ -1815,12 +1943,14 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
           flexDirection: "column",
           background: t.dark,
           boxShadow: `0 0 70px ${t.glowDim}, 0 -10px 60px rgba(0,0,0,.85)`,
-          willChange: "transform",
+          willChange: mounted && !closing ? "auto" : "transform",
           backfaceVisibility: "hidden",
-          transform: closing ? "translateY(100%)" : mounted ? "translateY(0)" : "translateY(100%)",
-          transition: closing
-            ? "transform .34s cubic-bezier(.55,0,1,.45)"
-            : "transform .44s cubic-bezier(.22,1,.36,1)",
+          transform: mounted && !closing ? "translate3d(0,0,0) scale(1)" : hiddenSheetTransform,
+          transition: prefersReducedMotion
+            ? "none"
+            : closing
+              ? "transform .34s cubic-bezier(.55,0,1,.45)"
+              : "transform .48s cubic-bezier(.16,1,.3,1)",
           ...vars,
         }}
       >
@@ -1835,9 +1965,9 @@ function AlbumModalView({ album, access = "preview", onClose, onPlayTrackAtIndex
         >
           {/* Full-bleed cover art */}
           {isVideo && !albumCoverVideoFailed ? (
-            <video
+            <PersistentCoverVideo
+              active={renderedOpen}
               src={coverSrc}
-              autoPlay
               loop
               muted
               playsInline

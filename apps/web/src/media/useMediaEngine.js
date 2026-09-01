@@ -19,6 +19,8 @@ function readElementPlaying(audioRef) {
 }
 
 let _cachedMediaEngineState = null;
+const subscribeDisabledMediaEngine = () => () => {};
+const getDisabledMediaEngineSnapshot = () => null;
 
 function tracksEqual(a, b) {
   if (a === b) return true;
@@ -158,11 +160,15 @@ export function mapAudioContextToMediaEngine(audio) {
 /**
  * React subscription layer over AudioContext (single `<audio>` engine).
  */
-export function useMediaEngine() {
+export function useMediaEngine({ active = true } = {}) {
   const audio = useAudioPlayer();
-  const progress = usePlaybackProgress();
-  const transport = usePlaybackTransport();
-  useSyncExternalStore(subscribeMediaEngine, getMediaEngineSnapshot, () => null);
+  const progress = usePlaybackProgress(active);
+  const transport = usePlaybackTransport(active);
+  useSyncExternalStore(
+    active ? subscribeMediaEngine : subscribeDisabledMediaEngine,
+    active ? getMediaEngineSnapshot : getDisabledMediaEngineSnapshot,
+    getDisabledMediaEngineSnapshot
+  );
   return useMemo(() => {
     const mapped = mapAudioContextToMediaEngine(audio);
     return {

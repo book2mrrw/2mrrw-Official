@@ -211,19 +211,30 @@ export function useAudioPlayer() {
 }
 
 const SERVER_PLAYBACK_PROGRESS_SNAPSHOT = Object.freeze({ currentTime: 0, duration: 0 });
+const subscribeDisabledPlaybackChannel = () => () => {};
+const getServerPlaybackProgressSnapshot = () => SERVER_PLAYBACK_PROGRESS_SNAPSHOT;
 
 /** Subscribe to high-frequency playback progress without re-rendering the full AudioContext tree. */
-export function usePlaybackProgress() {
+export function usePlaybackProgress(enabled = true) {
   const { subscribeProgress, getProgressSnapshot } = useAudioPlayer();
-  return useSyncExternalStore(subscribeProgress, getProgressSnapshot, () => SERVER_PLAYBACK_PROGRESS_SNAPSHOT);
+  return useSyncExternalStore(
+    enabled ? subscribeProgress : subscribeDisabledPlaybackChannel,
+    enabled ? getProgressSnapshot : getServerPlaybackProgressSnapshot,
+    getServerPlaybackProgressSnapshot
+  );
 }
 
 const SERVER_PLAYBACK_TRANSPORT_SNAPSHOT = Object.freeze({ playbackNetworkState: "idle", isBuffering: false });
+const getServerPlaybackTransportSnapshot = () => SERVER_PLAYBACK_TRANSPORT_SNAPSHOT;
 
 /** Transport/network fields without AudioProvider reconcile (Phase P1). */
-export function usePlaybackTransport() {
+export function usePlaybackTransport(enabled = true) {
   const { subscribeTransport, getTransportSnapshot } = useAudioPlayer();
-  return useSyncExternalStore(subscribeTransport, getTransportSnapshot, () => SERVER_PLAYBACK_TRANSPORT_SNAPSHOT);
+  return useSyncExternalStore(
+    enabled ? subscribeTransport : subscribeDisabledPlaybackChannel,
+    enabled ? getTransportSnapshot : getServerPlaybackTransportSnapshot,
+    getServerPlaybackTransportSnapshot
+  );
 }
 
 const SERVER_PLAYBACK_IDENTITY_SNAPSHOT = Object.freeze({

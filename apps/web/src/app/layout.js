@@ -9,6 +9,7 @@ import PostHogInit from "@/components/system/PostHogInit";
 import BlackscreenTraceBootstrap from "@/components/system/BlackscreenTraceBootstrap";
 import PlaybackNetworkHints from "@/components/system/PlaybackNetworkHints";
 import GlobalMediaControllerMount from "@/components/system/GlobalMediaControllerMount";
+import PlayerReleaseModalHost from "@/components/player/PlayerReleaseModalHost";
 import { MediaErrorBoundary } from "@/system/errors";
 
 export const viewport = {
@@ -75,6 +76,7 @@ export default function RootLayout({ children }) {
                     {children}
                   </MediaErrorBoundary>
                 </SessionRecoveryRoot>
+                <PlayerReleaseModalHost />
               </AuthGateProvider>
             </AppAuthRoot>
             <GlobalAudioPlayerBar />
