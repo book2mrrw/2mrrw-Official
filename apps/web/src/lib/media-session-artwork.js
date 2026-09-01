@@ -1,11 +1,3 @@
-const ARTWORK_SIZE_ENTRIES = [
-  { sizes: "96x96" },
-  { sizes: "128x128" },
-  { sizes: "256x256" },
-  { sizes: "512x512" },
-  { sizes: "1024x1024" },
-];
-
 import {
   ensureRelativeSiteApiPath,
   isSiteApiMediaPath,
@@ -25,7 +17,40 @@ function mimeFromUrl(url) {
   if (/\.jpe?g($|[?#])/i.test(url)) return "image/jpeg";
   if (/\.png($|[?#])/i.test(url)) return "image/png";
   if (/\.webp($|[?#])/i.test(url)) return "image/webp";
-  return "image/jpeg";
+  if (/\.avif($|[?#])/i.test(url)) return "image/avif";
+  return "";
+}
+
+function isFetchableSystemArtworkUrl(src) {
+  try {
+    const parsed = new URL(src, typeof window !== "undefined" ? window.location?.origin : undefined);
+    if (parsed.protocol === "https:") return true;
+    return parsed.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function mediaSessionTrackIdentity(track) {
+  if (!track) return "";
+  const cover = resolveAbsoluteArtworkUrl(
+    track.baseCover || track.coverArt || track.coverUrl || track.cover || ""
+  );
+  const revision =
+    track.artwork_revision ||
+    track.artworkRevision ||
+    track.cover_art_revision ||
+    track.coverArtRevision ||
+    "";
+  return [
+    track.id || track.trackId || "",
+    track.slug || "",
+    track.title || "",
+    track.artist || "",
+    track.album || "",
+    revision,
+    cover,
+  ].join("|");
 }
 
 /**
@@ -75,13 +100,18 @@ export function resolveAbsoluteArtworkUrl(cover) {
 }
 
 /**
- * MediaMetadata artwork array with sizes iOS/Safari expects.
+ * Build a standards-valid MediaMetadata artwork array.
+ *
+ * A single original image must not be advertised as five different physical
+ * sizes. Browsers use `sizes` to choose a real derivative; a false declaration
+ * can make Chromium reject or mis-cache lock-screen artwork. Existing catalog
+ * authority currently exposes one static source, so publish that source once.
  */
 export function buildArtworkEntries(cover) {
   const src = resolveAbsoluteArtworkUrl(cover);
-  if (!src) return [];
+  if (!src || !isFetchableSystemArtworkUrl(src)) return [];
   const type = mimeFromUrl(src);
-  return ARTWORK_SIZE_ENTRIES.map(({ sizes }) => ({ src, sizes, type }));
+  return [{ src, ...(type ? { type } : {}) }];
 }
 
 /**
@@ -102,18 +132,24 @@ export function preloadArtwork(url) {
 }
 
 /**
- * Cached artwork entries keyed by track slug for fast re-hydration.
+ * Cached artwork entries keyed by stable track identity plus the concrete
+ * artwork URL. A cover revision for the same slug must be a cache miss.
  */
 export async function getArtworkEntriesForTrack(cover, slug) {
-  const cacheKey = slug || resolveAbsoluteArtworkUrl(cover);
+  const absolute = resolveAbsoluteArtworkUrl(cover);
+  const cacheKey = `${slug || ""}|${absolute}`;
   if (cacheKey && artworkEntriesCache.has(cacheKey)) {
     return artworkEntriesCache.get(cacheKey);
   }
-  const absolute = resolveAbsoluteArtworkUrl(cover);
-  if (absolute) await preloadArtwork(absolute);
   const entries = buildArtworkEntries(cover);
   if (cacheKey && entries.length) artworkEntriesCache.set(cacheKey, entries);
+  // Warm browser image caches without delaying title/artist/artwork authority.
+  if (absolute && entries.length) void preloadArtwork(absolute);
   return entries;
+}
+
+export function clearMediaSessionArtworkCache() {
+  artworkEntriesCache.clear();
 }
 
 export const MEDIA_SESSION_TRACK_STORAGE_KEY = "2mrrw:media-session-track";
@@ -127,7 +163,10 @@ export function persistMediaSessionTrack(track, { playing, currentTime, duration
         slug: track.slug,
         title: track.title,
         artist: track.artist,
+        album: track.album,
         cover: track.baseCover || track.cover,
+        artworkRevision:
+          track.artwork_revision || track.artworkRevision || track.cover_art_revision || null,
         source: track.source,
         playing: Boolean(playing),
         currentTime: Number.isFinite(currentTime) ? currentTime : 0,

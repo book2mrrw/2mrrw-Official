@@ -4,9 +4,6 @@ import { useLayoutEffect, useRef } from "react";
 import { resolveCoverMediaType } from "@/components/ui/CoverArt";
 import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
 
-const VIDEO_BLUR_DESKTOP = "blur(120px) saturate(1.2) brightness(0.15)";
-const VIDEO_BLUR_MOBILE = "blur(72px) saturate(1.2) brightness(0.15)";
-
 function AmbientVideoLayer({ src, style }) {
   const videoRef = useRef(null);
   const audioPriority = useAudioMediaPriority();
@@ -39,13 +36,14 @@ function AmbientVideoLayer({ src, style }) {
       playsInline
       preload="none"
       aria-hidden
+      className="ambient-playback-media ambient-playback-media--video"
       onError={(event) => { event.currentTarget.style.display = "none"; }}
       style={style}
     />
   );
 }
 
-export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobile = false }) {
+export default function AmbientPlaybackBackground({ currentTrack, csMode }) {
   if (!currentTrack?.cover) return null;
 
   const baseSrc = currentTrack.cover;
@@ -53,8 +51,6 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobi
   const csSrc = currentTrack.csCover || null;
   const csType = currentTrack.csCoverType || "image";
   const showCs = Boolean(csMode && csSrc);
-  const videoFilter = isMobile ? VIDEO_BLUR_MOBILE : VIDEO_BLUR_DESKTOP;
-
   const mediaStyle = {
     position: "fixed",
     inset: 0,
@@ -63,7 +59,6 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobi
     width: "100%",
     height: "100%",
     objectFit: "cover",
-    filter: videoFilter,
     transition: "opacity 500ms ease",
     willChange: "transform, opacity",
   };
@@ -75,7 +70,6 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobi
     pointerEvents: "none",
     backgroundSize: "cover",
     backgroundPosition: "center",
-    filter: "blur(72px) brightness(0.32)",
     transform: "scale(1.08)",
     transition: "opacity 500ms ease",
     willChange: "transform, opacity",
@@ -91,6 +85,7 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobi
       ) : (
         <div
           aria-hidden
+          className="ambient-playback-media ambient-playback-media--image"
           style={{
             ...imageLayerStyle,
             backgroundImage: `url(${baseSrc})`,
@@ -107,6 +102,7 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode, isMobi
         ) : (
           <div
             aria-hidden
+            className="ambient-playback-media ambient-playback-media--image"
             style={{
               ...imageLayerStyle,
               backgroundImage: `url(${csSrc})`,

@@ -1084,7 +1084,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   const [inventory, setInventory]                 = useState({});
   const [exclusiveCatalog, setExclusiveCatalog] = useState(exclusiveItemsBase);
   const [publicVault, setPublicVault]             = useState(null);
-  const [isMobile, setIsMobile]                   = useState(false);
   const [mobileCartOpen, setMobileCartOpen]       = useState(false);
   const [mobileNavOpen, setMobileNavOpen]         = useState(false);
   const [mobileNavClosing, setMobileNavClosing]   = useState(false);
@@ -1163,8 +1162,15 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     };
   }, [selectedAlbum]);
 
-  const searchIndex = useMemo(() => buildSearchIndex(singles, albums, mixtapesAndEps), []);
-  const searchResults = useMemo(() => searchCatalog(searchIndex, searchQuery), [searchIndex, searchQuery]);
+  const searchResults = useMemo(() => {
+    const surface = getCatalogSurfaceRef();
+    const searchIndex = buildSearchIndex(
+      surface.displaySingles?.length ? surface.displaySingles : singles,
+      surface.displayAlbums?.length ? surface.displayAlbums : albums,
+      surface.displayMixtapesAndEps?.length ? surface.displayMixtapesAndEps : mixtapesAndEps
+    );
+    return searchCatalog(searchIndex, searchQuery);
+  }, [searchQuery, albums, mixtapesAndEps]);
 
   const ensureStorefrontCarouselMedia = useCallback(() => {
     const row = singlesRowRef.current;
@@ -1194,24 +1200,17 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
   // ── EFFECTS ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    const detect = () => window.innerWidth < 768;
-    isMobileRef.current = detect();
-    setIsMobile(detect());
-    let rafId = null;
-    const onResize = () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        const m = detect();
-        isMobileRef.current = m;
-        setIsMobile((prev) => (prev === m ? prev : m));
-      });
+    // Presentation recomposes through CSS/container queries. Keep this ref current
+    // only for imperative, non-rendering media/navigation decisions; viewport
+    // changes must never cascade through the storefront React tree.
+    const compactQuery = window.matchMedia("(max-width: 599px)");
+    const syncCompactRef = () => {
+      isMobileRef.current = compactQuery.matches;
     };
-    window.addEventListener("resize", onResize, { passive: true });
-    // orientationchange fires before innerWidth updates on some Android browsers;
-    // the resize event follows it, so one listener covers both.
+    syncCompactRef();
+    compactQuery.addEventListener?.("change", syncCompactRef);
     return () => {
-      window.removeEventListener("resize", onResize);
-      if (rafId) cancelAnimationFrame(rafId);
+      compactQuery.removeEventListener?.("change", syncCompactRef);
     };
   }, []);
 
@@ -1243,7 +1242,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   }, [activeTab]);
 
   useEffect(() => {
-    if (!isMobile || activeTab !== "home") return;
+    if (activeTab !== "home") return;
     const root = mainScrollRef.current;
     if (!root) return;
     const targets = [
@@ -1257,6 +1256,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     if (!nodes.length) return;
     const obs = new IntersectionObserver(
       entries => {
+        if (!isMobileRef.current) return;
         const visible = entries
           .filter(e => e.isIntersecting)
           .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
@@ -1281,7 +1281,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     );
     nodes.forEach(n => obs.observe(n.el));
     return () => obs.disconnect();
-  }, [isMobile, activeTab]);
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeTab !== "home") {
@@ -1485,6 +1485,14 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   useEffect(() => {
     localStorage.setItem("2mrrw_cart", JSON.stringify(cart));
   }, [cart]);
+
+  useEffect(() => {
+    const syncPersistentCart = (event) => {
+      if (Array.isArray(event.detail?.cart)) setCart(event.detail.cart);
+    };
+    window.addEventListener("2mrrw:cart-updated", syncPersistentCart);
+    return () => window.removeEventListener("2mrrw:cart-updated", syncPersistentCart);
+  }, []);
 
   useEffect(() => {
     const move = e => {
@@ -2059,8 +2067,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
         home: "g-home",
       };
       if (navGroupByTab[tabId]) setExpandedGroup(navGroupByTab[tabId]);
-      // Read isMobileRef instead of isMobile state — keeps this callback stable
-      // with [] deps while still seeing the current mobile breakpoint at call time.
+      // The media-query ref is imperative only; it never drives rendering.
       if (isMobileRef.current) {
         setMobileNavOpen(false);
         setMobileNavClosing(false);
@@ -2144,8 +2151,8 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
         openFeatureModal={openFeatureModal}
       />
       <PageAuthCheckoutPendingEffect onCheckout={handleCheckout} />
-      <div ref={cursorRef} style={{position:"fixed",width:28,height:28,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.22) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99999,mixBlendMode:"screen",transition:"left 0.045s linear,top 0.045s linear",display:isMobile?"none":undefined}}/>
-      <div ref={cursorTrailRef} style={{position:"fixed",width:16,height:16,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.10) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99998,mixBlendMode:"screen",transition:"left 0.18s ease,top 0.18s ease",display:isMobile?"none":undefined}}/>
+      <div ref={cursorRef} className="storefront-pointer-effect" style={{position:"fixed",width:28,height:28,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.22) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99999,mixBlendMode:"screen",transition:"left 0.045s linear,top 0.045s linear"}}/>
+      <div ref={cursorTrailRef} className="storefront-pointer-effect" style={{position:"fixed",width:16,height:16,borderRadius:"50%",background:"radial-gradient(circle,rgba(0,255,255,0.10) 0%,transparent 70%)",pointerEvents:"none",transform:"translate(-50%,-50%)",zIndex:99998,mixBlendMode:"screen",transition:"left 0.18s ease,top 0.18s ease"}}/>
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,background:"radial-gradient(circle at 18% 18%,rgba(0,255,255,0.026) 0%,transparent 55%),radial-gradient(circle at 82% 80%,rgba(162,89,255,0.018) 0%,transparent 52%)"}}/>
       {/* ── IMMERSIVE MODALS (entitlement + auth islands — not hero) ── */}
       <EntitlementSurfaceIsland islandId="immersive-modals">
@@ -2164,7 +2171,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                         key="immersive-preview-modal"
                         single={selectedSingle}
                         releaseDetail={selectedReleaseDetail}
-                        isMobile={isMobile}
                         access={
                           resolveTrackAccess(selectedSingle, ent.entitlementAccountState)?.canStream
                             ? "full"
@@ -2190,7 +2196,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                         key="immersive-feature-modal"
                         single={featureModalItem}
                         releaseDetail={featureReleaseDetail}
-                        isMobile={isMobile}
                         access={
                           resolveTrackAccess(featureModalItem, ent.entitlementAccountState)?.canStream
                             ? "full"
@@ -2240,8 +2245,8 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
       {/* ── TICKET MODAL ── */}
       {selectedEvent && (
-        <div onClick={()=>setSelectedEvent(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:30,width:isMobile?"100%":360,maxWidth:isMobile?"calc(100vw - 32px)":"none",display:"flex",flexDirection:"column",gap:14}}>
+        <div className="storefront-responsive-overlay" onClick={()=>setSelectedEvent(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.88)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div className="storefront-responsive-panel" onClick={e=>e.stopPropagation()} style={{background:"#111",border:"1px solid #222",borderRadius:20,padding:30,width:360,display:"flex",flexDirection:"column",gap:14}}>
             <div style={{fontSize:20,fontWeight:800,letterSpacing:2}}>{selectedEvent.name}</div>
             <div style={{fontSize:13,color:"#aaa"}}>{selectedEvent.location}</div>
             <div style={{fontSize:13,color:"#aaa"}}>{new Date(selectedEvent.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"})}{selectedEvent.time ? ` · ${_fmtEventTime(selectedEvent.date, selectedEvent.time, selectedEvent.venueTz)}` : ""}</div>
@@ -2263,8 +2268,8 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
       {/* ── EXCLUSIVE / VAULT MODAL ── */}
       {exclusiveModal && (
-        <div onClick={()=>setExclusiveModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:20}}>
-          <div onClick={e=>e.stopPropagation()} style={{background:"#0d0d0d",border:`1px solid ${exclusiveModal.badgeColor}33`,borderRadius:24,padding:isMobile?20:32,width:isMobile?"100%":380,maxWidth:isMobile?"calc(100vw - 32px)":"none",maxHeight:"88vh",overflowY:"auto",display:"flex",flexDirection:"column",gap:16,boxShadow:`0 0 60px ${exclusiveModal.badgeColor}22`}}>
+        <div className="storefront-responsive-overlay" onClick={()=>setExclusiveModal(null)} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:8888,display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div className="storefront-responsive-panel" onClick={e=>e.stopPropagation()} style={{background:"#0d0d0d",border:`1px solid ${exclusiveModal.badgeColor}33`,borderRadius:24,padding:32,width:380,maxHeight:"88dvh",overflowY:"auto",display:"flex",flexDirection:"column",gap:16,boxShadow:`0 0 60px ${exclusiveModal.badgeColor}22`}}>
             <div style={{position:"relative"}}><img src={exclusiveModal.cover} alt={exclusiveModal.title || ""} style={{width:"100%",height:200,borderRadius:14,objectFit:"cover",display:"block"}}/><div style={{position:"absolute",top:12,left:12,background:exclusiveModal.badgeColor,color:"#000",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 10px",borderRadius:20}}>{exclusiveModal.badge}</div></div>
             <div style={{fontSize:20,fontWeight:900,letterSpacing:1}}>{exclusiveModal.title}</div>
             <div style={{fontSize:12,color:"#555",letterSpacing:1}}>{exclusiveModal.subtitle}</div>
@@ -2301,13 +2306,11 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
       {/* ══════════════════════ MAIN LAYOUT ═══════════════════════════════════ */}
       <PlaybackChromeIsland
-        isMobile={isMobile}
         ambientRefs={ambientRefs}
       >
-      <div style={{display:"flex",flexDirection:isMobile?"column":"row",height:"calc(100dvh - var(--player-bar-inset, 0px))",overflow:"hidden",maxWidth:"100vw",overflowX:"hidden",background:"#050505",color:"white",position:"relative",zIndex:1,fontFamily:"'Helvetica Now','Helvetica Neue',Helvetica,Arial,sans-serif"}}>
-        {/* ── DESKTOP SIDEBAR ── */}
-        {!isMobile && (
-          <div style={{width:220,flexShrink:0,borderRight:"1px solid #141414",background:"rgba(4,4,4,0.9)",backdropFilter:"blur(20px)",display:"flex",flexDirection:"column",height:"100%",overflowY:"auto",boxShadow:"2px 0 32px rgba(0,0,0,0.5)"}}>
+      <div className="storefront-adaptive-shell">
+        {/* ── PERSISTENT PRIMARY RAIL — CSS decides whether space can support it ── */}
+          <aside className="storefront-primary-rail" aria-label="Primary navigation">
             <div style={{padding:"22px 18px 18px",borderBottom:"1px solid #111",flexShrink:0}}>
               <div style={{fontSize:20,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 24px rgba(0,255,255,0.45)",marginBottom:4}}>2MRRW</div>
               <PageAuthSidebarBadge
@@ -2344,24 +2347,22 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               <button onClick={()=>switchTab("account")} style={{width:"100%",padding:"10px 12px",textAlign:"left",background:activeTab==="account"?"rgba(0,255,255,0.07)":"transparent",border:"none",borderLeft:activeTab==="account"?"2px solid #00ffff":"2px solid transparent",color:activeTab==="account"?"#00ffff":"#b0b0b0",fontSize:11,fontWeight:700,letterSpacing:2.5,cursor:"pointer",transition:"0.18s"}} onMouseEnter={e=>{if(activeTab!=="account")e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{if(activeTab!=="account")e.currentTarget.style.color="#b0b0b0";}}>ACCOUNT</button>
               <button onClick={()=>setSoundOn(!soundOn)} style={{width:"100%",padding:"9px 12px",textAlign:"left",background:"transparent",border:"none",color:soundOn?"#00ffff":"#888",fontSize:11,cursor:"pointer",letterSpacing:2,fontWeight:700,transition:"0.18s",textShadow:soundOn?"0 0 8px rgba(0,255,255,0.5)":"none"}}>{soundOn?"♫  SOUND ON":"♫  SOUND OFF"}</button>
             </div>
-          </div>
-        )}
+          </aside>
 
         {/* ── MAIN AREA ── */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",overflow:"hidden",minWidth:0}}>
+        <main className="storefront-main-column">
           <div
             ref={mainScrollRef}
             data-main-scroll
             style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:0,WebkitOverflowScrolling:"touch"}}
           >
             <HeroIsland
-              isMobile={isMobile}
               heroContainerRef={heroContainerRef}
               heroVideoRef={heroVideoRef}
               heroTextRef={heroTextRef}
               heroSocialsRef={heroSocialsRef}
             />
-            <ScrollPaddingShell isMobile={isMobile}>
+            <ScrollPaddingShell>
             <div data-tab-panel>
 
               {/* ══ HOME (Phase 17A/17B: persist mount + render islands) ══ */}
@@ -2373,7 +2374,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 <HomeStorefrontIsland
                   onGiftRequest={setGiftSheetRelease}
                   liveCountdownTarget={nextLiveDateTime}
-                  isMobile={isMobile}
                   onDonateOpen={handleDonateOpen}
                   singlesRowRef={singlesRowRef}
                   onCardClick={openSingleModal}
@@ -2424,7 +2424,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                       placeholder="Search tracks, albums…"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:isMobile?"11px 40px 11px 14px":"12px 44px 12px 16px",color:"#fff",fontSize:isMobile?14:15,outline:"none",WebkitAppearance:"none",appearance:"none"}}
+                      style={{width:"100%",boxSizing:"border-box",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"clamp(11px,2cqi,12px) clamp(40px,5cqi,44px) clamp(11px,2cqi,12px) clamp(14px,3cqi,16px)",color:"#fff",fontSize:"clamp(14px,1.7cqi,15px)",outline:"none",WebkitAppearance:"none",appearance:"none"}}
                     />
                     {searchQuery ? (
                       <button type="button" onClick={()=>setSearchQuery("")} aria-label="Clear search" style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"rgba(255,255,255,0.45)",fontSize:18,cursor:"pointer",padding:"4px 6px",lineHeight:1}}>✕</button>
@@ -2453,7 +2453,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                             >
                               {r.cover && <img src={r.cover} alt="" width={40} height={40} style={{borderRadius:6,objectFit:"cover",flexShrink:0}} />}
                               <div style={{minWidth:0,flex:1}}>
-                                <div style={{color:"#fff",fontSize:isMobile?13:14,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.title}</div>
+                                <div style={{color:"#fff",fontSize:"clamp(13px,1.6cqi,14px)",fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.title}</div>
                                 <div style={{color:"rgba(255,255,255,0.4)",fontSize:11,marginTop:2}}>
                                   {r.type==="track"?`Track · ${r.albumTitle}`:r.type==="album"?"Album":"Single"}
                                 </div>
@@ -2467,9 +2467,9 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   ) : (
                     <>
                   <div style={{marginTop:8,marginBottom:0}}>
-                    <div style={{display:"flex",gap:0,borderBottom:"1px solid #1a1a1a",marginBottom:24}}>
+                    <div className="storefront-subtab-rail" style={{display:"flex",gap:0,borderBottom:"1px solid #1a1a1a",marginBottom:24}}>
                       {[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mixtapes",label:"Mixtapes & EPs"},{id:"mymusic",label:"Collection"}].map(sub=>(
-                        <button key={sub.id} onClick={()=>switchTab(sub.id)} style={{padding:isMobile?"11px 16px":"12px 22px",background:"none",border:"none",borderBottom:activeTab===sub.id?"2px solid #00ffff":"2px solid transparent",color:activeTab===sub.id?"#00ffff":"#555",fontSize:isMobile?12:13,fontWeight:700,letterSpacing:1.5,cursor:"pointer",transition:"all 0.18s",textTransform:"uppercase",marginBottom:-1}}>
+                        <button key={sub.id} onClick={()=>switchTab(sub.id)} style={{padding:"12px 22px",background:"none",border:"none",borderBottom:activeTab===sub.id?"2px solid #00ffff":"2px solid transparent",color:activeTab===sub.id?"#00ffff":"#555",fontSize:13,fontWeight:700,letterSpacing:1.5,cursor:"pointer",transition:"all 0.18s",textTransform:"uppercase",marginBottom:-1}}>
                           {sub.label}
                         </button>
                       ))}
@@ -2478,7 +2478,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
                   <MusicTabCatalogPanels
                     activeTab={activeTab}
-                    isMobile={isMobile}
                     singleIndex={singleIndex}
                     goToSingle={goToSingle}
                     handleSingleClick={handleSingleClick}
@@ -2521,7 +2520,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   {printfulLoading ? <div style={{padding:"60px 0",textAlign:"center",fontSize:13,color:"#333",letterSpacing:2}}>Loading products…</div> : (
                     <>
                       {shopIsFallback && <div style={{marginBottom:20,padding:"12px 16px",background:"rgba(255,255,255,0.02)",border:"1px solid #1a1a1a",borderRadius:10,fontSize:11,color:"#444",letterSpacing:1,lineHeight:1.7}}>Store inventory is syncing. Showing preview items — check back soon for the full Printful catalog.</div>}
-                      <CatalogGrid items={shopItems} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut} isMobile={isMobile}/>
+                      <CatalogGrid items={shopItems} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut}/>
                     </>
                   )}
                 </>
@@ -2531,7 +2530,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               {activeTab==="vault" && (
                 <>
                   <h2 className="section-heading">Vault</h2>
-                  <div style={{marginTop:28,background:"#0d0d0d",border:"1px solid #1a1a1a",borderRadius:isMobile?14:20,padding:isMobile?"36px 24px":"48px 40px",textAlign:"center",maxWidth:520}}>
+                  <div style={{marginTop:28,background:"#0d0d0d",border:"1px solid #1a1a1a",borderRadius:"clamp(14px,3cqi,20px)",padding:"clamp(36px,6cqi,48px) clamp(24px,5cqi,40px)",textAlign:"center",maxWidth:520}}>
                     <p style={{fontSize:13,color:"#555",letterSpacing:1,lineHeight:1.8,margin:0}}>The Vault remains empty for now. Exclusive drops will be listed here when they launch.</p>
                   </div>
                 </>
@@ -2547,7 +2546,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                       <InlineShowsAdmin onRefreshFanView={refreshLiveEvents} />
                     )}
 
-                    <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?12:24,marginBottom:30}}>
+                    <div style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:20,padding:"clamp(12px,3cqi,24px)",marginBottom:30}}>
                         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:18}}>
                           <button onClick={prevMonth} style={{background:"none",border:"1px solid #333",color:"white",padding:"6px 14px",borderRadius:8,cursor:"pointer",fontSize:16}}>‹</button>
                           <div style={{fontSize:18,fontWeight:700,letterSpacing:3}}>{monthNames[calMonth]} {calYear}</div>
@@ -2572,23 +2571,23 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                       {liveEvents.map(evt=>{
                         const soldOut = evt.tickets === 0;
                         return (
-                          <div key={evt.id} style={{background:"#0e0e0e",border:`1px solid ${soldOut?"#2a1a1a":"#1e1e1e"}`,borderRadius:14,padding:isMobile?"14px":"18px 20px",display:"flex",alignItems:isMobile?"flex-start":"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",opacity:soldOut?0.7:1}}>
+                          <div key={evt.id} style={{background:"#0e0e0e",border:`1px solid ${soldOut?"#2a1a1a":"#1e1e1e"}`,borderRadius:14,padding:"clamp(14px,2.5cqi,18px) clamp(14px,3cqi,20px)",display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",opacity:soldOut?0.7:1}}>
                             <div style={{flex:1,minWidth:0}}>
                               <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                                <div style={{fontWeight:700,fontSize:isMobile?13:15}}>{evt.name}</div>
+                                <div style={{fontWeight:700,fontSize:"clamp(13px,1.8cqi,15px)"}}>{evt.name}</div>
                                 {soldOut && <div style={{fontSize:9,fontWeight:900,letterSpacing:2,padding:"2px 8px",borderRadius:20,background:"rgba(239,68,68,0.12)",color:"#ef4444",border:"1px solid rgba(239,68,68,0.25)"}}>SOLD OUT</div>}
                               </div>
                               <div style={{fontSize:12,color:"#aaa"}}>{evt.location}</div>
                               <div style={{fontSize:11,color:"#555",marginTop:2}}>{new Date(evt.date+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"})}{evt.time ? ` · ${_fmtEventTime(evt.date, evt.time, evt.venueTz)}` : ""}</div>
                             </div>
-                            <div style={{display:"flex",alignItems:"center",gap:isMobile?10:14}}>
-                              <div style={{fontSize:isMobile?15:18,fontWeight:900,color:soldOut?"#555":"#00ffff"}}>${evt.price.toFixed(2)}</div>
+                            <div style={{display:"flex",alignItems:"center",gap:"clamp(10px,2cqi,14px)"}}>
+                              <div style={{fontSize:"clamp(15px,2.2cqi,18px)",fontWeight:900,color:soldOut?"#555":"#00ffff"}}>${evt.price.toFixed(2)}</div>
                               <button
                                 onClick={()=>!soldOut&&setSelectedEvent(evt)}
                                 disabled={soldOut}
                                 onMouseEnter={soldOut?null:buttonHoverIn}
                                 onMouseLeave={soldOut?null:buttonHoverOut}
-                                style={{padding:isMobile?"9px 14px":"10px 20px",background:soldOut?"#111":"#111",color:soldOut?"#444":"white",border:`1px solid ${soldOut?"#2a2a2a":"#333"}`,borderRadius:8,cursor:soldOut?"not-allowed":"pointer",fontWeight:"bold",fontSize:isMobile?12:13,transition:"0.25s"}}
+                                style={{padding:"clamp(9px,1.5cqi,10px) clamp(14px,2.5cqi,20px)",background:soldOut?"#111":"#111",color:soldOut?"#444":"white",border:`1px solid ${soldOut?"#2a2a2a":"#333"}`,borderRadius:8,cursor:soldOut?"not-allowed":"pointer",fontWeight:"bold",fontSize:"clamp(12px,1.6cqi,13px)",transition:"0.25s"}}
                               >{soldOut?"Sold Out":"Get Tickets"}</button>
                             </div>
                           </div>
@@ -2609,7 +2608,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     {auth.isAdminStable && <InlineLiveAdmin />}
                     <LiveCountdownProvider targetDate={nextLiveDateTime}>
                       <LiveCountdownLiveTab
-                        isMobile={isMobile}
                         liveStreamDate={liveStreamDate}
                         liveStreamTime={liveStreamTime}
                       />
@@ -2629,7 +2627,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   {blogPost ? (
                     <div>
                       <button onClick={()=>setBlogPost(null)} style={{background:"none",border:"none",color:"#00ffff",cursor:"pointer",fontSize:13,marginBottom:20,padding:0,letterSpacing:1}}>← BACK TO BLOG</button>
-                      <h1 style={{fontSize:isMobile?20:24,fontWeight:900,marginBottom:6,letterSpacing:1}}>{blogPost.title}</h1>
+                      <h1 style={{fontSize:"clamp(20px,3cqi,24px)",fontWeight:900,marginBottom:6,letterSpacing:1}}>{blogPost.title}</h1>
                       <div style={{fontSize:12,color:"#555",marginBottom:24}}>{blogPost.date} · by {blogPost.author}</div>
                       <div style={{fontSize:14,lineHeight:1.9,color:"#ccc",whiteSpace:"pre-line",marginBottom:40}}>{blogPost.body}</div>
                       <div style={{borderTop:"1px solid #1e1e1e",paddingTop:24}}>
@@ -2647,8 +2645,8 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                       <h2 className="section-heading" style={{marginBottom:24}}>Community Blog</h2>
                       <div style={{display:"flex",flexDirection:"column",gap:20}}>
                         {blogPosts.map(post=>(
-                          <div key={post.id} onClick={()=>setBlogPost(post)} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:14,padding:isMobile?18:24,cursor:"pointer",transition:"0.25s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.boxShadow="0 0 16px rgba(0,255,255,0.1)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1e1e1e";e.currentTarget.style.boxShadow="none";}}>
-                            <div style={{fontSize:isMobile?15:18,fontWeight:800,marginBottom:6}}>{post.title}</div>
+                          <div key={post.id} onClick={()=>setBlogPost(post)} style={{background:"#0e0e0e",border:"1px solid #1e1e1e",borderRadius:14,padding:"clamp(18px,3cqi,24px)",cursor:"pointer",transition:"0.25s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#00ffff";e.currentTarget.style.boxShadow="0 0 16px rgba(0,255,255,0.1)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1e1e1e";e.currentTarget.style.boxShadow="none";}}>
+                            <div style={{fontSize:"clamp(15px,2.2cqi,18px)",fontWeight:800,marginBottom:6}}>{post.title}</div>
                             <div style={{fontSize:11,color:"#555",marginBottom:12}}>{post.date} · by {post.author}</div>
                             <div style={{fontSize:13,color:"#777",lineHeight:1.7}}>{post.body.slice(0,160)}…</div>
                             <div style={{fontSize:12,color:"#00ffff",marginTop:14}}>Read more →</div>
@@ -2665,17 +2663,17 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               {activeTab==="vision" && (
                 <>
                   <h2 className="section-heading">Vision</h2>
-                  <div style={{background:"linear-gradient(135deg,#080808,#0e0e0e)",border:"1px solid #1a1a1a",borderRadius:24,padding:isMobile?"28px 20px":"48px 40px",marginBottom:28,textAlign:"center",position:"relative",overflow:"hidden"}}>
+                  <div style={{background:"linear-gradient(135deg,#080808,#0e0e0e)",border:"1px solid #1a1a1a",borderRadius:24,padding:"clamp(28px,6cqi,48px) clamp(20px,5cqi,40px)",marginBottom:28,textAlign:"center",position:"relative",overflow:"hidden"}}>
                     <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at center,rgba(0,255,255,0.04) 0%,transparent 65%)",pointerEvents:"none"}}/>
                     <div style={{fontSize:11,color:"#444",letterSpacing:4,marginBottom:20,textTransform:"uppercase"}}>The Name</div>
-                    <div style={{fontSize:isMobile?36:52,fontWeight:900,letterSpacing:isMobile?4:8,color:"white",textShadow:"0 0 40px rgba(0,255,255,0.3)",marginBottom:20,lineHeight:1}}>2MRRW</div>
+                    <div style={{fontSize:"clamp(36px,7cqi,52px)",fontWeight:900,letterSpacing:"clamp(4px,1cqi,8px)",color:"white",textShadow:"0 0 40px rgba(0,255,255,0.3)",marginBottom:20,lineHeight:1}}>2MRRW</div>
                     <div style={{fontSize:16,color:"#777",letterSpacing:2,fontStyle:"italic"}}>Tomorrow. Always possible.</div>
                   </div>
                   <div style={{display:"flex",flexDirection:"column",gap:20}}>
                     {[{label:"The Name",heading:"What 2MRRW Means",body:"2MRRW started as a reminder, not a brand. A reminder that no matter how hard today is, tomorrow is a blank page. You get to start again. The number 2 is intentional — it's shorthand for the second chance, the next version, the one that gets it right.\n\nEvery record, every show, every piece of merch carries that forward. If you're listening, you're part of the movement."},{label:"The Music",heading:"Artist Philosophy",body:"Music is not background noise. It's a conversation. 2MRRW makes music that holds something real — real emotion, real experience, real questions. Not manufactured for playlists. Built for people who feel deeply.\n\nThe goal is never to chase what's popular. The goal is to make something that still means something in 10 years. That's the standard every project is held to."},{label:"The Mission",heading:"What This Is Building",body:"This is not a streaming play. This is an ecosystem. Direct-to-fan. Artist-owned. Built on trust between creator and believer.\n\nThe music is the entry point. The community is the foundation. The collector system is the bridge between listening and belonging. Every piece is connected. Every purchase, every comment, every ticket is a step deeper into something that's being built in real time.\n\nListeners come and go. Fans stay. Believers build the movement."}].map((s,i)=>(
-                      <div key={i} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:18,padding:isMobile?"20px":"28px 30px"}}>
+                      <div key={i} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:18,padding:"clamp(20px,3.5cqi,28px) clamp(20px,4cqi,30px)"}}>
                         <div style={{fontSize:10,color:"#444",letterSpacing:3,marginBottom:10,textTransform:"uppercase"}}>{s.label}</div>
-                        <div style={{fontSize:isMobile?17:20,fontWeight:800,marginBottom:16,letterSpacing:0.5}}>{s.heading}</div>
+                        <div style={{fontSize:"clamp(17px,2.5cqi,20px)",fontWeight:800,marginBottom:16,letterSpacing:0.5}}>{s.heading}</div>
                         <div style={{fontSize:14,color:"#888",lineHeight:2,whiteSpace:"pre-line"}}>{s.body}</div>
                       </div>
                     ))}
@@ -2694,7 +2692,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     {pa.userStatus && <div style={{fontSize:10,fontWeight:900,letterSpacing:2,padding:"3px 10px",borderRadius:20,background:pa.userStatus.glow+"22",color:pa.userStatus.color,border:`1px solid ${pa.userStatus.color}44`,boxShadow:`0 0 10px ${pa.userStatus.glow}`}}>{pa.userStatus.label}</div>}
                   </div>
                   <p style={{fontSize:13,color:"#444",marginBottom:28,lineHeight:1.8}}>This is not a comment section. It&apos;s a direct line. Ask 2MRRW anything. Share what the music means to you. Selected submissions receive an official response.</p>
-                  <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:28,marginBottom:32}}>
+                  <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"clamp(20px,3.5cqi,28px)",marginBottom:32}}>
                     <div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Ask 2MRRW</div>
                     <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>{["question","thought","feedback","message"].map(cat=><button key={cat} onClick={()=>setCircleCategory(cat)} style={{padding:"6px 12px",fontSize:11,fontWeight:700,letterSpacing:1,cursor:"pointer",border:circleCategory===cat?"1px solid #00ffff":"1px solid #2a2a2a",borderRadius:20,background:circleCategory===cat?"rgba(0,255,255,0.1)":"transparent",color:circleCategory===cat?"#00ffff":"#555",textTransform:"uppercase",transition:"0.2s"}}>{cat}</button>)}</div>
                     <textarea placeholder="Write your question or message…" value={circleQuestion} onChange={e=>setCircleQuestion(e.target.value)} rows={4} style={{width:"100%",padding:"12px 14px",background:"#0a0a0a",border:"1px solid #2a2a2a",color:"white",borderRadius:12,fontSize:14,resize:"vertical",outline:"none",boxSizing:"border-box",fontFamily:"inherit",lineHeight:1.7}}/>
@@ -2707,15 +2705,15 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   <div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>2MRRW Responses</div>
                   <div style={{display:"flex",flexDirection:"column",gap:16,marginBottom:36}}>
                     {circleResponses.map(resp=>(
-                      <div key={resp.id} style={{background:resp.highlight?"linear-gradient(135deg,#0d0d0d,#111)":"#0a0a0a",border:resp.highlight?`1px solid ${resp.tagColor}33`:"1px solid #1a1a1a",borderRadius:18,padding:isMobile?18:24,boxShadow:resp.highlight?`0 0 30px ${resp.tagColor}10`:"none"}}>
+                      <div key={resp.id} style={{background:resp.highlight?"linear-gradient(135deg,#0d0d0d,#111)":"#0a0a0a",border:resp.highlight?`1px solid ${resp.tagColor}33`:"1px solid #1a1a1a",borderRadius:18,padding:"clamp(18px,3cqi,24px)",boxShadow:resp.highlight?`0 0 30px ${resp.tagColor}10`:"none"}}>
                         <div style={{marginBottom:16}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}><div style={{width:28,height:28,borderRadius:"50%",background:"#1a1a1a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#555",fontWeight:700,flexShrink:0}}>{resp.questionBy[0]}</div><div><div style={{fontSize:12,fontWeight:700,color:"#aaa"}}>{resp.questionBy}</div><div style={{fontSize:10,color:"#444"}}>{resp.questionTime}</div></div></div><div style={{fontSize:14,color:"#888",lineHeight:1.7,fontStyle:"italic"}}>&quot;{resp.question}&quot;</div></div>
                         <div style={{borderTop:"1px solid #1a1a1a",paddingTop:16}}><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><div style={{fontSize:11,fontWeight:900,letterSpacing:6,color:"white",textShadow:"0 0 10px rgba(0,255,255,0.5)"}}>2MRRW</div><div style={{fontSize:10,fontWeight:900,letterSpacing:1,padding:"2px 8px",borderRadius:10,background:resp.tagColor+"22",color:resp.tagColor,border:`1px solid ${resp.tagColor}44`}}>{resp.tag}</div></div><div style={{fontSize:14,color:"#ccc",lineHeight:1.9}}>{resp.response}</div></div>
                       </div>
                     ))}
                   </div>
-                  <div style={{background:"linear-gradient(135deg,#0a0a14,#0d0d0d)",border:"1px solid #1a1a2a",borderRadius:20,padding:isMobile?"20px":"28px 30px"}}>
+                  <div style={{background:"linear-gradient(135deg,#0a0a14,#0d0d0d)",border:"1px solid #1a1a2a",borderRadius:20,padding:"clamp(20px,3.5cqi,28px) clamp(20px,4cqi,30px)"}}>
                     <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Community Status</div>
-                    <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(auto-fit,minmax(180px,1fr))",gap:12}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,180px),1fr))",gap:12}}>
                       {[{label:"EARLY SUPPORTER",color:"#aaa",desc:"Joined the ecosystem early."},{label:"COLLECTOR",color:"#ff6b35",desc:"Purchased a collector card or bundle."},{label:"VISIONARY",color:"#00ffff",desc:"3+ Circle submissions."},{label:"INNER CIRCLE",color:"#a259ff",desc:"Collector + Circle member."}].map(s=><div key={s.label} style={{padding:"14px",background:"#080808",borderRadius:14,border:`1px solid ${s.color}22`}}><div style={{fontSize:9,fontWeight:900,letterSpacing:2,color:s.color,marginBottom:6}}>{s.label}</div><div style={{fontSize:11,color:"#555",lineHeight:1.6}}>{s.desc}</div></div>)}
                     </div>
                     {pa.userStatus && <div style={{marginTop:20,padding:"14px 18px",background:pa.userStatus.glow+"10",borderRadius:12,border:`1px solid ${pa.userStatus.color}33`,display:"flex",alignItems:"center",gap:12}}><div style={{fontSize:10,color:"#555"}}>Your status:</div><div style={{fontSize:11,fontWeight:900,letterSpacing:2,color:pa.userStatus.color}}>{pa.userStatus.label}</div></div>}
@@ -2731,10 +2729,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 {(pa) => (
                 <>
                   {pa.userStatus?.label !== "INNER CIRCLE" ? (
-                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",padding:isMobile?"40px 16px":"60px 20px"}}>
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",padding:"clamp(40px,7cqi,60px) clamp(16px,3cqi,20px)"}}>
                       <div style={{fontSize:56,lineHeight:1,marginBottom:24,filter:"drop-shadow(0 0 24px rgba(162,89,255,0.5))",animation:"pulse 3s infinite"}}>🔒</div>
                       <div style={{fontSize:11,color:"#a259ff",letterSpacing:4,marginBottom:12,fontWeight:700}}>RESTRICTED ACCESS</div>
-                      <div style={{fontSize:isMobile?20:24,fontWeight:900,letterSpacing:1,marginBottom:14}}>Inner Circle Access Required</div>
+                      <div style={{fontSize:"clamp(20px,3cqi,24px)",fontWeight:900,letterSpacing:1,marginBottom:14}}>Inner Circle Access Required</div>
                       <div style={{fontSize:14,color:"#555",maxWidth:400,lineHeight:1.9,marginBottom:36}}>This section is reserved for verified Inner Circle members — those who own a piece of the music and are active in the conversation.</div>
                       <div style={{width:"100%",maxWidth:460,display:"flex",flexDirection:"column",gap:12,marginBottom:32}}>
                         <div style={{fontSize:11,color:"#a259ff",letterSpacing:3,marginBottom:4,fontWeight:700}}>HOW TO UNLOCK</div>
@@ -2754,7 +2752,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                         <div>
                           <button onClick={()=>setInnerCirclePost(null)} style={{background:"none",border:"none",color:"#a259ff",cursor:"pointer",fontSize:13,marginBottom:20,padding:0,letterSpacing:1}}>← BACK TO INNER CIRCLE</button>
                           <div style={{fontSize:10,color:"#a259ff",letterSpacing:3,marginBottom:12,textTransform:"uppercase"}}>Inner Circle Exclusive</div>
-                          <h1 style={{fontSize:isMobile?20:24,fontWeight:900,marginBottom:6,letterSpacing:1}}>{innerCirclePost.title}</h1>
+                          <h1 style={{fontSize:"clamp(20px,3cqi,24px)",fontWeight:900,marginBottom:6,letterSpacing:1}}>{innerCirclePost.title}</h1>
                           <div style={{fontSize:12,color:"#555",marginBottom:28}}>{innerCirclePost.date}</div>
                           <div style={{fontSize:14,lineHeight:1.9,color:"#ccc",whiteSpace:"pre-line"}}>{innerCirclePost.body}</div>
                         </div>
@@ -2762,7 +2760,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                         <>
                           <div style={{display:"flex",alignItems:"baseline",gap:12,marginBottom:6,flexWrap:"wrap"}}><h2 className="section-heading" style={{margin:0}}>Inner Circle</h2>{pa.userStatus&&<div style={{fontSize:10,fontWeight:900,letterSpacing:2,padding:"3px 10px",borderRadius:20,background:"rgba(162,89,255,0.12)",color:"#a259ff",border:"1px solid rgba(162,89,255,0.3)"}}>{pa.userStatus.label}</div>}</div>
                           <p style={{fontSize:13,color:"#444",marginBottom:32,lineHeight:1.8}}>Exclusive posts for believers. This is where the real conversation lives.</p>
-                          <div style={{background:"linear-gradient(135deg,#0d0814,#0d0d0d)",border:"1px solid rgba(162,89,255,0.2)",borderRadius:20,padding:isMobile?"20px":"28px 30px",marginBottom:28,position:"relative",overflow:"hidden"}}>
+                          <div style={{background:"linear-gradient(135deg,#0d0814,#0d0d0d)",border:"1px solid rgba(162,89,255,0.2)",borderRadius:20,padding:"clamp(20px,3.5cqi,28px) clamp(20px,4cqi,30px)",marginBottom:28,position:"relative",overflow:"hidden"}}>
                             <div style={{position:"absolute",inset:0,background:"radial-gradient(ellipse at top left,rgba(162,89,255,0.06) 0%,transparent 60%)",pointerEvents:"none"}}/>
                             <div style={{fontSize:11,color:"#a259ff",letterSpacing:3,marginBottom:8,textTransform:"uppercase"}}>Direct from 2MRRW</div>
                             <div style={{fontSize:18,fontWeight:800,marginBottom:8}}>The stories behind the music.</div>
@@ -2779,9 +2777,9 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                           ) : null}
                           <div style={{display:"flex",flexDirection:"column",gap:18}}>
                             {innerCirclePosts.map((post,i)=>(
-                              <div key={post.id} onClick={()=>setInnerCirclePost(post)} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:16,padding:isMobile?18:24,cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.1}s forwards`,transition:"border-color 0.25s,box-shadow 0.25s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#a259ff55";e.currentTarget.style.boxShadow="0 0 20px rgba(162,89,255,0.1)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a1a1a";e.currentTarget.style.boxShadow="none";}}>
+                              <div key={post.id} onClick={()=>setInnerCirclePost(post)} style={{background:"#0a0a0a",border:"1px solid #1a1a1a",borderRadius:16,padding:"clamp(18px,3cqi,24px)",cursor:"pointer",opacity:0,animation:`fadeInUp 0.5s ease ${i*0.1}s forwards`,transition:"border-color 0.25s,box-shadow 0.25s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#a259ff55";e.currentTarget.style.boxShadow="0 0 20px rgba(162,89,255,0.1)";}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a1a1a";e.currentTarget.style.boxShadow="none";}}>
                                 <div style={{fontSize:10,color:"#a259ff",letterSpacing:3,marginBottom:8,textTransform:"uppercase"}}>Inner Circle Exclusive</div>
-                                <div style={{fontSize:isMobile?15:18,fontWeight:800,marginBottom:6}}>{post.title}</div>
+                                <div style={{fontSize:"clamp(15px,2.2cqi,18px)",fontWeight:800,marginBottom:6}}>{post.title}</div>
                                 <div style={{fontSize:11,color:"#555",marginBottom:12}}>{post.date}</div>
                                 <div style={{fontSize:13,color:"#666",lineHeight:1.7}}>{post.preview}</div>
                                 <div style={{fontSize:12,color:"#a259ff",marginTop:16}}>Read more →</div>
@@ -2805,12 +2803,12 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   <h2 className="section-heading">Account</h2>
                   {pa.currentUser ? (
                     <div style={{display:"flex",flexDirection:"column",gap:20}}>
-                      <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:isMobile?20:28}}>
-                        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{pa.accountDisplayInitial}</div><div><div style={{fontSize:18,fontWeight:800}}>{pa.accountDisplayName}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{pa.currentUser?.email || "—"}</div></div>{pa.userStatus&&<div style={{marginLeft:isMobile?0:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:pa.userStatus.glow+"22",color:pa.userStatus.color,border:`1px solid ${pa.userStatus.color}44`}}>{pa.userStatus.label}</div>}</div>
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>{[{label:"Purchases",value:pa.myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===pa.accountCircleByline||s.by===pa.currentUser?.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{padding:"14px 10px",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:isMobile?20:24,fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:isMobile?9:11,color:"#555",marginTop:4,letterSpacing:1}}>{stat.label}</div></div>)}</div>
+                      <div style={{background:"#0d0d0d",border:"1px solid #1e1e1e",borderRadius:20,padding:"clamp(20px,3.5cqi,28px)"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:20,flexWrap:"wrap"}}><div style={{width:56,height:56,borderRadius:"50%",background:"linear-gradient(135deg,#00ffff22,#a259ff22)",border:"1px solid #333",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,fontWeight:900,color:"#00ffff",flexShrink:0}}>{pa.accountDisplayInitial}</div><div><div style={{fontSize:18,fontWeight:800}}>{pa.accountDisplayName}</div><div style={{fontSize:13,color:"#555",marginTop:2}}>{pa.currentUser?.email || "—"}</div></div>{pa.userStatus&&<div style={{marginLeft:"auto",fontSize:10,fontWeight:900,letterSpacing:2,padding:"4px 12px",borderRadius:20,background:pa.userStatus.glow+"22",color:pa.userStatus.color,border:`1px solid ${pa.userStatus.color}44`}}>{pa.userStatus.label}</div>}</div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:"clamp(6px,2cqi,12px)"}}>{[{label:"Purchases",value:pa.myPurchases.length},{label:"Circle Posts",value:circleSubmissions.filter(s=>s.by===pa.accountCircleByline||s.by===pa.currentUser?.name).length},{label:"Member Since",value:"2026"}].map(stat=><div key={stat.label} style={{minWidth:0,padding:"14px clamp(4px,1.5cqi,10px)",background:"#080808",borderRadius:12,border:"1px solid #1a1a1a",textAlign:"center"}}><div style={{fontSize:"clamp(20px,3cqi,24px)",fontWeight:900,color:"#00ffff"}}>{stat.value}</div><div style={{fontSize:"clamp(8px,1.3cqi,11px)",color:"#555",marginTop:4,letterSpacing:"clamp(.2px,.3cqi,1px)",overflowWrap:"anywhere"}}>{stat.label}</div></div>)}</div>
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>{[{label:"My Collection",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:isMobile?12:13,fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
-                      <NotificationSettingsSection isMobile={isMobile} />
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,150px),1fr))",gap:12}}>{[{label:"My Collection",tab:"mymusic",color:"#00ffff"},{label:"Vault Drops",tab:"vault",color:"#a259ff"},{label:"The Circle",tab:"circle",color:"#ff6b35"},{label:"Inner Circle",tab:"innercircle",color:"#a259ff"}].map(link=><button key={link.tab} onClick={()=>switchTab(link.tab)} style={{padding:"14px",background:"#0a0a0a",border:`1px solid ${link.color}22`,borderRadius:14,cursor:"pointer",textAlign:"left",color:link.color,fontSize:"clamp(12px,1.6cqi,13px)",fontWeight:700,transition:"0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor=link.color+"55";e.currentTarget.style.background=link.color+"0a";}} onMouseLeave={e=>{e.currentTarget.style.borderColor=link.color+"22";e.currentTarget.style.background="#0a0a0a";}}>{link.label} →</button>)}</div>
+                      <NotificationSettingsSection />
                       <AuthSurfaceIsland islandId="account-admin">
                         {(auth) => (
                           <>
@@ -2830,7 +2828,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                               </>
                             )}
                             {auth.isAdminStable && accountSubTab==="analytics" && (
-                              <AnalyticsDashboard isMobile={isMobile} />
+                              <AnalyticsDashboard />
                             )}
                           </>
                         )}
@@ -2857,11 +2855,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
             </div>{/* end tab panel */}
             </ScrollPaddingShell>
           </div>{/* end scroll area */}
-        </div>
+        </main>
 
-        {/* ── DESKTOP CART SIDEBAR ── */}
-        {!isMobile && (
-          <div style={{width:240,flexShrink:0,borderLeft:"1px solid #222",padding:25,overflowY:"auto",background:"rgba(4,4,4,0.8)",backdropFilter:"blur(12px)"}}>
+        {/* ── PERSISTENT CART RAIL — integrated only when the shell has capacity ── */}
+          <aside className="storefront-cart-rail" aria-label="Shopping cart">
             <h3 style={{fontSize:12,letterSpacing:3,color:"#555",marginBottom:16,textTransform:"uppercase"}}>Cart</h3>
             {cart.length===0 && <p style={{opacity:0.4,fontSize:13}}>Empty</p>}
             {cart.map((item,i)=>(
@@ -2883,13 +2880,11 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 </div>
               ) : null}
             </PageAuthSessionBridge>
-          </div>
-        )}
+          </aside>
       </div>
 
-      {/* ── MOBILE UI ── */}
-      {isMobile && (
-        <>
+      {/* ── COMPACT / MEDIUM PRESENTATION — remains mounted across geometry changes ── */}
+        <div className="storefront-mobile-ui">
           <MobileCartFab cartCount={cart.length} onOpen={() => setMobileCartOpen(true)} />
 
           <MobileHomeBottomNav
@@ -3029,18 +3024,13 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               </ModalErrorBoundary>
             )}
           </AnimatePresence>
-        </>
-      )}
+        </div>
       </PlaybackChromeIsland>
 
       {/* ── CSS ── */}
       <style jsx global>{`
         html,body{width:100%;overflow-x:clip;}
         *,*::before,*::after{box-sizing:border-box;}
-        @media(max-width:768px){
-          .singles-row,.mixtapes-eps-row,.albums-row,.features-row,.products-row,.videos-row{display:flex!important;flex-wrap:nowrap!important;overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;scroll-snap-type:x mandatory!important;overscroll-behavior-x:contain!important;gap:12px!important;padding-bottom:10px!important;}
-          .singles-row>*,.mixtapes-eps-row>*,.albums-row>*,.features-row>*,.products-row>*,.videos-row>*{flex:0 0 auto!important;scroll-snap-align:start!important;}
-        }
         .singles-row::-webkit-scrollbar,.mixtapes-eps-row::-webkit-scrollbar,.albums-row::-webkit-scrollbar,.features-row::-webkit-scrollbar,.products-row::-webkit-scrollbar,.videos-row::-webkit-scrollbar{height:4px;}
         .singles-row::-webkit-scrollbar-track,.mixtapes-eps-row::-webkit-scrollbar-track,.albums-row::-webkit-scrollbar-track,.features-row::-webkit-scrollbar-track,.products-row::-webkit-scrollbar-track,.videos-row::-webkit-scrollbar-track{background:#111;border-radius:4px;}
         .singles-row::-webkit-scrollbar-thumb,.mixtapes-eps-row::-webkit-scrollbar-thumb,.albums-row::-webkit-scrollbar-thumb,.features-row::-webkit-scrollbar-thumb,.products-row::-webkit-scrollbar-thumb,.videos-row::-webkit-scrollbar-thumb{background:#00ffff;border-radius:4px;}
@@ -3076,8 +3066,8 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
         <EntitlementSurfaceIsland islandId="membership-upsell">
           {(ent) =>
             membershipUpsellOpen && ent.showSubscribeCta ? (
-          <motion.div key="membership-upsell" {...OVERLAY_FADE} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:9998,display:"flex",alignItems:"center",justifyContent:"center",padding:isMobile?16:0}}>
-            <motion.div {...(isMobile ? SHEET_UP : MODAL_CENTER)} style={{background:"#0a0a0a",padding:isMobile?22:30,borderRadius:isMobile?"20px 20px 0 0":20,width:isMobile?"100%":420,border:"1px solid #222",alignSelf:isMobile?"flex-end":"center",boxShadow:"0 0 40px rgba(0,255,255,0.12)"}}>
+          <motion.div key="membership-upsell" className="storefront-adaptive-modal-overlay" {...OVERLAY_FADE} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:9998,display:"flex",justifyContent:"center"}}>
+            <motion.div className="storefront-adaptive-modal-panel" {...MODAL_CENTER} style={{background:"#0a0a0a",width:420,border:"1px solid #222",boxShadow:"0 0 40px rgba(0,255,255,0.12)"}}>
               <div style={{fontSize:11,color:"#00ffff",letterSpacing:3,marginBottom:12,textTransform:"uppercase"}}>Thanks for supporting</div>
               <div style={{fontSize:22,fontWeight:900,marginBottom:10}}>Want early access, exclusive drops, and giveaways?</div>
               <p style={{fontSize:13,color:"#888",lineHeight:1.7,marginBottom:20}}>Membership is optional. Your purchase is already saved to your library.</p>
@@ -3091,7 +3081,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       </AnimatePresence>
 
       <Suspense fallback={null}>
-        <DonateModal open={donateOpen} onClose={()=>setDonateOpen(false)} isMobile={isMobile}/>
+        <DonateModal open={donateOpen} onClose={()=>setDonateOpen(false)}/>
       </Suspense>
       <AuthSurfaceIsland islandId="gift-sheet" onGiftRequest={setGiftSheetRelease}>
         {(auth) => (
@@ -3100,7 +3090,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
             release={giftSheetRelease}
             senderUserId={auth.userId}
             isAdmin={auth.isAdminStable}
-            isMobile={isMobile}
             onClose={() => setGiftSheetRelease(null)}
           />
         )}
@@ -3116,7 +3105,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 accountState={ent.entitlementAccountState}
                 userId={auth.userId}
                 isAdmin={auth.isAdmin}
-                isMobile={isMobile}
                 onClose={() => setAlbumTracklistRelease(null)}
                 onLibraryChange={auth.handleLibraryChange}
               />
@@ -3135,19 +3123,18 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
           >
           <motion.div
             key="stripe"
+            className="storefront-adaptive-modal-overlay"
             {...OVERLAY_FADE}
-            style={{...stripePaymentOverlayStyle({ isMobile, padding: isMobile ? 0 : 16 }), background:"rgba(0,0,0,0.9)"}}
+            style={{...stripePaymentOverlayStyle({ padding: 16 }), background:"rgba(0,0,0,0.9)"}}
           >
             <motion.div
-              {...(isMobile ? SHEET_UP : MODAL_CENTER)}
+              className="storefront-adaptive-modal-panel storefront-adaptive-modal-panel--payment"
+              {...MODAL_CENTER}
               onClick={(e) => e.stopPropagation()}
               style={{
-                ...stripePaymentPanelStyle({ isMobile, maxWidth: 400 }),
+                ...stripePaymentPanelStyle({ maxWidth: 400 }),
                 background:"#0a0a0a",
-                padding: isMobile ? "20px 20px max(20px, env(safe-area-inset-bottom))" : 30,
-                borderRadius: isMobile ? "20px 20px 0 0" : 20,
                 border:"1px solid #222",
-                alignSelf: isMobile ? "flex-end" : "center",
               }}
             >
               <motion.div style={{fontSize:11,color:"#555",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Checkout</motion.div>

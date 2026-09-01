@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect } from "react";
+import { memo, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import styles from "./HomeStorefront.module.css";
@@ -17,10 +17,31 @@ import {
   logUiHydrationTrace,
 } from "@/lib/diagnostics/ui-hydration-trace";
 import AdminIngestButton from "@/components/admin/AdminIngestButton";
+import { usePlaybackChromeLayout } from "@/hooks/usePlaybackChromeLayout";
+
+const HomeFlowStateIsland = memo(function HomeFlowStateIsland({
+  flowConversionActive,
+  currentSlide,
+  showOwnTrackConversion,
+  onAddToCart,
+}) {
+  const { nowPlayingKey } = usePlaybackChromeLayout();
+  const activeFlowMode = useMemo(
+    () => (flowConversionActive ? "conversion" : nowPlayingKey ? "nowplaying" : "idle"),
+    [flowConversionActive, nowPlayingKey]
+  );
+  return (
+    <FlowState
+      activeFlowMode={activeFlowMode}
+      currentSlide={currentSlide}
+      showOwnTrackConversion={showOwnTrackConversion}
+      onAddToCart={onAddToCart}
+    />
+  );
+});
 
 const HomeStorefront = memo(function HomeStorefront({
   liveCountdownTarget,
-  isMobile,
   showSubscribeCta,
   onDonateOpen,
   singlesRowRef,
@@ -51,7 +72,7 @@ const HomeStorefront = memo(function HomeStorefront({
   radioIndex,
   onGoRadio,
   onFlowConversionActive,
-  activeFlowMode,
+  flowConversionActive,
   showOwnTrackConversion,
   onAudioVisualsFocused,
   onAudioVisualsExit,
@@ -94,7 +115,6 @@ const HomeStorefront = memo(function HomeStorefront({
         </motion.div>
 
         <HomeStorefrontCatalogMedia
-          isMobile={isMobile}
           singlesRowRef={singlesRowRef}
           onGift={onGift}
           onCardClick={onCardClick}
@@ -120,27 +140,10 @@ const HomeStorefront = memo(function HomeStorefront({
 
       <div style={{ marginTop: 28, marginBottom: 28 }}>
         <h2 className="section-heading" style={{ marginBottom: 14 }}>2MRRW RADIO</h2>
-        {isMobile ? (
-          <RadioCarousel
-            isMobile={isMobile}
-            currentSlide={currentSlide}
-            radioSlides={enrichedRadioSlides}
-            radioIndex={radioIndex}
-            goRadio={onGoRadio}
-            isAdmin={isAdminStable}
-            onGift={onGift}
-            onAddToCart={addToCart}
-            onFlowConversionActive={onFlowConversionActive}
-            accountState={accountState}
-            currentUserId={userId}
-            onLibraryChange={onLibraryChange}
-          />
-        ) : (
-          <div style={{ display: "flex", gap: 16, alignItems: "stretch", minHeight: 320 }}>
-            <div style={{ flex: "0 0 55%", minWidth: 0 }}>
+          <div className="home-radio-composition">
+            <div className="home-radio-composition__primary">
               <RadioCarousel
                 narrow
-                isMobile={isMobile}
                 currentSlide={currentSlide}
                 radioSlides={enrichedRadioSlides}
                 radioIndex={radioIndex}
@@ -154,19 +157,19 @@ const HomeStorefront = memo(function HomeStorefront({
                 onLibraryChange={onLibraryChange}
               />
             </div>
-            <FlowState
-              activeFlowMode={activeFlowMode}
-              currentSlide={currentSlide}
-              showOwnTrackConversion={showOwnTrackConversion}
-              onAddToCart={addToCart}
-            />
+            <div className="home-radio-composition__flow">
+              <HomeFlowStateIsland
+                flowConversionActive={flowConversionActive}
+                currentSlide={currentSlide}
+                showOwnTrackConversion={showOwnTrackConversion}
+                onAddToCart={addToCart}
+              />
+            </div>
           </div>
-        )}
       </div>
 
       <div style={{ margin: "32px 0 24px", height: 1, background: "#1a1a1a" }} />
       <AudioVisualsSection
-        isMobile={isMobile}
         onAudioVisualsFocused={onAudioVisualsFocused}
         onAudioVisualsExit={onAudioVisualsExit}
       />
@@ -190,7 +193,6 @@ const HomeStorefront = memo(function HomeStorefront({
               hoverOut={hoverOut}
               buttonHoverIn={buttonHoverIn}
               buttonHoverOut={buttonHoverOut}
-              isMobile={isMobile}
             />
           </>
         )}
@@ -200,7 +202,7 @@ const HomeStorefront = memo(function HomeStorefront({
 
       <div id="home-vault">
         <h2 className="section-heading" style={{ marginBottom: 8 }}>Vault</h2>
-        <div style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: isMobile ? 14 : 18, padding: isMobile ? "28px 20px" : "40px 32px", textAlign: "center" }}>
+        <div className="home-vault-card" style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", textAlign: "center" }}>
           <p style={{ fontSize: 13, color: "#555", letterSpacing: 1, lineHeight: 1.8, margin: 0 }}>
             The Vault remains completely empty for now. Exclusive drops will be listed here when they launch.
           </p>
@@ -238,16 +240,16 @@ const HomeStorefront = memo(function HomeStorefront({
                 background: "#0e0e0e",
                 border: "1px solid #1e1e1e",
                 borderRadius: 14,
-                padding: isMobile ? "14px" : "16px 18px",
+                padding: "clamp(14px, 2.4cqi, 18px)",
                 display: "flex",
-                alignItems: isMobile ? "flex-start" : "center",
+                alignItems: "center",
                 justifyContent: "space-between",
                 gap: 12,
                 flexWrap: "wrap",
               }}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: isMobile ? 13 : 14, marginBottom: 3 }}>{evt.name}</div>
+                <div style={{ fontWeight: 700, fontSize: "clamp(13px, 1.8cqi, 14px)", marginBottom: 3 }}>{evt.name}</div>
                 <div style={{ fontSize: 12, color: "#aaa" }}>{evt.location}</div>
                 <div style={{ fontSize: 11, color: "#555", marginTop: 2 }}>
                   {new Date(evt.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })} · {evt.time}
@@ -275,7 +277,7 @@ const HomeStorefront = memo(function HomeStorefront({
 
       <div style={{ margin: "32px 0 24px", height: 1, background: "#1a1a1a" }} />
 
-      <LiveCountdownHomeSection isMobile={isMobile} liveStreamDate={liveStreamDate} liveStreamTime={liveStreamTime} />
+      <LiveCountdownHomeSection liveStreamDate={liveStreamDate} liveStreamTime={liveStreamTime} />
       <div style={{ height: 40 }} />
     </>
   );

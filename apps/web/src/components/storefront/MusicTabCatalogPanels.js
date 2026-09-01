@@ -17,7 +17,6 @@ import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actio
  */
 const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
   activeTab,
-  isMobile,
   singleIndex,
   goToSingle,
   handleSingleClick,
@@ -28,8 +27,6 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
   openFeatureModal,
   openAlbumModal,
   setAlbumTracklistRelease,
-  albums,
-  mixtapesAndEps,
   hoverIn,
   hoverOut,
   giftHighlightSlug,
@@ -44,7 +41,13 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
   handleLibraryChange,
   onPlayAlbum,
 }) {
-  const { displaySingles, displayFeatures, catalogPlaybackLookup } = useCatalogSurface();
+  const {
+    displaySingles,
+    displayFeatures,
+    displayAlbums: albums,
+    displayMixtapesAndEps: mixtapesAndEps,
+    catalogPlaybackLookup,
+  } = useCatalogSurface();
 
   const handleFeaturePlay = useCallback((e, clickedItem) => {
     e.stopPropagation();
@@ -100,8 +103,7 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           Singles
         </h2>
         <CarouselUI
-          large={!isMobile}
-          isMobile={isMobile}
+          large
           currentSingle={currentSingle}
           currentSingleAccess={
             currentSingle ? resolveContentAccess(currentSingle, entitlementAccountState) : null
@@ -128,7 +130,6 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           </h2>
           <FeaturesRail
             features={displayFeatures}
-            isMobile={isMobile}
             addToCart={addToCart}
             onOpenFeature={openFeatureModal}
             accountState={entitlementAccountState}
@@ -140,7 +141,6 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           />
         </div>
         <AudioVisualsSection
-          isMobile={isMobile}
           onAudioVisualsFocused={handleAudioVisualsFocused}
           onAudioVisualsExit={handleAudioVisualsExit}
         />
@@ -166,7 +166,6 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           onPlayAlbum={onPlayAlbum}
           onOpenAlbumTracklist={setAlbumTracklistRelease}
           catalogPlaybackLookup={catalogPlaybackLookup}
-          isMobile={isMobile}
           accountState={entitlementAccountState}
           userId={userId}
           isAdmin={isAdminStable}
@@ -195,7 +194,6 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           onPlayAlbum={onPlayAlbum}
           onOpenAlbumTracklist={setAlbumTracklistRelease}
           catalogPlaybackLookup={catalogPlaybackLookup}
-          isMobile={isMobile}
           accountState={entitlementAccountState}
           userId={userId}
           isAdmin={isAdminStable}
@@ -212,7 +210,6 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
         singles={displaySingles}
         albums={albums}
         mixtapesAndEps={mixtapesAndEps}
-        isMobile={isMobile}
         isAdmin={isAdminStable}
         highlightSlug={giftHighlightSlug}
         onSwitchTab={switchTab}

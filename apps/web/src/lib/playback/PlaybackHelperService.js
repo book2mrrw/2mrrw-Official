@@ -58,8 +58,8 @@ import {
 import { recordListeningEvent } from "@/lib/listening-history";
 import {
   getArtworkEntriesForTrack,
+  mediaSessionTrackIdentity,
   persistMediaSessionTrack,
-  resolveAbsoluteArtworkUrl,
 } from "@/lib/media-session-artwork";
 import { recordAudioContextState } from "@/lib/dev/performanceMarks";
 import { prefetchHlsSegmentsForTrack } from "@/lib/audio/hls-segment-prefetcher";
@@ -105,6 +105,7 @@ const AUDIO_CONTENT_TYPE_RE = /^(audio\/|application\/octet-stream)/i;
 export function createPlaybackHelpers(initialDeps) {
   const self = {
     _deps: { ...initialDeps },
+    _mediaSessionUpdateEpoch: 0,
 
     updateDeps(deps) {
       Object.assign(self._deps, deps);
@@ -1050,13 +1051,20 @@ export function createPlaybackHelpers(initialDeps) {
 
     syncPositionState(force = false) {
       const audio = self._deps.audioRef.current;
+      const duration = Number(audio?.duration);
+      const currentTime = Number(audio?.currentTime);
+      const playbackRate = Number(audio?.playbackRate);
       if (
         typeof navigator === "undefined" ||
         !("mediaSession" in navigator) ||
         !navigator.mediaSession?.setPositionState ||
         !audio ||
-        !isFinite(audio.duration) ||
-        audio.duration <= 0
+        !self._deps.stateRef.current?.currentTrack ||
+        !Number.isFinite(duration) ||
+        duration <= 0 ||
+        !Number.isFinite(currentTime) ||
+        !Number.isFinite(playbackRate) ||
+        playbackRate <= 0
       ) {
         return;
       }
@@ -1070,9 +1078,9 @@ export function createPlaybackHelpers(initialDeps) {
       self._deps.lastPositionStateAtRef.current = now;
       try {
         navigator.mediaSession.setPositionState({
-          duration: audio.duration,
-          playbackRate: audio.playbackRate || 1,
-          position: Math.min(Math.max(0, audio.currentTime), audio.duration),
+          duration,
+          playbackRate,
+          position: Math.min(Math.max(0, currentTime), duration),
         });
       } catch {
         /* unsupported duration/position combo */
@@ -1084,11 +1092,12 @@ export function createPlaybackHelpers(initialDeps) {
       const ms = navigator.mediaSession;
       if (!track) return;
 
-      // Capture slug before async work — used below to reject stale artwork updates.
-      const targetSlug = track.slug ?? null;
+      const updateEpoch = ++self._mediaSessionUpdateEpoch;
+      const targetIdentity = mediaSessionTrackIdentity(track);
 
       const isVideoTrack = track.coverArtType === "video";
-      const csCover = self._deps.csModeRef.current && (track.csCover || track.cs_cover)
+      const csCoverType = track.csCoverType || track.cs_cover_type || "image";
+      const csCover = self._deps.csModeRef.current && csCoverType !== "video" && (track.csCover || track.cs_cover)
         ? (track.csCover || track.cs_cover)
         : null;
       const staticCover = csCover
@@ -1097,26 +1106,17 @@ export function createPlaybackHelpers(initialDeps) {
         || track.coverArt
         || track.coverUrl
         || "";
-      const rawVideoCover = isVideoTrack ? (track.cover || null) : null;
 
       const staticEntries = await getArtworkEntriesForTrack(staticCover, track.slug);
 
-      // Stale-artwork guard: if the active track changed during async artwork resolution, abort.
-      // Prevents a slow artwork fetch for track A from overwriting track B's system metadata.
-      if (targetSlug) {
-        const nowSlug = self._deps.stateRef.current?.currentTrack?.slug ?? null;
-        if (nowSlug && nowSlug !== targetSlug) return;
-      }
+      // Last authoritative request wins, including two revisions of the same slug.
+      // Slug-only guards allow a slow old-cover request to overwrite a new cover.
+      if (updateEpoch !== self._mediaSessionUpdateEpoch) return;
+      const currentIdentity = mediaSessionTrackIdentity(
+        self._deps.stateRef.current?.currentTrack
+      );
+      if (currentIdentity && targetIdentity && currentIdentity !== targetIdentity) return;
 
-      let artwork = staticEntries;
-      if (rawVideoCover) {
-        const videoAbsUrl = resolveAbsoluteArtworkUrl(rawVideoCover);
-        // Dynamic Island on iOS supports animated MP4 — put it first so iOS picks it up.
-        // The static entries follow as fallback for lock screen / Bluetooth / Android.
-        if (videoAbsUrl && /^https?:\/\//i.test(videoAbsUrl)) {
-          artwork = [{ src: videoAbsUrl, sizes: "512x512", type: "video/mp4" }, ...staticEntries];
-        }
-      }
       try {
         ms.metadata = new MediaMetadata({
           title: self._deps.csModeRef.current
@@ -1124,7 +1124,7 @@ export function createPlaybackHelpers(initialDeps) {
             : (track.title || "Untitled"),
           artist: track.artist || "2MRRW",
           album: track.album || "2MRRW",
-          artwork,
+          artwork: staticEntries,
         });
         const truthState = self.computeLifecycleAudioTruthState();
         if (truthState === LIFECYCLE_AUDIO_TRUTH_STATES.OS_SUSPENDED) {

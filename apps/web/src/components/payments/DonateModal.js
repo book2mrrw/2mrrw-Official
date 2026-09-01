@@ -5,7 +5,6 @@ import { AnimatePresence, motion } from "framer-motion";
 import { getStripeClient } from "@/lib/commerce/stripe-client";
 import { Elements } from "@stripe/react-stripe-js";
 import CheckoutForm from "@/components/payments/CheckoutForm";
-import { stripePaymentOverlayStyle, stripePaymentPanelStyle } from "@/components/payments/stripePaymentShell";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { ModalErrorBoundary } from "@/system/errors";
 
@@ -15,7 +14,6 @@ const MAX_DOLLARS = 5000;
 const OVERLAY_FADE = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.22 } };
 const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
 const MODAL_CENTER = { initial: { opacity: 0, scale: 0.96 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.96 }, transition: SPRING_SOFT };
-const SHEET_UP = { initial: { y: "100%" }, animate: { y: 0 }, exit: { y: "100%" }, transition: SPRING_SOFT };
 
 function parseCustomDollars(value) {
   const trimmed = String(value || "").trim();
@@ -25,7 +23,7 @@ function parseCustomDollars(value) {
   return amount;
 }
 
-export default function DonateModal({ open, onClose, isMobile }) {
+export default function DonateModal({ open, onClose }) {
   const [step, setStep] = useState("amount");
   const [presetDollars, setPresetDollars] = useState(10);
   const [useCustom, setUseCustom] = useState(false);
@@ -118,23 +116,20 @@ export default function DonateModal({ open, onClose, isMobile }) {
       {open && (
         <motion.div
           key="donate-modal"
+          className="storefront-adaptive-modal-overlay"
           {...OVERLAY_FADE}
           style={{
-            ...stripePaymentOverlayStyle({ isMobile, padding: isMobile ? 0 : 16 }),
             background: "rgba(0,0,0,0.9)",
           }}
           onClick={handleClose}
         >
           <motion.div
-            {...(isMobile ? SHEET_UP : MODAL_CENTER)}
+            className="storefront-adaptive-modal-panel"
+            {...MODAL_CENTER}
             onClick={(e) => e.stopPropagation()}
             style={{
-              ...stripePaymentPanelStyle({ isMobile, maxWidth: 400 }),
               background: "#0a0a0a",
-              padding: isMobile ? "20px 20px max(20px, env(safe-area-inset-bottom))" : 30,
-              borderRadius: isMobile ? "20px 20px 0 0" : 20,
               border: "1px solid #222",
-              alignSelf: isMobile ? "flex-end" : "center",
             }}
           >
             {step === "thanks" ? (

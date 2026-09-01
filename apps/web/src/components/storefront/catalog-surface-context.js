@@ -11,7 +11,6 @@ import {
   useSyncExternalStore,
   useLayoutEffect,
 } from "react";
-import { useRouter } from "next/navigation";
 import {
   getCatalogLoading,
   setCatalogLoading,
@@ -73,6 +72,18 @@ function mergeCanonicalTrackWithFreshMetadata(prev, incoming, inlineFallback) {
   return merged;
 }
 
+function reconcileFreshCatalogGroup(previous, incoming, inlineFallback) {
+  const prevBySlug = new Map((previous || []).map((item) => [item.slug, item]));
+  const fallbackBySlug = new Map((inlineFallback || []).map((item) => [item.slug, item]));
+  return (Array.isArray(incoming) ? incoming : []).map((item) =>
+    mergeCanonicalTrackWithFreshMetadata(
+      prevBySlug.get(item?.slug),
+      item,
+      fallbackBySlug.get(item?.slug)
+    )
+  );
+}
+
 /**
  * Phase 17C — catalog fetch + derived playback lookup isolated from Page shell.
  * Phase 20G — stable media URLs on first paint; skip redundant page-1 rewrites.
@@ -86,7 +97,6 @@ export function CatalogSurfaceProvider({
   inlineMixtapesAndEps = [],
   children,
 }) {
-  const router = useRouter();
   const [stabilizedInlineSingles] = useState(() =>
     stabilizeCatalogMediaDeterministic(inlineSingles));
 
@@ -94,6 +104,12 @@ export function CatalogSurfaceProvider({
     const seed = initialSingles?.length ? initialSingles : inlineSingles;
     return stabilizeCatalogMediaDeterministic(seed);
   });
+  const [browseFeatures, setBrowseFeatures] = useState(() =>
+    stabilizeCatalogMediaDeterministic(inlineFeatures));
+  const [browseAlbums, setBrowseAlbums] = useState(() =>
+    stabilizeCatalogMediaDeterministic(inlineAlbums));
+  const [browseMixtapesAndEps, setBrowseMixtapesAndEps] = useState(() =>
+    stabilizeCatalogMediaDeterministic(inlineMixtapesAndEps));
   const catalogMutationRevision = useSyncExternalStore(
     subscribeCatalogRefresh,
     getCatalogRefreshRevision,
@@ -112,7 +128,7 @@ export function CatalogSurfaceProvider({
   const catalogFetchAbort = useAbortController(
     `${catalogMutationRevision}:${catalogPage}`
   );
-  const lastRscRefreshRevisionRef = useRef(catalogMutationRevision);
+  const lastSnapshotRevisionRef = useRef(catalogMutationRevision);
   const prevBrowseSinglesLenRef = useRef(0);
   const prevBrowseSinglesRef = useRef(browseSingles);
   const browseSinglesRef = useRef(browseSingles);
@@ -122,12 +138,36 @@ export function CatalogSurfaceProvider({
   }, [browseSingles]);
 
   useEffect(() => {
-    if (lastRscRefreshRevisionRef.current === catalogMutationRevision) return;
-    lastRscRefreshRevisionRef.current = catalogMutationRevision;
-    // Refresh the RSC projection too so features, albums, EPs, and mixtapes
-    // receive the same committed-state update as the paged singles surface.
-    router.refresh();
-  }, [catalogMutationRevision, router]);
+    if (lastSnapshotRevisionRef.current === catalogMutationRevision) return undefined;
+    const controller = new AbortController();
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch("/api/catalog/releases?view=snapshot", {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (cancelled || !response.ok || data?.fallback || !data?.catalog) return;
+        const snapshot = data.catalog;
+        setBrowseFeatures((previous) =>
+          reconcileFreshCatalogGroup(previous, snapshot.features, inlineFeatures));
+        setBrowseAlbums((previous) =>
+          reconcileFreshCatalogGroup(previous, snapshot.albums, inlineAlbums));
+        setBrowseMixtapesAndEps((previous) =>
+          reconcileFreshCatalogGroup(previous, snapshot.mixtapes, inlineMixtapesAndEps));
+        lastSnapshotRevisionRef.current = catalogMutationRevision;
+      } catch (error) {
+        if (error?.name !== "AbortError") {
+          console.error("[catalog-surface] targeted snapshot refresh failed", error?.message);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [catalogMutationRevision, inlineFeatures, inlineAlbums, inlineMixtapesAndEps]);
 
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
@@ -263,20 +303,19 @@ export function CatalogSurfaceProvider({
   // reason to resurrect the stale seed.
   const displaySingles = browseSingles;
 
-  const displayFeatures = useMemo(
-    () => stabilizeCatalogMediaDeterministic(inlineFeatures),
-    [inlineFeatures]
-  );
+  const displayFeatures = browseFeatures;
+  const displayAlbums = browseAlbums;
+  const displayMixtapesAndEps = browseMixtapesAndEps;
 
   const catalogPlaybackLookup = useMemo(
     () =>
       buildCatalogPlaybackLookup([
         ...displaySingles,
         ...displayFeatures,
-        ...inlineAlbums,
-        ...inlineMixtapesAndEps,
+        ...displayAlbums,
+        ...displayMixtapesAndEps,
       ]),
-    [displaySingles, displayFeatures, inlineAlbums, inlineMixtapesAndEps]
+    [displaySingles, displayFeatures, displayAlbums, displayMixtapesAndEps]
   );
 
   const value = useMemo(
@@ -284,6 +323,8 @@ export function CatalogSurfaceProvider({
       browseSingles,
       displaySingles,
       displayFeatures,
+      displayAlbums,
+      displayMixtapesAndEps,
       catalogHasMore: catalogHasMoreForCurrentRevision,
       catalogPage,
       loadMoreCatalog,
@@ -293,6 +334,8 @@ export function CatalogSurfaceProvider({
       browseSingles,
       displaySingles,
       displayFeatures,
+      displayAlbums,
+      displayMixtapesAndEps,
       catalogHasMoreForCurrentRevision,
       catalogPage,
       loadMoreCatalog,

@@ -97,7 +97,6 @@ export const LiveCountdownMobileHomeStrip = memo(function LiveCountdownMobileHom
 });
 
 export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection({
-  isMobile,
   liveStreamDate,
   liveStreamTime,
 }) {
@@ -112,12 +111,12 @@ export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection({
           background: "linear-gradient(135deg,#080808,#0d0d0d)",
           border: "1px solid rgba(0,255,255,0.1)",
           borderRadius: 20,
-          padding: isMobile ? "20px 16px" : "32px",
+          padding: "clamp(20px, 4cqi, 32px)",
           textAlign: "center",
         }}
       >
         <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 8 }}>NEXT LIVE STREAM</div>
-        <div style={{ fontSize: isMobile ? 16 : 20, fontWeight: 800, marginBottom: 4 }}>2MRRW LIVE – Dallas</div>
+        <div style={{ fontSize: "clamp(16px, 2.6cqi, 20px)", fontWeight: 800, marginBottom: 4 }}>2MRRW LIVE – Dallas</div>
         <div style={{ fontSize: 13, color: "#aaa", marginBottom: 24 }}>
           {liveStreamDate} · {liveStreamTime}
         </div>
@@ -149,7 +148,7 @@ export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection({
             style={{
               display: "flex",
               justifyContent: "center",
-              gap: isMobile ? 8 : 14,
+              gap: "clamp(8px, 2cqi, 14px)",
               flexWrap: "wrap",
             }}
           >
@@ -165,14 +164,14 @@ export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection({
                   background: "#0a0a0a",
                   border: "1px solid #1e1e1e",
                   borderRadius: 14,
-                  padding: isMobile ? "12px 10px" : "16px 20px",
-                  minWidth: isMobile ? 52 : 68,
+                  padding: "clamp(12px, 2cqi, 16px) clamp(10px, 2.6cqi, 20px)",
+                  minWidth: "clamp(52px, 10cqi, 68px)",
                   textAlign: "center",
                 }}
               >
                 <div
                   style={{
-                    fontSize: isMobile ? 24 : 32,
+                    fontSize: "clamp(24px, 4cqi, 32px)",
                     fontWeight: 900,
                     color: "#00ffff",
                     fontVariantNumeric: "tabular-nums",
@@ -202,7 +201,6 @@ export const LiveCountdownHomeSection = memo(function LiveCountdownHomeSection({
 });
 
 export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
-  isMobile,
   liveStreamDate,
   liveStreamTime,
 }) {
@@ -231,7 +229,7 @@ export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
           background: "linear-gradient(135deg,#080808,#0d0d0d)",
           border: liveIsLive ? "1px solid rgba(0,255,255,0.35)" : "1px solid rgba(0,255,255,0.12)",
           borderRadius: 20,
-          padding: isMobile ? "20px 16px" : "36px 32px",
+          padding: "clamp(20px, 4cqi, 36px) clamp(16px, 4cqi, 32px)",
           marginBottom: 28,
           textAlign: "center",
           transition: "border-color 0.4s",
@@ -240,7 +238,7 @@ export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
         <div style={{ fontSize: 11, color: "#555", letterSpacing: 3, marginBottom: 6, textTransform: "uppercase" }}>
           {liveIsLive ? "On Air Now" : "Next Live Stream"}
         </div>
-        <div style={{ fontSize: isMobile ? 17 : 22, fontWeight: 800, marginBottom: 4 }}>
+        <div style={{ fontSize: "clamp(17px, 3cqi, 22px)", fontWeight: 800, marginBottom: 4 }}>
           {liveTitle || "2MRRW LIVE"}
         </div>
         {!liveIsLive && (
@@ -259,7 +257,7 @@ export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
             <div style={{ fontSize: 28, fontWeight: 900, color: "#00ffff", letterSpacing: 4 }}>LIVE NOW</div>
           </div>
         ) : (
-          <div style={{ display: "flex", justifyContent: "center", gap: isMobile ? 8 : 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: "clamp(8px, 2cqi, 16px)", flexWrap: "wrap" }}>
             {[
               { v: liveCountdown.days, l: "Days" },
               { v: liveCountdown.hours, l: "Hours" },
@@ -270,10 +268,10 @@ export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
                 key={u.l}
                 style={{
                   background: "#0a0a0a", border: "1px solid #1e1e1e", borderRadius: 14,
-                  padding: isMobile ? "12px 10px" : "18px 22px", minWidth: isMobile ? 52 : 74, textAlign: "center",
+                  padding: "clamp(12px, 2.4cqi, 18px) clamp(10px, 3cqi, 22px)", minWidth: "clamp(52px, 11cqi, 74px)", textAlign: "center",
                 }}
               >
-                <div style={{ fontSize: isMobile ? 26 : 36, fontWeight: 900, color: "#00ffff", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
+                <div style={{ fontSize: "clamp(26px, 5cqi, 36px)", fontWeight: 900, color: "#00ffff", fontVariantNumeric: "tabular-nums", lineHeight: 1 }}>
                   {String(u.v).padStart(2, "0")}
                 </div>
                 <div style={{ fontSize: 9, color: "#444", letterSpacing: 2, marginTop: 6, textTransform: "uppercase" }}>{u.l}</div>

@@ -1,11 +1,11 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo } from "react";
 import HomeStorefront from "@/components/home/HomeStorefront";
-import { usePlaybackChromeLayout } from "@/hooks/usePlaybackChromeLayout";
 
 /**
- * Subscribes to playback chrome for activeFlowMode without re-rendering Page or Hero.
+ * Stable bridge into HomeStorefront. Playback-mode subscriptions live beside
+ * the Flow State panel so transport changes never re-render this wrapper.
  */
 const HomeStorefrontFlowMode = memo(function HomeStorefrontFlowMode({
   flowConversionActive,
@@ -13,17 +13,11 @@ const HomeStorefrontFlowMode = memo(function HomeStorefrontFlowMode({
   liveCountdownTarget,
   ...homeProps
 }) {
-  const { nowPlayingKey } = usePlaybackChromeLayout();
-  const activeFlowMode = useMemo(
-    () => (flowConversionActive ? "conversion" : nowPlayingKey ? "nowplaying" : "idle"),
-    [flowConversionActive, nowPlayingKey]
-  );
-
   return (
     <HomeStorefront
       {...homeProps}
       liveCountdownTarget={liveCountdownTarget}
-      activeFlowMode={activeFlowMode}
+      flowConversionActive={flowConversionActive}
       onFlowConversionActive={onFlowConversionActive}
     />
   );

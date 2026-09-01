@@ -9,7 +9,6 @@ import { withR2CatalogMedia } from "@/components/home/catalogMedia";
 
 function RadioCarousel({
   narrow = false,
-  isMobile,
   currentSlide,
   radioSlides,
   radioIndex,
@@ -22,13 +21,11 @@ function RadioCarousel({
   currentUserId,
   onLibraryChange,
 }) {
-  const coverW = isMobile ? 120 : narrow ? 200 : 320;
-  const infoPad = isMobile ? "20px 16px" : narrow ? "28px 22px" : "36px 32px";
-  const titleSize = isMobile ? 18 : narrow ? 24 : 34;
   const radioAccess = resolveContentAccess(currentSlide, accountState);
 
   return (
     <div
+      className={`home-radio-card${narrow ? " home-radio-card--narrow" : ""}`}
       style={{
         position: "relative",
         borderRadius: 22,
@@ -49,9 +46,10 @@ function RadioCarousel({
           zIndex: 0,
         }}
       />
-      <div style={{ display: "flex", alignItems: "stretch", minHeight: isMobile ? 180 : 320, position: "relative", zIndex: 1 }}>
+      <div className="home-radio-card__layout" style={{ display: "flex", alignItems: "stretch", position: "relative", zIndex: 1 }}>
         <div
-          style={{ flexShrink: 0, width: coverW, position: "relative", overflow: "hidden" }}
+          className="home-radio-card__cover"
+          style={{ flexShrink: 0, position: "relative", overflow: "hidden" }}
         >
           <img
             src={currentSlide.cover}
@@ -85,17 +83,16 @@ function RadioCarousel({
           </div>
         </div>
         <div
+          className="home-radio-card__info"
           style={{
             flex: 1,
-            padding: infoPad,
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
-            gap: isMobile ? 8 : 14,
           }}
         >
           <div style={{ fontSize: 10, color: "#444", letterSpacing: 4, textTransform: "uppercase", fontWeight: 700 }}>2MRRW RADIO</div>
-          <div style={{ fontSize: titleSize, fontWeight: 900, letterSpacing: 2, lineHeight: 1.1 }}>{currentSlide.title}</div>
+          <div className="home-radio-card__title" style={{ fontWeight: 900, letterSpacing: 2, lineHeight: 1.1 }}>{currentSlide.title}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ display: "flex", alignItems: "flex-end", gap: 3, height: 18 }}>
               {[10, 16, 8, 14].map((h, i) => (
@@ -114,7 +111,7 @@ function RadioCarousel({
             <div style={{ fontSize: 13, color: "#555", letterSpacing: 1 }}>SINGLE</div>
           </div>
           {radioAccess?.showPrice ? (
-            <div style={{ fontSize: isMobile ? 16 : 20, color: "#00ffff", fontWeight: 700 }}>${currentSlide.price.toFixed(2)}</div>
+            <div className="home-radio-card__price" style={{ color: "#00ffff", fontWeight: 700 }}>${currentSlide.price.toFixed(2)}</div>
           ) : null}
           <div style={{ display: "flex", gap: 10, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}>
             <ReleaseCardPlayButton
@@ -144,14 +141,13 @@ function RadioCarousel({
                   e.currentTarget.style.transform = "scale(1)";
                   onFlowConversionActive(false);
                 }}
+                className="home-radio-card__cart"
                 style={{
-                  padding: isMobile ? "10px 16px" : "11px 22px",
                   background: currentSlide.tagColor,
                   color: "#000",
                   border: "none",
                   borderRadius: 10,
                   cursor: "pointer",
-                  fontSize: isMobile ? 12 : 13,
                   fontWeight: 900,
                   transition: "0.25s",
                   boxShadow: `0 0 20px ${currentSlide.tagColor}55`,
@@ -167,7 +163,7 @@ function RadioCarousel({
               onLibraryChange={onLibraryChange}
             />
           </div>
-          <div style={{ display: "flex", gap: 7, marginTop: isMobile ? 4 : 10 }}>
+          <div className="home-radio-card__dots" style={{ display: "flex", gap: 7 }}>
             {radioSlides.map((s, i) => (
               <div
                 key={s.slug}
@@ -185,7 +181,7 @@ function RadioCarousel({
             ))}
           </div>
         </div>
-        <div style={{ position: "absolute", bottom: isMobile ? 12 : 24, right: isMobile ? 12 : 24, display: "flex", gap: 8 }}>
+        <div className="home-radio-card__nav" style={{ position: "absolute", display: "flex", gap: 8 }}>
           {[
             { d: "prev", icon: "‹" },
             { d: "next", icon: "›" },
@@ -203,9 +199,8 @@ function RadioCarousel({
                       : radioIndex + 1;
                 goRadio(ni);
               }}
+              className="home-radio-card__nav-button"
               style={{
-                width: isMobile ? 32 : 36,
-                height: isMobile ? 32 : 36,
                 borderRadius: "50%",
                 background: "rgba(255,255,255,0.05)",
                 border: "1px solid #2a2a2a",

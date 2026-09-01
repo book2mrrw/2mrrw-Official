@@ -14,7 +14,6 @@ const musicVideos = [
 ];
 
 const AudioVisualsSection = memo(function AudioVisualsSection({
-  isMobile,
   onAudioVisualsFocused,
   onAudioVisualsExit,
 }) {
@@ -50,7 +49,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
-    const threshold = isMobile ? 0.5 : 0.4;
+    const threshold = 0.45;
     let hasBeenInView = false;
 
     const sendCmd = (cmd) => {
@@ -128,92 +127,13 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
 
   return (
     <div ref={sectionRef}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: isMobile ? 12 : 20, marginTop: isMobile ? 24 : 32 }}>
-        <h2 className="section-heading" style={{ margin: 0, fontSize: isMobile ? 17 : 22 }}>Audio Visuals</h2>
+      <div className="audio-visuals-heading" style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
+        <h2 className="section-heading audio-visuals-heading__title" style={{ margin: 0 }}>Audio Visuals</h2>
         <span style={{ fontSize: 10, color: "#333", letterSpacing: 3, textTransform: "uppercase", fontWeight: 700 }}>Official Visuals</span>
       </div>
 
-      {isMobile ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 16, overflow: "hidden" }}>
-            <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "#000" }}>
-              {hasEntered ? (
-                <iframe
-                  key={featuredId}
-                  ref={iframeRef}
-                  src={iframeSrc}
-                  title={featuredVid.title}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                  allowFullScreen
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
-                />
-              ) : (
-                <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", cursor: "pointer" }} onClick={handlePlaceholderClick}>
-                  <img
-                    src={`https://img.youtube.com/vi/${featuredId}/mqdefault.jpg`}
-                    alt={featuredVid.title}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                  />
-                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.35)" }}>
-                    <div style={{ width: 52, height: 52, borderRadius: "50%", background: "rgba(0,0,0,0.7)", border: "2px solid rgba(255,255,255,0.3)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                      <svg viewBox="0 0 24 24" fill="white" width="22" height="22" style={{ marginLeft: 3 }}><path d="M8 5v14l11-7z" /></svg>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div style={{ padding: "12px 14px" }}>
-              <div style={{ fontSize: 14, fontWeight: 800, letterSpacing: 1 }}>{featuredVid.title}</div>
-              <div style={{ fontSize: 11, color: "#555", marginTop: 3 }}>{featuredVid.description}</div>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 6, scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch" }}>
-            {musicVideos.map((vid) => {
-              const isActive = featuredId === vid.youtubeId;
-              return (
-                <div
-                  key={vid.id}
-                  onClick={() => handleSelect(vid.youtubeId)}
-                  style={{
-                    flex: "0 0 auto",
-                    width: 140,
-                    scrollSnapAlign: "start",
-                    background: "#0e0e0e",
-                    border: `1px solid ${isActive ? "#00ffff55" : "#1e1e1e"}`,
-                    borderRadius: 12,
-                    overflow: "hidden",
-                    cursor: "pointer",
-                    transition: "border-color 0.2s, box-shadow 0.2s",
-                    boxShadow: isActive ? "0 0 12px rgba(0,255,255,0.18)" : "none",
-                  }}
-                >
-                  <div style={{ position: "relative", paddingBottom: "56.25%", height: 0 }}>
-                    <img
-                      src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
-                      alt={vid.title}
-                      style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", objectFit: "cover" }}
-                    />
-                    {isActive && (
-                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.45)" }}>
-                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#00ffff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                          <svg viewBox="0 0 24 24" fill="#000" width="12" height="12"><path d="M6 19h4V5H6zm8-14v14h4V5z" /></svg>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ padding: "8px 10px" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.3, color: isActive ? "#00ffff" : "white" }}>{vid.title}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
-          <div style={{ flex: "1 1 0", minWidth: 0, background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 20, overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.5)" }}>
+        <div className="audio-visuals-composition">
+          <div className="audio-visuals-feature" style={{ flex: "1 1 0", minWidth: 0, background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 20, overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.5)" }}>
             <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "#000" }}>
               {hasEntered ? (
                 <iframe
@@ -261,12 +181,13 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
             </div>
           </div>
 
-          <div style={{ width: 236, flexShrink: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div className="audio-visuals-playlist" style={{ flexShrink: 0 }}>
             <div style={{ fontSize: 9, color: "#2a2a2a", letterSpacing: 3, textTransform: "uppercase", fontWeight: 700, marginBottom: 2 }}>Up Next</div>
             {musicVideos.map((vid) => {
               const isActive = featuredId === vid.youtubeId;
               return (
                 <div
+                  className="audio-visuals-playlist__item"
                   key={vid.id}
                   onClick={() => handleSelect(vid.youtubeId)}
                   style={{
@@ -356,7 +277,6 @@ const AudioVisualsSection = memo(function AudioVisualsSection({
             })}
           </div>
         </div>
-      )}
     </div>
   );
 });

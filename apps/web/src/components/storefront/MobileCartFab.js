@@ -2,19 +2,12 @@
 
 import { memo } from "react";
 import { motion } from "framer-motion";
-import { usePlaybackChromeLayout } from "@/hooks/usePlaybackChromeLayout";
-
-const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
 
 const MobileCartFab = memo(function MobileCartFab({ cartCount, onOpen }) {
-  const { mobileCartFabBottom } = usePlaybackChromeLayout();
-
   return (
     <motion.button
-      layout
+      className="storefront-cart-fab"
       onClick={onOpen}
-      animate={{ bottom: mobileCartFabBottom }}
-      transition={SPRING_SOFT}
       style={{
         position: "fixed",
         right: 16,

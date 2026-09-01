@@ -198,6 +198,52 @@ export async function PATCH(req, { params }) {
     return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ ok: true, archived: id });
   }
 
+  const hasEditorMutation =
+    title !== undefined || price !== undefined || genre !== undefined ||
+    release_date !== undefined || Array.isArray(track_lyrics);
+  const hasLifecycleMutation = lifecycleKeys.some((key) => body[key] !== undefined);
+  if (hasEditorMutation && !hasLifecycleMutation) {
+    if (title !== undefined && !String(title).trim()) {
+      return NextResponse.json({ error: "Title cannot be empty" }, { status: 422 });
+    }
+    let priceCents = null;
+    const priceSet = price !== undefined && price !== "";
+    if (priceSet) {
+      priceCents = Math.round(Number.parseFloat(String(price)) * 100);
+      if (!Number.isSafeInteger(priceCents) || priceCents < 0) {
+        return NextResponse.json({ error: "Price must be a valid non-negative amount" }, { status: 422 });
+      }
+    }
+    const releaseDateSet = release_date !== undefined;
+    const normalizedReleaseDate = releaseDateSet && String(release_date || "").trim()
+      ? String(release_date).trim()
+      : null;
+
+    const { data: committed, error: commitError } = await admin.rpc("commit_current_release_edit", {
+      p_release_ref_id: id,
+      p_title: title === undefined ? null : String(title).trim(),
+      p_title_set: title !== undefined,
+      p_price_cents: priceCents,
+      p_price_set: priceSet,
+      p_genre: genre === undefined ? null : String(genre),
+      p_genre_set: genre !== undefined,
+      p_release_date: normalizedReleaseDate,
+      p_release_date_set: releaseDateSet,
+      p_track_lyrics: Array.isArray(track_lyrics) ? track_lyrics : [],
+    });
+    if (commitError) {
+      console.error("[admin/releases PATCH] atomic editor commit failed", commitError.message);
+      return NextResponse.json(
+        { error: "No changes were committed because the release edit could not be saved" },
+        { status: 500 }
+      );
+    }
+    if (committed?.status !== "draft") {
+      revalidateStorefront(committed?.slug, committed?.releaseType);
+    }
+    return NextResponse.json({ ok: true, committed });
+  }
+
   // ── Path A: wizard release ─────────────────────────────────────────────────────
   const { data: release } = await admin
     .from("releases")

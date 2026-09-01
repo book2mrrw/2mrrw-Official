@@ -24,7 +24,6 @@ import {
 const FeatureCard = memo(function FeatureCard({
   item,
   index,
-  isMobile,
   onGift,
   onOpenFeature,
   addToCart,
@@ -87,9 +86,9 @@ const FeatureCard = memo(function FeatureCard({
       source="home_feature_card"
       enabled={showPlayActions}
       data-release-presentation-key={presentationIdentity.key || undefined}
+      className="adaptive-rail-card adaptive-rail-card--feature"
       style={{
         flex: "0 0 auto",
-        width: isMobile ? 160 : 220,
         scrollSnapAlign: "start",
         background: "#0a0a0a",
         borderRadius: 14,
@@ -175,8 +174,8 @@ const FeatureCard = memo(function FeatureCard({
           </div>
         ) : null}
       </div>
-      <div style={{ padding: isMobile ? "10px 12px 14px" : "12px 14px 16px" }}>
-        <div className="hero-title-glow" style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, marginBottom: 4 }}>
+      <div className="adaptive-rail-card__meta">
+        <div className="hero-title-glow adaptive-rail-card__title" style={{ fontWeight: 700, marginBottom: 4 }}>
           {mediaItem.title}
         </div>
         <div style={{ fontSize: 10, color: "#a259ff", fontWeight: 700, letterSpacing: 1.5, marginBottom: 6 }}>
@@ -184,7 +183,7 @@ const FeatureCard = memo(function FeatureCard({
         </div>
         {access?.lifecycleMessage ? <div style={{ fontSize: 10, color: "rgba(255,255,255,.58)", lineHeight: 1.35, marginBottom: 7 }}>{access.lifecycleMessage}</div> : null}
         {access?.showPrice && mediaItem.price != null && Number.isFinite(Number(mediaItem.price)) ? (
-          <div style={{ fontSize: 12, color: "#00ffff", fontWeight: 700, marginBottom: isMobile ? 8 : 10 }}>
+          <div style={{ fontSize: 12, color: "#00ffff", fontWeight: 700, marginBottom: 10 }}>
             ${Number(mediaItem.price).toFixed(2)}
           </div>
         ) : null}
@@ -227,7 +226,6 @@ const FeatureCard = memo(function FeatureCard({
 
 function FeaturesRail({
   features,
-  isMobile,
   addToCart,
   onOpenFeature,
   onGift,
@@ -241,7 +239,7 @@ function FeaturesRail({
 
   return (
     <div
-      className="features-row"
+      className="features-row adaptive-scroll-rail"
       style={{
         display: "flex",
         flexWrap: "nowrap",
@@ -251,7 +249,6 @@ function FeaturesRail({
         overflowY: "hidden",
         overscrollBehaviorX: "contain",
         touchAction: "pan-x pan-y",
-        gap: isMobile ? 12 : 18,
         paddingBottom: 14,
       }}
     >
@@ -263,7 +260,6 @@ function FeaturesRail({
             key={stableKey}
             item={feat}
             index={i}
-            isMobile={isMobile}
             onGift={onGift}
             onOpenFeature={onOpenFeature}
             addToCart={addToCart}

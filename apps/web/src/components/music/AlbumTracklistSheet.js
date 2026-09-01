@@ -36,7 +36,6 @@ export default function AlbumTracklistSheet({
   accountState,
   userId,
   isAdmin = false,
-  isMobile = false,
   onClose,
   onLibraryChange,
 }) {
@@ -237,16 +236,15 @@ export default function AlbumTracklistSheet({
           y: dragY,
           opacity: sheetOpacity,
           width: "100%",
-          maxWidth: isMobile ? "100%" : 480,
+          maxWidth: 480,
           touchAction: "pan-y",
           boxSizing: "border-box",
         }}
         onDragEnd={handleDragEnd}
       >
         <div
+          className="album-tracklist-adaptive-sheet"
           style={{
-            height: isMobile ? "calc(100dvh - env(safe-area-inset-top) - 8px)" : undefined,
-            maxHeight: isMobile ? "none" : "70vh",
             background: "linear-gradient(165deg, rgba(20,20,24,0.96) 0%, rgba(8,8,12,0.98) 100%)",
             border: "1px solid rgba(255,255,255,0.06)",
             borderRadius: "16px 16px 0 0",
@@ -366,7 +364,7 @@ export default function AlbumTracklistSheet({
               overscrollBehavior: "contain",
               flex: 1,
               minHeight: 0,
-              padding: isMobile ? "0 4px" : "0 8px",
+              padding: "0 clamp(4px, 1.5cqi, 8px)",
               WebkitOverflowScrolling: "touch",
             }}
           >
@@ -397,12 +395,13 @@ export default function AlbumTracklistSheet({
               };
               return (
                 <div
+                  className="album-tracklist-adaptive-row"
                   key={track.id || index}
                   style={{
                     display: "flex",
                     alignItems: "center",
-                    gap: isMobile ? 6 : 10,
-                    padding: isMobile ? "10px 6px" : "10px 8px",
+                    gap: "clamp(6px, 2cqi, 10px)",
+                    padding: "10px clamp(6px, 1.5cqi, 8px)",
                     borderBottom: "1px solid rgba(255,255,255,0.04)",
                     background: active ? "rgba(0,191,255,0.06)" : "transparent",
                     minWidth: 0,
@@ -438,13 +437,11 @@ export default function AlbumTracklistSheet({
                       {track.title}
                     </div>
                   </div>
-                  {!isMobile ? (
-                    <span style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
-                      {formatDuration(duration) || "—"}
-                    </span>
-                  ) : null}
-                  {active && !isMobile ? (
-                    <>
+                  <span className="album-tracklist-adaptive-detail" style={{ fontSize: 11, color: "rgba(255,255,255,0.35)", flexShrink: 0, fontVariantNumeric: "tabular-nums" }}>
+                    {formatDuration(duration) || "—"}
+                  </span>
+                  {active ? (
+                    <span className="album-tracklist-adaptive-detail album-tracklist-adaptive-seek">
                       <button
                         type="button"
                         aria-label="Rewind 15 seconds"
@@ -481,7 +478,7 @@ export default function AlbumTracklistSheet({
                       >
                         +15
                       </button>
-                    </>
+                    </span>
                   ) : null}
                   <span onClick={(e) => e.stopPropagation()}>
                     <MusicPlusButton
@@ -508,6 +505,7 @@ export default function AlbumTracklistSheet({
                     </span>
                   ) : (
                     <button
+                      className="album-tracklist-adaptive-play"
                       type="button"
                       aria-label={
                         active && isPlaying
@@ -525,8 +523,8 @@ export default function AlbumTracklistSheet({
                         playTrackInSheet(index);
                       }}
                       style={{
-                        width: isMobile ? 40 : 32,
-                        height: isMobile ? 40 : 32,
+                        width: 32,
+                        height: 32,
                         borderRadius: "50%",
                         border: "1px solid rgba(255,255,255,0.1)",
                         background: "rgba(255,255,255,0.05)",

@@ -11,7 +11,6 @@ export default function GiftBottomSheet({
   open,
   release,
   senderUserId,
-  isMobile,
   isAdmin = false,
   onClose,
 }) {

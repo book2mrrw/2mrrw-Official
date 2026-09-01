@@ -185,7 +185,6 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
 const SinglesStyleCard = memo(function SinglesStyleCard({
   item,
   index,
-  isMobile,
   onGift,
   onCardClick,
   onPlayClick,
@@ -259,10 +258,9 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
       data-single-card={cardMedia === "video" ? true : undefined}
       data-release-presentation-key={presentationIdentity.key || undefined}
       onClick={() => onCardClick?.(mediaItem)}
-      className={shouldAnimate ? "catalog-card-enter" : undefined}
+      className={`adaptive-rail-card${shouldAnimate ? " catalog-card-enter" : ""}`}
       style={{
         flex: "0 0 auto",
-        width: isMobile ? 160 : 200,
         cursor: "pointer",
         scrollSnapAlign: "start",
         animationDelay: `${index * 0.09}s`,
@@ -321,10 +319,10 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
           </div>
         ) : null}
       </div>
-      <div style={{ padding: isMobile ? "10px 12px 14px" : "12px 14px 16px" }}>
+      <div className="adaptive-rail-card__meta">
         <div
-          className={titleClassName}
-          style={{ fontSize: isMobile ? 12 : 13, fontWeight: 700, marginBottom: 4 }}
+          className={`${titleClassName || ""} adaptive-rail-card__title`}
+          style={{ fontWeight: 700, marginBottom: 4 }}
         >
           {mediaItem.title}
         </div>
@@ -335,7 +333,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
               fontSize: 12,
               color: "#00ffff",
               fontWeight: 700,
-              marginBottom: isMobile ? 8 : 10,
+              marginBottom: 10,
             }}
           >
             ${Number(mediaItem.price).toFixed(2)}
@@ -380,7 +378,6 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
 const LatestSinglesStyleRow = forwardRef(function LatestSinglesStyleRow(
   {
     items = [],
-    isMobile,
     onGift,
     onCardClick,
     onPlayClick,
@@ -426,11 +423,10 @@ const LatestSinglesStyleRow = forwardRef(function LatestSinglesStyleRow(
   return (
     <div
       ref={ref}
-      className={rowClassName}
+      className={`${rowClassName} adaptive-scroll-rail`}
       style={{
         flex: 1,
         display: "flex",
-        gap: isMobile ? 12 : 18,
         overflowX: "auto",
         paddingBottom: 14,
         scrollSnapType: "x mandatory",
@@ -451,7 +447,6 @@ const LatestSinglesStyleRow = forwardRef(function LatestSinglesStyleRow(
             key={stableKey}
             item={rawItem}
             index={i}
-            isMobile={isMobile}
             onGift={onGift}
             onCardClick={onCardClick}
             onPlayClick={onPlayClick}

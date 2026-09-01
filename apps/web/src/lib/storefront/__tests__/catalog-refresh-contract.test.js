@@ -75,7 +75,7 @@ test("the pinned storefront snapshot accepts authoritative empty and metadata ch
   assert.deepEqual(store.getStorefrontDisplaySingles(), []);
 });
 
-test("successful admin mutations signal a mounted refresh and refresh all RSC release groups", () => {
+test("successful admin mutations refresh the mounted catalog without an RSC reload", () => {
   const wizard = read("src/components/admin/UploadWizard.js");
   const manager = read("src/components/admin/InlineReleasesManager.js");
   const provider = read("src/components/storefront/catalog-surface-context.js");
@@ -85,7 +85,7 @@ test("successful admin mutations signal a mounted refresh and refresh all RSC re
   for (const reason of [
     "release_metadata_updated",
     "release_lyrics_updated",
-    "release_master_replaced",
+    "release_master_promoted",
   ]) {
     assert.match(manager, new RegExp(reason));
   }
@@ -93,5 +93,6 @@ test("successful admin mutations signal a mounted refresh and refresh all RSC re
   assert.match(provider, /subscribeCatalogRefresh/);
   assert.match(provider, /catalogRequest\.revision === catalogMutationRevision/);
   assert.match(provider, /\? catalogRequest\.page\s*:\s*1/);
-  assert.match(provider, /router\.refresh\(\)/);
+  assert.doesNotMatch(provider, /router\.refresh\(\)/);
+  assert.match(provider, /applyCatalogSnapshot|replaceCatalogSnapshot|catalogMutationRevision/);
 });

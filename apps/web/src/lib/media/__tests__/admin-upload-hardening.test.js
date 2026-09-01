@@ -38,13 +38,18 @@ describe("admin upload MIME authority", () => {
 });
 
 describe("one upload transport and one storefront invalidator", () => {
-  test("all eight upload call sites use the shared transport", () => {
+  test("normal assets use the shared transport and master replacements use the staged transport", () => {
     const wizard = read("src/components/admin/UploadWizard.js");
     const releases = read("src/app/admin/releases/page.js");
     const inline = read("src/components/admin/InlineReleasesManager.js");
     assert.equal((wizard.match(/uploadAssetToR2\s*\(/g) || []).length, 4);
-    assert.equal((releases.match(/uploadAssetToR2\s*\(/g) || []).length, 2);
-    assert.equal((inline.match(/uploadAssetToR2\s*\(/g) || []).length, 2);
+    assert.equal((releases.match(/uploadAssetToR2\s*\(/g) || []).length, 1);
+    assert.equal((inline.match(/uploadAssetToR2\s*\(/g) || []).length, 1);
+    for (const source of [releases, inline]) {
+      assert.match(source, /stageMasterReplacement\s*\(/);
+      assert.match(source, /beginMasterReplacement\s*\(/);
+      assert.match(source, /watchMasterReplacement\s*\(/);
+    }
     for (const source of [wizard, releases, inline]) {
       assert.ok(!source.includes("/api/admin/upload/presigned"));
       assert.ok(!source.includes("new XMLHttpRequest"));
@@ -78,22 +83,25 @@ describe("one upload transport and one storefront invalidator", () => {
     assert.match(complete, /ADMIN_UPLOAD_CONTRACTS\["cover-video"\]\.maxDurationSeconds/);
   });
 
-  test("My Releases replaces audio immediately after direct upload", () => {
+  test("My Releases reports success only after the staged revision becomes active", () => {
     const inline = read("src/components/admin/InlineReleasesManager.js");
     const uploadStart = inline.indexOf("const uploadAudio");
-    const replaceCall = inline.indexOf("/replace-master`,", uploadStart);
-    assert.ok(replaceCall > uploadStart);
+    const stageCall = inline.indexOf("stageMasterReplacement({", uploadStart);
+    const promoteSignal = inline.indexOf('status.status === "active"', stageCall);
+    assert.ok(stageCall > uploadStart && promoteSignal > stageCall);
+    assert.match(inline, /signalCatalogMutation\("release_master_promoted"\)/);
     assert.ok(!inline.includes('setAudioPhase("confirming")'));
     assert.ok(!inline.includes('audioPhase === "confirming"'));
   });
 
-  test("master cleanup occurs after persistence and preserves the new key", () => {
-    const route = read("src/app/api/admin/releases/[id]/replace-master/route.js");
-    const update = route.indexOf('.from("tracks")');
-    const cleanup = route.indexOf("removeStaleMasterSiblings(newAudioFolder, newKey)");
-    assert.ok(update > -1 && cleanup > update);
-    assert.match(route, /key !== newKey/);
-    assert.match(route, /listR2Objects\(prefix, \{ recursive: false \}\)/);
+  test("master cleanup is delayed until after atomic promotion and retention", () => {
+    const migration = read("supabase/migrations/20260901000000_audio_master_revision_authority.sql");
+    const cron = read("src/app/api/cron/retire-audio-master-revisions/route.js");
+    assert.match(migration, /promote_audio_master_revision/);
+    assert.match(migration, /retire_after/);
+    assert.match(migration, /interval '7 days'/i);
+    assert.match(cron, /status[\s\S]*retired/);
+    assert.match(cron, /deleteR2Object/);
   });
 
   test("catalog DB has no explicit cache beneath ISR", () => {
@@ -416,9 +424,11 @@ describe("draft mutations never bust the public storefront cache", () => {
   test("draft-scoped upload/complete and replace-master calls are gated on release status", () => {
     const complete = read("src/app/api/admin/upload/complete/route.js");
     const replaceMaster = read("src/app/api/admin/releases/[id]/replace-master/route.js");
+    const promoted = read("src/app/api/admin/hls/complete/route.js");
     assert.match(complete, /if \(!audioRelStatus \|\| audioRelStatus\.status !== "draft"\) revalidateStorefront\(\);/);
-    assert.match(complete, /if \(!relRow \|\| relRow\.status !== "draft"\) revalidateStorefront\(\);/);
-    assert.match(replaceMaster, /if \(release\.status !== "draft"\) revalidateStorefront\(\);/);
+    assert.match(complete, /if \(promotion\?\.status !== "draft"\) revalidateStorefront\(promotion\?\.slug, promotion\?\.releaseType\);/);
+    assert.doesNotMatch(replaceMaster, /revalidateStorefront\(/);
+    assert.match(promoted, /if \(body\.replacementId\)[\s\S]*revalidateStorefront\(slug\)/);
   });
 
   test("the release PATCH route revalidates using the post-update status, not the pre-fetch one", () => {

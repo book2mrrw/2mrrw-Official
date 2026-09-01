@@ -19,6 +19,26 @@ export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const view = searchParams.get("view");
 
+  if (view === "snapshot") {
+    try {
+      const catalog = await getStorefrontCatalogFromDB();
+      if (!catalog) throw new Error("catalog_unavailable");
+      return NextResponse.json({
+        catalog,
+        fallback: false,
+        source: "supabase",
+      }, { headers: NO_STORE_HEADERS });
+    } catch (error) {
+      console.error("[catalog/releases] storefront snapshot read failed", {
+        error: error?.message,
+      });
+      return NextResponse.json(
+        { error: "catalog_unavailable", catalog: null, fallback: true },
+        { status: 503, headers: NO_STORE_HEADERS }
+      );
+    }
+  }
+
   if (view === "platform") {
     try {
       const catalog = await getStorefrontCatalogFromDB();

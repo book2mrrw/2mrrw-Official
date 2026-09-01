@@ -19,6 +19,7 @@ import { useEntitlementAccountState } from "@/context/AuthContext";
 import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 import {
   DOUBLE_TAP_MS,
+  HOLD_THRESHOLD_MS,
   HOLD_FADE_MS,
   RELEASE_FADE_MS,
   MOVE_CANCEL_PX,
@@ -26,6 +27,10 @@ import {
 import { resolvePlayerDisplayTitle } from "@/lib/playback/resolve-player-display-title";
 import { useArtworkGesture, isArtworkGestureActive } from "@/hooks/useArtworkGesture";
 import { interactiveMediaState, PLAYBACK_MODE } from "@/media/InteractiveMediaState";
+import {
+  openPlayerReleaseModal,
+  primePlayerReleaseModal,
+} from "@/lib/storefront/player-release-modal-bridge";
 
 const PREVIEW_MAX_SEC = 15;
 
@@ -170,7 +175,7 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
 
 // ─── Cover art thumbnail with CS hold gesture ─────────────────────────────────
 
-function MiniCoverHit({
+const MiniCoverHit = memo(function MiniCoverHit({
   title,
   trackSlug,
   baseCoverUrl,
@@ -185,6 +190,7 @@ function MiniCoverHit({
   onCoverTouchStart,
   onCoverTouchMove,
   onCoverTouchEnd,
+  onOpenRelease,
 }) {
   // Asset failure state keyed by stable track identity + role.
   // trackSlug is stable for the lifetime of a track; URLs are ephemeral delivery attempts.
@@ -205,12 +211,66 @@ function MiniCoverHit({
 
   const videoRef  = useRef(null);
   const coverRef  = useRef(null);
+  const pointerIntentRef = useRef({ startedAt: 0, startX: 0, startY: 0, moved: false, allowOpen: false, pointerType: "" });
 
   // Interactive artwork gesture — Slow/Screw/Chop/Filter on the mini player cover
   const { handlers: artGesture } = useArtworkGesture({
     slug:       trackSlug || "",
     elementRef: coverRef,
   });
+
+  const handlePointerDown = useCallback((e) => {
+    if (e.button === 0) {
+      pointerIntentRef.current = {
+        startedAt: performance.now(),
+        startX: e.clientX,
+        startY: e.clientY,
+        moved: false,
+        allowOpen: false,
+        pointerType: e.pointerType,
+        mode: interactiveMediaState.getSnapshot().playbackMode,
+      };
+    }
+    artGesture.onPointerDown(e);
+  }, [artGesture]);
+
+  const handlePointerMove = useCallback((e) => {
+    const intent = pointerIntentRef.current;
+    if (
+      intent.startedAt &&
+      Math.hypot(e.clientX - intent.startX, e.clientY - intent.startY) > MOVE_CANCEL_PX
+    ) {
+      intent.moved = true;
+    }
+    artGesture.onPointerMove(e);
+  }, [artGesture]);
+
+  const handlePointerUp = useCallback((e) => {
+    const intent = pointerIntentRef.current;
+    const elapsed = intent.startedAt ? performance.now() - intent.startedAt : Infinity;
+    intent.allowOpen =
+      !intent.moved &&
+      elapsed < HOLD_THRESHOLD_MS &&
+      intent.mode !== PLAYBACK_MODE.SLOW_LOCKED;
+    artGesture.onPointerUp(e);
+  }, [artGesture]);
+
+  const cancelPointerOpen = useCallback((e, handler) => {
+    pointerIntentRef.current.allowOpen = false;
+    handler(e);
+  }, []);
+
+  const handleClick = useCallback((e) => {
+    e.preventDefault();
+    // Native keyboard activation has detail=0 and no pointer gesture to arbitrate.
+    if (e.detail === 0) {
+      onOpenRelease?.();
+      return;
+    }
+    if (pointerIntentRef.current.pointerType === "touch" || !pointerIntentRef.current.allowOpen) return;
+    pointerIntentRef.current.allowOpen = false;
+    onOpenRelease?.();
+  }, [onOpenRelease]);
 
   // Record the next visual identity without starting a media request. Audio is
   // the critical path; the animated cover is attached only after playback has
@@ -257,16 +317,22 @@ function MiniCoverHit({
       className="player-bar-cover-hit"
       role="button"
       tabIndex={0}
-      aria-label="Cover art"
+      aria-label={title ? `Open ${title} release details` : "Open release details"}
       onTouchStart={(e) => onCoverTouchStart(e, undefined)}
       onTouchMove={onCoverTouchMove}
-      onTouchEnd={(e) => onCoverTouchEnd(e, undefined)}
-      onClick={(e) => e.preventDefault()}
-      onPointerDown={artGesture.onPointerDown}
-      onPointerMove={artGesture.onPointerMove}
-      onPointerUp={artGesture.onPointerUp}
-      onPointerCancel={artGesture.onPointerCancel}
-      onLostPointerCapture={artGesture.onLostPointerCapture}
+      onTouchEnd={(e) => onCoverTouchEnd(e, onOpenRelease)}
+      onClick={handleClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenRelease?.();
+        }
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={(e) => cancelPointerOpen(e, artGesture.onPointerCancel)}
+      onLostPointerCapture={(e) => cancelPointerOpen(e, artGesture.onLostPointerCapture)}
     >
       {!showVideo && !showStaticLayer && !showOverlay ? (
         <div className="player-bar-cover-fallback">{letter}</div>
@@ -304,7 +370,52 @@ function MiniCoverHit({
       ) : null}
     </div>
   );
-}
+});
+
+const PlayerReleaseMeta = memo(function PlayerReleaseMeta({
+  displayTitle,
+  gifted,
+  artistLine,
+  hasError,
+  onOpenRelease,
+}) {
+  return (
+    <div
+      className="player-bar-compact-meta player-bar-release-trigger"
+      onClick={onOpenRelease}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenRelease?.();
+        }
+      }}
+      aria-label={displayTitle ? `Open ${displayTitle} release details` : "Open release details"}
+    >
+      <div className="player-bar-compact-title">
+        {displayTitle}
+        {gifted ? (
+          <GiftIcon
+            size={12}
+            style={{
+              marginLeft: 4,
+              display: "inline-block",
+              verticalAlign: "middle",
+              animation: "giftIconSpin 4s ease-in-out infinite",
+            }}
+          />
+        ) : null}
+      </div>
+      <div
+        className="player-bar-compact-artist"
+        data-error={hasError ? "1" : undefined}
+      >
+        {artistLine}
+      </div>
+    </div>
+  );
+});
 
 // ─── Compact dock layout ───────────────────────────────────────────────────────
 // Layout: [Cover] [Title/Artist ·flex·] [Prev] [Play] [Next] [Repeat] [CS?]
@@ -314,6 +425,7 @@ function QueueButton({ count, onClick }) {
   return (
     <button
       type="button"
+      className="player-bar-queue-button"
       aria-label={count > 0 ? `View queue — ${count} up next` : "View queue"}
       onClick={onClick}
       style={{
@@ -363,6 +475,7 @@ function SleepTimerButton({ active, label, onClick }) {
   return (
     <button
       type="button"
+      className="player-bar-sleep-button"
       aria-label={active ? `Sleep timer active: ${label}` : "Set sleep timer"}
       onClick={onClick}
       style={{
@@ -436,25 +549,13 @@ const MiniPlayerDock = forwardRef(function MiniPlayerDock({
   onCoverTouchStart,
   onCoverTouchMove,
   onCoverTouchEnd,
+  onOpenRelease,
   sleepTimerActive,
   sleepTimerLabel,
   onOpenSleepSheet,
   upNextCount,
   onOpenQueueSheet,
 }, ref) {
-  const giftBadge =
-    currentTrack?.source === "gift" || currentTrack?.gifted ? (
-      <GiftIcon
-        size={12}
-        style={{
-          marginLeft: 4,
-          display: "inline-block",
-          verticalAlign: "middle",
-          animation: "giftIconSpin 4s ease-in-out infinite",
-        }}
-      />
-    ) : null;
-
   const artistLine = accessDenied
     ? errorMessage
     : streamRetryable
@@ -481,21 +582,19 @@ const MiniPlayerDock = forwardRef(function MiniPlayerDock({
             onCoverTouchStart={onCoverTouchStart}
             onCoverTouchMove={onCoverTouchMove}
             onCoverTouchEnd={onCoverTouchEnd}
+            onOpenRelease={onOpenRelease}
           />
-          <div className="player-bar-compact-meta">
-            <div className="player-bar-compact-title">
-              {displayTitle}
-              {giftBadge}
-            </div>
-            <div
-              className="player-bar-compact-artist"
-              data-error={(accessDenied || streamRetryable) ? "1" : undefined}
-            >
-              {artistLine}
-            </div>
-          </div>
+          <PlayerReleaseMeta
+            displayTitle={displayTitle}
+            gifted={currentTrack?.source === "gift" || Boolean(currentTrack?.gifted)}
+            artistLine={artistLine}
+            hasError={Boolean(accessDenied || streamRetryable)}
+            onOpenRelease={onOpenRelease}
+          />
           <div className="player-bar-controls">
-            <ShuffleButton active={shuffleEnabled} size={36} onClick={onToggleShuffle} />
+            <span className="player-bar-control-optional player-bar-control-shuffle">
+              <ShuffleButton active={shuffleEnabled} size={36} onClick={onToggleShuffle} />
+            </span>
             <TrackTransportButton direction="back" size={40} onClick={onPrevTrack} />
             <SignaturePlayRing
               isPlaying={isPlaying}
@@ -507,14 +606,22 @@ const MiniPlayerDock = forwardRef(function MiniPlayerDock({
               className="player-bar-compact-play"
             />
             <TrackTransportButton direction="forward" size={40} onClick={onNextTrack} />
-            <RepeatButton
-              repeatMode={repeatMode}
-              size={36}
-              onClick={onToggleRepeat}
-            />
-            {showCs ? <PlayerCsBarButton active={csActive} onClick={onToggleCs} /> : null}
+            <span className="player-bar-control-optional player-bar-control-repeat">
+              <RepeatButton
+                repeatMode={repeatMode}
+                size={36}
+                onClick={onToggleRepeat}
+              />
+            </span>
+            {showCs ? (
+              <span className="player-bar-control-optional player-bar-control-cs">
+                <PlayerCsBarButton active={csActive} onClick={onToggleCs} />
+              </span>
+            ) : null}
             <QueueButton count={upNextCount} onClick={onOpenQueueSheet} />
-            <SleepTimerButton active={sleepTimerActive} label={sleepTimerLabel} onClick={onOpenSleepSheet} />
+            <span className="player-bar-control-optional player-bar-control-sleep">
+              <SleepTimerButton active={sleepTimerActive} label={sleepTimerLabel} onClick={onOpenSleepSheet} />
+            </span>
           </div>
         </div>
       </div>
@@ -606,6 +713,8 @@ function GlobalAudioPlayerBar() {
   const csOverlayImgRef = useRef(null);
   const touchMovedRef = useRef(false);
   const touchStartRef = useRef(null);
+  const touchStartedAtRef = useRef(0);
+  const doubleTapConsumedRef = useRef(false);
   const tapTimeoutRef = useRef(null);
   const holdRafRef = useRef(null);
   const lastHoldOpacityRef = useRef(0);
@@ -623,18 +732,27 @@ function GlobalAudioPlayerBar() {
       document.documentElement.style.setProperty('--player-bar-inset', '0px');
       return;
     }
-    const update = () => {
+    let rafId = 0;
+    const measure = () => {
+      rafId = 0;
       const rect = el.getBoundingClientRect();
       const inset = Math.max(0, window.innerHeight - rect.top);
       document.documentElement.style.setProperty('--player-bar-inset', `${inset}px`);
+    };
+    const update = () => {
+      if (rafId) return;
+      rafId = window.requestAnimationFrame(measure);
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     window.addEventListener('resize', update);
+    window.visualViewport?.addEventListener('resize', update);
     roCleanupRef.current = () => {
       ro.disconnect();
       window.removeEventListener('resize', update);
+      window.visualViewport?.removeEventListener('resize', update);
+      if (rafId) window.cancelAnimationFrame(rafId);
     };
   }, []);
 
@@ -661,6 +779,15 @@ function GlobalAudioPlayerBar() {
       csCoverType: continuitySnap.cover?.csArtType ?? currentTrack.csCoverType,
     };
   }, [continuityFrozen, continuitySnap, currentTrack]);
+
+  useLayoutEffect(() => {
+    primePlayerReleaseModal(dockCurrentTrack);
+  }, [dockCurrentTrack]);
+
+  const handleOpenCurrentRelease = useCallback(() => {
+    if (!dockCurrentTrack) return false;
+    return openPlayerReleaseModal(dockCurrentTrack);
+  }, [dockCurrentTrack]);
 
   // Screen-reader track announcer — DOM-mutated on slug change, never causes a re-render.
   const trackAnnouncerRef = useRef(null);
@@ -757,15 +884,19 @@ function GlobalAudioPlayerBar() {
   );
 
   const handleCoverTouchStart = useCallback(
-    (e, onSingleTap) => {
+    (e) => {
       e.stopPropagation();
       touchMovedRef.current = false;
       touchStartRef.current = { x: e.touches[0]?.clientX ?? 0, y: e.touches[0]?.clientY ?? 0 };
 
       const now = Date.now();
+      touchStartedAtRef.current = now;
+      doubleTapConsumedRef.current = false;
       const sinceLast = now - lastTapTimeRef.current;
       if (sinceLast < DOUBLE_TAP_MS && lastTapTimeRef.current > 0 && hasCs) {
         window.clearTimeout(tapTimeoutRef.current);
+        tapTimeoutRef.current = null;
+        doubleTapConsumedRef.current = true;
         lastTapTimeRef.current = 0;
         cancelHoldAnim();
         revertHoldPreview();
@@ -775,15 +906,9 @@ function GlobalAudioPlayerBar() {
         void toggleCSMode?.();
         return;
       }
-      lastTapTimeRef.current = now;
+      lastTapTimeRef.current = hasCs ? now : 0;
 
       if (!hasCs || csModeRef.current) {
-        if (onSingleTap) {
-          tapTimeoutRef.current = window.setTimeout(() => {
-            onSingleTap();
-            lastTapTimeRef.current = 0;
-          }, DOUBLE_TAP_MS);
-        }
         return;
       }
 
@@ -818,27 +943,62 @@ function GlobalAudioPlayerBar() {
       e.preventDefault();
       e.stopPropagation();
 
-      if (touchMovedRef.current) { touchStartRef.current = null; return; }
-      if (csModeRef.current) { touchStartRef.current = null; return; }
+      const elapsed = Math.max(0, Date.now() - touchStartedAtRef.current);
+      const finishTouch = () => {
+        touchStartRef.current = null;
+        touchStartedAtRef.current = 0;
+      };
+      const scheduleSingleTap = () => {
+        if (!onSingleTap) {
+          lastTapTimeRef.current = 0;
+          return;
+        }
+        const open = () => {
+          tapTimeoutRef.current = null;
+          lastTapTimeRef.current = 0;
+          if (interactiveMediaState.getSnapshot().playbackMode !== PLAYBACK_MODE.SLOW_LOCKED) {
+            onSingleTap();
+          }
+        };
+        const delay = hasCs ? Math.max(0, DOUBLE_TAP_MS - elapsed) : 0;
+        if (delay > 0) tapTimeoutRef.current = window.setTimeout(open, delay);
+        else open();
+      };
+
+      if (doubleTapConsumedRef.current) {
+        doubleTapConsumedRef.current = false;
+        finishTouch();
+        return;
+      }
+      if (touchMovedRef.current) {
+        lastTapTimeRef.current = 0;
+        finishTouch();
+        return;
+      }
+
+      if (csModeRef.current) {
+        scheduleSingleTap();
+        finishTouch();
+        return;
+      }
 
       if (holdActiveRef.current) {
+        const wasQuickTap = elapsed < HOLD_THRESHOLD_MS;
         animateHoldOpacity(lastHoldOpacityRef.current, 0, RELEASE_FADE_MS, null, () => {
           revertHoldPreview();
           setIsHoldAnimating(false);
         });
-        touchStartRef.current = null;
+        if (wasQuickTap) scheduleSingleTap();
+        else lastTapTimeRef.current = 0;
+        finishTouch();
         return;
       }
 
-      if (onSingleTap) {
-        tapTimeoutRef.current = window.setTimeout(() => {
-          onSingleTap();
-          lastTapTimeRef.current = 0;
-        }, DOUBLE_TAP_MS);
-      }
-      touchStartRef.current = null;
+      if (elapsed < HOLD_THRESHOLD_MS) scheduleSingleTap();
+      else lastTapTimeRef.current = 0;
+      finishTouch();
     },
-    [animateHoldOpacity, revertHoldPreview]
+    [animateHoldOpacity, hasCs, revertHoldPreview]
   );
 
   const previewOnly = Boolean(currentTrack?.metadata?.access?.previewOnly);
@@ -1234,6 +1394,7 @@ function GlobalAudioPlayerBar() {
         onCoverTouchStart={handleCoverTouchStart}
         onCoverTouchMove={handleCoverTouchMove}
         onCoverTouchEnd={handleCoverTouchEnd}
+        onOpenRelease={handleOpenCurrentRelease}
         sleepTimerActive={sleepTimerActive}
         sleepTimerLabel={sleepTimerLabel}
         onOpenSleepSheet={handleOpenSleepSheet}

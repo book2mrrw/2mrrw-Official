@@ -265,7 +265,6 @@ function CatalogGrid({
   onPlayAlbum,
   onOpenAlbumTracklist,
   catalogPlaybackLookup,
-  isMobile,
   onGift,
   onLibraryChange,
 }) {
@@ -273,11 +272,9 @@ function CatalogGrid({
   const accountState = entitlementAccountState;
   const isAdmin = isAdminStable;
   if (!items || items.length === 0) return null;
-  const containerStyle = isMobile
-    ? { display:"flex", flexWrap:"nowrap", overflowX:"auto", overflowY:"hidden", WebkitOverflowScrolling:"touch", scrollSnapType:"x mandatory", overscrollBehaviorX:"contain", touchAction:"pan-x pan-y", gap:12, paddingBottom:10 }
-    : { display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(260px,1fr))", gap:22 };
   return (
-    <div className={isMobile?`${type}-row`:""} style={containerStyle}>
+    <div className="catalog-adaptive-container">
+    <div className={`catalog-adaptive-grid ${type}-row`}>
       {items.map((item) => {
         if (!item?.slug) return null;
         const mediaItem = withR2CatalogMedia(item);
@@ -314,13 +311,12 @@ function CatalogGrid({
             <div
               key={mediaItem.slug}
               data-release-presentation-key={presentationIdentity.key || undefined}
-              className="release-card release-card--upcoming"
+              className="catalog-adaptive-card release-card release-card--upcoming"
               onClick={() => onCardClick?.(mediaItem)}
               style={{
-                ...(isMobile ? { flex: "0 0 160px", width: 160, scrollSnapAlign: "start" } : {}),
                 position: "relative",
                 background: "#0a0a0a",
-                borderRadius: isMobile ? 12 : 16,
+                borderRadius: 16,
                 overflow: "hidden",
                 border: "1px solid #1a1a1a",
               }}
@@ -348,8 +344,8 @@ function CatalogGrid({
                   </div>
                 </div>
               </div>
-              <div className="release-card-meta" style={{ padding: isMobile ? "10px" : "14px 16px" }}>
-                <div className="release-card-title" style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700 }}>
+              <div className="catalog-adaptive-card__meta release-card-meta">
+                <div className="catalog-adaptive-card__title release-card-title" style={{ fontWeight: 700 }}>
                   {mediaItem.title}
                 </div>
                 <div className="release-card-upcoming-label">
@@ -375,7 +371,8 @@ function CatalogGrid({
           isAlbumCard={type === "albums"}
           enabled={showPlayActions}
           data-release-presentation-key={presentationIdentity.key || undefined}
-          style={{...(isMobile?{flex:"0 0 160px",width:160,scrollSnapAlign:"start"}:{}),position:"relative",background:"#0a0a0a",borderRadius:isMobile?12:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}}
+          className="catalog-adaptive-card release-card"
+          style={{position:"relative",background:"#0a0a0a",borderRadius:16,overflow:"hidden",border:"1px solid #1a1a1a",transition:"border-color 0.25s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor="#2a2a2a"}
           onMouseLeave={e=>e.currentTarget.style.borderColor="#1a1a1a"}
         >
@@ -402,9 +399,9 @@ function CatalogGrid({
           {type==="albums"&&(mediaItem.type==="deluxe"||mediaItem.releaseType==="deluxe")?(
             <span style={{position:"absolute",top:8,right:8,fontSize:9,fontWeight:800,letterSpacing:1.2,padding:"4px 7px",borderRadius:6,background:"rgba(245,158,11,0.92)",color:"#111"}}>DELUXE</span>
           ):null}
-          <div style={{padding:isMobile?"10px 10px 14px":"14px 16px 18px"}}>
-            <div className={type==="albums"&&isUpcomingReleaseDate(mediaItem.date)?"song-title-turquoise-glow":undefined} style={{fontSize:isMobile?12:14,fontWeight:700,marginBottom:4,lineHeight:1.3}}>{mediaItem.title}</div>
-            {mediaItem.date && <div style={{fontSize:isMobile?9:11,color:"#444",marginBottom:6,letterSpacing:1}}>{mediaItem.date}</div>}
+          <div className="catalog-adaptive-card__meta">
+            <div className={`${type==="albums"&&isUpcomingReleaseDate(mediaItem.date)?"song-title-turquoise-glow ":""}catalog-adaptive-card__title`} style={{fontWeight:700,marginBottom:4,lineHeight:1.3}}>{mediaItem.title}</div>
+            {mediaItem.date && <div className="catalog-adaptive-card__date" style={{color:"#444",marginBottom:6,letterSpacing:1}}>{mediaItem.date}</div>}
             {access?.badge && <div style={{marginBottom:6}}><MusicAccessBadge access={access} label={access.badge} compact /></div>}
             {albumIsGifted ? (
               <div style={{
@@ -428,7 +425,7 @@ function CatalogGrid({
                 </span>
               </div>
             ) : null}
-            {access?.showPrice && <div style={{fontSize:isMobile?12:13,color:"#00ffff",fontWeight:700,marginBottom:isMobile?8:10}}>${mediaItem.price.toFixed(2)}</div>}
+            {access?.showPrice && <div className="catalog-adaptive-card__price" style={{color:"#00ffff",fontWeight:700}}>${mediaItem.price.toFixed(2)}</div>}
             <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}} onClick={type==="albums"?e=>e.stopPropagation():undefined}>
               {showPlayActions && type==="albums" ? (
                 <div style={{flex:1,minWidth:0}}>
@@ -454,13 +451,14 @@ function CatalogGrid({
                   />
                 </div>
               ) : access?.showCart ? (
-                <button onClick={()=>addToCart(mediaItem)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,padding:isMobile?"9px 0":"8px 0",fontSize:isMobile?11:12,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",borderRadius:isMobile?7:8,transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>
+                <button className="catalog-adaptive-card__cart" onClick={()=>addToCart(mediaItem)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>
               ) : null}
             </div>
           </div>
         </PlaybackPrewarmCardShell>
       );
       })}
+    </div>
     </div>
   );
 }

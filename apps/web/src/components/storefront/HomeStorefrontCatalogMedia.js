@@ -9,8 +9,10 @@ import {
   LiveCountdownMobileHomeStrip,
 } from "@/components/home/LiveCountdownDisplays";
 import { TrackCardSkeleton } from "@/ui/skeletons";
-import { useCatalogLoading } from "@/components/storefront/catalog-surface-context";
-import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
+import {
+  useCatalogLoading,
+  useCatalogSurface,
+} from "@/components/storefront/catalog-surface-context";
 import {
   getStorefrontDisplaySingles,
   subscribeStorefrontDisplaySingles,
@@ -75,7 +77,6 @@ function useStorefrontDisplaySingles() {
 
 function homeCatalogMediaPropsEqual(prev, next) {
   const keys = [
-    "isMobile",
     "singlesRowRef",
     "onGift",
     "onCardClick",
@@ -108,14 +109,12 @@ function homeCatalogMediaPropsEqual(prev, next) {
  * Singles pinned by media signature; entitlement chrome via storefront-card-chrome-store.
  */
 const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
-  isMobile,
   singlesRowRef,
   onGift,
   onCardClick,
   addToCart,
   onLibraryChange,
   onOpenFeature,
-  albums,
   hoverIn,
   hoverOut,
   buttonHoverIn,
@@ -123,7 +122,6 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
   onAlbumClick,
   onPlayAlbum,
   onOpenAlbumTracklist,
-  mixtapesAndEps,
   onPlayMixtapeEp,
   onPlaySingle,
   onPlayFeature,
@@ -131,12 +129,14 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
   liveStreamTime,
 }) {
   const pinnedSingles = useStorefrontDisplaySingles();
-  const surface = getCatalogSurfaceRef();
+  const surface = useCatalogSurface();
   const displaySingles = pinnedSingles.length
     ? pinnedSingles
     : surface.displaySingles;
   const prevDisplaySinglesRef = useRef(displaySingles);
   const displayFeatures = surface.displayFeatures;
+  const albums = surface.displayAlbums;
+  const mixtapesAndEps = surface.displayMixtapesAndEps;
   const loadMoreCatalog = surface.loadMoreCatalog;
   const catalogPlaybackLookup = surface.catalogPlaybackLookup;
 
@@ -154,13 +154,12 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
   }, [displaySingles]);
 
   return (
-    <>
-      <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 18, alignItems: "flex-start" }}>
+    <div className="home-catalog-media">
+      <div className="home-latest-composition">
         <div style={{ flex: 1, width: "100%", minWidth: 0 }}>
           <LatestSinglesStyleRow
             ref={singlesRowRef}
             items={displaySingles}
-            isMobile={isMobile}
             onGift={onGift}
             onCardClick={onCardClick}
             onPlayClick={onPlaySingle}
@@ -172,18 +171,19 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
           <CatalogLatestSinglesLoadingExtras onLoadMoreCatalog={loadMoreCatalog} />
         </div>
 
-        {!isMobile ? (
+        <div className="home-live-panel-wide">
           <LiveCountdownDesktopPanel liveStreamDate={liveStreamDate} liveStreamTime={liveStreamTime} />
-        ) : null}
+        </div>
       </div>
 
-      {isMobile ? <LiveCountdownMobileHomeStrip /> : null}
+      <div className="home-live-panel-compact">
+        <LiveCountdownMobileHomeStrip />
+      </div>
 
       <div style={{ marginTop: 28, marginBottom: 4 }}>
         <h2 className="section-heading" style={{ marginBottom: 14 }}>Features</h2>
         <FeaturesRail
           features={displayFeatures}
-          isMobile={isMobile}
           addToCart={addToCart}
           onOpenFeature={onOpenFeature}
           onGift={onGift}
@@ -208,7 +208,6 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
           onPlayAlbum={onPlayAlbum}
           onOpenAlbumTracklist={onOpenAlbumTracklist}
           catalogPlaybackLookup={catalogPlaybackLookup}
-          isMobile={isMobile}
           onGift={onGift}
           onLibraryChange={onLibraryChange}
         />
@@ -219,7 +218,6 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
         <div style={{ flex: 1, width: "100%", minWidth: 0 }}>
           <LatestSinglesStyleRow
             items={mixtapesAndEps}
-            isMobile={isMobile}
             onGift={onGift}
             onCardClick={onAlbumClick}
             onPlayClick={onPlayMixtapeEp}
@@ -230,7 +228,7 @@ const HomeStorefrontCatalogMedia = memo(function HomeStorefrontCatalogMedia({
           />
         </div>
       </div>
-    </>
+    </div>
   );
 }, homeCatalogMediaPropsEqual);
 

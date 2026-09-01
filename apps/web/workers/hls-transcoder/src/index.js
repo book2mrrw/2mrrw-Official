@@ -51,7 +51,7 @@ async function processJob(job) {
 
   try {
     const manifest = await transcode({ job });
-    await markJobComplete(job.id, manifest);
+    await markJobComplete(job, manifest);
     logger.info("job complete", { jobId: job.id, slug: job.slug, trackSlug: job.track_slug });
 
     // Poster extraction — only for video jobs, non-fatal

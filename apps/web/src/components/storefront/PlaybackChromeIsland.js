@@ -10,10 +10,8 @@ import {
   setPagePlaybackActionsBridge,
 } from "@/lib/playback/page-playback-actions-bridge";
 import AmbientPlaybackBackground from "@/components/home/AmbientPlaybackBackground";
-import { commitPlaybackChromeLayout } from "@/lib/storefront/playback-chrome-layout-store";
 
 const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
-  isMobile,
   ambientRefs,
   children,
 }) {
@@ -104,16 +102,8 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
     logUiChurn("playback-chrome-island", {
       isPlaying,
       playbackState,
-      isMobile,
     });
-  }, [isPlaying, playbackState, isMobile]);
-
-  // Commit stable layout values — scroll padding accounts for GlobalAudioPlayerBar height only.
-  const mobileScrollPadding = isMobile ? "110px" : "30px";
-  const mobileCartFabBottom = "calc(62px + env(safe-area-inset-bottom, 0px) + 12px)";
-  useEffect(() => {
-    commitPlaybackChromeLayout({ mobileScrollPadding, mobileCartFabBottom });
-  }, [mobileScrollPadding, mobileCartFabBottom]);
+  }, [isPlaying, playbackState]);
 
   const continuitySnap = continuityFrozen ? getContinuitySnapshot?.() : null;
 
@@ -145,7 +135,6 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
         <AmbientPlaybackBackground
           currentTrack={ambientTrack}
           csMode={csMode}
-          isMobile={isMobile}
         />
       ) : null}
     </>

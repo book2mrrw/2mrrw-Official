@@ -51,6 +51,7 @@ const MobileHomeBottomNav = memo(function MobileHomeBottomNav({
 
   return (
     <motion.div
+      className="storefront-bottom-nav"
       style={{
         position: "fixed",
         bottom: 0,

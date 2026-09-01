@@ -30,7 +30,7 @@ const PRODUCT_COLS = [
   "video_path", "image_path", "stream_path",
   "release_type", "release_date",
   "metadata", "active", "gifting_enabled",
-  "content_type", "content_id",
+  "content_type", "content_id", "updated_at",
 ].join(", ");
 
 const RELEASE_LIFECYCLE_COLS = "id,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,preorder_enabled,preorder_starts_at,preorder_price_cents,early_access_enabled,early_access_starts_at,early_access_scope,early_access_audiences,release_timezone,unavailable_at";
@@ -65,12 +65,18 @@ export function mapProductRow(row) {
 
   // Cover: DB explicit cover, or fall back to legacy public path in metadata
   const legacyCover = row.cover_url || row.image_path || meta.legacy_cover || null;
-  const legacyVideo = meta.legacy_video_stem
+  const legacyVideo = meta.animated_cover_r2_key || (meta.legacy_video_stem
     ? `videos/${releaseTypeFolder}/${row.slug}/${meta.legacy_video_stem}.mp4`
-    : null;
+    : null);
 
   const isSingle = releaseTypeFolder === "singles";
   const hasVideo = isSingle || Boolean(legacyVideo || row.video_path);
+  const artworkRevision =
+    meta.artwork_revision || meta.cover_art_revision || meta.cover_art_r2_key ||
+    row.image_path || row.cover_url || null;
+  const motionRevision =
+    meta.motion_revision || meta.animated_cover_revision ||
+    meta.animated_cover_r2_key || row.video_path || null;
 
   const visual = hasVideo
     ? visualDiscoveryUrl(releaseTypeFolder, row.slug, {
@@ -92,6 +98,10 @@ export function mapProductRow(row) {
     release_date: row.release_date || meta.release_date || null,
     releaseDate: row.release_date || meta.release_date || null,
     release_id: row.release_id || null,
+    catalog_revision: row.updated_at || null,
+    artwork_revision: artworkRevision,
+    artworkRevision,
+    motion_revision: motionRevision,
     status: lifecycleRow?.status || (row.active ? "published" : "unavailable"),
     scheduled_publish_at: lifecycleRow?.available_at || lifecycleRow?.scheduled_at || null,
     availability,

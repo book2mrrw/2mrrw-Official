@@ -15,6 +15,7 @@ export async function uploadAssetToR2({
   assetType,
   file,
   releaseId,
+  revisioned = false,
   onProgress,
   xhrRef,
 }) {
@@ -33,6 +34,7 @@ export async function uploadAssetToR2({
         filename: file.name,
         size: file.size,
         releaseId,
+        revisioned,
       }),
     });
   } catch (cause) {
@@ -48,6 +50,33 @@ export async function uploadAssetToR2({
   }
   const { uploadUrl, key, contentType } = presignData;
   if (!uploadUrl || !key || !contentType) {
+    throw new UploadTransportError("presign_invalid", "Upload authorization returned an incomplete response");
+  }
+
+  await putFileToSignedR2({
+    file,
+    uploadUrl,
+    contentType,
+    onProgress,
+    xhrRef,
+  });
+
+  return { key, contentType };
+}
+
+/**
+ * Proven XHR PUT transport shared by normal ingest and immutable master
+ * revisions. The server-supplied Content-Type is always echoed exactly.
+ */
+export async function putFileToSignedR2({
+  file,
+  uploadUrl,
+  contentType,
+  onProgress,
+  xhrRef,
+}) {
+  if (!(file instanceof Blob)) throw new TypeError("R2 upload requires a File or Blob");
+  if (!uploadUrl || !contentType) {
     throw new UploadTransportError("presign_invalid", "Upload authorization returned an incomplete response");
   }
 
@@ -71,8 +100,6 @@ export async function uploadAssetToR2({
     xhr.setRequestHeader("Content-Type", contentType);
     xhr.send(file);
   });
-
-  return { key, contentType };
 }
 
 export class UploadTransportError extends Error {

@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-08-26T01:55:23.609Z",
+  "generatedAt": "2026-09-01T22:55:00.000Z",
   "sourceRoot": "src/app/api",
-  "total": 126,
+  "total": 128,
   "counts": {
-    "HUMAN_ADMIN": 29,
-    "SERVICE_ONLY": 17,
+    "HUMAN_ADMIN": 30,
+    "SERVICE_ONLY": 18,
     "ADMIN_OR_SERVICE_CAPABILITY": 5,
     "AUTHENTICATED_USER": 23,
     "PUBLIC": 51,
@@ -91,6 +91,15 @@
     {
       "route": "/api/admin/catalog/hls-sync-trigger",
       "file": "src/app/api/admin/catalog/hls-sync-trigger/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/releases/[id]/replace-master/stage",
+      "file": "src/app/api/admin/releases/[id]/replace-master/stage/route.js",
       "methods": [
         "POST"
       ],
@@ -289,6 +298,8 @@
       "route": "/api/admin/releases/[id]/replace-master",
       "file": "src/app/api/admin/releases/[id]/replace-master/route.js",
       "methods": [
+        "DELETE",
+        "GET",
         "POST"
       ],
       "authority": "HUMAN_ADMIN",
@@ -646,6 +657,15 @@
     {
       "route": "/api/cron/livestream-notifications",
       "file": "src/app/api/cron/livestream-notifications/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "cron or signed webhook machine boundary"
+    },
+    {
+      "route": "/api/cron/retire-audio-master-revisions",
+      "file": "src/app/api/cron/retire-audio-master-revisions/route.js",
       "methods": [
         "GET"
       ],

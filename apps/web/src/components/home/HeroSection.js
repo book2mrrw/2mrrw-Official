@@ -21,8 +21,6 @@ const SOCIALS = [
  * - Mobile hero pause when singles carousel is in view is DOM-only via P5 persistent media helpers in page.js.
  */
 const HeroSection = memo(function HeroSection({
-  isMobile,
-  mobileHeroHeight,
   heroContainerRef,
   heroVideoRef,
   heroTextRef,
@@ -31,14 +29,12 @@ const HeroSection = memo(function HeroSection({
   return (
     <motion.div
       ref={heroContainerRef}
+      className="storefront-adaptive-hero"
       style={{
         position: "relative",
-        height: mobileHeroHeight,
         marginBottom: 0,
-        borderRadius: isMobile ? 0 : 20,
         overflow: "hidden",
         background: "black",
-        transition: isMobile ? "none" : "none",
       }}
     >
       <video
@@ -51,22 +47,22 @@ const HeroSection = memo(function HeroSection({
         webkit-playsinline="true"
         src={catalogMotionVideoUrl("videos/A2B.mp4")}
         onError={(e) => { e.currentTarget.style.display = "none"; }}
+        className="storefront-adaptive-hero__video"
         style={{
           position: "absolute",
           width: "100%",
           height: "100%",
           objectFit: "cover",
-          opacity: isMobile ? 0.35 : 0.35,
-          filter: isMobile ? "brightness(1) blur(0px)" : "brightness(1) blur(1px)",
+          opacity: 0.35,
           transform: "scale(1)",
         }}
       />
       <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,black,transparent 60%)" }} />
       <div style={{ position: "absolute", inset: 0, background: "radial-gradient(circle at center,transparent 30%,black 100%)" }} />
-      <motion.div ref={heroTextRef} style={{ position: "absolute", top: isMobile ? 16 : 25, left: isMobile ? 16 : 25, zIndex: 10, transformOrigin: "top left" }}>
-        <div style={{ fontSize: isMobile ? 28 : 42, fontWeight: 900, letterSpacing: isMobile ? 5 : 8, animation: "pulse 2.5s infinite", textShadow: "0 0 20px rgba(0,255,255,0.8)" }}>2MRRW</div>
+      <motion.div ref={heroTextRef} className="storefront-adaptive-hero__brand" style={{ position: "absolute", zIndex: 10, transformOrigin: "top left" }}>
+        <div className="storefront-adaptive-hero__brand-text" style={{ fontWeight: 900, animation: "pulse 2.5s infinite", textShadow: "0 0 20px rgba(0,255,255,0.8)" }}>2MRRW</div>
       </motion.div>
-      <motion.div ref={heroSocialsRef} style={{ position: "absolute", bottom: isMobile ? 14 : 24, right: isMobile ? 14 : 25, display: "flex", gap: isMobile ? 12 : 16, alignItems: "center", zIndex: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+      <motion.div ref={heroSocialsRef} className="storefront-adaptive-hero__socials" style={{ position: "absolute", display: "flex", alignItems: "center", zIndex: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
         {SOCIALS.map((s) => (
           <a
             key={s.name}

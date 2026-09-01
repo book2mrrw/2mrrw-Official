@@ -5,6 +5,11 @@ import { useAuth } from "@/context/AuthContext";
 import { catalogCoverUrl, catalogMotionVideoUrl } from "@/lib/media-urls";
 import { UploadWizard } from "@/components/admin/UploadWizard";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
+import {
+  beginMasterReplacement,
+  stageMasterReplacement,
+  watchMasterReplacement,
+} from "@/lib/media/master-revision-client";
 import { VIDEO_COVER_ACCEPT, MASTER_AUDIO_ACCEPT } from "@/lib/media/admin-upload-contract";
 import { signalCatalogMutation } from "@/lib/storefront/catalog-refresh-store";
 
@@ -453,21 +458,28 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const [coverState,   setCoverState]   = useState({ status: relStub.cover_art_r2_key ? "done" : "idle", error: null, pct: 0 });
   const [coverPreview, setCoverPreview] = useState(null);
   const coverPreviewObjectUrlRef = useRef(null);
+  const coverInputRef = useRef(null);
 
   // Animated cover video upload state — same persistence rule as cover art.
   const [mp4State,   setMp4State]   = useState({ status: relStub.metadata?.animated_cover_r2_key ? "done" : "idle", error: null, pct: 0 });
   const [mp4Preview, setMp4Preview] = useState(null);
   const mp4PreviewObjectUrlRef = useRef(null);
+  const videoInputRef = useRef(null);
 
   // Audio replace state
   const [audioReplacing,  setAudioReplacing]  = useState(null);
-  const [audioPhase,      setAudioPhase]      = useState("idle"); // idle | uploading | done | error
+  const [audioPhase,      setAudioPhase]      = useState("idle"); // idle | uploading | processing | done | error
   const [audioProgress,   setAudioProgress]   = useState(0);
   const [audioNewKey,     setAudioNewKey]     = useState(null);
   const [audioError,      setAudioError]      = useState("");
   const audioXhrRef = useRef(null);
+  const audioOperationRef = useRef(null);
+  const audioWatchStopRef = useRef(null);
+  const audioInputRef = useRef(null);
 
   useEffect(() => () => {
+    audioWatchStopRef.current?.();
+    audioXhrRef.current?.abort?.();
     for (const ref of [coverPreviewObjectUrlRef, mp4PreviewObjectUrlRef]) {
       if (ref.current) URL.revokeObjectURL(ref.current);
       ref.current = null;
@@ -518,7 +530,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
         body:    JSON.stringify({ title: editTitle, price: editPrice, genre: editGenre, release_date: editDate }),
       });
       const json = await res.json();
-      if (!res.ok && res.status !== 207) throw new Error(json.errors?.[0] || "Save failed");
+      if (!res.ok || json.ok !== true) throw new Error(json.error || json.errors?.[0] || "Save failed");
       signalCatalogMutation("release_metadata_updated");
       showMsg("Saved — changes live on storefront");
       onSaved();
@@ -540,7 +552,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
         body:    JSON.stringify({ track_lyrics }),
       });
       const json = await res.json();
-      if (!res.ok && res.status !== 207) throw new Error(json.errors?.[0] || "Save failed");
+      if (!res.ok || json.ok !== true) throw new Error(json.error || json.errors?.[0] || "Save failed");
       signalCatalogMutation("release_lyrics_updated");
       showMsg("Lyrics saved");
     } catch (err) {
@@ -581,6 +593,8 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
         slug:        detail.release.slug,
         assetType,
         file,
+        releaseId: relStub.id,
+        revisioned: true,
         onProgress:  (pct) => setState((s) => ({ ...s, pct })),
       });
 
@@ -610,20 +624,6 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
     }
   }, [detail, relStub, showMsg, onSaved]);
 
-  const pickFile = (accept, handler) => {
-    const inp    = document.createElement("input");
-    inp.type     = "file";
-    inp.accept   = accept;
-    inp.style.display = "none";
-    inp.onchange = (e) => {
-      const file = e.target.files?.[0];
-      inp.remove();
-      if (file) handler(file);
-    };
-    document.body.appendChild(inp);
-    inp.click();
-  };
-
   // ── Audio replace ─────────────────────────────────────────────────────────────
   const startAudioReplace = (track) => {
     setAudioReplacing(track);
@@ -635,42 +635,72 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
 
   const uploadAudio = useCallback(async (file) => {
     if (!file || !audioReplacing || !detail) return;
+    audioWatchStopRef.current?.();
+    const operation = {
+      file,
+      trackId: audioReplacing.id,
+      releaseId: relStub.id,
+      replacementId: null,
+    };
+    audioOperationRef.current = operation;
     setAudioPhase("uploading");
     setAudioProgress(0);
-    const isMulti   = ["album","ep","mixtape"].includes(detail.release.release_type);
-    const trackSlug = isMulti ? audioReplacing.slug : null;
 
     try {
-      const { key } = await uploadAssetToR2({
-        releaseType: detail.release.release_type,
-        slug:        detail.release.slug,
-        trackSlug,
-        assetType:   "audio",
+      const staged = await stageMasterReplacement({
+        releaseId: relStub.id,
+        trackId: audioReplacing.id,
         file,
-        releaseId:   relStub.id,
-        onProgress:  setAudioProgress,
-        xhrRef:      audioXhrRef,
+        onProgress: setAudioProgress,
+        xhrRef: audioXhrRef,
+      });
+      if (audioOperationRef.current !== operation) return;
+      operation.replacementId = staged.replacementId;
+      setAudioNewKey(staged.key);
+      setAudioPhase("processing");
+      await beginMasterReplacement({
+        releaseId: relStub.id,
+        replacementId: staged.replacementId,
       });
 
-      setAudioNewKey(key);
-      const res = await fetch(`/api/admin/releases/${relStub.id}/replace-master`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key, track_id: audioReplacing?.id }),
+      audioWatchStopRef.current = watchMasterReplacement({
+        releaseId: relStub.id,
+        replacementId: staged.replacementId,
+        onStatus: (status) => {
+          if (audioOperationRef.current !== operation) return;
+          if (status.status === "active") {
+            setAudioPhase("done");
+            signalCatalogMutation("release_master_promoted");
+            showMsg("New master validated and promoted");
+            onSaved();
+            audioOperationRef.current = null;
+          } else if (["failed", "cancelled"].includes(status.status)) {
+            setAudioError(status.error || "Replacement processing failed; the previous master remains live");
+            setAudioPhase("error");
+            audioOperationRef.current = null;
+          }
+        },
+        onError: (error) => {
+          if (audioOperationRef.current !== operation) return;
+          setAudioError(`${error.message}. Processing may still be running; reopen this release to check.`);
+          setAudioPhase("error");
+        },
       });
-      const json = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(json.error || "Replace master failed");
-      setAudioPhase("done");
-      signalCatalogMutation("release_master_replaced");
-      showMsg("Master replaced — HLS re-queued and playback cache cleared");
-      onSaved();
     } catch (err) {
+      if (audioOperationRef.current !== operation) return;
       setAudioError(err.message);
       setAudioPhase("error");
+      audioOperationRef.current = null;
     }
   }, [audioReplacing, detail, relStub, showMsg, onSaved]);
 
-  const cancelAudioReplace = () => { setAudioReplacing(null); setAudioPhase("idle"); };
+  const cancelAudioReplace = () => {
+    audioWatchStopRef.current?.();
+    audioWatchStopRef.current = null;
+    audioOperationRef.current = null;
+    setAudioReplacing(null);
+    setAudioPhase("idle");
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────────
   if (loading) {
@@ -699,6 +729,39 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
 
   return (
     <div style={{ padding: "28px 0 80px", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
+      <input
+        ref={coverInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void uploadAsset({ file, assetType: "cover", setState: setCoverState, setPreview: setCoverPreview, objectUrlRef: coverPreviewObjectUrlRef });
+        }}
+      />
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept={VIDEO_COVER_ACCEPT}
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void uploadAsset({ file, assetType: "cover-video", setState: setMp4State, setPreview: setMp4Preview, objectUrlRef: mp4PreviewObjectUrlRef });
+        }}
+      />
+      <input
+        ref={audioInputRef}
+        type="file"
+        accept={MASTER_AUDIO_ACCEPT}
+        hidden
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          event.target.value = "";
+          if (file) void uploadAudio(file);
+        }}
+      />
 
       {/* Header with inline cover art thumbnail */}
       <div style={{ marginBottom: 22 }}>
@@ -790,7 +853,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
               <Label>Static Cover · JPEG / PNG / WEBP</Label>
               <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
                 <div
-                  onClick={coverState.status !== "uploading" ? () => pickFile("image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp", (f) => uploadAsset({ file: f, assetType: "cover", setState: setCoverState, setPreview: setCoverPreview, objectUrlRef: coverPreviewObjectUrlRef })) : undefined}
+                  onClick={coverState.status !== "uploading" ? () => coverInputRef.current?.click() : undefined}
                   style={{
                     width: 120, height: 120, flexShrink: 0, borderRadius: 12,
                     background: C.surface2,
@@ -813,7 +876,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                   <Btn
                     variant="secondary" small
                     disabled={coverState.status === "uploading"}
-                    onClick={() => pickFile("image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp", (f) => uploadAsset({ file: f, assetType: "cover", setState: setCoverState, setPreview: setCoverPreview, objectUrlRef: coverPreviewObjectUrlRef }))}
+                    onClick={() => coverInputRef.current?.click()}
                   >
                     {coverState.status === "uploading" ? `Uploading ${coverState.pct}%…` : coverState.status === "done" ? "✓ Replace Again" : "Choose Image"}
                   </Btn>
@@ -852,7 +915,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                   <Btn
                     variant="secondary" small
                     disabled={mp4State.status === "checking" || mp4State.status === "uploading"}
-                    onClick={() => pickFile(VIDEO_COVER_ACCEPT, (f) => uploadAsset({ file: f, assetType: "cover-video", setState: setMp4State, setPreview: setMp4Preview, objectUrlRef: mp4PreviewObjectUrlRef }))}
+                    onClick={() => videoInputRef.current?.click()}
                   >
                     {mp4State.status === "checking" ? "Checking duration…" : mp4State.status === "uploading" ? `Uploading ${mp4State.pct}%…` : mp4State.status === "done" ? "✓ Replace Video" : "Upload Cover Video"}
                   </Btn>
@@ -871,7 +934,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
           <div>
             <h3 style={{ fontSize: 15, fontWeight: 900, color: C.text, marginBottom: 6, marginTop: 0 }}>Replace Master Audio</h3>
             <p style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>
-              Upload WAV / FLAC / AIFF. This replaces the current master — the previous audio file is not recoverable after replacing. HLS re-queues automatically. Playback cache clears immediately.
+              Upload WAV / FLAC / AIFF. The current master keeps playing while the replacement is uploaded, validated, and transcoded. It becomes authoritative only after every output is ready; the previous revision is retained for safe rollback and active sessions.
             </p>
 
             {detail.tracks.length === 0 && (
@@ -906,7 +969,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                     {audioPhase === "idle" && (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <button
-                          onClick={() => pickFile(MASTER_AUDIO_ACCEPT, uploadAudio)}
+                          onClick={() => audioInputRef.current?.click()}
                           style={{ background: C.accent, border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 12, fontWeight: 700, color: "#000", cursor: "pointer", fontFamily: "inherit" }}
                         >
                           Select New Master
@@ -917,15 +980,21 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                     {audioPhase === "uploading" && (
                       <div>
                         <div style={{ fontSize: 12, color: C.accent, fontWeight: 700 }}>
-                          {audioNewKey ? "Replacing…" : `Uploading… ${audioProgress}%`}
+                          {`Uploading immutable revision… ${audioProgress}%`}
                         </div>
-                        {!audioNewKey && <ProgressBar pct={audioProgress} />}
+                        <ProgressBar pct={audioProgress} />
+                      </div>
+                    )}
+                    {audioPhase === "processing" && (
+                      <div>
+                        <div style={{ fontSize: 12, color: C.warn, fontWeight: 700 }}>Validating and transcoding the new revision…</div>
+                        <div style={{ fontSize: 11, color: C.muted2, marginTop: 5 }}>The current master remains live and playback is not interrupted.</div>
                       </div>
                     )}
                     {audioPhase === "done" && (
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <span>✅</span>
-                        <span style={{ fontSize: 12, color: C.success, fontWeight: 700 }}>Master replaced — HLS re-queued, cache cleared</span>
+                        <span style={{ fontSize: 12, color: C.success, fontWeight: 700 }}>New master validated and atomically promoted</span>
                         <button onClick={cancelAudioReplace} style={{ background: "none", border: "none", color: C.muted2, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Done</button>
                       </div>
                     )}

@@ -28,7 +28,7 @@
     "test:release-lifecycle": "node --test src/lib/releases/__tests__/release-availability.test.js",
     "test:auth-security": "node --import ./scripts/register-alias.mjs --test src/lib/auth/__tests__/*.test.js",
     "test:playback-physical": "node --experimental-loader ./src/lib/playback-core/__tests__/physical/alias-loader.mjs --test src/lib/playback-core/__tests__/physical/differential.test.mjs src/lib/playback-core/__tests__/physical/effect-authority.test.mjs src/lib/playback-core/__tests__/physical/hardening-b.test.mjs",
-    "test:signal-path-contracts": "node --test src/lib/architecture/__tests__/*.test.js",
+    "test:signal-path-contracts": "node --import ./scripts/register-alias.mjs --test src/lib/architecture/__tests__/*.test.js src/lib/media/__tests__/media-session-artwork.test.js",
     "test:architecture-critical": "npm run test:core-invariants && npm run test:playback-physical && npm run test:auth-security && npm run test:admin-upload && npm run test:release-lifecycle && npm run test:signal-path-contracts"
   },
   "dependencies": {

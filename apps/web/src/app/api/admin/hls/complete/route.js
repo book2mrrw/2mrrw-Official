@@ -25,6 +25,7 @@ import { invalidateManifestCache } from "@/lib/server/hls-manifest-cache";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { clearPersistedPlaybackKey } from "@/lib/playback/resolve-playback-key";
 import { requireServiceCapability, ServiceCapability } from "@/lib/auth/admin-api-guard";
+import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 
 const LOG_PREFIX = "[hls/complete]";
 
@@ -65,7 +66,13 @@ export async function POST(req) {
       console.warn(`${LOG_PREFIX} playback key cache clear failed (non-fatal)`, pkErr?.message);
     }
 
-    return json({ ok: true, slug, trackSlug });
+    if (body.replacementId) {
+      // Promotion already committed atomically in Supabase. This invalidates
+      // only dependent server projections; it never reloads an open player.
+      revalidateStorefront(slug);
+    }
+
+    return json({ ok: true, slug, trackSlug, replacementId: body.replacementId || null });
   } catch (err) {
     // Cache invalidation failure is logged but not fatal â€” the DB row already exists
     // and the TTL will self-heal within 24 h. A 500 here causes the worker to retry,

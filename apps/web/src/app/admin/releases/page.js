@@ -6,6 +6,12 @@ import { createBrowserClient } from "@supabase/ssr";
 import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
 import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
+import {
+  beginMasterReplacement,
+  stageMasterReplacement,
+  watchMasterReplacement,
+} from "@/lib/media/master-revision-client";
+import { signalCatalogMutation } from "@/lib/storefront/catalog-refresh-store";
 
 const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
 function isAdmin(session) {
@@ -46,14 +52,16 @@ const TYPE_LABELS = {
 
 // ── Replace Master Modal ───────────────────────────────────────────────────────
 function ReplaceMasterModal({ release, onClose }) {
-  const [phase, setPhase] = useState("select"); // select | uploading | confirming | done | error
+  const [phase, setPhase] = useState("select"); // select | confirming | uploading | processing | done | error
   const [progress, setProgress] = useState(0);
-  const [newKey, setNewKey] = useState(null);
   const [filename, setFilename] = useState("");
   const [errMsg, setErrMsg] = useState("");
   const [trackId, setTrackId] = useState(null);
   const [tracks, setTracks] = useState([]);
   const xhrRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const selectedFileRef = useRef(null);
+  const watchStopRef = useRef(null);
 
   // Load tracks for multi-track releases
   useEffect(() => {
@@ -67,47 +75,65 @@ function ReplaceMasterModal({ release, onClose }) {
       .catch(() => {});
   }, [release]);
 
+  useEffect(() => () => {
+    selectedFileRef.current = null;
+    watchStopRef.current?.();
+    xhrRef.current?.abort?.();
+  }, []);
+
   const isMultiTrack = ["album", "ep", "mixtape"].includes(release?.release_type);
 
-  const pickAndUpload = async (file) => {
+  const selectFile = (file) => {
     if (!file) return;
-    setPhase("uploading");
+    selectedFileRef.current = file;
     setProgress(0);
     setFilename(file.name);
-
-    try {
-      const trackSlug = isMultiTrack && trackId ? (tracks.find((t) => t.id === trackId)?.slug || null) : null;
-      const { key } = await uploadAssetToR2({
-        releaseType: release.release_type,
-        slug: release.slug,
-        trackSlug,
-        assetType: "audio",
-        file,
-        releaseId: release.id,
-        onProgress: setProgress,
-        xhrRef,
-      });
-
-      setNewKey(key);
-      setPhase("confirming");
-    } catch (err) {
-      setErrMsg(err.message);
-      setPhase("error");
-    }
+    setErrMsg("");
+    setPhase("confirming");
   };
 
   const confirmReplace = async () => {
+    const file = selectedFileRef.current;
+    if (!file) {
+      setErrMsg("Choose a master file first");
+      setPhase("error");
+      return;
+    }
     setPhase("uploading");
     try {
-      const res = await fetch(`/api/admin/releases/${release.id}/replace-master`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: newKey, track_id: trackId }),
+      const staged = await stageMasterReplacement({
+        releaseId: release.id,
+        trackId,
+        file,
+        onProgress: setProgress,
+        xhrRef,
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Replace master failed");
-      setPhase("done");
+      setPhase("processing");
+      await beginMasterReplacement({
+        releaseId: release.id,
+        replacementId: staged.replacementId,
+      });
+      watchStopRef.current = watchMasterReplacement({
+        releaseId: release.id,
+        replacementId: staged.replacementId,
+        onStatus: (status) => {
+          if (status.status === "active") {
+            selectedFileRef.current = null;
+            signalCatalogMutation("release_master_promoted");
+            setPhase("done");
+          } else if (["failed", "cancelled"].includes(status.status)) {
+            selectedFileRef.current = null;
+            setErrMsg(status.error || "Processing failed; the previous master remains live");
+            setPhase("error");
+          }
+        },
+        onError: (error) => {
+          setErrMsg(`${error.message}. Processing may still be running; reopen this release to check.`);
+          setPhase("error");
+        },
+      });
     } catch (err) {
+      selectedFileRef.current = null;
       setErrMsg(err.message);
       setPhase("error");
     }
@@ -133,6 +159,18 @@ function ReplaceMasterModal({ release, onClose }) {
           {TYPE_LABELS[release?.release_type] || release?.release_type}
         </div>
 
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".wav,.flac,.aiff,.aif,audio/wav,audio/flac,audio/aiff"
+          hidden
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0] || null;
+            event.currentTarget.value = "";
+            if (file) selectFile(file);
+          }}
+        />
+
         {isMultiTrack && tracks.length > 1 && phase === "select" && (
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: C.muted2, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 8 }}>Select Track</div>
@@ -153,16 +191,15 @@ function ReplaceMasterModal({ release, onClose }) {
           <>
             <div style={{ background: C.surface2, border: `2px dashed ${C.border2}`, borderRadius: 10, padding: "28px 20px", textAlign: "center", marginBottom: 16 }}>
               <div style={{ fontSize: 13, color: C.muted }}>Upload new master WAV / FLAC / AIFF</div>
-              <div style={{ fontSize: 11, color: C.muted2, marginTop: 4 }}>Max 2 GB. Old master will be archived in history.</div>
+              <div style={{ fontSize: 11, color: C.muted2, marginTop: 4 }}>Max 2 GB. The current master stays live until the new revision is fully validated.</div>
             </div>
             <button
               onClick={() => {
                 if (isMultiTrack && !trackId && tracks.length > 1) { alert("Select a track first."); return; }
-                const input = document.createElement("input");
-                input.type = "file";
-                input.accept = ".wav,.flac,.aiff,.aif,audio/wav,audio/flac,audio/aiff";
-                input.onchange = (e) => { if (e.target.files?.[0]) pickAndUpload(e.target.files[0]); };
-                input.click();
+                if (fileInputRef.current) {
+                  fileInputRef.current.value = "";
+                  fileInputRef.current.click();
+                }
               }}
               style={{
                 width: "100%", background: C.accent, border: "none", borderRadius: 9,
@@ -178,13 +215,11 @@ function ReplaceMasterModal({ release, onClose }) {
         {phase === "uploading" && (
           <div style={{ textAlign: "center", padding: "12px 0" }}>
             <div style={{ fontSize: 13, color: C.accent, fontWeight: 700, marginBottom: 12 }}>
-              {newKey ? "Confirming…" : `Uploading… ${progress}%`}
+              {`Uploading immutable revision… ${progress}%`}
             </div>
-            {!newKey && (
-              <div style={{ background: C.surface2, borderRadius: 4, height: 6, overflow: "hidden" }}>
-                <div style={{ background: C.accent, width: `${progress}%`, height: "100%", transition: "width 0.2s" }} />
-              </div>
-            )}
+            <div style={{ background: C.surface2, borderRadius: 4, height: 6, overflow: "hidden" }}>
+              <div style={{ background: C.accent, width: `${progress}%`, height: "100%", transition: "width 0.2s" }} />
+            </div>
             {filename && <div style={{ fontSize: 11, color: C.muted2, marginTop: 8 }}>{filename}</div>}
           </div>
         )}
@@ -192,11 +227,11 @@ function ReplaceMasterModal({ release, onClose }) {
         {phase === "confirming" && (
           <div>
             <div style={{ background: "rgba(255,159,10,0.08)", border: `1px solid rgba(255,159,10,0.3)`, borderRadius: 8, padding: "14px 16px", marginBottom: 20, fontSize: 13, color: C.warn }}>
-              This will replace the current master audio and re-queue HLS transcoding. The old master key will be archived in history. Continue?
+              Stage <strong>{filename}</strong> as a new immutable revision? The current master and active playback remain unchanged until transcoding and validation finish.
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button
-                onClick={() => { setPhase("select"); setNewKey(null); }}
+                onClick={() => { selectedFileRef.current = null; setFilename(""); setPhase("select"); }}
                 style={{ flex: 1, background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 9, padding: "12px 0", fontSize: 13, color: C.text, cursor: "pointer", fontFamily: "inherit" }}
               >
                 Cancel
@@ -211,11 +246,18 @@ function ReplaceMasterModal({ release, onClose }) {
           </div>
         )}
 
+        {phase === "processing" && (
+          <div style={{ textAlign: "center", padding: "12px 0" }}>
+            <div style={{ fontSize: 14, color: C.warn, fontWeight: 700, marginBottom: 8 }}>Validating and transcoding…</div>
+            <div style={{ fontSize: 12, color: C.muted }}>The current master remains authoritative. This screen will confirm only after atomic promotion.</div>
+          </div>
+        )}
+
         {phase === "done" && (
           <div style={{ textAlign: "center", padding: "12px 0" }}>
             <div style={{ fontSize: 28, marginBottom: 12 }}>✅</div>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.success, marginBottom: 6 }}>Master replaced successfully</div>
-            <div style={{ fontSize: 12, color: C.muted }}>HLS transcoding has been re-queued. The new audio will be live once transcoding completes.</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.success, marginBottom: 6 }}>Master validated and promoted</div>
+            <div style={{ fontSize: 12, color: C.muted }}>The master pointer and HLS manifest changed together. Existing playback sessions were not interrupted.</div>
             <button
               onClick={onClose}
               style={{ marginTop: 20, background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 9, padding: "10px 24px", fontSize: 13, color: C.text, cursor: "pointer", fontFamily: "inherit" }}
@@ -229,7 +271,7 @@ function ReplaceMasterModal({ release, onClose }) {
           <div>
             <div style={{ fontSize: 13, color: C.error, marginBottom: 16 }}>{errMsg || "Unknown error"}</div>
             <button
-              onClick={() => { setPhase("select"); setNewKey(null); setErrMsg(""); }}
+              onClick={() => { selectedFileRef.current = null; setFilename(""); setPhase("select"); setErrMsg(""); }}
               style={{ background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 9, padding: "10px 20px", fontSize: 13, color: C.text, cursor: "pointer", fontFamily: "inherit" }}
             >
               Try Again
@@ -258,6 +300,8 @@ function ReplaceCoverModal({ release, onClose }) {
         slug: release.slug,
         assetType: "cover",
         file,
+        releaseId: release.id,
+        revisioned: true,
         onProgress: setProgress,
       });
 

@@ -13,13 +13,13 @@
  * work unmodified.
  */
 
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 
 // .../apps/web/src/lib/playback-core/__tests__/physical → .../apps/web/src
 const SRC_ROOT = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")),
+  path.dirname(fileURLToPath(import.meta.url)),
   "../../../.."
 );
 
@@ -44,8 +44,8 @@ function resolveAliased(specifier) {
  */
 function resolveRelative(specifier, parentURL) {
   if (!parentURL || !specifier.startsWith(".")) return null;
-  const parentPath = new URL(parentURL).pathname.replace(/^\/([A-Za-z]:)/, "$1");
-  const base = path.resolve(path.dirname(decodeURIComponent(parentPath)), specifier);
+  const parentPath = fileURLToPath(parentURL);
+  const base = path.resolve(path.dirname(parentPath), specifier);
   for (const suffix of CANDIDATE_SUFFIXES) {
     const candidate = base + suffix;
     if (existsSync(candidate) && statSync(candidate).isFile()) {

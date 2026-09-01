@@ -201,6 +201,34 @@ export async function headR2ObjectKey(key) {
 }
 
 /**
+ * Return authoritative metadata for one R2 object. Replacement uploads use
+ * this to prove the immutable staged object matches the server-issued byte
+ * length and Content-Type before any processing job can be queued.
+ */
+export async function getR2ObjectMetadata(key) {
+  const normalized = String(key || "").replace(/^\//, "");
+  if (!R2_BUCKET || !normalized) return null;
+  try {
+    const result = await r2Client.send(
+      new HeadObjectCommand({ Bucket: R2_BUCKET, Key: normalized })
+    );
+    return {
+      key: normalized,
+      contentLength: Number.isFinite(Number(result.ContentLength))
+        ? Number(result.ContentLength)
+        : null,
+      contentType: String(result.ContentType || "").toLowerCase() || null,
+      etag: result.ETag || null,
+      lastModified: result.LastModified || null,
+    };
+  } catch (err) {
+    const status = err?.$metadata?.httpStatusCode;
+    if (status === 404 || err?.name === "NotFound") return null;
+    throw err;
+  }
+}
+
+/**
  * Server-side same-bucket copy. Used at publish time to move wizard-uploaded
  * audio from the temporary draft-slug path to the canonical slug path.
  * @param {string} sourceKey - existing R2 key

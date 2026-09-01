@@ -9,6 +9,8 @@ const EMPTY_CATALOG_SURFACE_REF = {
   browseSingles: [],
   displaySingles: [],
   displayFeatures: [],
+  displayAlbums: [],
+  displayMixtapesAndEps: [],
   catalogHasMore: false,
   catalogPage: 1,
   loadMoreCatalog: () => {},

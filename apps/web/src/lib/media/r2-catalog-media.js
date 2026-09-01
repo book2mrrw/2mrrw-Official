@@ -17,7 +17,15 @@ const catalogMediaStableCache = new Map(); // slug → { sig, value, ts }
 /** Stable signature for cover/video/visual/preview — used to skip redundant state updates. */
 export function catalogMediaSignature(item) {
   if (!item) return "";
-  return [item.slug, item.cover, item.video, item.visual, item.preview].join("\0");
+  return [
+    item.slug,
+    item.cover,
+    item.video,
+    item.visual,
+    item.preview,
+    item.artwork_revision || item.artworkRevision,
+    item.motion_revision || item.motionRevision,
+  ].join("\0");
 }
 
 export function catalogSinglesMediaEqual(a, b) {
