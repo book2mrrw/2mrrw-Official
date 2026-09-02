@@ -713,8 +713,12 @@ body {
   }
 }
 
-/* Expanded window: integrated navigation rail + flexible content. */
-@media (min-width: 840px) {
+/* Expanded window: integrated navigation rail + flexible content.
+   Gated on (hover: hover) and (pointer: fine) for the same reason as the cart
+   rail below: a side nav rail + hidden bottom nav is desktop-navigation
+   presentation. A wide touch-only viewport (foldable unfolded, tablet) keeps
+   the mobile bottom nav and simply gets a wider single content column. */
+@media (min-width: 840px) and (hover: hover) and (pointer: fine) {
   .storefront-adaptive-shell {
     grid-template-columns: clamp(196px, 19vw, 220px) minmax(0, 1fr);
   }
@@ -742,8 +746,11 @@ body {
   }
 }
 
-/* Large window: cart becomes an integrated secondary rail. */
-@media (min-width: 1180px) {
+/* Large window: cart becomes an integrated secondary rail.
+   Gated on (hover: hover) and (pointer: fine) so a foldable phone unfolded to a
+   wide touch-only viewport keeps its mobile cart FAB instead of surfacing
+   desktop commerce UI; only a mouse/trackpad-driven session gets the rail. */
+@media (min-width: 1180px) and (hover: hover) and (pointer: fine) {
   .storefront-adaptive-shell {
     grid-template-columns: 220px minmax(0, 1fr) clamp(220px, 20vw, 248px);
   }

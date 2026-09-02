@@ -33,6 +33,24 @@ test("capacity ranges are CSS-only and preserve compact, expanded, and large she
   assert.match(css, /env\(safe-area-inset-bottom/);
 });
 
+test("desktop-only chrome (nav rail, cart rail) requires a fine pointer, not just raw width", () => {
+  // A foldable phone unfolded to a wide viewport is still a touch-only device.
+  // Raw min-width alone must never be sufficient to switch on nav-rail/cart-rail
+  // desktop chrome — it must also require (hover: hover) and (pointer: fine),
+  // which real desktop/mouse sessions have and touch-only large viewports do not.
+  const css = read("src/app/globals.css");
+  assert.match(
+    css,
+    /@media \(min-width: 840px\) and \(hover: hover\) and \(pointer: fine\)/,
+    "nav rail must stay gated behind a fine pointer, not width alone"
+  );
+  assert.match(
+    css,
+    /@media \(min-width: 1180px\) and \(hover: hover\) and \(pointer: fine\)/,
+    "cart rail must stay gated behind a fine pointer, not width alone"
+  );
+});
+
 test("playback authority and release modal remain rooted above adaptive content", () => {
   const layout = read("src/app/layout.js");
   const audioProviderStart = layout.indexOf("<AudioProvider>");
@@ -51,6 +69,26 @@ test("adaptive player chrome mutates only CSS inset during geometry changes", ()
   assert.match(player, /ResizeObserver/);
   assert.match(player, /--player-bar-inset/);
   assert.doesNotMatch(player, /ResizeObserver[\s\S]{0,600}(?:setCurrentTrack|playQueue|dispatchPlaybackCommand|\.load\(\))/);
+});
+
+test("core playback lib has no resize/orientation/posture listener wired to any playback entrypoint", () => {
+  // Rotation/fold is a geometry event, not a playback event. None of the files that
+  // actually own stream/entitlement resolution or the <audio> element lifecycle may
+  // listen for resize/orientation/posture at all — that keeps the audio domain
+  // provably independent of the presentation domain, regardless of what the CSS
+  // layout is doing.
+  const files = [
+    "src/context/AudioContext.js",
+    "src/lib/playback/audio-engine-runtime.js",
+    "src/lib/playback/command-dispatcher.js",
+    "src/lib/playback/PlaybackStreamCommands.js",
+    "src/lib/playback/PlaybackEventHandlers.js",
+    "src/lib/playback/usePlaybackEffects.js",
+  ];
+  const forbidden = /addEventListener\(\s*["'](resize|orientationchange)["']|screen\.orientation|visualViewport|viewport-segment/;
+  for (const file of files) {
+    assert.doesNotMatch(read(file), forbidden, `${file} must not observe geometry/posture`);
+  }
 });
 
 test("playback mode subscriptions are isolated to the Flow State panel", () => {
