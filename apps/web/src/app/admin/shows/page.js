@@ -1,33 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
-import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
-import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
-
-const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
-
-function isAdmin(session) {
-  return (session?.user?.email?.toLowerCase() || "") === ADMIN_EMAIL;
-}
+import { useAdminGate } from "@/hooks/useAdminGate";
 
 export default function AdminShowsPage() {
-  const router = useRouter();
-  const [checked, setChecked] = useState(false);
+  const gate = useAdminGate();
 
-  useEffect(() => {
-    const sb = createBrowserClient(
-      SUPABASE_URL,
-      SUPABASE_PUBLIC_KEY
-    );
-    sb.auth.getSession().then(({ data }) => {
-      if (!isAdmin(data.session)) { router.replace("/"); return; }
-      setChecked(true);
-    });
-  }, [router]);
-
-  if (!checked) return <div style={s.page}><div style={s.spinner} /></div>;
+  if (gate !== "ok") return <div style={s.page}><div style={s.spinner} /></div>;
   return <ShowsManager />;
 }
 

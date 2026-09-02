@@ -28,7 +28,11 @@ export function CollectorsCardsGrid() {
   };
 
   useEffect(() => {
-    setIsMobile(window.matchMedia("(max-width: 768px)").matches);
+    const mql = window.matchMedia("(max-width: 768px)");
+    setIsMobile(mql.matches);
+    const onChange = (e) => setIsMobile(e.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
   }, []);
 
   return (

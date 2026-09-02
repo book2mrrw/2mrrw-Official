@@ -6,13 +6,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
 import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
 import { useAuth } from "@/context/AuthContext";
-
-const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "callme2mrrw@gmail.com").toLowerCase();
-
-function isAdmin(session) {
-  const email = session?.user?.email?.toLowerCase() || "";
-  return email === ADMIN_EMAIL;
-}
+import { useAdminGate } from "@/hooks/useAdminGate";
 
 function statusLabel(status, claimed) {
   if (claimed) return { label: "Redeemed", color: "#22c55e" };
@@ -403,6 +397,10 @@ function GiftsHistory({ gifts, loading }) {
 export default function AdminGiftsPage() {
   const router = useRouter();
   const { signOut } = useAuth();
+  const gate = useAdminGate({ redirectOnDenied: null });
+  // Used only for the direct catalog read below (see loadCatalog) — the admin
+  // gate itself is resolved server-side via useAdminGate, not from this
+  // client's session state, so it never needs to read the auth cookie in JS.
   const [supabase] = useState(() => {
     if (typeof window === "undefined") return null;
     return createBrowserClient(
@@ -410,17 +408,9 @@ export default function AdminGiftsPage() {
       SUPABASE_PUBLIC_KEY
     );
   });
-  const [session, setSession] = useState(undefined);
   const [catalog, setCatalog] = useState([]);
   const [gifts, setGifts] = useState([]);
   const [giftsLoading, setGiftsLoading] = useState(true);
-
-  useEffect(() => {
-    if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => setSession(data?.session ?? null));
-    const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    return () => data.subscription.unsubscribe();
-  }, [supabase]);
 
   const loadCatalog = useCallback(async () => {
     if (!supabase) return;
@@ -445,14 +435,13 @@ export default function AdminGiftsPage() {
   }, []);
 
   useEffect(() => {
-    if (session === undefined) return;
-    if (!session || !isAdmin(session)) return;
+    if (gate !== "ok") return;
     loadCatalog();
     loadGifts();
-  }, [session, loadCatalog, loadGifts]);
+  }, [gate, loadCatalog, loadGifts]);
 
   // Loading state
-  if (session === undefined) {
+  if (gate === "loading") {
     return (
       <div style={s.page}>
         <div style={{ color: "#555", fontSize: 14 }}>Loading…</div>
@@ -461,7 +450,7 @@ export default function AdminGiftsPage() {
   }
 
   // Not signed in
-  if (!session) {
+  if (gate === "unauthenticated") {
     return (
       <div style={s.page}>
         <div style={s.gate}>
@@ -474,7 +463,7 @@ export default function AdminGiftsPage() {
   }
 
   // Not admin
-  if (!isAdmin(session)) {
+  if (gate === "forbidden") {
     return (
       <div style={s.page}>
         <div style={s.gate}>

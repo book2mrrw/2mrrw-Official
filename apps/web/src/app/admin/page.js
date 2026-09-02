@@ -1,17 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
-import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
-import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
-
-const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
-
-function isAdmin(session) {
-  return (session?.user?.email?.toLowerCase() || "") === ADMIN_EMAIL;
-}
+import { useRouter } from "next/navigation";
+import { useAdminGate } from "@/hooks/useAdminGate";
 
 const C = {
   bg: "#050505",
@@ -39,20 +30,9 @@ const NAV_ITEMS = [
 
 export default function AdminPage() {
   const router = useRouter();
-  const [checked, setChecked] = useState(false);
+  const gate = useAdminGate();
 
-  useEffect(() => {
-    const sb = createBrowserClient(
-      SUPABASE_URL,
-      SUPABASE_PUBLIC_KEY
-    );
-    sb.auth.getSession().then(({ data }) => {
-      if (!isAdmin(data.session)) { router.replace("/"); return; }
-      setChecked(true);
-    });
-  }, [router]);
-
-  if (!checked) {
+  if (gate !== "ok") {
     return (
       <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ width: 28, height: 28, border: `2px solid ${C.accentBorder}`, borderTopColor: C.accent, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />

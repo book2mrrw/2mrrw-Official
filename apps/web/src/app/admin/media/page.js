@@ -1,37 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
-import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
-import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
-
-const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
-
-function isAdmin(session) {
-  return (session?.user?.email?.toLowerCase() || "") === ADMIN_EMAIL;
-}
+import { useAdminGate } from "@/hooks/useAdminGate";
 
 const RELEASE_TYPES = ["singles", "albums", "features", "mixtapes-and-eps", "eps"];
 
 export default function AdminMediaPage() {
-  const router = useRouter();
-  const [session, setSession] = useState(null);
-  const [checked, setChecked] = useState(false);
+  const gate = useAdminGate();
 
-  useEffect(() => {
-    const sb = createBrowserClient(
-      SUPABASE_URL,
-      SUPABASE_PUBLIC_KEY
-    );
-    sb.auth.getSession().then(({ data }) => {
-      if (!isAdmin(data.session)) { router.replace("/"); return; }
-      setSession(data.session);
-      setChecked(true);
-    });
-  }, [router]);
-
-  if (!checked) return <div style={styles.page}><div style={styles.spinner} /></div>;
+  if (gate !== "ok") return <div style={styles.page}><div style={styles.spinner} /></div>;
 
   return (
     <div style={styles.page}>

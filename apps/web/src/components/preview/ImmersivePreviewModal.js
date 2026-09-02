@@ -674,7 +674,7 @@ function Badge({ access, t }) {
 
 function ShareSheet({ title, sub, t, onClose }) {
   return (
-    <div className="bsheet" style={{ background: t.dark }}>
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(0px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
       <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
       <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 24px 22px", cursor: "pointer" }} onClick={onClose}>
         <div
@@ -714,7 +714,7 @@ function ShareSheet({ title, sub, t, onClose }) {
 
 function ViewMoreSheet({ title, sub, t, rows, onClose }) {
   return (
-    <div className="bsheet" style={{ background: t.dark, paddingBottom: 28 }}>
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(28px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
       <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
       <div style={{ padding: "6px 22px 10px" }}>
         <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 22, fontWeight: 400, color: "white", marginBottom: 3 }}>{title}</div>
@@ -755,7 +755,7 @@ function SleepTimerSheet({ t, sleepTimerEndsAt, sleepAfterCurrentTrack, setSleep
     { label: "End of track", value: "end_of_track" },
   ];
   return (
-    <div className="bsheet" style={{ background: t.dark, paddingBottom: 28 }}>
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(28px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
       <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
       <div style={{ padding: "6px 22px 14px" }}>
         <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 20, fontWeight: 400, color: "white", marginBottom: 2 }}>Sleep Timer</div>
@@ -798,7 +798,7 @@ function TrackContextSheet({ track, album, t, onPlayNext, onAddToQueue, onAddToP
     { label: "Share Track", icon: <I.ShareArrow />, fn: onShare },
   ];
   return (
-    <div className="bsheet" style={{ background: t.dark, paddingBottom: 32 }}>
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(32px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
       <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
       <div style={{ padding: "4px 22px 14px", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
         <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 17, fontWeight: 500, color: "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{track?.title}</div>
@@ -848,7 +848,7 @@ function PlaylistPickerSheet({ track, album, userId, t, onClose }) {
   }, [userId, trackRef, album, onClose]);
 
   return (
-    <div className="bsheet" style={{ background: t.dark, paddingBottom: 32, maxHeight: "70vh", overflowY: "auto" }}>
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(32px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)", maxHeight: "70vh", overflowY: "auto" }}>
       <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
       <div style={{ padding: "4px 22px 14px", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
         <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 18, fontWeight: 400, color: "white" }}>Add to Playlist</div>
@@ -884,7 +884,7 @@ const SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 function PlaybackSpeedSheet({ speed, t, onSelect, onClose }) {
   return (
-    <div className="bsheet" style={{ background: t.dark, paddingBottom: 32 }}>
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(32px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
       <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
       <div style={{ padding: "4px 22px 14px", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
         <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 18, fontWeight: 400, color: "white" }}>Playback Speed</div>
@@ -990,7 +990,7 @@ function QueueSheet({ queue, queueIndex, t, onRemove, onMove, onClear, onSaveAsP
   };
 
   return (
-    <div className="bsheet" style={{ background: t.dark, paddingBottom: 32, maxHeight: "72vh", display: "flex", flexDirection: "column" }}>
+    <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(32px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)", maxHeight: "72vh", display: "flex", flexDirection: "column" }}>
       <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
       <div style={{ padding: "4px 22px 10px", borderBottom: "1px solid rgba(255,255,255,.06)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 18, fontWeight: 400, color: "white" }}>Queue</div>

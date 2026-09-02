@@ -17,7 +17,13 @@
  * Response 200: { ok: true, slug, trackSlug }
  * Response 401: missing or wrong token
  * Response 400: missing slug
- * Response 500: cache invalidation failed (rare â€” TTL will self-heal)
+ * Response 500: cache invalidation failed here (rare) is non-fatal for a master
+ *   replacement specifically: promote_audio_master_revision() already clears
+ *   playback_key_resolution_cache itself, in the same transaction as the
+ *   pointer flip (see 20260902000000_promote_audio_master_revision_clears_playback_cache.sql).
+ *   This endpoint is now a second, best-effort pass on top of that, plus the
+ *   only thing invalidating the separate HLS manifest cache below, which
+ *   still relies on its 24h TTL to self-heal if this call never lands.
  */
 
 import { NextResponse } from "next/server";
@@ -74,9 +80,12 @@ export async function POST(req) {
 
     return json({ ok: true, slug, trackSlug, replacementId: body.replacementId || null });
   } catch (err) {
-    // Cache invalidation failure is logged but not fatal â€” the DB row already exists
-    // and the TTL will self-heal within 24 h. A 500 here causes the worker to retry,
-    // which is safe (invalidateManifestCache is idempotent).
+    // Cache invalidation failure is logged but not fatal for a master replacement:
+    // promote_audio_master_revision() already cleared playback_key_resolution_cache
+    // itself (see 20260902000000_...sql), so playback is correct either way. The
+    // manifest cache this endpoint also invalidates still relies on its 24h TTL to
+    // self-heal — the worker (workers/hls-transcoder/src/db.js) does NOT retry this
+    // call on a non-2xx response, it only logs a warning.
     console.error(`${LOG_PREFIX} cache invalidation failed`, { slug, trackSlug, error: err?.message });
     return json({ error: "Cache invalidation failed", slug, trackSlug }, 500);
   }

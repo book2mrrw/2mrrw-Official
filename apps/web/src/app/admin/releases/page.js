@@ -2,21 +2,17 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
-import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
-import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
 import {
   beginMasterReplacement,
   stageMasterReplacement,
-  watchMasterReplacement,
 } from "@/lib/media/master-revision-client";
 import { signalCatalogMutation } from "@/lib/storefront/catalog-refresh-store";
+import { AdminVerificationOverlay } from "@/components/admin/AdminVerificationOverlay";
+import { RECOVERABLE_ADMIN_AUTH_CODES } from "@/lib/auth/admin-authority-diagnostics";
+import { useAdminGate } from "@/hooks/useAdminGate";
 
 const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
-function isAdmin(session) {
-  return (session?.user?.email?.toLowerCase() || "") === ADMIN_EMAIL;
-}
 
 const C = {
   bg:           "#050505",
@@ -61,7 +57,6 @@ function ReplaceMasterModal({ release, onClose }) {
   const xhrRef = useRef(null);
   const fileInputRef = useRef(null);
   const selectedFileRef = useRef(null);
-  const watchStopRef = useRef(null);
 
   // Load tracks for multi-track releases
   useEffect(() => {
@@ -77,7 +72,6 @@ function ReplaceMasterModal({ release, onClose }) {
 
   useEffect(() => () => {
     selectedFileRef.current = null;
-    watchStopRef.current?.();
     xhrRef.current?.abort?.();
   }, []);
 
@@ -109,29 +103,22 @@ function ReplaceMasterModal({ release, onClose }) {
         xhrRef,
       });
       setPhase("processing");
-      await beginMasterReplacement({
+      const status = await beginMasterReplacement({
         releaseId: release.id,
+        trackId,
         replacementId: staged.replacementId,
+        key: staged.key,
+        size: staged.size,
       });
-      watchStopRef.current = watchMasterReplacement({
-        releaseId: release.id,
-        replacementId: staged.replacementId,
-        onStatus: (status) => {
-          if (status.status === "active") {
-            selectedFileRef.current = null;
-            signalCatalogMutation("release_master_promoted");
-            setPhase("done");
-          } else if (["failed", "cancelled"].includes(status.status)) {
-            selectedFileRef.current = null;
-            setErrMsg(status.error || "Processing failed; the previous master remains live");
-            setPhase("error");
-          }
-        },
-        onError: (error) => {
-          setErrMsg(`${error.message}. Processing may still be running; reopen this release to check.`);
-          setPhase("error");
-        },
-      });
+      if (status.status === "active") {
+        selectedFileRef.current = null;
+        signalCatalogMutation("release_master_promoted");
+        setPhase("done");
+      } else {
+        selectedFileRef.current = null;
+        setErrMsg(status.error || "Replacement failed; the previous master remains live");
+        setPhase("error");
+      }
     } catch (err) {
       selectedFileRef.current = null;
       setErrMsg(err.message);
@@ -496,7 +483,8 @@ function SwipeDeleteRow({ children, onDelete, showBorder }) {
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function AdminReleasesPage() {
   const router = useRouter();
-  const [checked,  setChecked]  = useState(false);
+  const gate = useAdminGate();
+  const checked = gate === "ok";
   const [releases, setReleases] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState(null);
@@ -505,26 +493,28 @@ export default function AdminReleasesPage() {
   const [filter,   setFilter]   = useState("all");
   const [deleting, setDeleting] = useState(null); // slug being deleted (for loading state)
   const [undoDump, setUndoDump] = useState(null);
+  const [reauthRequired, setReauthRequired] = useState(false);
+  const reauthResumeRef = useRef(null);
 
   useEffect(() => {
-    const sb = createBrowserClient(
-      SUPABASE_URL,
-      SUPABASE_PUBLIC_KEY
-    );
-    sb.auth.getSession().then(({ data: d }) => {
-      if (!isAdmin(d.session)) { router.replace("/"); return; }
-      setChecked(true);
-      loadReleases();
-    });
-  }, [router]);
+    if (checked) loadReleases();
+  }, [checked]);
 
   const loadReleases = async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/admin/releases");
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error);
+      if (!res.ok) {
+        if (RECOVERABLE_ADMIN_AUTH_CODES.has(json.code)) {
+          reauthResumeRef.current = () => loadReleases();
+          setReauthRequired(true);
+          return;
+        }
+        throw new Error(json.error);
+      }
       setReleases(json.releases || []);
+      setReauthRequired(false);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -548,7 +538,14 @@ export default function AdminReleasesPage() {
         ? { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "archive" }) }
         : { method: "DELETE" });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Delete failed");
+      if (!res.ok) {
+        if (RECOVERABLE_ADMIN_AUTH_CODES.has(json.code)) {
+          reauthResumeRef.current = () => deleteRelease(rel, true);
+          setReauthRequired(true);
+          return;
+        }
+        throw new Error(json.error || "Delete failed");
+      }
       if (json.staged) {
         setReleases((current) => current.filter((item) => item.id !== rel.id));
         setUndoDump(rel);
@@ -846,6 +843,21 @@ export default function AdminReleasesPage() {
           <button type="button" onClick={undoDraftDump} style={{ background: "none", border: 0, color: C.accent, fontWeight: 900, cursor: "pointer", letterSpacing: ".06em" }}>UNDO</button>
         </div>
       ) : null}
+      {reauthRequired && (
+        <AdminVerificationOverlay
+          email={ADMIN_EMAIL}
+          onCancel={() => {
+            reauthResumeRef.current = null;
+            setReauthRequired(false);
+          }}
+          onVerified={async () => {
+            setReauthRequired(false);
+            const resume = reauthResumeRef.current;
+            reauthResumeRef.current = null;
+            await resume?.();
+          }}
+        />
+      )}
     </div>
   );
 }

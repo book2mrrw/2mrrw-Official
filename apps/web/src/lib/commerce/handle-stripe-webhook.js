@@ -30,7 +30,16 @@ function resolvePaymentIntentId(event) {
   return typeof pi === "string" ? pi : pi.id || null;
 }
 
-async function revokePurchaseByPaymentIntent(paymentIntentId) {
+/**
+ * Revoke library access + extended entitlements for the purchase tied to a
+ * payment intent. Safe to call more than once for the same payment intent —
+ * every step (status flip, library delete, cache invalidation) is a no-op on
+ * a purchase that's already refunded. Called both from the charge.refunded
+ * webhook below AND synchronously from POST /api/refund (src/app/api/refund/
+ * route.js) right after Stripe confirms the refund, so a customer's access is
+ * revoked immediately rather than only whenever the webhook happens to land.
+ */
+export async function revokePurchaseByPaymentIntent(paymentIntentId) {
   if (!paymentIntentId) {
     console.warn(`${LOG_PREFIX} revocation skipped: missing payment_intent id`);
     return;

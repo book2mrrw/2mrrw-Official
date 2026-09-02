@@ -61,6 +61,7 @@ export const ServiceCapability = Object.freeze({
   HLS_COMPLETE:      "HLS_WORKER_API_TOKEN",
   R2_CORS_CONFIGURE: "SVC_R2_CORS_SECRET",
   PLAYBACK_BACKFILL: "SVC_PLAYBACK_BACKFILL_SECRET",
+  LIVE_TWITCH_INGEST: "LIVE_RELAY_SERVICE_SECRET",
 });
 
 /** Constant-time compare that tolerates a length mismatch without throwing. */
@@ -129,14 +130,23 @@ export async function requireAdminActor({ recentSeconds = null, logDenial = true
 function denyAdminAuthority(reason, { user = null, mfa = null, logDenial = true } = {}) {
   const diagnostic = classifyAdminAuthorityDenial(reason);
   if (logDenial) {
-    emitServerEvent(diagnostic.level, "admin_authority_denied", {
+    const eventData = {
       code: diagnostic.code,
       actorId: user?.id || null,
       configurationState:
         diagnostic.code === "ADMIN_AUTH_MFA_CONFIGURATION_ERROR"
           ? mfa?.configurationState || null
           : undefined,
-    });
+    };
+    // emitServerEvent only forwards to Sentry when an Error is passed, even at
+    // "error" severity — without this, a misconfigured HUMAN_ADMIN_MFA_REQUIRED
+    // env var (which locks out every admin platform-wide) would only ever show
+    // up as a console.error line in Vercel logs, not as anything that pages
+    // anyone. This is the one denial reason worth capturing as an exception.
+    const captureError = diagnostic.code === "ADMIN_AUTH_MFA_CONFIGURATION_ERROR"
+      ? new Error(`Admin MFA misconfigured: ${reason}`)
+      : null;
+    emitServerEvent(diagnostic.level, "admin_authority_denied", eventData, captureError);
   }
   return { ok: false, reason, ...(user ? { user } : {}), ...(mfa ? { mfa } : {}) };
 }

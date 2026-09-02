@@ -54,11 +54,20 @@ test("INV-MFA diagnostics are structured and internal reasons stay server-side",
 test("INV-MFA admin release recovery renews authority without leaving the storefront", () => {
   const releases = read("src/app/api/admin/releases/route.js");
   const manager = read("src/components/admin/InlineReleasesManager.js");
+  // The recovery UI and its recoverable-code set are shared across every admin
+  // screen (src/components/admin/AdminVerificationOverlay.js,
+  // src/lib/auth/admin-authority-diagnostics.js) rather than duplicated per
+  // file — check the invariant at its actual source, and that the manager
+  // wires the shared pieces up correctly.
+  const overlay = read("src/components/admin/AdminVerificationOverlay.js");
+  const codes = read("src/lib/auth/admin-authority-diagnostics.js");
   const login = read("src/app/login/page.js");
   assert.match(releases, /code: denial\.code/);
-  assert.match(manager, /ADMIN_AUTH_MFA_REQUIRED/);
-  assert.match(manager, /\/api\/auth\/login-step1/);
-  assert.match(manager, /\/api\/auth\/login-step2/);
+  assert.match(codes, /ADMIN_AUTH_MFA_REQUIRED/);
+  assert.match(manager, /import \{ AdminVerificationOverlay \} from "@\/components\/admin\/AdminVerificationOverlay"/);
+  assert.match(manager, /import \{ RECOVERABLE_ADMIN_AUTH_CODES \} from "@\/lib\/auth\/admin-authority-diagnostics"/);
+  assert.match(overlay, /\/api\/auth\/login-step1/);
+  assert.match(overlay, /\/api\/auth\/login-step2/);
   assert.match(manager, /onVerified=\{loadReleases\}/);
   assert.doesNotMatch(manager, /router\.refresh\(\)/);
   assert.match(login, /\/api\/auth\/mfa-session/);

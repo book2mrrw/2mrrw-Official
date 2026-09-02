@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
+import { getAdminSessionUser, requireAdminActor } from "@/lib/auth/admin-api-guard";
+import { classifyAdminAuthorityDenial } from "@/lib/auth/admin-authority-diagnostics";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
@@ -343,10 +344,15 @@ export async function PATCH(req, { params }) {
 // Catalog products (source=catalog): sets active=false (takedown, preserves purchase history).
 // Query param: ?source=catalog to force catalog path when id is a product id.
 export async function DELETE(req, { params }) {
-  const user = await getAdminSessionUser({ recentSeconds: 15 * 60 });
-  if (!user || !isAdminUser(user)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const gate = await requireAdminActor({ recentSeconds: 15 * 60 });
+  if (!gate.ok) {
+    const denial = classifyAdminAuthorityDenial(gate.reason);
+    return NextResponse.json(
+      { error: denial.status === 401 ? "Unauthorized" : "Forbidden", code: denial.code },
+      { status: denial.status }
+    );
   }
+  const user = gate.user;
 
   const rl = await checkRateLimit(req, {
     routeKey: "admin.releases.delete",

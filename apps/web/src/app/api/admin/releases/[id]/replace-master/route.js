@@ -1,29 +1,45 @@
 import { NextResponse } from "next/server";
-import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
-import { isAdminUser } from "@/lib/auth/constants";
+import { requireAdminActor } from "@/lib/auth/admin-api-guard";
+import { classifyAdminAuthorityDenial } from "@/lib/auth/admin-authority-diagnostics";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
-import { deleteR2Object, getR2ObjectMetadata } from "@/lib/storage/r2";
+import { copyR2Object, deleteR2Object, getR2ObjectMetadata } from "@/lib/storage/r2";
+import { ADMIN_UPLOAD_CONTRACTS } from "@/lib/media/admin-upload-contract";
+import {
+  buildMasterRevisionKeys,
+  MasterRevisionTargetError,
+  resolveMasterRevisionTarget,
+} from "@/lib/media/master-revision-authority";
+import { invalidateAudioCacheAndRequeueTranscode } from "@/lib/media/audio-cache-refresh";
+import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 
 export const dynamic = "force-dynamic";
 
-const PUBLIC_STATUS = Object.freeze({
-  uploading: "uploading",
-  uploaded: "processing",
-  processing: "processing",
-  ready: "processing",
-  promoting: "processing",
-  active: "active",
-  failed: "failed",
-  cancelled: "cancelled",
-  retired: "retired",
-});
+/**
+ * Commits a staged master replacement synchronously — no worker, no staging
+ * table. This mirrors exactly what the working initial-upload path already
+ * does in publish/route.js: copy the file to its canonical R2 key, update the
+ * pointer column directly, done. The previous design staged into
+ * audio_master_revisions and waited for an external transcoder worker to call
+ * promote_audio_master_revision(); that table was never deployed to
+ * production, so no replacement ever took effect. HLS regeneration still
+ * happens in the background afterward (invalidateAudioCacheAndRequeueTranscode),
+ * exactly like /api/admin/media/refresh-track — it is an enhancement, not a
+ * precondition for the new audio being audible.
+ */
 
-async function authorize(req, routeKey, limit = 60, recentSeconds = 15 * 60) {
-  const user = await getAdminSessionUser({ recentSeconds });
-  if (!user || !isAdminUser(user)) {
-    return { response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+async function authorize(req, routeKey, limit = 60) {
+  const gate = await requireAdminActor({ recentSeconds: 15 * 60 });
+  if (!gate.ok) {
+    const denial = classifyAdminAuthorityDenial(gate.reason);
+    return {
+      response: NextResponse.json(
+        { error: denial.status === 401 ? "Unauthorized" : "Forbidden", code: denial.code },
+        { status: denial.status }
+      ),
+    };
   }
+  const user = gate.user;
   const rl = await checkRateLimit(req, {
     routeKey,
     limit,
@@ -34,47 +50,27 @@ async function authorize(req, routeKey, limit = 60, recentSeconds = 15 * 60) {
   return { user };
 }
 
-function revisionResponse(revision) {
-  return {
-    replacementId: revision.id,
-    status: PUBLIC_STATUS[revision.status] || revision.status,
-    internalStatus: revision.status,
-    error: revision.error_message || null,
-    uploadedAt: revision.uploaded_at || null,
-    processingAt: revision.processing_at || null,
-    promotedAt: revision.promoted_at || null,
-  };
+function extWithDotFromKey(key) {
+  const i = String(key || "").lastIndexOf(".");
+  return i >= 0 ? key.slice(i) : "";
 }
 
-async function loadBoundRevision(admin, releaseRefId, revisionId) {
-  if (!revisionId) return null;
-  const { data } = await admin
-    .from("audio_master_revisions")
-    .select("id, release_ref_id, staged_master_key, content_type, byte_size, status, error_message, uploaded_at, processing_at, promoted_at, hls_job_id")
-    .eq("id", revisionId)
-    .eq("release_ref_id", releaseRefId)
-    .maybeSingle();
-  return data || null;
+function canonicalAudioKey({ folder, releaseSlug, trackSlug, extWithDot }) {
+  return trackSlug
+    ? `digital-assets/${folder}/${releaseSlug}/${trackSlug}/${trackSlug}${extWithDot}`
+    : `digital-assets/${folder}/${releaseSlug}/${releaseSlug}${extWithDot}`;
 }
 
-/** Read-only lifecycle endpoint used only while one admin replacement is open. */
-export async function GET(req, { params }) {
-  // Polling may outlive the 15-minute mutation window. Keep the administrator
-  // identity/MFA boundary, but do not expire a read-only status stream midway.
-  const auth = await authorize(req, "admin.releases.replace-master.status", 120, null);
-  if (auth.response) return auth.response;
-  const { id: releaseRefId } = await params;
-  const replacementId = req.nextUrl.searchParams.get("replacementId");
-  const revision = await loadBoundRevision(getAdminClient(), releaseRefId, replacementId);
-  if (!revision) {
-    return NextResponse.json({ error: "Replacement transaction not found" }, { status: 404 });
-  }
-  return NextResponse.json(revisionResponse(revision));
+async function mergeMetadataAudioKey(admin, table, matchColumn, matchValue, destKey) {
+  const { data: row } = await admin.from(table).select("metadata").eq(matchColumn, matchValue).maybeSingle();
+  const metadata = { ...(row?.metadata || {}), audio_key: destKey, audio_replaced_at: new Date().toISOString() };
+  return admin.from(table).update({ metadata }).eq(matchColumn, matchValue);
 }
 
 /**
- * Verify the staged object and queue its immutable HLS job. This endpoint does
- * not change a public master pointer and therefore cannot interrupt playback.
+ * Commit a staged master replacement: verify the upload, copy it to the
+ * canonical R2 key, flip the pointer, and kick off cache/transcode cleanup.
+ * Synchronous — the response reflects the final state, no polling required.
  */
 export async function POST(req, { params }) {
   const auth = await authorize(req, "admin.releases.replace-master.commit", 10);
@@ -86,29 +82,45 @@ export async function POST(req, { params }) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
   const replacementId = String(body.replacementId || "");
-  if (!replacementId) {
-    return NextResponse.json({ error: "replacementId is required" }, { status: 400 });
+  const key = String(body.key || "");
+  const size = Number(body.size);
+  if (!replacementId || !key) {
+    return NextResponse.json({ error: "replacementId and key are required" }, { status: 400 });
+  }
+  if (!Number.isSafeInteger(size) || size <= 0) {
+    return NextResponse.json({ error: "size is required" }, { status: 400 });
   }
 
   const admin = getAdminClient();
-  const revision = await loadBoundRevision(admin, releaseRefId, replacementId);
-  if (!revision) {
-    return NextResponse.json({ error: "Replacement transaction not found" }, { status: 404 });
+  let target;
+  try {
+    target = await resolveMasterRevisionTarget(admin, releaseRefId, body.trackId || null);
+  } catch (error) {
+    const status = error instanceof MasterRevisionTargetError ? error.status : 500;
+    return NextResponse.json({ error: error.message || "Could not resolve replacement target" }, { status });
   }
-  if (revision.status === "active") return NextResponse.json(revisionResponse(revision));
-  if (["processing", "ready", "promoting"].includes(revision.status)) {
-    return NextResponse.json(revisionResponse(revision), { status: 202 });
+
+  const extWithDot = extWithDotFromKey(key);
+  const extension = extWithDot.replace(/^\./, "").toLowerCase();
+  const expectedKey = buildMasterRevisionKeys({
+    folder: target.releaseType,
+    releaseSlug: target.releaseSlug,
+    trackSlug: target.trackSlug,
+    revisionId: replacementId,
+    extension,
+  }).stagedMasterKey;
+  if (key !== expectedKey) {
+    return NextResponse.json({ error: "Invalid staged file reference" }, { status: 400 });
   }
-  if (revision.status !== "uploading" && revision.status !== "uploaded") {
-    return NextResponse.json(
-      { error: revision.error_message || `Replacement cannot continue from ${revision.status}` },
-      { status: 409 }
-    );
+
+  const expectedContentType = ADMIN_UPLOAD_CONTRACTS.audio.extensions[extension];
+  if (!expectedContentType) {
+    return NextResponse.json({ error: "Unsupported master format" }, { status: 400 });
   }
 
   let object;
   try {
-    object = await getR2ObjectMetadata(revision.staged_master_key);
+    object = await getR2ObjectMetadata(key);
   } catch (error) {
     console.error("[replace-master] staged object verification failed", error?.message);
     return NextResponse.json({ error: "Could not verify staged master in storage" }, { status: 502 });
@@ -119,61 +131,83 @@ export async function POST(req, { params }) {
       { status: 422 }
     );
   }
-  if (object.contentLength !== Number(revision.byte_size)) {
-    await admin.from("audio_master_revisions").update({
-      status: "failed",
-      failed_at: new Date().toISOString(),
-      error_message: "Uploaded byte length did not match the authorized file",
-    }).eq("id", revision.id);
+  if (object.contentLength !== size) {
+    await deleteR2Object(key).catch(() => {});
     return NextResponse.json({ error: "Uploaded master failed byte-length validation" }, { status: 422 });
   }
-  if (object.contentType !== String(revision.content_type).toLowerCase()) {
-    await admin.from("audio_master_revisions").update({
-      status: "failed",
-      failed_at: new Date().toISOString(),
-      error_message: "Uploaded Content-Type did not match the authorized file",
-    }).eq("id", revision.id);
+  if (String(object.contentType || "").toLowerCase() !== expectedContentType.toLowerCase()) {
+    await deleteR2Object(key).catch(() => {});
     return NextResponse.json({ error: "Uploaded master failed content-type validation" }, { status: 422 });
   }
 
-  const { data: job, error: queueError } = await admin.rpc("queue_audio_master_revision", {
-    p_revision_id: revision.id,
-    p_queued_by: auth.user.id,
+  const destKey = canonicalAudioKey({
+    folder: target.releaseType,
+    releaseSlug: target.releaseSlug,
+    trackSlug: target.trackSlug,
+    extWithDot,
   });
-  if (queueError || !job?.id) {
-    console.error("[replace-master] revision queue failed", queueError?.message);
+
+  try {
+    await copyR2Object(key, destKey);
+  } catch (error) {
+    console.error("[replace-master] R2 copy to canonical key failed", error?.message);
     return NextResponse.json(
-      { error: "The staged master could not enter processing; the active master is unchanged" },
+      { error: "Could not move the new master into canonical storage; the active master is unchanged" },
       { status: 500 }
     );
   }
 
-  return NextResponse.json({
-    replacementId: revision.id,
-    status: "processing",
-    hlsJobId: job.id,
-    activeMasterUnchanged: true,
-  }, { status: 202 });
+  try {
+    if (target.entityKind === "track") {
+      const { error } = await admin
+        .from("tracks")
+        .update({ audio_r2_key: destKey, master_r2_key: destKey })
+        .eq("id", target.entityId);
+      if (error) throw error;
+    } else if (target.entityKind === "catalog_track") {
+      const { error } = await mergeMetadataAudioKey(admin, "catalog_tracks", "id", target.entityId, destKey);
+      if (error) throw error;
+    } else if (target.entityKind === "product") {
+      const { error } = await mergeMetadataAudioKey(admin, "products", "id", target.entityId, destKey);
+      if (error) throw error;
+    }
+  } catch (error) {
+    console.error("[replace-master] pointer update failed", error?.message);
+    return NextResponse.json(
+      { error: "The new master is stored but could not be committed; please retry" },
+      { status: 500 }
+    );
+  }
+
+  // Best-effort cleanup — the pointer already moved, so a leftover file here
+  // is unused storage, not a correctness problem.
+  if (target.previousMasterKey && target.previousMasterKey !== destKey) {
+    await deleteR2Object(target.previousMasterKey).catch(() => {});
+  }
+  await deleteR2Object(key).catch(() => {});
+
+  await invalidateAudioCacheAndRequeueTranscode({
+    admin,
+    slug: target.releaseSlug,
+    trackSlug: target.trackSlug,
+    releaseType: target.releaseType,
+    sourceKey: destKey,
+    queuedBy: auth.user.id,
+  });
+
+  if (target.isPublic) {
+    revalidateStorefront(target.releaseSlug);
+  }
+
+  return NextResponse.json({ replacementId, status: "active", key: destKey });
 }
 
-/** Cancel only an unqueued staged upload. Processing/active revisions are immutable. */
-export async function DELETE(req, { params }) {
+/** Cancel a staged upload that was never committed. */
+export async function DELETE(req) {
   const auth = await authorize(req, "admin.releases.replace-master.cancel", 20);
   if (auth.response) return auth.response;
-  const { id: releaseRefId } = await params;
-  const replacementId = req.nextUrl.searchParams.get("replacementId");
-  const admin = getAdminClient();
-  const revision = await loadBoundRevision(admin, releaseRefId, replacementId);
-  if (!revision) return NextResponse.json({ error: "Replacement transaction not found" }, { status: 404 });
-  if (revision.status !== "uploading") {
-    return NextResponse.json({ error: "Only an unqueued staged upload can be cancelled" }, { status: 409 });
-  }
-  await deleteR2Object(revision.staged_master_key).catch(() => {});
-  const { error } = await admin.from("audio_master_revisions").update({
-    status: "cancelled",
-    failed_at: new Date().toISOString(),
-    error_message: "Staged upload was cancelled before processing",
-  }).eq("id", revision.id).eq("status", "uploading");
-  if (error) return NextResponse.json({ error: "Could not cancel staged upload" }, { status: 500 });
-  return NextResponse.json({ replacementId: revision.id, status: "cancelled" });
+  const key = req.nextUrl.searchParams.get("key");
+  if (!key) return NextResponse.json({ error: "key is required" }, { status: 400 });
+  await deleteR2Object(key).catch(() => {});
+  return NextResponse.json({ ok: true });
 }

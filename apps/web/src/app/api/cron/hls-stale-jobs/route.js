@@ -45,7 +45,7 @@ export async function GET(req) {
 
   const { data: staleJobs, error: fetchErr } = await admin
     .from("hls_transcode_jobs")
-    .select("id, slug, track_slug, attempt_count, worker_id, master_revision_id")
+    .select("id, slug, track_slug, attempt_count, worker_id")
     .eq("status", "processing")
     .lt("started_at", staleAfter);
 
@@ -98,25 +98,6 @@ export async function GET(req) {
     emitServerEvent("error", "hls_stale_job_recovery_failed",
       { correlationId, staleFound: staleJobs.length, errorCount: errors.length }, results.find((result) => result.error)?.error);
     return json({ error: errors.join("; ") }, 500);
-  }
-
-  const failedRevisionIds = staleJobs
-    .filter((job) => toEscalate.includes(job.id) && job.master_revision_id)
-    .map((job) => job.master_revision_id);
-  if (failedRevisionIds.length) {
-    const { error: revisionError } = await admin
-      .from("audio_master_revisions")
-      .update({
-        status: "failed",
-        failed_at: new Date().toISOString(),
-        error_message: `HLS processing exceeded ${MAX_ATTEMPTS} recovery attempts; the previous master remains active`,
-      })
-      .in("id", failedRevisionIds)
-      .in("status", ["uploaded", "processing", "ready", "promoting"]);
-    if (revisionError) {
-      emitServerEvent("error", "hls_stale_revision_escalation_failed",
-        { correlationId, revisionCount: failedRevisionIds.length }, revisionError);
-    }
   }
 
   emitServerEvent(toEscalate.length ? "warn" : "info", "hls_stale_job_recovery_completed",

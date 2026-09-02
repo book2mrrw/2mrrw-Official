@@ -1123,6 +1123,10 @@ export function createPlaybackEventHandlers({
           });
           return;
         }
+        // A successful retry fully recovered playback — reset the budget so an
+        // unrelated later blip on this same track gets its own full 3 attempts,
+        // instead of inheriting whatever count this one happened to reach.
+        streamErrorRetriedRef.current = 0;
         patchState({
           error: null,
           streamRetryable: false,

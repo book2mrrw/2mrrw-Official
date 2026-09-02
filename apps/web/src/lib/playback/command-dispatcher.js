@@ -223,6 +223,17 @@ export function dispatchPlaybackCommand(type, payload = {}, {
       state: stateGetterRef.current?.(),
     });
     commandQueueRef.current = Promise.resolve();
+    // The timed-out command's own `finally` already clears activeCommandRef
+    // once its promise settles, but that settling doesn't cancel whatever
+    // network request it was still waiting on — only STREAM_ABORT_COMMANDS
+    // below abort it, and only when the *next* command happens to be one of
+    // those types. Abort unconditionally here instead: the breaker tripping
+    // means we're abandoning that command right now regardless of what type
+    // comes next, so its abandoned fetch must not be left free to resolve
+    // late and mutate shared refs or call play() after a newer command has
+    // already taken over.
+    activeStreamAbortRef.current?.abort();
+    activeCommandRef.current = null;
   }
 
   // Navigation commands supersede any in-progress stream load. Aborting here

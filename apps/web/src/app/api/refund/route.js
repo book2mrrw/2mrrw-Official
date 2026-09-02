@@ -3,6 +3,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { getStripe } from "@/lib/commerce/stripe";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { revokePurchaseByPaymentIntent } from "@/lib/commerce/handle-stripe-webhook";
 
 const REFUND_WINDOW_DAYS = 30;
 
@@ -119,6 +120,15 @@ export async function POST(req) {
       .eq("user_id", user.id)
       .eq("status", "refunding");
     if (updateError) throw updateError;
+
+    // Revoke access synchronously instead of waiting for the charge.refunded
+    // webhook — the webhook still fires and calls this same idempotent
+    // function again, which is a safe no-op once access is already revoked.
+    try {
+      await revokePurchaseByPaymentIntent(purchase.stripe_payment_intent_id);
+    } catch (revokeErr) {
+      console.error("[refund] synchronous revocation failed; webhook will retry", revokeErr);
+    }
 
     return NextResponse.json({
       success: true,

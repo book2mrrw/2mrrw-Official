@@ -2,8 +2,6 @@
 
 import { putFileToSignedR2, UploadTransportError } from "@/lib/media/r2-upload-client";
 
-const TERMINAL = new Set(["active", "failed", "cancelled", "retired"]);
-
 async function readJson(res) {
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
@@ -47,7 +45,7 @@ export async function stageMasterReplacement({
       xhrRef,
     });
   } catch (error) {
-    const params = new URLSearchParams({ replacementId: staged.replacementId });
+    const params = new URLSearchParams({ key: staged.key });
     fetch(`/api/admin/releases/${releaseId}/replace-master?${params}`, {
       method: "DELETE",
     }).catch(() => {});
@@ -59,67 +57,20 @@ export async function stageMasterReplacement({
     replacementId: staged.replacementId,
     key: staged.key,
     contentType: staged.contentType,
+    size: file.size,
   };
-}
-
-export async function beginMasterReplacement({ releaseId, replacementId }) {
-  const res = await fetch(`/api/admin/releases/${releaseId}/replace-master`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ replacementId }),
-  });
-  return readJson(res);
-}
-
-export async function getMasterReplacementStatus({ releaseId, replacementId, signal }) {
-  const params = new URLSearchParams({ replacementId });
-  const res = await fetch(`/api/admin/releases/${releaseId}/replace-master?${params}`, {
-    cache: "no-store",
-    signal,
-  });
-  return readJson(res);
 }
 
 /**
- * Short-lived operation status watcher. It is scoped to the open admin command,
- * never refreshes the storefront, and stops immediately at a terminal state.
+ * Commit a staged master replacement. Synchronous — by the time this resolves,
+ * the canonical audio file has already been swapped and is playable; there is
+ * no further processing step to poll for.
  */
-export function watchMasterReplacement({
-  releaseId,
-  replacementId,
-  onStatus,
-  onError,
-  intervalMs = 3000,
-}) {
-  const controller = new AbortController();
-  let timeoutId = null;
-  let stopped = false;
-
-  const stop = () => {
-    stopped = true;
-    controller.abort();
-    if (timeoutId != null) clearTimeout(timeoutId);
-  };
-
-  const check = async () => {
-    if (stopped) return;
-    try {
-      const status = await getMasterReplacementStatus({
-        releaseId,
-        replacementId,
-        signal: controller.signal,
-      });
-      if (stopped) return;
-      onStatus?.(status);
-      if (TERMINAL.has(status.status)) return stop();
-      timeoutId = setTimeout(check, intervalMs);
-    } catch (error) {
-      if (stopped || error?.name === "AbortError") return;
-      onError?.(error);
-      stop();
-    }
-  };
-
-  check();
-  return stop;
+export async function beginMasterReplacement({ releaseId, trackId, replacementId, key, size }) {
+  const res = await fetch(`/api/admin/releases/${releaseId}/replace-master`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ replacementId, trackId: trackId || null, key, size }),
+  });
+  return readJson(res);
 }

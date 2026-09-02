@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "generatedAt": "2026-09-01T22:55:00.000Z",
   "sourceRoot": "src/app/api",
-  "total": 128,
+  "total": 132,
   "counts": {
-    "HUMAN_ADMIN": 30,
-    "SERVICE_ONLY": 18,
+    "HUMAN_ADMIN": 32,
+    "SERVICE_ONLY": 20,
     "ADMIN_OR_SERVICE_CAPABILITY": 5,
     "AUTHENTICATED_USER": 23,
     "PUBLIC": 51,
@@ -231,6 +231,15 @@
       "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
     },
     {
+      "route": "/api/admin/livestream/studio/session",
+      "file": "src/app/api/admin/livestream/studio/session/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
       "route": "/api/admin/media-diagnostics",
       "file": "src/app/api/admin/media-diagnostics/route.js",
       "methods": [
@@ -390,6 +399,17 @@
       ],
       "authority": "SERVICE_ONLY",
       "evidence": "exact scoped service capability"
+    },
+    {
+      "route": "/api/admin/twitch/authorization",
+      "file": "src/app/api/admin/twitch/authorization/route.js",
+      "methods": [
+        "DELETE",
+        "GET",
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
     },
     {
       "route": "/api/admin/twitch/register",
@@ -664,8 +684,8 @@
       "evidence": "cron or signed webhook machine boundary"
     },
     {
-      "route": "/api/cron/retire-audio-master-revisions",
-      "file": "src/app/api/cron/retire-audio-master-revisions/route.js",
+      "route": "/api/cron/twitch-live-reconcile",
+      "file": "src/app/api/cron/twitch-live-reconcile/route.js",
       "methods": [
         "GET"
       ],
@@ -811,6 +831,24 @@
       ],
       "authority": "PUBLIC",
       "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/live/relay-auth",
+      "file": "src/app/api/live/relay-auth/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "custom relay publish-token verification (verifyLiveRelayPublishToken), not requireServiceCapability"
+    },
+    {
+      "route": "/api/live/twitch-ingest",
+      "file": "src/app/api/live/twitch-ingest/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "SERVICE_ONLY",
+      "evidence": "exact scoped service capability"
     },
     {
       "route": "/api/library",

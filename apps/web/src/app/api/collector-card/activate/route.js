@@ -29,6 +29,19 @@ export async function POST(req) {
     });
     if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
+    // The per-user limit above doesn't stop enumeration across many accounts
+    // hitting from the same origin — visible serials are short, sequential,
+    // and printed on a small edition, so that's a real path to guessing a
+    // card someone else owns. A second, IP-scoped limit (default identifier
+    // is the client IP — see checkRateLimit) closes that gap without needing
+    // any change to already-printed physical cards.
+    const ipLimit = await checkRateLimit(req, {
+      routeKey: "collector-card-activate-ip",
+      limit: 20,
+      windowSeconds: 300,
+    });
+    if (!ipLimit.allowed) return rateLimitResponse(ipLimit.retryAfterSeconds);
+
     const result = await activateCollectorCardBySerial({
       userId: user.id,
       visibleSerial,

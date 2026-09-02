@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -48,8 +48,11 @@ describe("one upload transport and one storefront invalidator", () => {
     for (const source of [releases, inline]) {
       assert.match(source, /stageMasterReplacement\s*\(/);
       assert.match(source, /beginMasterReplacement\s*\(/);
-      assert.match(source, /watchMasterReplacement\s*\(/);
     }
+    // beginMasterReplacement is now synchronous (commits immediately — see
+    // replace-master/route.js), so there is no separate polling watcher.
+    assert.ok(!/from "@\/lib\/media\/master-revision-client"[\s\S]{0,200}watchMasterReplacement/.test(releases));
+    assert.ok(!/from "@\/lib\/media\/master-revision-client"[\s\S]{0,200}watchMasterReplacement/.test(inline));
     for (const source of [wizard, releases, inline]) {
       assert.ok(!source.includes("/api/admin/upload/presigned"));
       assert.ok(!source.includes("new XMLHttpRequest"));
@@ -85,23 +88,68 @@ describe("one upload transport and one storefront invalidator", () => {
 
   test("My Releases reports success only after the staged revision becomes active", () => {
     const inline = read("src/components/admin/InlineReleasesManager.js");
+    // uploadAudio stages first, then hands off to commitStagedMaster — which is
+    // the only place that checks status.status === "active" before signaling
+    // success. Verify both the handoff and the ordering inside each function.
     const uploadStart = inline.indexOf("const uploadAudio");
     const stageCall = inline.indexOf("stageMasterReplacement({", uploadStart);
-    const promoteSignal = inline.indexOf('status.status === "active"', stageCall);
-    assert.ok(stageCall > uploadStart && promoteSignal > stageCall);
+    const commitHandoff = inline.indexOf("commitStagedMaster(operation, staged)", stageCall);
+    assert.ok(stageCall > uploadStart && commitHandoff > stageCall,
+      "uploadAudio must stage before handing off to commitStagedMaster");
+
+    const commitStart = inline.indexOf("const commitStagedMaster");
+    const beginCall = inline.indexOf("beginMasterReplacement({", commitStart);
+    const promoteSignal = inline.indexOf('status.status === "active"', beginCall);
+    assert.ok(commitStart > -1 && beginCall > commitStart && promoteSignal > beginCall,
+      "commitStagedMaster must check the commit response before signaling success");
     assert.match(inline, /signalCatalogMutation\("release_master_promoted"\)/);
     assert.ok(!inline.includes('setAudioPhase("confirming")'));
     assert.ok(!inline.includes('audioPhase === "confirming"'));
   });
 
-  test("master cleanup is delayed until after atomic promotion and retention", () => {
-    const migration = read("supabase/migrations/20260901000000_audio_master_revision_authority.sql");
-    const cron = read("src/app/api/cron/retire-audio-master-revisions/route.js");
-    assert.match(migration, /promote_audio_master_revision/);
-    assert.match(migration, /retire_after/);
-    assert.match(migration, /interval '7 days'/i);
-    assert.match(cron, /status[\s\S]*retired/);
-    assert.match(cron, /deleteR2Object/);
+  test("replace-master commits by copying to the canonical key, not by staging into a table that was never deployed", () => {
+    // Regression for: Replace Master Audio in Manage Releases never took effect.
+    // The old design staged into audio_master_revisions and waited on an
+    // external transcoder worker to call promote_audio_master_revision() —
+    // that table does not exist in production, so no replacement could ever
+    // complete. The fix mirrors the working initial-upload path (publish/route.js):
+    // copy straight to the canonical R2 key and update the pointer column in
+    // the same request, synchronously.
+    const stage = read("src/app/api/admin/releases/[id]/replace-master/stage/route.js");
+    const commit = read("src/app/api/admin/releases/[id]/replace-master/route.js");
+    assert.doesNotMatch(stage, /\.from\(\s*["']audio_master_revisions["']\s*\)/);
+    assert.doesNotMatch(commit, /\.from\(\s*["']audio_master_revisions["']\s*\)|\.rpc\(\s*["']queue_audio_master_revision["']/);
+    assert.match(commit, /copyR2Object\(key, destKey\)/);
+    assert.match(commit, /invalidateAudioCacheAndRequeueTranscode\(/);
+    assert.match(commit, /status: "active"/);
+  });
+
+  test("the abandoned audio_master_revisions cleanup cron stays fully retired", () => {
+    // Regression for: this cron queried a table that was never deployed to
+    // production and failed on every daily run. Since replace-master no
+    // longer uses that table at all (see the "replace-master commits by
+    // copying to the canonical key" test above), the correct fix was to
+    // delete the cron outright rather than leave broken infrastructure
+    // running — assert it stays deleted, and that its stale-job sibling
+    // (which handles ALL HLS jobs, not just master-audio ones) never grows
+    // a dependency back onto that missing schema.
+    const cronPath = path.join(WEB, "src/app/api/cron/retire-audio-master-revisions/route.js");
+    assert.ok(!existsSync(cronPath), "the retire-audio-master-revisions route must stay deleted");
+
+    const staleJobsCron = read("src/app/api/cron/hls-stale-jobs/route.js");
+    assert.doesNotMatch(staleJobsCron, /master_revision_id|audio_master_revisions/);
+
+    // Manifest-parity itself is covered by "the two vercel.json cron manifests
+    // cannot silently disagree" below; just confirm neither still schedules
+    // the deleted route.
+    const rootManifest = JSON.parse(read("../../vercel.json"));
+    const webManifest = JSON.parse(read("vercel.json"));
+    for (const manifest of [rootManifest, webManifest]) {
+      assert.ok(
+        !manifest.crons.some((c) => c.path === "/api/cron/retire-audio-master-revisions"),
+        "no vercel.json may still schedule the deleted cron"
+      );
+    }
   });
 
   test("catalog DB has no explicit cache beneath ISR", () => {
@@ -428,7 +476,13 @@ describe("draft mutations never bust the public storefront cache", () => {
     assert.match(complete, /if \(!audioRelStatus \|\| audioRelStatus\.status !== "draft"\) revalidateStorefront\(\);/);
     assert.match(complete, /if \(!relRow \|\| relRow\.status !== "draft"\) revalidateStorefront\(\);/);
     assert.match(complete, /if \(!rel \|\| rel\.status !== "draft"\) revalidateStorefront\(\);/);
-    assert.doesNotMatch(replaceMaster, /revalidateStorefront\(/);
+    // replace-master now commits the pointer change synchronously (no more
+    // staged-then-worker-promoted flow), so this is the moment "the actual
+    // change landed" — the same invariant the other routes enforce above,
+    // just relocated to where the promotion now actually happens. Gated on
+    // target.isPublic (draft releases/inactive products still must not bust
+    // the public cache), exactly like the other routes gate on non-draft status.
+    assert.match(replaceMaster, /if \(target\.isPublic\) \{\s*revalidateStorefront\(target\.releaseSlug\);/);
     assert.match(promoted, /if \(body\.replacementId\)[\s\S]*revalidateStorefront\(slug\)/);
   });
 

@@ -19,6 +19,7 @@ import GiftsSentSection from "@/components/gifts/GiftsSentSection";
 import { useListeningHistory } from "@/hooks/useListeningHistory";
 import { buildRecommendations } from "@/lib/recommendations";
 import { useArtworkGesture } from "@/hooks/useArtworkGesture";
+import { usePointerCapability } from "@/hooks/usePointerCapability";
 
 const SORT_STORAGE_KEY = "mymusic_sort_pref";
 
@@ -762,7 +763,7 @@ function MyMusicTab({
   singles = [],
   albums = [],
   mixtapesAndEps = [],
-  isMobile,
+  isMobile: isMobileProp,
   isAdmin = false,
   highlightSlug = null,
   onSwitchTab,
@@ -773,6 +774,14 @@ function MyMusicTab({
   onOpenAlbum,
   onOpenAlbumTracklist,
 }) {
+  // Regression fix: the only caller (MusicTabCatalogPanels) never passed
+  // isMobile, so this silently ran the desktop branch on every touch device —
+  // content sat clipped behind the fixed bottom nav/player bar. Falling back
+  // to the same (hover:hover) and (pointer:fine) signal the storefront's CSS
+  // already gates desktop-only chrome on means this can never regress the
+  // same way again, regardless of what a future caller does or doesn't pass.
+  const hasFinePointer = usePointerCapability();
+  const isMobile = isMobileProp ?? !hasFinePointer;
   const goAccount = onGoToAccount || (() => onSwitchTab?.("account"));
   const goSingles = onDiscoverSingles || (() => onSwitchTab?.("singles"));
   const goVault = onDiscoverVault || (() => onSwitchTab?.("vault"));

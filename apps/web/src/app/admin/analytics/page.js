@@ -1,11 +1,8 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createBrowserClient } from "@supabase/ssr";
-import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
-import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
+import { useAdminGate } from "@/hooks/useAdminGate";
 import { geoNaturalEarth1, geoPath, geoGraticule } from "d3-geo";
 import { feature as topoFeature } from "topojson-client";
 import worldTopo from "world-atlas/countries-110m.json";
@@ -23,7 +20,6 @@ function useIsMobile(bp = 768) {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const ADMIN_EMAIL = "book2mrrw@gmail.com";
 const MAP_W = 960, MAP_H = 460;
 
 const C = {
@@ -792,27 +788,14 @@ function GeographyTable({ data, onCountryClick }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function AdminGlobalAnalytics() {
-  const router = useRouter();
   const isMobile = useIsMobile(768);
-  const [ready, setReady] = useState(false);
+  const gate = useAdminGate();
+  const ready = gate === "ok";
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedCountry, setSelectedCountry] = useState(null);
   const [mapMode, setMapMode] = useState("DOTS");
-
-  useEffect(() => {
-    const sb = createBrowserClient(
-      SUPABASE_URL,
-      SUPABASE_PUBLIC_KEY
-    );
-    sb.auth.getSession().then(({ data: d }) => {
-      if ((d.session?.user?.email?.toLowerCase() || "") !== ADMIN_EMAIL) {
-        router.replace("/"); return;
-      }
-      setReady(true);
-    });
-  }, [router]);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");

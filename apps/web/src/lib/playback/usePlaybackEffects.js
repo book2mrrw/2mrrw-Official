@@ -200,6 +200,13 @@ export function usePlaybackEffects({
 
     const local = loadPlaybackSession(userId);
     if (local?.queue?.length) {
+      // Same guard as the server-fetch branch below: never let a session
+      // restore (this user's own saved queue) clobber audio that's already
+      // playing — e.g. a guest's preview track still audible at the exact
+      // moment user.id first resolves to a real id after login. Without this,
+      // the <audio> element keeps playing the guest's track while the UI
+      // silently swaps to this user's old saved queue underneath it.
+      if (stateRef.current.hasStarted || stateRef.current.isPlaying) return;
       applySession(local);
     } else {
       fetchQueueFromServer().then((serverSession) => {
@@ -248,11 +255,20 @@ export function usePlaybackEffects({
       }
       changed = true;
       const justGainedStream = !prev?.canStream && fresh.canStream && track.slug;
+      // Symmetric downgrade: a lapsed subscription/revoked entitlement flips
+      // canStream true -> false. Without this, a queued-but-unplayed track
+      // keeps its already-resolved full-stream URL even though its access
+      // flags now say it can't be streamed — only the metadata was "fixed."
+      // Fall back to whatever preview URL this track already carried before
+      // it was ever upgraded (preserved below via ...track / ...metadata).
+      const justLostStream = prev?.canStream && !fresh.canStream;
       const rawTrackSlug = track.metadata?.trackSlug || null;
       const subTrackSlug = rawTrackSlug && rawTrackSlug !== track.slug ? rawTrackSlug : null;
       const freshSrc = justGainedStream
         ? libraryStreamRedirectSrc(track.slug, { trackSlug: subTrackSlug })
-        : track.src;
+        : justLostStream
+          ? (track.metadata?.previewSrc || track.preview || track.preview_path || track.src)
+          : track.src;
       return {
         ...track,
         src: freshSrc,
@@ -270,6 +286,7 @@ export function usePlaybackEffects({
     const currentTrack = stateRef.current.currentTrack;
     if (currentTrack?.slug) {
       const wasPreviewOnly = currentTrack.metadata?.access?.previewOnly;
+      const wasStreamable = currentTrack.metadata?.access?.canStream;
       const updatedCurrent = updated.find((t) => t.slug === currentTrack.slug);
       if (wasPreviewOnly && updatedCurrent?.metadata?.access?.canStream) {
         const policy = entitlementAccountState?.playbackPolicy;
@@ -288,6 +305,15 @@ export function usePlaybackEffects({
           // currentTrack directly — no audio element src-swap needed or wanted.
           patchState({ currentTrack: updatedCurrent });
         }
+      } else if (wasStreamable && updatedCurrent?.metadata?.access?.previewOnly) {
+        // Downgrade of the track actively playing right now (e.g. a subscription
+        // lapsed mid-stream). Patch currentTrack so its metadata.access.previewOnly
+        // is true on the very next read — the existing PREVIEW_HARD_CAP_SEC
+        // enforcement in PlaybackEventHandlers.onTime reads stateRef.current.currentTrack
+        // live on every timeupdate tick and will gracefully fade/pause it at the cap
+        // on its own. No direct audio-element call needed here, and none of the
+        // proven pause/fade machinery is duplicated or bypassed.
+        patchState({ currentTrack: updatedCurrent });
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
-import { isAdminUser } from "@/lib/auth/constants";
+import { requireAdminActor } from "@/lib/auth/admin-api-guard";
+import { classifyAdminAuthorityDenial } from "@/lib/auth/admin-authority-diagnostics";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { createR2SignedPutUrl } from "@/lib/storage/r2";
@@ -15,10 +15,15 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function POST(req, { params }) {
-  const user = await getAdminSessionUser({ recentSeconds: 15 * 60 });
-  if (!user || !isAdminUser(user)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const gate = await requireAdminActor({ recentSeconds: 15 * 60 });
+  if (!gate.ok) {
+    const denial = classifyAdminAuthorityDenial(gate.reason);
+    return NextResponse.json(
+      { error: denial.status === 401 ? "Unauthorized" : "Forbidden", code: denial.code },
+      { status: denial.status }
+    );
   }
+  const user = gate.user;
 
   const rl = await checkRateLimit(req, {
     routeKey: "admin.releases.replace-master.stage",
@@ -56,22 +61,14 @@ export async function POST(req, { params }) {
       );
     }
 
-    const { data: inflight } = await admin
-      .from("audio_master_revisions")
-      .select("id, status")
-      .eq("entity_kind", target.entityKind)
-      .eq("entity_id", target.entityId)
-      .in("status", ["uploading", "uploaded", "processing", "ready", "promoting"])
-      .maybeSingle();
-    if (inflight) {
-      return NextResponse.json(
-        { error: "A master replacement is already in progress for this track", replacementId: inflight.id, status: inflight.status },
-        { status: 409 }
-      );
-    }
-
+    // No DB row for the staged upload — commit re-derives the target from
+    // (releaseId, trackId) the same way this route just did, and verifies the
+    // staged key against a freshly recomputed expected path (see route.js).
+    // A stale/concurrent staged file left in R2 under a one-shot revisionId
+    // is harmless: nothing ever reads a staging key unless a matching commit
+    // request names it, and commit deletes it once consumed.
     const revisionId = crypto.randomUUID();
-    const { stagedMasterKey, hlsPrefix } = buildMasterRevisionKeys({
+    const { stagedMasterKey } = buildMasterRevisionKeys({
       folder: target.releaseType,
       releaseSlug: target.releaseSlug,
       trackSlug: target.trackSlug,
@@ -79,64 +76,18 @@ export async function POST(req, { params }) {
       extension,
     });
 
-    let manifestQuery = admin
-      .from("hls_manifests")
-      .select("hls_prefix")
-      .eq("slug", target.releaseSlug);
-    manifestQuery = target.trackSlug
-      ? manifestQuery.eq("track_slug", target.trackSlug)
-      : manifestQuery.is("track_slug", null);
-    const { data: currentManifest } = await manifestQuery.maybeSingle();
-
-    const { error: insertError } = await admin.from("audio_master_revisions").insert({
-      id: revisionId,
-      release_ref_id: target.releaseRefId,
-      release_source: target.releaseSource,
-      entity_kind: target.entityKind,
-      entity_id: target.entityId,
-      release_slug: target.releaseSlug,
-      track_slug: target.trackSlug,
-      release_type: target.releaseType,
-      staged_master_key: stagedMasterKey,
-      previous_master_key: target.previousMasterKey,
-      previous_storage_path: target.previousStoragePath,
-      hls_prefix: hlsPrefix,
-      previous_hls_prefix: currentManifest?.hls_prefix || null,
-      original_filename: filename.slice(0, 512),
-      content_type: contentType,
-      byte_size: byteSize,
-      status: "uploading",
-      requested_by: user.id,
+    const uploadUrl = await createR2SignedPutUrl(
+      stagedMasterKey,
+      contentType,
+      uploadContract.expiresIn
+    );
+    return NextResponse.json({
+      replacementId: revisionId,
+      uploadUrl,
+      key: stagedMasterKey,
+      contentType,
+      expiresAt: new Date(Date.now() + uploadContract.expiresIn * 1000).toISOString(),
     });
-    if (insertError) {
-      const conflict = insertError.code === "23505";
-      return NextResponse.json(
-        { error: conflict ? "A master replacement is already in progress for this track" : "Could not create replacement transaction" },
-        { status: conflict ? 409 : 500 }
-      );
-    }
-
-    try {
-      const uploadUrl = await createR2SignedPutUrl(
-        stagedMasterKey,
-        contentType,
-        uploadContract.expiresIn
-      );
-      return NextResponse.json({
-        replacementId: revisionId,
-        uploadUrl,
-        key: stagedMasterKey,
-        contentType,
-        expiresAt: new Date(Date.now() + uploadContract.expiresIn * 1000).toISOString(),
-      });
-    } catch (error) {
-      await admin.from("audio_master_revisions").update({
-        status: "failed",
-        failed_at: new Date().toISOString(),
-        error_message: "Could not authorize staged upload",
-      }).eq("id", revisionId);
-      throw error;
-    }
   } catch (error) {
     const status = error instanceof MasterRevisionTargetError ? error.status : 500;
     console.error("[replace-master/stage]", error?.message);
@@ -146,4 +97,3 @@ export async function POST(req, { params }) {
     );
   }
 }
-

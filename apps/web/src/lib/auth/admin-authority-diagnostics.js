@@ -1,3 +1,18 @@
+/**
+ * Denial codes an admin can resolve themselves, in place, by re-verifying —
+ * as opposed to ADMIN_AUTH_NO_SESSION (needs a full sign-in), ADMIN_AUTH_NOT_ADMIN
+ * (never recoverable), or ADMIN_AUTH_MFA_CONFIGURATION_ERROR (an ops problem,
+ * not something the admin caused or can fix). Any admin fetch wrapper checking
+ * a denial response's `code` against this set should show
+ * AdminVerificationOverlay (src/components/admin/AdminVerificationOverlay.js)
+ * instead of a dead-end error.
+ */
+export const RECOVERABLE_ADMIN_AUTH_CODES = new Set([
+  "ADMIN_AUTH_MFA_REQUIRED",
+  "ADMIN_AUTH_MFA_EXPIRED",
+  "ADMIN_AUTH_MFA_INVALID",
+]);
+
 const CONFIGURATION_REASONS = new Set([
   "custom_mfa_configuration_missing",
   "custom_mfa_configuration_invalid",

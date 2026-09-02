@@ -1,10 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { createBrowserClient } from "@supabase/ssr";
-import { SUPABASE_PUBLIC_KEY } from "@/lib/supabase/public-key";
-import { SUPABASE_URL } from "@/lib/supabase/supabase-url";
+import { useAdminGate } from "@/hooks/useAdminGate";
 import {
   VISUAL_ASSET_TYPES,
   VISUAL_PLAYBACK_MODES,
@@ -16,11 +13,6 @@ import {
   ENTITLEMENT_LABELS,
 } from "@/lib/media/visual-asset-schema";
 import { invalidateVisualAssetsCache } from "@/hooks/useVisualAssets";
-
-const ADMIN_EMAIL = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "book2mrrw@gmail.com").toLowerCase();
-function isAdmin(session) {
-  return (session?.user?.email?.toLowerCase() || "") === ADMIN_EMAIL;
-}
 
 const BLANK_FORM = {
   release_slug:     "",
@@ -44,9 +36,8 @@ const BLANK_FORM = {
 };
 
 export default function AdminVisualLayerPage() {
-  const router = useRouter();
-  const [checked, setChecked]       = useState(false);
-  const [session, setSession]       = useState(null);
+  const gate = useAdminGate();
+  const checked = gate === "ok";
   const [slug,    setSlug]          = useState("");
   const [assets,  setAssets]        = useState([]);
   const [loading, setLoading]       = useState(false);
@@ -56,17 +47,6 @@ export default function AdminVisualLayerPage() {
   const [saving,  setSaving]        = useState(false);
   const [deleting, setDeleting]     = useState(null);
 
-  useEffect(() => {
-    const sb = createBrowserClient(
-      SUPABASE_URL,
-      SUPABASE_PUBLIC_KEY
-    );
-    sb.auth.getSession().then(({ data }) => {
-      if (!isAdmin(data.session)) { router.replace("/"); return; }
-      setSession(data.session);
-      setChecked(true);
-    });
-  }, [router]);
 
   const fetchAssets = useCallback(async (releaseSlug) => {
     if (!releaseSlug) return;

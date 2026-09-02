@@ -41,18 +41,6 @@ export async function markJobProcessing(jobId, workerId) {
 
 export async function markJobComplete(job, manifest) {
   const jobId = job.id;
-  if (job.master_revision_id) {
-    const { error: promoteError } = await db.rpc("promote_audio_master_revision", {
-      p_job_id: jobId,
-      p_bitrates: manifest.bitrates,
-      p_segment_duration_secs: manifest.segment_duration_secs,
-      p_duration_seconds: manifest.duration_seconds,
-      p_segment_counts: manifest.segment_counts,
-    });
-    if (promoteError) {
-      throw new Error(`promote audio master revision: ${promoteError.message}`);
-    }
-  } else {
   // PostgREST's onConflict can't reference expression-based indexes (COALESCE).
   // INSERT first; on unique constraint violation (23505), UPDATE the existing row.
   const { error: insErr } = await db.from("hls_manifests").insert(manifest);
@@ -78,7 +66,6 @@ export async function markJobComplete(job, manifest) {
     .update({ status: "complete", completed_at: new Date().toISOString() })
     .eq("id", jobId);
   if (jErr) throw new Error(`markJobComplete: ${jErr.message}`);
-  }
 
   // Notify the web app to invalidate the L1+L2 manifest cache immediately so
   // the next /api/library/hls request serves the real manifest instead of waiting
@@ -96,7 +83,6 @@ export async function markJobComplete(job, manifest) {
         body: JSON.stringify({
           slug: manifest.slug,
           trackSlug: manifest.track_slug ?? null,
-          replacementId: job.master_revision_id ?? null,
         }),
       });
       if (!response.ok) {
@@ -121,7 +107,7 @@ export async function updatePosterKey(slug, trackSlug, posterKey, status = "read
 export async function markJobFailed(jobId, errorMessage) {
   const { data: job } = await db
     .from("hls_transcode_jobs")
-    .select("attempt_count, master_revision_id")
+    .select("attempt_count")
     .eq("id", jobId)
     .single();
 
@@ -142,17 +128,4 @@ export async function markJobFailed(jobId, errorMessage) {
     .eq("id", jobId);
 
   if (error) throw new Error(`markJobFailed: ${error.message}`);
-
-  if (nextStatus === "failed" && job?.master_revision_id) {
-    const { error: revisionError } = await db
-      .from("audio_master_revisions")
-      .update({
-        status: "failed",
-        failed_at: new Date().toISOString(),
-        error_message: errorMessage,
-      })
-      .eq("id", job.master_revision_id)
-      .in("status", ["uploaded", "processing", "ready", "promoting"]);
-    if (revisionError) throw new Error(`mark replacement failed: ${revisionError.message}`);
-  }
 }

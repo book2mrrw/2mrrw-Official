@@ -8,10 +8,11 @@ import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
 import {
   beginMasterReplacement,
   stageMasterReplacement,
-  watchMasterReplacement,
 } from "@/lib/media/master-revision-client";
 import { VIDEO_COVER_ACCEPT, MASTER_AUDIO_ACCEPT } from "@/lib/media/admin-upload-contract";
 import { signalCatalogMutation } from "@/lib/storefront/catalog-refresh-store";
+import { AdminVerificationOverlay } from "@/components/admin/AdminVerificationOverlay";
+import { RECOVERABLE_ADMIN_AUTH_CODES } from "@/lib/auth/admin-authority-diagnostics";
 
 // ── Design tokens ────────────────────────────────────────────────────────────────
 const C = {
@@ -56,12 +57,6 @@ const SLUG_PREFIXES = {
   ep:      "/album/",
   mixtape: "/album/",
 };
-
-const RECOVERABLE_ADMIN_AUTH_CODES = new Set([
-  "ADMIN_AUTH_MFA_REQUIRED",
-  "ADMIN_AUTH_MFA_EXPIRED",
-  "ADMIN_AUTH_MFA_INVALID",
-]);
 
 // ── Shared atoms ─────────────────────────────────────────────────────────────────
 function Label({ children }) {
@@ -111,156 +106,6 @@ function Sel({ value, onChange, children }) {
     >
       {children}
     </select>
-  );
-}
-
-function AdminVerificationOverlay({ email: initialEmail, onVerified, onCancel }) {
-  const [phase, setPhase] = useState("credentials");
-  const [email, setEmail] = useState(initialEmail || "");
-  const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const submitCredentials = async (event) => {
-    event.preventDefault();
-    if (loading) return;
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch("/api/auth/login-step1", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ email: email.trim(), password }),
-      });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || "Verification could not be started");
-      setCode("");
-      setPhase("code");
-    } catch (verificationError) {
-      setError(verificationError.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const submitCode = async (event) => {
-    event.preventDefault();
-    if (loading) return;
-    const normalizedCode = code.replace(/\D/g, "");
-    if (normalizedCode.length !== 6) {
-      setError("Enter the 6-digit code.");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    try {
-      const response = await fetch("/api/auth/login-step2", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ code: normalizedCode }),
-      });
-      const body = await response.json();
-      if (!response.ok) {
-        if (body.expired) {
-          setPassword("");
-          setCode("");
-          setPhase("credentials");
-        }
-        throw new Error(body.error || "Verification failed");
-      }
-      await onVerified();
-    } catch (verificationError) {
-      setError(verificationError.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="admin-verification-title"
-      style={{
-        position: "fixed", inset: 0, zIndex: 10020,
-        display: "grid", placeItems: "center", padding: 20,
-        background: "rgba(0,0,0,0.76)", backdropFilter: "blur(18px)",
-      }}
-    >
-      <form
-        onSubmit={phase === "credentials" ? submitCredentials : submitCode}
-        style={{
-          width: "min(420px, 100%)", padding: 26, borderRadius: 18,
-          background: "rgba(13,13,13,0.98)", border: `1px solid ${C.accentBorder}`,
-          boxShadow: "0 24px 80px rgba(0,0,0,0.55)",
-        }}
-      >
-        <div id="admin-verification-title" style={{ fontSize: 20, fontWeight: 900, color: C.text }}>
-          Verify admin session
-        </div>
-        <p style={{ margin: "8px 0 20px", color: C.muted, fontSize: 13, lineHeight: 1.55 }}>
-          {phase === "credentials"
-            ? "Your releases are intact. Re-verify to restore secure access without leaving this page or interrupting playback."
-            : "Enter the 6-digit code sent to your email or phone."}
-        </p>
-
-        {phase === "credentials" ? (
-          <>
-            <Inp value={email} onChange={setEmail} placeholder="Email" type="email" />
-            <div style={{ height: 10 }} />
-            <Inp value={password} onChange={setPassword} placeholder="Password" type="password" />
-          </>
-        ) : (
-          <input
-            value={code}
-            onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            autoFocus
-            aria-label="6-digit verification code"
-            placeholder="000000"
-            style={{
-              width: "100%", boxSizing: "border-box", background: C.surface2,
-              border: `1px solid ${C.border2}`, borderRadius: 10, color: C.text,
-              padding: "13px 16px", textAlign: "center", fontSize: 24,
-              fontWeight: 800, letterSpacing: "0.32em", outline: "none",
-            }}
-          />
-        )}
-
-        {error && <div style={{ marginTop: 12, color: C.error, fontSize: 12 }}>{error}</div>}
-
-        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={loading}
-            style={{
-              flex: 1, padding: "11px 14px", borderRadius: 9,
-              border: `1px solid ${C.border2}`, background: C.surface2,
-              color: C.muted, fontWeight: 700, cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={loading || !email || (phase === "credentials" ? !password : code.length !== 6)}
-            style={{
-              flex: 1.5, padding: "11px 14px", borderRadius: 9, border: "none",
-              background: C.accent, color: "#000", fontWeight: 900,
-              cursor: loading ? "wait" : "pointer",
-              opacity: loading ? 0.65 : 1,
-            }}
-          >
-            {loading ? "Verifying…" : phase === "credentials" ? "Send Code" : "Verify & Continue"}
-          </button>
-        </div>
-      </form>
-    </div>
   );
 }
 
@@ -593,6 +438,7 @@ function ReleaseListView({ releases, loading, error, filter, onFilter, onRefresh
 
 // ── Release Editor Panel ─────────────────────────────────────────────────────────
 function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
+  const { currentUser } = useAuth();
   const [detail,     setDetail]     = useState(null);
   const [loading,    setLoading]    = useState(true);
   const [loadError,  setLoadError]  = useState(null);
@@ -626,12 +472,12 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const [audioProgress,   setAudioProgress]   = useState(0);
   const [audioNewKey,     setAudioNewKey]     = useState(null);
   const [audioError,      setAudioError]      = useState("");
+  const [audioReauthRequired, setAudioReauthRequired] = useState(false);
   const audioXhrRef = useRef(null);
   const audioOperationRef = useRef(null);
-  const audioWatchStopRef = useRef(null);
+  const audioResumeRef = useRef(null);
 
   useEffect(() => () => {
-    audioWatchStopRef.current?.();
     audioXhrRef.current?.abort?.();
     for (const ref of [coverPreviewObjectUrlRef, mp4PreviewObjectUrlRef]) {
       if (ref.current) URL.revokeObjectURL(ref.current);
@@ -798,9 +644,49 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
     setAudioProgress(0);
   };
 
+  // A large master upload can easily outlast the 15-minute MFA-recency window
+  // sensitive admin mutations require, even though the broader 12h admin
+  // session is still valid. On that specific, recoverable denial, show the
+  // same re-verification overlay /api/admin/releases already uses instead of
+  // a dead-end "Unauthorized" — and resume exactly where the operation left
+  // off (never re-upload a file that already landed in staging).
+  const commitStagedMaster = useCallback(async (operation, staged) => {
+    try {
+      const status = await beginMasterReplacement({
+        releaseId: relStub.id,
+        trackId: operation.trackId,
+        replacementId: staged.replacementId,
+        key: staged.key,
+        size: staged.size,
+      });
+      if (audioOperationRef.current !== operation) return;
+
+      if (status.status === "active") {
+        setAudioPhase("done");
+        signalCatalogMutation("release_master_promoted");
+        showMsg("New master is live");
+        onSaved();
+        audioOperationRef.current = null;
+      } else {
+        setAudioError(status.error || "Replacement failed; the previous master remains live");
+        setAudioPhase("error");
+        audioOperationRef.current = null;
+      }
+    } catch (err) {
+      if (audioOperationRef.current !== operation) return;
+      if (RECOVERABLE_ADMIN_AUTH_CODES.has(err.data?.code)) {
+        audioResumeRef.current = () => commitStagedMaster(operation, staged);
+        setAudioReauthRequired(true);
+        return;
+      }
+      setAudioError(err.message);
+      setAudioPhase("error");
+      audioOperationRef.current = null;
+    }
+  }, [relStub, showMsg, onSaved]);
+
   const uploadAudio = useCallback(async (file) => {
     if (!file || !audioReplacing || !detail) return;
-    audioWatchStopRef.current?.();
     const operation = {
       file,
       trackId: audioReplacing.id,
@@ -811,58 +697,39 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
     setAudioPhase("uploading");
     setAudioProgress(0);
 
+    let staged;
     try {
-      const staged = await stageMasterReplacement({
+      staged = await stageMasterReplacement({
         releaseId: relStub.id,
         trackId: audioReplacing.id,
         file,
         onProgress: setAudioProgress,
         xhrRef: audioXhrRef,
       });
-      if (audioOperationRef.current !== operation) return;
-      operation.replacementId = staged.replacementId;
-      setAudioNewKey(staged.key);
-      setAudioPhase("processing");
-      await beginMasterReplacement({
-        releaseId: relStub.id,
-        replacementId: staged.replacementId,
-      });
-
-      audioWatchStopRef.current = watchMasterReplacement({
-        releaseId: relStub.id,
-        replacementId: staged.replacementId,
-        onStatus: (status) => {
-          if (audioOperationRef.current !== operation) return;
-          if (status.status === "active") {
-            setAudioPhase("done");
-            signalCatalogMutation("release_master_promoted");
-            showMsg("New master validated and promoted");
-            onSaved();
-            audioOperationRef.current = null;
-          } else if (["failed", "cancelled"].includes(status.status)) {
-            setAudioError(status.error || "Replacement processing failed; the previous master remains live");
-            setAudioPhase("error");
-            audioOperationRef.current = null;
-          }
-        },
-        onError: (error) => {
-          if (audioOperationRef.current !== operation) return;
-          setAudioError(`${error.message}. Processing may still be running; reopen this release to check.`);
-          setAudioPhase("error");
-        },
-      });
     } catch (err) {
       if (audioOperationRef.current !== operation) return;
+      if (RECOVERABLE_ADMIN_AUTH_CODES.has(err.data?.code)) {
+        audioResumeRef.current = () => uploadAudio(file);
+        setAudioReauthRequired(true);
+        return;
+      }
       setAudioError(err.message);
       setAudioPhase("error");
       audioOperationRef.current = null;
+      return;
     }
-  }, [audioReplacing, detail, relStub, showMsg, onSaved]);
+    if (audioOperationRef.current !== operation) return;
+    operation.replacementId = staged.replacementId;
+    setAudioNewKey(staged.key);
+    setAudioPhase("processing");
+
+    await commitStagedMaster(operation, staged);
+  }, [audioReplacing, detail, relStub, commitStagedMaster]);
 
   const cancelAudioReplace = () => {
-    audioWatchStopRef.current?.();
-    audioWatchStopRef.current = null;
     audioOperationRef.current = null;
+    audioResumeRef.current = null;
+    setAudioReauthRequired(false);
     setAudioReplacing(null);
     setAudioPhase("idle");
   };
@@ -1111,21 +978,21 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                     {audioPhase === "uploading" && (
                       <div>
                         <div style={{ fontSize: 12, color: C.accent, fontWeight: 700 }}>
-                          {`Uploading immutable revision… ${audioProgress}%`}
+                          {`Uploading new master… ${audioProgress}%`}
                         </div>
                         <ProgressBar pct={audioProgress} />
                       </div>
                     )}
                     {audioPhase === "processing" && (
                       <div>
-                        <div style={{ fontSize: 12, color: C.warn, fontWeight: 700 }}>Validating and transcoding the new revision…</div>
-                        <div style={{ fontSize: 11, color: C.muted2, marginTop: 5 }}>The current master remains live and playback is not interrupted.</div>
+                        <div style={{ fontSize: 12, color: C.warn, fontWeight: 700 }}>Verifying and committing the new master…</div>
+                        <div style={{ fontSize: 11, color: C.muted2, marginTop: 5 }}>HLS regenerates in the background afterward — playback already uses the new file.</div>
                       </div>
                     )}
                     {audioPhase === "done" && (
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <span>✅</span>
-                        <span style={{ fontSize: 12, color: C.success, fontWeight: 700 }}>New master validated and atomically promoted</span>
+                        <span style={{ fontSize: 12, color: C.success, fontWeight: 700 }}>New master is live</span>
                         <button onClick={cancelAudioReplace} style={{ background: "none", border: "none", color: C.muted2, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Done</button>
                       </div>
                     )}
@@ -1137,6 +1004,24 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                           <button onClick={cancelAudioReplace} style={{ background: "none", border: "none", color: C.muted2, fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
                         </div>
                       </div>
+                    )}
+                    {audioReauthRequired && (
+                      <AdminVerificationOverlay
+                        email={currentUser?.email || ""}
+                        onCancel={() => {
+                          audioResumeRef.current = null;
+                          setAudioReauthRequired(false);
+                          setAudioError("Re-verification was cancelled; the previous master remains live");
+                          setAudioPhase("error");
+                          audioOperationRef.current = null;
+                        }}
+                        onVerified={() => {
+                          setAudioReauthRequired(false);
+                          const resume = audioResumeRef.current;
+                          audioResumeRef.current = null;
+                          resume?.();
+                        }}
+                      />
                     )}
                   </div>
                 )}
