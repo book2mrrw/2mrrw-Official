@@ -614,13 +614,11 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const [coverState,   setCoverState]   = useState({ status: relStub.cover_art_r2_key ? "done" : "idle", error: null, pct: 0 });
   const [coverPreview, setCoverPreview] = useState(null);
   const coverPreviewObjectUrlRef = useRef(null);
-  const coverInputRef = useRef(null);
 
   // Animated cover video upload state — same persistence rule as cover art.
   const [mp4State,   setMp4State]   = useState({ status: relStub.metadata?.animated_cover_r2_key ? "done" : "idle", error: null, pct: 0 });
   const [mp4Preview, setMp4Preview] = useState(null);
   const mp4PreviewObjectUrlRef = useRef(null);
-  const videoInputRef = useRef(null);
 
   // Audio replace state
   const [audioReplacing,  setAudioReplacing]  = useState(null);
@@ -631,7 +629,6 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const audioXhrRef = useRef(null);
   const audioOperationRef = useRef(null);
   const audioWatchStopRef = useRef(null);
-  const audioInputRef = useRef(null);
 
   useEffect(() => () => {
     audioWatchStopRef.current?.();
@@ -686,7 +683,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
         body:    JSON.stringify({ title: editTitle, price: editPrice, genre: editGenre, release_date: editDate }),
       });
       const json = await res.json();
-      if (!res.ok || json.ok !== true) throw new Error(json.error || json.errors?.[0] || "Save failed");
+      if (!res.ok && res.status !== 207) throw new Error(json.errors?.[0] || "Save failed");
       signalCatalogMutation("release_metadata_updated");
       showMsg("Saved — changes live on storefront");
       onSaved();
@@ -708,7 +705,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
         body:    JSON.stringify({ track_lyrics }),
       });
       const json = await res.json();
-      if (!res.ok || json.ok !== true) throw new Error(json.error || json.errors?.[0] || "Save failed");
+      if (!res.ok && res.status !== 207) throw new Error(json.errors?.[0] || "Save failed");
       signalCatalogMutation("release_lyrics_updated");
       showMsg("Lyrics saved");
     } catch (err) {
@@ -749,8 +746,6 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
         slug:        detail.release.slug,
         assetType,
         file,
-        releaseId: relStub.id,
-        revisioned: true,
         onProgress:  (pct) => setState((s) => ({ ...s, pct })),
       });
 
@@ -779,6 +774,20 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
       setState({ status: "error", error: err.message, pct: 0 });
     }
   }, [detail, relStub, showMsg, onSaved]);
+
+  const pickFile = (accept, handler) => {
+    const inp = document.createElement("input");
+    inp.type = "file";
+    inp.accept = accept;
+    inp.style.display = "none";
+    inp.onchange = (event) => {
+      const file = event.target.files?.[0];
+      inp.remove();
+      if (file) handler(file);
+    };
+    document.body.appendChild(inp);
+    inp.click();
+  };
 
   // ── Audio replace ─────────────────────────────────────────────────────────────
   const startAudioReplace = (track) => {
@@ -885,40 +894,6 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
 
   return (
     <div style={{ padding: "28px 0 80px", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
-      <input
-        ref={coverInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"
-        hidden
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = "";
-          if (file) void uploadAsset({ file, assetType: "cover", setState: setCoverState, setPreview: setCoverPreview, objectUrlRef: coverPreviewObjectUrlRef });
-        }}
-      />
-      <input
-        ref={videoInputRef}
-        type="file"
-        accept={VIDEO_COVER_ACCEPT}
-        hidden
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = "";
-          if (file) void uploadAsset({ file, assetType: "cover-video", setState: setMp4State, setPreview: setMp4Preview, objectUrlRef: mp4PreviewObjectUrlRef });
-        }}
-      />
-      <input
-        ref={audioInputRef}
-        type="file"
-        accept={MASTER_AUDIO_ACCEPT}
-        hidden
-        onChange={(event) => {
-          const file = event.target.files?.[0];
-          event.target.value = "";
-          if (file) void uploadAudio(file);
-        }}
-      />
-
       {/* Header with inline cover art thumbnail */}
       <div style={{ marginBottom: 22 }}>
         <button onClick={onBack} style={backBtnStyle}>← My Releases</button>
@@ -1009,7 +984,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
               <Label>Static Cover · JPEG / PNG / WEBP</Label>
               <div style={{ display: "flex", gap: 18, alignItems: "flex-start", flexWrap: "wrap" }}>
                 <div
-                  onClick={coverState.status !== "uploading" ? () => coverInputRef.current?.click() : undefined}
+                  onClick={coverState.status !== "uploading" ? () => pickFile("image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp", (file) => uploadAsset({ file, assetType: "cover", setState: setCoverState, setPreview: setCoverPreview, objectUrlRef: coverPreviewObjectUrlRef })) : undefined}
                   style={{
                     width: 120, height: 120, flexShrink: 0, borderRadius: 12,
                     background: C.surface2,
@@ -1032,7 +1007,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                   <Btn
                     variant="secondary" small
                     disabled={coverState.status === "uploading"}
-                    onClick={() => coverInputRef.current?.click()}
+                    onClick={() => pickFile("image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp", (file) => uploadAsset({ file, assetType: "cover", setState: setCoverState, setPreview: setCoverPreview, objectUrlRef: coverPreviewObjectUrlRef }))}
                   >
                     {coverState.status === "uploading" ? `Uploading ${coverState.pct}%…` : coverState.status === "done" ? "✓ Replace Again" : "Choose Image"}
                   </Btn>
@@ -1071,7 +1046,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                   <Btn
                     variant="secondary" small
                     disabled={mp4State.status === "checking" || mp4State.status === "uploading"}
-                    onClick={() => videoInputRef.current?.click()}
+                    onClick={() => pickFile(VIDEO_COVER_ACCEPT, (file) => uploadAsset({ file, assetType: "cover-video", setState: setMp4State, setPreview: setMp4Preview, objectUrlRef: mp4PreviewObjectUrlRef }))}
                   >
                     {mp4State.status === "checking" ? "Checking duration…" : mp4State.status === "uploading" ? `Uploading ${mp4State.pct}%…` : mp4State.status === "done" ? "✓ Replace Video" : "Upload Cover Video"}
                   </Btn>
@@ -1125,7 +1100,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                     {audioPhase === "idle" && (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <button
-                          onClick={() => audioInputRef.current?.click()}
+                          onClick={() => pickFile(MASTER_AUDIO_ACCEPT, uploadAudio)}
                           style={{ background: C.accent, border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 12, fontWeight: 700, color: "#000", cursor: "pointer", fontFamily: "inherit" }}
                         >
                           Select New Master

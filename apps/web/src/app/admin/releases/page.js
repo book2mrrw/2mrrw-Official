@@ -300,8 +300,6 @@ function ReplaceCoverModal({ release, onClose }) {
         slug: release.slug,
         assetType: "cover",
         file,
-        releaseId: release.id,
-        revisioned: true,
         onProgress: setProgress,
       });
 

@@ -426,7 +426,8 @@ describe("draft mutations never bust the public storefront cache", () => {
     const replaceMaster = read("src/app/api/admin/releases/[id]/replace-master/route.js");
     const promoted = read("src/app/api/admin/hls/complete/route.js");
     assert.match(complete, /if \(!audioRelStatus \|\| audioRelStatus\.status !== "draft"\) revalidateStorefront\(\);/);
-    assert.match(complete, /if \(promotion\?\.status !== "draft"\) revalidateStorefront\(promotion\?\.slug, promotion\?\.releaseType\);/);
+    assert.match(complete, /if \(!relRow \|\| relRow\.status !== "draft"\) revalidateStorefront\(\);/);
+    assert.match(complete, /if \(!rel \|\| rel\.status !== "draft"\) revalidateStorefront\(\);/);
     assert.doesNotMatch(replaceMaster, /revalidateStorefront\(/);
     assert.match(promoted, /if \(body\.replacementId\)[\s\S]*revalidateStorefront\(slug\)/);
   });

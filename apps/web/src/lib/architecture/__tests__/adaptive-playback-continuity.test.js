@@ -92,14 +92,12 @@ test("replace-master keeps public pointers stable until an atomic promotion", ()
   assert.match(migration, /public storefront projection changed while replacement was processing/);
 });
 
-test("Current Release edits commit atomically and refresh the mounted catalog in place", () => {
-  const migration = read("supabase/migrations/20260901000001_storefront_edit_authority.sql");
+test("Current Release edits retain the known-good editor route and refresh the mounted catalog in place", () => {
   const route = read("src/app/api/admin/releases/[id]/route.js");
   const catalogSurface = read("src/components/storefront/catalog-surface-context.js");
 
-  assert.match(migration, /commit_current_release_edit/);
-  assert.match(migration, /promote_release_visual_asset/);
-  assert.match(route, /rpc\("commit_current_release_edit"/);
+  assert.doesNotMatch(route, /rpc\("commit_current_release_edit"/);
+  assert.match(route, /const finalStatus = lifecycleUpdates\.status \|\| release\.status/);
   assert.match(catalogSurface, /applyCatalogSnapshot|replaceCatalogSnapshot|catalogMutationRevision/);
   assert.doesNotMatch(catalogSurface, /router\.refresh\(/);
 });

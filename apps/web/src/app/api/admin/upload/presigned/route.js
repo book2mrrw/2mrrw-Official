@@ -1,11 +1,9 @@
-import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { createR2SignedPutUrl } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { ADMIN_UPLOAD_CONTRACTS, extensionForFilename } from "@/lib/media/admin-upload-contract";
-import { getAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -19,16 +17,8 @@ const RELEASE_TYPE_FOLDERS = {
   mixtape: "mixtapes-and-eps",
 };
 
-const RELEASE_TYPE_ALIASES = {
-  ...RELEASE_TYPE_FOLDERS,
-  singles: "singles",
-  features: "features",
-  albums: "albums",
-  "mixtapes-and-eps": "mixtapes-and-eps",
-};
-
 function buildR2Key(releaseType, slug, assetType, filename, trackSlug) {
-  const folder = RELEASE_TYPE_ALIASES[releaseType];
+  const folder = RELEASE_TYPE_FOLDERS[releaseType];
   if (!folder) return null;
 
   const ext = (filename || "").split(".").pop().toLowerCase() || "wav";
@@ -68,10 +58,10 @@ export async function POST(req) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { releaseType, slug, assetType, filename, size, trackSlug, releaseId, revisioned } = body;
+  const { releaseType, slug, assetType, filename, size, trackSlug } = body;
 
   // Validate release type
-  if (!RELEASE_TYPE_ALIASES[releaseType]) {
+  if (!RELEASE_TYPE_FOLDERS[releaseType]) {
     return NextResponse.json({ error: "Invalid releaseType" }, { status: 400 });
   }
 
@@ -110,33 +100,7 @@ export async function POST(req) {
     return NextResponse.json({ error: `File too large — max ${mb}MB for ${assetType}` }, { status: 400 });
   }
 
-  let key = buildR2Key(releaseType, slug, assetType, filename, trackSlug);
-  if (revisioned === true) {
-    if (!releaseId || !["cover", "cover-video"].includes(assetType)) {
-      return NextResponse.json({ error: "Versioned replacement requires a release and visual asset" }, { status: 400 });
-    }
-    const admin = getAdminClient();
-    const { data: release } = await admin
-      .from("releases")
-      .select("id, slug, release_type")
-      .eq("id", releaseId)
-      .maybeSingle();
-    const { data: product } = release ? { data: null } : await admin
-      .from("products")
-      .select("id, slug, release_type, product_type")
-      .eq("id", releaseId)
-      .maybeSingle();
-    const authoritativeSlug = release?.slug || product?.slug;
-    const authoritativeType = release?.release_type || product?.release_type || product?.product_type;
-    const folder = RELEASE_TYPE_ALIASES[authoritativeType];
-    if (!authoritativeSlug || !folder) {
-      return NextResponse.json({ error: "Release not found for versioned upload" }, { status: 404 });
-    }
-    const revisionId = crypto.randomUUID();
-    const root = assetType === "cover" ? "images" : "videos";
-    const stem = assetType === "cover" ? "cover" : "motion";
-    key = `${root}/${folder}/${authoritativeSlug}/revisions/${revisionId}/${stem}.${fileExt}`;
-  }
+  const key = buildR2Key(releaseType, slug, assetType, filename, trackSlug);
   if (!key) {
     return NextResponse.json({ error: "Could not build R2 key" }, { status: 400 });
   }

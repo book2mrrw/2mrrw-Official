@@ -15,7 +15,6 @@ export async function uploadAssetToR2({
   assetType,
   file,
   releaseId,
-  revisioned = false,
   onProgress,
   xhrRef,
 }) {
@@ -34,7 +33,6 @@ export async function uploadAssetToR2({
         filename: file.name,
         size: file.size,
         releaseId,
-        revisioned,
       }),
     });
   } catch (cause) {

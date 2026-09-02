@@ -18,13 +18,6 @@ const RELEASE_TYPE_FOLDERS = {
   ep:      "mixtapes-and-eps",
   mixtape: "mixtapes-and-eps",
 };
-const RELEASE_TYPE_ALIASES = {
-  ...RELEASE_TYPE_FOLDERS,
-  singles: "singles",
-  features: "features",
-  albums: "albums",
-  "mixtapes-and-eps": "mixtapes-and-eps",
-};
 
 function buildHLSPrefix(releaseType, slug, trackSlug) {
   const folder = RELEASE_TYPE_FOLDERS[releaseType] || "singles";
@@ -74,44 +67,6 @@ export async function POST(req) {
 
   const admin = getAdminClient();
 
-  // Bind every completed object to server-owned release identity. Client slugs,
-  // folders, and release types are presentation hints, never storage authority.
-  const { data: authorityRelease } = await admin
-    .from("releases")
-    .select("id, slug, release_type, status")
-    .eq("id", releaseId)
-    .maybeSingle();
-  const { data: authorityProduct } = authorityRelease ? { data: null } : await admin
-    .from("products")
-    .select("id, slug, release_type, product_type, active")
-    .eq("id", releaseId)
-    .maybeSingle();
-  if (!authorityRelease && !authorityProduct) {
-    return NextResponse.json({ error: "Release not found for upload completion" }, { status: 404 });
-  }
-  const authoritySlug = authorityRelease?.slug || authorityProduct?.slug;
-  const authorityType = authorityRelease?.release_type || authorityProduct?.release_type || authorityProduct?.product_type;
-  const authorityFolder = RELEASE_TYPE_ALIASES[authorityType];
-  const assetRoots = {
-    audio: "digital-assets",
-    cover: "images",
-    "cover-video": "videos",
-    preview: "previews",
-  };
-  const expectedPrefix = authorityFolder && assetRoots[assetType]
-    ? `${assetRoots[assetType]}/${authorityFolder}/${authoritySlug}/`
-    : null;
-  const normalizedKey = String(key).replace(/^\//, "");
-  if (!expectedPrefix || normalizedKey.includes("..") || !normalizedKey.startsWith(expectedPrefix)) {
-    return NextResponse.json({ error: "Uploaded object is not bound to this release" }, { status: 422 });
-  }
-  if (assetType === "audio" && (!authorityRelease || authorityRelease.status !== "draft")) {
-    return NextResponse.json(
-      { error: "Existing masters must use the staged replacement transaction" },
-      { status: 409 }
-    );
-  }
-
   try {
     if (assetType === "audio") {
       // Upsert or create the tracks row for this release
@@ -129,8 +84,7 @@ export async function POST(req) {
         const { error } = await admin
           .from("tracks")
           .update({ ...trackPayload, upload_status: "ready" })
-          .eq("id", trackId)
-          .eq("release_id", releaseId);
+          .eq("id", trackId);
         if (error) throw error;
       } else {
         // Position is the persisted track identity. Track slugs are carried by
@@ -217,32 +171,59 @@ export async function POST(req) {
     }
 
     if (assetType === "cover") {
-      const { data: promotion, error } = await admin.rpc("promote_release_visual_asset", {
-        p_release_ref_id: releaseId,
-        p_asset_type: assetType,
-        p_object_key: normalizedKey,
-      });
-      if (error) throw error;
+      // Try wizard release (releases table) first
+      const { data: relRow } = await admin
+        .from("releases").select("id, status").eq("id", releaseId).maybeSingle();
+
+      if (relRow) {
+        const { error } = await admin
+          .from("releases").update({ cover_art_r2_key: key }).eq("id", releaseId);
+        if (error) throw error;
+      } else {
+        // Catalog product (products table) — update image_path + metadata
+        const { data: product, error: prodErr } = await admin
+          .from("products").select("metadata").eq("id", releaseId).maybeSingle();
+        if (prodErr || !product) {
+          return NextResponse.json({ error: "Release not found for cover art update" }, { status: 404 });
+        }
+        const coverFolder = key.split("/").slice(0, -1).join("/") + "/";
+        const { error: updErr } = await admin.from("products").update({
+          image_path: coverFolder,
+          metadata:   { ...(product.metadata || {}), cover_art_r2_key: key },
+        }).eq("id", releaseId);
+        if (updErr) throw updErr;
+      }
 
       console.info(`[admin/upload/complete] cover complete key=${key} releaseId=${releaseId}`);
-      if (promotion?.status !== "draft") revalidateStorefront(promotion?.slug, promotion?.releaseType);
+      if (!relRow || relRow.status !== "draft") revalidateStorefront();
       emitServerEvent("info", "admin_upload_completed", { correlationId, releaseId, assetType });
-      return NextResponse.json({ ok: true, assetType, assetRevision: promotion?.assetRevision || normalizedKey });
+      return NextResponse.json({ ok: true, assetType });
     }
 
     if (assetType === "cover-video") {
       if (!Number.isFinite(durationSeconds) || durationSeconds <= 0 || durationSeconds > ADMIN_UPLOAD_CONTRACTS["cover-video"].maxDurationSeconds + 0.5) {
         return NextResponse.json({ error: "Cover video must be no longer than 7 minutes" }, { status: 400 });
       }
-      const { data: promotion, error } = await admin.rpc("promote_release_visual_asset", {
-        p_release_ref_id: releaseId,
-        p_asset_type: assetType,
-        p_object_key: normalizedKey,
-      });
-      if (error) throw error;
-      if (promotion?.status !== "draft") revalidateStorefront(promotion?.slug, promotion?.releaseType);
+      const { data: rel } = await admin.from("releases").select("id, status, metadata").eq("id", releaseId).maybeSingle();
+      if (rel) {
+        const meta = (rel.metadata && typeof rel.metadata === "object") ? rel.metadata : {};
+        const { error } = await admin.from("releases")
+          .update({ metadata: { ...meta, animated_cover_r2_key: key } }).eq("id", releaseId);
+        if (error) throw error;
+      } else {
+        const { data: product, error: productError } = await admin.from("products")
+          .select("metadata").eq("id", releaseId).single();
+        if (productError) throw productError;
+        const { error } = await admin.from("products").update({
+          metadata: { ...(product.metadata || {}), animated_cover_r2_key: key },
+          video_path: key.split("/").slice(0, -1).join("/") + "/",
+        }).eq("id", releaseId);
+        if (error) throw error;
+      }
+
+      if (!rel || rel.status !== "draft") revalidateStorefront();
       emitServerEvent("info", "admin_upload_completed", { correlationId, releaseId, assetType });
-      return NextResponse.json({ ok: true, assetType, assetRevision: promotion?.assetRevision || normalizedKey });
+      return NextResponse.json({ ok: true, assetType });
     }
 
     if (assetType === "preview") {
