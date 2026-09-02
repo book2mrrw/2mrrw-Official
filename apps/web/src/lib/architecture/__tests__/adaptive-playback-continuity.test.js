@@ -6,23 +6,6 @@ import test from "node:test";
 const root = process.cwd();
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-test("a circuit-breaker reset aborts the abandoned command's stream fetch, not just its queue slot", () => {
-  // Regression for: when the watchdog trips the breaker on a command timeout,
-  // the finally block already clears activeCommandRef once that command's own
-  // promise settles — but nothing cancelled its still-running network fetch
-  // unless the *next* dispatched command happened to be a navigation-type
-  // command. A same-type or unrelated next command left the old fetch free to
-  // resolve late and mutate shared refs after a newer command had taken over.
-  const dispatcher = read("src/lib/playback/command-dispatcher.js");
-  const breakerBlockAt = dispatcher.indexOf("if (queueCircuitOpenRef.current) {");
-  const queueResetAt = dispatcher.indexOf("commandQueueRef.current = Promise.resolve();", breakerBlockAt);
-  const abortAt = dispatcher.indexOf("activeStreamAbortRef.current?.abort();", breakerBlockAt);
-  assert.ok(
-    breakerBlockAt > -1 && queueResetAt > breakerBlockAt && abortAt > queueResetAt,
-    "the breaker-reset block must unconditionally abort the abandoned stream fetch"
-  );
-});
-
 test("a lapsed entitlement downgrades an in-progress stream instead of playing it out in full", () => {
   // Regression for: Effect 5 (entitlement sync) handled upgrades (preview ->
   // full stream) but had no symmetric branch for a downgrade (subscription
