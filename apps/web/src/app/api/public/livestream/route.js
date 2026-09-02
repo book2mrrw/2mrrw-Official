@@ -1,58 +1,55 @@
-import { NextResponse, after } from "next/server";
+import { NextResponse } from "next/server";
+import { requireConsumerPrincipal } from "@/lib/auth/consumer-authority";
+import { isAdminUser } from "@/lib/auth/constants";
+import { getUserEntitlements } from "@/lib/entitlements";
 import { getAdminClient } from "@/lib/supabase/admin";
-import {
-  getCurrentBroadcast,
-  scheduleBroadcast,
-  setLive,
-} from "@/lib/server/livestream";
-import { isTwitchConfigured, twitchRequest } from "@/lib/server/twitch-eventsub";
+import { getCurrentBroadcast } from "@/lib/server/livestream";
 
 export const dynamic = "force-dynamic";
 
-const BROADCASTER_LOGIN = process.env.TWITCH_BROADCASTER_LOGIN || "callme2mrrw";
-let lastTwitchSyncMs = 0;
-const TWITCH_SYNC_COOLDOWN_MS = 55_000;
+async function resolveLivestreamAccess(admin, user, broadcast) {
+  if (!broadcast || broadcast.audience === "all" || isAdminUser(user)) return true;
+  if (broadcast.audience === "purchaser") {
+    const { data, error } = await admin
+      .from("purchases")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("status", "completed")
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    return Boolean(data);
+  }
+  const entitlements = await getUserEntitlements(user.id, admin);
+  if (broadcast.audience === "subscriber") return Boolean(entitlements?.subscriber);
+  if (broadcast.audience === "collector") return Boolean(entitlements?.collector_card);
+  return false;
+}
 
-/** Public, read-only broadcast state. Background reconciliation is provider-scoped. */
 export async function GET() {
+  const user = await requireConsumerPrincipal();
+  if (!user) {
+    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+  }
+
   try {
     const admin = getAdminClient();
     const broadcast = await getCurrentBroadcast(admin);
+    const canView = await resolveLivestreamAccess(admin, user, broadcast);
+    const safeBroadcast = !broadcast || canView
+      ? broadcast
+      : { ...broadcast, channel: null, twitch_stream_id: null };
 
-    if (isTwitchConfigured() && Date.now() - lastTwitchSyncMs > TWITCH_SYNC_COOLDOWN_MS) {
-      lastTwitchSyncMs = Date.now();
-      after(async () => {
-        try {
-          const streams = await twitchRequest(`/streams?user_login=${encodeURIComponent(BROADCASTER_LOGIN)}`);
-          const twitchIsLive = Array.isArray(streams?.data) && streams.data.length > 0;
-          if (twitchIsLive === Boolean(broadcast?.is_live)) return;
-          const reconciler = getAdminClient();
-          const current = await getCurrentBroadcast(reconciler);
-          if (twitchIsLive && !current?.is_live) {
-            let targetId = current?.id;
-            if (!targetId) {
-              const created = await scheduleBroadcast(reconciler, {
-                title: streams.data[0]?.title || "2MRRW Live",
-                goesLiveAt: new Date().toISOString(),
-                channel: BROADCASTER_LOGIN,
-                audience: "all",
-              });
-              targetId = created.id;
-            }
-            await setLive(reconciler, targetId, true);
-          } else if (!twitchIsLive && current?.is_live) {
-            await setLive(reconciler, current.id, false);
-          }
-        } catch (error) {
-          lastTwitchSyncMs = 0;
-          console.warn("[public/livestream] Twitch reconciliation failed", error?.message);
-        }
-      });
-    }
-
-    return NextResponse.json({ broadcast }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({
+      broadcast: safeBroadcast,
+      canView,
+      providerStatus: broadcast?.provider_status || "offline",
+    }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
     console.error("[public/livestream] read failed", error?.message);
-    return NextResponse.json({ broadcast: null });
+    return NextResponse.json({ error: "Live status is temporarily unavailable" }, {
+      status: 503,
+      headers: { "Cache-Control": "private, no-store, max-age=0" },
+    });
   }
 }

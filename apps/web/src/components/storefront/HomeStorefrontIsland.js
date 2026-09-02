@@ -11,7 +11,6 @@ import HomeStorefrontFlowMode from "@/components/storefront/HomeStorefrontFlowMo
  */
 const HomeStorefrontIsland = memo(function HomeStorefrontIsland({
   onGiftRequest,
-  liveCountdownTarget,
   onDonateOpen,
   singlesRowRef,
   onCardClick,
@@ -52,7 +51,6 @@ const HomeStorefrontIsland = memo(function HomeStorefrontIsland({
         <AuthSurfaceIsland islandId="home-storefront" onGiftRequest={onGiftRequest}>
           {(auth) => (
             <HomeStorefrontFlowMode
-              liveCountdownTarget={liveCountdownTarget}
               showSubscribeCta={ent.showSubscribeCta}
               onDonateOpen={onDonateOpen}
               singlesRowRef={singlesRowRef}

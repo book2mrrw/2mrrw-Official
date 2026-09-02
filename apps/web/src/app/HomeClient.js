@@ -82,7 +82,7 @@ import {
 import { COLLECTORS_CARDS_ROUTE } from "@/lib/collectors-cards";
 import { catalogCoverUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "@/lib/media-urls";
 import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
-import { LiveCountdownProvider } from "@/components/home/LiveCountdownContext";
+import { LiveCountdownProvider, useTwitchEmbedConfig } from "@/components/home/LiveCountdownContext";
 import { LiveCountdownLiveTab } from "@/components/home/LiveCountdownDisplays";
 import CatalogGrid from "@/components/home/CatalogGrid";
 import HeroIsland from "@/components/home/HeroIsland";
@@ -507,15 +507,18 @@ function InlineShowsAdmin({ onRefreshFanView }) {
 
 // ── Inline admin live-stream manager (admin-only, renders in the LIVE tab) ──
 function InlineLiveAdmin() {
+  const { channel: twitchChannel } = useTwitchEmbedConfig();
   const [broadcast, setBroadcast]       = useState(null);
   const [loading, setLoading]           = useState(true);
   const [saving, setSaving]             = useState(false);
+  const [providerStatus, setProviderStatus] = useState("unknown");
   const [flash, setFlash]               = useState(null);
   const [showForm, setShowForm]         = useState(false);
-  const [form, setForm]                 = useState({ title: "2MRRW Live", goesLiveAt: "", channel: "callme2mrrw" });
+  const [form, setForm]                 = useState({ title: "2MRRW Live", goesLiveAt: "", audience: "all" });
   const [eventSub, setEventSub]         = useState(null);   // { configured, allActive, subscriptions, missing }
   const [eventSubLoading, setEsLoading] = useState(true);
   const [eventSubSaving, setEsSaving]   = useState(false);
+  const eventSubVerificationTimerRef    = useRef(null);
 
   const showFlash = (msg, isErr = false) => {
     setFlash({ msg, isErr });
@@ -527,8 +530,14 @@ function InlineLiveAdmin() {
     try {
       const res  = await fetch("/api/admin/livestream");
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `Live status ${res.status}`);
       setBroadcast(data.broadcast || null);
-    } catch { setBroadcast(null); }
+      setProviderStatus(data.providerStatus || "unknown");
+    } catch (error) {
+      setBroadcast(null);
+      setProviderStatus("unavailable");
+      setFlash({ msg: error.message || "Live status unavailable", isErr: true });
+    }
     finally { setLoading(false); }
   }, []);
 
@@ -537,8 +546,11 @@ function InlineLiveAdmin() {
     try {
       const res  = await fetch("/api/admin/twitch/register");
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `EventSub status ${res.status}`);
       setEventSub(data);
-    } catch { setEventSub(null); }
+    } catch (error) {
+      setEventSub({ configured: true, allActive: false, error: error.message || "EventSub status unavailable" });
+    }
     finally { setEsLoading(false); }
   }, []);
 
@@ -548,11 +560,12 @@ function InlineLiveAdmin() {
       const res  = await fetch("/api/admin/twitch/register", { method: "POST" });
       const data = await res.json();
       if (!res.ok) { showFlash(data.error || "EventSub registration failed", true); }
-      else { showFlash("Twitch EventSub connected. Going live on Twitch will now auto-trigger everything."); }
+      else { showFlash("Registration requested. Twitch is verifying the production callback now."); }
       await loadEventSub();
       // New subscriptions start in pending state — Twitch verifies the webhook within ~5s.
       // Re-check after 7s so the UI reflects the post-verification enabled state.
-      setTimeout(() => loadEventSub(), 7000);
+      clearTimeout(eventSubVerificationTimerRef.current);
+      eventSubVerificationTimerRef.current = window.setTimeout(loadEventSub, 7000);
     } catch (err) { showFlash(err.message || "Error", true); }
     finally { setEsSaving(false); }
   };
@@ -570,7 +583,16 @@ function InlineLiveAdmin() {
     finally { setEsSaving(false); }
   };
 
-  useEffect(() => { load(); loadEventSub(); }, [load, loadEventSub]);
+  useEffect(() => {
+    const initialLoadTimer = window.setTimeout(() => {
+      load();
+      loadEventSub();
+    }, 0);
+    return () => {
+      clearTimeout(initialLoadTimer);
+      clearTimeout(eventSubVerificationTimerRef.current);
+    };
+  }, [load, loadEventSub]);
 
   const handleSchedule = async (e) => {
     e.preventDefault();
@@ -580,7 +602,7 @@ function InlineLiveAdmin() {
       const res  = await fetch("/api/admin/livestream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ title: form.title, goesLiveAt: new Date(form.goesLiveAt).toISOString(), channel: form.channel }),
+        body:    JSON.stringify({ title: form.title, goesLiveAt: new Date(form.goesLiveAt).toISOString(), audience: form.audience }),
       });
       const data = await res.json();
       if (!res.ok) { showFlash(data.error || "Schedule failed", true); return; }
@@ -591,34 +613,17 @@ function InlineLiveAdmin() {
     finally { setSaving(false); }
   };
 
-  const handleGoLive = async () => {
+  const handleSyncTwitch = async () => {
     setSaving(true);
     try {
       const res  = await fetch("/api/admin/livestream", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ action: "go_live", broadcastId: broadcast?.id, title: form.title }),
+        body:    JSON.stringify({ action: "sync" }),
       });
       const data = await res.json();
-      if (!res.ok) { showFlash(data.error || "Go live failed", true); return; }
-      showFlash("You're LIVE. Notifications sent to all accounts.");
-      await load();
-    } catch (err) { showFlash(err.message || "Error", true); }
-    finally { setSaving(false); }
-  };
-
-  const handleEndLive = async () => {
-    if (!confirm("End the live stream?")) return;
-    setSaving(true);
-    try {
-      const res  = await fetch("/api/admin/livestream", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ action: "end_live", broadcastId: broadcast?.id }),
-      });
-      const data = await res.json();
-      if (!res.ok) { showFlash(data.error || "End failed", true); return; }
-      showFlash("Stream ended.");
+      if (!res.ok) { showFlash(data.error || "Twitch sync failed", true); return; }
+      showFlash(data.providerStatus === "live" ? "Twitch ingest confirmed. The platform is live." : "Twitch is offline. The platform state is synchronized.");
       await load();
     } catch (err) { showFlash(err.message || "Error", true); }
     finally { setSaving(false); }
@@ -638,15 +643,12 @@ function InlineLiveAdmin() {
               {showForm ? "Cancel" : "Schedule"}
             </button>
           )}
-          {broadcast?.is_live ? (
-            <button onClick={handleEndLive} disabled={saving} style={{ background: "#ef4444", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: "white", cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1 }}>
-              {saving ? "Ending…" : "End Stream"}
-            </button>
-          ) : (
-            <button onClick={handleGoLive} disabled={saving} style={{ background: "#00ffff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: "#000", cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1 }}>
-              {saving ? "Going live…" : "⬤ Go Live Now"}
-            </button>
-          )}
+          <a href={`https://dashboard.twitch.tv/u/${encodeURIComponent(twitchChannel)}/stream-manager`} target="_blank" rel="noreferrer" style={{ background: "rgba(145,70,255,.18)", border: "1px solid rgba(145,70,255,.5)", borderRadius: 8, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: "#c4a1ff", textDecoration: "none" }}>
+            Stream Manager ↗
+          </a>
+          <button onClick={handleSyncTwitch} disabled={saving} style={{ background: "#00ffff", border: "none", borderRadius: 8, padding: "7px 14px", fontSize: 11, fontWeight: 700, color: "#000", cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1 }}>
+            {saving ? "Syncing…" : "Sync Twitch"}
+          </button>
         </div>
       </div>
 
@@ -661,7 +663,8 @@ function InlineLiveAdmin() {
           <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".2em", color: "rgba(255,255,255,.4)" }}>SCHEDULE STREAM</div>
           <label style={labelStyle}>TITLE<input style={inputStyle} value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="2MRRW Live" /></label>
           <label style={labelStyle}>GOES LIVE AT (your local time) *<input type="datetime-local" style={{ ...inputStyle, colorScheme: "dark" }} value={form.goesLiveAt} onChange={(e) => setForm((f) => ({ ...f, goesLiveAt: e.target.value }))} required /></label>
-          <label style={labelStyle}>TWITCH CHANNEL<input style={inputStyle} value={form.channel} onChange={(e) => setForm((f) => ({ ...f, channel: e.target.value }))} placeholder="callme2mrrw" /></label>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,.4)" }}>TWITCH CHANNEL · {twitchChannel}</div>
+          <label style={labelStyle}>AUDIENCE<select style={inputStyle} value={form.audience} onChange={(e) => setForm((f) => ({ ...f, audience: e.target.value }))}><option value="all">All signed-in fans</option><option value="subscriber">Subscribers</option><option value="collector">Collectors</option><option value="purchaser">Purchasers</option></select></label>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="submit" disabled={saving} style={{ background: "#9b5de5", border: "none", borderRadius: 8, padding: "9px 18px", fontSize: 12, fontWeight: 700, color: "white", cursor: saving ? "wait" : "pointer", opacity: saving ? 0.6 : 1 }}>{saving ? "Saving…" : "Save Schedule"}</button>
           </div>
@@ -676,13 +679,13 @@ function InlineLiveAdmin() {
             <span style={{ color: broadcast.is_live ? "#00ffff" : "rgba(255,255,255,.3)", fontWeight: 700 }}>
               {broadcast.is_live ? "● LIVE" : "○ OFFLINE"}
             </span>
-            {" · "}{broadcast.title}
+            {` · Twitch ${providerStatus.toUpperCase()} · `}{broadcast.title}
             {broadcast.goes_live_at && !broadcast.is_live && (
               <span style={{ color: "rgba(255,255,255,.3)" }}> · scheduled {new Date(broadcast.goes_live_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true })}</span>
             )}
           </div>
         ) : (
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,.25)", padding: "8px 0" }}>No stream scheduled — use Go Live Now or Schedule above.</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,.35)", padding: "8px 0", lineHeight: 1.6 }}>No stream scheduled. Schedule one here, then start the encoder in Twitch Stream Manager. 2MRRW will detect the real Twitch ingest automatically.</div>
         )
       )}
 
@@ -715,9 +718,15 @@ function InlineLiveAdmin() {
             Missing env vars: {eventSub.missing.join(", ")}
           </div>
         )}
+        {!eventSubLoading && eventSub?.invalid?.length > 0 && (
+          <div style={{ fontSize: 10, color: "#ef4444", marginTop: 6 }}>Invalid env vars: {eventSub.invalid.join(", ")}</div>
+        )}
+        {!eventSubLoading && eventSub?.error && (
+          <div style={{ fontSize: 10, color: "#ef4444", marginTop: 6, lineHeight: 1.5 }}>{eventSub.error}</div>
+        )}
         {!eventSubLoading && eventSub?.allActive && (
           <div style={{ fontSize: 10, color: "rgba(255,255,255,.3)", marginTop: 6, lineHeight: 1.6 }}>
-            Going live on Twitch auto-triggers the embed and notifies all accounts. No button needed.
+            Verified production webhooks are active. Twitch ingest is the authority; 2MRRW updates automatically without reloading the player.
           </div>
         )}
         {!eventSubLoading && eventSub && !eventSub.allActive && eventSub.configured && (
@@ -962,7 +971,7 @@ function AdminManageReleasesNavItem({ activeTab, onSwitch, mobile = false }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-export default function HomeClient({ initialEvents, initialCatalog }) {
+export default function HomeClient({ initialEvents, initialCatalog, twitchEmbedParent = "www.2mrrw.com", twitchBroadcasterLogin = "callme2mrrw" }) {
   // Prefer DB-driven catalog when available; fall back to hardcoded inline arrays.
   // withR2CatalogMedia resolves R2 paths to public CDN URLs for all sources.
   const effectiveSingles =
@@ -993,11 +1002,13 @@ export default function HomeClient({ initialEvents, initialCatalog }) {
       inlineAlbums={effectiveAlbums}
       inlineMixtapesAndEps={effectiveMixtapes}
     >
-      <PageStorefront
-        initialEvents={initialEvents}
-        effectiveAlbums={effectiveAlbums}
-        effectiveMixtapes={effectiveMixtapes}
-      />
+      <LiveCountdownProvider targetDate={nextLiveDateTime} embedParent={twitchEmbedParent} broadcasterLogin={twitchBroadcasterLogin}>
+        <PageStorefront
+          initialEvents={initialEvents}
+          effectiveAlbums={effectiveAlbums}
+          effectiveMixtapes={effectiveMixtapes}
+        />
+      </LiveCountdownProvider>
     </CatalogSurfaceProvider>
   );
 }
@@ -2096,6 +2107,13 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       }
       return;
     }
+    if (window.location.hash.toLowerCase() === "#live") {
+      switchTab("live");
+      const next = new URL(window.location.href);
+      next.hash = "";
+      window.history.replaceState({}, "", next.pathname + (next.search || ""));
+      return;
+    }
     const openTab = sessionStorage.getItem("openTab");
     const highlightSlug = consumeGiftHighlightSlug();
     if (highlightSlug) {
@@ -2373,7 +2391,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               >
                 <HomeStorefrontIsland
                   onGiftRequest={setGiftSheetRelease}
-                  liveCountdownTarget={nextLiveDateTime}
                   onDonateOpen={handleDonateOpen}
                   singlesRowRef={singlesRowRef}
                   onCardClick={openSingleModal}
@@ -2602,17 +2619,20 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
               {/* ══ LIVE ══ */}
               <AuthSurfaceIsland islandId="live-tab">
-                {(auth) => activeTab==="live" && (
-                  <>
+                {(auth) => (
+                  <section
+                    data-live-storefront
+                    style={{ display: activeTab === "live" ? undefined : "none" }}
+                    aria-hidden={activeTab !== "live"}
+                    inert={activeTab === "live" ? undefined : ""}
+                  >
                     <h2 className="section-heading">2MRRW LIVE</h2>
                     {auth.isAdminStable && <InlineLiveAdmin />}
-                    <LiveCountdownProvider targetDate={nextLiveDateTime}>
-                      <LiveCountdownLiveTab
-                        liveStreamDate={liveStreamDate}
-                        liveStreamTime={liveStreamTime}
-                      />
-                    </LiveCountdownProvider>
-                  </>
+                    <LiveCountdownLiveTab
+                      liveStreamDate={liveStreamDate}
+                      liveStreamTime={liveStreamTime}
+                    />
+                  </section>
                 )}
               </AuthSurfaceIsland>
 

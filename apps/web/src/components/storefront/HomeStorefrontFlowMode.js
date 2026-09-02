@@ -10,13 +10,11 @@ import HomeStorefront from "@/components/home/HomeStorefront";
 const HomeStorefrontFlowMode = memo(function HomeStorefrontFlowMode({
   flowConversionActive,
   onFlowConversionActive,
-  liveCountdownTarget,
   ...homeProps
 }) {
   return (
     <HomeStorefront
       {...homeProps}
-      liveCountdownTarget={liveCountdownTarget}
       flowConversionActive={flowConversionActive}
       onFlowConversionActive={onFlowConversionActive}
     />

@@ -175,7 +175,7 @@ export function buildMembershipWelcomeEmail({ name }) {
 export function buildLivestreamEmail({ title, channel, type }) {
   const base = storefrontBaseUrl();
   const twitchUrl = `https://twitch.tv/${channel || "callme2mrrw"}`;
-  const liveTabUrl = `${base}/#live`;
+  const liveTabUrl = `${base}/?tab=live`;
 
   const headlineMap = {
     "24h":   `${title || "2MRRW Live"} — Tomorrow on Twitch`,

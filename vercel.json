@@ -9,6 +9,7 @@
     { "path": "/api/cron/hls-stale-jobs", "schedule": "*/10 * * * *" },
     { "path": "/api/cron/retire-audio-master-revisions", "schedule": "17 4 * * *" },
     { "path": "/api/cron/livestream-notifications", "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/twitch-live-reconcile", "schedule": "* * * * *" },
     { "path": "/api/cron/publish-scheduled", "schedule": "* * * * *" },
     { "path": "/api/cron/finalize-draft-dumps", "schedule": "* * * * *" },
     { "path": "/api/cron/account-lifecycle", "schedule": "*/5 * * * *" }

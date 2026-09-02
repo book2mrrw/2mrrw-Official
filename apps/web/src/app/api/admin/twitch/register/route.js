@@ -4,10 +4,12 @@ import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import {
   isTwitchConfigured,
+  getTwitchConfiguration,
+  getTwitchWebhookCallbackUrl,
   getBroadcasterUserId,
   getEventSubSubscriptions,
-  registerEventSubSubscription,
   deleteEventSubSubscription,
+  ensureTwitchStreamEventSubscriptions,
 } from "@/lib/server/twitch-eventsub";
 
 export const dynamic = "force-dynamic";
@@ -25,24 +27,23 @@ async function guard(req) {
   return { user, err: null };
 }
 
-function siteBase() {
-  return (process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL || "https://www.2mrrw.com").replace(/\/+$/, "");
-}
-
 // GET — current EventSub subscription status (configured / active / pending).
 export async function GET(req) {
   const { user, err } = await guard(req);
   if (err) return err;
 
   if (!isTwitchConfigured()) {
+    const config = getTwitchConfiguration();
     return NextResponse.json({
       configured:    false,
       subscriptions: [],
-      missing:       ["TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET", "TWITCH_WEBHOOK_SECRET"].filter(k => !process.env[k]),
+      missing:       config.missing,
+      invalid:       config.invalid,
     });
   }
 
   try {
+    const callbackUrl = getTwitchWebhookCallbackUrl();
     const broadcasterId = await getBroadcasterUserId(BROADCASTER_LOGIN);
     const subs     = await getEventSubSubscriptions();
     // Filter by BOTH event type AND broadcaster — stale subs for other accounts must not count.
@@ -50,11 +51,15 @@ export async function GET(req) {
       WATCHED_EVENT_TYPES.includes(s.type) &&
       s.condition?.broadcaster_user_id === broadcasterId
     );
-    const allActive = WATCHED_EVENT_TYPES.every(t => relevant.some(s => s.type === t && s.status === "enabled"));
-    return NextResponse.json({ configured: true, allActive, subscriptions: relevant, broadcasterId, broadcaster: BROADCASTER_LOGIN });
+    const allActive = WATCHED_EVENT_TYPES.every(t => relevant.some(s =>
+      s.type === t &&
+      s.status === "enabled" &&
+      s.transport?.callback === callbackUrl
+    ));
+    return NextResponse.json({ configured: true, allActive, subscriptions: relevant, broadcasterId, broadcaster: BROADCASTER_LOGIN, callbackUrl });
   } catch (err) {
     console.error("[admin/twitch/register GET]", err?.message);
-    return NextResponse.json({ configured: true, allActive: false, error: err.message, subscriptions: [] });
+    return NextResponse.json({ configured: true, allActive: false, error: err.message, subscriptions: [] }, { status: 502 });
   }
 }
 
@@ -64,52 +69,17 @@ export async function POST(req) {
   if (err) return err;
 
   if (!isTwitchConfigured()) {
+    const config = getTwitchConfiguration();
     return NextResponse.json({
-      error:   "Missing environment variables. Add TWITCH_CLIENT_ID, TWITCH_CLIENT_SECRET, and TWITCH_WEBHOOK_SECRET to Vercel.",
-      missing: ["TWITCH_CLIENT_ID", "TWITCH_CLIENT_SECRET", "TWITCH_WEBHOOK_SECRET"].filter(k => !process.env[k]),
+      error:   "Twitch configuration is missing or invalid.",
+      missing: config.missing,
+      invalid: config.invalid,
     }, { status: 503 });
   }
 
-  const callbackUrl   = `${siteBase()}/api/webhooks/twitch`;
-  const webhookSecret = process.env.TWITCH_WEBHOOK_SECRET;
-
   try {
-    const broadcasterId = await getBroadcasterUserId(BROADCASTER_LOGIN);
-    const existingSubs  = await getEventSubSubscriptions();
-    const results       = [];
-
-    for (const eventType of WATCHED_EVENT_TYPES) {
-      // Already enabled — skip.
-      const active = existingSubs.find(
-        s => s.type === eventType &&
-             s.condition?.broadcaster_user_id === broadcasterId &&
-             s.status === "enabled"
-      );
-      if (active) {
-        results.push({ type: eventType, action: "already_active", id: active.id });
-        continue;
-      }
-
-      // Remove stale/broken subscriptions for this event type first.
-      const stale = existingSubs.filter(
-        s => s.type === eventType &&
-             s.condition?.broadcaster_user_id === broadcasterId &&
-             s.status !== "enabled"
-      );
-      await Promise.allSettled(stale.map(s => deleteEventSubSubscription(s.id)));
-
-      const created = await registerEventSubSubscription({
-        type:        eventType,
-        condition:   { broadcaster_user_id: broadcasterId },
-        callbackUrl,
-        secret:      webhookSecret,
-      });
-
-      const id = created?.data?.[0]?.id || null;
-      results.push({ type: eventType, action: "registered", id });
-    }
-
-    return NextResponse.json({ ok: true, broadcasterId, broadcaster: BROADCASTER_LOGIN, callbackUrl, results });
+    const ensured = await ensureTwitchStreamEventSubscriptions(BROADCASTER_LOGIN);
+    return NextResponse.json({ ok: true, broadcaster: BROADCASTER_LOGIN, ...ensured });
   } catch (err) {
     console.error("[admin/twitch/register POST]", err?.message);
     return NextResponse.json({ error: err.message || "Registration failed" }, { status: 500 });
@@ -128,7 +98,10 @@ export async function DELETE(req) {
   try {
     const broadcasterId = await getBroadcasterUserId(BROADCASTER_LOGIN);
     const subs          = await getEventSubSubscriptions();
-    const relevant      = subs.filter(s => s.condition?.broadcaster_user_id === broadcasterId);
+    const relevant      = subs.filter(s =>
+      WATCHED_EVENT_TYPES.includes(s.type) &&
+      s.condition?.broadcaster_user_id === broadcasterId
+    );
 
     const settled = await Promise.allSettled(relevant.map(s => deleteEventSubSubscription(s.id)));
     return NextResponse.json({

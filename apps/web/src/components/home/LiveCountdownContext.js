@@ -1,8 +1,10 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
-const LiveCountdownContext = createContext(null);
+const LiveBroadcastContext = createContext(null);
+const LiveClockContext = createContext(null);
+const TwitchEmbedConfigContext = createContext(null);
 
 function computeCountdown(targetMs) {
   const diff = targetMs - Date.now();
@@ -15,49 +17,79 @@ function computeCountdown(targetMs) {
   };
 }
 
-const POLL_MS = 30_000; // check DB state every 30 seconds
+const POLL_MS = 15_000;
+
+const INITIAL_BROADCAST_STATE = Object.freeze({
+  isLive: false,
+  goesLiveAt: null,
+  channel: "callme2mrrw",
+  title: "2MRRW Live",
+  broadcastId: null,
+  providerStatus: "unknown",
+  stateStatus: "loading",
+  canView: true,
+});
+
+function sameBroadcastState(left, right) {
+  return Object.keys(INITIAL_BROADCAST_STATE).every((key) => left[key] === right[key]);
+}
 
 /**
- * Fetches live broadcast state from the DB and drives the countdown.
- * When is_live = true, liveIsLive is forced true regardless of countdown math.
- * Isolates 1 Hz ticks from the storefront shell so it doesn't re-render every second.
+ * Single application authority for Twitch broadcast state and the countdown clock.
+ * Broadcast state and the 1 Hz clock use separate contexts: countdown ticks can
+ * update countdown labels without reconciling the persistent Twitch player.
  */
-export function LiveCountdownProvider({ targetDate, children }) {
+export function LiveCountdownProvider({ targetDate, embedParent = "www.2mrrw.com", broadcasterLogin = "callme2mrrw", children }) {
   // Fallback target from prop (may be overridden by DB goes_live_at).
   const [fallbackMs] = useState(() => targetDate instanceof Date
     ? targetDate.getTime()
     : new Date(targetDate || Date.now()).getTime());
 
-  const [dbState, setDbState] = useState({ isLive: false, goesLiveAt: null, channel: "callme2mrrw", title: "2MRRW Live" });
+  const [dbState, setDbState] = useState(INITIAL_BROADCAST_STATE);
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const requestInFlightRef = useRef(false);
 
-  // DB poll — fetch current broadcast state.
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchState() {
-      try {
-        const res = await fetch("/api/public/livestream", { cache: "no-store" });
-        if (!res.ok) return;
-        const json = await res.json();
-        const b = json.broadcast;
-        if (cancelled) return;
-        setDbState({
-          isLive:     Boolean(b?.is_live),
-          goesLiveAt: b?.goes_live_at || null,
-          channel:    b?.channel || "callme2mrrw",
-          title:      b?.title || "2MRRW Live",
-          broadcastId: b?.id || null,
-        });
-      } catch {
-        // Non-fatal — keeps showing hardcoded countdown
-      }
+  const fetchState = useCallback(async () => {
+    if (requestInFlightRef.current) return;
+    requestInFlightRef.current = true;
+    try {
+      const res = await fetch("/api/public/livestream", { cache: "no-store" });
+      if (!res.ok) throw new Error(`livestream state ${res.status}`);
+      const json = await res.json();
+      const b = json.broadcast;
+      const next = {
+        isLive: Boolean(b?.is_live),
+        goesLiveAt: b?.goes_live_at || null,
+        channel: b?.channel || "callme2mrrw",
+        title: b?.title || "2MRRW Live",
+        broadcastId: b?.id || null,
+        providerStatus: json.providerStatus || (b?.is_live ? "live" : "offline"),
+        stateStatus: "ready",
+        canView: json.canView !== false,
+      };
+      setDbState((current) => sameBroadcastState(current, next) ? current : next);
+    } catch {
+      setDbState((current) => current.stateStatus === "unavailable"
+        ? current
+        : { ...current, stateStatus: "unavailable" });
+    } finally {
+      requestInFlightRef.current = false;
     }
-
-    fetchState();
-    const pollId = setInterval(fetchState, POLL_MS);
-    return () => { cancelled = true; clearInterval(pollId); };
   }, []);
+
+  useEffect(() => {
+    const initialPollId = window.setTimeout(fetchState, 0);
+    const pollId = setInterval(fetchState, POLL_MS);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchState();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      clearTimeout(initialPollId);
+      clearInterval(pollId);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [fetchState]);
 
   // Countdown tick — 1 Hz, uses DB goes_live_at if present, else prop.
   useEffect(() => {
@@ -69,25 +101,54 @@ export function LiveCountdownProvider({ targetDate, children }) {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [dbState.goesLiveAt]);
+  }, [dbState.goesLiveAt, fallbackMs]);
 
-  const value = useMemo(
+  const broadcastValue = useMemo(
     () => ({
       liveIsLive:  dbState.isLive,
-      liveCountdown: countdown,
       liveChannel: dbState.channel,
       liveTitle:   dbState.title,
       liveBroadcastId: dbState.broadcastId || null,
       liveGoesLiveAt:  dbState.goesLiveAt || null,
+      liveProviderStatus: dbState.providerStatus,
+      liveStateStatus: dbState.stateStatus,
+      canViewLive: dbState.canView,
+      refreshLiveState: fetchState,
     }),
-    [dbState.isLive, countdown, dbState.channel, dbState.title, dbState.broadcastId, dbState.goesLiveAt]
+    [dbState, fetchState]
   );
+  const embedConfig = useMemo(() => ({
+    parent: /^[a-z0-9.-]+$/i.test(embedParent) ? embedParent : "www.2mrrw.com",
+    channel: /^[a-zA-Z0-9_]{1,25}$/.test(broadcasterLogin) ? broadcasterLogin : "callme2mrrw",
+  }), [broadcasterLogin, embedParent]);
 
-  return <LiveCountdownContext.Provider value={value}>{children}</LiveCountdownContext.Provider>;
+  return (
+    <TwitchEmbedConfigContext.Provider value={embedConfig}>
+      <LiveBroadcastContext.Provider value={broadcastValue}>
+        <LiveClockContext.Provider value={countdown}>{children}</LiveClockContext.Provider>
+      </LiveBroadcastContext.Provider>
+    </TwitchEmbedConfigContext.Provider>
+  );
+}
+
+export function useLiveBroadcast() {
+  const ctx = useContext(LiveBroadcastContext);
+  if (!ctx) throw new Error("useLiveBroadcast must be used within LiveCountdownProvider");
+  return ctx;
+}
+
+export function useTwitchEmbedConfig() {
+  const ctx = useContext(TwitchEmbedConfigContext);
+  if (!ctx) throw new Error("useTwitchEmbedConfig must be used within LiveCountdownProvider");
+  return ctx;
 }
 
 export function useLiveCountdown() {
-  const ctx = useContext(LiveCountdownContext);
-  if (!ctx) throw new Error("useLiveCountdown must be used within LiveCountdownProvider");
-  return ctx;
+  const broadcast = useLiveBroadcast();
+  const countdown = useContext(LiveClockContext);
+  if (!countdown) throw new Error("useLiveCountdown must be used within LiveCountdownProvider");
+  return useMemo(
+    () => ({ ...broadcast, liveCountdown: countdown }),
+    [broadcast, countdown]
+  );
 }

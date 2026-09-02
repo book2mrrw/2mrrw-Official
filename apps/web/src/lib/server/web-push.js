@@ -56,7 +56,7 @@ const PUSH_PAGE_SIZE = 500;
  * Sends each page in batches of 100 to avoid overwhelming push services.
  * Automatically disables subscriptions that respond with 404/410 (expired).
  */
-export async function sendPushToSubscribers(admin, payload) {
+export async function sendPushToSubscribers(admin, payload, { eligibleUserIds = null } = {}) {
   if (!isWebPushConfigured()) {
     console.info("[web-push] VAPID not configured — skipping fan-out");
     return { sent: 0, failed: 0 };
@@ -76,8 +76,12 @@ export async function sendPushToSubscribers(admin, payload) {
 
     if (error || !page?.length) break;
 
-    for (let i = 0; i < page.length; i += PUSH_BATCH_SIZE) {
-      const batch = page.slice(i, i + PUSH_BATCH_SIZE);
+    const eligiblePage = eligibleUserIds === null
+      ? page
+      : page.filter((subscription) => eligibleUserIds.has(subscription.user_id));
+
+    for (let i = 0; i < eligiblePage.length; i += PUSH_BATCH_SIZE) {
+      const batch = eligiblePage.slice(i, i + PUSH_BATCH_SIZE);
       await Promise.all(
         batch.map(async (sub) => {
           const result = await sendWebPush(sub, payload);

@@ -11,7 +11,6 @@ import RadioCarousel from "@/components/home/RadioCarousel";
 import FlowState from "@/components/home/FlowState";
 import CatalogGrid from "@/components/home/CatalogGrid";
 import { LiveCountdownHomeSection } from "@/components/home/LiveCountdownDisplays";
-import { LiveCountdownProvider } from "@/components/home/LiveCountdownContext";
 import {
   isUiHydrationTraceEnabled,
   logUiHydrationTrace,
@@ -41,7 +40,6 @@ const HomeFlowStateIsland = memo(function HomeFlowStateIsland({
 });
 
 const HomeStorefront = memo(function HomeStorefront({
-  liveCountdownTarget,
   showSubscribeCta,
   onDonateOpen,
   singlesRowRef,
@@ -282,11 +280,7 @@ const HomeStorefront = memo(function HomeStorefront({
     </>
   );
 
-  if (!liveCountdownTarget) return storefront;
-
-  return (
-    <LiveCountdownProvider targetDate={liveCountdownTarget}>{storefront}</LiveCountdownProvider>
-  );
+  return storefront;
 });
 
 export default HomeStorefront;
