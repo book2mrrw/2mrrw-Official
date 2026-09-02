@@ -51,6 +51,20 @@ test("INV-MFA diagnostics are structured and internal reasons stay server-side",
   assert.doesNotMatch(state, /mfaReason:/);
 });
 
+test("INV-MFA admin release recovery renews authority without leaving the storefront", () => {
+  const releases = read("src/app/api/admin/releases/route.js");
+  const manager = read("src/components/admin/InlineReleasesManager.js");
+  const login = read("src/app/login/page.js");
+  assert.match(releases, /code: denial\.code/);
+  assert.match(manager, /ADMIN_AUTH_MFA_REQUIRED/);
+  assert.match(manager, /\/api\/auth\/login-step1/);
+  assert.match(manager, /\/api\/auth\/login-step2/);
+  assert.match(manager, /onVerified=\{loadReleases\}/);
+  assert.doesNotMatch(manager, /router\.refresh\(\)/);
+  assert.match(login, /\/api\/auth\/mfa-session/);
+  assert.match(login, /state\?\.admin && state\?\.mfaRequired/);
+});
+
 test("INV-MFA every admin sign-out surface uses canonical revocation", () => {
   const giftsPage = read("src/app/admin/gifts/page.js");
   assert.match(giftsPage, /const \{ signOut \} = useAuth\(\)/);

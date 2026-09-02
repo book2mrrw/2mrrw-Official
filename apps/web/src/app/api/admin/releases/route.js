@@ -12,8 +12,11 @@ export async function GET(req) {
   if (!gate.ok) {
     const denial = classifyAdminAuthorityDenial(gate.reason);
     return NextResponse.json(
-      { error: denial.status === 401 ? "Unauthorized" : "Forbidden" },
-      { status: denial.status }
+      {
+        error: denial.status === 401 ? "Unauthorized" : "Forbidden",
+        code: denial.code,
+      },
+      { status: denial.status, headers: { "Cache-Control": "private, no-store" } }
     );
   }
   const user = gate.user;

@@ -58,7 +58,19 @@ function LoginForm() {
     (async () => {
       try {
         const user = await getAuthenticatedUser();
-        if (mounted && user?.email) { router.replace("/"); return; }
+        if (mounted && user?.email) {
+          const stateRes = await fetch("/api/auth/mfa-session", {
+            credentials: "include",
+            cache: "no-store",
+          });
+          const state = stateRes.ok ? await stateRes.json() : null;
+          if (state?.admin && state?.mfaRequired) {
+            setEmail(user.email);
+          } else {
+            router.replace("/");
+            return;
+          }
+        }
       } catch {}
       if (mounted) setCheckingAuth(false);
     })();
