@@ -1,0 +1,49 @@
+logLevel: info
+logDestinations: [stdout]
+logStructured: true
+
+authMethod: http
+authHTTPAddress: https://www.2mrrw.com/api/live/relay-auth
+authHTTPExclude:
+  - action: read
+    path: 2mrrw-live
+
+api: false
+metrics: false
+pprof: false
+playback: false
+rtsp: true
+rtspTransports: [tcp]
+rtspAddress: :8554
+rtmp: false
+hls: false
+srt: false
+moq: false
+
+webrtc: true
+webrtcAddress: :8889
+webrtcEncryption: false
+webrtcAllowOrigins:
+  - https://www.2mrrw.com
+  - https://2mrrw.com
+  - https://*.vercel.app
+  - http://localhost:3000
+webrtcTrustedProxies:
+  - 100.64.0.0/10
+webrtcLocalUDPAddress: :8189
+webrtcLocalTCPAddress: :8189
+webrtcIPsFromInterfaces: false
+webrtcAdditionalHosts:
+  - 2mrrw-live-relay.fly.dev
+webrtcHandshakeTimeout: 10s
+webrtcTrackGatherTimeout: 3s
+
+pathDefaults:
+  source: publisher
+  overridePublisher: false
+  record: false
+
+paths:
+  2mrrw-live:
+    runOnAvailable: /relay-to-twitch.sh
+    runOnAvailableRestart: true

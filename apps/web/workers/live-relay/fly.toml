@@ -1,0 +1,54 @@
+app = "2mrrw-live-relay"
+primary_region = "dfw"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  LIVE_PLATFORM_ORIGIN = "https://www.2mrrw.com"
+  TWITCH_VIDEO_BITRATE = "4500k"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8889
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.tcp_checks]]
+    interval = "15s"
+    timeout = "2s"
+
+[[services]]
+  protocol = "udp"
+  internal_port = 8189
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 8189
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8189
+  auto_stop_machines = false
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[services.ports]]
+    port = 8189
+
+[[vm]]
+  memory = "2gb"
+  cpu_kind = "shared"
+  cpus = 2

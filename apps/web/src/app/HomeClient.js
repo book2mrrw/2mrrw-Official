@@ -84,6 +84,7 @@ import { catalogCoverUrl, catalogPreviewAudioUrl, catalogPublicMediaUrl } from "
 import CoverArt, { resolveCoverMediaType } from "@/components/ui/CoverArt";
 import { LiveCountdownProvider, useTwitchEmbedConfig } from "@/components/home/LiveCountdownContext";
 import { LiveCountdownLiveTab } from "@/components/home/LiveCountdownDisplays";
+import BrowserBroadcastStudio from "@/components/admin/BrowserBroadcastStudio";
 import CatalogGrid from "@/components/home/CatalogGrid";
 import HeroIsland from "@/components/home/HeroIsland";
 import PlaybackChromeIsland from "@/components/storefront/PlaybackChromeIsland";
@@ -658,6 +659,11 @@ function InlineLiveAdmin() {
         </div>
       )}
 
+      <BrowserBroadcastStudio
+        defaultTitle={broadcast?.title || form.title || "2MRRW Live"}
+        audience={broadcast?.audience || form.audience || "all"}
+      />
+
       {showForm && !broadcast?.is_live && (
         <form onSubmit={handleSchedule} style={{ display: "flex", flexDirection: "column", gap: 10, padding: "14px 0", borderTop: "1px solid rgba(155,93,229,0.15)" }}>
           <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".2em", color: "rgba(255,255,255,.4)" }}>SCHEDULE STREAM</div>
@@ -685,7 +691,7 @@ function InlineLiveAdmin() {
             )}
           </div>
         ) : (
-          <div style={{ fontSize: 12, color: "rgba(255,255,255,.35)", padding: "8px 0", lineHeight: 1.6 }}>No stream scheduled. Schedule one here, then start the encoder in Twitch Stream Manager. 2MRRW will detect the real Twitch ingest automatically.</div>
+          <div style={{ fontSize: 12, color: "rgba(255,255,255,.35)", padding: "8px 0", lineHeight: 1.6 }}>No stream scheduled. You can schedule one or use Go Live Now in the studio above. 2MRRW will detect the real Twitch ingest automatically.</div>
         )
       )}
 

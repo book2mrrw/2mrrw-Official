@@ -72,6 +72,8 @@ const SERVICE_INTERNAL_API_METHODS = new Map([
   ["/api/cron/twitch-live-reconcile", new Set(["GET"])],
   ["/api/cron/publish-scheduled", new Set(["GET"])],
   ["/api/cron/purge-stream-events", new Set(["GET", "POST"])],
+  ["/api/live/relay-auth", new Set(["POST"])],
+  ["/api/live/twitch-ingest", new Set(["POST"])],
   ["/api/stripe/webhook", new Set(["POST"])],
   ["/api/webhook", new Set(["POST"])],
   ["/api/webhooks/stripe", new Set(["POST"])],
