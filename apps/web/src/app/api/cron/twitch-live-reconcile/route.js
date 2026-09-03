@@ -5,6 +5,7 @@ import {
   processPendingTwitchReceipts,
   syncTwitchLiveState,
 } from "@/lib/server/twitch-livestream-authority";
+import { reconcileMissingVods } from "@/lib/server/live-vod";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,12 @@ export async function GET(req) {
     const receipts = await processPendingTwitchReceipts(admin, { limit: 25 });
     const subscriptions = await ensureTwitchStreamEventSubscriptions(process.env.TWITCH_BROADCASTER_LOGIN || "callme2mrrw", admin);
     const sync = await syncTwitchLiveState(admin, { notifyOnTransition: true });
+    // VOD capture never blocks or fails the core live-state reconciliation —
+    // a Twitch API hiccup here just means the next tick tries again.
+    const vod = await reconcileMissingVods(admin).catch((vodError) => {
+      console.error("[cron/twitch-live-reconcile] vod capture failed", vodError?.message);
+      return { captured: 0 };
+    });
     return NextResponse.json({
       ok: true,
       processedReceipts: receipts.length,
@@ -33,6 +40,7 @@ export async function GET(req) {
       subscriptions: subscriptions.results,
       providerStatus: sync.providerStatus,
       changed: sync.changed,
+      vodCaptured: vod.captured,
     });
   } catch (error) {
     console.error("[cron/twitch-live-reconcile]", error?.message);

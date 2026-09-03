@@ -486,6 +486,77 @@ const PersistentTwitchPlayer = memo(function PersistentTwitchPlayer() {
   );
 });
 
+function formatVodDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function PastLivesSection() {
+  const [vods, setVods] = useState([]);
+  const [openVodId, setOpenVodId] = useState(null);
+  const { parent } = useTwitchEmbedConfig();
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/public/live-vods", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => { if (!cancelled && Array.isArray(data.vods)) setVods(data.vods); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  if (!vods.length) return null;
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".2em", color: "rgba(255,255,255,.4)", marginBottom: 10, textTransform: "uppercase" }}>
+        Past Lives
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {vods.map((vod) => (
+          <div key={vod.id} style={{ background: "#0d0d0d", border: "1px solid #1e1e1e", borderRadius: 14, overflow: "hidden" }}>
+            <button
+              onClick={() => setOpenVodId((current) => (current === vod.id ? null : vod.id))}
+              style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "12px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+            >
+              <div>
+                <div style={{ fontSize: 13, color: "#eee", fontWeight: 600 }}>{vod.title}</div>
+                <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>
+                  {new Date(vod.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  {formatVodDuration(vod.durationSeconds) ? ` · ${formatVodDuration(vod.durationSeconds)}` : ""}
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: vod.access === "free" ? "#00ffff" : "#888", fontWeight: 700, whiteSpace: "nowrap" }}>
+                {vod.access === "free" ? (openVodId === vod.id ? "Close ✕" : "Watch ▶") : "Locked 🔒"}
+              </div>
+            </button>
+            {openVodId === vod.id && (
+              vod.access === "free" && vod.twitchVideoId ? (
+                <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", background: "#000" }}>
+                  <iframe
+                    src={`https://player.twitch.tv/?video=${encodeURIComponent(vod.twitchVideoId)}&parent=${encodeURIComponent(parent)}&autoplay=true`}
+                    title={vod.title}
+                    allowFullScreen
+                    allow="autoplay; fullscreen; picture-in-picture"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: "none" }}
+                  />
+                </div>
+              ) : (
+                <div style={{ padding: "8px 16px 18px" }}>
+                  <LiveAccessGate access={vod.access} broadcastTitle={vod.title} />
+                </div>
+              )
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
   liveStreamDate,
   liveStreamTime,
@@ -494,6 +565,7 @@ export const LiveCountdownLiveTab = memo(function LiveCountdownLiveTab({
     <>
       <LiveCountdownHeader liveStreamDate={liveStreamDate} liveStreamTime={liveStreamTime} />
       <PersistentTwitchPlayer />
+      <PastLivesSection />
     </>
   );
 });

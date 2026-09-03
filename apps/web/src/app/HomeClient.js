@@ -506,6 +506,87 @@ function InlineShowsAdmin({ onRefreshFanView }) {
   );
 }
 
+// ── Admin VOD management (publish/unpublish/delete captured replays) ──
+function LiveVodAdminPanel() {
+  const [vods, setVods] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+
+  const load = () => {
+    fetch("/api/admin/live/vods")
+      .then((res) => res.json())
+      .then((data) => setVods(Array.isArray(data.vods) ? data.vods : []))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const togglePublish = async (vod) => {
+    setBusyId(vod.id);
+    try {
+      await fetch(`/api/admin/live/vods/${vod.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ published: !vod.published }),
+      });
+      load();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const remove = async (vod) => {
+    if (!window.confirm(`Delete "${vod.title}" permanently? This only removes the catalog entry, not the Twitch VOD itself.`)) return;
+    setBusyId(vod.id);
+    try {
+      await fetch(`/api/admin/live/vods/${vod.id}`, { method: "DELETE" });
+      load();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  if (loading) return null;
+  if (!vods.length) return null;
+
+  return (
+    <div style={{ marginTop: 16, paddingTop: 14, borderTop: "1px solid rgba(155,93,229,0.12)" }}>
+      <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".2em", color: "rgba(155,93,229,0.7)", textTransform: "uppercase" }}>
+        Past Live Replays
+      </span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+        {vods.map((vod) => (
+          <div key={vod.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, fontSize: 12, padding: "8px 0", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+            <div style={{ color: "rgba(255,255,255,.7)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {vod.title}
+              <span style={{ color: "rgba(255,255,255,.3)", marginLeft: 8 }}>
+                {new Date(vod.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+              </span>
+            </div>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+              <button
+                onClick={() => togglePublish(vod)}
+                disabled={busyId === vod.id}
+                style={{ background: vod.published ? "rgba(34,197,94,.15)" : "rgba(255,255,255,.08)", border: `1px solid ${vod.published ? "rgba(34,197,94,.4)" : "rgba(255,255,255,.15)"}`, borderRadius: 6, padding: "4px 10px", fontSize: 10, fontWeight: 700, color: vod.published ? "#22c55e" : "#aaa", cursor: busyId === vod.id ? "wait" : "pointer" }}
+              >
+                {vod.published ? "Published" : "Draft"}
+              </button>
+              <button
+                onClick={() => remove(vod)}
+                disabled={busyId === vod.id}
+                style={{ background: "transparent", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 6, padding: "4px 10px", fontSize: 10, color: "#ef4444", cursor: busyId === vod.id ? "wait" : "pointer" }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Inline admin live-stream manager (admin-only, renders in the LIVE tab) ──
 function InlineLiveAdmin() {
   const { channel: twitchChannel } = useTwitchEmbedConfig();
@@ -741,6 +822,8 @@ function InlineLiveAdmin() {
           </div>
         )}
       </div>
+
+      <LiveVodAdminPanel />
     </div>
   );
 }

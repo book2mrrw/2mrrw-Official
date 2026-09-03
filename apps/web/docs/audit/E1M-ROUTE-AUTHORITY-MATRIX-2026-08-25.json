@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "generatedAt": "2026-09-01T22:55:00.000Z",
   "sourceRoot": "src/app/api",
-  "total": 136,
+  "total": 139,
   "counts": {
-    "HUMAN_ADMIN": 32,
+    "HUMAN_ADMIN": 34,
     "SERVICE_ONLY": 20,
     "ADMIN_OR_SERVICE_CAPABILITY": 5,
     "AUTHENTICATED_USER": 23,
-    "PUBLIC": 55,
+    "PUBLIC": 56,
     "DEAD": 0
   },
   "routes": [
@@ -1287,6 +1287,34 @@
     {
       "route": "/api/live/chat/history",
       "file": "src/app/api/live/chat/history/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/admin/live/vods",
+      "file": "src/app/api/admin/live/vods/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/live/vods/[id]",
+      "file": "src/app/api/admin/live/vods/[id]/route.js",
+      "methods": [
+        "DELETE",
+        "PATCH"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/public/live-vods",
+      "file": "src/app/api/public/live-vods/route.js",
       "methods": [
         "GET"
       ],

@@ -274,7 +274,7 @@ async function requestStreamKey(row, accessToken) {
   });
 }
 
-export async function getAuthorizedTwitchStreamKey() {
+async function getFreshAccessToken() {
   const row = await loadAuthorization();
   let accessToken = unseal(row.access_token_ciphertext, "twitch-access-token");
   const tokenNearExpiry = Date.parse(row.expires_at) <= Date.now() + 60_000;
@@ -286,6 +286,11 @@ export async function getAuthorizedTwitchStreamKey() {
       accessToken = await refreshAuthorization(row);
     }
   }
+  return { row, accessToken };
+}
+
+export async function getAuthorizedTwitchStreamKey() {
+  let { row, accessToken } = await getFreshAccessToken();
   let result = await requestStreamKey(row, accessToken);
   if (result.response.status === 401) {
     accessToken = await refreshAuthorization(row);
@@ -295,6 +300,16 @@ export async function getAuthorizedTwitchStreamKey() {
   const streamKey = result.data?.data?.[0]?.stream_key;
   if (!streamKey) throw new Error("Twitch did not return a stream key");
   return streamKey;
+}
+
+/**
+ * A valid, refreshed access token plus the broadcaster's Twitch user id —
+ * for read-only Helix calls (e.g. Get Videos) that need no stream-key-specific
+ * scope beyond the authorization already stored.
+ */
+export async function getAuthorizedTwitchAccessToken() {
+  const { row, accessToken } = await getFreshAccessToken();
+  return { accessToken, broadcasterId: row.broadcaster_id };
 }
 
 export async function revokeTwitchAuthorization() {
