@@ -7,7 +7,7 @@ const INBOX_CHUNK = 500;
 const PAGE_SIZE   = 500;
 const SMS_BATCH   = 50;
 const EMAIL_BATCH = 50;
-const BROADCAST_COLUMNS = "id, title, platform, channel, is_live, goes_live_at, started_at, ended_at, audience, twitch_stream_id, provider_status, last_provider_event_at, notification_24h_sent_at, notification_prelive_sent_at, notification_live_sent_at, created_at, updated_at";
+const BROADCAST_COLUMNS = "id, title, platform, channel, is_live, goes_live_at, started_at, ended_at, audience, twitch_stream_id, provider_status, last_provider_event_at, notification_24h_sent_at, notification_prelive_sent_at, notification_live_sent_at, peak_witnesses, created_at, updated_at";
 const ALLOWED_AUDIENCES = new Set(["all", "subscriber", "collector", "purchaser"]);
 const TWITCH_LOGIN = /^[a-zA-Z0-9_]{1,25}$/;
 

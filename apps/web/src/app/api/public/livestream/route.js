@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
-import { requireConsumerPrincipal } from "@/lib/auth/consumer-authority";
+import { getRequestUser } from "@/lib/guest-session";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getUserEntitlements } from "@/lib/entitlements";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getCurrentBroadcast } from "@/lib/server/livestream";
+import { resolveLiveBroadcastAccess } from "@/lib/server/live-access";
 
 export const dynamic = "force-dynamic";
 
-async function resolveLivestreamAccess(admin, user, broadcast) {
-  if (!broadcast || broadcast.audience === "all" || isAdminUser(user)) return true;
+// A broadcast explicitly scheduled with a restricted audience (subscriber-
+// only / collector-only / purchaser-only) is a hard wall with no
+// pay-per-view bypass — a deliberate admin choice, distinct from the
+// default "all" policy handled by resolveLiveBroadcastAccess below.
+async function resolveRestrictedAudienceAccess(admin, user, broadcast) {
   if (broadcast.audience === "purchaser") {
     const { data, error } = await admin
       .from("purchases")
@@ -27,23 +31,46 @@ async function resolveLivestreamAccess(admin, user, broadcast) {
 }
 
 export async function GET() {
-  const user = await requireConsumerPrincipal();
-  if (!user) {
-    return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-  }
+  const user = await getRequestUser();
+  const hasAccount = Boolean(user && !user.isGuest);
 
   try {
     const admin = getAdminClient();
     const broadcast = await getCurrentBroadcast(admin);
-    const canView = await resolveLivestreamAccess(admin, user, broadcast);
-    const safeBroadcast = !broadcast || canView
+
+    if (!broadcast) {
+      return NextResponse.json(
+        { broadcast: null, canView: false, access: "none", providerStatus: "offline" },
+        { headers: { "Cache-Control": "private, no-store, max-age=0" } }
+      );
+    }
+
+    let access;
+    if (broadcast.audience !== "all") {
+      if (!hasAccount) {
+        access = { access: "signup_required", reason: "no_account" };
+      } else if (isAdminUser(user)) {
+        access = { access: "free", reason: "admin" };
+      } else {
+        const allowed = await resolveRestrictedAudienceAccess(admin, user, broadcast);
+        access = allowed
+          ? { access: "free", reason: "restricted_tier" }
+          : { access: "none", reason: "restricted_tier_denied" };
+      }
+    } else {
+      access = await resolveLiveBroadcastAccess({ admin, user, broadcast });
+    }
+
+    const canView = access.access === "free";
+    const safeBroadcast = canView
       ? broadcast
       : { ...broadcast, channel: null, twitch_stream_id: null };
 
     return NextResponse.json({
       broadcast: safeBroadcast,
       canView,
-      providerStatus: broadcast?.provider_status || "offline",
+      access: access.access,
+      providerStatus: broadcast.provider_status || "offline",
     }, { headers: { "Cache-Control": "private, no-store, max-age=0" } });
   } catch (error) {
     console.error("[public/livestream] read failed", error?.message);

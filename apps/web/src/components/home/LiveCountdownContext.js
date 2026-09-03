@@ -27,7 +27,8 @@ const INITIAL_BROADCAST_STATE = Object.freeze({
   broadcastId: null,
   providerStatus: "unknown",
   stateStatus: "loading",
-  canView: true,
+  canView: false,
+  access: "loading",
 });
 
 function sameBroadcastState(left, right) {
@@ -65,7 +66,8 @@ export function LiveCountdownProvider({ targetDate, embedParent = "www.2mrrw.com
         broadcastId: b?.id || null,
         providerStatus: json.providerStatus || (b?.is_live ? "live" : "offline"),
         stateStatus: "ready",
-        canView: json.canView !== false,
+        canView: json.canView === true,
+        access: json.access || "none",
       };
       setDbState((current) => sameBroadcastState(current, next) ? current : next);
     } catch {
@@ -113,6 +115,7 @@ export function LiveCountdownProvider({ targetDate, embedParent = "www.2mrrw.com
       liveProviderStatus: dbState.providerStatus,
       liveStateStatus: dbState.stateStatus,
       canViewLive: dbState.canView,
+      liveAccess: dbState.access,
       refreshLiveState: fetchState,
     }),
     [dbState, fetchState]

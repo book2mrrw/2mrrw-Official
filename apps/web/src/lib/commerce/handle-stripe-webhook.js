@@ -224,6 +224,14 @@ export async function handleStripeWebhook(req) {
           break;
         }
 
+        // ── Live event pay-per-view — separate fulfillment path ──────────────
+        if (session.metadata?.payment_kind === "live_ppv") {
+          if (session.payment_status === "paid") {
+            await fulfillLivePpvPurchase(admin, session);
+          }
+          break;
+        }
+
         // ── Digital / merch purchase ─────────────────────────────────────────
         if (session.payment_status === "paid") {
           const result = await fulfillCheckoutSession(session);
@@ -417,6 +425,41 @@ async function fulfillTicketPurchase(admin, session) {
   }
 
   console.log(`${LOG_PREFIX} ticket fulfilled`, { sessionId: session.id, userId, showId, qty });
+}
+
+async function fulfillLivePpvPurchase(admin, session) {
+  const meta = session.metadata || {};
+  const userId = meta.user_id;
+  const broadcastId = meta.broadcast_id;
+  const amountCents = Number(meta.amount_cents) || session.amount_total || 0;
+
+  if (!userId || !broadcastId) {
+    console.warn(`${LOG_PREFIX} live_ppv fulfillment: missing user_id or broadcast_id`, session.id);
+    return;
+  }
+
+  const { error: insertErr } = await admin.from("live_broadcast_purchases").insert({
+    broadcast_id: broadcastId,
+    user_id: userId,
+    amount_cents: amountCents,
+    stripe_checkout_session_id: session.id,
+    stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id || null,
+    status: "paid",
+  });
+
+  if (insertErr) {
+    // A retried webhook delivery for an already-fulfilled session hits the
+    // (broadcast_id, user_id) paid-unique index — that's a success, not a
+    // failure, so Stripe should not keep retrying it.
+    if (insertErr.code === "23505") {
+      console.log(`${LOG_PREFIX} live_ppv already fulfilled (idempotent retry)`, session.id);
+      return;
+    }
+    console.error(`${LOG_PREFIX} live_ppv insert failed`, session.id, insertErr.message);
+    throw insertErr;
+  }
+
+  console.log(`${LOG_PREFIX} live_ppv fulfilled`, { sessionId: session.id, userId, broadcastId, amountCents });
 }
 
 function buildTicketConfirmationEmail({ name, showName, location, date, time, quantity, amountCents }) {

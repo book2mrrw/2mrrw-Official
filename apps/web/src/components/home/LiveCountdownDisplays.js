@@ -1,8 +1,100 @@
 "use client";
 
-import { memo, useMemo } from "react";
+import { memo, useMemo, useState } from "react";
 import LivePanel from "@/components/home/LivePanel";
 import { useLiveBroadcast, useLiveCountdown, useTwitchEmbedConfig } from "@/components/home/LiveCountdownContext";
+import { LIVE_PPV_PRESET_CENTS, formatLivePpvAmount } from "@/lib/live/ppv-pricing";
+import { useLiveWitnessCount } from "@/hooks/useLiveWitnessCount";
+
+function LivePpvPricePicker({ broadcastTitle }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const handleSelect = async (amountCents) => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/live/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountCents }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setErr(data.error || "Checkout failed"); return; }
+      if (data.url) window.location.href = data.url;
+    } catch {
+      setErr("Network error — try again");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        style={{ padding: "12px 22px", background: "#00ffff", color: "#000", fontWeight: 700, border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13, letterSpacing: 0.4 }}
+      >
+        Unlock This Live
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, maxWidth: 380 }}>
+      <div style={{ fontSize: 12, color: "#aaa", textAlign: "center" }}>
+        Choose what to pay to watch {broadcastTitle || "this live"}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, width: "100%" }}>
+        {LIVE_PPV_PRESET_CENTS.map((cents) => (
+          <button
+            key={cents}
+            disabled={loading}
+            onClick={() => handleSelect(cents)}
+            style={{ padding: "10px 0", background: loading ? "#1a1a1a" : "#141414", color: loading ? "#555" : "#00ffff", border: "1px solid rgba(0,255,255,0.25)", borderRadius: 6, cursor: loading ? "wait" : "pointer", fontSize: 12, fontWeight: 600 }}
+          >
+            {formatLivePpvAmount(cents)}
+          </button>
+        ))}
+      </div>
+      {err && <div style={{ fontSize: 12, color: "#ef4444", textAlign: "center" }}>{err}</div>}
+      <button
+        onClick={() => setOpen(false)}
+        disabled={loading}
+        style={{ background: "none", border: "none", color: "#666", fontSize: 12, cursor: "pointer", textDecoration: "underline" }}
+      >
+        Cancel
+      </button>
+    </div>
+  );
+}
+
+function LiveAccessGate({ access, broadcastTitle }) {
+  if (access === "signup_required") {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+        <div style={{ fontSize: 13, color: "#aaa", textAlign: "center", maxWidth: 320 }}>
+          Create a free account to watch {broadcastTitle || "2MRRW Live"}.
+        </div>
+        <a
+          href="/join?returnTo=/"
+          style={{ padding: "12px 22px", background: "#00ffff", color: "#000", fontWeight: 700, borderRadius: 8, fontSize: 13, textDecoration: "none", letterSpacing: 0.4 }}
+        >
+          Create Account
+        </a>
+      </div>
+    );
+  }
+  if (access === "payment_required") {
+    return <LivePpvPricePicker broadcastTitle={broadcastTitle} />;
+  }
+  return (
+    <div style={{ fontSize: 13, color: "#888", textAlign: "center", maxWidth: 320 }}>
+      This livestream is reserved for eligible members of the announced audience.
+    </div>
+  );
+}
 
 export const LiveCountdownDesktopPanel = memo(function LiveCountdownDesktopPanel({
   liveStreamDate,
@@ -263,8 +355,12 @@ const LiveCountdownHeader = memo(function LiveCountdownHeader({
 });
 
 const PersistentTwitchPlayer = memo(function PersistentTwitchPlayer() {
-  const { liveIsLive, liveProviderStatus, liveStateStatus, canViewLive } = useLiveBroadcast();
+  const { liveIsLive, liveProviderStatus, liveStateStatus, canViewLive, liveAccess, liveTitle, liveBroadcastId } = useLiveBroadcast();
   const { channel, parent } = useTwitchEmbedConfig();
+  const witnessCount = useLiveWitnessCount({
+    broadcastId: liveBroadcastId,
+    active: canViewLive && liveIsLive,
+  });
   const twitchSrc = useMemo(() => {
     const params = new URLSearchParams({
       channel,
@@ -290,26 +386,39 @@ const PersistentTwitchPlayer = memo(function PersistentTwitchPlayer() {
             />
           </div>
         ) : (
-          <div style={{ minHeight: 300, display: "grid", placeItems: "center", padding: 24, textAlign: "center", color: "#888" }}>
-            This livestream is reserved for eligible members of the announced audience.
+          <div style={{ minHeight: 300, display: "grid", placeItems: "center", padding: 24 }}>
+            <LiveAccessGate access={liveAccess} broadcastTitle={liveTitle} />
           </div>
         )}
       </div>
       <div style={{ padding: "16px 20px", borderTop: "1px solid #111", display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div style={{ fontSize: 13, color: liveIsLive ? "#8ff" : "#666" }}>
           {!canViewLive
-            ? "Your account does not currently include access to this broadcast."
+            ? liveAccess === "signup_required"
+              ? "Create an account to unlock this live."
+              : liveAccess === "payment_required"
+                ? "Pay once to unlock this specific live event."
+                : liveAccess === "loading"
+                  ? "Checking your access…"
+                  : "Your account does not currently include access to this broadcast."
             : liveStateStatus === "unavailable"
             ? "Live status is reconnecting. The Twitch player remains available."
             : liveIsLive
               ? "Streaming live on 2MRRW"
               : liveProviderStatus === "unknown" ? "Checking Twitch status…" : "Twitch is currently offline"}
         </div>
-        {canViewLive && (
-          <a href={`https://www.twitch.tv/${channel}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#9146ff", textDecoration: "none" }}>
-            Open Twitch ↗
-          </a>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          {canViewLive && liveIsLive && witnessCount > 0 && (
+            <div style={{ fontSize: 12, color: "#8ff" }}>
+              👁 {witnessCount.toLocaleString("en-US")} {witnessCount === 1 ? "witness" : "witnesses"}
+            </div>
+          )}
+          {canViewLive && (
+            <a href={`https://www.twitch.tv/${channel}`} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: "#9146ff", textDecoration: "none" }}>
+              Open Twitch ↗
+            </a>
+          )}
+        </div>
       </div>
     </div>
   );
