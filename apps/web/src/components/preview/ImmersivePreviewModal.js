@@ -12,6 +12,7 @@ import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { useEntitlementAccountState } from "@/context/AuthContext";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
+import { PREVIEW_HARD_CAP_SEC } from "@/lib/playback/PlaybackEventHandlers";
 import {
   albumTracksForPlayback,
   describeAlbumQueuePlaybackFailure,
@@ -463,12 +464,17 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
   const draggingRef = useRef(false);
 
   const seekAt = useCallback((e) => {
+    // Preview is fixed-position by design — non-interactive, even though this
+    // bar still visually shows progress. Enforced again in seekInternal, but
+    // this prevents the dead drag/click interaction from engaging at all.
+    if (isPreview) return;
     const rect = (barRef.current || e.currentTarget).getBoundingClientRect();
     const cx = e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX;
     onSeekRatio(Math.max(0, Math.min(1, (cx - rect.left) / rect.width)));
-  }, [onSeekRatio]);
+  }, [isPreview, onSeekRatio]);
 
   const onMouseDown = useCallback((e) => {
+    if (isPreview) return;
     e.preventDefault();
     draggingRef.current = true;
     seekAt(e);
@@ -480,12 +486,13 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [seekAt]);
+  }, [isPreview, seekAt]);
 
   const onTouchMove = useCallback((e) => {
+    if (isPreview) return;
     e.preventDefault();
     seekAt(e);
-  }, [seekAt]);
+  }, [isPreview, seekAt]);
 
   return (
     <div
@@ -495,12 +502,14 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
       onTouchMove={onTouchMove}
       role="slider"
       aria-valuenow={pct}
+      aria-disabled={isPreview || undefined}
+      tabIndex={isPreview ? -1 : 0}
       style={{
         width: "100%",
         height: 4,
         background: "rgba(255,255,255,.12)",
         borderRadius: 4,
-        cursor: "pointer",
+        cursor: isPreview ? "default" : "pointer",
         position: "relative",
         flexShrink: 0,
       }}
@@ -582,7 +591,7 @@ function FloatingPlayer({
         </span>
         <ScrubBar pct={pct} t={t} onSeekRatio={onSeekRatio} isPreview={isPreview} />
         <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "rgba(255,255,255,.38)", flexShrink: 0, minWidth: 28, textAlign: "right" }}>
-          {isPreview ? "0:30" : fmt(duration)}
+          {isPreview ? fmt(PREVIEW_HARD_CAP_SEC) : fmt(duration)}
         </span>
       </div>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 2px", ...vars }}>
@@ -1337,8 +1346,8 @@ export function SingleModal({
             onSeekRatio={(r) => seek(r * displayDuration)}
             onPrev={playPrevious}
             onNext={playNext}
-            onSkipBack={seekBack}
-            onSkipFwd={seekForward}
+            onSkipBack={isPreview ? undefined : seekBack}
+            onSkipFwd={isPreview ? undefined : seekForward}
             onToggleShuffle={toggleShuffle}
             shuffleOn={shuffle}
             onToggleRepeat={toggleRepeat}
@@ -2040,8 +2049,8 @@ function AlbumModalView({
             onSeekRatio={(r) => seek(r * displayDuration)}
             onPrev={playPrevious}
             onNext={playNext}
-            onSkipBack={seekBack}
-            onSkipFwd={seekForward}
+            onSkipBack={isPreview && activeTrack && !activeTrack?.free ? undefined : seekBack}
+            onSkipFwd={isPreview && activeTrack && !activeTrack?.free ? undefined : seekForward}
             onToggleShuffle={toggleShuffle}
             shuffleOn={shuffle}
             onToggleRepeat={toggleRepeat}
@@ -2053,7 +2062,7 @@ function AlbumModalView({
               open={lyricsOpen}
               lrcText={activeTrack?.lyrics || album?.lyrics || ""}
               onClose={() => { setLyricsOpen(false); setLyricsFullscreen(false); }}
-              onSeek={seek}
+              onSeek={isPreview && activeTrack && !activeTrack?.free ? undefined : seek}
               isMobile
               fullscreen={lyricsFullscreen}
               onFullscreenChange={setLyricsFullscreen}

@@ -24,7 +24,6 @@ import { logPlayback } from "@/lib/observability/client-log";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
 import { clearPersistedMediaSessionTrack } from "@/lib/media-session-artwork";
-import { PREVIEW_HARD_CAP_SEC } from "@/lib/playback/PlaybackEventHandlers";
 import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 
 /**
@@ -266,16 +265,21 @@ export function attachTransportCommands(self) {
     if (!audio || !Number.isFinite(time)) return;
     tracePlayback("seekInternal", "seekInternal", { time });
     const track = stateRef.current.currentTrack;
-    let capped = time;
-    if (track?.metadata?.access?.previewOnly) {
-      capped = Math.min(time, PREVIEW_HARD_CAP_SEC);
-    }
+    // Preview-only playback is fixed-position by design: it plays forward to
+    // PREVIEW_HARD_CAP_SEC and stops (see the onTime hard-cap and onEnded
+    // handling in PlaybackEventHandlers.js); to hear it again the user presses
+    // Play, which now correctly restarts from 0. No seek of any kind — scrub,
+    // keyboard shortcut, or Media Session seekbackward/seekforward, all of
+    // which route through this single function — is permitted, forward or
+    // backward. This is the one place that decision is enforced for every
+    // caller; non-preview playback below is completely unaffected.
+    if (track?.metadata?.access?.previewOnly) return;
     if (audio.readyState < 1 || stateRef.current.playbackState === "loading") {
-      pendingSeekRef.current = Math.max(0, capped);
+      pendingSeekRef.current = Math.max(0, time);
       syncProgressTime(pendingSeekRef.current);
       return;
     }
-    audio.currentTime = Math.max(0, Math.min(capped, isFinite(audio.duration) ? audio.duration : capped));
+    audio.currentTime = Math.max(0, Math.min(time, isFinite(audio.duration) ? audio.duration : time));
     syncProgressTime(audio.currentTime);
     syncPositionState(true);
     if (stateRef.current.currentTrack) {

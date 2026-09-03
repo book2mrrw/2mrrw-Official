@@ -115,20 +115,25 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
 
   const seekFromEvent = useCallback(
     (e) => {
-      if (!maxSeek) return;
+      // Preview is fixed-position by design — the bar may show progress, but
+      // it is non-interactive. Enforced again server-side in seekInternal;
+      // this just prevents the dead click/drag interaction from engaging at
+      // all, rather than silently clamping to a spot the user didn't pick.
+      if (previewOnly || !maxSeek) return;
       const ratio = ratioFromEvent(e);
       onSeek(ratio * maxSeek);
     },
-    [maxSeek, onSeek, ratioFromEvent]
+    [maxSeek, onSeek, previewOnly, ratioFromEvent]
   );
 
   const onScrubStart = useCallback(
     (e) => {
+      if (previewOnly) return;
       e.preventDefault();
       setDragging(true);
       seekFromEvent(e);
     },
-    [seekFromEvent]
+    [previewOnly, seekFromEvent]
   );
 
   useEffect(() => {
@@ -152,12 +157,14 @@ const PlayerBarScrub = memo(function PlayerBarScrub({ duration, previewOnly, onS
   return (
     <div
       ref={scrubRef}
-      className={["player-bar-scrub", dragging ? "is-dragging" : ""].filter(Boolean).join(" ")}
+      className={["player-bar-scrub", dragging ? "is-dragging" : "", previewOnly ? "is-noninteractive" : ""].filter(Boolean).join(" ")}
       role="slider"
       aria-valuemin={0}
       aria-valuemax={maxSeek || 0}
       aria-valuenow={0}
-      tabIndex={0}
+      aria-disabled={previewOnly || undefined}
+      tabIndex={previewOnly ? -1 : 0}
+      style={previewOnly ? { cursor: "default" } : undefined}
       onMouseDown={onScrubStart}
       onTouchStart={onScrubStart}
       onTouchMove={seekFromEvent}

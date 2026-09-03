@@ -719,6 +719,11 @@ export function createPlaybackEventHandlers({
           gain.gain.setValueAtTime(0, now);
           gain.gain.linearRampToValueAtTime(userVolumeRef.current, now + 0.08);
         }
+        // Matches the sibling "file ended naturally" path below (onEnded,
+        // for previews shorter than the cap), which already resets position —
+        // without this, resumeInternal's next play() call resumes from ~15s
+        // (silence/immediate end) instead of actually replaying the preview.
+        audio.currentTime = 0;
         syncProgressTime(0);
         patchState({
           isPlaying: false,
