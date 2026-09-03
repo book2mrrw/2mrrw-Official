@@ -9,6 +9,8 @@ import {
   setCachedTier,
   getCachedSlugResult,
   setCachedSlugResult,
+  getCachedOwnershipResult,
+  setCachedOwnershipResult,
   withInflight,
   invalidateUserEntitlementCache,
 } from "@/lib/server/entitlement-cache";
@@ -88,30 +90,40 @@ export async function getOwnedSlugs(userId) {
 }
 
 export async function userOwnsProduct(userId, productSlug) {
-  const admin = getAdminClient();
-  const { data: product } = await admin.from("products").select("id").eq("slug", productSlug).single();
-  if (!product) return false;
+  if (!userId || !productSlug) return false;
 
-  const entitled = await userOwnsProductViaEntitlements(admin, userId, product.id);
-  if (entitled === true) return true;
-  if (entitled === false) {
-    const { data } = await admin
-      .from("library_items")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("product_id", product.id)
-      .maybeSingle();
-    return !!data;
-  }
+  // Distinct inflight key from userCanStreamProduct's own coalescing below —
+  // "owns" and "can stream" are different questions and must never share a
+  // dedup slot, or a concurrent call to one could hand back the other's result.
+  return withInflight(`owns:${userId}:${productSlug}`, async () => {
+    const cached = await getCachedOwnershipResult(userId, productSlug);
+    if (cached !== null) return cached;
 
-  const { data } = await admin
-    .from("library_items")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("product_id", product.id)
-    .maybeSingle();
+    const admin = getAdminClient();
+    const { data: product } = await admin.from("products").select("id").eq("slug", productSlug).single();
+    if (!product) {
+      // An unknown/mistyped slug is a different failure mode than "known
+      // product, not owned" — don't memoize it as a denial.
+      return false;
+    }
 
-  return !!data;
+    const entitled = await userOwnsProductViaEntitlements(admin, userId, product.id);
+    let result;
+    if (entitled === true) {
+      result = true;
+    } else {
+      const { data } = await admin
+        .from("library_items")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("product_id", product.id)
+        .maybeSingle();
+      result = !!data;
+    }
+
+    await setCachedOwnershipResult(userId, productSlug, result);
+    return result;
+  });
 }
 
 /**

@@ -1,13 +1,18 @@
 import { getCanonicalReleaseBySlug, resolveEntityPreviewFolder } from "@/lib/media/canonical-catalog";
 import { isStreamPlaybackPreferred } from "@/lib/feature-flags";
 import { normalizePlaybackR2Key } from "@/lib/playback/normalize-r2-key";
-import { normalizeEntityFolderPath, resolveAudio, resolvePreview } from "@/lib/media/entity-resolver";
+import { normalizeEntityFolderPath, resolveAudio, resolvePreview, isConcreteMediaKey } from "@/lib/media/entity-resolver";
 import { resolvePreviewPath, resolveStoragePath, isEntityPreviewFolderPath } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/normalize-release-type";
 import { recordPlaybackResolverOutcome } from "@/lib/playback/playback-resolver-diagnostics";
 import { tryResolveStreamPlaybackKey } from "@/lib/playback/resolve-stream-playback";
 
 const PLAYBACK_KEY_TTL_MS = 60_000;
+// Unlike the master resolver (which never caches a miss — a track mid-upload
+// shouldn't lock users out for 60s), a confirmed-missing preview IS cached,
+// short-lived, so repeated plays of a track with no preview don't each pay a
+// live R2 folder scan. Short enough that a freshly uploaded clip surfaces fast.
+const PREVIEW_KEY_NEGATIVE_TTL_MS = 30_000;
 /** @type {Map<string, { expiresAt: number, value: object | null }>} */
 const playbackKeyCache = new Map();
 /** @type {Map<string, Promise<object | null>>} */
@@ -71,6 +76,30 @@ export async function clearPersistedPlaybackKey(admin, slug, trackSlug = null) {
     .eq("cache_key", cacheKey);
   if (error) {
     console.warn("[resolvePlaybackKey] clear persisted cache failed", { cacheKey, message: error.message });
+  }
+}
+
+function previewCacheKey(slug, trackSlug) {
+  return `preview:${playbackCacheKey(slug, trackSlug)}`;
+}
+
+/**
+ * Invalidate both the in-memory and durable preview-key cache entries for a
+ * slug (and, for a multi-track release, a specific track within it) —
+ * called when a preview clip is (re)published for an already-live release,
+ * so the new clip is discoverable immediately rather than waiting out
+ * PLAYBACK_KEY_TTL_MS / PREVIEW_KEY_NEGATIVE_TTL_MS.
+ */
+export async function clearPersistedPreviewKey(admin, slug, trackSlug = null) {
+  const cacheKey = previewCacheKey(String(slug || "").trim(), trackSlug);
+  playbackKeyCache.delete(cacheKey);
+  playbackKeyInflight.delete(cacheKey);
+  const { error } = await admin
+    .from("playback_key_resolution_cache")
+    .delete()
+    .eq("cache_key", cacheKey);
+  if (error) {
+    console.warn("[resolvePreviewKey] clear persisted cache failed", { cacheKey, message: error.message });
   }
 }
 
@@ -389,10 +418,51 @@ async function resolvePlaybackKeyUncached(admin, slug, trackSlug) {
  * Resolve the R2 key for a product's preview audio file only — never returns a full audio key.
  * Used by the library stream endpoint to serve non-entitled users their 15-second preview
  * through the same authenticated pipeline as full streams.
+ *
+ * Cached with the same two-tier strategy (in-memory + durable cross-instance
+ * table) as resolvePlaybackKey above, under a "preview:" cache-key prefix so
+ * entries can never collide with a master resolution for the same slug. This
+ * function alone decides preview caching policy — resolvePlaybackKey and
+ * resolvePlaybackKeyUncached above are untouched.
  */
-export async function resolvePreviewKey(admin, slug) {
+export async function resolvePreviewKey(admin, slug, options = {}) {
   const normalizedSlug = String(slug || "").trim();
   if (!normalizedSlug) return null;
+  const trackSlug = options.trackSlug ? String(options.trackSlug).trim() : null;
+
+  const cacheKey = previewCacheKey(normalizedSlug, trackSlug);
+  const now = Date.now();
+  const hit = playbackKeyCache.get(cacheKey);
+  if (hit) {
+    if (hit.expiresAt > now) return hit.value;
+    playbackKeyCache.delete(cacheKey);
+  }
+
+  if (playbackKeyInflight.has(cacheKey)) return playbackKeyInflight.get(cacheKey);
+
+  const promise = resolvePreviewKeyUncached(admin, normalizedSlug, trackSlug, cacheKey)
+    .then((value) => {
+      if (playbackKeyCache.size >= 1000) {
+        const oldest = playbackKeyCache.keys().next().value;
+        if (oldest !== undefined) playbackKeyCache.delete(oldest);
+      }
+      const ttl = value ? PLAYBACK_KEY_TTL_MS : PREVIEW_KEY_NEGATIVE_TTL_MS;
+      playbackKeyCache.set(cacheKey, { value, expiresAt: now + ttl });
+      playbackKeyInflight.delete(cacheKey);
+      return value;
+    })
+    .catch((err) => {
+      playbackKeyInflight.delete(cacheKey);
+      throw err;
+    });
+
+  playbackKeyInflight.set(cacheKey, promise);
+  return promise;
+}
+
+async function resolvePreviewKeyUncached(admin, normalizedSlug, trackSlug, cacheKey) {
+  const persisted = await loadPersistedKeyResolution(admin, cacheKey);
+  if (persisted) return persisted.key;
 
   const { data: product, error } = await admin
     .from("products")
@@ -402,17 +472,56 @@ export async function resolvePreviewKey(admin, slug) {
 
   if (error || !product) return null;
 
+  // For a multi-track release, the per-track preview lives on catalog_tracks,
+  // not the parent product row.
+  let rawPreviewPath = product.preview_path;
+  if (trackSlug) {
+    const { data: trackRow } = await admin
+      .from("catalog_tracks")
+      .select("preview_path")
+      .eq("album_slug", normalizedSlug)
+      .eq("slug", trackSlug)
+      .maybeSingle();
+    if (trackRow?.preview_path) rawPreviewPath = trackRow.preview_path;
+  }
+
+  // Fast path: a preview we generated ourselves (PreviewTrimPicker, see
+  // UploadWizard.js) is stored as the exact, deterministic object key at
+  // publish time — no R2 discovery needed at all, just this one DB read.
+  // Falls through to live folder discovery only for releases whose preview
+  // predates this system (a bare folder convention, resolved by scanning).
+  if (rawPreviewPath && isConcreteMediaKey(rawPreviewPath)) {
+    const key = String(rawPreviewPath).replace(/^\//, "");
+    persistKeyResolution(admin, cacheKey, {
+      key,
+      source: "preview_direct_key",
+      playbackSource: "preview",
+      productId: product.id,
+    });
+    return key;
+  }
+
   const releaseType = inferProductReleaseType(product);
   const previewFolder =
-    resolveEntityPreviewFolder(product.preview_path, product.slug) ||
-    (releaseType ? resolvePreviewPath(releaseType, product.slug, null) : null);
+    resolveEntityPreviewFolder(rawPreviewPath, product.slug) ||
+    (releaseType ? resolvePreviewPath(releaseType, trackSlug || product.slug, trackSlug ? product.slug : null) : null);
   const legacyPreview =
     resolveEntityPreviewFolder(
       product.metadata?.preview_path || product.metadata?.preview_legacy,
       product.slug
     ) ||
-    (isEntityPreviewFolderPath(product.preview_path) ? null : product.preview_path) ||
+    (isEntityPreviewFolderPath(rawPreviewPath) ? null : rawPreviewPath) ||
     null;
 
-  return resolvePreview(previewFolder, legacyPreview).catch(() => null);
+  const key = await resolvePreview(previewFolder, legacyPreview).catch(() => null);
+  if (key) {
+    persistKeyResolution(admin, cacheKey, {
+      key,
+      source: "preview_folder",
+      playbackSource: "preview",
+      entityFolder: previewFolder,
+      productId: product.id,
+    });
+  }
+  return key;
 }

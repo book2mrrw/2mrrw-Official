@@ -82,9 +82,9 @@ function withStreamTiming(req, response, timing) {
 
 // Non-entitled users get their track's preview audio file served through the same
 // authenticated endpoint — no 403, no public CDN URLs. Server enforces the boundary.
-async function buildPreviewStreamResponse(req, user, slug, { timing } = {}) {
+async function buildPreviewStreamResponse(req, user, slug, { trackSlug = null, timing } = {}) {
   const admin = getAdminClient();
-  const previewKey = await resolvePreviewKey(admin, slug);
+  const previewKey = await resolvePreviewKey(admin, slug, { trackSlug: trackSlug || undefined });
   timing?.mark("resolve", "preview");
   if (!previewKey) {
     return applyMediaCors(
@@ -96,7 +96,7 @@ async function buildPreviewStreamResponse(req, user, slug, { timing } = {}) {
     user.id,
     `preview:${slug}`,
     () => createR2SignedGetUrl(previewKey, STREAM_SIGNED_URL_TTL_SECONDS),
-    null
+    trackSlug || null
   );
   timing?.mark("sign", cacheHit ? "cache_hit" : undefined);
 
@@ -137,7 +137,7 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
     if (releaseAccess.availability && !releaseAccess.availability.canPreview) {
       return applyMediaCors(req, NextResponse.json({ error: "Playback locked until release", code: "RELEASE_LOCKED" }, { status: 403 }));
     }
-    return buildPreviewStreamResponse(req, user, slug, { timing });
+    return buildPreviewStreamResponse(req, user, slug, { trackSlug, timing });
   }
 
   const admin = getAdminClient();

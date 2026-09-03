@@ -51,6 +51,7 @@ export function __setRedisClientForTests(client) {
 export function __clearL1ForTests() {
   _tierL1.clear();
   _slugL1.clear();
+  _ownsL1.clear();
   _inflight.clear();
 }
 
@@ -69,6 +70,8 @@ const GEN_REDIS_TTL_S  = 86_400;   // 24 h — generation counter outlives every
 const _tierL1 = new Map();
 /** @type {Map<string, { result: boolean, ts: number }>} */
 const _slugL1 = new Map();
+/** @type {Map<string, { result: boolean, generation: number, ts: number }>} */
+const _ownsL1 = new Map();
 /** @type {Map<string, Promise<any>>} */
 const _inflight = new Map();
 
@@ -345,6 +348,75 @@ export async function setCachedSlugResult(userId, slug, result) {
   } catch {}
 }
 
+// ── Per-slug OWNERSHIP cache ──────────────────────────────────────────────────
+//
+// Deliberately a SEPARATE namespace from the streaming-eligibility slug cache
+// above (`ent:slug:`) — a subscriber can stream a track without owning it, so
+// "can stream" and "owns" must never share a cache key or one would corrupt
+// the other. Added for userOwnsProduct() (preview-playback performance work);
+// reuses the identical generation-validated security properties as the
+// streaming cache above (grants re-checked against the live generation on
+// every read, denials served straight from L1) rather than inventing a
+// separate, less-hardened cache.
+
+/**
+ * @param {string} userId
+ * @param {string} slug
+ * @returns {Promise<boolean|null>}  null = cache miss
+ */
+export async function getCachedOwnershipResult(userId, slug) {
+  const mapKey = `${userId}:${slug}`;
+
+  const l1 = _ownsL1.get(mapKey);
+  const l1Fresh = l1 && Date.now() - l1.ts < SLUG_L1_TTL_MS;
+  if (l1Fresh && l1.result === false) return false;
+
+  const { generation, value: raw } = await readGenerationAndValue(
+    userId,
+    `ent:owns:${userId}:${slug}`
+  );
+  if (generation === null) return null; // cannot validate → recompute from DB
+
+  if (l1Fresh && l1.generation === generation) return l1.result;
+
+  try {
+    if (raw === null) return null;
+    const text = String(raw);
+    const sep = text.indexOf(":");
+    if (sep < 0) return null;
+    const entryGen = Number(text.slice(0, sep));
+    if (!Number.isFinite(entryGen) || entryGen !== generation) return null;
+    const result = text.slice(sep + 1) === "1";
+    evictL1(_ownsL1);
+    _ownsL1.set(mapKey, { result, generation, ts: Date.now() });
+    return result;
+  } catch {}
+  return null;
+}
+
+/**
+ * @param {string} userId
+ * @param {string} slug
+ * @param {boolean} result
+ */
+export async function setCachedOwnershipResult(userId, slug, result) {
+  const mapKey = `${userId}:${slug}`;
+  const generation = (await getEntitlementGeneration(userId)) ?? 0;
+
+  evictL1(_ownsL1);
+  _ownsL1.set(mapKey, { result, generation, ts: Date.now() });
+
+  const redis = getRedis();
+  if (!redis) return;
+  try {
+    await redis.setex(
+      `ent:owns:${userId}:${slug}`,
+      SLUG_REDIS_TTL_S,
+      `${generation}:${result ? "1" : "0"}`
+    );
+  } catch {}
+}
+
 // ── Inflight coalescing ───────────────────────────────────────────────────────
 
 /**
@@ -394,9 +466,16 @@ export async function invalidateEntitlementTierCache(userId) {
  */
 export async function invalidateEntitlementSlugCache(userId, slug) {
   _slugL1.delete(`${userId}:${slug}`);
+  _ownsL1.delete(`${userId}:${slug}`);
   const redis = getRedis();
   if (!redis) return;
-  try { await redis.del(`ent:slug:${userId}:${slug}`); } catch {}
+  try {
+    await redis.del(`ent:slug:${userId}:${slug}`);
+    // A purchase changes ownership too — without this, a denial cached before
+    // the purchase (fail-closed, so not generation-validated) could otherwise
+    // outlive the generation bump for up to SLUG_REDIS_TTL_S.
+    await redis.del(`ent:owns:${userId}:${slug}`);
+  } catch {}
 }
 
 /**
@@ -413,14 +492,20 @@ export async function invalidateUserEntitlementCache(userId, slugs = []) {
   // them. The explicit deletes below are then just eager cleanup.
   await bumpEntitlementGeneration(userId);
 
-  for (const slug of slugs) _slugL1.delete(`${userId}:${slug}`);
+  for (const slug of slugs) {
+    _slugL1.delete(`${userId}:${slug}`);
+    _ownsL1.delete(`${userId}:${slug}`);
+  }
 
   const redis = getRedis();
   if (!redis) return;
   try {
     const pipeline = redis.pipeline();
     pipeline.del(`ent:tier:${userId}`);
-    for (const slug of slugs) pipeline.del(`ent:slug:${userId}:${slug}`);
+    for (const slug of slugs) {
+      pipeline.del(`ent:slug:${userId}:${slug}`);
+      pipeline.del(`ent:owns:${userId}:${slug}`);
+    }
     await pipeline.exec();
   } catch {}
 }

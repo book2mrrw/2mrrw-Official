@@ -16,6 +16,7 @@ import {
 } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
 import { validateLifecycleConfiguration } from "@/lib/releases/release-availability";
+import { clearPersistedPreviewKey } from "@/lib/playback/resolve-playback-key";
 
 export const dynamic = "force-dynamic";
 
@@ -345,17 +346,29 @@ export async function POST(req, { params }) {
         }
       }
     }
+    // A stale negative (from a play attempt before this publish) must not
+    // outlive this fix, and a re-published clip's new content should be
+    // discoverable immediately rather than waiting out the cache TTL.
+    await clearPersistedPreviewKey(admin, releaseSlug).catch(() => {});
   }
 
+  // track.slug -> exact preview object key, for direct (discovery-free) lookup
+  // by resolvePreviewKey once persisted onto catalog_tracks.preview_path below.
+  const canonicalTrackPreviewKeys = new Map();
   for (const track of readyTracks) {
     const previewSrcKey = track.preview_key;
     if (!previewSrcKey) continue;
     const ext = extFromKey(previewSrcKey) || ".wav";
     const destKey = `previews/${typeFolder}/${releaseSlug}/${track.slug}/${track.slug}-preview${ext}`;
-    if (previewSrcKey === destKey) continue;
+    if (previewSrcKey === destKey) {
+      canonicalTrackPreviewKeys.set(track.slug, destKey);
+      continue;
+    }
     try {
       await copyR2Object(previewSrcKey, destKey);
       await deleteR2Object(previewSrcKey).catch(() => {});
+      canonicalTrackPreviewKeys.set(track.slug, destKey);
+      await clearPersistedPreviewKey(admin, releaseSlug, track.slug).catch(() => {});
     } catch (err) {
       console.warn(`[publish] track ${track.id} preview canonicalize error (non-fatal for re-publish)`, err?.message);
       if (isFirstPublish) {
@@ -397,7 +410,12 @@ export async function POST(req, { params }) {
   // ── 6. Build storefront media paths ───────────────────────────────────────
   const storage_path = resolveStoragePath(typeFolder, releaseSlug);
   const artwork_path = resolveArtworkPath(typeFolder, releaseSlug);
-  const preview_path = resolvePreviewPath(typeFolder, releaseSlug);
+  // A preview we generated ourselves (canonicalPreviewKey) is stored as the
+  // exact object key, not a folder — resolvePreviewKey then reads it directly
+  // with zero R2 discovery, since we already know precisely where it is. Only
+  // a release with no generated preview at all falls back to the folder
+  // convention (legacy discovery path, single/feature releases predating P0).
+  const preview_path = canonicalPreviewKey || resolvePreviewPath(typeFolder, releaseSlug);
   const video_path   = resolveVideoPath(typeFolder, releaseSlug);
   const visual       = visualDiscoveryUrl(typeFolder, releaseSlug, {});
   const preview      = previewDiscoveryUrl(preview_path);
@@ -512,7 +530,10 @@ export async function POST(req, { params }) {
         product_id:       productId,
         track_id:         t.id,
         storage_path:     resolveStoragePath(typeFolder, releaseSlug, t.slug),
-        preview_path:     resolvePreviewPath(typeFolder, t.slug, releaseSlug),
+        // Same principle as the single/feature preview_path above — a track
+        // preview we generated ourselves is stored as the exact key so
+        // resolvePreviewKey never has to fall back to R2 discovery for it.
+        preview_path:     canonicalTrackPreviewKeys.get(t.slug) || resolvePreviewPath(typeFolder, t.slug, releaseSlug),
         lyrics:           t.lyrics || null,
         credits:          tCredits,
         featured_artists: tFeatured,
