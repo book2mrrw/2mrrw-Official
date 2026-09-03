@@ -5,6 +5,7 @@ import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { validateEmail } from "@/lib/auth/validation";
 import { persistNewUserProfileOrRollback } from "@/lib/auth/provision-new-user";
 import { buildWelcomeEmail, sendTransactionalEmail } from "@/lib/server/email";
+import { geocodeProfileIfNeeded } from "@/lib/geo/geocode-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -82,6 +83,9 @@ export async function POST(req) {
         { status: 500 }
       );
     }
+
+    // Best-effort analytics enrichment — never blocks or affects signup.
+    geocodeProfileIfNeeded(admin, { userId: newUser.id, city, state, country }).catch(() => {});
 
     // Sign in server-side so the SSR client writes auth cookies into the response.
     const supabase = await createClient();

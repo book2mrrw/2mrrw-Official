@@ -14,6 +14,7 @@ import { persistNewUserProfileOrRollback } from "@/lib/auth/provision-new-user";
 import { buildWelcomeEmail, sendTransactionalEmail } from "@/lib/server/email";
 import { catalogCoverUrl } from "@/lib/media-urls";
 import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
+import { geocodeProfileIfNeeded } from "@/lib/geo/geocode-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +113,9 @@ export async function POST(req) {
         { status: 500 }
       );
     }
+
+    // Best-effort analytics enrichment — never blocks or affects account claim.
+    geocodeProfileIfNeeded(admin, { userId: newUser.id, city, state, country }).catch(() => {});
 
     // Sign in server-side — the SSR client writes the auth cookies into the response
     // headers so the browser is immediately authenticated after this API call returns.
