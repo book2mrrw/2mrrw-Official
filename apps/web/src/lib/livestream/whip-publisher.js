@@ -157,6 +157,21 @@ export class WhipPublisher {
     if (response.status !== 204) throw new Error(`Relay ICE update failed (${response.status})`);
   }
 
+  async replaceTrack(kind, nextTrack) {
+    if (this.closed || !this.peer) throw new Error("Publisher is not connected");
+    if (!nextTrack || nextTrack.kind !== kind) throw new Error(`A ${kind} track is required`);
+    const sender = this.peer.getSenders().find((candidate) => candidate.track?.kind === kind);
+    if (!sender) throw new Error(`The publisher has no ${kind} sender`);
+    const previousTrack = sender.track;
+    await sender.replaceTrack(nextTrack);
+    await configureSender(sender, kind);
+    if (previousTrack && previousTrack !== nextTrack) {
+      this.stream?.removeTrack?.(previousTrack);
+      this.stream?.addTrack?.(nextTrack);
+      previousTrack.stop?.();
+    }
+  }
+
   close() {
     if (this.closed) return;
     this.closed = true;

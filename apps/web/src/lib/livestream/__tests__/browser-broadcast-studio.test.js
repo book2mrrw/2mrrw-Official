@@ -11,6 +11,7 @@ import {
   startTwitchDeviceAuthorization,
   TwitchAuthorizationPendingError,
 } from "../../server/twitch-user-authorization.js";
+import { WhipPublisher } from "../whip-publisher.js";
 
 function source(path) {
   return readFileSync(new URL(path, import.meta.url), "utf8");
@@ -61,6 +62,39 @@ test("studio remains one mounted leaf and never invokes app navigation or music 
   assert.match(studio, /"Authorize Twitch"/);
   assert.match(studio, /href=\{twitchPrompt\.verificationUri\}/);
   assert.match(studio, /AdminVerificationOverlay/);
+  assert.match(studio, /devicechange/);
+  assert.match(studio, /publisher\.replaceTrack\("video", nextTrack\)/);
+  assert.match(studio, /video: cameraConstraints\(deviceId\), audio: false/);
+  assert.doesNotMatch(studio, /disabled=\{active\}[^>]*>\s*\{devices\.cameras/);
+});
+
+test("a live camera switch replaces only the video sender without reconnecting", async () => {
+  const stopped = [];
+  const removed = [];
+  const added = [];
+  const previousTrack = { kind: "video", stop: () => stopped.push("previous") };
+  const nextTrack = { kind: "video", stop: () => stopped.push("next") };
+  const sender = {
+    track: previousTrack,
+    replaceTrack: async (track) => { sender.track = track; },
+  };
+  const publisher = new WhipPublisher({
+    url: "https://relay.example.test/live/whip",
+    token: "test-token",
+    stream: {
+      removeTrack: (track) => removed.push(track),
+      addTrack: (track) => added.push(track),
+    },
+  });
+  publisher.peer = { getSenders: () => [sender] };
+
+  await publisher.replaceTrack("video", nextTrack);
+
+  assert.equal(sender.track, nextTrack);
+  assert.deepEqual(removed, [previousTrack]);
+  assert.deepEqual(added, [nextTrack]);
+  assert.deepEqual(stopped, ["previous"]);
+  assert.equal(publisher.closed, false);
 });
 
 test("relay is warm, single-publisher, authenticated, and forwards to Twitch without exposing RTSP", () => {

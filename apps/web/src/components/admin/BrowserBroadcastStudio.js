@@ -9,6 +9,47 @@ import { WhipPublisher } from "@/lib/livestream/whip-publisher";
 const ACTIVE_PHASES = new Set(["connecting", "confirming", "live", "reconnecting"]);
 const MAX_RECONNECT_ATTEMPTS = 8;
 const TWITCH_CONFIRMATION_MS = 45_000;
+const CAMERA_STORAGE_KEY = "2mrrw.broadcast.camera";
+
+function cameraConstraints(deviceId = "") {
+  return {
+    deviceId: deviceId ? { exact: deviceId } : undefined,
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+    frameRate: { ideal: 30, max: 30 },
+  };
+}
+
+function rememberedCameraId() {
+  try { return window.localStorage.getItem(CAMERA_STORAGE_KEY) || ""; } catch { return ""; }
+}
+
+function rememberCameraId(deviceId) {
+  try {
+    if (deviceId) window.localStorage.setItem(CAMERA_STORAGE_KEY, deviceId);
+  } catch { /* Device choice persistence is best-effort. */ }
+}
+
+function preferredCameraId(cameras, current = "") {
+  const available = (candidate) => candidate && cameras.some((device) => device.deviceId === candidate);
+  const remembered = rememberedCameraId();
+  if (available(remembered)) return remembered;
+  const builtInMac = cameras.find((device) =>
+    /facetime|built[ -]?in|macbook|studio display/i.test(device.label || "") &&
+    !/iphone|continuity/i.test(device.label || "")
+  );
+  if (builtInMac?.deviceId) return builtInMac.deviceId;
+  if (available(current)) return current;
+  return cameras.find((device) => device.deviceId === "default")?.deviceId || cameras[0]?.deviceId || "";
+}
+
+function cameraOptionLabel(device, index) {
+  const label = device.label || `Camera ${index + 1}`;
+  if (/iphone|continuity/i.test(label)) return `${label} · iPhone`;
+  if (/facetime|built[ -]?in|macbook|studio display/i.test(label)) return `${label} · Mac`;
+  if (/obs|virtual|camo|snap camera/i.test(label)) return `${label} · Virtual`;
+  return `${label} · External / Capture`;
+}
 
 function studioMessageForError(error) {
   if (error?.name === "NotAllowedError") return "Camera or microphone permission was denied. Allow both, then try again.";
@@ -67,6 +108,7 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
   const [selectedMicrophone, setSelectedMicrophone] = useState("");
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [microphoneEnabled, setMicrophoneEnabled] = useState(true);
+  const [cameraSwitching, setCameraSwitching] = useState(false);
   const [twitchAuthorization, setTwitchAuthorization] = useState({ status: "checking", broadcasterLogin: null });
   const [twitchPrompt, setTwitchPrompt] = useState(null);
   const [adminVerificationRequired, setAdminVerificationRequired] = useState(false);
@@ -174,13 +216,24 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
   }, [pollTwitchAuthorization, twitchAuthorization.status]);
 
   const enumerateDevices = useCallback(async () => {
+    if (!navigator.mediaDevices?.enumerateDevices) return { cameras: [], microphones: [] };
     const all = await navigator.mediaDevices.enumerateDevices();
     const cameras = all.filter((device) => device.kind === "videoinput");
     const microphones = all.filter((device) => device.kind === "audioinput");
     setDevices({ cameras, microphones });
-    setSelectedCamera((current) => current || cameras[0]?.deviceId || "");
+    setSelectedCamera((current) => preferredCameraId(cameras, current));
     setSelectedMicrophone((current) => current || microphones[0]?.deviceId || "");
+    return { cameras, microphones };
   }, []);
+
+  useEffect(() => {
+    const mediaDevices = navigator.mediaDevices;
+    if (!mediaDevices?.enumerateDevices) return undefined;
+    const refresh = () => enumerateDevices().catch(() => {});
+    refresh();
+    mediaDevices.addEventListener?.("devicechange", refresh);
+    return () => mediaDevices.removeEventListener?.("devicechange", refresh);
+  }, [enumerateDevices]);
 
   const attachStream = useCallback((stream) => {
     streamRef.current = stream;
@@ -195,10 +248,7 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
     if (!navigator.mediaDevices?.getUserMedia) throw new Error("This browser does not support live camera publishing.");
     const next = await navigator.mediaDevices.getUserMedia({
       video: {
-        deviceId: cameraId ? { exact: cameraId } : undefined,
-        width: { ideal: 1920 },
-        height: { ideal: 1080 },
-        frameRate: { ideal: 30, max: 30 },
+        ...cameraConstraints(cameraId),
       },
       audio: {
         deviceId: microphoneId ? { exact: microphoneId } : undefined,
@@ -214,6 +264,11 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
     const previous = streamRef.current;
     attachStream(next);
     previous?.getTracks().forEach((track) => track.stop());
+    const actualCameraId = next.getVideoTracks()[0]?.getSettings?.().deviceId || cameraId;
+    if (actualCameraId) {
+      setSelectedCamera(actualCameraId);
+      rememberCameraId(actualCameraId);
+    }
     await enumerateDevices();
     return next;
   }, [attachStream, cameraEnabled, enumerateDevices, microphoneEnabled, selectedCamera, selectedMicrophone]);
@@ -229,14 +284,27 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
     setPhase("preparing");
     setMessage("Opening camera and microphone…");
     try {
-      await acquireMedia();
+      let cameraId = selectedCamera;
+      if (!devices.cameras.some((device) => device.label)) {
+        // Browsers hide camera names until the first user-approved capture.
+        // Probe video only, release it immediately, then open the preferred
+        // exact camera so macOS cannot silently keep Continuity Camera active.
+        const probe = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        try {
+          const discovered = await enumerateDevices();
+          cameraId = preferredCameraId(discovered.cameras, cameraId);
+        } finally {
+          probe.getTracks().forEach((track) => track.stop());
+        }
+      }
+      await acquireMedia({ cameraId });
       setPhase("preview");
       setMessage("Preview ready. Twitch does not receive anything until you press Go Live Now.");
     } catch (error) {
       setPhase("error");
       setMessage(studioMessageForError(error));
     }
-  }, [acquireMedia, phase]);
+  }, [acquireMedia, devices.cameras, enumerateDevices, phase, selectedCamera]);
 
   const beginTwitchConfirmation = useCallback((generation) => {
     const deadline = Date.now() + TWITCH_CONFIRMATION_MS;
@@ -375,9 +443,53 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
     window.setTimeout(refreshLiveState, 2500);
   }, [clearTimers, refreshLiveState]);
 
+  const switchCamera = useCallback(async (deviceId) => {
+    if (!deviceId) return;
+    if (!streamRef.current) {
+      setSelectedCamera(deviceId);
+      rememberCameraId(deviceId);
+      setMessage("Camera selected. Press Preview Camera when you are ready.");
+      return;
+    }
+    setCameraSwitching(true);
+    let replacement = null;
+    try {
+      replacement = await navigator.mediaDevices.getUserMedia({ video: cameraConstraints(deviceId), audio: false });
+      const nextTrack = replacement.getVideoTracks()[0];
+      if (!nextTrack) throw new Error("The selected camera did not provide video.");
+      const publisher = publisherRef.current;
+      if (publisher) {
+        await publisher.replaceTrack("video", nextTrack);
+      } else {
+        const stream = streamRef.current;
+        const previousTracks = stream.getVideoTracks();
+        previousTracks.forEach((track) => stream.removeTrack(track));
+        stream.addTrack(nextTrack);
+        previousTracks.forEach((track) => track.stop());
+      }
+      const actualCameraId = nextTrack.getSettings?.().deviceId || deviceId;
+      setSelectedCamera(actualCameraId);
+      rememberCameraId(actualCameraId);
+      if (videoRef.current) videoRef.current.srcObject = streamRef.current;
+      setMessage(ACTIVE_PHASES.has(phase)
+        ? "Camera switched without interrupting the live connection."
+        : "Preview camera switched.");
+      replacement = null;
+      await enumerateDevices();
+    } catch (error) {
+      replacement?.getTracks().forEach((track) => track.stop());
+      setMessage(studioMessageForError(error));
+    } finally {
+      setCameraSwitching(false);
+    }
+  }, [enumerateDevices, phase]);
+
   const changeDevice = useCallback(async (kind, deviceId) => {
-    if (kind === "camera") setSelectedCamera(deviceId);
-    else setSelectedMicrophone(deviceId);
+    if (kind === "camera") {
+      await switchCamera(deviceId);
+      return;
+    }
+    setSelectedMicrophone(deviceId);
     if (!streamRef.current || ACTIVE_PHASES.has(phase)) return;
     setPhase("preparing");
     try {
@@ -397,7 +509,7 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
       setPhase("error");
       setMessage(studioMessageForError(error));
     }
-  }, [acquireMedia, phase, selectedCamera, selectedMicrophone]);
+  }, [acquireMedia, phase, selectedCamera, selectedMicrophone, switchCamera]);
 
   const toggleTrack = useCallback((kind) => {
     const tracks = kind === "video" ? streamRef.current?.getVideoTracks() : streamRef.current?.getAudioTracks();
@@ -445,10 +557,11 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 8, marginTop: 10 }}>
         <label style={{ fontSize: 9, color: "rgba(255,255,255,.4)", letterSpacing: ".1em" }}>CAMERA
-          <select value={selectedCamera} onChange={(event) => changeDevice("camera", event.target.value)} disabled={active} style={{ ...selectStyle, marginTop: 5, opacity: active ? .55 : 1 }}>
+          <select value={selectedCamera} onChange={(event) => changeDevice("camera", event.target.value)} disabled={cameraSwitching} style={{ ...selectStyle, marginTop: 5, opacity: cameraSwitching ? .55 : 1 }}>
             {devices.cameras.length === 0 && <option value="">Default camera</option>}
-            {devices.cameras.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `Camera ${index + 1}`}</option>)}
+            {devices.cameras.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{cameraOptionLabel(device, index)}</option>)}
           </select>
+          <span style={{ marginTop: 4, fontSize: 8, color: "rgba(255,255,255,.28)", letterSpacing: 0 }}>{cameraSwitching ? "Switching camera…" : "Mac, iPhone, USB, capture cards, and virtual cameras"}</span>
         </label>
         <label style={{ fontSize: 9, color: "rgba(255,255,255,.4)", letterSpacing: ".1em" }}>MICROPHONE
           <select value={selectedMicrophone} onChange={(event) => changeDevice("microphone", event.target.value)} disabled={active} style={{ ...selectStyle, marginTop: 5, opacity: active ? .55 : 1 }}>
