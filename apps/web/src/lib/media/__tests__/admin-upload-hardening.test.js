@@ -42,7 +42,9 @@ describe("one upload transport and one storefront invalidator", () => {
     const wizard = read("src/components/admin/UploadWizard.js");
     const releases = read("src/app/admin/releases/page.js");
     const inline = read("src/components/admin/InlineReleasesManager.js");
-    assert.equal((wizard.match(/uploadAssetToR2\s*\(/g) || []).length, 4);
+    // 5th usage added for the browser-derived preview clip (PreviewTrimPicker) —
+    // still the one shared transport, not a new upload path.
+    assert.equal((wizard.match(/uploadAssetToR2\s*\(/g) || []).length, 5);
     assert.equal((releases.match(/uploadAssetToR2\s*\(/g) || []).length, 1);
     assert.equal((inline.match(/uploadAssetToR2\s*\(/g) || []).length, 1);
     for (const source of [releases, inline]) {

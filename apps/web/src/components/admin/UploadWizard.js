@@ -3,6 +3,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
 import { MASTER_AUDIO_ACCEPT, VIDEO_COVER_ACCEPT } from "@/lib/media/admin-upload-contract";
+import { extractAudioClipAsWav, probeAudioDuration } from "@/lib/media/browser-audio-trim";
+import { PREVIEW_CLIP_SECONDS } from "@/lib/media/preview-constants";
 import { validateLifecycleConfiguration } from "@/lib/releases/release-availability";
 import { signalCatalogMutation } from "@/lib/storefront/catalog-refresh-store";
 
@@ -54,6 +56,8 @@ export function newTrack(position) {
     upload_status:    "idle",
     upload_progress:  0,
     upload_error:     null,
+    preview_key:            "",
+    preview_start_seconds:  0,
     featured_artists: null,
     content_rating:   null,
     isrc:             "",
@@ -589,6 +593,157 @@ function CreditsStep({ data, onChange, onNext, onBack, isMultiTrack }) {
   );
 }
 
+// ── Shared: pinpoint a 15s preview window on an in-memory master file ────────────
+// Derives the preview clip entirely in the browser (decode → slice → WAV-encode)
+// and uploads it through the same presign+PUT pipeline as any other asset — no
+// ffmpeg, no worker changes, no separate preview file for the admin to prepare.
+function PreviewTrimPicker({ file, releaseType, slug, trackSlug, releaseId, previewKey, onGenerated }) {
+  const [duration, setDuration] = useState(0);
+  const [startSec, setStartSec] = useState(0);
+  const [status, setStatus] = useState(previewKey ? "ready" : "idle");
+  const [error, setError] = useState(null);
+  const [auditioning, setAuditioning] = useState(false);
+  const barRef = useRef(null);
+  const objectUrlRef = useRef(null);
+  const auditionElRef = useRef(null);
+  const auditionTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    if (!file) return undefined;
+    let cancelled = false;
+    setStatus((s) => (s === "ready" ? s : "probing"));
+    const url = URL.createObjectURL(file);
+    objectUrlRef.current = url;
+    probeAudioDuration(file)
+      .then((dur) => {
+        if (cancelled) return;
+        setDuration(dur);
+        setStatus((s) => (s === "ready" ? s : "picking"));
+      })
+      .catch(() => { if (!cancelled) setError("Could not read audio duration"); });
+    return () => {
+      cancelled = true;
+      URL.revokeObjectURL(url);
+    };
+  }, [file]);
+
+  const maxStart = Math.max(0, duration - PREVIEW_CLIP_SECONDS);
+  const clipEnd = Math.min(duration, startSec + PREVIEW_CLIP_SECONDS);
+
+  const stopAudition = useCallback(() => {
+    if (auditionTimeoutRef.current) clearTimeout(auditionTimeoutRef.current);
+    if (auditionElRef.current) { auditionElRef.current.pause(); auditionElRef.current = null; }
+    setAuditioning(false);
+  }, []);
+  useEffect(() => stopAudition, [stopAudition]);
+
+  const audition = () => {
+    stopAudition();
+    if (!objectUrlRef.current) return;
+    const el = new Audio(objectUrlRef.current);
+    auditionElRef.current = el;
+    el.currentTime = startSec;
+    setAuditioning(true);
+    el.play().catch(() => setAuditioning(false));
+    auditionTimeoutRef.current = setTimeout(stopAudition, Math.max(0, (clipEnd - startSec)) * 1000);
+  };
+
+  const handleBarPointer = (e) => {
+    const bar = barRef.current;
+    if (!bar || !duration) return;
+    const rect = bar.getBoundingClientRect();
+    const clientX = e.touches?.[0]?.clientX ?? e.clientX;
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    setStartSec(Math.min(maxStart, ratio * duration));
+    stopAudition();
+  };
+
+  const generate = async () => {
+    stopAudition();
+    setStatus("generating");
+    setError(null);
+    try {
+      const { blob } = await extractAudioClipAsWav(file, {
+        startSeconds: startSec,
+        durationSeconds: PREVIEW_CLIP_SECONDS,
+      });
+      const clipFile = new File([blob], "preview.wav", { type: "audio/wav" });
+      const { key } = await uploadAssetToR2({
+        releaseType, slug, trackSlug, assetType: "preview", file: clipFile, releaseId,
+      });
+      const completeRes = await fetch("/api/admin/upload/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ releaseId, key, assetType: "preview", releaseType, slug, trackSlug }),
+      });
+      const completeData = await completeRes.json();
+      if (!completeRes.ok) throw new Error(completeData.error || "Preview upload failed");
+      onGenerated(key, startSec);
+      setStatus("ready");
+    } catch (err) {
+      setError(err.message);
+      setStatus("error");
+    }
+  };
+
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+  if (!file && !previewKey) return null;
+  if (status === "idle" || status === "probing") {
+    return <div style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Reading track length…</div>;
+  }
+
+  return (
+    <div style={{ marginTop: 12, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1 }}>
+          Preview Clip — tap the bar to move the {PREVIEW_CLIP_SECONDS}s window
+        </div>
+        {status === "ready" && <div style={{ fontSize: 11, color: C.success, fontWeight: 700 }}>✓ Preview set</div>}
+      </div>
+      <div
+        ref={barRef}
+        onMouseDown={handleBarPointer}
+        onTouchStart={handleBarPointer}
+        style={{ position: "relative", height: 36, background: C.surface, borderRadius: 6, cursor: duration ? "pointer" : "default", overflow: "hidden" }}
+      >
+        {duration > 0 && (
+          <div style={{
+            position: "absolute", top: 0, bottom: 0,
+            left: `${(startSec / duration) * 100}%`,
+            width: `${(Math.max(0, clipEnd - startSec) / duration) * 100}%`,
+            background: "rgba(0,255,255,0.28)", border: "1px solid #00ffff", borderRadius: 4,
+          }} />
+        )}
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.muted, marginTop: 6 }}>
+        <span>0:00</span>
+        <span>Preview: {fmt(startSec)} – {fmt(clipEnd)}</span>
+        <span>{fmt(duration)}</span>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+        <button
+          type="button"
+          onClick={auditioning ? stopAudition : audition}
+          disabled={!duration}
+          style={{ background: "none", border: `1px solid ${C.border2}`, borderRadius: 7, padding: "8px 16px", fontSize: 12, color: C.text, cursor: duration ? "pointer" : "default", fontFamily: "inherit" }}
+        >
+          {auditioning ? "■ Stop" : "▶ Audition"}
+        </button>
+        <button
+          type="button"
+          onClick={generate}
+          disabled={status === "generating" || !duration}
+          style={{ background: status === "generating" ? C.surface : C.accent, border: "none", borderRadius: 7, padding: "8px 16px", fontSize: 12, fontWeight: 700, color: status === "generating" ? C.muted : "#000", cursor: status === "generating" ? "wait" : "pointer", fontFamily: "inherit" }}
+        >
+          {status === "generating" ? "Generating…" : status === "ready" ? "Use This Spot Instead" : "Use This Clip"}
+        </button>
+      </div>
+      {error && <div style={{ fontSize: 11, color: C.error, marginTop: 8 }}>{error}</div>}
+    </div>
+  );
+}
+
 // ── Step 3a: Audio Upload (single / feature) ─────────────────────────────────────
 function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug }) {
   const [uploadState, setUploadState] = useState({
@@ -598,9 +753,11 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
   });
   const xhrRef = useRef(null);
   const audioInputRef = useRef(null);
+  const masterFileRef = useRef(null);
 
   const upload = useCallback(async (file) => {
     if (!file) return;
+    masterFileRef.current = file;
     setUploadState({ status: "uploading", progress: 0, error: null });
 
     try {
@@ -702,11 +859,31 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
         )}
       </div>
 
-      <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: "12px 16px", marginBottom: 24 }}>
+      {status === "ready" && (
+        <PreviewTrimPicker
+          file={masterFileRef.current}
+          releaseType={data.release_type}
+          slug={draftSlug || `draft-${Date.now()}`}
+          releaseId={releaseId}
+          previewKey={data.preview_key}
+          onGenerated={(key, startSeconds) => {
+            onChange("preview_key", key);
+            onChange("preview_start_seconds", startSeconds);
+          }}
+        />
+      )}
+
+      <div style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, padding: "12px 16px", marginTop: 20, marginBottom: 24 }}>
         <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
           HLS transcoding queues automatically after upload. You can publish while HLS is still processing.
         </div>
       </div>
+
+      {status === "ready" && !data.preview_key && (
+        <div style={{ fontSize: 12, color: "#f59e0b", marginBottom: 16, lineHeight: 1.6 }}>
+          No preview clip set yet — publishing will be blocked until one is chosen above.
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 12 }}>
         <Btn onClick={onBack} variant="secondary">← Back</Btn>
@@ -733,7 +910,7 @@ function TrackRow({ track, idx, total, albumSlug, data, releaseId, setTracks }) 
 
   const startUpload = async (file) => {
     const trackSlug = track.slug || slugifyTrack(track.title, track.position);
-    updateSelf({ upload_status: "uploading", upload_progress: 0, upload_error: null, audio_filename: file.name, slug: trackSlug });
+    updateSelf({ upload_status: "uploading", upload_progress: 0, upload_error: null, audio_filename: file.name, slug: trackSlug, masterFile: file });
 
     try {
       const { key } = await uploadAssetToR2({
@@ -898,6 +1075,18 @@ function TrackRow({ track, idx, total, albumSlug, data, releaseId, setTracks }) 
         style={{ display: "none" }}
         onChange={(e) => { if (e.target.files?.[0]) startUpload(e.target.files[0]); e.target.value = ""; }}
       />
+
+      {st === "ready" && (
+        <PreviewTrimPicker
+          file={track.masterFile}
+          releaseType={data.release_type}
+          slug={albumSlug}
+          trackSlug={track.slug}
+          releaseId={releaseId}
+          previewKey={track.preview_key}
+          onGenerated={(key, startSeconds) => updateSelf({ preview_key: key, preview_start_seconds: startSeconds })}
+        />
+      )}
     </div>
   );
 }
@@ -906,6 +1095,7 @@ function TracklistBuilderStep({ data, tracks, setTracks, onNext, onBack, release
   const albumSlug   = data.proposed_slug || draftSlug || `draft-${releaseId?.slice(0, 8)}`;
   const readyCount  = tracks.filter((t) => t.upload_status === "ready").length;
   const uploadingAny = tracks.some((t) => t.upload_status === "uploading");
+  const missingPreviewCount = tracks.filter((t) => t.upload_status === "ready" && !t.preview_key).length;
 
   const addTrack = () =>
     setTracks((prev) => [...prev, newTrack(prev.length + 1)]);
@@ -943,6 +1133,12 @@ function TracklistBuilderStep({ data, tracks, setTracks, onNext, onBack, release
       >
         + Add Track
       </button>
+
+      {missingPreviewCount > 0 && !uploadingAny && (
+        <div style={{ fontSize: 12, color: "#f59e0b", marginBottom: 12, lineHeight: 1.6 }}>
+          {missingPreviewCount} track{missingPreviewCount === 1 ? "" : "s"} missing a preview clip — publishing will be blocked until every track has one.
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <Btn onClick={onBack} variant="secondary">← Back</Btn>
@@ -1471,6 +1667,8 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
           publishing_credits: data.publishing_credits,
           cover_key:          data.cover_key,
           audio_key:          data.audio_key,
+          preview_key:        data.preview_key,
+          preview_start_seconds: data.preview_start_seconds,
           track_id:           data.track_id,
           lyrics:             data.lyrics,
           scheduled_at,
@@ -1493,6 +1691,8 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
             isrc:             t.isrc || null,
             featured_artists: t.featured_artists !== null ? t.featured_artists : undefined,
             content_rating:   t.content_rating   !== null ? t.content_rating   : undefined,
+            preview_key:            t.preview_key || null,
+            preview_start_seconds:  t.preview_start_seconds ?? 0,
           })),
         }),
       });
@@ -1659,6 +1859,8 @@ const DEFAULT_DATA = {
   publishing_credits: "",
   audio_key:          "",
   audio_filename:     "",
+  preview_key:            "",
+  preview_start_seconds:  0,
   track_id:           null,
   cover_key:          "",
   cover_preview_url:  "",

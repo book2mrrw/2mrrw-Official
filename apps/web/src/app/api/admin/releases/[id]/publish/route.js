@@ -88,6 +88,8 @@ export async function POST(req, { params }) {
     publishing_credits,
     cover_key,         // R2 key set by /upload/complete
     audio_key,         // R2 key set by /upload/complete
+    preview_key,       // R2 key of the browser-derived preview clip, set by /upload/complete
+    preview_start_seconds = 0,
     track_id,          // tracks row id (single/feature only)
     lyrics,
     scheduled_at,
@@ -109,7 +111,7 @@ export async function POST(req, { params }) {
   // ── 1. Load the release record ─────────────────────────────────────────────
   const { data: release, error: relErr } = await admin
     .from("releases")
-    .select("id, slug, status, release_type, cover_art_r2_key")
+    .select("id, slug, status, release_type, cover_art_r2_key, metadata")
     .eq("id", releaseId)
     .single();
 
@@ -117,6 +119,10 @@ export async function POST(req, { params }) {
     return NextResponse.json({ error: "Release not found" }, { status: 404 });
   }
   // Re-publishing is an idempotent projection refresh for the same release ID.
+  // Preview readiness is only enforced on the FIRST publish — a release that
+  // predates this requirement must remain editable/re-publishable without
+  // retroactively demanding a preview it was never asked to have.
+  const isFirstPublish = release.status === "draft";
 
   const releaseType = release.release_type;
   const typeFolder  = RELEASE_TYPE_FOLDERS[releaseType] || "singles";
@@ -141,6 +147,8 @@ export async function POST(req, { params }) {
       title:            bodyTrack.title    || dbTrack.title,
       position:         bodyTrack.position ?? dbTrack.position,
       lyrics:           bodyTrack.lyrics   || dbTrack.lyrics,
+      preview_key:            bodyTrack.preview_key || null,
+      preview_start_seconds:  bodyTrack.preview_start_seconds ?? 0,
       featured_artists: bodyTrack.featured_artists !== undefined ? bodyTrack.featured_artists : null,
       track_credits: {
         produced_by:    bodyTrack.produced_by    ?? null,
@@ -179,6 +187,25 @@ export async function POST(req, { params }) {
   }
   if (isMultiTrack && !hasAudioFromDB) {
     return NextResponse.json({ error: "BLOCKING: At least one track must have audio uploaded" }, { status: 422 });
+  }
+
+  // Preview readiness — only enforced the first time a release goes live (see
+  // isFirstPublish above). A release with working full playback and a broken
+  // or missing preview is not considered successfully published.
+  const resolvedPreviewKey = preview_key || release.metadata?.preview_r2_key || null;
+  if (isFirstPublish) {
+    if (!isMultiTrack && !resolvedPreviewKey) {
+      return NextResponse.json({ error: "BLOCKING: A preview clip must be set before publishing" }, { status: 422 });
+    }
+    if (isMultiTrack) {
+      const tracksMissingPreview = readyTracks.filter((t) => !t.preview_key);
+      if (tracksMissingPreview.length) {
+        return NextResponse.json(
+          { error: `BLOCKING: ${tracksMissingPreview.length} track(s) are missing a preview clip` },
+          { status: 422 }
+        );
+      }
+    }
   }
 
   // ── 4. Resolve final status (needed for product active flag) ──────────────
@@ -293,6 +320,53 @@ export async function POST(req, { params }) {
     await deleteR2Object(srcKey).catch(() => {});
   }
 
+  // ── 5b2. Canonicalize preview clip path(s) ────────────────────────────────
+  // Preview clips (browser-derived from the master, see PreviewTrimPicker in
+  // UploadWizard.js) land at the same draft-slug pattern as audio/cover.
+  // resolvePreviewKey discovers a preview by scanning the canonical
+  // previews/ folder for the final slug — move each clip there now so it's
+  // actually found once the release is live, not just recorded in metadata.
+  let canonicalPreviewKey = resolvedPreviewKey;
+  if (resolvedPreviewKey) {
+    const ext = extFromKey(resolvedPreviewKey) || ".wav";
+    const destKey = `previews/${typeFolder}/${releaseSlug}/${releaseSlug}-preview${ext}`;
+    if (resolvedPreviewKey !== destKey) {
+      try {
+        await copyR2Object(resolvedPreviewKey, destKey);
+        await deleteR2Object(resolvedPreviewKey).catch(() => {});
+        canonicalPreviewKey = destKey;
+      } catch (err) {
+        console.warn("[publish] preview canonicalize error (non-fatal for re-publish)", err?.message);
+        if (isFirstPublish) {
+          return NextResponse.json(
+            { error: "Publish failed — could not move the preview clip to canonical storage. Please try again." },
+            { status: 500 }
+          );
+        }
+      }
+    }
+  }
+
+  for (const track of readyTracks) {
+    const previewSrcKey = track.preview_key;
+    if (!previewSrcKey) continue;
+    const ext = extFromKey(previewSrcKey) || ".wav";
+    const destKey = `previews/${typeFolder}/${releaseSlug}/${track.slug}/${track.slug}-preview${ext}`;
+    if (previewSrcKey === destKey) continue;
+    try {
+      await copyR2Object(previewSrcKey, destKey);
+      await deleteR2Object(previewSrcKey).catch(() => {});
+    } catch (err) {
+      console.warn(`[publish] track ${track.id} preview canonicalize error (non-fatal for re-publish)`, err?.message);
+      if (isFirstPublish) {
+        return NextResponse.json(
+          { error: `Publish failed — could not move the preview clip for track ${track.slug}. Please try again.` },
+          { status: 500 }
+        );
+      }
+    }
+  }
+
   // ── 5c. Canonicalize cover art path ───────────────────────────────────────
   // Cover art uploaded during wizard lands at images/{folder}/draft-xxx/draft-xxx.ext.
   // Move it to the canonical images/{folder}/{slug}/{slug}.ext so both the releases
@@ -378,6 +452,8 @@ export async function POST(req, { params }) {
           content_rating:           content_rating || null,
           featured_artists:         featured_artists || [],
           cover_art_r2_key:         canonicalCoverKey,
+          preview_r2_key:           canonicalPreviewKey || null,
+          preview_start_seconds:    canonicalPreviewKey ? Number(preview_start_seconds) || 0 : null,
           lifecycle_managed:        true,
         },
         gifting_enabled: false,
@@ -440,7 +516,7 @@ export async function POST(req, { params }) {
         lyrics:           t.lyrics || null,
         credits:          tCredits,
         featured_artists: tFeatured,
-        metadata:         {},
+        metadata:         t.preview_key ? { preview_start_seconds: Number(t.preview_start_seconds) || 0 } : {},
       };
     });
 
