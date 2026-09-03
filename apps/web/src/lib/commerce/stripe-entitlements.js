@@ -38,12 +38,19 @@ export async function upsertMembershipFromSubscription(subscription) {
   const active = status === "active" || status === "trialing";
   const revokeSubscriber = !active || status === "past_due" || status === "canceled" || status === "unpaid";
 
+  // Captured at webhook time rather than trusted from a hardcoded constant, so
+  // MRR reporting (get_subscription_stats) stays correct if pricing changes or
+  // a second tier is added later.
+  const subscriptionPrice = subscription.items?.data?.[0]?.price;
+
   const row = {
     user_id: userId,
     tier: subscription.metadata?.tier || "inner_circle",
     status: active ? status : status === "past_due" ? "past_due" : "canceled",
     stripe_customer_id: typeof subscription.customer === "string" ? subscription.customer : subscription.customer?.id,
     stripe_subscription_id: subscription.id,
+    price_cents: subscriptionPrice?.unit_amount ?? null,
+    currency: subscriptionPrice?.currency || null,
     current_period_end: subscription.current_period_end
       ? new Date(subscription.current_period_end * 1000).toISOString()
       : null,

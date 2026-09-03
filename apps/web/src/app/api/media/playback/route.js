@@ -46,6 +46,23 @@ export async function POST(req) {
       ? Math.max(0, Math.min(1, positionSeconds / durationSeconds))
       : null;
 
+    // Resolves the owning album/single's product row so per-track analytics can
+    // disambiguate catalog_tracks.slug values, which are only unique within their
+    // own album (e.g. two different albums can both have a track named "intro").
+    // Best-effort: a miss just leaves product_id null, same as before this existed.
+    const albumSlug = cleanSlug(body.albumSlug);
+    let productId = null;
+    try {
+      const { data: productRow } = await admin
+        .from("products")
+        .select("id")
+        .eq("slug", albumSlug || slug)
+        .maybeSingle();
+      productId = productRow?.id || null;
+    } catch {
+      productId = null;
+    }
+
     const ipCountry = req.headers.get("x-vercel-ip-country") || null;
     const ipRegion = req.headers.get("x-vercel-ip-region") || null;
     const rawIpCity = req.headers.get("x-vercel-ip-city") || null;
@@ -54,6 +71,7 @@ export async function POST(req) {
     const eventPayload = {
       user_id: user?.id || null,
       product_slug: slug,
+      product_id: productId,
       event_type: completed ? "complete" : eventType,
       media_type: body.mediaType || "audio",
       position_seconds: positionSeconds,

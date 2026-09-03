@@ -559,6 +559,7 @@ const TABS = [
   { id:"overview", label:"Overview" },
   { id:"audience", label:"Audience" },
   { id:"tracks",   label:"Tracks"   },
+  { id:"revenue",  label:"Revenue"  },
 ];
 const SORT_OPTS = [
   { key:"plays",          label:"Plays"      },
@@ -574,6 +575,14 @@ export default function AnalyticsDashboard({ isMobile }) {
   const [tab,     setTab]     = useState("overview");
   const [sortBy,  setSortBy]  = useState("plays");
 
+  // Revenue tab has its own fetch/loading/error state, entirely separate from
+  // the overview/audience/tracks load above — it only fires once the Revenue
+  // tab is actually opened, so opening this dashboard never does more work
+  // than it did before this tab existed.
+  const [revenueData,    setRevenueData]    = useState(null);
+  const [revenueLoading, setRevenueLoading] = useState(false);
+  const [revenueError,   setRevenueError]   = useState(null);
+
   const load = useCallback(() => {
     setLoading(true); setError(null);
     fetch("/api/admin/analytics", { credentials:"include" })
@@ -582,7 +591,18 @@ export default function AnalyticsDashboard({ isMobile }) {
       .catch(()=>{ setError("Could not load analytics."); setLoading(false); });
   }, []);
 
+  const loadRevenue = useCallback(() => {
+    setRevenueLoading(true); setRevenueError(null);
+    fetch("/api/admin/analytics/revenue", { credentials:"include" })
+      .then(r=>r.ok?r.json():Promise.reject(r.status))
+      .then(d=>{ setRevenueData(d); setRevenueLoading(false); })
+      .catch(()=>{ setRevenueError("Could not load revenue."); setRevenueLoading(false); });
+  }, []);
+
   useEffect(()=>{ load(); },[load]);
+  useEffect(()=>{
+    if (tab==="revenue" && !revenueData && !revenueLoading) loadRevenue();
+  },[tab, revenueData, revenueLoading, loadRevenue]);
 
   if (loading) return (
     <div style={{ padding:"60px 0", textAlign:"center" }}>
@@ -879,6 +899,84 @@ export default function AnalyticsDashboard({ isMobile }) {
           </Card>
         </div>
       )}
+
+      {tab==="revenue" && (
+        <RevenueTab
+          data={revenueData}
+          loading={revenueLoading}
+          error={revenueError}
+          onRetry={loadRevenue}
+          isMobile={isMobile}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Revenue tab: per-release attribution + subscription snapshot ────────────
+function RevenueTab({ data, loading, error, onRetry, isMobile }) {
+  if (loading) return (
+    <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>Loading revenue…</div>
+  );
+  if (error) return (
+    <div style={{ padding:"24px 0", color:C.red, fontSize:13, display:"flex", alignItems:"center", gap:10 }}>
+      <span>⚠</span> {error}
+      <button onClick={onRetry} style={{ marginLeft:"auto", background:"none", border:`1px solid #333`, borderRadius:8, color:C.muted, fontSize:11, padding:"5px 12px", cursor:"pointer", fontFamily:"inherit" }}>
+        Retry
+      </button>
+    </div>
+  );
+  if (!data) return null;
+
+  const { releases=[], subscriptions={}, overview={} } = data;
+
+  const KPI = ({ label, value, glow }) => (
+    <Card style={{ padding:"16px 18px", flex:1, minWidth:120 }} orbColor={glow}>
+      <Label>{label}</Label>
+      <div style={{ fontSize:22, fontWeight:900, color:C.text, marginTop:6 }}>{value}</div>
+    </Card>
+  );
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+        <KPI label="Gross · 90d" value={fmtRevenue(overview.totalGrossCents)} glow={C.greenGlow} />
+        <KPI label="MRR" value={fmtRevenue(subscriptions.mrrCents)} glow={C.accentGlow} />
+        <KPI label="Active Subs" value={fmt(subscriptions.activeCount)} glow={C.purpleGlow} />
+        <KPI label="Trialing" value={fmt(subscriptions.trialingCount)} />
+        <KPI label="Past Due" value={fmt(subscriptions.pastDueCount)} />
+        <KPI label="Canceled · 30d" value={fmt(subscriptions.canceledLast30d)} />
+      </div>
+
+      <Card style={{ padding:"16px 20px" }}>
+        <Label style={{ marginBottom:12 }}>Revenue by release · 90d</Label>
+        {!isMobile && (
+          <div style={{
+            display:"grid",
+            gridTemplateColumns:"1fr 96px 96px",
+            gap:12, paddingBottom:10,
+            borderBottom:`1px solid ${C.border}`,
+          }}>
+            {["Release","Gross","Sold"].map((h,i)=>(
+              <div key={i} style={{ fontSize:7, color:C.dim, letterSpacing:2, textTransform:"uppercase", textAlign:i>0?"right":"left" }}>{h}</div>
+            ))}
+          </div>
+        )}
+        {releases.length===0 ? (
+          <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>No revenue data yet</div>
+        ) : releases.map((r)=>(
+          <div key={r.productId || r.slug} style={{
+            display:"grid",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 96px 96px",
+            gap:12, padding:"10px 0",
+            borderBottom:`1px solid ${C.border2}`,
+          }}>
+            <div style={{ fontSize:13, color:C.text, fontWeight:600 }}>{r.title || r.slug}</div>
+            <div style={{ fontSize:13, color:C.green, fontWeight:700, textAlign: isMobile ? "left" : "right" }}>{fmtRevenue(r.grossCents)}</div>
+            <div style={{ fontSize:13, color:C.muted, textAlign: isMobile ? "left" : "right" }}>{fmt(r.itemsSold)}</div>
+          </div>
+        ))}
+      </Card>
     </div>
   );
 }

@@ -224,6 +224,9 @@ export function createPlaybackEventHandlers({
       keepalive: true,
       body: JSON.stringify({
         slug: track.slug,
+        // Disambiguates track.slug across albums (e.g. two different albums'
+        // "intro") for per-track analytics — see media_stream_events.product_id.
+        albumSlug: track.metadata?.albumSlug || null,
         title: track.title,
         eventType,
         mediaType: "audio",
