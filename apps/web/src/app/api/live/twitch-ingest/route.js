@@ -4,7 +4,6 @@ import {
   getAuthorizedTwitchStreamKey,
   TwitchAuthorizationRequiredError,
 } from "@/lib/server/twitch-user-authorization";
-import { getAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 const NO_STORE = { "Cache-Control": "private, no-store, max-age=0" };
@@ -16,7 +15,7 @@ export async function POST(req) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: NO_STORE });
   }
   try {
-    const streamKey = await getAuthorizedTwitchStreamKey(getAdminClient());
+    const streamKey = await getAuthorizedTwitchStreamKey();
     return NextResponse.json(
       { destination: `${TWITCH_INGEST_ORIGIN}/${streamKey}` },
       { headers: NO_STORE }

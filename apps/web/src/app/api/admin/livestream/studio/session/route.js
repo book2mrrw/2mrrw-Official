@@ -50,7 +50,7 @@ export async function POST(req) {
     // Validate/refresh Twitch authority before creating a publisher session.
     // The returned key is deliberately discarded here; only the Fly relay's
     // service-authenticated endpoint can obtain an ingest destination.
-    await getAuthorizedTwitchStreamKey(admin);
+    await getAuthorizedTwitchStreamKey();
     const current = await getBroadcastForProviderStart(admin);
     const scheduledAt = current?.goes_live_at ? Date.parse(current.goes_live_at) : NaN;
     const shouldReuse = Boolean(current?.is_live) || (

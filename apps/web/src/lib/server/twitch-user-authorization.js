@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import postgres from "postgres";
 
 const TWITCH_TOKEN_ENDPOINT = "https://id.twitch.tv/oauth2/token";
 const TWITCH_DEVICE_ENDPOINT = "https://id.twitch.tv/oauth2/device";
@@ -7,6 +8,26 @@ const TWITCH_STREAM_KEY_ENDPOINT = "https://api.twitch.tv/helix/streams/key";
 const REQUIRED_SCOPE = "channel:read:stream_key";
 const AUTHORIZATION_ID = "primary";
 const CIPHER_VERSION = "v1";
+let oauthSql = null;
+
+function getOAuthSql() {
+  if (oauthSql) return oauthSql;
+  const connectionString = String(process.env.POSTGRES_URL || "").trim();
+  if (!/^postgres(?:ql)?:\/\//i.test(connectionString)) {
+    throw new Error("POSTGRES_URL is not configured for Twitch authorization");
+  }
+  // The OAuth credential table is intentionally server-only. A single lazy,
+  // short-idle connection through Supabase's transaction pooler avoids the
+  // public Data API and its schema cache without creating a connection storm.
+  oauthSql = postgres(connectionString, {
+    max: 1,
+    prepare: false,
+    idle_timeout: 20,
+    connect_timeout: 10,
+    max_lifetime: 10 * 60,
+  });
+  return oauthSql;
+}
 
 export class TwitchAuthorizationPendingError extends Error {
   constructor(message = "authorization_pending") {
@@ -85,32 +106,39 @@ async function validateUserToken(accessToken) {
   return { broadcasterId: data.user_id, broadcasterLogin, scopes };
 }
 
-async function persistAuthorization(admin, actorId, tokenResponse) {
+async function persistAuthorization(actorId, tokenResponse) {
   if (!tokenResponse?.access_token || !tokenResponse?.refresh_token) {
     throw new Error("Twitch returned an incomplete authorization");
   }
   const identity = await validateUserToken(tokenResponse.access_token);
   const expiresIn = Math.max(60, Number(tokenResponse.expires_in) || 3600);
   const now = new Date();
-  const row = {
-    id: AUTHORIZATION_ID,
-    broadcaster_id: identity.broadcasterId,
-    broadcaster_login: identity.broadcasterLogin,
-    access_token_ciphertext: seal(tokenResponse.access_token, "twitch-access-token"),
-    refresh_token_ciphertext: seal(tokenResponse.refresh_token, "twitch-refresh-token"),
-    scopes: identity.scopes,
-    expires_at: new Date(now.getTime() + expiresIn * 1000).toISOString(),
-    authorized_by: actorId,
-    revoked_at: null,
-    updated_at: now.toISOString(),
-  };
-  const { data, error } = await admin
-    .from("twitch_user_authorizations")
-    .upsert(row, { onConflict: "id" })
-    .select("broadcaster_id, broadcaster_login, scopes, expires_at, updated_at")
-    .single();
-  if (error) throw error;
-  return data;
+  const sql = getOAuthSql();
+  const [row] = await sql`
+    insert into public.twitch_user_authorizations (
+      id, broadcaster_id, broadcaster_login, access_token_ciphertext,
+      refresh_token_ciphertext, scopes, expires_at, authorized_by,
+      revoked_at, updated_at
+    ) values (
+      ${AUTHORIZATION_ID}, ${identity.broadcasterId}, ${identity.broadcasterLogin},
+      ${seal(tokenResponse.access_token, "twitch-access-token")},
+      ${seal(tokenResponse.refresh_token, "twitch-refresh-token")},
+      ${sql.array(identity.scopes)},
+      ${new Date(now.getTime() + expiresIn * 1000)}, ${actorId}, null, ${now}
+    )
+    on conflict (id) do update set
+      broadcaster_id = excluded.broadcaster_id,
+      broadcaster_login = excluded.broadcaster_login,
+      access_token_ciphertext = excluded.access_token_ciphertext,
+      refresh_token_ciphertext = excluded.refresh_token_ciphertext,
+      scopes = excluded.scopes,
+      expires_at = excluded.expires_at,
+      authorized_by = excluded.authorized_by,
+      revoked_at = null,
+      updated_at = excluded.updated_at
+    returning broadcaster_id, broadcaster_login, scopes, expires_at, updated_at
+  `;
+  return row;
 }
 
 export async function startTwitchDeviceAuthorization({ actorId, nowMs = Date.now() }) {
@@ -147,7 +175,7 @@ export async function startTwitchDeviceAuthorization({ actorId, nowMs = Date.now
   };
 }
 
-export async function pollTwitchDeviceAuthorization(admin, { actorId, grantToken, nowMs = Date.now() }) {
+export async function pollTwitchDeviceAuthorization({ actorId, grantToken, nowMs = Date.now() }) {
   let grant;
   try { grant = JSON.parse(unseal(grantToken, "twitch-device-grant")); } catch {
     throw new Error("Twitch authorization request is invalid");
@@ -174,38 +202,38 @@ export async function pollTwitchDeviceAuthorization(admin, { actorId, grantToken
     throw new Error(data?.message || "Twitch authorization failed");
   }
   if (!data?.access_token || !data?.refresh_token) throw new Error("Twitch returned an incomplete authorization");
-  return persistAuthorization(admin, actorId, data);
+  return persistAuthorization(actorId, data);
 }
 
-export async function getTwitchAuthorizationStatus(admin) {
-  const { data, error } = await admin
-    .from("twitch_user_authorizations")
-    .select("broadcaster_id, broadcaster_login, scopes, expires_at, updated_at, revoked_at")
-    .eq("id", AUTHORIZATION_ID)
-    .maybeSingle();
-  if (error) throw error;
-  const connected = Boolean(data && !data.revoked_at && data.scopes?.includes(REQUIRED_SCOPE));
+export async function getTwitchAuthorizationStatus() {
+  const sql = getOAuthSql();
+  const [row] = await sql`
+    select broadcaster_id, broadcaster_login, scopes, expires_at, updated_at, revoked_at
+      from public.twitch_user_authorizations
+     where id = ${AUTHORIZATION_ID}
+  `;
+  const connected = Boolean(row && !row.revoked_at && row.scopes?.includes(REQUIRED_SCOPE));
   return {
     connected,
-    broadcasterLogin: connected ? data.broadcaster_login : null,
-    scopes: connected ? data.scopes : [],
-    updatedAt: connected ? data.updated_at : null,
+    broadcasterLogin: connected ? row.broadcaster_login : null,
+    scopes: connected ? row.scopes : [],
+    updatedAt: connected ? row.updated_at : null,
   };
 }
 
-async function loadAuthorization(admin) {
-  const { data, error } = await admin
-    .from("twitch_user_authorizations")
-    .select("*")
-    .eq("id", AUTHORIZATION_ID)
-    .is("revoked_at", null)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) throw new TwitchAuthorizationRequiredError();
-  return data;
+async function loadAuthorization() {
+  const sql = getOAuthSql();
+  const [row] = await sql`
+    select *
+      from public.twitch_user_authorizations
+     where id = ${AUTHORIZATION_ID}
+       and revoked_at is null
+  `;
+  if (!row) throw new TwitchAuthorizationRequiredError();
+  return row;
 }
 
-async function refreshAuthorization(admin, row) {
+async function refreshAuthorization(row) {
   const { clientId, clientSecret } = twitchConfig();
   const body = new URLSearchParams({
     client_id: clientId,
@@ -219,10 +247,15 @@ async function refreshAuthorization(admin, row) {
     body,
   });
   if (!response.ok || !data?.access_token || !data?.refresh_token) {
-    await admin.from("twitch_user_authorizations").update({ revoked_at: new Date().toISOString() }).eq("id", AUTHORIZATION_ID);
+    const sql = getOAuthSql();
+    await sql`
+      update public.twitch_user_authorizations
+         set revoked_at = now(), updated_at = now()
+       where id = ${AUTHORIZATION_ID}
+    `;
     throw new TwitchAuthorizationRequiredError("Twitch authorization expired; authorize Twitch again");
   }
-  await persistAuthorization(admin, row.authorized_by, data);
+  await persistAuthorization(row.authorized_by, data);
   return data.access_token;
 }
 
@@ -233,21 +266,21 @@ async function requestStreamKey(row, accessToken) {
   });
 }
 
-export async function getAuthorizedTwitchStreamKey(admin) {
-  const row = await loadAuthorization(admin);
+export async function getAuthorizedTwitchStreamKey() {
+  const row = await loadAuthorization();
   let accessToken = unseal(row.access_token_ciphertext, "twitch-access-token");
   const tokenNearExpiry = Date.parse(row.expires_at) <= Date.now() + 60_000;
   const validationDue = Date.parse(row.updated_at) <= Date.now() - 55 * 60_000;
   if (tokenNearExpiry) {
-    accessToken = await refreshAuthorization(admin, row);
+    accessToken = await refreshAuthorization(row);
   } else if (validationDue) {
     try { await validateUserToken(accessToken); } catch {
-      accessToken = await refreshAuthorization(admin, row);
+      accessToken = await refreshAuthorization(row);
     }
   }
   let result = await requestStreamKey(row, accessToken);
   if (result.response.status === 401) {
-    accessToken = await refreshAuthorization(admin, row);
+    accessToken = await refreshAuthorization(row);
     result = await requestStreamKey(row, accessToken);
   }
   if (!result.response.ok) throw new Error(result.data?.message || "Twitch stream key is unavailable");
@@ -256,9 +289,9 @@ export async function getAuthorizedTwitchStreamKey(admin) {
   return streamKey;
 }
 
-export async function revokeTwitchAuthorization(admin) {
+export async function revokeTwitchAuthorization() {
   let row;
-  try { row = await loadAuthorization(admin); } catch (error) {
+  try { row = await loadAuthorization(); } catch (error) {
     if (error?.message === "Twitch authorization is required") return;
     throw error;
   }
@@ -271,9 +304,10 @@ export async function revokeTwitchAuthorization(admin) {
     body,
     cache: "no-store",
   }).catch(() => {});
-  const { error } = await admin
-    .from("twitch_user_authorizations")
-    .update({ revoked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-    .eq("id", AUTHORIZATION_ID);
-  if (error) throw error;
+  const sql = getOAuthSql();
+  await sql`
+    update public.twitch_user_authorizations
+       set revoked_at = now(), updated_at = now()
+     where id = ${AUTHORIZATION_ID}
+  `;
 }

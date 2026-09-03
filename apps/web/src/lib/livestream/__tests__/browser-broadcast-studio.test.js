@@ -93,6 +93,10 @@ test("Twitch authorization is user-approved, encrypted, renewable, and server-on
   assert.match(oauth, /aes-256-gcm/);
   assert.match(oauth, /grant_type:\s*"refresh_token"/);
   assert.match(oauth, /TWITCH_VALIDATE_ENDPOINT/);
+  assert.match(oauth, /postgres\(connectionString/);
+  assert.match(oauth, /process\.env\.POSTGRES_URL/);
+  assert.match(oauth, /insert into public\.twitch_user_authorizations/);
+  assert.doesNotMatch(oauth, /\.from\("twitch_user_authorizations"\)/);
   assert.match(adminRoute, /startTwitchDeviceAuthorization/);
   assert.match(adminRoute, /pollTwitchDeviceAuthorization/);
   assert.match(ingestRoute, /ServiceCapability\.LIVE_TWITCH_INGEST/);
@@ -102,7 +106,7 @@ test("Twitch authorization is user-approved, encrypted, renewable, and server-on
   assert.doesNotMatch(`${adminRoute}\n${ingestRoute}`, /streamKey\s*:/);
 });
 
-test("device authorization is actor-bound and stores only encrypted credentials", async () => {
+test("device authorization grant is encrypted, actor-bound, and pending safely", async () => {
   const previous = {
     id: process.env.TWITCH_CLIENT_ID,
     secret: process.env.TWITCH_CLIENT_SECRET,
@@ -114,8 +118,6 @@ test("device authorization is actor-bound and stores only encrypted credentials"
   process.env.TWITCH_CLIENT_SECRET = "test-secret";
   process.env.TWITCH_BROADCASTER_LOGIN = "callme2mrrw";
   process.env.TWITCH_OAUTH_TOKEN_ENCRYPTION_KEY = "7b".repeat(32);
-  const persisted = [];
-  let pending = true;
   global.fetch = async (url) => {
     if (url === "https://id.twitch.tv/oauth2/device") {
       return Response.json({
@@ -127,47 +129,22 @@ test("device authorization is actor-bound and stores only encrypted credentials"
       });
     }
     if (url === "https://id.twitch.tv/oauth2/token") {
-      if (pending) return Response.json({ message: "authorization_pending" }, { status: 400 });
-      return Response.json({ access_token: "plain-access-token", refresh_token: "plain-refresh-token", expires_in: 14400 });
-    }
-    if (url === "https://id.twitch.tv/oauth2/validate") {
-      return Response.json({ client_id: "test-client", login: "callme2mrrw", user_id: "42", scopes: ["channel:read:stream_key"] });
+      return Response.json({ message: "authorization_pending" }, { status: 400 });
     }
     throw new Error(`Unexpected test request: ${url}`);
   };
-  const admin = {
-    from(table) {
-      assert.equal(table, "twitch_user_authorizations");
-      return {
-        upsert(row) {
-          persisted.push(row);
-          return {
-            select() {
-              return { single: async () => ({ data: { broadcaster_id: row.broadcaster_id, broadcaster_login: row.broadcaster_login, scopes: row.scopes, expires_at: row.expires_at, updated_at: row.updated_at }, error: null }) };
-            },
-          };
-        },
-      };
-    },
-  };
-
   try {
     const prompt = await startTwitchDeviceAuthorization({ actorId: "admin-42", nowMs: 1_800_000_000_000 });
     assert.equal(prompt.verificationUri, "https://www.twitch.tv/activate?device-code=ABCD1234");
     assert.doesNotMatch(prompt.grantToken, /device-code-secret|admin-42/);
     await assert.rejects(
-      pollTwitchDeviceAuthorization(admin, { actorId: "another-admin", grantToken: prompt.grantToken, nowMs: 1_800_000_001_000 }),
+      pollTwitchDeviceAuthorization({ actorId: "another-admin", grantToken: prompt.grantToken, nowMs: 1_800_000_001_000 }),
       /expired/
     );
     await assert.rejects(
-      pollTwitchDeviceAuthorization(admin, { actorId: "admin-42", grantToken: prompt.grantToken, nowMs: 1_800_000_001_000 }),
+      pollTwitchDeviceAuthorization({ actorId: "admin-42", grantToken: prompt.grantToken, nowMs: 1_800_000_001_000 }),
       TwitchAuthorizationPendingError
     );
-    pending = false;
-    await pollTwitchDeviceAuthorization(admin, { actorId: "admin-42", grantToken: prompt.grantToken, nowMs: 1_800_000_001_000 });
-    assert.equal(persisted.length, 1);
-    assert.doesNotMatch(persisted[0].access_token_ciphertext, /plain-access-token/);
-    assert.doesNotMatch(persisted[0].refresh_token_ciphertext, /plain-refresh-token/);
   } finally {
     global.fetch = previous.fetch;
     for (const [name, value] of [

@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { requireAdminActor } from "@/lib/auth/admin-api-guard";
 import { classifyAdminAuthorityDenial } from "@/lib/auth/admin-authority-diagnostics";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
-import { getAdminClient } from "@/lib/supabase/admin";
 import {
   getTwitchAuthorizationStatus,
   pollTwitchDeviceAuthorization,
@@ -49,7 +48,7 @@ export async function GET(req) {
   const authority = await authorize(req, { routeKey: "admin.twitch.authorization.status", limit: 60 });
   if (authority.response) return authority.response;
   try {
-    return NextResponse.json(await getTwitchAuthorizationStatus(getAdminClient()), { headers: NO_STORE });
+    return NextResponse.json(await getTwitchAuthorizationStatus(), { headers: NO_STORE });
   } catch (error) {
     return failure(error, "Could not read Twitch authorization status");
   }
@@ -78,7 +77,7 @@ export async function PATCH(req) {
     if (!grantToken || grantToken.length > 4096) {
       return NextResponse.json({ error: "Authorization request is invalid" }, { status: 400, headers: NO_STORE });
     }
-    const result = await pollTwitchDeviceAuthorization(getAdminClient(), {
+    const result = await pollTwitchDeviceAuthorization({
       actorId: authority.gate.user.id,
       grantToken,
     });
@@ -99,7 +98,7 @@ export async function DELETE(req) {
   const authority = await authorize(req, { recent: true, routeKey: "admin.twitch.authorization.revoke", limit: 10 });
   if (authority.response) return authority.response;
   try {
-    await revokeTwitchAuthorization(getAdminClient());
+    await revokeTwitchAuthorization();
     return NextResponse.json({ ok: true, connected: false }, { headers: NO_STORE });
   } catch (error) {
     return failure(error, "Twitch authorization could not be removed");
