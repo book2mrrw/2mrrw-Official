@@ -16,6 +16,14 @@ function getOAuthSql() {
   if (!/^postgres(?:ql)?:\/\//i.test(connectionString)) {
     throw new Error("POSTGRES_URL is not configured for Twitch authorization");
   }
+  const target = new URL(connectionString);
+  const projectReference = target.username.startsWith("postgres.")
+    ? target.username.slice("postgres.".length)
+    : target.hostname.match(/^db\.([^.]+)\.supabase\.co$/i)?.[1] || null;
+  console.info("[twitch-authorization-db] initialized", {
+    host: target.hostname,
+    projectReference,
+  });
   // The OAuth credential table is intentionally server-only. A single lazy,
   // short-idle connection through Supabase's transaction pooler avoids the
   // public Data API and its schema cache without creating a connection storm.
