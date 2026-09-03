@@ -96,6 +96,7 @@ test("Twitch authorization is user-approved, encrypted, renewable, and server-on
   assert.match(oauth, /postgres\(connectionString/);
   assert.match(oauth, /process\.env\.POSTGRES_URL/);
   assert.match(oauth, /insert into public\.twitch_user_authorizations/);
+  assert.match(oauth, /sql\.array\(identity\.scopes\)\}::text\[\]/);
   assert.doesNotMatch(oauth, /\.from\("twitch_user_authorizations"\)/);
   assert.match(adminRoute, /startTwitchDeviceAuthorization/);
   assert.match(adminRoute, /pollTwitchDeviceAuthorization/);

@@ -131,7 +131,7 @@ async function persistAuthorization(actorId, tokenResponse) {
       ${AUTHORIZATION_ID}, ${identity.broadcasterId}, ${identity.broadcasterLogin},
       ${seal(tokenResponse.access_token, "twitch-access-token")},
       ${seal(tokenResponse.refresh_token, "twitch-refresh-token")},
-      ${sql.array(identity.scopes)},
+      ${sql.array(identity.scopes)}::text[],
       ${new Date(now.getTime() + expiresIn * 1000)}, ${actorId}, null, ${now}
     )
     on conflict (id) do update set
