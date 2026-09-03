@@ -345,7 +345,23 @@ export function createPlaybackEventHandlers({
     startKeepAlivePing();
     startProgressRaf();
     startPositionSaveTimer();
-    persistPlayback("play");
+    // Analytics only — does not affect playback. Three fixes to what gets
+    // reported here, not what the user hears: (1) a preview play must never
+    // count toward "plays" analytics, since it isn't a genuine listen to the
+    // full track; (2) an admin's own plays (resolveTrackAccess's
+    // adminTrackAccess() stamps access.admin — the same object already read
+    // for previewOnly) must not contaminate a real fan's listening numbers;
+    // (3) this native onPlay event fires on every resume-after-pause too,
+    // not just a track's genuine start, so without this it silently inflates
+    // "plays" every time someone pauses and resumes the same listen. A
+    // resume (currentTime not near 0) is reported as "progress" instead —
+    // an existing event type, already excluded from the "plays" count —
+    // rather than a new type requiring server changes.
+    const analyticsAccess = stateRef.current.currentTrack?.metadata?.access;
+    if (!analyticsAccess?.previewOnly && !analyticsAccess?.admin) {
+      const isFreshListenStart = (audioRef.current?.currentTime || 0) < 1;
+      persistPlayback(isFreshListenStart ? "play" : "progress");
+    }
     const track = stateRef.current.currentTrack;
     if (track) {
       listeningProgressRef.current = { slug: track.slug, recorded30s: false };
