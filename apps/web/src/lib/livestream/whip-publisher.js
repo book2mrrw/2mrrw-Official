@@ -66,6 +66,7 @@ export class WhipPublisher {
     this.onStateChange = onStateChange;
     this.peer = null;
     this.sessionUrl = null;
+    this.sessionEtag = null;
     this.offerData = null;
     this.queuedCandidates = [];
     this.closed = false;
@@ -124,6 +125,7 @@ export class WhipPublisher {
     const location = response.headers.get("Location");
     if (!location) throw new Error("Relay did not create a WHIP session");
     this.sessionUrl = new URL(location, this.url).toString();
+    this.sessionEtag = response.headers.get("ETag");
     const answer = await response.text();
     await peer.setRemoteDescription({ type: "answer", sdp: answer });
 
@@ -138,17 +140,24 @@ export class WhipPublisher {
       return;
     }
     this.patchCandidates([candidate]).catch((error) => {
-      if (!this.closed && error?.name !== "AbortError") this.onStateChange?.("failed", error);
+      // Candidate signaling is ancillary once the peer has a viable route.
+      // RTCPeerConnection remains the transport authority and will emit
+      // "failed" itself if connectivity is actually lost.
+      if (!this.closed && error?.name !== "AbortError") this.onStateChange?.("candidate-error", error);
     });
   }
 
   async patchCandidates(candidates) {
     if (!this.sessionUrl || this.closed) return;
+    // A WHIP server advertises Trickle ICE support with the session ETag.
+    // Without it, do not mislabel a normal candidate addition as an ICE restart.
+    if (!this.sessionEtag) return;
     const response = await fetch(this.sessionUrl, {
       method: "PATCH",
       headers: {
+        ...this.authHeaders(),
         "Content-Type": "application/trickle-ice-sdpfrag",
-        "If-Match": "*",
+        "If-Match": this.sessionEtag,
       },
       body: candidateFragment(this.offerData, candidates),
       signal: this.abortController.signal,
@@ -177,11 +186,12 @@ export class WhipPublisher {
     this.closed = true;
     const sessionUrl = this.sessionUrl;
     this.sessionUrl = null;
+    this.sessionEtag = null;
     this.abortController.abort();
     this.peer?.close();
     this.peer = null;
     if (sessionUrl) {
-      fetch(sessionUrl, { method: "DELETE", keepalive: true }).catch(() => {});
+      fetch(sessionUrl, { method: "DELETE", headers: this.authHeaders(), keepalive: true }).catch(() => {});
     }
   }
 }

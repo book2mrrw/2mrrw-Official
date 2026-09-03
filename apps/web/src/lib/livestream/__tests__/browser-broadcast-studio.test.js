@@ -62,6 +62,9 @@ test("studio remains one mounted leaf and never invokes app navigation or music 
   assert.match(studio, /"Authorize Twitch"/);
   assert.match(studio, /href=\{twitchPrompt\.verificationUri\}/);
   assert.match(studio, /AdminVerificationOverlay/);
+  assert.match(studio, /RECOVERABLE_ADMIN_AUTH_CODES\.has\(session\.code\)/);
+  assert.match(studio, /verificationResumeRef\.current = \(\) => connectRef\.current\?\.\(recovery\)/);
+  assert.doesNotMatch(studio, /onVerified[\s\S]{0,240}setTwitchAuthorization\(\{ status: "required"/);
   assert.match(studio, /devicechange/);
   assert.match(studio, /publisher\.replaceTrack\("video", nextTrack\)/);
   assert.match(studio, /video: cameraConstraints\(deviceId\), audio: false/);
@@ -95,6 +98,49 @@ test("a live camera switch replaces only the video sender without reconnecting",
   assert.deepEqual(added, [nextTrack]);
   assert.deepEqual(stopped, ["previous"]);
   assert.equal(publisher.closed, false);
+});
+
+test("WHIP candidate updates use session authority without forcing a healthy peer to reconnect", async () => {
+  const previousFetch = global.fetch;
+  const requests = [];
+  const states = [];
+  global.fetch = async (url, options) => {
+    requests.push({ url, options });
+    return new Response(null, { status: 409 });
+  };
+  try {
+    const publisher = new WhipPublisher({
+      url: "https://relay.example.test/live/whip",
+      token: "publish-grant",
+      stream: { getTracks: () => [] },
+      onStateChange: (state) => states.push(state),
+    });
+    publisher.sessionUrl = "https://relay.example.test/live/whip/session-1";
+    publisher.sessionEtag = '"session-etag"';
+    publisher.offerData = {
+      iceUfrag: "offer-user",
+      icePwd: "offer-password",
+      media: ["video 9 UDP/TLS/RTP/SAVPF 96"],
+    };
+    publisher.sendCandidate({
+      sdpMLineIndex: 0,
+      candidate: "candidate:1 1 udp 1 192.0.2.1 5000 typ host",
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].options.headers.Authorization, "Bearer publish-grant");
+    assert.equal(requests[0].options.headers["If-Match"], '"session-etag"');
+    assert.deepEqual(states, ["candidate-error"]);
+    assert.equal(publisher.closed, false);
+
+    publisher.close();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(requests[1].options.method, "DELETE");
+    assert.equal(requests[1].options.headers.Authorization, "Bearer publish-grant");
+  } finally {
+    global.fetch = previousFetch;
+  }
 });
 
 test("relay is warm, single-publisher, authenticated, and forwards to Twitch without exposing RTSP", () => {

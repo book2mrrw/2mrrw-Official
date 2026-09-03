@@ -99,6 +99,8 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
   const twitchPopupRef = useRef(null);
   const reconnectAttemptsRef = useRef(0);
   const connectRef = useRef(null);
+  const authorizeTwitchRef = useRef(null);
+  const verificationResumeRef = useRef(null);
 
   const [phase, setPhase] = useState("idle");
   const [message, setMessage] = useState("Preview your camera, then go live directly from 2MRRW.");
@@ -191,7 +193,10 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
       });
       const data = await response.json();
       if (!response.ok) {
-        if (RECOVERABLE_ADMIN_AUTH_CODES.has(data.code)) setAdminVerificationRequired(true);
+        if (RECOVERABLE_ADMIN_AUTH_CODES.has(data.code)) {
+          verificationResumeRef.current = () => authorizeTwitchRef.current?.();
+          setAdminVerificationRequired(true);
+        }
         throw new Error(data.error || "Twitch authorization could not start");
       }
       const prompt = {
@@ -214,6 +219,10 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
       setMessage(studioMessageForError(error));
     }
   }, [pollTwitchAuthorization, twitchAuthorization.status]);
+
+  useEffect(() => {
+    authorizeTwitchRef.current = authorizeTwitch;
+  }, [authorizeTwitch]);
 
   const enumerateDevices = useCallback(async () => {
     if (!navigator.mediaDevices?.enumerateDevices) return { cameras: [], microphones: [] };
@@ -382,6 +391,18 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
       });
       const session = await sessionResponse.json();
       if (!sessionResponse.ok) {
+        if (RECOVERABLE_ADMIN_AUTH_CODES.has(session.code)) {
+          // The camera/microphone MediaStream stays alive while the short MFA
+          // recency window is restored. Resume this exact connection intent;
+          // Twitch authorization is an independent authority and stays intact.
+          publisherRef.current?.close();
+          publisherRef.current = null;
+          verificationResumeRef.current = () => connectRef.current?.(recovery);
+          setAdminVerificationRequired(true);
+          setPhase(hasMedia ? "preview" : "idle");
+          setMessage("Verify your admin session to continue. Your camera and microphone remain ready.");
+          return;
+        }
         if (session.code === "TWITCH_AUTHORIZATION_REQUIRED") {
           setTwitchAuthorization({ status: "required", broadcasterLogin: null });
           setPhase(hasMedia ? "preview" : "idle");
@@ -536,11 +557,16 @@ function BrowserBroadcastStudio({ defaultTitle = "2MRRW Live", audience = "all" 
     <section data-browser-broadcast-studio style={panelStyle} aria-label="Browser broadcast studio">
       {adminVerificationRequired && (
         <AdminVerificationOverlay
-          onCancel={() => setAdminVerificationRequired(false)}
-          onVerified={async () => {
+          onCancel={() => {
+            verificationResumeRef.current = null;
             setAdminVerificationRequired(false);
-            setTwitchAuthorization({ status: "required", broadcasterLogin: null });
-            await authorizeTwitch();
+            setMessage("Admin verification was cancelled. Your camera and microphone remain ready.");
+          }}
+          onVerified={async () => {
+            const resume = verificationResumeRef.current;
+            verificationResumeRef.current = null;
+            setAdminVerificationRequired(false);
+            if (resume) await resume();
           }}
         />
       )}
