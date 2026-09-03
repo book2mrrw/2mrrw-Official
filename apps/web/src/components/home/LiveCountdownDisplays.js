@@ -1,10 +1,11 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import LivePanel from "@/components/home/LivePanel";
 import { useLiveBroadcast, useLiveCountdown, useTwitchEmbedConfig } from "@/components/home/LiveCountdownContext";
 import { LIVE_PPV_PRESET_CENTS, formatLivePpvAmount } from "@/lib/live/ppv-pricing";
 import { useLiveWitnessCount } from "@/hooks/useLiveWitnessCount";
+import { useLiveChat } from "@/hooks/useLiveChat";
 
 function LivePpvPricePicker({ broadcastTitle }) {
   const [open, setOpen] = useState(false);
@@ -354,6 +355,64 @@ const LiveCountdownHeader = memo(function LiveCountdownHeader({
   );
 });
 
+function LiveChatPanel({ broadcastId }) {
+  const { messages, sendMessage, sending, error } = useLiveChat({ broadcastId, active: true });
+  const [draft, setDraft] = useState("");
+  const listRef = useRef(null);
+
+  useEffect(() => {
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  const handleSend = async () => {
+    const body = draft;
+    setDraft("");
+    await sendMessage(body);
+  };
+
+  return (
+    <div style={{ borderTop: "1px solid #111", display: "flex", flexDirection: "column", height: 260 }}>
+      <div ref={listRef} style={{ flex: 1, overflowY: "auto", padding: "10px 16px", display: "flex", flexDirection: "column", gap: 6 }}>
+        {messages.length === 0 && (
+          <div style={{ fontSize: 12, color: "#555", textAlign: "center", marginTop: 20 }}>
+            No messages yet — say something.
+          </div>
+        )}
+        {messages.map((m) => (
+          <div key={m.id} style={{ fontSize: 13, lineHeight: 1.4 }}>
+            <span style={{ fontWeight: 700, color: m.is_creator ? "#00ffff" : "#9146ff" }}>{m.display_name}</span>
+            {m.badge && (
+              <span style={{ fontSize: 9, color: "#888", marginLeft: 6, letterSpacing: 0.5, textTransform: "uppercase" }}>
+                {m.badge}
+              </span>
+            )}
+            <span style={{ color: "#ddd" }}>: {m.body}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8, padding: "10px 16px", borderTop: "1px solid #111" }}>
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !sending && draft.trim()) handleSend(); }}
+          maxLength={500}
+          placeholder="Say something…"
+          style={{ flex: 1, background: "#141414", border: "1px solid #222", borderRadius: 6, color: "#eee", padding: "8px 10px", fontSize: 13 }}
+        />
+        <button
+          onClick={handleSend}
+          disabled={sending || !draft.trim()}
+          style={{ padding: "8px 16px", background: sending || !draft.trim() ? "#1a1a1a" : "#00ffff", color: sending || !draft.trim() ? "#555" : "#000", border: "none", borderRadius: 6, fontWeight: 700, fontSize: 12, cursor: sending || !draft.trim() ? "default" : "pointer" }}
+        >
+          Send
+        </button>
+      </div>
+      {error && <div style={{ fontSize: 11, color: "#ef4444", padding: "0 16px 8px" }}>{error}</div>}
+    </div>
+  );
+}
+
 const PersistentTwitchPlayer = memo(function PersistentTwitchPlayer() {
   const { liveIsLive, liveProviderStatus, liveStateStatus, canViewLive, liveAccess, liveTitle, liveBroadcastId } = useLiveBroadcast();
   const { channel, parent } = useTwitchEmbedConfig();
@@ -420,6 +479,9 @@ const PersistentTwitchPlayer = memo(function PersistentTwitchPlayer() {
           )}
         </div>
       </div>
+      {canViewLive && liveIsLive && liveBroadcastId && (
+        <LiveChatPanel broadcastId={liveBroadcastId} />
+      )}
     </div>
   );
 });
