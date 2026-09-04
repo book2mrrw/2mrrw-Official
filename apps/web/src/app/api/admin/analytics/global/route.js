@@ -83,6 +83,11 @@ function inRange(iso, start, end) {
  * default. GROWTH mode is intentionally independent of that range — it is
  * always the last 30 days vs. the 30 days before that, matching the map's
  * pre-existing "30-Day Growth" label.
+ *
+ * "Fan" = a registered profile who has streamed at least once — not merely
+ * signed up. Every count here (by_country/by_city fans, overview.total_fans,
+ * monthly_growth) is scoped to that, by WHEN the streaming happened (not
+ * signup date), so since/until genuinely filters who counts as active.
  */
 export async function GET(req) {
   const user = await getAdminSessionUser();
@@ -115,7 +120,7 @@ export async function GET(req) {
       .limit(100000),
     admin
       .from("media_stream_events")
-      .select("country, region, city, event_type, created_at")
+      .select("user_id, country, region, city, event_type, created_at")
       .not("country", "is", null)
       .in("event_type", ["play", "complete"])
       .limit(100000),
@@ -131,19 +136,41 @@ export async function GET(req) {
   const purchases = purchasesResult.data || [];
   const profileByUserId = new Map(profiles.map((p) => [p.id, p]));
 
+  // A "fan" is a registered profile who has streamed at least once — not
+  // merely signed up. Previously every profile counted as a fan regardless
+  // of activity, inflating every number on this map with dead accounts.
+  // Scoped by WHEN the streaming happened (not signup date), so the
+  // since/until range answers "how many fans were active in this window,"
+  // and growth reflects real 30d-vs-prior-30d activity (a user active in
+  // both windows counts in both — that's a retained fan, not a contradiction).
+  const playEvents = streams.filter((s) => s.event_type === "play" && s.user_id);
+  const streamedInWindow = new Set(
+    playEvents.filter((s) => (!since && !until) || inRange(s.created_at, since, until)).map((s) => s.user_id)
+  );
+  const streamedInGrowthCurrent = new Set(
+    playEvents.filter((s) => inRange(s.created_at, growthCurrentStart, now)).map((s) => s.user_id)
+  );
+  const streamedInGrowthPrev = new Set(
+    playEvents.filter((s) => inRange(s.created_at, growthPrevStart, growthCurrentStart)).map((s) => s.user_id)
+  );
+  const firstPlayMonthByUser = new Map();
+  for (const s of playEvents) {
+    const existing = firstPlayMonthByUser.get(s.user_id);
+    if (!existing || s.created_at < existing) firstPlayMonthByUser.set(s.user_id, s.created_at);
+  }
+
   const currentAgg = new Aggregator();
   const growthCurrentAgg = new Aggregator();
   const growthPrevAgg = new Aggregator();
   const monthCounts = {};
-  let totalFansInWindow = 0;
 
-  // ─── Fans ───────────────────────────────────────────────────────────────
+  // ─── Fans (streamed at least once) ─────────────────────────────────────
+  for (const iso of firstPlayMonthByUser.values()) {
+    const m = iso.slice(0, 7);
+    monthCounts[m] = (monthCounts[m] || 0) + 1;
+  }
+
   for (const p of profiles) {
-    if (p.created_at) {
-      const m = p.created_at.slice(0, 7);
-      monthCounts[m] = (monthCounts[m] || 0) + 1;
-    }
-    if (inRange(p.created_at, since, until) || (!since && !until)) totalFansInWindow++;
     if (!p.country) continue;
 
     const displayName = p.country.trim();
@@ -169,10 +196,9 @@ export async function GET(req) {
       }
     };
 
-    if (!since && !until) apply(currentAgg);
-    else if (inRange(p.created_at, since, until)) apply(currentAgg);
-    if (inRange(p.created_at, growthCurrentStart, now)) apply(growthCurrentAgg);
-    else if (inRange(p.created_at, growthPrevStart, growthCurrentStart)) apply(growthPrevAgg);
+    if (streamedInWindow.has(p.id)) apply(currentAgg);
+    if (streamedInGrowthCurrent.has(p.id)) apply(growthCurrentAgg);
+    if (streamedInGrowthPrev.has(p.id)) apply(growthPrevAgg);
   }
 
   // ─── Streams (media_stream_events.country is already an ISO alpha-2 code) ──
@@ -266,7 +292,7 @@ export async function GET(req) {
   return NextResponse.json(
     {
       overview: {
-        total_fans: totalFansInWindow,
+        total_fans: streamedInWindow.size,
         unique_countries: by_country.filter((c) => c.fans > 0).length,
         unique_cities: by_city.length,
         total_streams: totalStreams,

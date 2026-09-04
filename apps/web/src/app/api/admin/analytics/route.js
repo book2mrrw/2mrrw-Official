@@ -61,14 +61,27 @@ export async function GET(req) {
   const admin = getAdminClient();
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [playStatsResult, trackPlayStatsResult, libraryResult, purchasesResult, productsResult, profilesResult] = await Promise.all([
+  const [playStatsResult, trackPlayStatsResult, libraryResult, purchasesResult, productsResult, profilesResult, playEventsResult] = await Promise.all([
     admin.rpc("get_play_stats", { since: ninetyDaysAgo }),
     admin.rpc("get_track_play_stats", { since: ninetyDaysAgo }),
     admin.from("library_items").select("product_id, source, products(slug, title, cover_url)").eq("source", "purchase").limit(10000),
     admin.from("purchases").select("items, status, amount_cents").eq("status", "completed").gte("created_at", ninetyDaysAgo).limit(5000),
     admin.from("products").select(PRODUCT_COLS_FOR_COVER).in("product_type", ["single", "feature", "album"]).limit(1000),
-    admin.from("profiles").select("gender, age_range, city, state, country, created_at, role").limit(50000),
+    admin.from("profiles").select("id, gender, age_range, city, state, country, created_at, role").limit(50000),
+    admin.from("media_stream_events").select("user_id, created_at").eq("event_type", "play").not("user_id", "is", null).limit(100000),
   ]);
+
+  // A "fan" is a registered profile who has streamed at least once — not
+  // merely signed up. Every demographic/geography count below, and totalFans
+  // itself, is scoped to this; previously every profile counted regardless
+  // of activity, inflating every number here with accounts that never
+  // listened to anything.
+  const streamedUserIds = new Set((playEventsResult.data || []).map((e) => e.user_id));
+  const firstPlayMonthByUser = new Map();
+  for (const e of playEventsResult.data || []) {
+    const existing = firstPlayMonthByUser.get(e.user_id);
+    if (!existing || e.created_at < existing) firstPlayMonthByUser.set(e.user_id, e.created_at);
+  }
 
   // ─── Play stats ───────────────────────────────────────────────────────────
   const playStats = {};
@@ -173,8 +186,8 @@ export async function GET(req) {
     { plays: 0, purchases: 0 }
   );
 
-  // ─── Demographics + geography ─────────────────────────────────────────────
-  const profiles = profilesResult.data || [];
+  // ─── Demographics + geography (streamed-at-least-once fans only) ──────────
+  const profiles = (profilesResult.data || []).filter((p) => streamedUserIds.has(p.id));
   const gender = { male: 0, female: 0, unknown: 0 };
   const ageRange = { "18-25": 0, "25-40": 0, "40-65": 0, unknown: 0 };
   const stateCounts = {};
@@ -206,10 +219,13 @@ export async function GET(req) {
       const c = p.country.trim();
       countryCounts[c] = (countryCounts[c] || 0) + 1;
     }
-    if (p.created_at) {
-      const m = p.created_at.slice(0, 7);
-      monthCounts[m] = (monthCounts[m] || 0) + 1;
-    }
+  }
+
+  // Fan growth by month is keyed by first-play month, not signup month —
+  // consistent with "fan" meaning "streamed," not "signed up."
+  for (const iso of firstPlayMonthByUser.values()) {
+    const m = iso.slice(0, 7);
+    monthCounts[m] = (monthCounts[m] || 0) + 1;
   }
 
   const topStates = Object.entries(stateCounts)

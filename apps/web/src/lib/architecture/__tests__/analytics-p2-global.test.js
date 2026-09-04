@@ -111,18 +111,30 @@ test("GROWTH is always a fixed last-30-days vs. prior-30-days comparison, indepe
   assert.match(src, /const GROWTH_WINDOW_MS = 30 \* DAY_MS;/);
   assert.match(src, /const growthCurrentStart = new Date\(now\.getTime\(\) - GROWTH_WINDOW_MS\);/);
   assert.match(src, /const growthPrevStart = new Date\(growthCurrentStart\.getTime\(\) - GROWTH_WINDOW_MS\);/);
-  // growth buckets must be filled unconditionally (not gated on since/until at all)
+  // Fans (a "fan" is a profile who streamed at least once, keyed by media_stream_events.created_at,
+  // not since/until at all) — growth buckets are two independent Set-membership checks, so a
+  // returning fan (active in both 30d windows) counts in both, not mutually exclusive.
+  assert.match(src, /const streamedInGrowthCurrent = new Set\(\s*\n\s*playEvents\.filter\(\(s\) => inRange\(s\.created_at, growthCurrentStart, now\)\)\.map\(\(s\) => s\.user_id\)\s*\n\s*\);/);
+  assert.match(src, /const streamedInGrowthPrev = new Set\(\s*\n\s*playEvents\.filter\(\(s\) => inRange\(s\.created_at, growthPrevStart, growthCurrentStart\)\)\.map\(\(s\) => s\.user_id\)\s*\n\s*\);/);
   const fansSectionAt = src.indexOf("// ─── Fans");
   const fansBody = src.slice(fansSectionAt, src.indexOf("// ─── Streams"));
-  assert.match(fansBody, /if \(inRange\(p\.created_at, growthCurrentStart, now\)\) apply\(growthCurrentAgg\);/);
-  assert.match(fansBody, /else if \(inRange\(p\.created_at, growthPrevStart, growthCurrentStart\)\) apply\(growthPrevAgg\);/);
+  assert.match(fansBody, /if \(streamedInGrowthCurrent\.has\(p\.id\)\) apply\(growthCurrentAgg\);/);
+  assert.match(fansBody, /if \(streamedInGrowthPrev\.has\(p\.id\)\) apply\(growthPrevAgg\);/);
 });
 
-test("omitting since/until behaves exactly like the pre-existing all-time default — the current bucket is populated unconditionally in that case", () => {
+test("omitting since/until behaves exactly like the pre-existing all-time default — every fan who has ever streamed counts in the current bucket", () => {
   const src = read("src/app/api/admin/analytics/global/route.js");
+  assert.match(src, /const streamedInWindow = new Set\(\s*\n\s*playEvents\.filter\(\(s\) => \(!since && !until\) \|\| inRange\(s\.created_at, since, until\)\)\.map\(\(s\) => s\.user_id\)\s*\n\s*\);/);
   const fansSectionAt = src.indexOf("// ─── Fans");
   const fansBody = src.slice(fansSectionAt, src.indexOf("// ─── Streams"));
-  assert.match(fansBody, /if \(!since && !until\) apply\(currentAgg\);\s*\n\s*else if \(inRange\(p\.created_at, since, until\)\) apply\(currentAgg\);/);
+  assert.match(fansBody, /if \(streamedInWindow\.has\(p\.id\)\) apply\(currentAgg\);/);
+});
+
+test("a fan is a registered profile who has streamed at least once — not merely signed up — and every fan count is scoped to that", () => {
+  const src = read("src/app/api/admin/analytics/global/route.js");
+  assert.match(src, /const playEvents = streams\.filter\(\(s\) => s\.event_type === "play" && s\.user_id\);/);
+  assert.match(src, /total_fans: streamedInWindow\.size,/);
+  assert.doesNotMatch(src, /profiles\.length/, "total_fans must never fall back to a raw signup count");
 });
 
 test("since/until are optional ISO date query params parsed defensively — an invalid value degrades to null (all-time), not a 500", () => {

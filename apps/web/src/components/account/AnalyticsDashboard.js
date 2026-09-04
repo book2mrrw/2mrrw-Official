@@ -780,7 +780,7 @@ export default function AnalyticsDashboard({ isMobile }) {
 
           {/* KPI row */}
           <div style={{ display:"flex", gap:10, flexWrap: isMobile?"wrap":"nowrap" }}>
-            <KPITile isMobile={isMobile} label="Total Fans"      value={fmt(overview.totalFans)}           sub="All-time accounts"    color={C.accent} glow={C.accentGlow} />
+            <KPITile isMobile={isMobile} label="Total Fans"      value={fmt(overview.totalFans)}           sub="Streamed at least once"    color={C.accent} glow={C.accentGlow} />
             <KPITile isMobile={isMobile} label="Plays · 90d"     value={fmt(overview.totalPlays)}          sub="Stream events"        color="#ffffff"  glow="rgba(255,255,255,0.07)" />
             <KPITile isMobile={isMobile} label="Purchases · 90d" value={fmt(overview.totalPurchases)}      sub="Completed orders"     color={C.gold}   glow={C.goldGlow} />
             <KPITile isMobile={isMobile} label="Revenue · 90d"   value={fmtRevenue(overview.totalRevenueCents)} sub="Gross sales"    color={C.green}  glow={C.greenGlow} />
@@ -861,7 +861,7 @@ export default function AnalyticsDashboard({ isMobile }) {
 
           {/* KPIs */}
           <div style={{ display:"flex", gap:10, flexWrap: isMobile?"wrap":"nowrap" }}>
-            <KPITile isMobile={isMobile} label="Total Fans"      value={fmt(overview.totalFans)}                                           color={C.accent} glow={C.accentGlow} />
+            <KPITile isMobile={isMobile} label="Total Fans"      value={fmt(overview.totalFans)}             sub="Streamed at least once" color={C.accent} glow={C.accentGlow} />
             <KPITile isMobile={isMobile} label="Fully Profiled"  value={fmt(overview.fansWithDemographics)}  sub={`${overview.demographicsCoverage||0}% of total`} color={C.purple} glow={C.purpleGlow} />
             <KPITile isMobile={isMobile} label="States"          value={fmt(geography.topStates?.length||0)} sub="Represented"             color={C.gold}   glow={C.goldGlow} />
             <KPITile isMobile={isMobile} label="Cities"          value={fmt(geography.topCities?.length||0)} sub="Represented"             color={C.green}  glow={C.greenGlow} />

@@ -897,7 +897,7 @@ export default function AdminGlobalAnalytics() {
           <>
             {/* KPI strip */}
             <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
-              <KPITile label="Total Fans" value={fmt(ov.total_fans)} sub="All-time signups" color={C.accent}
+              <KPITile label="Total Fans" value={fmt(ov.total_fans)} sub="Streamed at least once" color={C.accent}
                 style={{ minWidth: isMobile ? "calc(50% - 5px)" : 140 }} />
               <KPITile label="Countries" value={fmt(ov.unique_countries)} sub="Markets reached" color={C.purple}
                 style={{ minWidth: isMobile ? "calc(50% - 5px)" : 140 }} />
