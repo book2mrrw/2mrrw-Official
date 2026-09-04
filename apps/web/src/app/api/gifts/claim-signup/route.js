@@ -15,6 +15,7 @@ import { buildWelcomeEmail, sendTransactionalEmail } from "@/lib/server/email";
 import { catalogCoverUrl } from "@/lib/media-urls";
 import { getCanonicalReleaseBySlug } from "@/lib/media/canonical-catalog";
 import { geocodeProfileIfNeeded } from "@/lib/geo/geocode-profile";
+import { readAttributionCookie } from "@/lib/auth/attribution-cookie";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,7 @@ export async function POST(req) {
 
     const VALID_GENDERS = ["male", "female"];
     const VALID_AGE_RANGES = ["18-25", "25-40", "40-65"];
+    const firstTouch = await readAttributionCookie();
     const profileProvision = await persistNewUserProfileOrRollback(admin, {
       userId: newUser.id,
       logPrefix: "claim-signup",
@@ -105,6 +107,7 @@ export async function POST(req) {
         gender: VALID_GENDERS.includes(gender) ? gender : null,
         age_range: VALID_AGE_RANGES.includes(age_range) ? age_range : null,
         role: "user",
+        first_touch: firstTouch,
       },
     });
     if (!profileProvision.ok) {

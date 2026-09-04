@@ -560,6 +560,7 @@ const TABS = [
   { id:"audience", label:"Audience" },
   { id:"tracks",   label:"Tracks"   },
   { id:"revenue",  label:"Revenue"  },
+  { id:"funnels",  label:"Funnels"  },
 ];
 const SORT_OPTS = [
   { key:"plays",          label:"Plays"      },
@@ -583,6 +584,11 @@ export default function AnalyticsDashboard({ isMobile }) {
   const [revenueLoading, setRevenueLoading] = useState(false);
   const [revenueError,   setRevenueError]   = useState(null);
 
+  // Funnels tab — same lazy, isolated pattern as Revenue above.
+  const [funnelsData,    setFunnelsData]    = useState(null);
+  const [funnelsLoading, setFunnelsLoading] = useState(false);
+  const [funnelsError,   setFunnelsError]   = useState(null);
+
   const load = useCallback(() => {
     setLoading(true); setError(null);
     fetch("/api/admin/analytics", { credentials:"include" })
@@ -599,10 +605,21 @@ export default function AnalyticsDashboard({ isMobile }) {
       .catch(()=>{ setRevenueError("Could not load revenue."); setRevenueLoading(false); });
   }, []);
 
+  const loadFunnels = useCallback(() => {
+    setFunnelsLoading(true); setFunnelsError(null);
+    fetch("/api/admin/analytics/funnels", { credentials:"include" })
+      .then(r=>r.ok?r.json():Promise.reject(r.status))
+      .then(d=>{ setFunnelsData(d); setFunnelsLoading(false); })
+      .catch(()=>{ setFunnelsError("Could not load funnels."); setFunnelsLoading(false); });
+  }, []);
+
   useEffect(()=>{ load(); },[load]);
   useEffect(()=>{
     if (tab==="revenue" && !revenueData && !revenueLoading) loadRevenue();
   },[tab, revenueData, revenueLoading, loadRevenue]);
+  useEffect(()=>{
+    if (tab==="funnels" && !funnelsData && !funnelsLoading) loadFunnels();
+  },[tab, funnelsData, funnelsLoading, loadFunnels]);
 
   if (loading) return (
     <div style={{ padding:"60px 0", textAlign:"center" }}>
@@ -909,6 +926,16 @@ export default function AnalyticsDashboard({ isMobile }) {
           isMobile={isMobile}
         />
       )}
+
+      {tab==="funnels" && (
+        <FunnelsTab
+          data={funnelsData}
+          loading={funnelsLoading}
+          error={funnelsError}
+          onRetry={loadFunnels}
+          isMobile={isMobile}
+        />
+      )}
     </div>
   );
 }
@@ -974,6 +1001,125 @@ function RevenueTab({ data, loading, error, onRetry, isMobile }) {
             <div style={{ fontSize:13, color:C.text, fontWeight:600 }}>{r.title || r.slug}</div>
             <div style={{ fontSize:13, color:C.green, fontWeight:700, textAlign: isMobile ? "left" : "right" }}>{fmtRevenue(r.grossCents)}</div>
             <div style={{ fontSize:13, color:C.muted, textAlign: isMobile ? "left" : "right" }}>{fmt(r.itemsSold)}</div>
+          </div>
+        ))}
+      </Card>
+    </div>
+  );
+}
+
+// ── Funnels tab: acquisition funnel, cohort retention, first-touch attribution ──
+function FunnelsTab({ data, loading, error, onRetry, isMobile }) {
+  if (loading) return (
+    <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>Loading funnels…</div>
+  );
+  if (error) return (
+    <div style={{ padding:"24px 0", color:C.red, fontSize:13, display:"flex", alignItems:"center", gap:10 }}>
+      <span>⚠</span> {error}
+      <button onClick={onRetry} style={{ marginLeft:"auto", background:"none", border:`1px solid #333`, borderRadius:8, color:C.muted, fontSize:11, padding:"5px 12px", cursor:"pointer", fontFamily:"inherit" }}>
+        Retry
+      </button>
+    </div>
+  );
+  if (!data) return null;
+
+  const { funnel={signups:0,streamed:0,purchased:0}, cohorts=[], attribution=[] } = data;
+  const steps = [
+    { key:"signups",  label:"Signups",  value:funnel.signups,  color:C.accent },
+    { key:"streamed", label:"Streamed", value:funnel.streamed, color:C.purple },
+    { key:"purchased",label:"Purchased",value:funnel.purchased,color:C.green  },
+  ];
+  const maxStep = Math.max(funnel.signups, 1);
+
+  const cohortMonths = [...new Set(cohorts.map(c=>c.cohortMonth))].sort().reverse();
+  const maxOffset = cohorts.reduce((m,c)=>Math.max(m,c.monthOffset), 0);
+  const cellFor = (month, offset) => cohorts.find(c=>c.cohortMonth===month && c.monthOffset===offset);
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <Card style={{ padding:"16px 20px" }}>
+        <Label style={{ marginBottom:14 }}>Acquisition funnel · 90d</Label>
+        <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+          {steps.map((s,i)=>{
+            const prev = i>0 ? steps[i-1].value : null;
+            const convPct = prev ? Math.round((s.value/prev)*100) : 100;
+            return (
+              <div key={s.key}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+                  <span style={{ fontSize:12, color:C.text, fontWeight:600 }}>{s.label}</span>
+                  <span style={{ fontSize:12, color:s.color, fontWeight:700, fontVariantNumeric:"tabular-nums" }}>
+                    {fmt(s.value)}{i>0 && <span style={{ color:C.muted, fontWeight:400 }}> · {convPct}%</span>}
+                  </span>
+                </div>
+                <div style={{ height:10, background:C.surface2, borderRadius:5, overflow:"hidden" }}>
+                  <div style={{ height:"100%", width:`${(s.value/maxStep)*100}%`, background:s.color, borderRadius:5, transition:"width 0.3s" }} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card style={{ padding:"16px 20px", overflowX:"auto" }}>
+        <Label style={{ marginBottom:12 }}>Cohort retention · signup month → % active</Label>
+        {cohortMonths.length===0 ? (
+          <div style={{ textAlign:"center", padding:"24px 0", color:C.muted, fontSize:13 }}>No cohort data yet</div>
+        ) : (
+          <div style={{ minWidth: isMobile ? 480 : "auto" }}>
+            <div style={{ display:"grid", gridTemplateColumns:`90px repeat(${maxOffset+1}, 1fr)`, gap:4, marginBottom:6 }}>
+              <div />
+              {Array.from({length:maxOffset+1},(_,o)=>(
+                <div key={o} style={{ fontSize:8, color:C.dim, textAlign:"center", letterSpacing:1, textTransform:"uppercase" }}>M{o}</div>
+              ))}
+            </div>
+            {cohortMonths.map(month=>{
+              const size = cohorts.find(c=>c.cohortMonth===month)?.cohortSize || 0;
+              return (
+                <div key={month} style={{ display:"grid", gridTemplateColumns:`90px repeat(${maxOffset+1}, 1fr)`, gap:4, marginBottom:4 }}>
+                  <div style={{ fontSize:10, color:C.muted, alignSelf:"center" }}>{month} <span style={{ color:C.dim }}>({fmt(size)})</span></div>
+                  {Array.from({length:maxOffset+1},(_,o)=>{
+                    const cell = cellFor(month, o);
+                    if (!cell) return <div key={o} />;
+                    const retPct = size ? Math.round((cell.retainedFans/size)*100) : 0;
+                    return (
+                      <div key={o} title={`${retPct}% (${cell.retainedFans}/${size})`} style={{
+                        height:26, borderRadius:4, display:"flex", alignItems:"center", justifyContent:"center",
+                        background:`rgba(0,255,255,${0.05 + (retPct/100)*0.5})`,
+                        fontSize:10, color: retPct>40 ? "#001414" : C.muted, fontWeight:700, fontVariantNumeric:"tabular-nums",
+                      }}>
+                        {retPct}%
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </Card>
+
+      <Card style={{ padding:"16px 20px" }}>
+        <Label style={{ marginBottom:12 }}>First-touch attribution · 90d</Label>
+        {!isMobile && (
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 90px 90px 100px", gap:12, paddingBottom:10, borderBottom:`1px solid ${C.border}` }}>
+            {["Source / Medium / Campaign","Signups","Buys","Revenue"].map((h,i)=>(
+              <div key={i} style={{ fontSize:7, color:C.dim, letterSpacing:2, textTransform:"uppercase", textAlign:i>0?"right":"left" }}>{h}</div>
+            ))}
+          </div>
+        )}
+        {attribution.length===0 ? (
+          <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>No attribution data yet</div>
+        ) : attribution.slice(0,15).map((a,i)=>(
+          <div key={`${a.source}-${a.medium}-${a.campaign}-${i}`} style={{
+            display:"grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 90px 90px 100px",
+            gap:12, padding:"10px 0", borderBottom:`1px solid ${C.border2}`,
+          }}>
+            <div style={{ fontSize:13, color:C.text, fontWeight:600 }}>
+              {a.source}<span style={{ color:C.muted, fontWeight:400 }}> / {a.medium} / {a.campaign}</span>
+            </div>
+            <div style={{ fontSize:13, color:C.accent, fontWeight:700, textAlign: isMobile ? "left" : "right" }}>{fmt(a.signups)}</div>
+            <div style={{ fontSize:13, color:C.muted, textAlign: isMobile ? "left" : "right" }}>{fmt(a.purchases)}</div>
+            <div style={{ fontSize:13, color:C.green, textAlign: isMobile ? "left" : "right" }}>{a.revenueCents>0?fmtRevenue(a.revenueCents):"—"}</div>
           </div>
         ))}
       </Card>

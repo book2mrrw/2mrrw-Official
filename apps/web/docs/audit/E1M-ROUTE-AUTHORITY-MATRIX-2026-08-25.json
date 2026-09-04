@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedAt": "2026-09-01T22:55:00.000Z",
   "sourceRoot": "src/app/api",
-  "total": 141,
+  "total": 142,
   "counts": {
     "HUMAN_ADMIN": 34,
     "SERVICE_ONLY": 20,
@@ -71,6 +71,15 @@
     {
       "route": "/api/admin/analytics/revenue",
       "file": "src/app/api/admin/analytics/revenue/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/analytics/funnels",
+      "file": "src/app/api/admin/analytics/funnels/route.js",
       "methods": [
         "GET"
       ],
