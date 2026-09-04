@@ -194,27 +194,48 @@ function WorldMap({ data, selectedCountry, onCountryClick, mapMode, metric }) {
   const isGrowth = mapMode === "GROWTH";
   const metricGet = METRICS[metric]?.get || METRICS.fans.get;
   const metricColor = METRICS[metric]?.color || METRICS.fans.color;
+  const EMPTY_COUNTRY = { fans: 0, streams: 0, revenueCents: 0, male: 0, female: 0, ages: {}, growth: { fans: 0, prevFans: 0, streams: 0, prevStreams: 0, revenueCents: 0, prevRevenueCents: 0 } };
 
-  // geo + topo computed once
-  const { geoFeatures, pathGen, projection, valueMap, numericToA2 } = useMemo(() => {
+  // geo + topo computed once. Every country A2_TO_NUMERIC knows about gets an
+  // entry — not just ones with by_country data — so every country on the map
+  // stays clickable with its real name and a correct zero, instead of only
+  // countries that already have a fan/stream/revenue row.
+  const { geoFeatures, pathGen, projection, valueMap, numericToA2, countryByA2 } = useMemo(() => {
     try {
       const proj = geoNaturalEarth1().scale(153).translate([MAP_W / 2, MAP_H / 2]);
       const pg = geoPath().projection(proj);
       const features = topoFeature(worldTopo, worldTopo.objects.countries).features;
 
+      const byA2 = new Map((data?.by_country || []).map(c => [c.a2, c]));
       const vm = new Map();
       const n2a = new Map();
-      for (const c of data?.by_country || []) {
-        if (!c.a2) continue;
-        const num = A2_TO_NUMERIC[c.a2];
-        if (!num) continue;
+      for (const [a2, num] of Object.entries(A2_TO_NUMERIC)) {
+        const c = byA2.get(a2) || EMPTY_COUNTRY;
         const value = isGrowth ? growthPct(c.growth.fans, c.growth.prevFans) : metricGet(c);
         vm.set(num, value);
-        n2a.set(num, c.a2);
+        n2a.set(num, a2);
       }
-      return { geoFeatures: features, pathGen: pg, projection: proj, valueMap: vm, numericToA2: n2a };
-    } catch (e) { console.error("Map init:", e); return { geoFeatures: [], pathGen: null, projection: null, valueMap: new Map(), numericToA2: new Map() }; }
+      return { geoFeatures: features, pathGen: pg, projection: proj, valueMap: vm, numericToA2: n2a, countryByA2: byA2 };
+    } catch (e) { console.error("Map init:", e); return { geoFeatures: [], pathGen: null, projection: null, valueMap: new Map(), numericToA2: new Map(), countryByA2: new Map() }; }
   }, [data, metric, isGrowth, metricGet]);
+
+  // Zoom into the selected country's own bounding box — a real focus
+  // transform (not just a side-panel), so switching countries visually
+  // brings its cities into view instead of leaving the whole world at the
+  // same fixed scale. Resets to the full-world view when nothing is selected.
+  const zoomTransform = useMemo(() => {
+    if (!selectedCountry || !pathGen || !geoFeatures.length) return null;
+    const feature = geoFeatures.find(f => f.id === selectedCountry.numericId);
+    if (!feature) return null;
+    try {
+      const [[x0, y0], [x1, y1]] = pathGen.bounds(feature);
+      const dx = x1 - x0, dy = y1 - y0;
+      if (!dx || !dy || !isFinite(dx) || !isFinite(dy)) return null;
+      const scale = Math.max(1, Math.min(8, 0.82 / Math.max(dx / MAP_W, dy / MAP_H)));
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+      return { scale, translateX: MAP_W / 2 - scale * cx, translateY: MAP_H / 2 - scale * cy };
+    } catch { return null; }
+  }, [selectedCountry, pathGen, geoFeatures]);
 
   // Country centroids in SVG space
   const centroids = useMemo(() => {
@@ -253,7 +274,8 @@ function WorldMap({ data, selectedCountry, onCountryClick, mapMode, metric }) {
           [svgX, svgY] = cen;
         }
       }
-      return { ...c, svgX, svgY, value: metricGet(c) };
+      const hasActivity = (c.fans || 0) + (c.streams || 0) + (c.revenueCents || 0) > 0;
+      return { ...c, svgX, svgY, value: metricGet(c), hasActivity };
     }).filter(Boolean);
   }, [data, projection, centroids, metricGet]);
 
@@ -299,142 +321,156 @@ function WorldMap({ data, selectedCountry, onCountryClick, mapMode, metric }) {
           </radialGradient>
         </defs>
 
-        {/* Sphere background */}
+        {/* Sphere background stays full-scale — only the content group below zooms */}
         {sphereD && <path d={sphereD} fill="url(#sphereGrad)" stroke="rgba(255,255,255,0.06)" strokeWidth="0.8"/>}
 
-        {/* Graticule */}
-        {graticuleD && <path d={graticuleD} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="0.4"/>}
+        <g style={{ transition: "transform 0.5s cubic-bezier(0.22,1,0.36,1)" }}
+           transform={zoomTransform ? `translate(${zoomTransform.translateX},${zoomTransform.translateY}) scale(${zoomTransform.scale})` : undefined}>
 
-        {/* Countries */}
-        {geoFeatures.map(f => {
-          const value = valueMap.get(f.id) || 0;
-          const a2 = numericToA2.get(f.id);
-          const isSelected = selectedCountry?.numericId === f.id;
-          const isHovered = hoveredId === f.id;
-          const d = pathGen(f);
-          if (!d) return null;
+          {/* Graticule */}
+          {graticuleD && <path d={graticuleD} fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="0.4" vectorEffect="non-scaling-stroke"/>}
 
-          // GROWTH diverges around zero (decline=red, growth=the selected metric's
-          // color); DOTS/HEAT use a single sequential scale in that color.
-          const rgb = isGrowth ? (value < 0 ? "239,68,68" : metricColor) : metricColor;
-          let fill;
-          if (isSelected) fill = `rgba(${rgb},0.32)`;
-          else if (isHovered) fill = value !== 0 ? `rgba(${rgb},${valueOpacity(value) + 0.12})` : "rgba(255,255,255,0.1)";
-          else if (value !== 0) fill = `rgba(${rgb},${valueOpacity(value)})`;
-          else fill = "rgba(255,255,255,0.04)";
+          {/* Countries */}
+          {geoFeatures.map(f => {
+            const value = valueMap.get(f.id) || 0;
+            const a2 = numericToA2.get(f.id);
+            const isSelected = selectedCountry?.numericId === f.id;
+            const isHovered = hoveredId === f.id;
+            const d = pathGen(f);
+            if (!d) return null;
 
-          return (
-            <path
-              key={f.id}
-              d={d}
-              fill={fill}
-              stroke={isSelected ? `rgba(${rgb},0.7)` : "rgba(255,255,255,0.11)"}
-              strokeWidth={isSelected ? 1.2 : 0.5}
-              style={{ cursor: "pointer", transition: "fill 0.12s, stroke 0.12s" }}
-              onMouseEnter={(e) => {
-                setHoveredId(f.id);
-                const rect = svgRef.current?.getBoundingClientRect();
-                if (!rect) return;
-                const found = a2 ? (data?.by_country || []).find(c => c.a2 === a2) : null;
-                setTooltip({
-                  px: e.clientX - rect.left,
-                  py: e.clientY - rect.top,
-                  maxLeft: rect.width - 180,
-                  name: found?.country || A2_TO_NAME[a2] || "Unknown",
-                  a2: a2 || null,
-                  fans: found?.fans || 0,
-                  streams: found?.streams || 0,
-                  revenueCents: found?.revenueCents || 0,
-                  growthFans: found ? growthPct(found.growth.fans, found.growth.prevFans) : null,
-                });
-              }}
-              onMouseLeave={() => { setHoveredId(null); setTooltip(null); }}
-              onClick={() => {
-                if (!a2) return;
-                const found = (data?.by_country || []).find(c => c.a2 === a2);
-                const countryName = found?.country || A2_TO_NAME[a2] || a2;
-                const cities = (data?.by_city || []).filter(c => c.country === countryName).slice(0, 10);
-                onCountryClick({
-                  numericId: f.id, a2,
-                  name: countryName,
-                  fans: found?.fans || 0,
-                  streams: found?.streams || 0,
-                  revenueCents: found?.revenueCents || 0,
-                  male: found?.male || 0,
-                  female: found?.female || 0,
-                  ages: found?.ages || {},
-                  growth: found?.growth || { fans: 0, prevFans: 0, streams: 0, prevStreams: 0, revenueCents: 0, prevRevenueCents: 0 },
-                  cities,
-                });
-              }}
-            />
-          );
-        })}
+            // GROWTH diverges around zero (decline=red, growth=the selected metric's
+            // color); DOTS/HEAT use a single sequential scale in that color.
+            const rgb = isGrowth ? (value < 0 ? "239,68,68" : metricColor) : metricColor;
+            let fill;
+            if (isSelected) fill = `rgba(${rgb},0.32)`;
+            else if (isHovered) fill = value !== 0 ? `rgba(${rgb},${valueOpacity(value) + 0.12})` : "rgba(255,255,255,0.1)";
+            else if (value !== 0) fill = `rgba(${rgb},${valueOpacity(value)})`;
+            else fill = "rgba(255,255,255,0.04)";
 
-        {/* City dots */}
-        {mapMode === "DOTS" && cityDots.map((dot, i) => {
-          const r = 2 + Math.sqrt(dot.value / maxCityValue) * 9;
-          const opacity = dot.value > 0 ? 0.5 + (dot.value / maxCityValue) * 0.5 : 0;
-          if (opacity <= 0) return null;
-          return (
-            <circle
-              key={i}
-              cx={dot.svgX} cy={dot.svgY} r={r}
-              fill={`rgb(${metricColor})`} opacity={opacity}
-              filter="url(#dotGlow)"
-              style={{ cursor: "pointer", transition: "r 0.15s, opacity 0.15s" }}
-              onMouseEnter={(e) => {
-                const rect = svgRef.current?.getBoundingClientRect();
-                if (!rect) return;
-                setTooltip({
-                  px: e.clientX - rect.left,
-                  py: e.clientY - rect.top,
-                  maxLeft: rect.width - 180,
-                  name: `${dot.city}${dot.state ? `, ${dot.state}` : ""}`,
-                  a2: NAME_TO_A2[dot.country] || null,
-                  country: dot.country,
-                  fans: dot.fans,
-                  streams: dot.streams,
-                  revenueCents: dot.revenueCents,
-                  isCity: true,
-                });
-              }}
-              onMouseLeave={() => setTooltip(null)}
-            />
-          );
-        })}
+            return (
+              <path
+                key={f.id}
+                d={d}
+                fill={fill}
+                stroke={isSelected ? `rgba(${rgb},0.7)` : "rgba(255,255,255,0.11)"}
+                strokeWidth={isSelected ? 1.2 : 0.5}
+                vectorEffect="non-scaling-stroke"
+                style={{ cursor: "pointer", transition: "fill 0.12s, stroke 0.12s" }}
+                onMouseEnter={(e) => {
+                  setHoveredId(f.id);
+                  const rect = svgRef.current?.getBoundingClientRect();
+                  if (!rect) return;
+                  const found = countryByA2.get(a2);
+                  const name = found?.country || A2_TO_NAME[a2] || a2 || "Unknown";
+                  setTooltip({
+                    px: e.clientX - rect.left,
+                    py: e.clientY - rect.top,
+                    maxLeft: rect.width - 190,
+                    maxTop: rect.height,
+                    name,
+                    a2: a2 || null,
+                    fans: found?.fans || 0,
+                    streams: found?.streams || 0,
+                    revenueCents: found?.revenueCents || 0,
+                    growthFans: found ? growthPct(found.growth.fans, found.growth.prevFans) : 0,
+                  });
+                }}
+                onMouseLeave={() => { setHoveredId(null); setTooltip(null); }}
+                onClick={() => {
+                  if (!a2) return;
+                  const found = countryByA2.get(a2);
+                  const countryName = found?.country || A2_TO_NAME[a2] || a2;
+                  const cities = (data?.by_city || []).filter(c => c.country === countryName).slice(0, 10);
+                  onCountryClick({
+                    numericId: f.id, a2,
+                    name: countryName,
+                    fans: found?.fans || 0,
+                    streams: found?.streams || 0,
+                    revenueCents: found?.revenueCents || 0,
+                    male: found?.male || 0,
+                    female: found?.female || 0,
+                    ages: found?.ages || {},
+                    growth: found?.growth || EMPTY_COUNTRY.growth,
+                    cities,
+                  });
+                }}
+              />
+            );
+          })}
+
+          {/* City dots — visible whenever a city has ANY recorded activity, not
+              only when the currently-selected metric happens to be nonzero for
+              it (a city with plays but no registered fan there was previously
+              invisible in the default Fans view). */}
+          {mapMode === "DOTS" && cityDots.map((dot, i) => {
+            if (!dot.hasActivity) return null;
+            const r = dot.value > 0 ? 2 + Math.sqrt(dot.value / maxCityValue) * 9 : 2.5;
+            const opacity = dot.value > 0 ? 0.5 + (dot.value / maxCityValue) * 0.5 : 0.35;
+            return (
+              <circle
+                key={i}
+                cx={dot.svgX} cy={dot.svgY} r={r}
+                fill={`rgb(${metricColor})`} opacity={opacity}
+                filter="url(#dotGlow)"
+                vectorEffect="non-scaling-stroke"
+                style={{ cursor: "pointer", transition: "r 0.15s, opacity 0.15s" }}
+                onMouseEnter={(e) => {
+                  const rect = svgRef.current?.getBoundingClientRect();
+                  if (!rect) return;
+                  setTooltip({
+                    px: e.clientX - rect.left,
+                    py: e.clientY - rect.top,
+                    maxLeft: rect.width - 190,
+                    maxTop: rect.height,
+                    name: `${dot.city}${dot.state ? `, ${dot.state}` : ""}`,
+                    a2: NAME_TO_A2[dot.country] || null,
+                    country: dot.country,
+                    fans: dot.fans,
+                    streams: dot.streams,
+                    revenueCents: dot.revenueCents,
+                    isCity: true,
+                  });
+                }}
+                onMouseLeave={() => setTooltip(null)}
+              />
+            );
+          })}
+        </g>
       </svg>
 
-      {/* Tooltip */}
+      {/* Tooltip — clamped to stay fully inside the map, so it can never
+          overlap content below the card (previously unbounded vertically). */}
       {tooltip && (
         <div style={{
           position: "absolute",
-          left: Math.min(tooltip.px + 14, tooltip.maxLeft),
-          top: Math.max(tooltip.py - 60, 8),
+          left: Math.max(8, Math.min(tooltip.px + 14, tooltip.maxLeft)),
+          top: Math.max(8, Math.min(tooltip.py - 64, tooltip.maxTop - 140)),
           background: C.surface3, border: `1px solid ${C.borderAccent}`,
           borderRadius: 10, padding: "10px 14px",
-          pointerEvents: "none", zIndex: 20, minWidth: 150,
+          pointerEvents: "none", zIndex: 20, width: 172,
           boxShadow: `0 4px 32px rgba(0,255,255,0.12)`,
+          display: "flex", flexDirection: "column", gap: 3,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            {tooltip.a2 && <span style={{ fontSize: 18 }}>{flag(tooltip.a2)}</span>}
-            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{tooltip.name}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+            {tooltip.a2 && <span style={{ fontSize: 18, flexShrink: 0 }}>{flag(tooltip.a2)}</span>}
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tooltip.name}</span>
           </div>
           <div style={{ fontSize: 12, color: C.accent, fontVariantNumeric: "tabular-nums" }}>
             {fmt(tooltip.fans)} fan{tooltip.fans !== 1 ? "s" : ""}
           </div>
           {tooltip.streams > 0 && (
-            <div style={{ fontSize: 11, color: C.purple, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{fmt(tooltip.streams)} streams</div>
+            <div style={{ fontSize: 11, color: C.purple, fontVariantNumeric: "tabular-nums" }}>{fmt(tooltip.streams)} streams</div>
           )}
           {tooltip.revenueCents > 0 && (
-            <div style={{ fontSize: 11, color: C.green, marginTop: 2, fontVariantNumeric: "tabular-nums" }}>{fmtRevenue(tooltip.revenueCents)}</div>
+            <div style={{ fontSize: 11, color: C.green, fontVariantNumeric: "tabular-nums" }}>{fmtRevenue(tooltip.revenueCents)}</div>
           )}
-          {tooltip.growthFans != null && (
-            <div style={{ fontSize: 11, color: tooltip.growthFans < 0 ? C.red : C.accent, marginTop: 2 }}>
+          {!!tooltip.growthFans && (
+            <div style={{ fontSize: 11, color: tooltip.growthFans < 0 ? C.red : C.accent }}>
               {tooltip.growthFans > 0 ? "+" : ""}{tooltip.growthFans}% · 30d
             </div>
           )}
-          {!tooltip.isCity && <div style={{ fontSize: 10, color: C.dim, marginTop: 4 }}>Click to explore</div>}
+          {!tooltip.isCity && <div style={{ fontSize: 10, color: C.dim, marginTop: 2 }}>Click to explore</div>}
         </div>
       )}
     </div>
