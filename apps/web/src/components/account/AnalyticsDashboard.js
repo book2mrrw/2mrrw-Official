@@ -296,8 +296,10 @@ function GenderDonut({ male, female, unknown }) {
   const fArc=Math.max(0,(fP/100)*circ - gap);
 
   return (
-    <div style={{ display:"flex", alignItems:"center", gap:18, flexWrap:"wrap" }}>
-      {/* Donut SVG */}
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:18 }}>
+      {/* Donut SVG — stacked above the legend (not side-by-side) so the legend
+          always gets the card's full width to work with, regardless of how
+          narrow the surrounding panel is. */}
       <div style={{ flexShrink:0 }}>
         <svg width="124" height="124" viewBox="0 0 124 124">
           <defs>
@@ -342,30 +344,31 @@ function GenderDonut({ male, female, unknown }) {
         </svg>
       </div>
 
-      {/* Legend */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column", gap:14, minWidth:0 }}>
+      {/* Legend — full card width now, so labels/percentages/counts never
+          have to compete with the donut for horizontal room. */}
+      <div style={{ width:"100%", display:"flex", flexDirection:"column", gap:14 }}>
         {[
           { label:"Male",         p:mP,               count:male,    color:C.accent, glow:"rgba(0,255,255,0.35)" },
           { label:"Female",       p:fP,               count:female,  color:C.purple, glow:"rgba(162,89,255,0.35)" },
           ...(unknown>0 ? [{ label:"Unknown", p:pct(unknown,total), count:unknown, color:C.dim, glow:null }] : []),
         ].map(item=>(
           <div key={item.label}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
-              <div style={{ display:"flex", alignItems:"center", gap:7 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", flexWrap:"wrap", gap:6, marginBottom:6 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:7, minWidth:0 }}>
                 <div style={{
                   width:6, height:6, borderRadius:2, background:item.color, flexShrink:0,
                   boxShadow: item.glow ? `0 0 6px ${item.glow}` : "none",
                 }} />
-                <span style={{ fontSize:12, color:C.textSub, letterSpacing:0.4 }}>{item.label}</span>
+                <span style={{ fontSize:12, color:C.textSub, letterSpacing:0.4, whiteSpace:"nowrap" }}>{item.label}</span>
               </div>
-              <div style={{ display:"flex", alignItems:"baseline", gap:5 }}>
+              <div style={{ display:"flex", alignItems:"baseline", gap:5, flexShrink:0 }}>
                 <span style={{
                   fontSize:20, fontWeight:900, color:item.color,
                   fontVariantNumeric:"tabular-nums", lineHeight:1,
                 }}>
                   {item.p}%
                 </span>
-                <span style={{ fontSize:10, color:C.muted }}>({fmt(item.count)})</span>
+                <span style={{ fontSize:10, color:C.muted, whiteSpace:"nowrap" }}>({fmt(item.count)})</span>
               </div>
             </div>
             <div style={{ height:3, background:"rgba(255,255,255,0.04)", borderRadius:3, overflow:"hidden" }}>
@@ -676,12 +679,18 @@ export default function AnalyticsDashboard({ isMobile }) {
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
 
       {/* ── Tab bar ─────────────────────────────────────────────────────── */}
+      {/* The pill group scrolls horizontally on its own when there isn't room
+          for all six tabs — Global Map and Refresh stay pinned and visible on
+          the right instead of the whole row overflowing or wrapping them away. */}
       <div style={{ display:"flex", gap:6, alignItems:"center" }}>
         <div style={{
           display:"flex", gap:4, padding:"3px",
           background:"rgba(255,255,255,0.02)",
           border:`1px solid ${C.border}`,
           borderRadius:999,
+          overflowX:"auto",
+          minWidth:0,
+          scrollbarWidth:"none",
         }}>
           {TABS.map(t=>(
             <button key={t.id} onClick={()=>setTab(t.id)} style={{
@@ -690,13 +699,13 @@ export default function AnalyticsDashboard({ isMobile }) {
               borderRadius:999,
               color: tab===t.id ? C.accent : C.muted,
               fontSize:8, fontWeight:900, letterSpacing:3, textTransform:"uppercase",
-              padding:"6px 16px", cursor:"pointer", fontFamily:"inherit",
-              transition:"all 0.18s",
+              padding:"6px 12px", cursor:"pointer", fontFamily:"inherit",
+              transition:"all 0.18s", whiteSpace:"nowrap", flexShrink:0,
               boxShadow: tab===t.id ? "0 0 16px rgba(0,255,255,0.12)" : "none",
             }}>{t.label}</button>
           ))}
         </div>
-        <div style={{ flex:1 }} />
+        <div style={{ flex:1, minWidth:6 }} />
         <a href="/admin/analytics" style={{
           display:"inline-flex", alignItems:"center", gap:5,
           background:"rgba(0,255,255,0.07)",
@@ -704,7 +713,7 @@ export default function AnalyticsDashboard({ isMobile }) {
           borderRadius:8, color:C.accent,
           fontSize:11, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase",
           padding:"6px 13px", cursor:"pointer", fontFamily:"inherit",
-          textDecoration:"none",
+          textDecoration:"none", whiteSpace:"nowrap", flexShrink:0,
           transition:"background 0.15s, border-color 0.15s",
         }}>
           Global Map ↗
@@ -714,7 +723,7 @@ export default function AnalyticsDashboard({ isMobile }) {
           border:`1px solid ${C.border}`,
           borderRadius:8, color:C.dim,
           fontSize:12, padding:"6px 12px",
-          cursor:"pointer", fontFamily:"inherit",
+          cursor:"pointer", fontFamily:"inherit", flexShrink:0,
           transition:"border-color 0.2s, color 0.2s",
         }}>↺</button>
       </div>
@@ -1163,6 +1172,8 @@ function hourLabel(h) {
 }
 
 function TimingTab({ data, loading, error, onRetry, isMobile }) {
+  const [regionKey, setRegionKey] = useState("__global__");
+
   if (loading) return (
     <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>Loading timing…</div>
   );
@@ -1176,15 +1187,38 @@ function TimingTab({ data, loading, error, onRetry, isMobile }) {
   );
   if (!data) return null;
 
-  const { cells=[], peakHour, peakDay } = data;
+  const { cells:globalCells=[], peakHour:globalPeakHour, peakDay:globalPeakDay, regions=[] } = data;
+
+  // "Global (UTC)" plus one option per world region (US split into its own
+  // internal timezones, everywhere else grouped — see the migration for the
+  // full country-to-region mapping). Each region's hours/days are already its
+  // own real local time, DST included, computed server-side.
+  const options = [
+    { key:"__global__", label:"Global (UTC)", cells:globalCells, peakHour:globalPeakHour, peakDay:globalPeakDay, tzLabel:"UTC" },
+    ...regions.map(r=>({ key:r.region, label:r.region, cells:r.cells, peakHour:r.peakHour, peakDay:r.peakDay, tzLabel:`${r.region} local time` })),
+  ];
+  const selected = options.find(o=>o.key===regionKey) || options[0];
+  const { cells, peakHour, peakDay, tzLabel } = selected;
   const maxPlays = cells.reduce((m,c)=>Math.max(m,c.plays), 1);
   const cellFor = (day, hour) => cells.find(c=>c.day===day && c.hour===hour);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+        <Label style={{ marginBottom:0 }}>Time zone</Label>
+        <select value={regionKey} onChange={e=>setRegionKey(e.target.value)} style={{
+          background:C.surface2, border:`1px solid ${C.border}`, borderRadius:8,
+          color:C.text, fontSize:12, padding:"6px 10px", fontFamily:"inherit", cursor:"pointer",
+        }}>
+          {options.map(o=>(
+            <option key={o.key} value={o.key}>{o.label}</option>
+          ))}
+        </select>
+      </div>
+
       <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
         <Card style={{ padding:"16px 18px", flex:1, minWidth:160 }} orbColor={C.accentGlow}>
-          <Label>Peak Hour · UTC</Label>
+          <Label>Peak Hour</Label>
           <div style={{ fontSize:22, fontWeight:900, color:C.text, marginTop:6 }}>
             {peakHour ? `${hourLabel(peakHour.hour)}–${hourLabel((peakHour.hour+1)%24)}` : "—"}
           </div>
@@ -1201,7 +1235,11 @@ function TimingTab({ data, loading, error, onRetry, isMobile }) {
 
       <Card style={{ padding:"16px 20px", overflowX:"auto" }}>
         <Label style={{ marginBottom:4 }}>Listening activity by hour &amp; day · 90d</Label>
-        <div style={{ fontSize:10, color:C.dim, marginBottom:14 }}>All times UTC — no single local timezone applies across a global audience</div>
+        <div style={{ fontSize:10, color:C.dim, marginBottom:14 }}>
+          {regionKey==="__global__"
+            ? "All times UTC — pick a region above for its own local time"
+            : `Local time in ${tzLabel} (daylight saving applied automatically)`}
+        </div>
         {cells.length===0 ? (
           <div style={{ textAlign:"center", padding:"24px 0", color:C.muted, fontSize:13 }}>No listening data yet</div>
         ) : (
@@ -1231,6 +1269,21 @@ function TimingTab({ data, loading, error, onRetry, isMobile }) {
           </div>
         )}
       </Card>
+
+      {regions.length>0 && (
+        <Card style={{ padding:"16px 20px" }}>
+          <Label style={{ marginBottom:12 }}>Plays by region · 90d</Label>
+          {regions.map(r=>(
+            <div key={r.region} onClick={()=>setRegionKey(r.region)} style={{
+              display:"flex", justifyContent:"space-between", alignItems:"center",
+              padding:"8px 0", borderBottom:`1px solid ${C.border2}`, cursor:"pointer",
+            }}>
+              <span style={{ fontSize:12, color: regionKey===r.region ? C.accent : C.text, fontWeight: regionKey===r.region ? 700 : 500 }}>{r.region}</span>
+              <span style={{ fontSize:12, color:C.muted, fontVariantNumeric:"tabular-nums" }}>{fmt(r.totalPlays)}</span>
+            </div>
+          ))}
+        </Card>
+      )}
     </div>
   );
 }

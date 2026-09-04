@@ -130,15 +130,18 @@ test("the revenue route is admin-gated and rate-limited under its own routeKey, 
   assert.match(src, /routeKey: "admin\.analytics\.revenue",/, "must use its own rate-limit key, not share the existing admin.analytics bucket");
 });
 
-test("the revenue route calls all three new RPCs in parallel and never touches /api/admin/analytics' own tables or response shape", () => {
+test("the revenue route calls all three new RPCs in parallel", () => {
   const src = read("src/app/api/admin/analytics/revenue/route.js");
   assert.match(src, /admin\.rpc\("get_release_revenue_stats", \{ since: ninetyDaysAgo \}\)/);
   assert.match(src, /admin\.rpc\("get_track_play_stats", \{ since: ninetyDaysAgo \}\)/);
   assert.match(src, /admin\.rpc\("get_subscription_stats"\)\.maybeSingle\(\)/);
 
+  // get_track_play_stats is legitimately reused by /api/admin/analytics too
+  // (fixing its Tracks tab's per-song title/cover art — a later slice), but
+  // the revenue-specific RPCs and purchase_items must stay exclusive to this route.
   const existingRoute = read("src/app/api/admin/analytics/route.js");
-  assert.doesNotMatch(existingRoute, /purchase_items|get_release_revenue_stats|get_track_play_stats|get_subscription_stats/,
-    "the existing analytics route must be completely unmodified by this slice");
+  assert.doesNotMatch(existingRoute, /purchase_items|get_release_revenue_stats|get_subscription_stats/,
+    "revenue-specific RPCs must not be duplicated into the existing analytics route");
 });
 
 // ── Revenue tab: additive, lazy-loaded, no impact on existing tabs ──────────

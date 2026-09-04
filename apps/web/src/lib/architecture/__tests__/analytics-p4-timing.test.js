@@ -79,19 +79,28 @@ test("the Timing tab is added without touching the other tab definitions, and fe
   assert.doesNotMatch(originalLoadBody, /timing/i, "the original overview/audience/tracks load must be completely untouched by the new tab");
 });
 
-test("TimingTab labels the heatmap as UTC — bucketing is server-side UTC, so the UI must not imply local time", () => {
+test("TimingTab defaults to Global (UTC) and labels the heatmap accordingly, so the UI never implies local time for the default view", () => {
   const src = read("src/components/account/AnalyticsDashboard.js");
   const fnAt = src.indexOf("function TimingTab(");
-  const body = src.slice(fnAt, fnAt + 3500);
-  assert.match(body, /Peak Hour · UTC/);
-  assert.match(body, /All times UTC/);
+  const body = src.slice(fnAt, fnAt + 5000);
+  assert.match(body, /const \[regionKey, setRegionKey\] = useState\("__global__"\);/);
+  assert.match(body, /\{ key:"__global__", label:"Global \(UTC\)", cells:globalCells, peakHour:globalPeakHour, peakDay:globalPeakDay, tzLabel:"UTC" \}/);
+  assert.match(body, /All times UTC — pick a region above for its own local time/);
 });
 
 test("TimingTab renders a 7x24 grid keyed by (day, hour) with no crash on an empty cells list", () => {
   const src = read("src/components/account/AnalyticsDashboard.js");
   const fnAt = src.indexOf("function TimingTab(");
-  const body = src.slice(fnAt, fnAt + 3500);
+  const body = src.slice(fnAt, fnAt + 6000);
   assert.match(body, /cells\.length===0 \? \(/);
   assert.match(body, /const cellFor = \(day, hour\) => cells\.find\(c=>c\.day===day && c\.hour===hour\);/);
   assert.match(body, /DAY_NAMES\.map\(\(name, day\)=>\(/);
+});
+
+test("TimingTab offers a region selector fed by the route's regions array, each showing its own already-local-time peak hour/day", () => {
+  const src = read("src/components/account/AnalyticsDashboard.js");
+  const fnAt = src.indexOf("function TimingTab(");
+  const body = src.slice(fnAt, fnAt + 6000);
+  assert.match(body, /\.\.\.regions\.map\(r=>\(\{ key:r\.region, label:r\.region, cells:r\.cells, peakHour:r\.peakHour, peakDay:r\.peakDay, tzLabel:`\$\{r\.region\} local time` \}\)\)/);
+  assert.match(body, /<select value=\{regionKey\} onChange=\{e=>setRegionKey\(e\.target\.value\)\}/);
 });

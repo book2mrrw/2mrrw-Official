@@ -3,6 +3,15 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { mapProductRow } from "@/lib/media/catalog-db";
+
+// Every column mapProductRow() reads — matches PRODUCT_COLS in catalog-db.js,
+// duplicated here rather than imported so this route never depends on that
+// module's internals changing shape, only its (stable, exported) row mapper.
+const PRODUCT_COLS_FOR_COVER =
+  "id, release_id, slug, title, product_type, price_cents, cover_url, storage_path, " +
+  "preview_path, video_path, image_path, stream_path, release_type, " +
+  "release_date, metadata, active, gifting_enabled, content_type, content_id, updated_at";
 
 export const dynamic = "force-dynamic";
 
@@ -23,11 +32,12 @@ export async function GET(req) {
   const admin = getAdminClient();
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
 
-  const [playStatsResult, libraryResult, purchasesResult, productsResult, profilesResult] = await Promise.all([
+  const [playStatsResult, trackPlayStatsResult, libraryResult, purchasesResult, productsResult, profilesResult] = await Promise.all([
     admin.rpc("get_play_stats", { since: ninetyDaysAgo }),
+    admin.rpc("get_track_play_stats", { since: ninetyDaysAgo }),
     admin.from("library_items").select("product_id, source, products(slug, title, cover_url)").eq("source", "purchase").limit(10000),
     admin.from("purchases").select("items, status, amount_cents").eq("status", "completed").gte("created_at", ninetyDaysAgo).limit(5000),
-    admin.from("products").select("slug, title, cover_url").order("title").limit(1000),
+    admin.from("products").select(PRODUCT_COLS_FOR_COVER).in("product_type", ["single", "feature", "album"]).limit(1000),
     admin.from("profiles").select("gender, age_range, city, state, country, created_at, role").limit(50000),
   ]);
 
@@ -59,16 +69,76 @@ export async function GET(req) {
     if (slug) listenerCounts[slug] = (listenerCounts[slug] || 0) + 1;
   }
 
-  // ─── Tracks ───────────────────────────────────────────────────────────────
-  const tracks = (productsResult.data || []).map((p) => {
+  // ─── Tracks: one row per actual song, not per release ──────────────────────
+  // Singles/features ARE their own song — one product row, one track row.
+  // Albums/EPs/mixtapes are a tracklist: get_play_stats groups by product_slug,
+  // which for these is each individual catalog_tracks.slug, not the album's own
+  // slug — so an album's own product row always showed zero plays here before.
+  // Each song now gets its own row instead, using get_track_play_stats (P1),
+  // which groups by (product_id, track_slug) precisely for this reason, with
+  // the parent release's own resolved cover art (mapProductRow — the same
+  // canonical R2-path resolution the live storefront uses, not the raw
+  // cover_url column, which is frequently unset for releases uploaded through
+  // the modern pipeline).
+  const products = productsResult.data || [];
+  const albumProducts = products.filter((p) => p.product_type === "album");
+  const albumProductIds = albumProducts.map((p) => p.id);
+
+  const catalogTracksResult = albumProductIds.length
+    ? await admin
+        .from("catalog_tracks")
+        .select("product_id, slug, title, position")
+        .in("product_id", albumProductIds)
+        .order("position", { ascending: true })
+    : { data: [] };
+  const songsByProductId = new Map();
+  for (const song of catalogTracksResult.data || []) {
+    if (!songsByProductId.has(song.product_id)) songsByProductId.set(song.product_id, []);
+    songsByProductId.get(song.product_id).push(song);
+  }
+
+  const trackPlayStats = {};
+  for (const row of trackPlayStatsResult.data || []) {
+    trackPlayStats[`${row.product_id}:${row.track_slug}`] = {
+      plays: Number(row.plays) || 0,
+      avgCompletion: row.avg_completion != null ? Number(row.avg_completion) : null,
+    };
+  }
+
+  const tracks = [];
+  for (const p of products) {
+    if (p.product_type === "album") continue; // replaced by its individual songs below
     const stats = playStats[p.slug] || { plays: 0, completionTotal: 0, completionCount: 0 };
-    return {
-      slug: p.slug, title: p.title, coverUrl: p.cover_url || null,
-      plays: stats.plays, purchases: purchaseCounts[p.slug] || 0,
+    tracks.push({
+      slug: p.slug,
+      title: p.title,
+      coverUrl: mapProductRow(p).cover || null,
+      plays: stats.plays,
+      purchases: purchaseCounts[p.slug] || 0,
       listeners: listenerCounts[p.slug] || 0,
       completionRate: stats.completionCount > 0 ? Math.round(stats.completionTotal * 100) : null,
-    };
-  }).sort((a, b) => b.plays - a.plays);
+    });
+  }
+  for (const album of albumProducts) {
+    const coverUrl = mapProductRow(album).cover || null;
+    // Owning the album grants every song in it — purchases/listeners are the
+    // album's own counts, shared across its songs, same as real access works.
+    const purchases = purchaseCounts[album.slug] || 0;
+    const listeners = listenerCounts[album.slug] || 0;
+    for (const song of songsByProductId.get(album.id) || []) {
+      const stat = trackPlayStats[`${album.id}:${song.slug}`];
+      tracks.push({
+        slug: `${album.slug}:${song.slug}`,
+        title: song.title,
+        coverUrl,
+        plays: stat?.plays || 0,
+        purchases,
+        listeners,
+        completionRate: stat?.avgCompletion != null ? Math.round(stat.avgCompletion * 100) : null,
+      });
+    }
+  }
+  tracks.sort((a, b) => b.plays - a.plays);
 
   const totals = tracks.reduce(
     (acc, t) => ({ plays: acc.plays + t.plays, purchases: acc.purchases + t.purchases }),
