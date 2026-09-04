@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 // Platform color system — exact match to globals.css / HomeClient aesthetic
 const C = {
@@ -573,6 +573,80 @@ const SORT_OPTS = [
   { key:"completionRate", label:"Completion" },
 ];
 
+// ── Scrollable tab strip: six tabs don't always fit one row in the account
+// panel's narrower width. Genuinely scrollable (not just overflow:hidden) —
+// a real, visible scrollbar plus click-to-scroll arrow buttons that only
+// appear when there's actually more to see in that direction, so every tab
+// stays reachable no matter how narrow the container is. ──────────────────
+function ScrollableTabStrip({ tabs, activeTab, onSelect }) {
+  const scrollRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollState = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    updateScrollState();
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateScrollState, { passive: true });
+    window.addEventListener("resize", updateScrollState);
+    return () => {
+      el.removeEventListener("scroll", updateScrollState);
+      window.removeEventListener("resize", updateScrollState);
+    };
+  }, [updateScrollState, tabs.length]);
+
+  const scrollByAmount = (dx) => scrollRef.current?.scrollBy({ left: dx, behavior: "smooth" });
+
+  const arrowBtnStyle = {
+    flexShrink:0, width:24, height:24, borderRadius:"50%",
+    background:C.surface2, border:`1px solid ${C.border}`, color:C.accent,
+    fontSize:13, cursor:"pointer", fontFamily:"inherit",
+    display:"flex", alignItems:"center", justifyContent:"center",
+  };
+
+  return (
+    <div style={{ display:"flex", alignItems:"center", gap:6, minWidth:0 }}>
+      {canScrollLeft && (
+        <button onClick={()=>scrollByAmount(-140)} aria-label="Scroll tabs left" style={arrowBtnStyle}>‹</button>
+      )}
+      <div
+        ref={scrollRef}
+        style={{
+          display:"flex", gap:4, padding:"3px",
+          background:"rgba(255,255,255,0.02)",
+          border:`1px solid ${C.border}`,
+          borderRadius:999,
+          overflowX:"auto",
+          minWidth:0,
+        }}
+      >
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>onSelect(t.id)} style={{
+            background: activeTab===t.id ? "rgba(0,255,255,0.08)" : "transparent",
+            border: `1px solid ${activeTab===t.id ? "rgba(0,255,255,0.28)" : "transparent"}`,
+            borderRadius:999,
+            color: activeTab===t.id ? C.accent : C.muted,
+            fontSize:8, fontWeight:900, letterSpacing:3, textTransform:"uppercase",
+            padding:"6px 12px", cursor:"pointer", fontFamily:"inherit",
+            transition:"all 0.18s", whiteSpace:"nowrap", flexShrink:0,
+            boxShadow: activeTab===t.id ? "0 0 16px rgba(0,255,255,0.12)" : "none",
+          }}>{t.label}</button>
+        ))}
+      </div>
+      {canScrollRight && (
+        <button onClick={()=>scrollByAmount(140)} aria-label="Scroll tabs right" style={arrowBtnStyle}>›</button>
+      )}
+    </div>
+  );
+}
+
 export default function AnalyticsDashboard({ isMobile }) {
   const [data,    setData]    = useState(null);
   const [loading, setLoading] = useState(true);
@@ -679,45 +753,15 @@ export default function AnalyticsDashboard({ isMobile }) {
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
 
       {/* ── Tab bar ─────────────────────────────────────────────────────── */}
-      {/* The pill group scrolls horizontally on its own when there isn't room
-          for all six tabs — Global Map and Refresh stay pinned and visible on
-          the right instead of the whole row overflowing or wrapping them away. */}
+      {/* The pill strip genuinely scrolls (visible scrollbar + click-to-scroll
+          arrows that appear only when there's more to see) so all six tabs
+          stay reachable regardless of how narrow the account panel is.
+          "Global Map" now lives one level up, next to the Overview/Analytics
+          toggle — see HomeClient.js — so it's reachable without first opening
+          this tab, and doesn't compete with these six for row space. */}
       <div style={{ display:"flex", gap:6, alignItems:"center" }}>
-        <div style={{
-          display:"flex", gap:4, padding:"3px",
-          background:"rgba(255,255,255,0.02)",
-          border:`1px solid ${C.border}`,
-          borderRadius:999,
-          overflowX:"auto",
-          minWidth:0,
-          scrollbarWidth:"none",
-        }}>
-          {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{
-              background: tab===t.id ? "rgba(0,255,255,0.08)" : "transparent",
-              border: `1px solid ${tab===t.id ? "rgba(0,255,255,0.28)" : "transparent"}`,
-              borderRadius:999,
-              color: tab===t.id ? C.accent : C.muted,
-              fontSize:8, fontWeight:900, letterSpacing:3, textTransform:"uppercase",
-              padding:"6px 12px", cursor:"pointer", fontFamily:"inherit",
-              transition:"all 0.18s", whiteSpace:"nowrap", flexShrink:0,
-              boxShadow: tab===t.id ? "0 0 16px rgba(0,255,255,0.12)" : "none",
-            }}>{t.label}</button>
-          ))}
-        </div>
+        <ScrollableTabStrip tabs={TABS} activeTab={tab} onSelect={setTab} />
         <div style={{ flex:1, minWidth:6 }} />
-        <a href="/admin/analytics" style={{
-          display:"inline-flex", alignItems:"center", gap:5,
-          background:"rgba(0,255,255,0.07)",
-          border:`1px solid rgba(0,255,255,0.22)`,
-          borderRadius:8, color:C.accent,
-          fontSize:11, fontWeight:700, letterSpacing:1.5, textTransform:"uppercase",
-          padding:"6px 13px", cursor:"pointer", fontFamily:"inherit",
-          textDecoration:"none", whiteSpace:"nowrap", flexShrink:0,
-          transition:"background 0.15s, border-color 0.15s",
-        }}>
-          Global Map ↗
-        </a>
         <button onClick={load} style={{
           background:"none",
           border:`1px solid ${C.border}`,
@@ -725,7 +769,7 @@ export default function AnalyticsDashboard({ isMobile }) {
           fontSize:12, padding:"6px 12px",
           cursor:"pointer", fontFamily:"inherit", flexShrink:0,
           transition:"border-color 0.2s, color 0.2s",
-        }}>↺</button>
+        }}>↺ Refresh</button>
       </div>
 
       {/* ══════════════════════════════════════════════════════════

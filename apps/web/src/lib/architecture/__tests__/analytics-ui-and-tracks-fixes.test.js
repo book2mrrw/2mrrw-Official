@@ -23,16 +23,25 @@ test("the Tracks tab expands albums into their individual songs instead of one c
   assert.match(body, /title: song\.title,/, "each album-song row must use the individual song's own title, not the album's");
 });
 
-test("cover art comes from mapProductRow's canonical R2-path resolution, not the raw cover_url column", () => {
+test("cover art always calls the real R2 visual-discovery endpoint, not just when video metadata happens to be recorded", () => {
   const src = read("src/app/api/admin/analytics/route.js");
-  assert.match(src, /import \{ mapProductRow \} from "@\/lib\/media\/catalog-db";/);
-  assert.doesNotMatch(src, /coverUrl:\s*p\.cover_url/, "must not read the raw column directly anymore — many releases only resolve artwork via canonical paths");
+  assert.match(src, /import \{ visualDiscoveryUrl \} from "@\/lib\/media\/canonical-paths";/);
+  assert.doesNotMatch(src, /coverUrl:\s*p\.cover_url/, "must not read the raw column directly — many releases only resolve artwork via canonical paths");
+  const fnAt = src.indexOf("function resolveCoverUrl(row)");
+  const fnBody = src.slice(fnAt, fnAt + 900);
+  // mapProductRow (catalog-db.js) only calls visualDiscoveryUrl when it already
+  // knows a video exists — this route's own resolver must call it unconditionally,
+  // since the endpoint itself resolves whichever asset (video or image) is real.
+  assert.doesNotMatch(fnBody, /hasVideo|isSingle/,
+    "must not gate discovery behind a video-presence check — that gate is exactly what left albums with blank covers");
+  assert.match(fnBody, /return visualDiscoveryUrl\(releaseTypeFolder, row\.slug, \{/);
+
   const singleAt = src.indexOf("for (const p of products) {");
   const singleBody = src.slice(singleAt, singleAt + 700);
-  assert.match(singleBody, /coverUrl: mapProductRow\(p\)\.cover \|\| null,/);
+  assert.match(singleBody, /coverUrl: resolveCoverUrl\(p\),/);
   const albumAt = src.indexOf("for (const album of albumProducts) {");
   const albumBody = src.slice(albumAt, albumAt + 700);
-  assert.match(albumBody, /const coverUrl = mapProductRow\(album\)\.cover \|\| null;/,
+  assert.match(albumBody, /const coverUrl = resolveCoverUrl\(album\);/,
     "every song inside an album must inherit the parent album's own resolved cover, not try to resolve its own");
 });
 
@@ -57,23 +66,33 @@ test("only real audio product types (single/feature/album) are queried for the T
   assert.match(src, /\.in\("product_type", \["single", "feature", "album"\]\)/);
 });
 
-// ── Tab bar: Global Map button stays on the same row as the tabs ───────────
+// ── Tab bar: genuinely scrollable, discoverable, no tab ever unreachable ───
 
-test("the tab pill group scrolls horizontally on its own overflow instead of pushing Global Map / Refresh off the row", () => {
+test("ScrollableTabStrip scrolls its own overflow with visible click-to-scroll arrows that only appear when there's more to see in that direction", () => {
   const src = read("src/components/account/AnalyticsDashboard.js");
-  const tabBarAt = src.indexOf("Tab bar");
-  const body = src.slice(tabBarAt, tabBarAt + 2200);
-  assert.match(body, /overflowX:"auto",/, "the pill group itself must scroll, not the whole row wrap or overflow invisibly");
+  const fnAt = src.indexOf("function ScrollableTabStrip(");
+  const body = src.slice(fnAt, fnAt + 3200);
+  assert.match(body, /overflowX:"auto",/, "the pill group itself must scroll — no scrollbarWidth:\"none\" hiding it, which made the previous fix undiscoverable");
+  assert.doesNotMatch(body, /scrollbarWidth:"none"/, "the scrollbar must stay visible as a discoverable affordance");
+  assert.match(body, /\{canScrollLeft && \(/);
+  assert.match(body, /\{canScrollRight && \(/);
+  assert.match(body, /setCanScrollLeft\(el\.scrollLeft > 4\);/);
   assert.match(body, /whiteSpace:"nowrap", flexShrink:0,/, "each tab button must never shrink/wrap mid-label");
 });
 
-test("Global Map link and the refresh button never shrink or wrap out of the row", () => {
+test("the Analytics dashboard uses ScrollableTabStrip for its six tabs, and the Global Map link no longer renders inside this row (now one level up, next to Overview/Analytics)", () => {
   const src = read("src/components/account/AnalyticsDashboard.js");
-  const tabBarAt = src.indexOf("Tab bar");
-  const body = src.slice(tabBarAt, tabBarAt + 2200);
-  const globalMapAt = body.indexOf('href="/admin/analytics"');
-  const globalMapTag = body.slice(globalMapAt, globalMapAt + 600);
-  assert.match(globalMapTag, /whiteSpace:"nowrap", flexShrink:0,/);
+  assert.match(src, /<ScrollableTabStrip tabs=\{TABS\} activeTab=\{tab\} onSelect=\{setTab\} \/>/);
+  assert.doesNotMatch(src, /href="\/admin\/analytics"/, "the Global Map anchor no longer renders inside AnalyticsDashboard — see HomeClient.js");
+});
+
+test("Global Map now sits in the same row as the Overview/Analytics toggle in HomeClient.js, reachable without first opening the Analytics sub-tab", () => {
+  const src = read("src/app/HomeClient.js");
+  const toggleAt = src.indexOf('{["overview","analytics"].map(t=>');
+  const rowEndAt = src.indexOf("</div>", toggleAt);
+  const globalMapAt = src.indexOf('href="/admin/analytics"', toggleAt);
+  assert.ok(toggleAt > -1 && globalMapAt > toggleAt && globalMapAt < rowEndAt,
+    "the Global Map link must be inside the same flex row as the overview/analytics buttons, not appended after it closes");
 });
 
 // ── GenderDonut: stacked layout, no more side-by-side squeeze ──────────────
@@ -134,4 +153,16 @@ test("the timing route calls both the global (UTC) and regional RPCs, and summar
   assert.match(src, /admin\.rpc\("get_listening_time_patterns", \{ since: ninetyDaysAgo \}\)/);
   assert.match(src, /admin\.rpc\("get_regional_listening_patterns", \{ since: ninetyDaysAgo \}\)/);
   assert.match(src, /return \{ region, cells: regionCells, totalPlays, \.\.\.summarize\(regionCells\) \};/);
+});
+
+// ── Global Map: no caching, ever — every load/Refresh is genuinely live ────
+
+test("the global analytics route serves no-store — every request re-queries current data, never a browser-cached snapshot", () => {
+  const src = read("src/app/api/admin/analytics/global/route.js");
+  assert.match(src, /"Cache-Control": "private, no-store, must-revalidate"/);
+});
+
+test("the Global Map page's fetch explicitly requests no-store, so clicking Refresh can never be silently satisfied from the browser's HTTP cache", () => {
+  const src = read("src/app/admin/analytics/page.js");
+  assert.match(src, /fetch\(`\/api\/admin\/analytics\/global\$\{qs \? `\?\$\{qs\}` : ""\}`, \{ credentials: "include", cache: "no-store" \}\)/);
 });

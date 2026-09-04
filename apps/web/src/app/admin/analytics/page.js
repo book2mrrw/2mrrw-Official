@@ -719,7 +719,7 @@ export default function AdminGlobalAnalytics() {
       if (since) params.set("since", since.toISOString());
       if (until) params.set("until", until.toISOString());
       const qs = params.toString();
-      const res = await fetch(`/api/admin/analytics/global${qs ? `?${qs}` : ""}`, { credentials: "include" });
+      const res = await fetch(`/api/admin/analytics/global${qs ? `?${qs}` : ""}`, { credentials: "include", cache: "no-store" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to load");
       setData(json);

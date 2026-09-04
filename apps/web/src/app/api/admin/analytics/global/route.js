@@ -277,6 +277,9 @@ export async function GET(req) {
       by_city,
       monthly_growth,
     },
-    { headers: { "Cache-Control": "private, max-age=180" } }
+    // Every KPI here is monitoring live fan activity — no caching, ever, so
+    // Refresh (and every date-range change) always reflects the current DB
+    // state, not a browser-cached snapshot up to 3 minutes stale.
+    { headers: { "Cache-Control": "private, no-store, must-revalidate" } }
   );
 }

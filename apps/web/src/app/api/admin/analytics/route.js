@@ -3,15 +3,44 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
-import { mapProductRow } from "@/lib/media/catalog-db";
+import { visualDiscoveryUrl } from "@/lib/media/canonical-paths";
+import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
 
-// Every column mapProductRow() reads — matches PRODUCT_COLS in catalog-db.js,
-// duplicated here rather than imported so this route never depends on that
-// module's internals changing shape, only its (stable, exported) row mapper.
 const PRODUCT_COLS_FOR_COVER =
-  "id, release_id, slug, title, product_type, price_cents, cover_url, storage_path, " +
-  "preview_path, video_path, image_path, stream_path, release_type, " +
-  "release_date, metadata, active, gifting_enabled, content_type, content_id, updated_at";
+  "id, slug, title, product_type, cover_url, video_path, image_path, release_type, metadata";
+
+/**
+ * Resolves a product's real cover art, working for both video-loop singles
+ * and static-image albums/EPs/mixtapes alike.
+ *
+ * catalog-db.js's mapProductRow() (used by the live storefront) only calls
+ * visualDiscoveryUrl — the endpoint that actually finds whatever artwork
+ * exists in R2 — when it already knows a video is present (hasVideo, gated
+ * on isSingle || legacyVideo || row.video_path). For an album/EP/mixtape
+ * with no recorded video_path, that check is false, so it skips discovery
+ * entirely and falls back to the raw cover_url/image_path column — which is
+ * frequently unset for releases published through the canonical R2-path
+ * pipeline rather than the legacy explicit-column one. That gap is exactly
+ * why some tracks here showed a blank cover. visualDiscoveryUrl itself is
+ * safe to call unconditionally: it doesn't require a video to exist, it
+ * just builds a discovery-endpoint URL that resolves to whichever real
+ * asset (video or image) is actually there.
+ */
+function resolveCoverUrl(row) {
+  const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  const releaseTypeFolder =
+    row.release_type ||
+    normalizeReleaseType(meta.release_type || meta.release_category || row.product_type) ||
+    "singles";
+  const legacyCover = row.cover_url || row.image_path || meta.legacy_cover || null;
+  const legacyVideo = meta.animated_cover_r2_key || (meta.legacy_video_stem
+    ? `videos/${releaseTypeFolder}/${row.slug}/${meta.legacy_video_stem}.mp4`
+    : null);
+  return visualDiscoveryUrl(releaseTypeFolder, row.slug, {
+    legacyVideo: legacyVideo || undefined,
+    legacyImage: legacyCover || undefined,
+  }) || legacyCover || null;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -76,10 +105,9 @@ export async function GET(req) {
   // slug — so an album's own product row always showed zero plays here before.
   // Each song now gets its own row instead, using get_track_play_stats (P1),
   // which groups by (product_id, track_slug) precisely for this reason, with
-  // the parent release's own resolved cover art (mapProductRow — the same
-  // canonical R2-path resolution the live storefront uses, not the raw
-  // cover_url column, which is frequently unset for releases uploaded through
-  // the modern pipeline).
+  // the parent release's own resolved cover art (resolveCoverUrl above —
+  // real R2 discovery, not the raw cover_url column, which is frequently
+  // unset for releases uploaded through the modern pipeline).
   const products = productsResult.data || [];
   const albumProducts = products.filter((p) => p.product_type === "album");
   const albumProductIds = albumProducts.map((p) => p.id);
@@ -112,7 +140,7 @@ export async function GET(req) {
     tracks.push({
       slug: p.slug,
       title: p.title,
-      coverUrl: mapProductRow(p).cover || null,
+      coverUrl: resolveCoverUrl(p),
       plays: stats.plays,
       purchases: purchaseCounts[p.slug] || 0,
       listeners: listenerCounts[p.slug] || 0,
@@ -120,7 +148,7 @@ export async function GET(req) {
     });
   }
   for (const album of albumProducts) {
-    const coverUrl = mapProductRow(album).cover || null;
+    const coverUrl = resolveCoverUrl(album);
     // Owning the album grants every song in it — purchases/listeners are the
     // album's own counts, shared across its songs, same as real access works.
     const purchases = purchaseCounts[album.slug] || 0;
