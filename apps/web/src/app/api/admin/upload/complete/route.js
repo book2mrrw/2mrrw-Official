@@ -45,7 +45,7 @@ export async function POST(req) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { releaseId, trackId, key, assetType, releaseType, slug, trackSlug, trackTitle, position, durationSeconds } = body;
+  const { releaseId, trackId, key, assetType, releaseType, slug, trackSlug, trackTitle, position, durationSeconds, previewStartSeconds } = body;
 
   if (!key || !assetType || !releaseId) {
     return NextResponse.json({ error: "releaseId, key, and assetType are required" }, { status: 400 });
@@ -227,17 +227,32 @@ export async function POST(req) {
     }
 
     if (assetType === "preview") {
-      const { data: rel } = await admin.from("releases").select("status, metadata").eq("id", releaseId).single();
-      const meta = (rel?.metadata && typeof rel.metadata === "object") ? rel.metadata : {};
-      const { error } = await admin
-        .from("releases")
-        .update({ metadata: { ...meta, preview_r2_key: key } })
-        .eq("id", releaseId);
-      if (error) throw error;
+      // A multi-track release's preview belongs to ONE track, not the whole
+      // release — writing it to releases.metadata (as the single/feature path
+      // below does) would have every track's preview clobber the same shared
+      // field, and the publish route would canonicalize whichever one wrote
+      // last while destroying the others' real files. trackId routes it to
+      // that track's own row instead.
+      if (trackId) {
+        const { error } = await admin
+          .from("tracks")
+          .update({ preview_r2_key: key, preview_start_seconds: Number(previewStartSeconds) || 0 })
+          .eq("id", trackId);
+        if (error) throw error;
+      } else {
+        const { data: rel } = await admin.from("releases").select("status, metadata").eq("id", releaseId).single();
+        const meta = (rel?.metadata && typeof rel.metadata === "object") ? rel.metadata : {};
+        const { error } = await admin
+          .from("releases")
+          .update({ metadata: { ...meta, preview_r2_key: key } })
+          .eq("id", releaseId);
+        if (error) throw error;
+      }
 
-      if (!rel || rel.status !== "draft") revalidateStorefront();
-      emitServerEvent("info", "admin_upload_completed", { correlationId, releaseId, assetType });
-      return NextResponse.json({ ok: true, assetType });
+      const { data: relStatus } = await admin.from("releases").select("status").eq("id", releaseId).maybeSingle();
+      if (!relStatus || relStatus.status !== "draft") revalidateStorefront();
+      emitServerEvent("info", "admin_upload_completed", { correlationId, releaseId, assetType, trackId: trackId || null });
+      return NextResponse.json({ ok: true, assetType, trackId: trackId || null });
     }
 
     return NextResponse.json({ error: "Unknown assetType" }, { status: 400 });

@@ -597,7 +597,7 @@ function CreditsStep({ data, onChange, onNext, onBack, isMultiTrack }) {
 // Derives the preview clip entirely in the browser (decode → slice → WAV-encode)
 // and uploads it through the same presign+PUT pipeline as any other asset — no
 // ffmpeg, no worker changes, no separate preview file for the admin to prepare.
-function PreviewTrimPicker({ file, releaseType, slug, trackSlug, releaseId, previewKey, onGenerated }) {
+function PreviewTrimPicker({ file, releaseType, slug, trackSlug, releaseId, trackId, previewKey, onGenerated }) {
   const [duration, setDuration] = useState(0);
   const [startSec, setStartSec] = useState(0);
   const [status, setStatus] = useState(previewKey ? "ready" : "idle");
@@ -609,7 +609,12 @@ function PreviewTrimPicker({ file, releaseType, slug, trackSlug, releaseId, prev
   const auditionTimeoutRef = useRef(null);
 
   useEffect(() => {
-    if (!file) return undefined;
+    // A real File is required — track.masterFile survives in wizard state
+    // (sessionStorage / the draft autosave) via JSON.stringify, which turns
+    // any File/Blob into "{}" (they expose no own enumerable properties). A
+    // resumed session restores that as a plain, truthy-but-broken object;
+    // URL.createObjectURL would throw synchronously on it.
+    if (!file || typeof File === "undefined" || !(file instanceof File)) return undefined;
     let cancelled = false;
     setStatus((s) => (s === "ready" ? s : "probing"));
     const url = URL.createObjectURL(file);
@@ -674,7 +679,10 @@ function PreviewTrimPicker({ file, releaseType, slug, trackSlug, releaseId, prev
       const completeRes = await fetch("/api/admin/upload/complete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ releaseId, key, assetType: "preview", releaseType, slug, trackSlug }),
+        // trackId scopes a multi-track release's preview to its own track row
+        // (see /api/admin/upload/complete) instead of the shared release-level
+        // metadata field every track would otherwise clobber.
+        body: JSON.stringify({ releaseId, key, assetType: "preview", releaseType, slug, trackSlug, trackId, previewStartSeconds: startSec }),
       });
       const completeData = await completeRes.json();
       if (!completeRes.ok) throw new Error(completeData.error || "Preview upload failed");
@@ -688,7 +696,22 @@ function PreviewTrimPicker({ file, releaseType, slug, trackSlug, releaseId, prev
 
   const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
+  // A truthy but non-File `file` means the session was reloaded and the
+  // in-memory master file didn't survive (see the effect above) — without
+  // this, the component would otherwise get stuck showing "Reading track
+  // length…" forever, since nothing ever advances `status` past "probing".
+  const hasBrokenFile = Boolean(file) && typeof File !== "undefined" && !(file instanceof File);
+
   if (!file && !previewKey) return null;
+  if (hasBrokenFile) {
+    return (
+      <div style={{ marginTop: 12, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, fontSize: 12, color: previewKey ? C.success : C.muted, lineHeight: 1.6 }}>
+        {previewKey
+          ? "✓ Preview already set for this track. Re-select the master file above if you want to choose a different clip."
+          : "This session was reloaded, so the master file is no longer available for trimming a preview. Re-select the master file above to set one."}
+      </div>
+    );
+  }
   if (status === "idle" || status === "probing") {
     return <div style={{ fontSize: 12, color: C.muted, marginTop: 12 }}>Reading track length…</div>;
   }
@@ -865,6 +888,7 @@ function AudioUploadStep({ data, onChange, onNext, onBack, releaseId, draftSlug 
           releaseType={data.release_type}
           slug={draftSlug || `draft-${Date.now()}`}
           releaseId={releaseId}
+          trackId={data.track_id}
           previewKey={data.preview_key}
           onGenerated={(key, startSeconds) => {
             onChange("preview_key", key);
@@ -1083,6 +1107,7 @@ function TrackRow({ track, idx, total, albumSlug, data, releaseId, setTracks }) 
           slug={albumSlug}
           trackSlug={track.slug}
           releaseId={releaseId}
+          trackId={track.id}
           previewKey={track.preview_key}
           onGenerated={(key, startSeconds) => updateSelf({ preview_key: key, preview_start_seconds: startSeconds })}
         />

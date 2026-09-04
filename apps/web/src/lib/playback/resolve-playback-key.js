@@ -6,6 +6,7 @@ import { resolvePreviewPath, resolveStoragePath, isEntityPreviewFolderPath } fro
 import { normalizeReleaseType } from "@/lib/media/normalize-release-type";
 import { recordPlaybackResolverOutcome } from "@/lib/playback/playback-resolver-diagnostics";
 import { tryResolveStreamPlaybackKey } from "@/lib/playback/resolve-stream-playback";
+import { headR2ObjectKey } from "@/lib/storage/r2";
 
 const PLAYBACK_KEY_TTL_MS = 60_000;
 // Unlike the master resolver (which never caches a miss — a track mid-upload
@@ -487,18 +488,25 @@ async function resolvePreviewKeyUncached(admin, normalizedSlug, trackSlug, cache
 
   // Fast path: a preview we generated ourselves (PreviewTrimPicker, see
   // UploadWizard.js) is stored as the exact, deterministic object key at
-  // publish time — no R2 discovery needed at all, just this one DB read.
-  // Falls through to live folder discovery only for releases whose preview
-  // predates this system (a bare folder convention, resolved by scanning).
+  // publish time — no R2 discovery needed at all, just this one DB read plus
+  // a single existence check (only paid once, on a cache miss — the result
+  // is cached afterward same as any other resolution). The existence check
+  // matters: a corrupted or stale pointer (e.g. from an interrupted publish)
+  // must not be trusted and served with total confidence forever — fall
+  // through to live folder discovery instead, the same path a release
+  // predating this system already relies on.
   if (rawPreviewPath && isConcreteMediaKey(rawPreviewPath)) {
     const key = String(rawPreviewPath).replace(/^\//, "");
-    persistKeyResolution(admin, cacheKey, {
-      key,
-      source: "preview_direct_key",
-      playbackSource: "preview",
-      productId: product.id,
-    });
-    return key;
+    const exists = await headR2ObjectKey(key).catch(() => false);
+    if (exists) {
+      persistKeyResolution(admin, cacheKey, {
+        key,
+        source: "preview_direct_key",
+        playbackSource: "preview",
+        productId: product.id,
+      });
+      return key;
+    }
   }
 
   const releaseType = inferProductReleaseType(product);

@@ -132,24 +132,40 @@ export async function POST(req, { params }) {
   // ── 2. Load tracks ─────────────────────────────────────────────────────────
   const { data: dbTracks } = await admin
     .from("tracks")
-    .select("id, title, upload_status, audio_r2_key, master_r2_key, position, lyrics")
+    .select("id, title, upload_status, audio_r2_key, master_r2_key, position, lyrics, preview_r2_key, preview_start_seconds")
     .eq("release_id", releaseId);
 
-  // Merge body track data (titles, lyrics, credits overrides) into DB rows
+  // Merge body track data (titles, lyrics, credits overrides) into DB rows.
+  // preview_key/preview_start_seconds prefer the durable per-track DB column
+  // (written by /api/admin/upload/complete, scoped by trackId) over the
+  // client-reported wizard state — a resumed/reloaded wizard session can lose
+  // its in-memory preview_key (the browser File it was derived from doesn't
+  // survive a page reload), but the DB write from the original upload persists.
   const tracks = (dbTracks || []).map((dbTrack) => {
+    // The single/feature wizard step keeps an unused `tracks: [{ id: null,
+    // position: 1, ... }]` placeholder in its own state (a phantom leftover
+    // from sharing the multi-track UI's shape) that's still sent in every
+    // publish body regardless of release type. Requiring a real id for the
+    // position fallback keeps that placeholder from ever matching — a
+    // genuine multi-track track always has its id set (from the audio
+    // upload-complete response) by the time it's publish-ready.
     const bodyTrack = bodyTracks.find((bt) =>
-      bt.id === dbTrack.id || Number(bt.position) === Number(dbTrack.position)
+      bt.id === dbTrack.id || (bt.id != null && Number(bt.position) === Number(dbTrack.position))
     );
     const stableSlug = bodyTrack?.slug || slugify(bodyTrack?.title || dbTrack.title || `track-${dbTrack.position || 1}`);
-    if (!bodyTrack) return { ...dbTrack, slug: stableSlug };
+    const previewKey = dbTrack.preview_r2_key || bodyTrack?.preview_key || null;
+    const previewStartSeconds = dbTrack.preview_r2_key
+      ? (dbTrack.preview_start_seconds ?? 0)
+      : (bodyTrack?.preview_start_seconds ?? 0);
+    if (!bodyTrack) return { ...dbTrack, slug: stableSlug, preview_key: previewKey, preview_start_seconds: previewStartSeconds };
     return {
       ...dbTrack,
       slug:             stableSlug,
       title:            bodyTrack.title    || dbTrack.title,
       position:         bodyTrack.position ?? dbTrack.position,
       lyrics:           bodyTrack.lyrics   || dbTrack.lyrics,
-      preview_key:            bodyTrack.preview_key || null,
-      preview_start_seconds:  bodyTrack.preview_start_seconds ?? 0,
+      preview_key:            previewKey,
+      preview_start_seconds:  previewStartSeconds,
       featured_artists: bodyTrack.featured_artists !== undefined ? bodyTrack.featured_artists : null,
       track_credits: {
         produced_by:    bodyTrack.produced_by    ?? null,
@@ -193,7 +209,16 @@ export async function POST(req, { params }) {
   // Preview readiness — only enforced the first time a release goes live (see
   // isFirstPublish above). A release with working full playback and a broken
   // or missing preview is not considered successfully published.
-  const resolvedPreviewKey = preview_key || release.metadata?.preview_r2_key || null;
+  //
+  // For single/feature releases, the durable per-track column (tracks.preview_r2_key,
+  // already merged onto `tracks` above) is authoritative — falls back to the
+  // client-reported body field and, last, the legacy release-level metadata
+  // field for any release that predates per-track scoping.
+  const singleTrackPreview = !isMultiTrack ? (tracks.find((t) => t.id === track_id) || tracks[0]) : null;
+  const resolvedPreviewKey = singleTrackPreview?.preview_key || preview_key || release.metadata?.preview_r2_key || null;
+  const resolvedPreviewStartSeconds = singleTrackPreview?.preview_key
+    ? (singleTrackPreview.preview_start_seconds ?? 0)
+    : (Number(preview_start_seconds) || 0);
   if (isFirstPublish) {
     if (!isMultiTrack && !resolvedPreviewKey) {
       return NextResponse.json({ error: "BLOCKING: A preview clip must be set before publishing" }, { status: 422 });
@@ -327,8 +352,17 @@ export async function POST(req, { params }) {
   // resolvePreviewKey discovers a preview by scanning the canonical
   // previews/ folder for the final slug — move each clip there now so it's
   // actually found once the release is live, not just recorded in metadata.
+  //
+  // Single/feature ONLY — a multi-track release's preview is entirely
+  // per-track (the loop below). This used to run unconditionally: for a
+  // multi-track release, release.metadata.preview_r2_key could still hold a
+  // stray value (a track's own preview key, written there by the pre-fix
+  // upload/complete handler that had no per-track scoping at all), and this
+  // block would copy THAT ONE track's real preview file to a meaningless
+  // release-level path and delete the original — destroying it before the
+  // per-track loop below ever got a chance to canonicalize it correctly.
   let canonicalPreviewKey = resolvedPreviewKey;
-  if (resolvedPreviewKey) {
+  if (!isMultiTrack && resolvedPreviewKey) {
     const ext = extFromKey(resolvedPreviewKey) || ".wav";
     const destKey = `previews/${typeFolder}/${releaseSlug}/${releaseSlug}-preview${ext}`;
     if (resolvedPreviewKey !== destKey) {
@@ -471,7 +505,7 @@ export async function POST(req, { params }) {
           featured_artists:         featured_artists || [],
           cover_art_r2_key:         canonicalCoverKey,
           preview_r2_key:           canonicalPreviewKey || null,
-          preview_start_seconds:    canonicalPreviewKey ? Number(preview_start_seconds) || 0 : null,
+          preview_start_seconds:    canonicalPreviewKey ? resolvedPreviewStartSeconds : null,
           lifecycle_managed:        true,
         },
         gifting_enabled: false,
