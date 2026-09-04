@@ -483,7 +483,14 @@ function TrackRow({ track, rank, isFirst, isMobile }) {
     backgroundSize:"cover", backgroundPosition:"center",
     boxShadow: hov ? "0 0 18px rgba(0,255,255,0.14)" : "none",
     transition:"box-shadow 0.2s",
+    display: track.coverUrl ? undefined : "flex", alignItems:"center", justifyContent:"center",
   };
+  // A missing cover URL and a real cover that's still loading must not look
+  // identical — this glyph only appears when there's genuinely no coverUrl
+  // at all, never while a real url(...) is resolving in the browser.
+  const coverGlyph = !track.coverUrl && (
+    <span style={{ fontSize:14, color:C.dim, lineHeight:1 }} title="No cover art on file for this release">♪</span>
+  );
   const rowBase = {
     borderTop: isFirst ? "none" : `1px solid ${C.border}`,
     borderRadius:10,
@@ -501,7 +508,7 @@ function TrackRow({ track, rank, isFirst, isMobile }) {
       >
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
           <span style={{ fontSize:10, color:C.dim, width:18, textAlign:"right", fontVariantNumeric:"tabular-nums", flexShrink:0 }}>{rank}</span>
-          <div style={coverStyle} />
+          <div style={coverStyle}>{coverGlyph}</div>
           <div style={{ fontSize:13, fontWeight:600, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", flex:1 }}>
             {track.title||track.slug}
           </div>
@@ -535,7 +542,7 @@ function TrackRow({ track, rank, isFirst, isMobile }) {
       }}
     >
       <div style={{ fontSize:10, color:C.dim, textAlign:"right", fontVariantNumeric:"tabular-nums", fontWeight:700 }}>{rank}</div>
-      <div style={coverStyle} />
+      <div style={coverStyle}>{coverGlyph}</div>
       <div style={{ fontSize:13, fontWeight:500, color:C.text, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>
         {track.title||track.slug}
       </div>
@@ -829,26 +836,34 @@ export default function AnalyticsDashboard({ isMobile }) {
             </Card>
           </div>
 
-          {/* Top 5 tracks */}
+          {/* Top 5 tracks — the 7-column grid needs ~454px minimum before the
+              title gets any share at all; this dashboard renders inside the
+              account panel, which is often narrower than that. Scroll the
+              content horizontally instead of letting the title column
+              collapse toward zero and clip away. */}
           <Card>
             <Label style={{ marginBottom:14 }}>Top Tracks</Label>
-            {!isMobile && (
-              <div style={{
-                display:"grid",
-                gridTemplateColumns:"22px 40px 1fr 72px 72px 72px 104px",
-                gap:12, paddingBottom:10,
-                borderBottom:`1px solid ${C.border}`,
-                marginLeft:-10, marginRight:-10,
-                paddingLeft:10, paddingRight:10,
-              }}>
-                {["#","","Track","Plays","Buys","Fans","Completion"].map((h,i)=>(
-                  <div key={i} style={{ fontSize:7, color:C.dim, letterSpacing:2, textTransform:"uppercase", textAlign:i>2?"right":"left" }}>{h}</div>
+            <div style={{ overflowX:"auto" }}>
+              <div style={{ minWidth: isMobile ? "auto" : 480 }}>
+                {!isMobile && (
+                  <div style={{
+                    display:"grid",
+                    gridTemplateColumns:"22px 40px 1fr 72px 72px 72px 104px",
+                    gap:12, paddingBottom:10,
+                    borderBottom:`1px solid ${C.border}`,
+                    marginLeft:-10, marginRight:-10,
+                    paddingLeft:10, paddingRight:10,
+                  }}>
+                    {["#","","Track","Plays","Buys","Fans","Completion"].map((h,i)=>(
+                      <div key={i} style={{ fontSize:7, color:C.dim, letterSpacing:2, textTransform:"uppercase", textAlign:i>2?"right":"left" }}>{h}</div>
+                    ))}
+                  </div>
+                )}
+                {tracks.slice(0,5).map((t,i)=>(
+                  <TrackRow key={t.slug} track={t} rank={i+1} isFirst={i===0} isMobile={isMobile} />
                 ))}
               </div>
-            )}
-            {tracks.slice(0,5).map((t,i)=>(
-              <TrackRow key={t.slug} track={t} rank={i+1} isFirst={i===0} isMobile={isMobile} />
-            ))}
+            </div>
           </Card>
         </div>
       )}
@@ -963,26 +978,32 @@ export default function AnalyticsDashboard({ isMobile }) {
             </span>
           </div>
 
+          {/* Same title-clipping risk as the Overview widget above — scroll
+              horizontally instead of squeezing the title column to nothing. */}
           <Card style={{ padding:"16px 20px" }}>
-            {!isMobile && (
-              <div style={{
-                display:"grid",
-                gridTemplateColumns:"22px 40px 1fr 72px 72px 72px 104px",
-                gap:12, paddingBottom:10,
-                borderBottom:`1px solid ${C.border}`,
-                marginLeft:-10, marginRight:-10,
-                paddingLeft:10, paddingRight:10,
-              }}>
-                {["#","","Track","Plays","Buys","Fans","Completion"].map((h,i)=>(
-                  <div key={i} style={{ fontSize:7, color:C.dim, letterSpacing:2, textTransform:"uppercase", textAlign:i>2?"right":"left" }}>{h}</div>
+            <div style={{ overflowX:"auto" }}>
+              <div style={{ minWidth: isMobile ? "auto" : 480 }}>
+                {!isMobile && (
+                  <div style={{
+                    display:"grid",
+                    gridTemplateColumns:"22px 40px 1fr 72px 72px 72px 104px",
+                    gap:12, paddingBottom:10,
+                    borderBottom:`1px solid ${C.border}`,
+                    marginLeft:-10, marginRight:-10,
+                    paddingLeft:10, paddingRight:10,
+                  }}>
+                    {["#","","Track","Plays","Buys","Fans","Completion"].map((h,i)=>(
+                      <div key={i} style={{ fontSize:7, color:C.dim, letterSpacing:2, textTransform:"uppercase", textAlign:i>2?"right":"left" }}>{h}</div>
+                    ))}
+                  </div>
+                )}
+                {sortedTracks.length===0 ? (
+                  <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>No track data yet</div>
+                ) : sortedTracks.map((t,i)=>(
+                  <TrackRow key={t.slug} track={t} rank={i+1} isFirst={i===0} isMobile={isMobile} />
                 ))}
               </div>
-            )}
-            {sortedTracks.length===0 ? (
-              <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>No track data yet</div>
-            ) : sortedTracks.map((t,i)=>(
-              <TrackRow key={t.slug} track={t} rank={i+1} isFirst={i===0} isMobile={isMobile} />
-            ))}
+            </div>
           </Card>
         </div>
       )}
