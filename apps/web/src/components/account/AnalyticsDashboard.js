@@ -674,7 +674,7 @@ export default function AnalyticsDashboard({ isMobile }) {
 
   const load = useCallback(() => {
     setLoading(true); setError(null);
-    fetch("/api/admin/analytics", { credentials:"include" })
+    fetch("/api/admin/analytics", { credentials:"include", cache:"no-store" })
       .then(r=>r.ok?r.json():Promise.reject(r.status))
       .then(d=>{ setData(d); setLoading(false); })
       .catch(()=>{ setError("Could not load analytics."); setLoading(false); });
@@ -682,7 +682,7 @@ export default function AnalyticsDashboard({ isMobile }) {
 
   const loadRevenue = useCallback(() => {
     setRevenueLoading(true); setRevenueError(null);
-    fetch("/api/admin/analytics/revenue", { credentials:"include" })
+    fetch("/api/admin/analytics/revenue", { credentials:"include", cache:"no-store" })
       .then(r=>r.ok?r.json():Promise.reject(r.status))
       .then(d=>{ setRevenueData(d); setRevenueLoading(false); })
       .catch(()=>{ setRevenueError("Could not load revenue."); setRevenueLoading(false); });
@@ -690,7 +690,7 @@ export default function AnalyticsDashboard({ isMobile }) {
 
   const loadFunnels = useCallback(() => {
     setFunnelsLoading(true); setFunnelsError(null);
-    fetch("/api/admin/analytics/funnels", { credentials:"include" })
+    fetch("/api/admin/analytics/funnels", { credentials:"include", cache:"no-store" })
       .then(r=>r.ok?r.json():Promise.reject(r.status))
       .then(d=>{ setFunnelsData(d); setFunnelsLoading(false); })
       .catch(()=>{ setFunnelsError("Could not load funnels."); setFunnelsLoading(false); });
@@ -698,7 +698,7 @@ export default function AnalyticsDashboard({ isMobile }) {
 
   const loadTiming = useCallback(() => {
     setTimingLoading(true); setTimingError(null);
-    fetch("/api/admin/analytics/timing", { credentials:"include" })
+    fetch("/api/admin/analytics/timing", { credentials:"include", cache:"no-store" })
       .then(r=>r.ok?r.json():Promise.reject(r.status))
       .then(d=>{ setTimingData(d); setTimingLoading(false); })
       .catch(()=>{ setTimingError("Could not load timing."); setTimingLoading(false); });

@@ -61,6 +61,6 @@ export async function GET(req) {
 
   return NextResponse.json(
     { funnel, cohorts, attribution },
-    { headers: { "Cache-Control": "private, max-age=180" } }
+    { headers: { "Cache-Control": "private, no-store, must-revalidate" } }
   );
 }

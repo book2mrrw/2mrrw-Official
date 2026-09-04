@@ -252,6 +252,8 @@ export async function GET(req) {
     geography: { topStates, topCities, topCountries },
     growth: { monthly },
   }, {
-    headers: { "Cache-Control": "private, max-age=120" },
+    // No caching — every KPI/track row here must reflect the current DB
+    // state on every load, never a browser-cached snapshot.
+    headers: { "Cache-Control": "private, no-store, must-revalidate" },
   });
 }

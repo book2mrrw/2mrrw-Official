@@ -166,3 +166,21 @@ test("the Global Map page's fetch explicitly requests no-store, so clicking Refr
   const src = read("src/app/admin/analytics/page.js");
   assert.match(src, /fetch\(`\/api\/admin\/analytics\/global\$\{qs \? `\?\$\{qs\}` : ""\}`, \{ credentials: "include", cache: "no-store" \}\)/);
 });
+
+test("every tab's fetch in AnalyticsDashboard (overview/tracks, revenue, funnels, timing) explicitly requests no-store, and every one of their routes serves no-store back", () => {
+  const dashboard = read("src/components/account/AnalyticsDashboard.js");
+  assert.match(dashboard, /fetch\("\/api\/admin\/analytics", \{ credentials:"include", cache:"no-store" \}\)/);
+  assert.match(dashboard, /fetch\("\/api\/admin\/analytics\/revenue", \{ credentials:"include", cache:"no-store" \}\)/);
+  assert.match(dashboard, /fetch\("\/api\/admin\/analytics\/funnels", \{ credentials:"include", cache:"no-store" \}\)/);
+  assert.match(dashboard, /fetch\("\/api\/admin\/analytics\/timing", \{ credentials:"include", cache:"no-store" \}\)/);
+
+  for (const routeFile of [
+    "src/app/api/admin/analytics/route.js",
+    "src/app/api/admin/analytics/revenue/route.js",
+    "src/app/api/admin/analytics/funnels/route.js",
+    "src/app/api/admin/analytics/timing/route.js",
+  ]) {
+    const src = read(routeFile);
+    assert.match(src, /"Cache-Control": "private, no-store, must-revalidate"/, `${routeFile} must serve no-store`);
+  }
+});

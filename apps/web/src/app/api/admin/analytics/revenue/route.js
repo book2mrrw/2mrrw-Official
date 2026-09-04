@@ -71,6 +71,6 @@ export async function GET(req) {
     subscriptions,
     overview: { totalGrossCents, releaseCount: releases.length },
   }, {
-    headers: { "Cache-Control": "private, max-age=120" },
+    headers: { "Cache-Control": "private, no-store, must-revalidate" },
   });
 }

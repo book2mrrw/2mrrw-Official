@@ -85,6 +85,6 @@ export async function GET(req) {
 
   return NextResponse.json(
     { cells, peakCell, peakHour, peakDay, regions },
-    { headers: { "Cache-Control": "private, max-age=300" } }
+    { headers: { "Cache-Control": "private, no-store, must-revalidate" } }
   );
 }
