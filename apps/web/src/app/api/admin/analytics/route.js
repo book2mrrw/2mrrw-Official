@@ -10,36 +10,40 @@ const PRODUCT_COLS_FOR_COVER =
   "id, slug, title, product_type, cover_url, video_path, image_path, release_type, metadata";
 
 /**
- * Resolves a product's real cover art, working for both video-loop singles
- * and static-image albums/EPs/mixtapes alike.
+ * Resolves a product's real cover art.
  *
- * catalog-db.js's mapProductRow() (used by the live storefront) only calls
- * visualDiscoveryUrl — the endpoint that actually finds whatever artwork
- * exists in R2 — when it already knows a video is present (hasVideo, gated
- * on isSingle || legacyVideo || row.video_path). For an album/EP/mixtape
- * with no recorded video_path, that check is false, so it skips discovery
- * entirely and falls back to the raw cover_url/image_path column — which is
- * frequently unset for releases published through the canonical R2-path
- * pipeline rather than the legacy explicit-column one. That gap is exactly
- * why some tracks here showed a blank cover. visualDiscoveryUrl itself is
- * safe to call unconditionally: it doesn't require a video to exist, it
- * just builds a discovery-endpoint URL that resolves to whichever real
- * asset (video or image) is actually there.
+ * Traced against the actual publish route (api/admin/releases/[id]/publish):
+ * cover art is verified to exist in R2 (a real HEAD check) before a release
+ * can publish at all, then canonicalized to images/{typeFolder}/{slug}/{slug}.ext,
+ * and products.cover_url is written as exactly visualDiscoveryUrl(typeFolder,
+ * slug, {}) — i.e. cover_url IS ALREADY the correct, publish-time-verified
+ * discovery URL for every release published through that flow.
+ *
+ * This function used to recompute that same URL itself instead of trusting
+ * the stored value — same discovery endpoint, but a second, independent
+ * computation with different inputs (it also threaded legacyVideo/legacyImage
+ * params the publish route never used) is a real drift risk with no upside,
+ * since the correct answer was already sitting in the row. Now: trust
+ * cover_url directly whenever it's present, and only fall back to recomputing
+ * via discovery for legacy rows published before that flow existed, where
+ * cover_url was never populated at all.
  */
 function resolveCoverUrl(row) {
+  if (row.cover_url) return row.cover_url;
+
   const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
   const releaseTypeFolder =
     row.release_type ||
     normalizeReleaseType(meta.release_type || meta.release_category || row.product_type) ||
     "singles";
-  const legacyCover = row.cover_url || row.image_path || meta.legacy_cover || null;
+  const legacyCover = row.image_path || meta.legacy_cover || null;
   const legacyVideo = meta.animated_cover_r2_key || (meta.legacy_video_stem
     ? `videos/${releaseTypeFolder}/${row.slug}/${meta.legacy_video_stem}.mp4`
     : null);
   return visualDiscoveryUrl(releaseTypeFolder, row.slug, {
     legacyVideo: legacyVideo || undefined,
     legacyImage: legacyCover || undefined,
-  }) || legacyCover || null;
+  }) || null;
 }
 
 export const dynamic = "force-dynamic";
