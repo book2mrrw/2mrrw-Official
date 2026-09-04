@@ -561,6 +561,7 @@ const TABS = [
   { id:"tracks",   label:"Tracks"   },
   { id:"revenue",  label:"Revenue"  },
   { id:"funnels",  label:"Funnels"  },
+  { id:"timing",   label:"Timing"   },
 ];
 const SORT_OPTS = [
   { key:"plays",          label:"Plays"      },
@@ -589,6 +590,11 @@ export default function AnalyticsDashboard({ isMobile }) {
   const [funnelsLoading, setFunnelsLoading] = useState(false);
   const [funnelsError,   setFunnelsError]   = useState(null);
 
+  // Timing tab — same lazy, isolated pattern.
+  const [timingData,    setTimingData]    = useState(null);
+  const [timingLoading, setTimingLoading] = useState(false);
+  const [timingError,   setTimingError]   = useState(null);
+
   const load = useCallback(() => {
     setLoading(true); setError(null);
     fetch("/api/admin/analytics", { credentials:"include" })
@@ -613,6 +619,14 @@ export default function AnalyticsDashboard({ isMobile }) {
       .catch(()=>{ setFunnelsError("Could not load funnels."); setFunnelsLoading(false); });
   }, []);
 
+  const loadTiming = useCallback(() => {
+    setTimingLoading(true); setTimingError(null);
+    fetch("/api/admin/analytics/timing", { credentials:"include" })
+      .then(r=>r.ok?r.json():Promise.reject(r.status))
+      .then(d=>{ setTimingData(d); setTimingLoading(false); })
+      .catch(()=>{ setTimingError("Could not load timing."); setTimingLoading(false); });
+  }, []);
+
   useEffect(()=>{ load(); },[load]);
   useEffect(()=>{
     if (tab==="revenue" && !revenueData && !revenueLoading) loadRevenue();
@@ -620,6 +634,9 @@ export default function AnalyticsDashboard({ isMobile }) {
   useEffect(()=>{
     if (tab==="funnels" && !funnelsData && !funnelsLoading) loadFunnels();
   },[tab, funnelsData, funnelsLoading, loadFunnels]);
+  useEffect(()=>{
+    if (tab==="timing" && !timingData && !timingLoading) loadTiming();
+  },[tab, timingData, timingLoading, loadTiming]);
 
   if (loading) return (
     <div style={{ padding:"60px 0", textAlign:"center" }}>
@@ -936,6 +953,16 @@ export default function AnalyticsDashboard({ isMobile }) {
           isMobile={isMobile}
         />
       )}
+
+      {tab==="timing" && (
+        <TimingTab
+          data={timingData}
+          loading={timingLoading}
+          error={timingError}
+          onRetry={loadTiming}
+          isMobile={isMobile}
+        />
+      )}
     </div>
   );
 }
@@ -1122,6 +1149,87 @@ function FunnelsTab({ data, loading, error, onRetry, isMobile }) {
             <div style={{ fontSize:13, color:C.green, textAlign: isMobile ? "left" : "right" }}>{a.revenueCents>0?fmtRevenue(a.revenueCents):"—"}</div>
           </div>
         ))}
+      </Card>
+    </div>
+  );
+}
+
+// ── Timing tab: peak listening hour/day-of-week heatmap ─────────────────────
+const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function hourLabel(h) {
+  if (h === 0) return "12a";
+  if (h === 12) return "12p";
+  return h < 12 ? `${h}a` : `${h-12}p`;
+}
+
+function TimingTab({ data, loading, error, onRetry, isMobile }) {
+  if (loading) return (
+    <div style={{ textAlign:"center", padding:"40px 0", color:C.muted, fontSize:13 }}>Loading timing…</div>
+  );
+  if (error) return (
+    <div style={{ padding:"24px 0", color:C.red, fontSize:13, display:"flex", alignItems:"center", gap:10 }}>
+      <span>⚠</span> {error}
+      <button onClick={onRetry} style={{ marginLeft:"auto", background:"none", border:`1px solid #333`, borderRadius:8, color:C.muted, fontSize:11, padding:"5px 12px", cursor:"pointer", fontFamily:"inherit" }}>
+        Retry
+      </button>
+    </div>
+  );
+  if (!data) return null;
+
+  const { cells=[], peakHour, peakDay } = data;
+  const maxPlays = cells.reduce((m,c)=>Math.max(m,c.plays), 1);
+  const cellFor = (day, hour) => cells.find(c=>c.day===day && c.hour===hour);
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+        <Card style={{ padding:"16px 18px", flex:1, minWidth:160 }} orbColor={C.accentGlow}>
+          <Label>Peak Hour · UTC</Label>
+          <div style={{ fontSize:22, fontWeight:900, color:C.text, marginTop:6 }}>
+            {peakHour ? `${hourLabel(peakHour.hour)}–${hourLabel((peakHour.hour+1)%24)}` : "—"}
+          </div>
+          <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>{peakHour ? `${fmt(peakHour.plays)} plays · 90d` : "No data yet"}</div>
+        </Card>
+        <Card style={{ padding:"16px 18px", flex:1, minWidth:160 }} orbColor={C.purpleGlow}>
+          <Label>Peak Day</Label>
+          <div style={{ fontSize:22, fontWeight:900, color:C.text, marginTop:6 }}>
+            {peakDay ? DAY_NAMES[peakDay.day] : "—"}
+          </div>
+          <div style={{ fontSize:11, color:C.muted, marginTop:4 }}>{peakDay ? `${fmt(peakDay.plays)} plays · 90d` : "No data yet"}</div>
+        </Card>
+      </div>
+
+      <Card style={{ padding:"16px 20px", overflowX:"auto" }}>
+        <Label style={{ marginBottom:4 }}>Listening activity by hour &amp; day · 90d</Label>
+        <div style={{ fontSize:10, color:C.dim, marginBottom:14 }}>All times UTC — no single local timezone applies across a global audience</div>
+        {cells.length===0 ? (
+          <div style={{ textAlign:"center", padding:"24px 0", color:C.muted, fontSize:13 }}>No listening data yet</div>
+        ) : (
+          <div style={{ minWidth: isMobile ? 720 : "auto" }}>
+            <div style={{ display:"grid", gridTemplateColumns:"36px repeat(24, 1fr)", gap:2, marginBottom:4 }}>
+              <div />
+              {Array.from({length:24},(_,h)=>(
+                <div key={h} style={{ fontSize:7, color:C.dim, textAlign:"center" }}>{h%3===0?hourLabel(h):""}</div>
+              ))}
+            </div>
+            {DAY_NAMES.map((name, day)=>(
+              <div key={name} style={{ display:"grid", gridTemplateColumns:"36px repeat(24, 1fr)", gap:2, marginBottom:2 }}>
+                <div style={{ fontSize:9, color:C.muted, alignSelf:"center" }}>{name}</div>
+                {Array.from({length:24},(_,hour)=>{
+                  const cell = cellFor(day, hour);
+                  const plays = cell?.plays || 0;
+                  const intensity = plays / maxPlays;
+                  return (
+                    <div key={hour} title={`${name} ${hourLabel(hour)}: ${fmt(plays)} plays`} style={{
+                      height:18, borderRadius:3,
+                      background: plays>0 ? `rgba(0,255,255,${0.06 + intensity*0.7})` : "rgba(255,255,255,0.02)",
+                    }} />
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );
