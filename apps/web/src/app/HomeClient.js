@@ -871,7 +871,12 @@ const FALLBACK_EVENTS = [
   { id:"evt-4", name:"2MRRW Live – LA",      location:"Los Angeles, CA", date:"2026-06-21", time:"9:00 PM", price:35.00, tickets:40 },
   { id:"evt-5", name:"2MRRW Live – NYC",     location:"New York, NY",    date:"2026-07-04", time:"8:00 PM", price:35.00, tickets:45 },
 ];
-const radioSlides = [
+// Last-resort paint before the live /api/catalog/releases?view=radio fetch
+// resolves (or if it fails) — never the ongoing source of truth. The
+// carousel used to be permanently stuck on these 4 hardcoded slides; see
+// the radioSlidesData state + fetch effect below for the real, live-catalog
+// (music + podcast) feed.
+const RADIO_SLIDES_FALLBACK = [
   { slug:"hour-glass",     title:"Hour Glass",     type:"single", cover:"/images/singles/hourglass.jpg", price:2.99, preview:"/audio/previews/hourglass-preview.mp3", tag:"NOW PLAYING", tagColor:"#00ffff" },
   { slug:"w2d",            title:"W.2.D",          type:"single", cover:"/images/singles/w2d.jpg",       price:2.99, preview:"/audio/previews/w2d-preview.mp3", tag:"FEATURED",    tagColor:"#a259ff" },
   { slug:"artificial",     title:"Artificial",     type:"single", cover:"/images/singles/artificial.jpg",price:2.99, preview:"/audio/previews/artificial-preview.mp3", tag:"TRENDING",    tagColor:"#ff6b35" },
@@ -1451,16 +1456,40 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   // Events arrive pre-fetched from the RSC page wrapper (initialEvents prop);
   // no client fetch needed.
 
+  // radioSlidesData starts as the static fallback (so the carousel never
+  // renders empty on first paint) and is replaced by the live catalog feed
+  // (music + podcast, latest-first) once /api/catalog/releases?view=radio
+  // resolves. A failed/empty fetch just leaves the fallback in place.
+  const [radioSlidesData, setRadioSlidesData] = useState(RADIO_SLIDES_FALLBACK);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/catalog/releases?view=radio")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (cancelled || !Array.isArray(json?.items) || !json.items.length) return;
+        setRadioSlidesData(json.items);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
   const enrichRadioSlide = useCallback(
     (slide) => {
       if (!slide) return slide;
       const match = getCatalogSurfaceRef().catalogPlaybackLookup.bySlug.get(slide.slug);
+      // A live catalog match is always at least as fresh as the slide itself
+      // (both are DB-backed once radioSlidesData has loaded) — prefer it so a
+      // stale/placeholder value on the slide can never shadow real cover or
+      // preview data. Previously `slide.cover || match.cover` always won on
+      // the slide's side because the old hardcoded fallback slides had a
+      // truthy `cover` on every entry, so match.cover was never used.
       const merged = match
         ? {
             ...match,
             ...slide,
-            preview: slide.preview || match.preview,
-            cover: slide.cover || match.cover,
+            preview: match.preview || slide.preview,
+            cover: match.cover || slide.cover,
             video: slide.video || match.video,
           }
         : slide;
@@ -1470,8 +1499,8 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   );
 
   const enrichedRadioSlides = useMemo(
-    () => radioSlides.map((slide) => enrichRadioSlide(slide)),
-    [enrichRadioSlide]
+    () => radioSlidesData.map((slide) => enrichRadioSlide(slide)),
+    [radioSlidesData, enrichRadioSlide]
   );
 
   useEffect(() => {

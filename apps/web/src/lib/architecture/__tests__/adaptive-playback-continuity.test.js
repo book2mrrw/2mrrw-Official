@@ -122,17 +122,20 @@ test("admin pages resolve their admin gate server-side, not by reading the sessi
   const hook = read("src/hooks/useAdminGate.js");
   assert.match(hook, /\/api\/auth\/mfa-session/);
   const pages = [
-    "src/app/admin/page.js",
-    "src/app/admin/releases/page.js",
-    "src/app/admin/visual-layer/page.js",
-    "src/app/admin/gifts/page.js",
-    "src/app/admin/shows/page.js",
-    "src/app/admin/upload/page.js",
-    "src/app/admin/analytics/page.js",
-    "src/app/admin/media/page.js",
+    { page: "src/app/admin/page.js" },
+    // releases and podcast are both thin wrappers around the same shared
+    // ReleasesManager component — the gate check lives there, not in the page.
+    { page: "src/app/admin/releases/page.js", impl: "src/components/admin/ReleasesManager.js" },
+    { page: "src/app/admin/podcast/page.js", impl: "src/components/admin/ReleasesManager.js" },
+    { page: "src/app/admin/visual-layer/page.js" },
+    { page: "src/app/admin/gifts/page.js" },
+    { page: "src/app/admin/shows/page.js" },
+    { page: "src/app/admin/upload/page.js" },
+    { page: "src/app/admin/analytics/page.js" },
+    { page: "src/app/admin/media/page.js" },
   ];
-  for (const page of pages) {
-    const source = read(page);
+  for (const { page, impl } of pages) {
+    const source = read(impl || page);
     assert.match(source, /import \{ useAdminGate \} from "@\/hooks\/useAdminGate"/, `${page} must use the shared admin gate`);
     assert.doesNotMatch(source, /\.auth\.getSession\(\)/, `${page} must not read the session client-side anymore`);
   }

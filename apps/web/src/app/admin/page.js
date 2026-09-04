@@ -21,6 +21,7 @@ const C = {
 
 const NAV_ITEMS = [
   { label: "Manage Releases", href: "/admin/releases", icon: "📋", desc: "View all releases, replace master audio, manage scheduled drops" },
+  { label: "Podcast", href: "/admin/podcast", icon: "🎙️", desc: "Upload podcast episodes and series — separate from music releases" },
   { label: "Audio Refresh", href: "/admin/media", icon: "🎵", desc: "Re-ingest R2 audio, clear HLS caches, re-queue transcoding" },
   { label: "Visual Layer", href: "/admin/visual-layer", icon: "🎨", desc: "Manage release visual assets, animated covers, artwork" },
   { label: "Gifts", href: "/admin/gifts", icon: "🎁", desc: "Create and manage gift links for fans" },

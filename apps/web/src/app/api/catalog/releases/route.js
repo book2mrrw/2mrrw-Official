@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   getStorefrontCatalogFromDB,
   getStorefrontSinglesPageFromDB,
+  getRadioCarouselItemsFromDB,
 } from "@/lib/media/catalog-db";
 import { toMobileCatalogReleases } from "@/lib/media/mobile-catalog-projection";
 
@@ -34,6 +35,25 @@ export async function GET(request) {
       });
       return NextResponse.json(
         { error: "catalog_unavailable", catalog: null, fallback: true },
+        { status: 503, headers: NO_STORE_HEADERS }
+      );
+    }
+  }
+
+  if (view === "radio") {
+    try {
+      const items = await getRadioCarouselItemsFromDB({ limit: 8 });
+      return NextResponse.json({
+        items,
+        fallback: false,
+        source: "supabase",
+      }, { headers: NO_STORE_HEADERS });
+    } catch (error) {
+      console.error("[catalog/releases] radio carousel read failed", {
+        error: error?.message,
+      });
+      return NextResponse.json(
+        { error: "catalog_unavailable", items: [], fallback: true },
         { status: 503, headers: NO_STORE_HEADERS }
       );
     }

@@ -31,10 +31,13 @@ export async function GET(req) {
 
   const admin = getAdminClient();
 
+  const kind = new URL(req.url).searchParams.get("kind") === "podcast" ? "podcast" : "music";
+
   // ── 1. Wizard releases (new upload system) ────────────────────────────────
   const { data: wizardReleases, error: wizardError } = await admin
     .from("releases")
-    .select("id, slug, status, release_type, release_date, storefront_visible, scheduled_at, available_at, release_timezone, upcoming_visible, preview_before_release, preorder_enabled, preorder_starts_at, preorder_price_cents, early_access_enabled, early_access_starts_at, early_access_scope, early_access_audiences, published_at, unavailable_at, cover_art_r2_key, upc, metadata, created_at")
+    .select("id, slug, status, release_type, content_kind, release_date, storefront_visible, scheduled_at, available_at, release_timezone, upcoming_visible, preview_before_release, preorder_enabled, preorder_starts_at, preorder_price_cents, early_access_enabled, early_access_starts_at, early_access_scope, early_access_audiences, published_at, unavailable_at, cover_art_r2_key, upc, metadata, created_at")
+    .eq("content_kind", kind)
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -85,7 +88,8 @@ export async function GET(req) {
   // ── 2. Catalog releases (legacy R2-ingest system → products table) ────────
   const { data: catalogProducts, error: catalogError } = await admin
     .from("products")
-    .select("id, slug, title, product_type, release_type, active, image_path, price_cents, created_at, updated_at, metadata")
+    .select("id, slug, title, product_type, release_type, content_kind, active, image_path, price_cents, created_at, updated_at, metadata")
+    .eq("content_kind", kind)
     .order("updated_at", { ascending: false })
     .limit(200);
 
@@ -141,6 +145,7 @@ export async function GET(req) {
       slug: p.slug,
       status: p.active ? "published" : "draft",
       release_type: releaseType,
+      content_kind: p.content_kind || "music",
       release_date: p.metadata?.release_date || null,
       storefront_visible: Boolean(p.active),
       scheduled_at: null,

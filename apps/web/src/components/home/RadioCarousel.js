@@ -7,6 +7,8 @@ import ReleaseCardPlayButton from "@/components/music/ReleaseCardPlayButton";
 import { resolveContentAccess } from "@/lib/music-access";
 import { withR2CatalogMedia } from "@/components/home/catalogMedia";
 
+const RADIO_TYPE_LABELS = { single: "SINGLE", feature: "FEATURE", album: "ALBUM", ep: "EP", mixtape: "MIXTAPE" };
+
 function RadioCarousel({
   narrow = false,
   currentSlide,
@@ -22,6 +24,9 @@ function RadioCarousel({
   onLibraryChange,
 }) {
   const radioAccess = resolveContentAccess(currentSlide, accountState);
+  const kindLabel = currentSlide.contentKind === "podcast"
+    ? (["album", "ep", "mixtape"].includes(currentSlide.type) ? "SERIES" : "EPISODE")
+    : (RADIO_TYPE_LABELS[currentSlide.type] || "SINGLE");
 
   return (
     <div
@@ -108,7 +113,7 @@ function RadioCarousel({
                 />
               ))}
             </div>
-            <div style={{ fontSize: 13, color: "#555", letterSpacing: 1 }}>SINGLE</div>
+            <div style={{ fontSize: 13, color: "#555", letterSpacing: 1 }}>{kindLabel}</div>
           </div>
           {radioAccess?.showPrice ? (
             <div className="home-radio-card__price" style={{ color: "#00ffff", fontWeight: 700 }}>${currentSlide.price.toFixed(2)}</div>

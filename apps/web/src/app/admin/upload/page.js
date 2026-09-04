@@ -10,9 +10,12 @@ export default function AdminUploadPage() {
   const gate = useAdminGate();
   const checked = gate === "ok";
   const [resumeReleaseId, setResumeReleaseId] = useState(null);
+  const [contentKind, setContentKind] = useState("music");
 
   useEffect(() => {
-    setResumeReleaseId(new URLSearchParams(window.location.search).get("draft"));
+    const params = new URLSearchParams(window.location.search);
+    setResumeReleaseId(params.get("draft"));
+    setContentKind(params.get("kind") === "podcast" ? "podcast" : "music");
   }, []);
 
   if (!checked) {
@@ -28,8 +31,9 @@ export default function AdminUploadPage() {
     <div style={{ minHeight: "100vh", background: "#050505", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
       <UploadWizard
         initialReleaseId={resumeReleaseId}
-        onComplete={() => router.push("/admin/releases")}
-        onDismiss={() => router.push("/admin")}
+        contentKind={contentKind}
+        onComplete={() => router.push(contentKind === "podcast" ? "/admin/podcast" : "/admin/releases")}
+        onDismiss={() => router.push(contentKind === "podcast" ? "/admin/podcast" : "/admin")}
       />
     </div>
   );

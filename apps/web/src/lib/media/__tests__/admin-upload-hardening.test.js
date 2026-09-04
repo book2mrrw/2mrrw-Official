@@ -40,7 +40,7 @@ describe("admin upload MIME authority", () => {
 describe("one upload transport and one storefront invalidator", () => {
   test("normal assets use the shared transport and master replacements use the staged transport", () => {
     const wizard = read("src/components/admin/UploadWizard.js");
-    const releases = read("src/app/admin/releases/page.js");
+    const releases = read("src/components/admin/ReleasesManager.js");
     const inline = read("src/components/admin/InlineReleasesManager.js");
     // 5th usage added for the browser-derived preview clip (PreviewTrimPicker) —
     // still the one shared transport, not a new upload path.
@@ -204,7 +204,11 @@ describe("release upload database contract", () => {
     const wizard = read("src/components/admin/UploadWizard.js");
     const draft = read("src/app/api/admin/releases/draft/route.js");
     const migration = read("supabase/migrations/20260823000020_release_upload_session_identity.sql");
-    assert.match(wizard, /sessionStorage\.setItem\("2mrrw\.admin\.release-upload"/);
+    // The sessionStorage key is namespaced by contentKind (music vs podcast)
+    // so a podcast upload session can never resume as a music draft or vice
+    // versa — see the sessionStorageKey declaration and its 3 call sites.
+    assert.match(wizard, /const sessionStorageKey = `2mrrw\.admin\.\$\{contentKind\}-upload`;/);
+    assert.match(wizard, /sessionStorage\.setItem\(sessionStorageKey,/);
     assert.match(wizard, /upload_session_id: uploadSessionIdRef\.current/);
     assert.match(wizard, /setReleaseId\(json\.release_id\)/);
     assert.match(draft, /contains\("metadata", \{ upload_session_id: uploadSessionId \}\)/);
@@ -289,9 +293,13 @@ describe("draft-list rows are openable without hitting a precise Edit target", (
     assert.match(inline, /onClick=\{\(e\) => e\.stopPropagation\(\)\}/);
     assert.match(inline, /onClick=\{\(e\) => \{ e\.stopPropagation\(\); onEdit\(rel\); \}\}/);
 
-    const adminPage = read("src/app/admin/releases/page.js");
-    assert.match(adminPage, /onClick=\{isDraft \? \(\) => router\.push\(`\/admin\/upload\?draft=\$\{rel\.id\}`\) : undefined\}/);
-    assert.match(adminPage, /onClick=\{\(e\) => e\.stopPropagation\(\)\}/);
+    // The admin releases page delegates to the shared ReleasesManager
+    // component (also used by /admin/podcast), so its draft-click handler and
+    // the draft URL builder both live there now, not in the thin page file.
+    const releasesManager = read("src/components/admin/ReleasesManager.js");
+    assert.match(releasesManager, /onClick=\{isDraft \? \(\) => router\.push\(draftHref\(rel\.id\)\) : undefined\}/);
+    assert.match(releasesManager, /const draftHref\s*=\s*\(id\) => isPodcast \? `\/admin\/upload\?draft=\$\{id\}&kind=podcast` : `\/admin\/upload\?draft=\$\{id\}`;/);
+    assert.match(releasesManager, /onClick=\{\(e\) => e\.stopPropagation\(\)\}/);
   });
 });
 

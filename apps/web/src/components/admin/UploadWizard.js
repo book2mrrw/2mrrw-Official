@@ -287,18 +287,26 @@ function StepBar({ steps, current }) {
 }
 
 // ── Step 0: Release Type ─────────────────────────────────────────────────────────
-function ReleaseTypeStep({ data, onChange, onNext, loading }) {
-  const TYPES = [
-    { value: "single",  label: "Single",  desc: "One track, solo or feature" },
-    { value: "feature", label: "Feature", desc: "Collab where 2MRRW is featured" },
-    { value: "ep",      label: "EP",      desc: "3–6 track project" },
-    { value: "mixtape", label: "Mixtape", desc: "Full-length informal release" },
-    { value: "album",   label: "Album",   desc: "Official full-length LP" },
-  ];
+function ReleaseTypeStep({ data, onChange, onNext, loading, contentKind = "music" }) {
+  const isPodcast = contentKind === "podcast";
+  const TYPES = isPodcast
+    ? [
+        { value: "single", label: "Single Episode",       desc: "One standalone episode" },
+        { value: "album",  label: "Multi-Episode Series",  desc: "Several episodes released together" },
+      ]
+    : [
+        { value: "single",  label: "Single",  desc: "One track, solo or feature" },
+        { value: "feature", label: "Feature", desc: "Collab where 2MRRW is featured" },
+        { value: "ep",      label: "EP",      desc: "3–6 track project" },
+        { value: "mixtape", label: "Mixtape", desc: "Full-length informal release" },
+        { value: "album",   label: "Album",   desc: "Official full-length LP" },
+      ];
 
   return (
     <div>
-      <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>What are you releasing?</h2>
+      <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>
+        {isPodcast ? "What are you uploading?" : "What are you releasing?"}
+      </h2>
       <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>This creates your private draft — nothing goes live until you publish.</p>
 
       <Field label="Release Type">
@@ -1898,7 +1906,8 @@ const STEPS_SINGLE = ["Type", "Info", "Credits", "Audio", "Artwork", "Review"];
 const STEPS_MULTI  = ["Type", "Info", "Credits", "Tracklist", "Details", "Artwork", "Review"];
 
 // ── Main exported component ──────────────────────────────────────────────────────
-export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null }) {
+export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null, contentKind = "music" }) {
+  const sessionStorageKey = `2mrrw.admin.${contentKind}-upload`;
   const [step,          setStep]          = useState(0);
   const [data,          setData]          = useState(DEFAULT_DATA);
   const [tracks,        setTracks]        = useState([newTrack(1)]);
@@ -1933,7 +1942,7 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null })
       return () => { cancelled = true; };
     }
     try {
-      const saved = JSON.parse(sessionStorage.getItem("2mrrw.admin.release-upload") || "null");
+      const saved = JSON.parse(sessionStorage.getItem(sessionStorageKey) || "null");
       if (!saved?.uploadSessionId) {
         uploadSessionIdRef.current = crypto.randomUUID();
         setSessionHydrated(true);
@@ -1955,7 +1964,7 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null })
 
   useEffect(() => {
     if (!sessionHydrated || !uploadSessionIdRef.current) return;
-    sessionStorage.setItem("2mrrw.admin.release-upload", JSON.stringify({
+    sessionStorage.setItem(sessionStorageKey, JSON.stringify({
       uploadSessionId: uploadSessionIdRef.current,
       releaseId,
       draftSlug,
@@ -2026,7 +2035,7 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null })
     setTracks([newTrack(1)]);
     setReleaseId(null);
     setDraftSlug(null);
-    sessionStorage.removeItem("2mrrw.admin.release-upload");
+    sessionStorage.removeItem(sessionStorageKey);
     uploadSessionIdRef.current = crypto.randomUUID();
   }, []);
 
@@ -2051,6 +2060,7 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null })
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           release_type: data.release_type,
+          content_kind: contentKind,
           slug: data.proposed_slug || slugify(data.title),
           upload_session_id: uploadSessionIdRef.current,
         }),
@@ -2072,7 +2082,7 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null })
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   const stepName    = STEPS[step];
-  const commonProps = { data, onChange: setField, onNext: next, onBack: back, releaseId, draftSlug };
+  const commonProps = { data, onChange: setField, onNext: next, onBack: back, releaseId, draftSlug, contentKind };
 
   return (
     <div style={{ maxWidth: 700, margin: "0 auto", padding: "32px 20px 60px", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
@@ -2088,7 +2098,7 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null })
               ← Back to Releases
             </button>
           )}
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: onDismiss ? "4px 0 0" : "0" }}>Upload Release</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: C.text, margin: onDismiss ? "4px 0 0" : "0" }}>{contentKind === "podcast" ? "Upload Podcast" : "Upload Release"}</h1>
         </div>
         {draftSlug && (
           <div style={{ fontSize: 11, color: C.muted2 }}>

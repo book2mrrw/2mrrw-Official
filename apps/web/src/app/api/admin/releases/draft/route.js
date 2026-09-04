@@ -23,11 +23,15 @@ export async function POST(req) {
   let body;
   try { body = await req.json(); } catch { body = {}; }
 
-  const { release_type, slug: requestedSlug, upload_session_id: uploadSessionId } = body;
+  const { release_type, slug: requestedSlug, upload_session_id: uploadSessionId, content_kind: contentKind = "music" } = body;
 
   const VALID_TYPES = ["single", "feature", "album", "ep", "mixtape"];
   if (!VALID_TYPES.includes(release_type)) {
     return NextResponse.json({ error: `release_type must be one of: ${VALID_TYPES.join(", ")}` }, { status: 400 });
+  }
+  const VALID_CONTENT_KINDS = ["music", "podcast"];
+  if (!VALID_CONTENT_KINDS.includes(contentKind)) {
+    return NextResponse.json({ error: `content_kind must be one of: ${VALID_CONTENT_KINDS.join(", ")}` }, { status: 400 });
   }
 
   const admin = getAdminClient();
@@ -39,7 +43,7 @@ export async function POST(req) {
   // Draft creation is idempotent for the lifetime of an upload session.
   const { data: existingDraft, error: existingError } = await admin
     .from("releases")
-    .select("id, slug, status, release_type")
+    .select("id, slug, status, release_type, content_kind")
     .eq("status", "draft")
     .contains("metadata", { upload_session_id: uploadSessionId })
     .maybeSingle();
@@ -53,6 +57,7 @@ export async function POST(req) {
       slug: existingDraft.slug,
       status: existingDraft.status,
       release_type: existingDraft.release_type,
+      content_kind: existingDraft.content_kind,
       recovered: true,
     });
   }
@@ -77,12 +82,13 @@ export async function POST(req) {
     .from("releases")
     .insert({
       release_type,
+      content_kind: contentKind,
       status: "draft",
       storefront_visible: false,
       slug: draftSlug,
       metadata: { upload_session_id: uploadSessionId },
     })
-    .select("id, slug, status, release_type")
+    .select("id, slug, status, release_type, content_kind")
     .single();
 
   if (error) {
@@ -90,5 +96,5 @@ export async function POST(req) {
     return NextResponse.json({ error: "Failed to create draft" }, { status: 500 });
   }
 
-  return NextResponse.json({ release_id: data.id, slug: data.slug, release_type: data.release_type, recovered: false });
+  return NextResponse.json({ release_id: data.id, slug: data.slug, release_type: data.release_type, content_kind: data.content_kind, recovered: false });
 }

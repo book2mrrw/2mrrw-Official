@@ -112,7 +112,7 @@ export async function POST(req, { params }) {
   // ── 1. Load the release record ─────────────────────────────────────────────
   const { data: release, error: relErr } = await admin
     .from("releases")
-    .select("id, slug, status, release_type, cover_art_r2_key, metadata")
+    .select("id, slug, status, release_type, content_kind, cover_art_r2_key, metadata")
     .eq("id", releaseId)
     .single();
 
@@ -480,6 +480,7 @@ export async function POST(req, { params }) {
         slug:          releaseSlug,
         title:         title.trim(),
         display_title: title.trim(),
+        content_kind:  release.content_kind || "music",
         product_type:  PRODUCT_TYPE_MAP[releaseType] || "single",
         release_type:  normalizeReleaseType(releaseType),
         release_date:  resolvedReleaseDate,

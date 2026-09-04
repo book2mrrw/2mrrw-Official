@@ -30,7 +30,7 @@ const PRODUCT_COLS = [
   "video_path", "image_path", "stream_path",
   "release_type", "release_date",
   "metadata", "active", "gifting_enabled",
-  "content_type", "content_id", "updated_at",
+  "content_type", "content_id", "content_kind", "updated_at",
 ].join(", ");
 
 const RELEASE_LIFECYCLE_COLS = "id,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,preorder_enabled,preorder_starts_at,preorder_price_cents,early_access_enabled,early_access_starts_at,early_access_scope,early_access_audiences,release_timezone,unavailable_at";
@@ -170,6 +170,7 @@ export async function getStorefrontSinglesPageFromDB({ offset = 0, limit = 20 } 
     .from("products")
     .select(`${PRODUCT_COLS}, releases(${RELEASE_LIFECYCLE_COLS})`, { count: "exact" })
     .eq("product_type", "single")
+    .eq("content_kind", "music")
     .eq("active", true)
     .order("release_date", { ascending: false, nullsLast: true })
     .order("id", { ascending: false })
@@ -286,6 +287,7 @@ export async function getStorefrontCatalogFromDB() {
       .from("products")
       .select(`${PRODUCT_COLS}, releases(${RELEASE_LIFECYCLE_COLS})`)
       .in("product_type", ["single", "feature", "album"])
+      .eq("content_kind", "music")
       .order("release_date", { ascending: false, nullsLast: true });
 
     if (error) throw error;
@@ -367,5 +369,56 @@ export async function getStorefrontCatalogFromDB() {
   } catch (err) {
     console.error("[catalog-db] getStorefrontCatalogFromDB error", { error: err?.message });
     return null;
+  }
+}
+
+const RADIO_BADGE_BY_KIND = {
+  podcast: { tag: "PODCAST",     tagColor: "#ff9f0a" },
+  music:   { tag: "NEW RELEASE", tagColor: "#00ffff" },
+};
+
+/**
+ * Latest storefront-visible releases across BOTH music and podcast content,
+ * for the "2MRRW RADIO" home carousel. This is the one storefront surface
+ * that intentionally includes podcasts — every other catalog read above
+ * excludes them via content_kind = 'music' so a podcast episode never leaks
+ * into the regular shop/catalog grid. Reuses mapProductRow so cover/preview/
+ * playback resolution is identical to every other catalog surface, not a
+ * second parallel implementation.
+ */
+export async function getRadioCarouselItemsFromDB({ limit = 8 } = {}) {
+  try {
+    const admin = getAdminClient();
+    const { data, error } = await admin
+      .from("products")
+      .select(`${PRODUCT_COLS}, releases(${RELEASE_LIFECYCLE_COLS})`)
+      .in("product_type", ["single", "feature", "album"])
+      .eq("active", true)
+      .order("release_date", { ascending: false, nullsLast: true })
+      .order("updated_at", { ascending: false })
+      .limit(Math.max(limit * 3, 24));
+
+    if (error) throw error;
+    if (!data?.length) return [];
+
+    const items = [];
+    for (const row of data) {
+      const enriched = mapProductRow(row);
+      if (enriched.availability && !enriched.availability.visible) continue;
+      const contentKind = row.content_kind === "podcast" ? "podcast" : "music";
+      const badge = RADIO_BADGE_BY_KIND[contentKind];
+      items.push({
+        ...enriched,
+        contentKind,
+        content_kind: contentKind,
+        tag: badge.tag,
+        tagColor: badge.tagColor,
+      });
+      if (items.length >= limit) break;
+    }
+    return items;
+  } catch (err) {
+    console.error("[catalog-db] getRadioCarouselItemsFromDB error", { error: err?.message });
+    return [];
   }
 }
