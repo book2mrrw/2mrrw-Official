@@ -52,6 +52,48 @@ function trackCoverSrc(track) {
   return src || track?.coverArt || track?.cover || track?.coverUrl || "";
 }
 
+// A release with an animated/video cover (e.g. a Mixtape/EP whose canonical
+// entry sets `video`) resolves catalogCoverDisplay's `src` to a video URL —
+// correct for the hero <CoverArt> display, which knows how to play it, but
+// this is a small static nav thumbnail with no <video> element at all. An
+// <img> pointed at a video URL just fails to render with no visible error,
+// which is exactly what made one release's thumbnail silently blank while
+// its non-video siblings rendered fine. Use the release's own static
+// fallback image instead — the same one CoverArt itself falls back to when
+// a video fails to load — so this can never happen for any release's cover.
+function moreReleaseThumbSrc(r) {
+  const { src, type } = catalogCoverDisplay(r || {});
+  if (type === "video") return r?.baseCover || r?.legacy_cover || "";
+  return src;
+}
+
+function MoreReleaseThumb({ r, accentColor, onClick }) {
+  const [failed, setFailed] = useState(false);
+  const thumbSrc = !failed ? moreReleaseThumbSrc(r) : "";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ flexShrink: 0, width: 76, background: "none", border: "none", padding: 0, cursor: "pointer", scrollSnapAlign: "start", textAlign: "left" }}
+    >
+      <div style={{ width: 76, height: 76, borderRadius: 9, overflow: "hidden", border: "1px solid rgba(255,255,255,.1)", background: "#111" }}>
+        {thumbSrc ? (
+          <img
+            src={thumbSrc}
+            alt=""
+            onError={() => setFailed(true)}
+            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+          />
+        ) : (
+          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Cormorant Garamond',serif", fontSize: 22, color: accentColor }}>{(r.title || "?").charAt(0)}</div>
+        )}
+      </div>
+      <div style={{ fontSize: 10, color: "rgba(255,255,255,.5)", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 76 }}>{r.title}</div>
+      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 7, letterSpacing: ".1em", color: "rgba(255,255,255,.22)", marginTop: 1 }}>{r.type || r.release_type || "Release"}</div>
+    </button>
+  );
+}
+
 function buildTheme(palette) {
   const safe = palette && typeof palette === "object" ? palette : {};
   const p1 = safe.primaryCss || "#9b5de5";
@@ -2317,22 +2359,12 @@ function AlbumModalView({
                 <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".24em", textTransform: "uppercase", color: "rgba(255,255,255,.3)", padding: "0 20px 10px" }}>More Releases</div>
                 <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingLeft: 20, paddingRight: 20, scrollSnapType: "x mandatory", WebkitOverflowScrolling: "touch", overflowY: "hidden" }}>
                   {otherReleases.map((r) => (
-                    <button
+                    <MoreReleaseThumb
                       key={r.slug || r.id}
-                      type="button"
+                      r={r}
+                      accentColor={t.accent}
                       onClick={() => onReleaseClick?.(r)}
-                      style={{ flexShrink: 0, width: 76, background: "none", border: "none", padding: 0, cursor: "pointer", scrollSnapAlign: "start", textAlign: "left" }}
-                    >
-                      <div style={{ width: 76, height: 76, borderRadius: 9, overflow: "hidden", border: "1px solid rgba(255,255,255,.1)", background: "#111" }}>
-                        {r.cover || r.coverArt ? (
-                          <img src={r.cover || r.coverArt} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
-                        ) : (
-                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Cormorant Garamond',serif", fontSize: 22, color: t.accent }}>{(r.title || "?").charAt(0)}</div>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 10, color: "rgba(255,255,255,.5)", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 76 }}>{r.title}</div>
-                      <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 7, letterSpacing: ".1em", color: "rgba(255,255,255,.22)", marginTop: 1 }}>{r.type || r.release_type || "Release"}</div>
-                    </button>
+                    />
                   ))}
                 </div>
               </div>
