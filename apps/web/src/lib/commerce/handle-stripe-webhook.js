@@ -177,6 +177,19 @@ export async function handleStripeWebhook(req) {
     switch (event.type) {
       case "payment_intent.succeeded": {
         const pi = event.data.object;
+
+        // ── Ticket purchase — separate fulfillment path ──────────────────────
+        if (pi.metadata?.payment_kind === "ticket") {
+          await fulfillTicketPurchase(admin, pi);
+          break;
+        }
+
+        // ── Live event pay-per-view — separate fulfillment path ──────────────
+        if (pi.metadata?.payment_kind === "live_ppv") {
+          await fulfillLivePpvPurchase(admin, pi);
+          break;
+        }
+
         const result = await fulfillPaymentIntent(pi);
         if (!result) {
           throw new Error(
@@ -216,21 +229,11 @@ export async function handleStripeWebhook(req) {
       case "checkout.session.completed": {
         const session = event.data.object;
 
-        // ── Ticket purchase — separate fulfillment path ──────────────────────
-        if (session.metadata?.payment_kind === "ticket") {
-          if (session.payment_status === "paid") {
-            await fulfillTicketPurchase(admin, session);
-          }
-          break;
-        }
-
-        // ── Live event pay-per-view — separate fulfillment path ──────────────
-        if (session.metadata?.payment_kind === "live_ppv") {
-          if (session.payment_status === "paid") {
-            await fulfillLivePpvPurchase(admin, session);
-          }
-          break;
-        }
+        // Tickets and Live PPV moved to the in-page PaymentIntent + Elements
+        // flow (see payment_intent.succeeded above) so payment never redirects
+        // off this app to a Stripe-hosted page — neither creates a Checkout
+        // Session anymore, so this event type carries no payment_kind === "ticket"
+        // / "live_ppv" traffic to dispatch here any more.
 
         // ── Digital / merch purchase ─────────────────────────────────────────
         if (session.payment_status === "paid") {
@@ -355,25 +358,30 @@ export async function handleStripeWebhook(req) {
   return NextResponse.json({ received: true, eventId: event.id, type: event.type });
 }
 
-async function fulfillTicketPurchase(admin, session) {
-  const meta = session.metadata || {};
+// Tickets moved from a Stripe Checkout Session (redirect off-page) to an
+// in-page PaymentIntent + Elements flow — this now reads a PaymentIntent
+// object (`pi`), not a Checkout Session, so there is no `pi.customer_details`/
+// `pi.payment_status`/`pi.amount_total` equivalent; everything needed was
+// already captured into `pi.metadata` at /api/tickets/checkout creation time.
+async function fulfillTicketPurchase(admin, pi) {
+  const meta = pi.metadata || {};
   const userId  = meta.guest_user_id || meta.user_id;
   const showId  = meta.show_id;
   const qty     = Number(meta.quantity) || 1;
   const price   = Number(meta.price_cents) || 0;
 
   if (!userId || !showId) {
-    console.warn(`${LOG_PREFIX} ticket fulfillment: missing user_id or show_id`, session.id);
+    console.warn(`${LOG_PREFIX} ticket fulfillment: missing user_id or show_id`, pi.id);
     return;
   }
 
-  // Record the purchase
+  // Record the purchase — idempotent on a retried webhook delivery for the
+  // same PaymentIntent (unique constraint on stripe_payment_intent_id).
   const { error: insertErr } = await admin.from("ticket_purchases").insert({
     user_id: userId,
     show_id: showId,
-    stripe_session_id: session.id,
-    stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id || null,
-    email: session.customer_details?.email || session.customer_email || meta.email || null,
+    stripe_payment_intent_id: pi.id,
+    email: pi.receipt_email || meta.email || null,
     phone: meta.phone || null,
     quantity: qty,
     price_cents: price,
@@ -381,7 +389,11 @@ async function fulfillTicketPurchase(admin, session) {
   });
 
   if (insertErr) {
-    console.error(`${LOG_PREFIX} ticket insert failed`, session.id, insertErr.message);
+    if (insertErr.code === "23505") {
+      console.log(`${LOG_PREFIX} ticket already fulfilled (idempotent retry)`, pi.id);
+      return;
+    }
+    console.error(`${LOG_PREFIX} ticket insert failed`, pi.id, insertErr.message);
     throw insertErr;
   }
 
@@ -404,37 +416,40 @@ async function fulfillTicketPurchase(admin, session) {
 
   // Confirmation email — non-fatal
   try {
-    const to = session.customer_details?.email || session.customer_email || meta.email;
+    const to = pi.receipt_email || meta.email;
     if (to) {
       const showDate = meta.show_date
         ? new Date(meta.show_date + "T12:00:00").toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric", year:"numeric" })
         : "";
       const { subject, html, text } = buildTicketConfirmationEmail({
-        name: session.customer_details?.name || "",
+        name: "",
         showName: meta.show_name || "2MRRW Live",
         location: meta.show_location || "",
         date: showDate,
         time: meta.show_time || "",
         quantity: qty,
-        amountCents: session.amount_total,
+        amountCents: pi.amount_received ?? pi.amount,
       });
       await sendTransactionalEmail({ to, subject, html, text });
     }
   } catch (emailErr) {
-    console.warn(`${LOG_PREFIX} ticket confirmation email failed`, session.id, emailErr?.message);
+    console.warn(`${LOG_PREFIX} ticket confirmation email failed`, pi.id, emailErr?.message);
   }
 
-  console.log(`${LOG_PREFIX} ticket fulfilled`, { sessionId: session.id, userId, showId, qty });
+  console.log(`${LOG_PREFIX} ticket fulfilled`, { paymentIntentId: pi.id, userId, showId, qty });
 }
 
-async function fulfillLivePpvPurchase(admin, session) {
-  const meta = session.metadata || {};
+// Live PPV moved from a Stripe Checkout Session (redirect off-page) to an
+// in-page PaymentIntent + Elements flow — this now reads a PaymentIntent
+// object (`pi`), not a Checkout Session.
+async function fulfillLivePpvPurchase(admin, pi) {
+  const meta = pi.metadata || {};
   const userId = meta.user_id;
   const broadcastId = meta.broadcast_id;
-  const amountCents = Number(meta.amount_cents) || session.amount_total || 0;
+  const amountCents = Number(meta.amount_cents) || pi.amount_received || pi.amount || 0;
 
   if (!userId || !broadcastId) {
-    console.warn(`${LOG_PREFIX} live_ppv fulfillment: missing user_id or broadcast_id`, session.id);
+    console.warn(`${LOG_PREFIX} live_ppv fulfillment: missing user_id or broadcast_id`, pi.id);
     return;
   }
 
@@ -442,24 +457,23 @@ async function fulfillLivePpvPurchase(admin, session) {
     broadcast_id: broadcastId,
     user_id: userId,
     amount_cents: amountCents,
-    stripe_checkout_session_id: session.id,
-    stripe_payment_intent_id: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id || null,
+    stripe_payment_intent_id: pi.id,
     status: "paid",
   });
 
   if (insertErr) {
-    // A retried webhook delivery for an already-fulfilled session hits the
-    // (broadcast_id, user_id) paid-unique index — that's a success, not a
+    // A retried webhook delivery for an already-fulfilled PaymentIntent hits
+    // the (broadcast_id, user_id) paid-unique index — that's a success, not a
     // failure, so Stripe should not keep retrying it.
     if (insertErr.code === "23505") {
-      console.log(`${LOG_PREFIX} live_ppv already fulfilled (idempotent retry)`, session.id);
+      console.log(`${LOG_PREFIX} live_ppv already fulfilled (idempotent retry)`, pi.id);
       return;
     }
-    console.error(`${LOG_PREFIX} live_ppv insert failed`, session.id, insertErr.message);
+    console.error(`${LOG_PREFIX} live_ppv insert failed`, pi.id, insertErr.message);
     throw insertErr;
   }
 
-  console.log(`${LOG_PREFIX} live_ppv fulfilled`, { sessionId: session.id, userId, broadcastId, amountCents });
+  console.log(`${LOG_PREFIX} live_ppv fulfilled`, { paymentIntentId: pi.id, userId, broadcastId, amountCents });
 }
 
 function buildTicketConfirmationEmail({ name, showName, location, date, time, quantity, amountCents }) {

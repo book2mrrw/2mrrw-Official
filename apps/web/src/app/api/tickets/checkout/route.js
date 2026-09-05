@@ -4,11 +4,6 @@ import { getRequestUser } from "@/lib/guest-session";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
-const siteUrl = () =>
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  process.env.NEXT_PUBLIC_BASE_URL ||
-  "http://localhost:3000";
-
 export async function POST(req) {
   try {
     const user = await getRequestUser();
@@ -62,22 +57,12 @@ export async function POST(req) {
     });
 
     const stripe = getStripe();
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      customer_email: user.email || undefined,
-      line_items: [{
-        quantity: qty,
-        price_data: {
-          currency: "usd",
-          unit_amount: unitAmount,
-          product_data: {
-            name: `Ticket — ${show.name}`,
-            description: `${show.location} · ${showDate} · ${show.event_time}`,
-          },
-        },
-      }],
-      success_url: `${siteUrl()}/success?session_id={CHECKOUT_SESSION_ID}&kind=ticket`,
-      cancel_url: `${siteUrl()}/?tab=shows`,
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: unitAmount * qty,
+      currency: "usd",
+      receipt_email: user.email || undefined,
+      // Payment stays on this page — no redirect to a Stripe-hosted checkout page.
+      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
       metadata: {
         payment_kind: "ticket",
         show_id: show.id,
@@ -94,7 +79,7 @@ export async function POST(req) {
       },
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ clientSecret: paymentIntent.client_secret });
   } catch (err) {
     console.error("[tickets/checkout] error:", err);
     return NextResponse.json({ error: err.message || "Checkout failed" }, { status: 500 });

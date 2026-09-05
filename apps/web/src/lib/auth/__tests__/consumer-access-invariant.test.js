@@ -136,7 +136,7 @@ test("admin show scheduling, pricing, inventory, Stripe checkout, and sign-out r
   assert.match(adminShows, /venue_timezone/);
   assert.match(adminShows, /price_cents/);
   assert.match(adminShows, /tickets_available/);
-  assert.match(checkout, /stripe\.checkout\.sessions\.create/);
+  assert.match(checkout, /stripe\.paymentIntents\.create/);
   assert.match(checkout, /const unitAmount = show\.price_cents/);
   assert.match(home, /handleSignOut[\s\S]*router\.replace\("\/login"\)/);
 });

@@ -1,6 +1,9 @@
 "use client";
 
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { Elements } from "@stripe/react-stripe-js";
+import { getStripeClient } from "@/lib/commerce/stripe-client";
+import CheckoutForm from "@/components/payments/CheckoutForm";
 import LivePanel from "@/components/home/LivePanel";
 import { useLiveBroadcast, useLiveCountdown, useTwitchEmbedConfig } from "@/components/home/LiveCountdownContext";
 import { LIVE_PPV_PRESET_CENTS, formatLivePpvAmount } from "@/lib/live/ppv-pricing";
@@ -8,9 +11,12 @@ import { useLiveWitnessCount } from "@/hooks/useLiveWitnessCount";
 import { useLiveChat } from "@/hooks/useLiveChat";
 
 function LivePpvPricePicker({ broadcastTitle }) {
+  const { refreshLiveState } = useLiveBroadcast();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
+  const [clientSecret, setClientSecret] = useState(null);
+  const [unlocked, setUnlocked] = useState(false);
 
   const handleSelect = async (amountCents) => {
     setLoading(true);
@@ -23,13 +29,30 @@ function LivePpvPricePicker({ broadcastTitle }) {
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || "Checkout failed"); return; }
-      if (data.url) window.location.href = data.url;
+      if (data.clientSecret) setClientSecret(data.clientSecret);
     } catch {
       setErr("Network error — try again");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleSuccess = () => {
+    setUnlocked(true);
+    setClientSecret(null);
+    // Webhook fulfillment lands asynchronously — refresh now, and once more
+    // shortly after, rather than waiting on the 15s background poll.
+    refreshLiveState();
+    setTimeout(refreshLiveState, 2000);
+  };
+
+  if (unlocked) {
+    return (
+      <div style={{ fontSize: 13, color: "#00ffff", fontWeight: 700, textAlign: "center" }}>
+        ✓ Unlocked — loading the stream…
+      </div>
+    );
+  }
 
   if (!open) {
     return (
@@ -39,6 +62,26 @@ function LivePpvPricePicker({ broadcastTitle }) {
       >
         Unlock This Live
       </button>
+    );
+  }
+
+  // Payment stays on this same page — no redirect to a Stripe-hosted checkout page.
+  if (clientSecret) {
+    return (
+      <div style={{ width: "100%", maxWidth: 380 }}>
+        <Elements
+          stripe={getStripeClient()}
+          options={{
+            clientSecret,
+            appearance: {
+              theme: "night",
+              variables: { colorPrimary: "#00ffff", colorBackground: "#0a0a0a", colorText: "#ffffff", borderRadius: "8px" },
+            },
+          }}
+        >
+          <CheckoutForm onSuccess={handleSuccess} requiresShipping={false} submitLabel="Unlock" />
+        </Elements>
+      </div>
     );
   }
 

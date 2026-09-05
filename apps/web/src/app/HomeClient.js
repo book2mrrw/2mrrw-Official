@@ -188,6 +188,9 @@ const nextLiveDateTime = new Date("2026-05-10T20:00:00");
 function TicketCheckoutButton({ event, onClose }) {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState(null);
+  const [clientSecret, setClientSecret] = useState(null);
+  const [purchased, setPurchased] = useState(false);
+
   const handleBuy = async () => {
     setLoading(true);
     setErr(null);
@@ -199,17 +202,44 @@ function TicketCheckoutButton({ event, onClose }) {
       });
       const data = await res.json();
       if (!res.ok) { setErr(data.error || "Checkout failed"); return; }
-      if (data.url) window.location.href = data.url;
+      if (data.clientSecret) setClientSecret(data.clientSecret);
     } catch (e) { setErr("Network error — try again"); }
     finally { setLoading(false); }
   };
+
+  if (purchased) {
+    return (
+      <div style={{textAlign:"center",padding:"14px 0",color:"#00ffff",fontWeight:700,fontSize:14}}>
+        ✓ Ticket confirmed — see you there!
+      </div>
+    );
+  }
+
+  // Payment stays on this same page — no redirect to a Stripe-hosted checkout page.
+  if (clientSecret) {
+    return (
+      <Elements
+        stripe={getStripeClient()}
+        options={{
+          clientSecret,
+          appearance: {
+            theme: "night",
+            variables: { colorPrimary: "#00ffff", colorBackground: "#0a0a0a", colorText: "#ffffff", borderRadius: "8px" },
+          },
+        }}
+      >
+        <CheckoutForm onSuccess={() => setPurchased(true)} requiresShipping={false} submitLabel={`Pay $${event.price.toFixed(2)}`} />
+      </Elements>
+    );
+  }
+
   return (
     <>
       <button
         onClick={handleBuy}
         disabled={loading}
         style={{width:"100%",padding:"12px 0",background:loading?"#1a1a1a":"#00ffff",color:loading?"#555":"#000",fontWeight:"bold",border:"none",borderRadius:8,cursor:loading?"wait":"pointer",fontSize:14,transition:"0.2s"}}
-      >{loading ? "Redirecting to checkout…" : `Buy Ticket — $${event.price.toFixed(2)}`}</button>
+      >{loading ? "Loading…" : `Buy Ticket — $${event.price.toFixed(2)}`}</button>
       {err && <div style={{fontSize:12,color:"#ef4444",textAlign:"center"}}>{err}</div>}
     </>
   );

@@ -49,9 +49,18 @@ test("resolveLiveBroadcastAccess checks for a paid purchase scoped to this exact
 test("live checkout route rejects amounts outside the preset list before touching Stripe", () => {
   const src = read("src/app/api/live/checkout/route.js");
   const validateAt = src.indexOf("isAllowedLivePpvAmount");
-  const stripeCreateAt = src.indexOf("stripe.checkout.sessions.create");
+  const stripeCreateAt = src.indexOf("stripe.paymentIntents.create");
   assert.ok(validateAt > -1 && stripeCreateAt > validateAt,
-    "amount validation must happen before a Stripe checkout session is created");
+    "amount validation must happen before a Stripe PaymentIntent is created");
+});
+
+test("live checkout creates an in-page PaymentIntent, never a redirect-based Checkout Session", () => {
+  const src = read("src/app/api/live/checkout/route.js");
+  assert.match(src, /stripe\.paymentIntents\.create\(/);
+  assert.match(src, /allow_redirects:\s*"never"/,
+    "must forbid payment methods that would redirect the fan off this app");
+  assert.doesNotMatch(src, /checkout\.sessions\.create/);
+  assert.doesNotMatch(src, /\burl:\s*session\.url\b/);
 });
 
 test("live checkout route turns away guests/unauthenticated requests before any purchase logic", () => {
@@ -99,10 +108,23 @@ test("the price picker renders the exact same presets the backend will accept, n
   assert.match(src, /LIVE_PPV_PRESET_CENTS\.map/);
 });
 
-test("the price picker posts to the live checkout route and follows the returned Stripe url", () => {
+test("the price picker posts to the live checkout route and renders Stripe Elements in-page, never redirecting off the app", () => {
   const src = read("src/components/home/LiveCountdownDisplays.js");
   assert.match(src, /fetch\(\s*"\/api\/live\/checkout"/);
-  assert.match(src, /window\.location\.href\s*=\s*data\.url/);
+  assert.doesNotMatch(src, /window\.location\.href/,
+    "payment must stay on this page — no redirect to a Stripe-hosted URL");
+  assert.match(src, /data\.clientSecret/);
+  assert.match(src, /<Elements[\s\S]{0,200}clientSecret/);
+  assert.match(src, /<CheckoutForm onSuccess=\{handleSuccess\}/);
+});
+
+test("a successful live PPV payment refreshes live access state instead of relying on a full page reload", () => {
+  const src = read("src/components/home/LiveCountdownDisplays.js");
+  assert.match(src, /const \{ refreshLiveState \} = useLiveBroadcast\(\);/);
+  const successAt = src.indexOf("const handleSuccess = () => {");
+  assert.ok(successAt > -1);
+  const body = src.slice(successAt, successAt + 400);
+  assert.match(body, /refreshLiveState\(\);/);
 });
 
 test("the signup-required gate sends the viewer to real account creation, not the guest-session flow", () => {

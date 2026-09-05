@@ -9,11 +9,6 @@ import { isAllowedLivePpvAmount } from "@/lib/live/ppv-pricing";
 
 export const dynamic = "force-dynamic";
 
-const siteUrl = () =>
-  process.env.NEXT_PUBLIC_SITE_URL ||
-  process.env.NEXT_PUBLIC_BASE_URL ||
-  "http://localhost:3000";
-
 export async function POST(req) {
   try {
     const user = await getRequestUser();
@@ -48,21 +43,12 @@ export async function POST(req) {
     }
 
     const stripe = getStripe();
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      customer_email: user.email || undefined,
-      line_items: [{
-        quantity: 1,
-        price_data: {
-          currency: "usd",
-          unit_amount: amountCents,
-          product_data: {
-            name: `Live Access — ${broadcast.title}`,
-          },
-        },
-      }],
-      success_url: `${siteUrl()}/?live=unlocked`,
-      cancel_url: `${siteUrl()}/`,
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amountCents,
+      currency: "usd",
+      receipt_email: user.email || undefined,
+      // Payment stays on this page — no redirect to a Stripe-hosted checkout page.
+      automatic_payment_methods: { enabled: true, allow_redirects: "never" },
       metadata: {
         payment_kind: "live_ppv",
         broadcast_id: broadcast.id,
@@ -71,7 +57,7 @@ export async function POST(req) {
       },
     });
 
-    return NextResponse.json({ url: session.url });
+    return NextResponse.json({ clientSecret: paymentIntent.client_secret });
   } catch (err) {
     console.error("[live/checkout] error:", err);
     return NextResponse.json({ error: err.message || "Checkout failed" }, { status: 500 });

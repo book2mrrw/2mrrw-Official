@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "generatedAt": "2026-09-01T22:55:00.000Z",
   "sourceRoot": "src/app/api",
-  "total": 143,
+  "total": 142,
   "counts": {
     "HUMAN_ADMIN": 34,
     "SERVICE_ONLY": 20,
@@ -576,15 +576,6 @@
       "file": "src/app/api/catalog/releases/route.js",
       "methods": [
         "GET"
-      ],
-      "authority": "PUBLIC",
-      "evidence": "public or token-scoped application surface"
-    },
-    {
-      "route": "/api/checkout/session",
-      "file": "src/app/api/checkout/session/route.js",
-      "methods": [
-        "POST"
       ],
       "authority": "PUBLIC",
       "evidence": "public or token-scoped application surface"

@@ -7,8 +7,8 @@ import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
 /**
  * Allocate a purchase's real charged total across its cart items,
  * proportional to each item's list price (item.price, in dollars, as stored
- * in the Stripe metadata at checkout — see checkout/session/route.js and
- * create-payment-intent/route.js). The last item absorbs the rounding
+ * in the Stripe metadata at checkout — see create-payment-intent/route.js).
+ * The last item absorbs the rounding
  * remainder so the sum always exactly equals totalAmountCents, even when a
  * collector discount was applied to the checkout as a whole and the list
  * total no longer matches what was actually charged.
