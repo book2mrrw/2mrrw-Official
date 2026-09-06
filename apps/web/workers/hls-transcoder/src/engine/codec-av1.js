@@ -13,11 +13,11 @@
  * `color_primaries=bt2020`, `color_transfer=smpte2084`,
  * `color_space=bt2020nc` on a real AV1-encoded file.
  *
- * HDR->SDR tone-mapping is NOT implemented here — see hdr-tonemap.js for
- * the confirmed, isolated blocker (this build's zscale cannot convert to
- * linear transfer characteristic, the required first step of the standard
- * tone-map filter chain). Genuine HDR-preserving encoding (this file) is
- * unaffected by that blocker — it never needs a linear-transfer conversion.
+ * HDR->SDR tone-mapping is NOT implemented here — see hdr-tonemap.js, which
+ * handles `requiresToneMap: true` renditions via libplacebo instead (this
+ * file's zscale metadata-tag approach was never usable for tone-mapping
+ * itself; only for stamping HDR metadata, which is all genuine HDR-preserving
+ * encoding — this file's job — ever needed).
  */
 import { spawn } from "child_process";
 import path from "path";

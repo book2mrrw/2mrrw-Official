@@ -150,7 +150,7 @@ test("HLG uses its own confirmed transfer value (18), never collapsed into PQ's 
   assert.match(capturedArgs[vfIndex + 1], /tin=18.*t=18/);
 });
 
-test("a rendition marked requiresToneMap never gets the HDR tag filter here — that path is a separate, later stage (currently blocked, see hdr-tonemap.js)", async () => {
+test("a rendition marked requiresToneMap never gets the HDR tag filter here — that path is a separate stage, see hdr-tonemap.js", async () => {
   let capturedArgs = null;
   await encodeAv1Rendition({
     sourcePath: "/data/master.mov", outputDir: "/data/out",
