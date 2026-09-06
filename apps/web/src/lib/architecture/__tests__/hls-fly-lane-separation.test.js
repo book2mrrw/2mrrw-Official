@@ -6,38 +6,30 @@ import test from "node:test";
 const root = process.cwd();
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-// Slice 3 of the Audio Visual foundation-hardening plan: the Fly.io worker
-// gains a second, independently-scalable process-group lane for video, so a
-// long video encode can never block the audio lane from claiming its next
-// job. The existing "app" process group — what the live, currently-serving
-// audio machines are already tagged as — is kept unrenamed so this split is
-// purely additive and never requires reassigning a production machine.
+// Correction after a real deploy attempt: Fly.io does not treat a newly
+// declared process group as a dormant placeholder — it tries to provision
+// (and bill for) a real machine for it immediately. Declaring a "video"
+// process group here before real VIDEO_TRANSCODE work exists to benchmark
+// would provision paid, idle compute for no reason. So fly.toml stays
+// single-process until that work is ready — only the harmless, inert
+// code-level lane resolution in index.js ships ahead of time.
 
-test("fly.toml defines two process groups, not a single undifferentiated one", () => {
+test("fly.toml does not declare a second process group yet — no idle video machine gets provisioned", () => {
   const toml = read("workers/hls-transcoder/fly.toml");
-  assert.match(toml, /\[processes\]/);
-  assert.match(toml, /app\s*=\s*"node src\/index\.js"/);
-  assert.match(toml, /video\s*=\s*"node src\/index\.js"/);
+  assert.doesNotMatch(toml, /\[processes\]/, "a [processes] table would make Fly try to provision a machine for every group in it");
+  assert.doesNotMatch(toml, /\bvideo\s*=/);
 });
 
-test("the audio lane keeps the 'app' process-group name — the existing live machines are never reassigned", () => {
-  const toml = read("workers/hls-transcoder/fly.toml");
-  const vmBlocks = toml.split("[[vm]]").slice(1);
-  const appVm = vmBlocks.find((b) => /processes\s*=\s*\["app"\]/.test(b));
-  assert.ok(appVm, "an [[vm]] block scoped to the app process group must exist");
-  assert.match(appVm, /memory\s*=\s*'2gb'/);
-  assert.match(appVm, /cpus\s*=\s*2/);
-});
-
-test("the video lane is defined with its own vm sizing, separate from the audio lane's", () => {
+test("the single vm block is unchanged from the known-good production config", () => {
   const toml = read("workers/hls-transcoder/fly.toml");
   const vmBlocks = toml.split("[[vm]]").slice(1);
-  const videoVm = vmBlocks.find((b) => /processes\s*=\s*\["video"\]/.test(b));
-  assert.ok(videoVm, "an [[vm]] block scoped to the video process group must exist");
-  assert.notEqual(videoVm, undefined);
+  assert.equal(vmBlocks.length, 1, "exactly one [[vm]] block — no per-process-group split yet");
+  assert.match(vmBlocks[0], /memory\s*=\s*'2gb'/);
+  assert.match(vmBlocks[0], /cpu_kind\s*=\s*'shared'/);
+  assert.match(vmBlocks[0], /cpus\s*=\s*2/);
 });
 
-test("index.js resolves its own lane from FLY_PROCESS_GROUP with a safe audio default", () => {
+test("index.js still resolves its own lane defensively from FLY_PROCESS_GROUP, defaulting to audio — harmless ahead of any second lane existing", () => {
   const src = read("workers/hls-transcoder/src/index.js");
   assert.match(src, /const WORKER_JOB_TYPE =/);
   assert.match(src, /process\.env\.FLY_PROCESS_GROUP === "video" \? "video" : "audio"/);
