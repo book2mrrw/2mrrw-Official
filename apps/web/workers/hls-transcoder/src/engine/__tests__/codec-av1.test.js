@@ -110,6 +110,69 @@ test("a nonzero FFmpeg exit is categorized as FFMPEG_FAILURE with stderr context
   );
 });
 
+// ── HDR color-metadata tagging — confirmed real, distinct from the blocked tone-map path ──
+
+test("an SDR rendition never gets an HDR metadata tag filter, even when sourceAnalysis reports HDR (only the rendition's own hdrMode governs)", async () => {
+  let capturedArgs = null;
+  await encodeAv1Rendition({
+    sourcePath: "/data/master.mov", outputDir: "/data/out",
+    rendition: av1Rendition({ hdrMode: "sdr" }),
+    sourceAnalysis: { colorPrimaries: "bt2020", colorTransfer: "smpte2084", colorMatrix: "bt2020nc", colorRange: "tv" },
+    spawnFn: (bin, args) => { capturedArgs = args; return fakeSpawnProcess({ exitCode: 0 }); },
+  });
+  const vfIndex = capturedArgs.indexOf("-vf");
+  assert.doesNotMatch(capturedArgs[vfIndex + 1], /zscale/);
+});
+
+test("a genuine HDR rendition (not tone-mapped) gets the confirmed-working zscale metadata-tag filter, using the real source's own color values", async () => {
+  let capturedArgs = null;
+  await encodeAv1Rendition({
+    sourcePath: "/data/master.mov", outputDir: "/data/out",
+    rendition: av1Rendition({ hdrMode: "hdr10", bitDepth: 10, requiresToneMap: false }),
+    sourceAnalysis: { colorPrimaries: "bt2020", colorTransfer: "smpte2084", colorMatrix: "bt2020nc", colorRange: "tv" },
+    spawnFn: (bin, args) => { capturedArgs = args; return fakeSpawnProcess({ exitCode: 0 }); },
+  });
+  const vfIndex = capturedArgs.indexOf("-vf");
+  // pin=9 (bt2020), tin=16 (smpte2084), min=9 (bt2020nc), rin=0 (tv) — the exact
+  // numeric values confirmed live against the real production FFmpeg build.
+  assert.match(capturedArgs[vfIndex + 1], /zscale=pin=9:tin=16:min=9:rin=0:p=9:t=16:m=9:r=0/);
+});
+
+test("HLG uses its own confirmed transfer value (18), never collapsed into PQ's (16)", async () => {
+  let capturedArgs = null;
+  await encodeAv1Rendition({
+    sourcePath: "/data/master.mov", outputDir: "/data/out",
+    rendition: av1Rendition({ hdrMode: "hlg", bitDepth: 10, requiresToneMap: false }),
+    sourceAnalysis: { colorPrimaries: "bt2020", colorTransfer: "arib-std-b67", colorMatrix: "bt2020nc", colorRange: "tv" },
+    spawnFn: (bin, args) => { capturedArgs = args; return fakeSpawnProcess({ exitCode: 0 }); },
+  });
+  const vfIndex = capturedArgs.indexOf("-vf");
+  assert.match(capturedArgs[vfIndex + 1], /tin=18.*t=18/);
+});
+
+test("a rendition marked requiresToneMap never gets the HDR tag filter here — that path is a separate, later stage (currently blocked, see hdr-tonemap.js)", async () => {
+  let capturedArgs = null;
+  await encodeAv1Rendition({
+    sourcePath: "/data/master.mov", outputDir: "/data/out",
+    rendition: av1Rendition({ hdrMode: "sdr", requiresToneMap: true }),
+    sourceAnalysis: { colorPrimaries: "bt2020", colorTransfer: "smpte2084", colorMatrix: "bt2020nc", colorRange: "tv" },
+    spawnFn: (bin, args) => { capturedArgs = args; return fakeSpawnProcess({ exitCode: 0 }); },
+  });
+  const vfIndex = capturedArgs.indexOf("-vf");
+  assert.doesNotMatch(capturedArgs[vfIndex + 1], /zscale/);
+});
+
+test("missing sourceAnalysis for an HDR rendition falls back to safe HDR10/BT.2020 defaults rather than throwing", async () => {
+  let capturedArgs = null;
+  await encodeAv1Rendition({
+    sourcePath: "/data/master.mov", outputDir: "/data/out",
+    rendition: av1Rendition({ hdrMode: "hdr10", bitDepth: 10, requiresToneMap: false }),
+    spawnFn: (bin, args) => { capturedArgs = args; return fakeSpawnProcess({ exitCode: 0 }); },
+  });
+  const vfIndex = capturedArgs.indexOf("-vf");
+  assert.match(capturedArgs[vfIndex + 1], /zscale=pin=9:tin=16:min=9:rin=0/);
+});
+
 test("a spawn-level error is also categorized as FFMPEG_FAILURE", async () => {
   const spawnFn = () => {
     const proc = new EventEmitter();

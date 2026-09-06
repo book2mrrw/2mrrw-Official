@@ -3,45 +3,81 @@
  * fMP4/CMAF HLS segments, mirroring codec-avc.js's shape. Encryption is a
  * separate, later stage (PackagingEngine).
  *
- * Scope note: this stage handles standard AV1 encoding (8-bit SDR and,
- * pixel-format-wise, 10-bit) — genuine HDR color-metadata passthrough and
- * the HDR->SDR tone-map filter chain are a separate, later stage (Part D.6)
- * and not yet implemented here. pix_fmt is selected from rendition.bitDepth
- * (8 -> yuv420p, 10 -> yuv420p10le) so this function is already correct for
- * when that later stage starts producing real 10-bit rendition entries.
+ * HDR color metadata (primaries/transfer/matrix/range) is tagged via a
+ * `zscale` metadata pass, NOT via plain `-color_primaries`/`-color_trc`/
+ * `-colorspace` output flags — confirmed live that those flags alone do not
+ * reliably stamp output metadata (ffprobe read back "unknown" for
+ * primaries/transfer despite passing them directly to libx264), while an
+ * explicit zscale in/out tag pass (matching input/output values, so it's a
+ * metadata stamp rather than an actual conversion) correctly produced
+ * `color_primaries=bt2020`, `color_transfer=smpte2084`,
+ * `color_space=bt2020nc` on a real AV1-encoded file.
  *
- * Flags verified against a real encode on the production video machine:
- * SVT-AV1 accepted preset 6/crf 34 (with a benign internal remap warning,
- * "Preset M6 is mapped to M7" — non-fatal, SVT-AV1's own normalization, not
- * a bug in this code) and separately confirmed genuine 10-bit output
- * (`pix_fmt=yuv420p10le`) with preset 8.
+ * HDR->SDR tone-mapping is NOT implemented here — see hdr-tonemap.js for
+ * the confirmed, isolated blocker (this build's zscale cannot convert to
+ * linear transfer characteristic, the required first step of the standard
+ * tone-map filter chain). Genuine HDR-preserving encoding (this file) is
+ * unaffected by that blocker — it never needs a linear-transfer conversion.
  */
 import { spawn } from "child_process";
 import path from "path";
 
 const FFMPEG_BIN = process.env.FFMPEG_PATH || "ffmpeg";
 
+// Confirmed live via `ffmpeg -h filter=zscale` against the production build —
+// these are the filter's own real enum values, not assumed from docs.
+const ZSCALE_PRIMARIES = { bt709: 1, bt2020: 9 };
+const ZSCALE_TRANSFER = { bt709: 1, smpte2084: 16, "arib-std-b67": 18 };
+const ZSCALE_MATRIX = { bt709: 1, bt2020nc: 9, bt2020c: 10 };
+const ZSCALE_RANGE = { tv: 0, pc: 1 };
+
+function zscaleValue(table, name, fallback) {
+  return name && table[name] !== undefined ? table[name] : fallback;
+}
+
+/**
+ * Build the zscale metadata-tag filter segment for a genuine HDR rendition.
+ * Input and output are set to the SAME values (a stamp, not a conversion) —
+ * deterministic regardless of what FFmpeg's own container-metadata
+ * auto-detection might otherwise guess.
+ */
+function hdrTagFilter(sourceAnalysis) {
+  const primaries = zscaleValue(ZSCALE_PRIMARIES, sourceAnalysis?.colorPrimaries, ZSCALE_PRIMARIES.bt2020);
+  const transfer = zscaleValue(ZSCALE_TRANSFER, sourceAnalysis?.colorTransfer, ZSCALE_TRANSFER.smpte2084);
+  const matrix = zscaleValue(ZSCALE_MATRIX, sourceAnalysis?.colorMatrix, ZSCALE_MATRIX.bt2020nc);
+  const range = zscaleValue(ZSCALE_RANGE, sourceAnalysis?.colorRange, ZSCALE_RANGE.tv);
+
+  return `zscale=pin=${primaries}:tin=${transfer}:min=${matrix}:rin=${range}:p=${primaries}:t=${transfer}:m=${matrix}:r=${range}`;
+}
+
 /**
  * @param {object} params
  * @param {string} params.sourcePath
  * @param {string} params.outputDir
  * @param {object} params.rendition - one entry from RenditionPlanner.planRenditions (codecFamily must be "av1")
+ * @param {object} [params.sourceAnalysis] - SourceAnalyzer output; required to tag real HDR color metadata correctly
  * @param {number} [params.segmentDurationSeconds]
  * @param {Function} [params.spawnFn] - injectable for tests
  */
-export async function encodeAv1Rendition({ sourcePath, outputDir, rendition, segmentDurationSeconds = 6, spawnFn = spawn }) {
+export async function encodeAv1Rendition({
+  sourcePath, outputDir, rendition, sourceAnalysis, segmentDurationSeconds = 6, spawnFn = spawn,
+}) {
   if (rendition.codecFamily !== "av1") {
     throw new Error(`encodeAv1Rendition: expected codecFamily "av1", got "${rendition.codecFamily}"`);
   }
+  const isHdr = Boolean(rendition.hdrMode && rendition.hdrMode !== "sdr" && !rendition.requiresToneMap);
 
   const playlistPath = path.join(outputDir, "playlist.m3u8");
   const gopFrames = Math.max(1, Math.round(rendition.frameRate * segmentDurationSeconds));
   const pixelFormat = rendition.bitDepth === 10 ? "yuv420p10le" : "yuv420p";
 
+  const videoFilters = [`scale=${rendition.width}:${rendition.height}`];
+  if (isHdr) videoFilters.push(hdrTagFilter(sourceAnalysis));
+
   const args = [
     "-hide_banner", "-loglevel", "error",
     "-i", sourcePath,
-    "-vf", `scale=${rendition.width}:${rendition.height}`,
+    "-vf", videoFilters.join(","),
     "-c:v", "libsvtav1",
     "-preset", String(rendition.preset),
     "-crf", String(rendition.crf),
