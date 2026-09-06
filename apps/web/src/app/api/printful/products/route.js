@@ -72,15 +72,27 @@ async function merchFromCatalog() {
   }
 }
 
+// The synced catalog (products/product_variants, kept current by
+// syncPrintfulCatalog() — see /api/admin/printful/sync) is the primary
+// source, not a live Printful pass-through: a pass-through item's slug
+// (external_id/id) never matches a real products row, so cart/checkout has
+// nothing to resolve it against. The live call below only exists as a
+// display-only fallback for the brief window before the catalog has ever
+// been synced — checkout would not work correctly for whatever it returns,
+// but showing *something* beats an empty shop tab.
 export async function GET() {
+  const catalog = await merchFromCatalog();
+  if (catalog.length > 0) {
+    return Response.json({ success: true, products: catalog, source: "catalog" });
+  }
+
   const apiKey = process.env.PRINTFUL_API_KEY;
   if (!apiKey) {
-    const catalog = await merchFromCatalog();
     return Response.json({
-      success: catalog.length > 0,
-      products: catalog,
-      source: catalog.length ? "catalog" : "none",
-      error: catalog.length ? undefined : "PRINTFUL_API_KEY not configured",
+      success: false,
+      products: [],
+      source: "none",
+      error: "PRINTFUL_API_KEY not configured, and the catalog has not been synced yet",
     });
   }
 
@@ -93,11 +105,10 @@ export async function GET() {
     const data = await res.json();
 
     if (!res.ok || (data.code && data.code !== 200)) {
-      const catalog = await merchFromCatalog();
       return Response.json({
-        success: catalog.length > 0,
-        products: catalog,
-        source: catalog.length ? "catalog" : "printful_error",
+        success: false,
+        products: [],
+        source: "printful_error",
         error: data.error?.message || data.result || `Printful HTTP ${res.status}`,
       });
     }
@@ -114,26 +125,18 @@ export async function GET() {
       rawProducts = result.products;
     }
 
-    let products = rawProducts.map(normalizePrintfulItem).filter((p) => p.cover);
-
-    if (products.length === 0) {
-      const catalog = await merchFromCatalog();
-      if (catalog.length > 0) {
-        products = catalog.filter((p) => p.cover);
-      }
-    }
+    const products = rawProducts.map(normalizePrintfulItem).filter((p) => p.cover);
 
     return Response.json({
       success: products.length > 0,
       products,
-      source: products[0]?.source || (rawProducts.length ? "printful" : "none"),
+      source: products.length ? "printful_unsynced" : "none",
     });
   } catch (err) {
-    const catalog = await merchFromCatalog();
     return Response.json({
-      success: catalog.length > 0,
-      products: catalog.filter((p) => p.cover),
-      source: catalog.length ? "catalog" : "error",
+      success: false,
+      products: [],
+      source: "error",
       error: err.message,
     });
   }
