@@ -9,6 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { VRM } from "@/lib/media/video-resource-manager";
+import { FullVideoAuthority } from "@/lib/media/full-video-authority";
 import { globalMediaController } from "@/media/visualEngine/GlobalMediaController";
 import { logVisualVideoError, logVisualVideoFallback } from "@/lib/media/visual-telemetry";
 
@@ -56,6 +57,21 @@ function FullVisualExperience({ asset, releaseSlug, coverUrl, onClose }) {
     VRM.register(el, VRM.PRIORITY_SYSTEM);
     return () => { VRM.unregister(el); };
   }, []);
+
+  // ── Full-video session exclusivity (additive — VRM registration above is
+  // unchanged). Only one full-video session (this, Vault, or a future
+  // standard Audio Visual player) may hold authority at a time; losing it
+  // only pauses this element, never unmounts/destroys it. ─────────────────
+  useEffect(() => {
+    const sessionId = `full-visual:${releaseSlug ?? "unknown"}`;
+    FullVideoAuthority.requestFullVideoSession(sessionId, {
+      onRevoked: () => {
+        const el = videoRef.current;
+        if (el && !el.paused) el.pause();
+      },
+    });
+    return () => FullVideoAuthority.releaseFullVideoSession(sessionId);
+  }, [releaseSlug]);
 
   // ── Body scroll lock ───────────────────────────────────────────────────────
   useEffect(() => {

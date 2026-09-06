@@ -19,6 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { HLSVideoEngine } from "@/lib/hls/HLSVideoEngine";
 import { VRM } from "@/lib/media/video-resource-manager";
+import { FullVideoAuthority } from "@/lib/media/full-video-authority";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -340,6 +341,21 @@ export function VaultVideoPlayer({
       VRM.unregister(el);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Full-video session exclusivity (additive — VRM registration above is
+  // unchanged). Only one full-video session (this, Full Visual Experience, or
+  // a future standard Audio Visual player) may hold authority at a time;
+  // losing it only pauses this element, never unmounts/destroys it. ────────
+  useEffect(() => {
+    const sessionId = `vault:${contentId ?? contentSlug ?? "unknown"}`;
+    FullVideoAuthority.requestFullVideoSession(sessionId, {
+      onRevoked: () => {
+        const el = videoRef.current;
+        if (el && !el.paused) el.pause();
+      },
+    });
+    return () => FullVideoAuthority.releaseFullVideoSession(sessionId);
+  }, [contentId, contentSlug]);
 
   // ── HLS engine lifecycle ─────────────────────────────────────────────────
 
