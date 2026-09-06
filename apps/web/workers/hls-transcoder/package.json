@@ -2,11 +2,12 @@
   "name": "hls-transcoder",
   "version": "1.0.0",
   "type": "module",
-  "description": "Fly.io worker: HLS pre-transcode pipeline for 2MRRW audio",
-  "main": "src/index.js",
+  "description": "Fly.io worker: HLS pre-transcode pipeline for 2MRRW audio and video",
+  "main": "src/workers/audio-worker.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "start": "node src/workers/audio-worker.js",
+    "dev": "node --watch src/workers/audio-worker.js",
+    "test": "node --test src/engine/__tests__/*.test.js"
   },
   "engines": {
     "node": ">=22"
