@@ -25,6 +25,9 @@ const PLATFORM_PROVIDED = new Set([
   // Windows-provided (scripts/recovery/certify-stripe-exactly-once.mjs reads
   // these for cross-platform shell handling, not as app configuration).
   "ComSpec", "SystemRoot",
+  // Fly.io-injected to match the [processes] entry in fly.toml — never set
+  // by hand (see WORKER_JOB_TYPE in .env.example for the manual override).
+  "FLY_PROCESS_GROUP",
 ]);
 
 function walk(dir, exts, out = []) {

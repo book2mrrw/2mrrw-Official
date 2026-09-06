@@ -8,7 +8,26 @@ primary_region = 'iad'
   LOG_LEVEL    = "info"
   IDLE_POLL_MS = "5000"
 
+# Two scheduling lanes so a long video transcode can never block the audio
+# pipeline from claiming its next job. "app" is kept as the audio lane's
+# process-group name unchanged — it's exactly what the currently-running
+# production machines are already tagged as, so this split is purely
+# additive and disturbs nothing already live. "video" is new and, for now,
+# intentionally unprovisioned (no `fly scale count` has been run for it) —
+# no video machine exists until a real machine-size benchmark justifies
+# spinning one up, ahead of actual VIDEO_TRANSCODE work landing.
+[processes]
+  app   = "node src/index.js"
+  video = "node src/index.js"
+
 [[vm]]
+  processes = ["app"]
   memory   = '2gb'
   cpu_kind = 'shared'
   cpus     = 2
+
+[[vm]]
+  processes = ["video"]
+  memory   = '4gb'   # placeholder — right-sized only after a real encode benchmark
+  cpu_kind = 'performance'
+  cpus     = 4

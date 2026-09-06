@@ -25,6 +25,16 @@ const VIDEO_BITRATES = new Set(["4000k", "2000k", "1000k", "720k"]);
 // Unique worker ID per process — shown in hls_transcode_jobs.worker_id
 const WORKER_ID = `fly-${os.hostname()}-${crypto.randomBytes(4).toString("hex")}`;
 
+// Which lane this machine belongs to. Fly.io injects FLY_PROCESS_GROUP to
+// match the [processes] entry in fly.toml ("app" or "video"); WORKER_JOB_TYPE
+// is an explicit override for local/manual runs. "app" maps to "audio" since
+// that's the historical, still-unrenamed name of the audio lane's process
+// group — kept as-is so the existing production machines needed no
+// reassignment when the video lane was added alongside them.
+const WORKER_JOB_TYPE =
+  process.env.WORKER_JOB_TYPE ||
+  (process.env.FLY_PROCESS_GROUP === "video" ? "video" : "audio");
+
 // Poll interval when queue is empty (ms)
 const IDLE_POLL_MS = parseInt(process.env.IDLE_POLL_MS || "5000", 10);
 
@@ -141,7 +151,7 @@ function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-logger.info("worker started", { workerId: WORKER_ID, idlePollMs: IDLE_POLL_MS });
+logger.info("worker started", { workerId: WORKER_ID, jobType: WORKER_JOB_TYPE, idlePollMs: IDLE_POLL_MS });
 poll().catch((err) => {
   logger.error("unhandled error in poll loop", { message: err?.message, stack: err?.stack });
   process.exit(1);
