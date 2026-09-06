@@ -6,27 +6,39 @@ import test from "node:test";
 const root = process.cwd();
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-// Slice 2 of the Audio Visual foundation-hardening plan: the Fly.io worker's
-// processJob() branches once, explicitly, on job.job_type — a video job can
-// never fall through to transcoder.js's audio-only FFmpeg encoder, and an
-// audio job's existing behavior is byte-for-byte unchanged by the split.
+// Real two-lane Fly.io architecture: audio-worker.js and video-worker.js are
+// separate, explicit process entry points (not one shared command branching
+// on an env var). Each requests only its own job_type from the atomic claim
+// query and dispatches only to its own processor — there is no code path in
+// either file that could reach the other lane's media processing.
 
-test("transcoder.js — today's audio encoder — is never imported by the video path", () => {
-  const src = read("workers/hls-transcoder/src/video-transcoder.js");
-  assert.doesNotMatch(src, /from ["']\.\/transcoder\.js["']/);
+test("audio-worker.js never imports the video processor or video-transcoder.js", () => {
+  const src = read("workers/hls-transcoder/src/workers/audio-worker.js");
+  assert.doesNotMatch(src, /video-transcoder/);
+  assert.doesNotMatch(src, /processVideoTranscodeJob/);
+  assert.match(src, /const JOB_TYPE = "audio";/);
 });
 
-test("index.js dispatches on job_type to two distinct, named processors", () => {
-  const src = read("workers/hls-transcoder/src/index.js");
-  assert.match(src, /import \{ processVideoTranscodeJob \}\s+from "\.\/video-transcoder\.js";/);
-  const dispatchAt = src.indexOf("async function processJob(job) {");
-  assert.ok(dispatchAt > -1);
-  const body = src.slice(dispatchAt, dispatchAt + 700);
-  assert.match(body, /if \(job\.job_type === "video"\) \{\s*\n\s*await processVideoTranscodeJob\(job\);\s*\n\s*\} else \{\s*\n\s*await processAudioTranscodeJob\(job\);/);
+test("video-worker.js never imports transcoder.js — today's audio encoder", () => {
+  const src = read("workers/hls-transcoder/src/workers/video-worker.js");
+  assert.doesNotMatch(src, /from ["']\.\.\/transcoder\.js["']/);
+  assert.match(src, /const JOB_TYPE = "video";/);
+});
+
+test("both entry points request their own type from runWorker and nothing else's", () => {
+  const audioSrc = read("workers/hls-transcoder/src/workers/audio-worker.js");
+  const videoSrc = read("workers/hls-transcoder/src/workers/video-worker.js");
+  assert.match(audioSrc, /runWorker\(\{\s*\n\s*jobType:\s*JOB_TYPE,/);
+  assert.match(videoSrc, /runWorker\(\{\s*\n\s*jobType:\s*JOB_TYPE,/);
+});
+
+test("transcoder.js — today's audio encoder — is still imported only by the audio lane", () => {
+  const audioSrc = read("workers/hls-transcoder/src/workers/audio-worker.js");
+  assert.match(audioSrc, /from ["']\.\.\/transcoder\.js["']/);
 });
 
 test("the audio processor still calls transcoder.js's transcode() and markJobComplete, unchanged", () => {
-  const src = read("workers/hls-transcoder/src/index.js");
+  const src = read("workers/hls-transcoder/src/workers/audio-worker.js");
   const fnAt = src.indexOf("async function processAudioTranscodeJob(job) {");
   assert.ok(fnAt > -1);
   const body = src.slice(fnAt, fnAt + 300);
@@ -34,13 +46,24 @@ test("the audio processor still calls transcoder.js's transcode() and markJobCom
   assert.match(body, /await markJobComplete\(job, manifest\);/);
 });
 
-test("job claim and job failure handling stay shared across both job types (generic db plumbing, not media policy)", () => {
-  const src = read("workers/hls-transcoder/src/index.js");
-  const dispatchAt = src.indexOf("async function processJob(job) {");
-  const nextFnAt = src.indexOf("async function processAudioTranscodeJob");
-  const body = src.slice(dispatchAt, nextFnAt);
-  assert.match(body, /await markJobFailed\(job\.id, message\)/);
-  assert.match(body, /jobType:\s*job\.job_type/, "failure logging must distinguish job type");
+test("worker-runtime.js is the shared claim/heartbeat/failure loop and carries zero media-specific policy", () => {
+  const src = read("workers/hls-transcoder/src/worker-runtime.js");
+  // No FFmpeg process spawning, no rendition constants, no manifest-shape
+  // assumptions — if any of these show up here, media policy has leaked
+  // into the shared layer instead of staying in each lane's own processor.
+  assert.doesNotMatch(src, /spawn\(/);
+  assert.doesNotMatch(src, /AUDIO_RENDITIONS|VIDEO_RENDITIONS/);
+  assert.doesNotMatch(src, /hls_prefix|segment_duration|\.m3u8/);
+  assert.match(src, /export function runWorker\(/);
+});
+
+test("runWorker defensively rejects a job whose job_type doesn't match this lane's, as a validation failure — defense in depth beyond the DB-level claim filter", () => {
+  const src = read("workers/hls-transcoder/src/worker-runtime.js");
+  const guardAt = src.indexOf("if (job.job_type !== jobType) {");
+  assert.ok(guardAt > -1);
+  const body = src.slice(guardAt, guardAt + 550);
+  assert.match(body, /"VALIDATION_FAILURE"/);
+  assert.match(body, /return;/);
 });
 
 test("the video processor is a real, isolated file that fails loudly instead of silently pretending to encode", async () => {
@@ -50,4 +73,8 @@ test("the video processor is a real, isolated file that fails loudly instead of 
 
   const mod = await import("../../../../workers/hls-transcoder/src/video-transcoder.js");
   await assert.rejects(() => mod.processVideoTranscodeJob({ id: "test-job-id" }), /VIDEO_TRANSCODE is not implemented yet/);
+});
+
+test("the old shared index.js entry point is gone, not just unreferenced", () => {
+  assert.ok(!fs.existsSync(path.join(root, "workers/hls-transcoder/src/index.js")));
 });

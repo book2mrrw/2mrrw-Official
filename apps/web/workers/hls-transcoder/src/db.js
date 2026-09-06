@@ -17,18 +17,38 @@ export const db = createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
 });
 
 /**
- * Claim the next pending job atomically.
+ * Claim the next pending job of the given type atomically.
  * Uses FOR UPDATE SKIP LOCKED — only one worker claims each row.
- * Returns null when queue is empty.
+ * The type filter is applied INSIDE the database claim query itself
+ * (hls_claim_next_job's WHERE job_type = p_job_type), so an audio-lane
+ * caller can never receive a video row and vice versa.
+ * Returns null when there is no pending job of that type.
  */
-export async function claimNextJob(workerId) {
+export async function claimNextJob(workerId, jobType) {
   // Supabase JS doesn't expose raw FOR UPDATE SKIP LOCKED — use RPC
-  const { data, error } = await db.rpc("hls_claim_next_job", { p_worker_id: workerId });
+  const { data, error } = await db.rpc("hls_claim_next_job", { p_worker_id: workerId, p_job_type: jobType });
   if (error) throw new Error(`claimNextJob RPC error: ${error.message}`);
   // PostgreSQL composite NULL serializes as {id: null, ...} in Supabase JS.
   // id is always a non-null UUID when a real job is claimed — null id = empty queue.
   if (!data || (Array.isArray(data) ? data.length === 0 : data.id == null)) return null;
   return Array.isArray(data) ? data[0] : data;
+}
+
+/**
+ * Refresh the lease on a job that's still genuinely being processed.
+ * Called periodically while a worker awaits its processor function —
+ * cheap and harmless for a fast audio job, and what lets a long video
+ * encode's stale-job check key off "heartbeat gone quiet" instead of a
+ * single fixed timeout that would either falsely reclaim a healthy long
+ * encode or leave a truly dead one unrecovered for too long.
+ */
+export async function touchHeartbeat(jobId) {
+  const { error } = await db
+    .from("hls_transcode_jobs")
+    .update({ heartbeat_at: new Date().toISOString() })
+    .eq("id", jobId)
+    .eq("status", "processing");
+  if (error) throw new Error(`touchHeartbeat: ${error.message}`);
 }
 
 export async function markJobProcessing(jobId, workerId) {
@@ -104,7 +124,7 @@ export async function updatePosterKey(slug, trackSlug, posterKey, status = "read
   if (error) throw new Error(`updatePosterKey: ${error.message}`);
 }
 
-export async function markJobFailed(jobId, errorMessage) {
+export async function markJobFailed(jobId, errorMessage, failureCategory = "UNKNOWN") {
   const { data: job } = await db
     .from("hls_transcode_jobs")
     .select("attempt_count")
@@ -118,12 +138,14 @@ export async function markJobFailed(jobId, errorMessage) {
   const { error } = await db
     .from("hls_transcode_jobs")
     .update({
-      status:        nextStatus,
-      error_message: errorMessage,
-      attempt_count: attemptCount,
-      worker_id:     null,
-      started_at:    null,
-      completed_at:  nextStatus === "failed" ? new Date().toISOString() : null,
+      status:           nextStatus,
+      error_message:    errorMessage,
+      failure_category: failureCategory,
+      attempt_count:    attemptCount,
+      worker_id:        null,
+      started_at:       null,
+      heartbeat_at:     null,
+      completed_at:     nextStatus === "failed" ? new Date().toISOString() : null,
     })
     .eq("id", jobId);
 

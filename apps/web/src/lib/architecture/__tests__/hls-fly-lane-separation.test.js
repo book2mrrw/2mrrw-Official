@@ -6,36 +6,45 @@ import test from "node:test";
 const root = process.cwd();
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "utf8");
 
-// Correction after a real deploy attempt: Fly.io does not treat a newly
-// declared process group as a dormant placeholder — it tries to provision
-// (and bill for) a real machine for it immediately. Declaring a "video"
-// process group here before real VIDEO_TRANSCODE work exists to benchmark
-// would provision paid, idle compute for no reason. So fly.toml stays
-// single-process until that work is ready — only the harmless, inert
-// code-level lane resolution in index.js ships ahead of time.
+// Real, provisioned two-lane Fly.io architecture: audio and video get
+// physically separate machines from day one, each running its own explicit
+// worker entry point (not one shared command distinguished only by an env
+// var), so a long video encode can never occupy the audio worker's claim
+// slot or its CPU/RAM. "app" is kept as the audio lane's process-group name
+// unchanged — it's exactly what the already-running production machines
+// are tagged as, so this never requires reassigning a live machine.
 
-test("fly.toml does not declare a second process group yet — no idle video machine gets provisioned", () => {
+test("fly.toml declares both lanes with explicit, distinct worker entry points", () => {
   const toml = read("workers/hls-transcoder/fly.toml");
-  assert.doesNotMatch(toml, /\[processes\]/, "a [processes] table would make Fly try to provision a machine for every group in it");
-  assert.doesNotMatch(toml, /\bvideo\s*=/);
+  assert.match(toml, /\[processes\]/);
+  assert.match(toml, /app\s*=\s*"node src\/workers\/audio-worker\.js"/);
+  assert.match(toml, /video\s*=\s*"node src\/workers\/video-worker\.js"/);
+  // The old ambiguous shape (both lanes running the exact same command,
+  // distinguished only by an env var at runtime) must be gone.
+  assert.doesNotMatch(toml, /app\s*=\s*"node src\/index\.js"/);
 });
 
-test("the single vm block is unchanged from the known-good production config", () => {
+test("the audio lane keeps the 'app' process-group name and its known-good machine size — the live machines are never reassigned or resized", () => {
   const toml = read("workers/hls-transcoder/fly.toml");
   const vmBlocks = toml.split("[[vm]]").slice(1);
-  assert.equal(vmBlocks.length, 1, "exactly one [[vm]] block — no per-process-group split yet");
-  assert.match(vmBlocks[0], /memory\s*=\s*'2gb'/);
-  assert.match(vmBlocks[0], /cpu_kind\s*=\s*'shared'/);
-  assert.match(vmBlocks[0], /cpus\s*=\s*2/);
+  const appVm = vmBlocks.find((b) => /processes\s*=\s*\["app"\]/.test(b));
+  assert.ok(appVm, "an [[vm]] block scoped to the app process group must exist");
+  assert.match(appVm, /memory\s*=\s*'2gb'/);
+  assert.match(appVm, /cpu_kind\s*=\s*'shared'/);
+  assert.match(appVm, /cpus\s*=\s*2/);
 });
 
-test("index.js still resolves its own lane defensively from FLY_PROCESS_GROUP, defaulting to audio — harmless ahead of any second lane existing", () => {
-  const src = read("workers/hls-transcoder/src/index.js");
-  assert.match(src, /const WORKER_JOB_TYPE =/);
-  assert.match(src, /process\.env\.FLY_PROCESS_GROUP === "video" \? "video" : "audio"/);
+test("the video lane has its own valid, independent machine size — not the invalid 4gb/performance combination Fly rejected", () => {
+  const toml = read("workers/hls-transcoder/fly.toml");
+  const vmBlocks = toml.split("[[vm]]").slice(1);
+  const videoVm = vmBlocks.find((b) => /processes\s*=\s*\["video"\]/.test(b));
+  assert.ok(videoVm, "an [[vm]] block scoped to the video process group must exist");
+  assert.match(videoVm, /cpu_kind\s*=\s*'performance'/);
+  assert.match(videoVm, /memory\s*=\s*'8gb'/, "performance-tier machines require a minimum of 8gb — 4gb was rejected by Fly");
+  assert.match(videoVm, /cpus\s*=\s*4/);
 });
 
-test("worker startup logging reports which lane this machine believes itself to be", () => {
-  const src = read("workers/hls-transcoder/src/index.js");
-  assert.match(src, /logger\.info\("worker started", \{ workerId: WORKER_ID, jobType: WORKER_JOB_TYPE, idlePollMs: IDLE_POLL_MS \}\);/);
+test("the Dockerfile's default CMD points at a real entry point, not the deleted index.js", () => {
+  const dockerfile = read("workers/hls-transcoder/Dockerfile");
+  assert.match(dockerfile, /CMD \["node", "src\/workers\/audio-worker\.js"\]/);
 });

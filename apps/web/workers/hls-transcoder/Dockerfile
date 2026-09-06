@@ -19,4 +19,4 @@ COPY src/ ./src/
 RUN useradd -r -u 1001 worker && chown -R worker /app
 USER worker
 
-CMD ["node", "src/index.js"]
+CMD ["node", "src/workers/audio-worker.js"]
