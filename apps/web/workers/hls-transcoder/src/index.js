@@ -17,6 +17,7 @@ import { logger }                                              from "./logger.js
 import { claimNextJob, markJobComplete, markJobFailed, updatePosterKey } from "./db.js";
 import { transcode }                                           from "./transcoder.js";
 import { extractPoster }                                       from "./poster.js";
+import { processVideoTranscodeJob }                            from "./video-transcoder.js";
 
 // Bitrates that indicate a video job (not audio-only)
 const VIDEO_BITRATES = new Set(["4000k", "2000k", "1000k", "720k"]);
@@ -39,10 +40,18 @@ process.on("SIGINT", () => {
   shuttingDown = true;
 });
 
+/**
+ * Single, explicit dispatch point: job_type decides which processor runs.
+ * transcoder.js's audio path is never touched by the video branch and vice
+ * versa — each processor owns its own transcode/complete logic below;
+ * job-claim and job-failure handling stay shared here since they carry no
+ * media-specific policy of their own.
+ */
 async function processJob(job) {
   activeJobId = job.id;
   logger.info("job claimed", {
     jobId:     job.id,
+    jobType:   job.job_type,
     slug:      job.slug,
     trackSlug: job.track_slug,
     bitrates:  job.bitrates,
@@ -50,39 +59,56 @@ async function processJob(job) {
   });
 
   try {
-    const manifest = await transcode({ job });
-    await markJobComplete(job, manifest);
-    logger.info("job complete", { jobId: job.id, slug: job.slug, trackSlug: job.track_slug });
-
-    // Poster extraction — only for video jobs, non-fatal
-    const isVideoJob = job.bitrates?.some((b) => VIDEO_BITRATES.has(b));
-    if (isVideoJob && !job.track_slug) {
-      try {
-        const posterKey = await extractPoster({
-          sourceKey:       job.source_key,
-          slug:            job.slug,
-          releaseType:     job.release_type,
-          durationSeconds: manifest.duration_seconds,
-        });
-        await updatePosterKey(job.slug, null, posterKey, "ready");
-        logger.info("poster ready", { jobId: job.id, slug: job.slug, posterKey });
-      } catch (posterErr) {
-        logger.warn("poster extraction failed (non-fatal)", {
-          jobId:   job.id,
-          slug:    job.slug,
-          message: posterErr?.message,
-        });
-        await updatePosterKey(job.slug, null, null, "needs_poster").catch(() => {});
-      }
+    if (job.job_type === "video") {
+      await processVideoTranscodeJob(job);
+    } else {
+      await processAudioTranscodeJob(job);
     }
   } catch (err) {
     const message = err?.message ?? String(err);
-    logger.error("job failed", { jobId: job.id, slug: job.slug, message });
+    logger.error("job failed", { jobId: job.id, jobType: job.job_type, slug: job.slug, message });
     await markJobFailed(job.id, message).catch((dbErr) => {
       logger.error("markJobFailed error", { jobId: job.id, message: dbErr?.message });
     });
   } finally {
     activeJobId = null;
+  }
+}
+
+/**
+ * job_type='audio' path — unchanged behavior from before the job_type split,
+ * only extracted out of processJob and given an explicit name for clarity.
+ * transcoder.js itself (today's transcodeOneBitrate/transcode()) is never
+ * edited by this or any future Audio Visual slice.
+ */
+async function processAudioTranscodeJob(job) {
+  const manifest = await transcode({ job });
+  await markJobComplete(job, manifest);
+  logger.info("job complete", { jobId: job.id, slug: job.slug, trackSlug: job.track_slug });
+
+  // Poster extraction — only for video jobs, non-fatal. Dead in practice
+  // now that job_type is explicit: an audio-typed job's bitrates are always
+  // AUDIO_RENDITIONS values, which VIDEO_BITRATES never contains. Left as-is
+  // — this slice preserves the audio path's behavior byte-for-byte.
+  const isVideoJob = job.bitrates?.some((b) => VIDEO_BITRATES.has(b));
+  if (isVideoJob && !job.track_slug) {
+    try {
+      const posterKey = await extractPoster({
+        sourceKey:       job.source_key,
+        slug:            job.slug,
+        releaseType:     job.release_type,
+        durationSeconds: manifest.duration_seconds,
+      });
+      await updatePosterKey(job.slug, null, posterKey, "ready");
+      logger.info("poster ready", { jobId: job.id, slug: job.slug, posterKey });
+    } catch (posterErr) {
+      logger.warn("poster extraction failed (non-fatal)", {
+        jobId:   job.id,
+        slug:    job.slug,
+        message: posterErr?.message,
+      });
+      await updatePosterKey(job.slug, null, null, "needs_poster").catch(() => {});
+    }
   }
 }
 
