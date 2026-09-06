@@ -15,8 +15,9 @@ RUN npm install --omit=dev --ignore-scripts
 # Copy source
 COPY src/ ./src/
 
-# Non-root for security
+# Non-root for security — dropped at the application layer (src/drop-privileges.js)
+# instead of via USER here, so the video lane can chown its freshly-mounted
+# /data volume (owned by root on first attach) before dropping to this user.
 RUN useradd -r -u 1001 worker && chown -R worker /app
-USER worker
 
 CMD ["node", "src/workers/audio-worker.js"]

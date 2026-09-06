@@ -19,6 +19,10 @@ import { markJobComplete, updatePosterKey } from "../db.js";
 import { transcode } from "../transcoder.js";
 import { extractPoster } from "../poster.js";
 import { runWorker } from "../worker-runtime.js";
+import { dropPrivilegesIfRoot } from "../drop-privileges.js";
+
+// No mounted volume to chown here — the audio lane never touches /data.
+dropPrivilegesIfRoot();
 
 const JOB_TYPE = "audio";
 

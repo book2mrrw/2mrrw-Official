@@ -37,3 +37,20 @@ primary_region = 'iad'
   memory   = '8gb'
   cpu_kind = 'performance'
   cpus     = 4
+
+# Dedicated scratch storage for the video lane only — the audio lane never
+# mounts this and needs no change for it. The video machine's default
+# ephemeral root disk (~7.8gb) cannot hold a realistic 4K/HDR master plus
+# simultaneous AVC+AV1 rendition candidates plus VMAF/CAMBI reference
+# decoding plus CMAF packaging output — confirmed on the live machine
+# (`df -h /` showed 7.4gb available). 500gb is scratch/workspace capacity,
+# not canonical storage: masters, published HLS/CMAF, Peek, posters, and
+# thumbnails all remain durable in R2, exactly as before. Each video
+# machine gets its own volume (never a shared filesystem across machines —
+# Fly volumes are host-local), matching one volume per machine below.
+# Scheduled snapshots are disabled on both — this is disposable transcode
+# scratch, not data needing backup; nothing here is canonical.
+[mounts]
+  source      = "video_scratch"
+  destination = "/data"
+  processes   = ["video"]

@@ -17,6 +17,11 @@ import os from "os";
 import crypto from "crypto";
 import { processVideoTranscodeJob } from "../video-transcoder.js";
 import { runWorker } from "../worker-runtime.js";
+import { dropPrivilegesIfRoot } from "../drop-privileges.js";
+
+// /data is the mounted scratch volume — owned by root the first time Fly
+// attaches a fresh volume, so this must chown it before dropping privileges.
+dropPrivilegesIfRoot(["/data"]);
 
 const JOB_TYPE = "video";
 
