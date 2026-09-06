@@ -5,6 +5,7 @@ FROM mwader/static-ffmpeg:7.1 AS ffmpeg-stage
 FROM node:22-slim
 
 COPY --from=ffmpeg-stage /ffmpeg /usr/local/bin/ffmpeg
+COPY --from=ffmpeg-stage /ffprobe /usr/local/bin/ffprobe
 
 WORKDIR /app
 
