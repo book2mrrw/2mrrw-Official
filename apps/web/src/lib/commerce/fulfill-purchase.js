@@ -2,7 +2,19 @@
 import { grantLibraryItems } from "@/lib/commerce/entitlements";
 import { grantCollectorOwnerships } from "@/lib/commerce/collector-ownerships";
 import { grantVaultPassEntitlement } from "@/lib/commerce/vault-entitlements";
+import { grantAudioVisualEntitlements } from "@/lib/audio-visual/entitlements";
 import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
+
+/**
+ * Audio Visual items carry no slug (audio_visuals is a stable-ID-only
+ * table) so they never enter the slugs.length-gated grant branch below —
+ * they're granted separately, keyed on video_id.
+ */
+async function grantAudioVisualItemsIfAny(admin, { userId, purchaseId, items }) {
+  const audioVisualItems = (items || []).filter((item) => item?.type === "audio_visual" && item?.video_id);
+  if (!audioVisualItems.length) return;
+  await grantAudioVisualEntitlements({ userId, purchaseId, items: audioVisualItems, admin });
+}
 
 /**
  * Allocate a purchase's real charged total across its cart items,
@@ -59,14 +71,20 @@ async function recordPurchaseItems(admin, { purchaseId, items, totalAmountCents 
     const productIdBySlug = new Map((products || []).map((p) => [p.slug, p.id]));
 
     const allocations = allocatePurchaseItemPrices(list, totalAmountCents);
+    // An item identifies what was purchased either by catalog slug (merch/
+    // digital music) or by Audio Visual video_id (audio_visuals has no
+    // slug — see the schema's own header comment) — never neither, or it
+    // would silently vanish from purchase_items rather than merely
+    // misrecording its type (the exact P1 finding this filter used to miss).
     const rows = allocations
-      .filter(({ item }) => item?.slug)
+      .filter(({ item }) => item?.slug || item?.video_id)
       .map(({ item, unitPriceCents }) => ({
         purchase_id: purchaseId,
-        product_id: productIdBySlug.get(item.slug) || null,
-        product_slug: item.slug,
+        product_id: item.slug ? productIdBySlug.get(item.slug) || null : null,
+        product_slug: item.slug || null,
+        audio_visual_id: item.type === "audio_visual" ? item.video_id : null,
         title: item.title || null,
-        item_type: item.type === "merch" ? "merch" : "digital",
+        item_type: item.type === "merch" ? "merch" : item.type === "audio_visual" ? "audio_visual" : "digital",
         access_type: item.access_type || null,
         release_id: item.release_id || null,
         unit_price_cents: unitPriceCents,
@@ -146,6 +164,7 @@ export async function fulfillCheckoutSession(session) {
       grantVaultPassEntitlement({ userId, purchaseId: purchase.id, slugs, items, payment: session }),
     ]);
   }
+  await grantAudioVisualItemsIfAny(admin, { userId, purchaseId: purchase.id, items });
 
   invalidateAccountStateCache(userId).catch(() => {});
   return { purchaseId: purchase.id, slugs };
@@ -217,6 +236,7 @@ export async function fulfillPaymentIntent(paymentIntent) {
       grantVaultPassEntitlement({ userId, purchaseId: purchase.id, slugs, items, payment: paymentIntent }),
     ]);
   }
+  await grantAudioVisualItemsIfAny(admin, { userId, purchaseId: purchase.id, items });
 
   invalidateAccountStateCache(userId).catch(() => {});
   return { purchaseId: purchase.id, slugs, items };

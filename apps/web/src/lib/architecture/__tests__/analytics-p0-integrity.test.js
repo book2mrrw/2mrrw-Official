@@ -150,8 +150,15 @@ test("recordPurchaseItems resolves product_id per slug via a single batch query,
 
 test("the purchase_items migration defines the columns and constraints the fulfillment code and revenue queries depend on", () => {
   const migrationsDir = path.join(root, "supabase/migrations");
-  const files = fs.readdirSync(migrationsDir).filter((f) => f.includes("purchase_items"));
-  assert.equal(files.length, 1, "expected exactly one purchase_items migration");
+  // Additive schema evolution means more than one migration legitimately
+  // touches purchase_items over time (Part B's own zero-downtime discipline
+  // expects this) — find the one migration that actually CREATEs the table,
+  // not "the only file that ever mentions it."
+  const files = fs.readdirSync(migrationsDir).filter((f) => {
+    const contents = fs.readFileSync(path.join(migrationsDir, f), "utf8");
+    return /create table if not exists public\.purchase_items/.test(contents);
+  });
+  assert.equal(files.length, 1, "expected exactly one migration that creates public.purchase_items");
   const sql = fs.readFileSync(path.join(migrationsDir, files[0]), "utf8");
 
   assert.match(sql, /create table if not exists public\.purchase_items/);
@@ -163,6 +170,25 @@ test("the purchase_items migration defines the columns and constraints the fulfi
   assert.match(sql, /product_slug\s+text\s+not null/);
   assert.match(sql, /create index if not exists purchase_items_purchase_id_idx/);
   assert.match(sql, /create index if not exists purchase_items_product_slug_idx/);
+});
+
+test("the audio_visual purchase_items migration relaxes product_slug and adds an ID-based identity column, and neither is ever left unset", () => {
+  const sql = read("supabase/migrations/20260906150000_purchase_items_audio_visual.sql");
+  assert.match(sql, /alter table public\.purchase_items\s+alter column product_slug drop not null/);
+  assert.match(sql, /add column if not exists audio_visual_id uuid references public\.audio_visuals\(id\) on delete set null/);
+  assert.match(sql, /check \(product_slug is not null or audio_visual_id is not null\)/,
+    "a purchase_items row must always identify what was purchased one way or the other — this is the fix for the P1 finding where an Audio Visual line item would otherwise be silently dropped");
+  assert.match(sql, /item_type in \('digital', 'merch', 'audio_visual'\)/);
+});
+
+test("recordPurchaseItems accepts an item identified by slug OR by video_id, and records the correct item_type/audio_visual_id for each", () => {
+  const src = read("src/lib/commerce/fulfill-purchase.js");
+  const fnAt = src.indexOf("async function recordPurchaseItems(admin");
+  const body = src.slice(fnAt, fnAt + 2400);
+  assert.match(body, /\.filter\(\(\{ item \}\) => item\?\.slug \|\| item\?\.video_id\)/,
+    "an Audio Visual item (no slug) must not be dropped from purchase_items the way the old slug-only filter would have dropped it");
+  assert.match(body, /audio_visual_id: item\.type === "audio_visual" \? item\.video_id : null/);
+  assert.match(body, /item_type: item\.type === "merch" \? "merch" : item\.type === "audio_visual" \? "audio_visual" : "digital"/);
 });
 
 // ── confirm full playback's own event path is untouched ─────────────────────
