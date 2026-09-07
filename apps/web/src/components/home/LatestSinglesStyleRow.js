@@ -35,7 +35,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
 }) {
   const videoRef = useRef(null);
   const assignedSrc = cardMedia === "video" ? mediaItem?.video || null : null;
-  const [coverVideoFailed, setCoverVideoFailed] = useState(false);
+  const [hasEnteredView, setHasEnteredView] = useState(false);
   const audioPriority = useAudioMediaPriority();
   const { currentTrackId, currentTrackSlug } = usePlaybackIdentity();
   // Only the release actually playing is exempt from suspension — every
@@ -43,16 +43,38 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
   // identical model applied to the other home-page cover surfaces).
   const isThisReleasePlaying = Boolean(currentTrackId && currentTrackSlug === mediaItem?.slug);
   const shouldSuspend = audioPriority.active && !isThisReleasePlaying;
-  const coverVideoSrc = !coverVideoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video"
-    ? mediaItem?.video || mediaItem?.visual || null
-    : null;
-  const activeVideoSrc = cardMedia === "video" ? assignedSrc : coverVideoSrc;
-  const coverLifecycle = useReleaseCoverLifecycle(presentationIdentity, activeVideoSrc || coverDisplay?.src);
+  const coverLifecycle = useReleaseCoverLifecycle(presentationIdentity, assignedSrc || coverDisplay?.src);
+
+  // One-shot gate on the *first* load only. storefront-persistent-media.js
+  // owns this element's play/pause for the rest of its life on the explicit
+  // contract that scroll must never pause/reload it once loaded — so this
+  // must never re-arm or re-gate after hasEnteredView flips true once.
+  useEffect(() => {
+    if (cardMedia !== "video" || hasEnteredView) return undefined;
+    const el = videoRef.current;
+    if (!el) return undefined;
+    if (typeof IntersectionObserver === "undefined") {
+      setHasEnteredView(true);
+      return undefined;
+    }
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setHasEnteredView(true);
+          obs.disconnect();
+        }
+      },
+      { rootMargin: "0px 150px", threshold: 0 }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [cardMedia, hasEnteredView]);
 
   useLayoutEffect(() => {
+    if (cardMedia !== "video") return;
     const el = videoRef.current;
     if (!el) return;
-    if (!activeVideoSrc) {
+    if (!assignedSrc || !hasEnteredView) {
       if (!el.paused) el.pause();
       el.preload = "none";
       if (el.hasAttribute("src")) {
@@ -66,13 +88,13 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
       el.preload = "none";
       return;
     }
-    if (el.getAttribute("src") !== activeVideoSrc) {
-      el.src = activeVideoSrc;
+    if (el.getAttribute("src") !== assignedSrc) {
+      el.src = assignedSrc;
       el.preload = "auto";
       el.load();
     }
     if (!document.hidden && el.paused) el.play().catch(() => {});
-  }, [activeVideoSrc, shouldSuspend]);
+  }, [cardMedia, assignedSrc, shouldSuspend, hasEnteredView]);
 
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;
@@ -139,45 +161,18 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
     );
   }
 
-  if (coverVideoSrc) {
-    return (
-      <video
-        ref={videoRef}
-        className="release-card-artwork-video"
-        data-single-carousel
-        data-release-slug={mediaItem?.slug || ""}
-        poster={mediaItem.cover || undefined}
-        muted
-        loop
-        playsInline
-        controls={false}
-        disablePictureInPicture
-        disableRemotePlayback
-        preload="none"
-        webkit-playsinline="true"
-        onLoadedMetadata={coverLifecycle.onVideoLoadedMetadata}
-        onLoadedData={coverLifecycle.onVideoLoadedData}
-        onError={() => setCoverVideoFailed(true)}
-        style={{
-          backgroundColor: "#0a0a0a",
-          width: "100%",
-          aspectRatio: "1/1",
-          objectFit: "cover",
-          display: "block",
-          borderRadius: "13px 13px 0 0",
-          transition: "transform 0.3s, filter 0.3s",
-          pointerEvents: "none",
-        }}
-      />
-    );
-  }
-
+  // Mixtape/EP cards with a motion asset: not part of the singles rail's
+  // persistent-media contract (storefront-persistent-media.js only ever
+  // queries the singles rail's own subtree), so this is free to route
+  // through CoverArt for the same viewport-gated, decode-budget-aware
+  // loading every other non-rail surface gets, plus the shimmer skeleton.
   return (
     <CoverArt
       src={coverDisplay.src}
       baseCover={mediaItem?.baseCover || undefined}
       type={coverDisplay.type || "image"}
       presentationIdentity={presentationIdentity}
+      skeleton
       alt=""
       width="100%"
       height="auto"

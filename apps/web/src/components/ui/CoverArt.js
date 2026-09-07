@@ -53,6 +53,7 @@ function CoverArt({
   skeleton = false,
   loadPriority = "normal",
   presentationIdentity = null,
+  videoPriority = VRM.PRIORITY_NEAR,
 }) {
   // Failure state is keyed to the src that triggered it.
   // When src changes the old failure is automatically ignored — no manual reset needed.
@@ -188,6 +189,7 @@ function CoverArt({
         onLoadedData={coverLifecycle.onVideoLoadedData}
         retainLoadedSource={Boolean(presentationIdentity?.key)}
         releaseId={presentationIdentity?.releaseId || null}
+        priority={videoPriority}
       />
     );
   }
@@ -218,6 +220,7 @@ function VideoArt({
   onLoadedData,
   retainLoadedSource,
   releaseId,
+  priority = VRM.PRIORITY_NEAR,
 }) {
   const videoRef = useRef(null);
   const prevSrcRef = useRef(null);
@@ -279,7 +282,7 @@ function VideoArt({
     const el = videoRef.current;
     if (!el) return;
 
-    VRM.register(el, VRM.PRIORITY_NEAR);
+    VRM.register(el, priority);
 
     if (typeof IntersectionObserver === "undefined") {
       // Old-browser fallback: load and request play immediately.
@@ -319,6 +322,10 @@ function VideoArt({
       obs.disconnect();
       VRM.unregister(el);
     };
+    // `priority` is a static per-instance choice (PRIORITY_NEAR vs
+    // PRIORITY_HERO) — this must register once on mount, not re-run the
+    // observer/VRM registration if a caller's constant were ever swapped.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

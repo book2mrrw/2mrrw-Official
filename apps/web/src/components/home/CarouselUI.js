@@ -1,9 +1,11 @@
 "use client";
 
-import { memo, useRef, useState } from "react";
+import { memo, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useMountEnterAnimation, useSlugEnterAnimation } from "@/hooks/useMountEnterAnimation";
 import CoverArt from "@/components/ui/CoverArt";
+import { VRM } from "@/lib/media/video-resource-manager";
+import { createReleasePresentationIdentity } from "@/hooks/useReleasePresentation";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import { VideoPreviewIcon, AdminVideoLinkedMarker } from "@/components/audio-visual/VideoPreviewIcon";
@@ -24,7 +26,6 @@ function CarouselUI({
   buttonHoverOut, accountState, userId, isAdmin, onGift, onLibraryChange,
 }) {
   const [previewHover, setPreviewHover] = useState(false);
-  const [coverVideoFailed, setCoverVideoFailed] = useState(false);
   const [inlinePreviewOpen, setInlinePreviewOpen] = useState(false);
   const [fullscreenVideo, setFullscreenVideo] = useState(null);
   const [previewedSlug, setPreviewedSlug] = useState(currentSingle?.slug);
@@ -41,9 +42,16 @@ function CarouselUI({
   const shouldAnimateTitle = useSlugEnterAnimation(currentSingle?.slug);
   const access = currentSingleAccess || (currentSingle ? resolveContentAccess(currentSingle, accountState) : null);
   const coverDisplay = catalogCoverDisplay(currentSingle);
-  const coverVideoSrc = (!coverVideoFailed && (currentSingle?.video || currentSingle?.visual) && (currentSingle?.coverArtType === "video" || coverDisplay?.type === "video"))
-    ? (currentSingle.video || currentSingle.visual)
-    : null;
+  const presentationIdentity = useMemo(
+    () => createReleasePresentationIdentity(
+      currentSingle,
+      "home_carousel_hero",
+      coverDisplay?.type === "video"
+        ? currentSingle?.video || currentSingle?.visual || coverDisplay?.src
+        : coverDisplay?.src
+    ),
+    [currentSingle, coverDisplay]
+  );
   const currentLibraryItem = accountState?.library?.find((item) => item.slug === currentSingle?.slug);
   const currentSingleIsGifted = currentLibraryItem?.source === "gift" || currentLibraryItem?.gifted === true;
 
@@ -117,23 +125,19 @@ function CarouselUI({
             }}
           />
         )}
-        {coverVideoSrc ? (
-          <video
-            key={coverVideoSrc}
-            src={coverVideoSrc}
-            poster={currentSingle.baseCover || currentSingle.cover || undefined}
-            autoPlay muted loop playsInline preload="auto" webkit-playsinline="true"
-            onError={() => setCoverVideoFailed(true)}
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", borderRadius: 18, boxShadow: "0 10px 50px rgba(0,0,0,0.7)", transition: "filter 0.3s", filter: previewHover ? "brightness(0.55)" : "brightness(1)", animation: shouldAnimateCover ? "fadeInCover 0.4s ease forwards" : undefined, pointerEvents: "none" }}
-          />
-        ) : (
-          <CoverArt
-            src={coverDisplay.src}
-            type={coverDisplay.type || "image"}
-            alt="" width="100%" height="100%" borderRadius={18}
-            style={{ boxShadow: "0 10px 50px rgba(0,0,0,0.7)", transition: "filter 0.3s", filter: previewHover ? "brightness(0.55)" : "brightness(1)", animation: shouldAnimateCover ? "fadeInCover 0.4s ease forwards" : undefined }}
-          />
-        )}
+        {/* Hero cover — routed through CoverArt at PRIORITY_HERO so it always
+            wins the shared decode budget over grid/rail cards, instead of a
+            bespoke autoplay video the decode-budget manager can't see at all. */}
+        <CoverArt
+          src={coverDisplay.src}
+          baseCover={currentSingle.baseCover || currentSingle.cover || undefined}
+          type={coverDisplay.type || "image"}
+          presentationIdentity={presentationIdentity}
+          videoPriority={VRM.PRIORITY_HERO}
+          skeleton
+          alt="" width="100%" height="100%" borderRadius={18}
+          style={{ boxShadow: "0 10px 50px rgba(0,0,0,0.7)", transition: "filter 0.3s", filter: previewHover ? "brightness(0.55)" : "brightness(1)", animation: shouldAnimateCover ? "fadeInCover 0.4s ease forwards" : undefined, pointerEvents: "none" }}
+        />
         <button
           type="button"
           aria-label={`${access?.canStream ? "Listen to" : "Preview"} ${currentSingle.title}`}
