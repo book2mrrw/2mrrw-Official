@@ -25,7 +25,7 @@
  * (v1 takes a Seriez id directly), and a dedicated edit-existing-video view
  * beyond re-uploading assets.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { uploadAudioVisualAssetToR2, completeAudioVisualUpload } from "@/lib/audio-visual/upload-client";
 import { IMAGE_COVER_ACCEPT, VIDEO_COVER_ACCEPT, AV_MASTER_ACCEPT } from "@/lib/media/admin-upload-contract";
@@ -87,6 +87,139 @@ const inputStyle = {
   width: "100%", background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 8,
   padding: "11px 14px", fontSize: 14, color: C.text, fontFamily: "inherit", boxSizing: "border-box",
 };
+
+// ── Track picker ─────────────────────────────────────────────────────────
+// Lets the admin find a track by browsing titles (Singles / Features /
+// Albums / Mixtapes & EPs) instead of pasting a raw tracks.id UUID. Only
+// wizard releases (source: "releases") are offered — legacy catalog
+// releases key their tracklist off catalog_tracks.id, which isn't a valid
+// audio_visuals.track_id (that column FKs to public.tracks only).
+const RELEASE_TABS = [
+  { key: "single", label: "Singles", match: (t) => t === "single" },
+  { key: "feature", label: "Features", match: (t) => t === "feature" },
+  { key: "album", label: "Albums", match: (t) => t === "album" || t === "deluxe" },
+  { key: "mixtape", label: "Mixtapes & EPs", match: (t) => t === "ep" || t === "mixtape" },
+];
+
+const pickerRowStyle = {
+  display: "block", width: "100%", textAlign: "left", fontFamily: "inherit", cursor: "pointer",
+  background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8,
+  padding: "10px 14px", marginBottom: 8,
+};
+
+function TrackPicker({ onPick, onClose }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [releases, setReleases] = useState([]);
+  const [activeTab, setActiveTab] = useState("single");
+  const [openRelease, setOpenRelease] = useState(null);
+  const [tracks, setTracks] = useState(null); // null = not drilled in yet
+  const [tracksLoading, setTracksLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/releases")
+      .then((r) => r.json())
+      .then((data) => {
+        if (cancelled) return;
+        setReleases((data.releases || []).filter((r) => r.source === "releases" && r.title));
+      })
+      .catch(() => { if (!cancelled) setError("Failed to load releases"); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const openReleaseTracks = useCallback((release) => {
+    setOpenRelease(release);
+    setTracks(null);
+    setTracksLoading(true);
+    fetch(`/api/admin/releases/${release.id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        const list = data.tracks || [];
+        if (list.length === 1) {
+          onPick({ trackId: list[0].id, title: list[0].title || release.title });
+        } else {
+          setTracks(list);
+        }
+      })
+      .catch(() => setError("Failed to load tracklist"))
+      .finally(() => setTracksLoading(false));
+  }, [onPick]);
+
+  const activeMatch = RELEASE_TABS.find((t) => t.key === activeTab).match;
+  const filtered = releases.filter((r) => activeMatch(r.release_type));
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, zIndex: 9500, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.75)" }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div style={{ width: "min(520px, 92vw)", maxHeight: "80vh", display: "flex", flexDirection: "column", background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 16, overflow: "hidden" }}>
+        <div style={{ padding: "18px 20px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.text }}>
+              {openRelease ? `Pick a track — ${openRelease.title}` : "Pick a release"}
+            </h3>
+            <button onClick={onClose} style={{ ...backBtnStyle, fontSize: 16 }}>✕</button>
+          </div>
+          {!openRelease && (
+            <div style={{ display: "flex", gap: 6, marginBottom: 14, overflowX: "auto" }}>
+              {RELEASE_TABS.map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => setActiveTab(t.key)}
+                  style={{
+                    flexShrink: 0, padding: "7px 14px", borderRadius: 999, fontSize: 11, fontWeight: 800,
+                    letterSpacing: 0.5, textTransform: "uppercase", cursor: "pointer", fontFamily: "inherit",
+                    border: `1px solid ${activeTab === t.key ? C.accentBorder : C.border2}`,
+                    background: activeTab === t.key ? C.accentDim : "transparent",
+                    color: activeTab === t.key ? C.accent : C.muted,
+                  }}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <div style={{ padding: "0 20px 20px", overflowY: "auto" }}>
+          {error && <div style={{ color: C.error, fontSize: 13, marginBottom: 12 }}>{error}</div>}
+          {openRelease ? (
+            <>
+              <button onClick={() => { setOpenRelease(null); setTracks(null); }} style={{ ...backBtnStyle, marginBottom: 12 }}>← Back to releases</button>
+              {tracksLoading ? (
+                <div style={{ color: C.muted, fontSize: 13, padding: "20px 0" }}>Loading tracklist…</div>
+              ) : tracks && tracks.length === 0 ? (
+                <div style={{ color: C.muted, fontSize: 13, padding: "20px 0" }}>No tracks yet for this release.</div>
+              ) : (
+                (tracks || []).map((t) => (
+                  <button key={t.id} onClick={() => onPick({ trackId: t.id, title: t.title || openRelease.title })} style={pickerRowStyle}>
+                    <span style={{ fontSize: 11, color: C.muted2, fontWeight: 700, marginRight: 10 }}>{t.position}.</span>
+                    <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{t.title || "(untitled track)"}</span>
+                  </button>
+                ))
+              )}
+            </>
+          ) : loading ? (
+            <div style={{ color: C.muted, fontSize: 13, padding: "20px 0" }}>Loading releases…</div>
+          ) : filtered.length === 0 ? (
+            <div style={{ color: C.muted, fontSize: 13, padding: "20px 0" }}>Nothing here yet.</div>
+          ) : (
+            filtered.map((r) => (
+              <button key={r.id} onClick={() => openReleaseTracks(r)} style={pickerRowStyle}>
+                <div style={{ fontSize: 13, color: C.text, fontWeight: 700 }}>{r.title}</div>
+                <div style={{ fontSize: 11, color: C.muted2, marginTop: 2 }}>
+                  {r.slug}{r.track_counts ? ` · ${r.track_counts.total} track${r.track_counts.total === 1 ? "" : "s"}` : ""}
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Home landing ─────────────────────────────────────────────────────────
 function HomeLanding({ count, onUpload, onList }) {
@@ -175,6 +308,8 @@ function UploadFlow({ onComplete, onDismiss }) {
   const [title, setTitle] = useState("");
   const [videoType, setVideoType] = useState("music_video");
   const [trackId, setTrackId] = useState("");
+  const [linkedTrackLabel, setLinkedTrackLabel] = useState("");
+  const [trackPickerOpen, setTrackPickerOpen] = useState(false);
   const [seriezMode, setSeriezMode] = useState("standalone"); // "standalone" | "new" | "existing"
   const [seriezTitle, setSeriezTitle] = useState("");
   const [existingSeriezId, setExistingSeriezId] = useState("");
@@ -212,6 +347,16 @@ function UploadFlow({ onComplete, onDismiss }) {
   const handleExistingSeriezBlur = useCallback(() => {
     if (existingSeriezId.trim()) fetchNextEpisodeNumber(existingSeriezId.trim(), Number(seasonNumber) || 1);
   }, [existingSeriezId, seasonNumber, fetchNextEpisodeNumber]);
+
+  // Picking a track fills the video's own title from it too, unless the
+  // admin already typed one — matches the confirmed intent that the video
+  // title defaults to the linked track's title but stays fully editable.
+  const handlePickTrack = useCallback(({ trackId: pickedId, title: pickedTitle }) => {
+    setTrackId(pickedId || "");
+    setLinkedTrackLabel(pickedTitle || "");
+    setTrackPickerOpen(false);
+    setTitle((current) => (current.trim() ? current : pickedTitle || current));
+  }, []);
 
   const uploadOne = useCallback(async (videoId, file, assetType, onProgress) => {
     const { key } = await uploadAudioVisualAssetToR2({ videoId, assetType, file, onProgress });
@@ -456,10 +601,21 @@ function UploadFlow({ onComplete, onDismiss }) {
       )}
 
       {videoType === "music_video" && !batchMode && (
-        <Field label="Linked track ID (optional — derives the slug from that track's own slug)">
-          <input type="text" value={trackId} onChange={(e) => setTrackId(e.target.value)} style={inputStyle} placeholder="Track UUID" />
+        <Field label="Linked track (optional — derives the slug from that track's own slug)">
+          {trackId ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ ...inputStyle, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {linkedTrackLabel || trackId}
+              </div>
+              <Btn small variant="secondary" onClick={() => setTrackPickerOpen(true)}>Change</Btn>
+              <Btn small variant="secondary" onClick={() => { setTrackId(""); setLinkedTrackLabel(""); }}>Clear</Btn>
+            </div>
+          ) : (
+            <Btn variant="secondary" onClick={() => setTrackPickerOpen(true)}>Pick a track…</Btn>
+          )}
         </Field>
       )}
+      {trackPickerOpen && <TrackPicker onPick={handlePickTrack} onClose={() => setTrackPickerOpen(false)} />}
 
       <Field label="Seriez">
         <select
