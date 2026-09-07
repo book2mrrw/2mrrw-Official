@@ -1,5 +1,13 @@
 ﻿import { getAdminClient } from "@/lib/supabase/admin";
 
+// Without this, Next.js can statically cache this route's response at build/
+// first-request time and keep serving that frozen snapshot indefinitely — a
+// real Printful sync writes fresh rows to the DB, but every subsequent page
+// load kept re-reading whatever was true the first time this route ever ran,
+// which is exactly why it looked like syncing "didn't stick" until the next
+// deploy. This route must always read the live merch table.
+export const dynamic = "force-dynamic";
+
 const MERCH_COVER_FALLBACK = {
   hoodie: "/images/albums/tbh.jpg",
   shirt: "/images/albums/ad.jpg",
