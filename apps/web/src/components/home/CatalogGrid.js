@@ -1,8 +1,10 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
+import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
+import { usePlaybackIdentity } from "@/context/AudioContext";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
@@ -63,6 +65,23 @@ function CatalogCardCoverSurface({
   const suppressNextClick  = useRef(false);
   const coverRef           = useRef(null);
   const dwellTimerRef      = useRef(null);
+  const coverVideoRef      = useRef(null);
+  const audioPriority = useAudioMediaPriority();
+  const { currentTrackId, currentTrackSlug } = usePlaybackIdentity();
+  // Only the release actually playing is exempt from suspension — mirrors
+  // the identical model in CoverArt.js's VideoArt and LatestSinglesStyleRow.
+  const isThisReleasePlaying = Boolean(currentTrackId && currentTrackSlug === mediaItem?.slug);
+  const shouldSuspendCoverVideo = audioPriority.active && !isThisReleasePlaying;
+
+  useLayoutEffect(() => {
+    const el = coverVideoRef.current;
+    if (!el) return;
+    if (shouldSuspendCoverVideo) {
+      if (!el.paused) el.pause();
+      return;
+    }
+    if (!document.hidden && el.paused) el.play().catch(() => {});
+  }, [shouldSuspendCoverVideo]);
 
   const { assets, primaryAsset } = useVisualAssets(mediaItem?.slug, accountState);
   const hasVisualMoment = Boolean(primaryAsset);
@@ -186,6 +205,7 @@ function CatalogCardCoverSurface({
       {/* Animated cover art / static cover */}
       {!videoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video" ? (
         <video
+          ref={coverVideoRef}
           src={mediaItem?.video || mediaItem?.visual || undefined}
           poster={mediaItem.cover || undefined}
           autoPlay muted loop playsInline preload="auto"

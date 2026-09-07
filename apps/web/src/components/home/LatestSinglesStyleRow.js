@@ -18,6 +18,7 @@ import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import { getMediaSignature } from "@/lib/media/media-determinism";
 import { useArtworkGesture } from "@/hooks/useArtworkGesture";
 import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
+import { usePlaybackIdentity } from "@/context/AudioContext";
 import {
   createReleasePresentationIdentity,
   entitlementPresentationIdentity,
@@ -36,6 +37,12 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
   const assignedSrc = cardMedia === "video" ? mediaItem?.video || null : null;
   const [coverVideoFailed, setCoverVideoFailed] = useState(false);
   const audioPriority = useAudioMediaPriority();
+  const { currentTrackId, currentTrackSlug } = usePlaybackIdentity();
+  // Only the release actually playing is exempt from suspension — every
+  // other release's cover art yields (see CoverArt.js's VideoArt for the
+  // identical model applied to the other home-page cover surfaces).
+  const isThisReleasePlaying = Boolean(currentTrackId && currentTrackSlug === mediaItem?.slug);
+  const shouldSuspend = audioPriority.active && !isThisReleasePlaying;
   const coverVideoSrc = !coverVideoFailed && (mediaItem?.video || mediaItem?.visual) && coverDisplay?.type === "video"
     ? mediaItem?.video || mediaItem?.visual || null
     : null;
@@ -54,7 +61,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
       }
       return;
     }
-    if (audioPriority.active) {
+    if (shouldSuspend) {
       if (!el.paused) el.pause();
       el.preload = "none";
       return;
@@ -65,7 +72,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
       el.load();
     }
     if (!document.hidden && el.paused) el.play().catch(() => {});
-  }, [activeVideoSrc, audioPriority.active]);
+  }, [activeVideoSrc, shouldSuspend]);
 
   useEffect(() => {
     if (!isUiHydrationTraceEnabled()) return;

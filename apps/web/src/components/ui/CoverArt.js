@@ -8,6 +8,7 @@ import { resolveCoverMediaType } from "@/lib/media/cover-media-type";
 import { VRM } from "@/lib/media/video-resource-manager";
 import { logVisualVideoError, logVisualVideoFallback, logVisualImageError } from "@/lib/media/visual-telemetry";
 import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
+import { usePlaybackIdentity } from "@/context/AudioContext";
 import { useReleaseCoverLifecycle } from "@/hooks/useReleasePresentation";
 import {
   getReleasePresentation,
@@ -186,6 +187,7 @@ function CoverArt({
         onLoadedMetadata={coverLifecycle.onVideoLoadedMetadata}
         onLoadedData={coverLifecycle.onVideoLoadedData}
         retainLoadedSource={Boolean(presentationIdentity?.key)}
+        releaseId={presentationIdentity?.releaseId || null}
       />
     );
   }
@@ -215,23 +217,31 @@ function VideoArt({
   onLoadedMetadata,
   onLoadedData,
   retainLoadedSource,
+  releaseId,
 }) {
   const videoRef = useRef(null);
   const prevSrcRef = useRef(null);
   const inViewRef = useRef(false);
   const audioPriority = useAudioMediaPriority();
-  const audioPriorityRef = useRef(audioPriority.active);
+  const { currentTrackId, currentTrackSlug } = usePlaybackIdentity();
+  // Only the release actually playing is exempt from suspension — every other
+  // release's cover art yields. With no releaseId (non-home-page callers,
+  // presentationIdentity absent), this is always false, so shouldSuspend
+  // reduces to the prior blanket audioPriority.active behavior unchanged.
+  const isThisReleasePlaying = Boolean(releaseId && currentTrackId && currentTrackSlug === releaseId);
+  const shouldSuspend = audioPriority.active && !isThisReleasePlaying;
+  const shouldSuspendRef = useRef(shouldSuspend);
 
   useLayoutEffect(() => {
-    audioPriorityRef.current = audioPriority.active;
-  }, [audioPriority.active]);
+    shouldSuspendRef.current = shouldSuspend;
+  }, [shouldSuspend]);
 
   // Imperative src update. For offscreen elements, defer el.load() to the
   // IntersectionObserver callback so the browser does not pre-fetch invisible media.
   useLayoutEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (audioPriority.active) {
+    if (shouldSuspend) {
       VRM.requestPause(el);
       if (!el.paused) el.pause();
       el.preload = "none";
@@ -242,12 +252,17 @@ function VideoArt({
       }
       return;
     }
-    if (src === prevSrcRef.current) return;
-    prevSrcRef.current = src;
-    el.src = src;
+    // Not suspended — ensure src is current, then always (re)request play when
+    // in view. A resume from suspension with retainLoadedSource leaves `src`
+    // unchanged, so "src unchanged" must never short-circuit re-requesting
+    // play, or a cover that yielded would never come back on its own.
+    if (src !== prevSrcRef.current) {
+      prevSrcRef.current = src;
+      el.src = src;
+    }
     if (inViewRef.current) {
       el.preload = "auto";
-      el.load();
+      if (el.readyState === 0 && el.src) el.load();
       VRM.requestPlay(
         el,
         () => { if (el.paused && !el.ended) el.play().catch(() => {}); },
@@ -255,7 +270,7 @@ function VideoArt({
       );
     }
     // Offscreen: IO will call load() when the element enters rootMargin.
-  }, [src, audioPriority.active, retainLoadedSource]);
+  }, [src, shouldSuspend, retainLoadedSource]);
 
   // Viewport-aware decoder management via VideoResourceManager (VRM).
   // Carousel videos use data-single-carousel and are managed by
@@ -280,7 +295,7 @@ function VideoArt({
       ([entry]) => {
         if (entry.isIntersecting) {
           inViewRef.current = true;
-          if (audioPriorityRef.current) return;
+          if (shouldSuspendRef.current) return;
           el.preload = "auto";
           // Load if src was set while offscreen (readyState 0 = HAVE_NOTHING).
           if (el.readyState === 0 && el.src) el.load();
