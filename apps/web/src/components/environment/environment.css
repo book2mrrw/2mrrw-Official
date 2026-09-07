@@ -71,15 +71,124 @@
 }
 
 .galaxy-environment__moon {
-  background: radial-gradient(circle at 35% 32%, #fffdf2 0%, #f3ecd2 38%, #d9cfa8 70%, transparent 100%);
-  box-shadow: 0 0 40px 6px rgba(255, 250, 220, 0.35), 0 0 90px 20px rgba(255, 250, 220, 0.12);
   opacity: var(--galaxy-moon-opacity, 0.6);
+  /* Soft ambient halo for the whole disc, dimmer than a full moon would
+     cast — most of the disc is unlit, only the crescent is bright. */
+  box-shadow: 0 0 26px 4px rgba(255, 250, 220, 0.22), 0 0 60px 14px rgba(255, 250, 220, 0.08);
+}
+
+.galaxy-environment__moon-core {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 27% 24%, rgba(0, 0, 0, 0.16) 0%, transparent 6%),
+    radial-gradient(circle at 58% 40%, rgba(0, 0, 0, 0.13) 0%, transparent 5%),
+    radial-gradient(circle at 42% 60%, rgba(0, 0, 0, 0.15) 0%, transparent 7%),
+    radial-gradient(circle at 68% 68%, rgba(0, 0, 0, 0.1) 0%, transparent 5%),
+    radial-gradient(circle at 22% 55%, rgba(0, 0, 0, 0.08) 0%, transparent 9%),
+    radial-gradient(circle at 35% 32%, #fffdf5 0%, #f2ecd6 32%, #d8cda8 65%, #b9ad84 100%);
+}
+
+.galaxy-environment__moon-shadow {
+  position: absolute;
+  inset: -6%;
+  border-radius: 50%;
+  background: #07070f;
+  filter: blur(2.5px);
+  /* Single tunable value for how much of the disc is lit — 0% ~ new moon
+     (fully covered), higher values uncover more toward a full moon. Ready
+     for a future admin phase/eclipse control to just set this variable. */
+  transform: translate3d(var(--galaxy-moon-phase-offset, 38%), -6%, 0);
 }
 
 .galaxy-environment__sun {
-  background: radial-gradient(circle at 35% 32%, #fffaeb 0%, #ffd54f 32%, #ff9d2f 68%, transparent 100%);
-  box-shadow: 0 0 50px 10px rgba(255, 178, 64, 0.4), 0 0 110px 26px rgba(255, 140, 32, 0.16);
   opacity: var(--galaxy-sun-opacity, 0);
+}
+
+.galaxy-environment__sun-corona {
+  position: absolute;
+  inset: -65%;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(255, 176, 60, 0.4) 0deg,
+    rgba(255, 140, 30, 0.04) 18deg,
+    rgba(255, 200, 100, 0.34) 42deg,
+    rgba(255, 140, 30, 0.04) 64deg,
+    rgba(255, 165, 50, 0.38) 95deg,
+    rgba(255, 140, 30, 0.04) 118deg,
+    rgba(255, 190, 90, 0.3) 150deg,
+    rgba(255, 140, 30, 0.04) 172deg,
+    rgba(255, 155, 40, 0.4) 200deg,
+    rgba(255, 140, 30, 0.04) 224deg,
+    rgba(255, 205, 110, 0.32) 255deg,
+    rgba(255, 140, 30, 0.04) 278deg,
+    rgba(255, 170, 55, 0.36) 310deg,
+    rgba(255, 140, 30, 0.04) 333deg,
+    rgba(255, 176, 60, 0.4) 360deg
+  );
+  filter: blur(7px);
+  mix-blend-mode: screen;
+  animation: sunCoronaSpin 100s linear infinite;
+}
+
+.galaxy-environment__sun-core {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 36% 28%, rgba(255, 254, 242, 0.9) 0%, rgba(255, 246, 208, 0.5) 7%, transparent 12%),
+    radial-gradient(circle at 66% 62%, rgba(255, 242, 196, 0.55) 0%, transparent 9%),
+    radial-gradient(circle at 55% 78%, rgba(255, 230, 170, 0.4) 0%, transparent 7%),
+    radial-gradient(circle at 50% 50%, #fffbe8 0%, #ffe27a 32%, #ffb347 60%, #ff8c1a 84%, #e8650a 100%);
+  box-shadow:
+    inset -10px -8px 22px rgba(190, 55, 10, 0.4),
+    0 0 34px 5px rgba(255, 222, 145, 0.65),
+    0 0 68px 16px rgba(255, 172, 62, 0.4),
+    0 0 130px 34px rgba(255, 132, 32, 0.2);
+  animation: sunPulse 6s ease-in-out infinite;
+}
+
+@keyframes sunCoronaSpin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes sunPulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.07); }
+}
+
+.galaxy-environment__shooting-star {
+  position: absolute;
+  top: 11%;
+  left: -6%;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.9), 0 0 14px 4px rgba(255, 255, 255, 0.4);
+  animation: shootingStarTravel 2.6s cubic-bezier(0.3, 0.6, 0.4, 1) forwards;
+}
+
+.galaxy-environment__shooting-star::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: 90px;
+  height: 1.5px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.7) 100%);
+  transform: translateY(-50%);
+}
+
+/* Left-to-right, fading out well before it would ever reach the sun (which
+   sits around left:86%) — it dissipates, it never crosses paths with it. */
+@keyframes shootingStarTravel {
+  0% { left: -6%; opacity: 0; }
+  8% { opacity: 1; }
+  65% { opacity: 1; }
+  100% { left: 76%; opacity: 0; }
 }
 
 .galaxy-environment__canvas {
@@ -107,7 +216,12 @@
 @media (prefers-reduced-motion: reduce) {
   .galaxy-environment__orb--a,
   .galaxy-environment__orb--b,
-  .galaxy-environment__orb--c {
+  .galaxy-environment__orb--c,
+  .galaxy-environment__sun-corona,
+  .galaxy-environment__sun-core {
     animation: none !important;
+  }
+  .galaxy-environment__shooting-star {
+    display: none !important;
   }
 }

@@ -55,6 +55,10 @@ export default function GalaxyEnvironment() {
   // immersive threshold) — a ref alone would leave the loop permanently
   // stopped once it self-stopped for a static low-tier paint.
   const [tier, setTier] = useState("medium");
+  // 0 = none shown yet. Bumping this remounts the shooting-star element
+  // (via key), which is the simplest reliable way to restart its CSS
+  // animation on each trigger without any manual class/timing juggling.
+  const [shootingStarKey, setShootingStarKey] = useState(0);
 
   const rootRef = useRef(null);
   const canvasRef = useRef(null);
@@ -95,6 +99,26 @@ export default function GalaxyEnvironment() {
     const id = setInterval(() => setTimeTarget(getTimeOfDayTarget()), TIME_CHECK_INTERVAL_MS);
     return () => clearInterval(id);
   }, []);
+
+  // Roughly every 30 minutes (with jitter so it never feels metronomic),
+  // and only when it's night-ish (moon dominant) — a shooting star against
+  // a bright daytime sky wouldn't read as anything. Gated here, not in CSS,
+  // so a daytime tick just reschedules without ever rendering the element.
+  useEffect(() => {
+    if (reducedMotion) return undefined;
+    let timeoutId;
+    function schedule() {
+      const delayMs = (25 + Math.random() * 10) * 60 * 1000;
+      timeoutId = setTimeout(() => {
+        if (targetStateRef.current.moonOpacity > 0.5) {
+          setShootingStarKey((k) => k + 1);
+        }
+        schedule();
+      }, delayMs);
+    }
+    schedule();
+    return () => clearTimeout(timeoutId);
+  }, [reducedMotion]);
 
   useEffect(() => {
     function updateViewport() {
@@ -289,8 +313,15 @@ export default function GalaxyEnvironment() {
         <div className="galaxy-environment__orb galaxy-environment__orb--b" />
         <div className="galaxy-environment__orb galaxy-environment__orb--c" />
       </div>
-      <div className="galaxy-environment__moon" />
-      <div className="galaxy-environment__sun" />
+      <div className="galaxy-environment__moon">
+        <div className="galaxy-environment__moon-core" />
+        <div className="galaxy-environment__moon-shadow" />
+      </div>
+      <div className="galaxy-environment__sun">
+        <div className="galaxy-environment__sun-corona" />
+        <div className="galaxy-environment__sun-core" />
+      </div>
+      {shootingStarKey > 0 && <div key={shootingStarKey} className="galaxy-environment__shooting-star" />}
       <canvas ref={canvasRef} className="galaxy-environment__canvas" />
     </div>
   );
