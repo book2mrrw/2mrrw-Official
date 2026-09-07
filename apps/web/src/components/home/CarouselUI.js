@@ -1,10 +1,15 @@
 "use client";
 
 import { memo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useMountEnterAnimation, useSlugEnterAnimation } from "@/hooks/useMountEnterAnimation";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
+import { VideoPreviewIcon, AdminVideoLinkedMarker } from "@/components/audio-visual/VideoPreviewIcon";
+import { AudioVisualInlinePreview } from "@/components/audio-visual/AudioVisualInlinePreview";
+
+const AudioVisualPlayer = dynamic(() => import("@/components/audio-visual/AudioVisualPlayer").then((m) => m.AudioVisualPlayer), { ssr: false });
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import { resolveContentAccess } from "@/lib/music-access";
@@ -20,6 +25,13 @@ function CarouselUI({
 }) {
   const [previewHover, setPreviewHover] = useState(false);
   const [coverVideoFailed, setCoverVideoFailed] = useState(false);
+  const [inlinePreviewOpen, setInlinePreviewOpen] = useState(false);
+  const [fullscreenVideo, setFullscreenVideo] = useState(null);
+  const [previewedSlug, setPreviewedSlug] = useState(currentSingle?.slug);
+  if (currentSingle?.slug !== previewedSlug) {
+    setPreviewedSlug(currentSingle?.slug);
+    setInlinePreviewOpen(false);
+  }
   const carouselCoverRef = useRef(null);
   const { handlers: carouselGesture } = useArtworkGesture({
     slug: currentSingle?.slug || "",
@@ -63,6 +75,23 @@ function CarouselUI({
   return (
     <div className="catalog-featured-carousel" style={{ background: "linear-gradient(135deg,#0e0e0e,#111)", border: "1px solid #1e1e1e", position: "relative", overflow: "hidden", boxShadow: "0 4px 40px rgba(0,0,0,0.5)" }}>
       {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(currentSingle)} /> : null}
+      {currentSingle.audio_visual_id ? (
+        <>
+          <VideoPreviewIcon
+            offsetTop={isAdmin ? 48 : 8}
+            onClick={() => setInlinePreviewOpen(true)}
+          />
+          {isAdmin ? <AdminVideoLinkedMarker /> : null}
+        </>
+      ) : null}
+      {fullscreenVideo && (
+        <AudioVisualPlayer
+          videoId={fullscreenVideo.id}
+          title={fullscreenVideo.title}
+          posterUrl={fullscreenVideo.posterUrl}
+          onClose={() => setFullscreenVideo(null)}
+        />
+      )}
       <div aria-hidden="true" style={{ position: "absolute", top: "50%", left: "50%", transform: "translate(-50%,-50%)", width: 360, height: 360, background: "radial-gradient(circle,rgba(0,255,255,0.04) 0%,transparent 70%)", pointerEvents: "none" }} />
       <button className="catalog-featured-carousel__previous" aria-label="Previous single" onClick={prevSingle} style={navStyle} onMouseEnter={navEnter} onMouseLeave={navLeave}>‹</button>
       <div
@@ -78,6 +107,16 @@ function CarouselUI({
         onPointerCancel={carouselGesture.onPointerCancel}
         onLostPointerCapture={carouselGesture.onLostPointerCapture}
       >
+        {inlinePreviewOpen && currentSingle.audio_visual_id && (
+          <AudioVisualInlinePreview
+            videoId={currentSingle.audio_visual_id}
+            onClose={() => setInlinePreviewOpen(false)}
+            onWatchFull={() => {
+              setInlinePreviewOpen(false);
+              setFullscreenVideo({ id: currentSingle.audio_visual_id, title: currentSingle.title, posterUrl: currentSingle.audio_visual_poster_url });
+            }}
+          />
+        )}
         {coverVideoSrc ? (
           <video
             key={coverVideoSrc}

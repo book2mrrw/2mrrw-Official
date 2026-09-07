@@ -249,6 +249,7 @@ export default function PlayerReleaseModalHost() {
             access={access}
             open={snapshot.open}
             persistent
+            isAdmin={Boolean(auth.sessionHydrated && auth.isAdmin)}
             onClose={closePlayerReleaseModal}
             onPlayTrackAtIndex={playAlbumTrackAtIndex}
             otherReleases={otherReleases}

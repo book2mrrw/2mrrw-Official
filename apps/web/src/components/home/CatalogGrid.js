@@ -6,6 +6,8 @@ import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
+import { VideoPreviewIcon, AdminVideoLinkedMarker } from "@/components/audio-visual/VideoPreviewIcon";
+import { AudioVisualInlinePreview } from "@/components/audio-visual/AudioVisualInlinePreview";
 import MusicAccessBadge from "@/components/music/MusicAccessBadge";
 import { ReleaseCardActions } from "@/components/music/ReleaseCardPlayButton";
 import PlaybackPrewarmCardShell from "@/components/music/PlaybackPrewarmCardShell";
@@ -26,6 +28,7 @@ import {
 
 const VisualMomentOverlay  = dynamic(() => import("@/components/music/VisualMomentOverlay"),  { ssr: false });
 const FullVisualExperience = dynamic(() => import("@/components/music/FullVisualExperience"), { ssr: false });
+const AudioVisualPlayer    = dynamic(() => import("@/components/audio-visual/AudioVisualPlayer").then((m) => m.AudioVisualPlayer), { ssr: false });
 
 function ReleasePresentationProbe({ identity, entitlementIdentity }) {
   useReleasePresentationLifecycle({
@@ -271,9 +274,19 @@ function CatalogGrid({
   const { entitlementAccountState, userId, isAdminStable } = useStorefrontCardChrome();
   const accountState = entitlementAccountState;
   const isAdmin = isAdminStable;
+  const [inlinePreviewSlug, setInlinePreviewSlug] = useState(null);
+  const [fullscreenVideo, setFullscreenVideo] = useState(null);
   if (!items || items.length === 0) return null;
   return (
     <div className="catalog-adaptive-container">
+    {fullscreenVideo && (
+      <AudioVisualPlayer
+        videoId={fullscreenVideo.id}
+        title={fullscreenVideo.title}
+        posterUrl={fullscreenVideo.posterUrl}
+        onClose={() => setFullscreenVideo(null)}
+      />
+    )}
     <div className={`catalog-adaptive-grid ${type}-row`}>
       {items.map((item) => {
         if (!item?.slug) return null;
@@ -381,6 +394,27 @@ function CatalogGrid({
             entitlementIdentity={entitlementIdentity}
           />
           {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(mediaItem)} /> : null}
+          {mediaItem.audio_visual_id ? (
+            <>
+              <VideoPreviewIcon
+                offsetTop={isAdmin ? 48 : 8}
+                onClick={() => setInlinePreviewSlug(mediaItem.slug)}
+              />
+              {isAdmin ? <AdminVideoLinkedMarker /> : null}
+            </>
+          ) : null}
+          {inlinePreviewSlug === mediaItem.slug && (
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, aspectRatio: "1/1", zIndex: 20, overflow: "hidden" }}>
+              <AudioVisualInlinePreview
+                videoId={mediaItem.audio_visual_id}
+                onClose={() => setInlinePreviewSlug(null)}
+                onWatchFull={() => {
+                  setInlinePreviewSlug(null);
+                  setFullscreenVideo({ id: mediaItem.audio_visual_id, title: mediaItem.title, posterUrl: mediaItem.audio_visual_poster_url });
+                }}
+              />
+            </div>
+          )}
           <CatalogCardCoverSurface
             mediaItem={mediaItem}
             coverDisplay={coverDisplay}

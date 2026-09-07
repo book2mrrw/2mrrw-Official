@@ -23,56 +23,97 @@ export function AudioVisualPlayer({ videoId, title, posterUrl, onClose }) {
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [isPeekMode, setIsPeekMode] = useState(false);
 
   useEffect(() => {
     const el = videoRef.current;
     if (!el || !videoId) return;
     let mounted = true;
+    let engine = null;
+    let sessionId = null;
 
     VRM.register(el, VRM.PRIORITY_SYSTEM);
-
-    const sessionId = `audio-visual:${videoId}`;
-    FullVideoAuthority.requestFullVideoSession(sessionId, {
-      onRevoked: () => { if (!el.paused) el.pause(); },
-    });
 
     const onPlaying = () => { if (mounted) setIsLoading(false); };
     const onWaiting = () => { if (mounted) setIsLoading(true); };
     const onError = () => { if (mounted) { setHasError(true); setIsLoading(false); } };
-
     el.addEventListener("playing", onPlaying);
     el.addEventListener("waiting", onWaiting);
     el.addEventListener("error", onError);
 
-    const engine = new HLSVideoEngine();
-    engineRef.current = engine;
+    const manifestUrl = `/api/audio-visual/${encodeURIComponent(videoId)}/manifest`;
 
-    engine.onFallback = () => {
-      // No progressive-download fallback for Audio Visualz — every real
-      // rendition is AES-128 encrypted HLS by design (see packaging.js);
-      // there is no unencrypted flat file to fall back to.
-      if (mounted) {
-        setHasError(true);
-        setErrorMessage("This video isn't available for playback yet.");
-        setIsLoading(false);
+    // Non-entitled callers get a 403 from /manifest (userCanWatchAudioVisual's
+    // `full` gate — unchanged). Pre-flight it before touching the HLS engine
+    // at all, so a non-buyer falls through to the always-allowed Peek clip
+    // instead of hitting a hard HLS load error.
+    const playFull = () => {
+      const hlsEngine = new HLSVideoEngine();
+      engine = hlsEngine;
+      engineRef.current = hlsEngine;
+      sessionId = `audio-visual:${videoId}`;
+      FullVideoAuthority.requestFullVideoSession(sessionId, {
+        onRevoked: () => { if (!el.paused) el.pause(); },
+      });
+
+      hlsEngine.onFallback = () => {
+        // No progressive-download fallback for Audio Visualz — every real
+        // rendition is AES-128 encrypted HLS by design (see packaging.js);
+        // there is no unencrypted flat file to fall back to.
+        if (mounted) {
+          setHasError(true);
+          setErrorMessage("This video isn't available for playback yet.");
+          setIsLoading(false);
+        }
+      };
+      hlsEngine.onError = (err) => {
+        console.error("[AudioVisualPlayer] HLS error", err);
+        if (mounted) { setHasError(true); setIsLoading(false); }
+      };
+      hlsEngine.onSegmentFatalError = () => {
+        if (mounted) { setHasError(true); setIsLoading(false); }
+      };
+
+      hlsEngine.loadContent(manifestUrl, el, {})
+        .then((hlsLoaded) => {
+          if (!mounted || !hlsLoaded) return;
+          VRM.requestPlay(el, () => el.play().catch(() => {}), () => { if (!el.paused) el.pause(); });
+        })
+        .catch((err) => {
+          console.error("[AudioVisualPlayer] loadContent threw", err);
+          if (mounted) { setHasError(true); setIsLoading(false); }
+        });
+    };
+
+    const playPeek = async () => {
+      if (mounted) setIsPeekMode(true);
+      try {
+        const res = await fetch(`/api/audio-visual/${encodeURIComponent(videoId)}/peek`);
+        const data = await res.json().catch(() => ({}));
+        if (!mounted) return;
+        if (!res.ok || !data.peek_url) {
+          setErrorMessage("A preview isn't available for this video yet.");
+          setHasError(true);
+          setIsLoading(false);
+          return;
+        }
+        el.src = data.peek_url;
+        el.muted = false;
+        VRM.requestPlay(el, () => el.play().catch(() => {}), () => { if (!el.paused) el.pause(); });
+      } catch (err) {
+        console.error("[AudioVisualPlayer] peek fetch threw", err);
+        if (mounted) { setHasError(true); setIsLoading(false); }
       }
     };
-    engine.onError = (err) => {
-      console.error("[AudioVisualPlayer] HLS error", err);
-      if (mounted) { setHasError(true); setIsLoading(false); }
-    };
-    engine.onSegmentFatalError = () => {
-      if (mounted) { setHasError(true); setIsLoading(false); }
-    };
 
-    const manifestUrl = `/api/audio-visual/${encodeURIComponent(videoId)}/manifest`;
-    engine.loadContent(manifestUrl, el, {})
-      .then((hlsLoaded) => {
-        if (!mounted || !hlsLoaded) return;
-        VRM.requestPlay(el, () => el.play().catch(() => {}), () => { if (!el.paused) el.pause(); });
+    fetch(manifestUrl)
+      .then((res) => {
+        if (!mounted) return;
+        if (res.status === 403) return playPeek();
+        return playFull();
       })
       .catch((err) => {
-        console.error("[AudioVisualPlayer] loadContent threw", err);
+        console.error("[AudioVisualPlayer] manifest pre-check threw", err);
         if (mounted) { setHasError(true); setIsLoading(false); }
       });
 
@@ -81,8 +122,8 @@ export function AudioVisualPlayer({ videoId, title, posterUrl, onClose }) {
       el.removeEventListener("playing", onPlaying);
       el.removeEventListener("waiting", onWaiting);
       el.removeEventListener("error", onError);
-      FullVideoAuthority.releaseFullVideoSession(sessionId);
-      engine.destroy();
+      if (sessionId) FullVideoAuthority.releaseFullVideoSession(sessionId);
+      if (engine) engine.destroy();
       engineRef.current = null;
       VRM.unregister(el);
       el.pause();
@@ -105,6 +146,21 @@ export function AudioVisualPlayer({ videoId, title, posterUrl, onClose }) {
         {hasError && (
           <div style={{ position: "absolute", color: "#ff453a", fontSize: 13, textAlign: "center", maxWidth: 320 }}>
             {errorMessage || "Something went wrong loading this video."}
+          </div>
+        )}
+        {isPeekMode && !hasError && (
+          <div style={{ position: "absolute", bottom: 22, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, pointerEvents: "none" }}>
+            <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>Preview</div>
+            <a
+              href="/subscribe"
+              style={{
+                pointerEvents: "auto",
+                background: "#00ffff", color: "#000", fontWeight: 800, fontSize: 12,
+                padding: "9px 20px", borderRadius: 999, textDecoration: "none",
+              }}
+            >
+              Unlock the full video
+            </a>
           </div>
         )}
       </div>

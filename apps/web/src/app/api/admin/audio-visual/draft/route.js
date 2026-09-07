@@ -48,7 +48,7 @@ export async function POST(req) {
   let body;
   try { body = await req.json(); } catch { body = {}; }
 
-  const { title, video_type: videoType, track_id: trackId, release_id: releaseId, seriez_id: seriezId, season_number: seasonNumber, episode_number: episodeNumber } = body;
+  const { title, video_type: videoType, track_id: trackId, release_id: releaseId, seriez_id: seriezId, season_number: seasonNumber, episode_number: episodeNumber, price_cents: priceCents } = body;
 
   if (!title || typeof title !== "string" || !title.trim()) {
     return NextResponse.json({ error: "title is required" }, { status: 400 });
@@ -58,6 +58,9 @@ export async function POST(req) {
   }
   if (seriezId && (!Number.isInteger(seasonNumber) || !Number.isInteger(episodeNumber))) {
     return NextResponse.json({ error: "season_number and episode_number are both required when attaching to a Seriez" }, { status: 400 });
+  }
+  if (priceCents !== undefined && (!Number.isInteger(priceCents) || priceCents < 0)) {
+    return NextResponse.json({ error: "price_cents must be a non-negative integer" }, { status: 400 });
   }
 
   const admin = getAdminClient();
@@ -118,7 +121,7 @@ export async function POST(req) {
       seriez_id: seriezId || null,
       season_number: seriezId ? seasonNumber : null,
       episode_number: seriezId ? episodeNumber : null,
-      price_cents: 0,
+      price_cents: priceCents !== undefined ? priceCents : 0,
       publication_state: "draft",
     })
     .select("id, slug, video_type, seriez_id")

@@ -31,7 +31,7 @@ export async function GET(req) {
   const admin = getAdminClient();
   const { data, error } = await admin
     .from("audio_visuals")
-    .select("id, slug, title, video_type, publication_state, poster_r2_key, seriez_id, season_number, episode_number, current_version_id, created_at")
+    .select("id, slug, title, video_type, publication_state, poster_r2_key, seriez_id, season_number, episode_number, current_version_id, price_cents, created_at")
     .order("created_at", { ascending: false })
     .limit(200);
 

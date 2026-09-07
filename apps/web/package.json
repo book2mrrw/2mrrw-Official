@@ -32,7 +32,8 @@
     "test:signal-path-contracts": "node --import ./scripts/register-alias.mjs --test src/lib/architecture/__tests__/*.test.js src/lib/media/__tests__/media-session-artwork.test.js src/lib/media/__tests__/full-video-authority.test.js",
     "test:fulfillment": "node --import ./scripts/register-alias.mjs --test src/lib/fulfillment/__tests__/*.test.js",
     "test:storage": "node --import ./scripts/register-alias.mjs --test src/lib/storage/__tests__/*.test.js",
-    "test:architecture-critical": "npm run test:core-invariants && npm run test:playback-physical && npm run test:auth-security && npm run test:admin-upload && npm run test:release-lifecycle && npm run test:signal-path-contracts && npm run test:livestream && npm run test:fulfillment && npm run test:storage"
+    "test:audio-visual": "node --import ./scripts/register-alias.mjs --test src/lib/audio-visual/__tests__/*.test.js",
+    "test:architecture-critical": "npm run test:core-invariants && npm run test:playback-physical && npm run test:auth-security && npm run test:admin-upload && npm run test:release-lifecycle && npm run test:signal-path-contracts && npm run test:livestream && npm run test:fulfillment && npm run test:storage && npm run test:audio-visual"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1051.0",

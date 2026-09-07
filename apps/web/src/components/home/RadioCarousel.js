@@ -1,11 +1,16 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
+import dynamic from "next/dynamic";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
 import ReleaseCardPlayButton from "@/components/music/ReleaseCardPlayButton";
 import { resolveContentAccess } from "@/lib/music-access";
 import { withR2CatalogMedia } from "@/components/home/catalogMedia";
+import { VideoPreviewIcon, AdminVideoLinkedMarker } from "@/components/audio-visual/VideoPreviewIcon";
+import { AudioVisualInlinePreview } from "@/components/audio-visual/AudioVisualInlinePreview";
+
+const AudioVisualPlayer = dynamic(() => import("@/components/audio-visual/AudioVisualPlayer").then((m) => m.AudioVisualPlayer), { ssr: false });
 
 const RADIO_TYPE_LABELS = { single: "SINGLE", feature: "FEATURE", album: "ALBUM", ep: "EP", mixtape: "MIXTAPE" };
 
@@ -23,6 +28,13 @@ function RadioCarousel({
   currentUserId,
   onLibraryChange,
 }) {
+  const [inlinePreviewOpen, setInlinePreviewOpen] = useState(false);
+  const [fullscreenVideo, setFullscreenVideo] = useState(null);
+  const [previewedSlug, setPreviewedSlug] = useState(currentSlide?.slug);
+  if (currentSlide?.slug !== previewedSlug) {
+    setPreviewedSlug(currentSlide?.slug);
+    setInlinePreviewOpen(false);
+  }
   const radioAccess = resolveContentAccess(currentSlide, accountState);
   const kindLabel = currentSlide.contentKind === "podcast"
     ? (["album", "ep", "mixtape"].includes(currentSlide.type) ? "SERIES" : "EPISODE")
@@ -42,6 +54,23 @@ function RadioCarousel({
       }}
     >
       {isAdmin ? <GiftOverlayButton onClick={() => onGift(currentSlide)} /> : null}
+      {currentSlide.audio_visual_id ? (
+        <>
+          <VideoPreviewIcon
+            offsetTop={isAdmin ? 48 : 8}
+            onClick={() => setInlinePreviewOpen(true)}
+          />
+          {isAdmin ? <AdminVideoLinkedMarker /> : null}
+        </>
+      ) : null}
+      {fullscreenVideo && (
+        <AudioVisualPlayer
+          videoId={fullscreenVideo.id}
+          title={fullscreenVideo.title}
+          posterUrl={fullscreenVideo.posterUrl}
+          onClose={() => setFullscreenVideo(null)}
+        />
+      )}
       <div
         style={{
           position: "absolute",
@@ -56,6 +85,16 @@ function RadioCarousel({
           className="home-radio-card__cover"
           style={{ flexShrink: 0, position: "relative", overflow: "hidden" }}
         >
+          {inlinePreviewOpen && currentSlide.audio_visual_id && (
+            <AudioVisualInlinePreview
+              videoId={currentSlide.audio_visual_id}
+              onClose={() => setInlinePreviewOpen(false)}
+              onWatchFull={() => {
+                setInlinePreviewOpen(false);
+                setFullscreenVideo({ id: currentSlide.audio_visual_id, title: currentSlide.title, posterUrl: currentSlide.audio_visual_poster_url });
+              }}
+            />
+          )}
           <img
             src={currentSlide.cover}
             alt={currentSlide.title}

@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import { VideoPreviewIcon, AdminVideoLinkedMarker } from "@/components/audio-visual/VideoPreviewIcon";
+import { AudioVisualInlinePreview } from "@/components/audio-visual/AudioVisualInlinePreview";
 import { useReducedMotion } from "framer-motion";
 import { useCoverPalette } from "@/hooks/useCoverPalette";
 import { useMediaEngine } from "@/media/useMediaEngine";
@@ -25,6 +28,8 @@ import { queueOfflineDownload, isOfflineCached, removeOfflineCache } from "@/lib
 import { loadPlaylists, addTrackToPlaylist, createPlaylist } from "@/lib/playlists";
 import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import { useArtworkGesture } from "@/hooks/useArtworkGesture";
+
+const AudioVisualPlayer = dynamic(() => import("@/components/audio-visual/AudioVisualPlayer").then((m) => m.AudioVisualPlayer), { ssr: false });
 
 const PREVIEW_CAP_SEC = 30;
 
@@ -1112,7 +1117,10 @@ export function SingleModal({
   releaseDetail,
   open = true,
   persistent = false,
+  isAdmin = false,
 }) {
+  const [inlinePreviewOpen, setInlinePreviewOpen] = useState(false);
+  const [fullscreenVideo, setFullscreenVideo] = useState(null);
   const coverSrc = trackCoverSrc(track || {});
   const isVideo = (track?.coverArtType || track?.coverType) === "video";
   const palette = useCoverPalette(coverSrc, track?.coverArtType || track?.coverType || "image");
@@ -1323,6 +1331,33 @@ export function SingleModal({
           <div style={{ position: "absolute", top: 12, right: 14, zIndex: 30 }}>
             <Badge access={access} t={t} />
           </div>
+          {track?.audio_visual_id ? (
+            <>
+              <VideoPreviewIcon
+                offsetTop={48}
+                onClick={() => setInlinePreviewOpen(true)}
+              />
+              {isAdmin ? <AdminVideoLinkedMarker /> : null}
+            </>
+          ) : null}
+          {inlinePreviewOpen && track?.audio_visual_id && (
+            <AudioVisualInlinePreview
+              videoId={track.audio_visual_id}
+              onClose={() => setInlinePreviewOpen(false)}
+              onWatchFull={() => {
+                setInlinePreviewOpen(false);
+                setFullscreenVideo({ id: track.audio_visual_id, title: track.title, posterUrl: track.audio_visual_poster_url });
+              }}
+            />
+          )}
+          {fullscreenVideo && (
+            <AudioVisualPlayer
+              videoId={fullscreenVideo.id}
+              title={fullscreenVideo.title}
+              posterUrl={fullscreenVideo.posterUrl}
+              onClose={() => setFullscreenVideo(null)}
+            />
+          )}
           {isPreview ? (
             <div style={{ position: "absolute", bottom: 118, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center" }}>
               <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".22em", padding: "4px 12px", borderRadius: 20, background: "rgba(0,0,0,.65)", border: "1px solid rgba(255,255,255,.12)", color: "rgba(255,255,255,.45)" }}>
@@ -1556,7 +1591,10 @@ function AlbumModalView({
   onPlayTrackAtIndex,
   otherReleases,
   onReleaseClick,
+  isAdmin = false,
 }) {
+  const [inlinePreviewOpen, setInlinePreviewOpen] = useState(false);
+  const [fullscreenVideo, setFullscreenVideo] = useState(null);
   const coverSrc = trackCoverSrc(album);
   const isVideo = (album?.coverArtType || album?.coverType) === "video";
   const palette = useCoverPalette(coverSrc, album?.coverArtType || album?.coverType || "image");
@@ -2030,6 +2068,33 @@ function AlbumModalView({
           <div style={{ position: "absolute", top: 12, right: 14, zIndex: 30 }}>
             <Badge access={access} t={t} />
           </div>
+          {album?.audio_visual_id ? (
+            <>
+              <VideoPreviewIcon
+                offsetTop={48}
+                onClick={() => setInlinePreviewOpen(true)}
+              />
+              {isAdmin ? <AdminVideoLinkedMarker /> : null}
+            </>
+          ) : null}
+          {inlinePreviewOpen && album?.audio_visual_id && (
+            <AudioVisualInlinePreview
+              videoId={album.audio_visual_id}
+              onClose={() => setInlinePreviewOpen(false)}
+              onWatchFull={() => {
+                setInlinePreviewOpen(false);
+                setFullscreenVideo({ id: album.audio_visual_id, title: album.title, posterUrl: album.audio_visual_poster_url });
+              }}
+            />
+          )}
+          {fullscreenVideo && (
+            <AudioVisualPlayer
+              videoId={fullscreenVideo.id}
+              title={fullscreenVideo.title}
+              posterUrl={fullscreenVideo.posterUrl}
+              onClose={() => setFullscreenVideo(null)}
+            />
+          )}
           {/* Now playing track title — overlaid on art, above pills */}
           {activeTrack && (
             <div style={{ position: "absolute", bottom: 152, left: 0, right: 0, zIndex: 10, padding: "0 22px", pointerEvents: "none" }}>

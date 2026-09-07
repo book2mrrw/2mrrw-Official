@@ -66,7 +66,7 @@ test("getRadioCarouselItemsFromDB is the one storefront read that deliberately i
     "the radio feed must not filter by content_kind — excluding podcasts here would defeat the entire feature");
   assert.match(body, /\.in\("product_type", \["single", "feature", "album"\]\)/);
   assert.match(body, /\.eq\("active", true\)/);
-  assert.match(body, /const enriched = mapProductRow\(row\);/,
+  assert.match(body, /const enriched = mapProductRow\(row, videosByReleaseId\.get\(row\.release_id\)\);/,
     "must reuse the canonical enrichment function, not a second parallel cover/preview resolver");
   assert.match(body, /const contentKind = row\.content_kind === "podcast" \? "podcast" : "music";/);
 });

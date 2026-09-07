@@ -450,7 +450,7 @@ describe("the public singles API is a bounded projection of canonical Supabase t
     assert.match(catalogDb, /\.eq\("product_type", "single"\)/);
     assert.match(catalogDb, /\.eq\("active", true\)/);
     assert.match(catalogDb, /\.range\(normalizedOffset, normalizedOffset \+ normalizedLimit - 1\)/);
-    assert.match(catalogDb, /const projected = \(data \|\| \[\]\)\.map\(mapProductRow\)/);
+    assert.match(catalogDb, /const projected = \(data \|\| \[\]\)\.map\(\(row\) => mapProductRow\(row, videosByReleaseId\.get\(row\.release_id\)\)\)/);
     assert.match(catalogDb, /const availability = lifecycleRow \? releaseAvailability\(lifecycleRow\) : null/);
   });
 

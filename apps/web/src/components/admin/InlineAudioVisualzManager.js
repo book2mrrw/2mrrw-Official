@@ -138,7 +138,7 @@ function TrackPicker({ onPick, onClose }) {
       .then((data) => {
         const list = data.tracks || [];
         if (list.length === 1) {
-          onPick({ trackId: list[0].id, title: list[0].title || release.title });
+          onPick({ trackId: list[0].id, releaseId: release.id, title: list[0].title || release.title });
         } else {
           setTracks(list);
         }
@@ -194,7 +194,7 @@ function TrackPicker({ onPick, onClose }) {
                 <div style={{ color: C.muted, fontSize: 13, padding: "20px 0" }}>No tracks yet for this release.</div>
               ) : (
                 (tracks || []).map((t) => (
-                  <button key={t.id} onClick={() => onPick({ trackId: t.id, title: t.title || openRelease.title })} style={pickerRowStyle}>
+                  <button key={t.id} onClick={() => onPick({ trackId: t.id, releaseId: openRelease.id, title: t.title || openRelease.title })} style={pickerRowStyle}>
                     <span style={{ fontSize: 11, color: C.muted2, fontWeight: 700, marginRight: 10 }}>{t.position}.</span>
                     <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{t.title || "(untitled track)"}</span>
                   </button>
@@ -249,8 +249,64 @@ function HomeLanding({ count, onUpload, onList }) {
   );
 }
 
+// ── Inline price editor — set/change price_cents on an already-created video,
+// since there is no general edit view yet and a video created before pricing
+// existed would otherwise be permanently stuck at $0 (unpurchasable). ──────
+function PriceEditor({ item, onSaved }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(item.price_cents ? (item.price_cents / 100).toFixed(2) : "");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const save = useCallback(async () => {
+    const dollars = Number(value);
+    if (!Number.isFinite(dollars) || dollars < 0) { setErr("Enter a valid amount"); return; }
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/admin/audio-visuals/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ price_cents: Math.round(dollars * 100) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save price");
+      onSaved(data.price_cents);
+      setEditing(false);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }, [value, item.id, onSaved]);
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        style={{ background: "none", border: `1px solid ${C.border2}`, borderRadius: 6, padding: "3px 9px", fontSize: 11, color: C.accent, cursor: "pointer", fontFamily: "inherit" }}
+      >
+        {item.price_cents > 0 ? `$${(item.price_cents / 100).toFixed(2)}` : "Set price"}
+      </button>
+    );
+  }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      <input
+        type="number" min="0" step="0.01" value={value} autoFocus
+        onChange={(e) => setValue(e.target.value)}
+        style={{ width: 70, background: C.surface2, border: `1px solid ${C.border2}`, borderRadius: 6, padding: "4px 7px", fontSize: 12, color: C.text, fontFamily: "inherit" }}
+      />
+      <button onClick={save} disabled={saving} style={{ background: "none", border: "none", color: C.success, fontSize: 12, cursor: "pointer" }}>{saving ? "…" : "✓"}</button>
+      <button onClick={() => setEditing(false)} style={{ background: "none", border: "none", color: C.muted2, fontSize: 12, cursor: "pointer" }}>✕</button>
+      {err && <span style={{ fontSize: 10, color: C.error }}>{err}</span>}
+    </div>
+  );
+}
+
 // ── List view ────────────────────────────────────────────────────────────
 function AudioVisualListView({ items, loading, error, onRefresh, onNew, onBack }) {
+  const [priceOverrides, setPriceOverrides] = useState({});
   return (
     <div style={{ padding: "28px 0 80px", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
       <div style={{ marginBottom: 22 }}>
@@ -290,6 +346,10 @@ function AudioVisualListView({ items, loading, error, onRefresh, onNew, onBack }
                     {item.seriez_id ? ` · S${item.season_number}E${item.episode_number}` : ""}
                   </div>
                 </div>
+                <PriceEditor
+                  item={{ ...item, price_cents: priceOverrides[item.id] ?? item.price_cents }}
+                  onSaved={(cents) => setPriceOverrides((p) => ({ ...p, [item.id]: cents }))}
+                />
               </div>
             );
           })}
@@ -306,8 +366,10 @@ function UploadFlow({ onComplete, onDismiss }) {
   const [error, setError] = useState(null);
 
   const [title, setTitle] = useState("");
+  const [priceDollars, setPriceDollars] = useState("");
   const [videoType, setVideoType] = useState("music_video");
   const [trackId, setTrackId] = useState("");
+  const [releaseId, setReleaseId] = useState("");
   const [linkedTrackLabel, setLinkedTrackLabel] = useState("");
   const [trackPickerOpen, setTrackPickerOpen] = useState(false);
   const [seriezMode, setSeriezMode] = useState("standalone"); // "standalone" | "new" | "existing"
@@ -351,8 +413,9 @@ function UploadFlow({ onComplete, onDismiss }) {
   // Picking a track fills the video's own title from it too, unless the
   // admin already typed one — matches the confirmed intent that the video
   // title defaults to the linked track's title but stays fully editable.
-  const handlePickTrack = useCallback(({ trackId: pickedId, title: pickedTitle }) => {
+  const handlePickTrack = useCallback(({ trackId: pickedId, releaseId: pickedReleaseId, title: pickedTitle }) => {
     setTrackId(pickedId || "");
+    setReleaseId(pickedReleaseId || "");
     setLinkedTrackLabel(pickedTitle || "");
     setTrackPickerOpen(false);
     setTitle((current) => (current.trim() ? current : pickedTitle || current));
@@ -395,6 +458,8 @@ function UploadFlow({ onComplete, onDismiss }) {
           title,
           video_type: videoType,
           track_id: videoType === "music_video" && trackId.trim() ? trackId.trim() : null,
+          release_id: videoType === "music_video" && releaseId.trim() ? releaseId.trim() : null,
+          price_cents: priceDollars.trim() ? Math.round(Number(priceDollars) * 100) : 0,
           seriez_id: seriezId,
           season_number: seriezId ? Number(seasonNumber) : null,
           episode_number: seriezId ? Number(episodeNumber) : null,
@@ -409,7 +474,7 @@ function UploadFlow({ onComplete, onDismiss }) {
     } finally {
       setSaving(false);
     }
-  }, [title, videoType, trackId, seasonNumber, episodeNumber, resolveSeriezId]);
+  }, [title, videoType, trackId, releaseId, priceDollars, seasonNumber, episodeNumber, resolveSeriezId]);
 
   const handleFinishAssets = useCallback(async () => {
     if (!coverFile) { setError("A cover image is required"); return; }
@@ -455,6 +520,7 @@ function UploadFlow({ onComplete, onDismiss }) {
             title: `${seriezTitle || "Episode"} — Episode ${thisEpisodeNumber}`,
             video_type: videoType,
             seriez_id: seriezId,
+            price_cents: priceDollars.trim() ? Math.round(Number(priceDollars) * 100) : 0,
             season_number: Number(seasonNumber) || 1,
             episode_number: thisEpisodeNumber,
           }),
@@ -476,7 +542,7 @@ function UploadFlow({ onComplete, onDismiss }) {
     } finally {
       setSaving(false);
     }
-  }, [coverFile, motionCoverFile, masterFiles, episodeNumber, seasonNumber, seriezTitle, videoType, resolveSeriezId, uploadOne]);
+  }, [coverFile, motionCoverFile, masterFiles, episodeNumber, seasonNumber, seriezTitle, videoType, priceDollars, resolveSeriezId, uploadOne]);
 
   const probeVideoDuration = useCallback((file) => {
     const el = document.createElement("video");
@@ -600,15 +666,23 @@ function UploadFlow({ onComplete, onDismiss }) {
         </Field>
       )}
 
+      <Field label={batchMode ? "Price per episode, in USD (optional — leave blank for free)" : "Price, in USD (optional — leave blank for free)"}>
+        <input
+          type="number" min="0" step="0.01" value={priceDollars}
+          onChange={(e) => setPriceDollars(e.target.value)}
+          style={inputStyle} placeholder="e.g. 4.99"
+        />
+      </Field>
+
       {videoType === "music_video" && !batchMode && (
-        <Field label="Linked track (optional — derives the slug from that track's own slug)">
+        <Field label="Linked track (optional — links this video to its release and derives the slug from the track's own slug)">
           {trackId ? (
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ ...inputStyle, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {linkedTrackLabel || trackId}
               </div>
               <Btn small variant="secondary" onClick={() => setTrackPickerOpen(true)}>Change</Btn>
-              <Btn small variant="secondary" onClick={() => { setTrackId(""); setLinkedTrackLabel(""); }}>Clear</Btn>
+              <Btn small variant="secondary" onClick={() => { setTrackId(""); setReleaseId(""); setLinkedTrackLabel(""); }}>Clear</Btn>
             </div>
           ) : (
             <Btn variant="secondary" onClick={() => setTrackPickerOpen(true)}>Pick a track…</Btn>

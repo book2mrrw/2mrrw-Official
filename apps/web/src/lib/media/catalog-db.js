@@ -23,6 +23,7 @@ import {
 } from "@/lib/media/canonical-paths";
 import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
 import { releaseAvailability } from "@/lib/releases/release-availability";
+import { getMusicVideosForReleaseIds } from "@/lib/audio-visual/release-video-lookup";
 
 const PRODUCT_COLS = [
   "id", "release_id", "slug", "title", "product_type", "price_cents",
@@ -35,8 +36,13 @@ const PRODUCT_COLS = [
 
 const RELEASE_LIFECYCLE_COLS = "id,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,preorder_enabled,preorder_starts_at,preorder_price_cents,early_access_enabled,early_access_starts_at,early_access_scope,early_access_audiences,release_timezone,unavailable_at";
 
-/** Map a raw products row to the canonical enriched storefront release shape. */
-export function mapProductRow(row) {
+/** Map a raw products row to the canonical enriched storefront release shape.
+ * @param {object} row
+ * @param {{ id: string, poster_url: string|null }} [videoMatch] - this
+ *   release's linked music video, if any (see release-video-lookup.js) —
+ *   optional so mapProductRow stays usable without the extra join.
+ */
+export function mapProductRow(row, videoMatch = null) {
   const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
   const lifecycleRow = Array.isArray(row.releases) ? row.releases[0] : row.releases;
   const availability = lifecycleRow ? releaseAvailability(lifecycleRow) : null;
@@ -98,6 +104,8 @@ export function mapProductRow(row) {
     release_date: row.release_date || meta.release_date || null,
     releaseDate: row.release_date || meta.release_date || null,
     release_id: row.release_id || null,
+    audio_visual_id: videoMatch?.id || null,
+    audio_visual_poster_url: videoMatch?.poster_url || null,
     catalog_revision: row.updated_at || null,
     artwork_revision: artworkRevision,
     artworkRevision,
@@ -179,7 +187,11 @@ export async function getStorefrontSinglesPageFromDB({ offset = 0, limit = 20 } 
   if (error) throw error;
   if (!Number.isInteger(count)) throw new Error("catalog_count_unavailable");
 
-  const projected = (data || []).map(mapProductRow);
+  const videosByReleaseId = await getMusicVideosForReleaseIds(
+    (data || []).map((row) => row.release_id),
+    admin
+  );
+  const projected = (data || []).map((row) => mapProductRow(row, videosByReleaseId.get(row.release_id)));
   const suppressed = projected.filter(
     (release) => release.availability && !release.availability.visible
   );
@@ -293,6 +305,11 @@ export async function getStorefrontCatalogFromDB() {
     if (error) throw error;
     if (!data?.length) return null;
 
+    const videosByReleaseId = await getMusicVideosForReleaseIds(
+      data.map((row) => row.release_id),
+      admin
+    );
+
     const multiTrackProducts = data
       .filter((row) => row.product_type === "album")
       .map((row) => ({
@@ -313,7 +330,7 @@ export async function getStorefrontCatalogFromDB() {
     const mixtapes = [];
 
     for (const row of data) {
-      const enriched = mapProductRow(row);
+      const enriched = mapProductRow(row, videosByReleaseId.get(row.release_id));
       if (!enriched.lifecycle && !row.active) continue;
       if (enriched.availability && !enriched.availability.visible) continue;
       const releaseTypeFolder =
@@ -401,9 +418,14 @@ export async function getRadioCarouselItemsFromDB({ limit = 8 } = {}) {
     if (error) throw error;
     if (!data?.length) return [];
 
+    const videosByReleaseId = await getMusicVideosForReleaseIds(
+      data.map((row) => row.release_id),
+      admin
+    );
+
     const items = [];
     for (const row of data) {
-      const enriched = mapProductRow(row);
+      const enriched = mapProductRow(row, videosByReleaseId.get(row.release_id));
       if (enriched.availability && !enriched.availability.visible) continue;
       const contentKind = row.content_kind === "podcast" ? "podcast" : "music";
       const badge = RADIO_BADGE_BY_KIND[contentKind];

@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "generatedAt": "2026-09-01T22:55:00.000Z",
   "sourceRoot": "src/app/api",
-  "total": 154,
+  "total": 156,
   "counts": {
-    "HUMAN_ADMIN": 40,
+    "HUMAN_ADMIN": 41,
     "SERVICE_ONLY": 20,
     "ADMIN_OR_SERVICE_CAPABILITY": 5,
     "AUTHENTICATED_USER": 24,
-    "PUBLIC": 60,
+    "PUBLIC": 61,
     "DEAD": 0
   },
   "routes": [
@@ -156,6 +156,15 @@
       "file": "src/app/api/admin/audio-visuals/route.js",
       "methods": [
         "GET"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/audio-visuals/[id]",
+      "file": "src/app/api/admin/audio-visuals/[id]/route.js",
+      "methods": [
+        "PATCH"
       ],
       "authority": "HUMAN_ADMIN",
       "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
@@ -589,6 +598,15 @@
       ],
       "authority": "AUTHENTICATED_USER",
       "evidence": "validated Supabase user session"
+    },
+    {
+      "route": "/api/audio-visual/[videoId]/peek",
+      "file": "src/app/api/audio-visual/[videoId]/peek/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
     },
     {
       "route": "/api/audio-visual/[videoId]/variant",
