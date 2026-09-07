@@ -92,6 +92,7 @@ import AuthSurfaceIsland from "@/components/storefront/AuthSurfaceIsland";
 import { useAuth } from "@/context/AuthContext";
 const InlineReleasesManager = dynamic(() => import("@/components/admin/InlineReleasesManager"), { ssr: false });
 const InlineAudioVisualzManager = dynamic(() => import("@/components/admin/InlineAudioVisualzManager"), { ssr: false });
+const SyncPrintfulButton = dynamic(() => import("@/components/admin/SyncPrintfulButton"), { ssr: false });
 import EntitlementSurfaceIsland from "@/components/storefront/EntitlementSurfaceIsland";
 import HomeStorefrontIsland from "@/components/storefront/HomeStorefrontIsland";
 import MusicTabCatalogPanels from "@/components/storefront/MusicTabCatalogPanels";
@@ -2767,6 +2768,9 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               {activeTab==="shop" && (
                 <>
                   <h2 className="section-heading" style={{marginBottom:16}}>Merch</h2>
+                  <AuthSurfaceIsland islandId="shop-tab-admin">
+                    {(auth) => auth.isAdminStable ? <SyncPrintfulButton /> : null}
+                  </AuthSurfaceIsland>
                   {printfulLoading ? <div style={{padding:"60px 0",textAlign:"center",fontSize:13,color:"#333",letterSpacing:2}}>Loading products…</div> : (
                     <>
                       {shopIsFallback && <div style={{marginBottom:20,padding:"12px 16px",background:"rgba(255,255,255,0.02)",border:"1px solid #1a1a1a",borderRadius:10,fontSize:11,color:"#444",letterSpacing:1,lineHeight:1.7}}>Store inventory is syncing. Showing preview items — check back soon for the full Printful catalog.</div>}

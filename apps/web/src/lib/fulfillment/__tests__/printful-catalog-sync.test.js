@@ -92,10 +92,19 @@ test("a successful sync revalidates the storefront so the new merch shows up wit
 // ── admin dashboard: a real trigger for the sync, with visible feedback ──────
 
 test("the admin dashboard has a Sync Printful Catalog button wired to the sync route", () => {
-  const src = read("src/app/admin/page.js");
-  assert.match(src, /function SyncPrintfulButton\(\) \{/);
-  assert.match(src, /fetch\("\/api\/admin\/printful\/sync", \{ method: "POST" \}\)/);
-  assert.match(src, /<SyncPrintfulButton \/>/);
+  // Shared between the standalone /admin dashboard and the home page's Shop
+  // tab (admin-only) — the button itself lives in its own component now.
+  const button = read("src/components/admin/SyncPrintfulButton.js");
+  assert.match(button, /export default function SyncPrintfulButton\(\) \{/);
+  assert.match(button, /fetch\("\/api\/admin\/printful\/sync", \{ method: "POST" \}\)/);
+
+  const dashboard = read("src/app/admin/page.js");
+  assert.match(dashboard, /import SyncPrintfulButton from "@\/components\/admin\/SyncPrintfulButton";/);
+  assert.match(dashboard, /<SyncPrintfulButton \/>/);
+
+  const homeClient = read("src/app/HomeClient.js");
+  assert.match(homeClient, /const SyncPrintfulButton = dynamic\(\(\) => import\("@\/components\/admin\/SyncPrintfulButton"\), \{ ssr: false \}\);/);
+  assert.match(homeClient, /auth\.isAdminStable \? <SyncPrintfulButton \/> : null/);
 });
 
 // ── /api/printful/products: the synced catalog is primary, not a pass-through ──
