@@ -2275,6 +2275,17 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       router.push(COLLECTORS_CARDS_ROUTE);
       return;
     }
+    // Closing the mobile nav sheet is a completion signal for the tap that
+    // just happened — it must never wait behind the (possibly slow) tab
+    // content swap below. Run it eagerly, outside startTransition, and
+    // unconditionally rather than gated on isMobileRef.current: that ref is
+    // imperative and can be stale at the exact moment of a click (e.g. right
+    // after a resize/orientation change), and resetting this mobile-only
+    // state to its already-default value on desktop is a complete no-op —
+    // there's no downside to always doing it.
+    setMobileNavOpen(false);
+    setMobileNavClosing(false);
+    setMobileNavExpandedGroups(new Set());
     // phase11: startTransition — non-urgent UI update
     startTransition(() => {
       setActiveTab(tabId);
@@ -2294,12 +2305,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
         home: "g-home",
       };
       if (navGroupByTab[tabId]) setExpandedGroup(navGroupByTab[tabId]);
-      // The media-query ref is imperative only; it never drives rendering.
-      if (isMobileRef.current) {
-        setMobileNavOpen(false);
-        setMobileNavClosing(false);
-        setMobileNavExpandedGroups(new Set());
-      }
     });
   }, [setActiveTab]);
 
