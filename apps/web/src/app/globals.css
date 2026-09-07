@@ -7,9 +7,13 @@
   --foreground: #171717;
   --player-bar-inset: 0px;
   /* Lets the persistent galaxy environment (apps/web/src/components/environment)
-     show through the main app shell as a subtle wash. 1 = fully opaque,
-     i.e. a one-line kill switch that fully hides the environment again. */
-  --env-shell-alpha: 0.96;
+     show through the main app shell. 1 = fully opaque, i.e. a one-line kill
+     switch that fully hides the environment again. Compositing math: a
+     star drawn at ~0.7 canvas opacity only reads at roughly
+     (1 - alpha) * 0.7 of its true brightness once the shell sits on top of
+     it, so this needs to stay well below "barely translucent" for stars to
+     actually be visible, not just technically present in the DOM. */
+  --env-shell-alpha: 0.55;
 }
 
 @theme inline {
