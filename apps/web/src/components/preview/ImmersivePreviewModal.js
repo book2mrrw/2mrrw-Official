@@ -1255,14 +1255,10 @@ export function SingleModal({
         }}
       />
       <div
+        className="immersive-preview-sheet"
         style={{
           position: "relative",
           zIndex: 1,
-          width: "100%",
-          maxWidth: 430,
-          margin: "0 auto",
-          height: "min(calc(100dvh - env(safe-area-inset-top) - 8px), 880px)",
-          borderRadius: "22px 22px 0 0",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
@@ -1981,14 +1977,10 @@ function AlbumModalView({
         }}
       />
       <div
+        className="immersive-preview-sheet"
         style={{
           position: "relative",
           zIndex: 1,
-          width: "100%",
-          maxWidth: 430,
-          margin: "0 auto",
-          height: "min(calc(100dvh - env(safe-area-inset-top) - 8px), 880px)",
-          borderRadius: "22px 22px 0 0",
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",

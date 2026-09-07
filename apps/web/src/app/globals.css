@@ -4622,6 +4622,29 @@ body.is-player-modal-open::before {
   100% { box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.88); }
 }
 
+/* Release modal (ImmersivePreviewModal: SingleModal / AlbumModalView) sizing.
+   Phones keep the phone-width bottom sheet. Tablets and unfolded foldables
+   (Z Fold, Pixel Fold, etc.) -- in either orientation -- go fully immersive,
+   filling the whole screen instead of a narrow centered sheet with black
+   bars around it. Gated on min-width AND min-height so a phone rotated to
+   landscape (short on one axis) doesn't get pulled into this. */
+.immersive-preview-sheet {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  height: min(calc(100dvh - env(safe-area-inset-top) - 8px), 880px);
+  border-radius: 22px 22px 0 0;
+}
+@media (min-width: 600px) and (min-height: 600px) {
+  .immersive-preview-sheet {
+    width: 100vw;
+    max-width: none;
+    height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+  }
+}
+
 .player-preview-ended-cta {
   position: fixed;
   left: 12px;
