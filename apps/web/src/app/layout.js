@@ -12,6 +12,7 @@ import PlaybackNetworkHints from "@/components/system/PlaybackNetworkHints";
 import GlobalMediaControllerMount from "@/components/system/GlobalMediaControllerMount";
 import PlayerReleaseModalHost from "@/components/player/PlayerReleaseModalHost";
 import { MediaErrorBoundary } from "@/system/errors";
+import GalaxyEnvironment from "@/components/environment/GalaxyEnvironment";
 
 export const viewport = {
   width: "device-width",
@@ -65,6 +66,7 @@ export default function RootLayout({ children }) {
             __html: `if("serviceWorker"in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("/sw.js").catch(function(){});});}`,
           }}
         />
+        <GalaxyEnvironment />
         <PostHogInit />
         <MarketingAttributionCapture />
         <AuthProvider>

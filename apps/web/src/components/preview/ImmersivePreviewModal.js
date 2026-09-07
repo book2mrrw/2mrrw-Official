@@ -1127,6 +1127,22 @@ export function SingleModal({
   const t = useMemo(() => buildTheme(palette), [palette]);
   const vars = useMemo(() => themeVars(t), [t]);
 
+  // One-way signal for the persistent background environment layer
+  // (apps/web/src/components/environment) to subtly tint itself toward
+  // this release's already-computed palette — no new image processing, a
+  // no-op if nothing is listening, never read back here.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent("2mrrw:release-palette", { detail: open ? { p1: t.p1, accent: t.accent, glow: t.glow } : null })
+    );
+  }, [open, t]);
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("2mrrw:release-palette", { detail: null }));
+    };
+  }, []);
+
   const isPreview = access !== "full";
   const fullDur = parseDurSec(track) || 222;
   const duration = isPreview ? PREVIEW_CAP_SEC : fullDur || 222;
@@ -1600,6 +1616,23 @@ function AlbumModalView({
   const palette = useCoverPalette(coverSrc, album?.coverArtType || album?.coverType || "image");
   const t = useMemo(() => buildTheme(palette), [palette]);
   const vars = useMemo(() => themeVars(t), [t]);
+
+  // One-way signal for the persistent background environment layer
+  // (apps/web/src/components/environment) to subtly tint itself toward
+  // this release's already-computed palette — no new image processing, a
+  // no-op if nothing is listening, never read back here.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+      new CustomEvent("2mrrw:release-palette", { detail: open ? { p1: t.p1, accent: t.accent, glow: t.glow } : null })
+    );
+  }, [open, t]);
+  useEffect(() => {
+    return () => {
+      if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent("2mrrw:release-palette", { detail: null }));
+    };
+  }, []);
+
   const entitlementAccountState = useEntitlementAccountState();
 
   // Memoized so `tracks` is referentially stable between renders when the album data hasn't changed.

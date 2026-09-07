@@ -1,0 +1,88 @@
+/* Persistent galaxy/atmosphere background. Pure decoration: fixed, behind
+   everything, never intercepts input. Visually consistent with the existing
+   .modal-immersive-scene__orb pattern (globals.css) but fully self-contained
+   in this file — no shared class names, no shared state. */
+
+.galaxy-environment {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+.galaxy-environment__nebula {
+  position: absolute;
+  inset: -15%;
+  pointer-events: none;
+  opacity: var(--galaxy-nebula-opacity, 0.8);
+  filter: hue-rotate(var(--galaxy-hue-bias, 0deg));
+  transform: translate3d(0, var(--galaxy-scroll-offset, 0px), 0);
+}
+
+.galaxy-environment__orb {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  filter: blur(90px);
+  will-change: transform, opacity;
+  transform: translate3d(0, 0, 0);
+}
+
+.galaxy-environment__orb--a {
+  top: 8%;
+  left: 12%;
+  width: 46vmax;
+  height: 46vmax;
+  background: radial-gradient(circle, var(--galaxy-p1, #00dcd2) 0%, transparent 70%);
+  animation: galaxyOrbA 46s ease-in-out infinite;
+}
+
+.galaxy-environment__orb--b {
+  bottom: 6%;
+  right: 10%;
+  width: 40vmax;
+  height: 40vmax;
+  background: radial-gradient(circle, var(--galaxy-p2, #6448b4) 0%, transparent 72%);
+  animation: galaxyOrbB 58s ease-in-out infinite;
+}
+
+.galaxy-environment__orb--c {
+  top: 42%;
+  left: 46%;
+  width: 34vmax;
+  height: 34vmax;
+  background: radial-gradient(circle, var(--galaxy-p3, #a259ff) 0%, transparent 74%);
+  animation: galaxyOrbC 64s ease-in-out infinite;
+}
+
+.galaxy-environment__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes galaxyOrbA {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(3%, -4%, 0) scale(1.08); }
+}
+
+@keyframes galaxyOrbB {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(-4%, 3%, 0) scale(1.06); }
+}
+
+@keyframes galaxyOrbC {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(2%, 2%, 0) scale(1.1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .galaxy-environment__orb--a,
+  .galaxy-environment__orb--b,
+  .galaxy-environment__orb--c {
+    animation: none !important;
+  }
+}

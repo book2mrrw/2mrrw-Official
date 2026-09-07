@@ -2275,6 +2275,12 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       router.push(COLLECTORS_CARDS_ROUTE);
       return;
     }
+    // One-way signal for the persistent background environment layer
+    // (apps/web/src/components/environment) to pick a target mood — a
+    // no-op if nothing is listening, never read back here.
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("2mrrw:tab-changed", { detail: { tabId } }));
+    }
     // Closing the mobile nav sheet is a completion signal for the tap that
     // just happened — it must never wait behind the (possibly slow) tab
     // content swap below. Run it eagerly, outside startTransition, and
