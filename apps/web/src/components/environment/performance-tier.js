@@ -20,6 +20,8 @@ export function getPerformanceTier({ reducedMotion, pointerFine, width, height }
 
 export const TIER_PARAMS = {
   high: { starCount: 220, pointerParallax: true, scrollParallax: true, animate: true, glow: true },
-  medium: { starCount: 90, pointerParallax: false, scrollParallax: true, animate: true, glow: false },
-  low: { starCount: 30, pointerParallax: false, scrollParallax: false, animate: false, glow: false },
+  medium: { starCount: 90, pointerParallax: false, scrollParallax: true, animate: true, glow: true },
+  // "low" draws exactly once and stops (no ongoing per-frame cost), so the
+  // glow is effectively free here too — no reason to withhold it.
+  low: { starCount: 30, pointerParallax: false, scrollParallax: false, animate: false, glow: true },
 };

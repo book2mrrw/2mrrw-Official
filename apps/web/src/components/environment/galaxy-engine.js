@@ -12,8 +12,8 @@ export function createStarField(count) {
     stars.push({
       x: Math.random(),
       y: Math.random(),
-      r: 1 + Math.random() * 1.8,
-      baseOpacity: 0.55 + Math.random() * 0.45,
+      r: 1.3 + Math.random() * 2.2,
+      baseOpacity: 0.65 + Math.random() * 0.35,
       twinkleSpeed: 0.15 + Math.random() * 0.35, // cycles per second — slow, never synchronized
       twinklePhase: Math.random() * TWO_PI,
       vx: (Math.random() - 0.5) * 0.0025, // fraction of width per second — slow drift
@@ -48,7 +48,9 @@ export function drawStarField(ctx, stars, { width, height, elapsedSeconds, color
   for (let i = 0; i < stars.length; i++) {
     const st = stars[i];
     const twinkle = 0.5 + 0.5 * Math.sin(elapsedSeconds * st.twinkleSpeed * TWO_PI + st.twinklePhase);
-    const opacity = st.baseOpacity * (0.45 + 0.55 * twinkle) * opacityMultiplier;
+    // Wide swing (15%-100% of base) so the brighten/dim cycle actually
+    // reads as pulsing, not a faint shimmer.
+    const opacity = st.baseOpacity * (0.15 + 0.85 * twinkle) * opacityMultiplier;
     if (opacity <= 0.02) continue;
     const x = st.x * width + parallaxX;
     const y = st.y * height + parallaxY;
@@ -57,7 +59,7 @@ export function drawStarField(ctx, stars, { width, height, elapsedSeconds, color
     // flat dot — cheap (one extra shadow per star, no extra draw calls).
     if (glow) {
       ctx.shadowColor = `rgba(${color},${alpha})`;
-      ctx.shadowBlur = st.r * 4;
+      ctx.shadowBlur = st.r * 5.5;
     } else {
       ctx.shadowBlur = 0;
     }
