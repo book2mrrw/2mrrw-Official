@@ -101,14 +101,18 @@ export class HLSEngine {
    *
    * @param {string}           manifestUrl  /api/library/hls?slug=... (master m3u8)
    * @param {HTMLAudioElement} audioEl      The singleton playback element
-   * @param {{ startPosition?: number, _version?: number }} opts
+   * @param {{ startPosition?: number, _version?: number, manifestTimeoutMs?: number }} opts
    *   _version: internal-only — renewal calls pass the manifestVersion they captured
    *   before _destroyHls(). If the version has advanced (detach() was called for a
    *   new track) the renewal aborts instead of clobbering the successor's hls.js.
    *   External callers omit _version (defaults to -1 = no guard).
+   *   manifestTimeoutMs: how long to wait for the manifest before falling back to
+   *   progressive. Callers should pass network-quality.js's getManifestTimeoutMs()
+   *   result — the default here is the tight, fast-connection budget so a caller
+   *   that omits it never regresses to a slower fallback than before.
    * @returns {Promise<boolean>} true = HLS loaded, false = falls back to progressive
    */
-  async loadTrack(manifestUrl, audioEl, { startPosition = 0, _version = -1 } = {}) {
+  async loadTrack(manifestUrl, audioEl, { startPosition = 0, _version = -1, manifestTimeoutMs = 3000 } = {}) {
     if (this._destroyed) return false;
     // Stale-renewal guard (pre-await): if detach() was called between the renewal
     // firing and this point, abort immediately without touching any engine state.
@@ -162,22 +166,24 @@ export class HLSEngine {
       abrBandWidthFactor:         0.95,
       abrBandWidthUpFactor:       0.7,
 
-      // Manifest loading — zero retries, but a timeout generous enough that a
-      // merely-slow connection doesn't get misclassified as a broken one.
-      // The manifest is ~200 bytes, so a real failure (404 = not transcoded,
-      // 401) still resolves in milliseconds — this timeout only matters for a
-      // response that's genuinely crawling. Retrying the manifest compounds
-      // latency multiplicatively: 3 retries × up to 10 s each was the root
-      // cause of 30-second first-play delays, so the retry count stays at 0.
-      // The timeout is the single dial for "how long is patient, not broken" —
-      // 6 s covers slow-2G/congested-3G without reintroducing that multiplicative
-      // blowup. Falling back to progressive mid-session is itself a bigger,
-      // more audible interruption than waiting a few extra seconds for HLS
-      // (which brings ABR + per-segment retry) to come up. Segment/level
-      // loading keeps its own retry budget below — those fail for transient
-      // reasons mid-stream, not at session start.
+      // Manifest loading — zero retries, but a timeout budgeted by connection
+      // quality (manifestTimeoutMs, from network-quality.js's
+      // getManifestTimeoutMs()) so a merely-slow connection doesn't get
+      // misclassified as a broken one. The manifest is ~200 bytes, so a real
+      // failure (404 = not transcoded, 401) still resolves in milliseconds —
+      // this timeout only matters for a response that's genuinely crawling.
+      // Retrying the manifest compounds latency multiplicatively: 3 retries ×
+      // up to 10 s each was the root cause of 30-second first-play delays, so
+      // the retry count stays at 0 regardless of connection quality. The
+      // budget itself must scale with connection quality, not be flat: a fast
+      // connection hitting an unrelated slow response (cold serverless
+      // function, brief server hiccup) should still fail fast and fall back
+      // to progressive — "instant playback" must never be traded away to buy
+      // patience that only slow-2g/2g/3g actually need. Segment/level loading
+      // keeps its own retry budget below — those fail for transient reasons
+      // mid-stream, not at session start.
       manifestLoadingMaxRetry:    0,
-      manifestLoadingTimeOut:     6000,
+      manifestLoadingTimeOut:     manifestTimeoutMs,
       levelLoadingMaxRetry:       3,
       fragLoadingMaxRetry:        3,
       levelLoadingRetryDelay:     1000,
@@ -210,7 +216,7 @@ export class HLSEngine {
         resolve(value);
       };
 
-      // 8 s hard cap — belt-and-suspenders in case hls.js events are suppressed.
+      // Hard cap — belt-and-suspenders in case hls.js events are suppressed.
       // Kept ~2 s above manifestLoadingTimeOut so hls.js's own timeout is always
       // the one that fires in the normal slow-manifest case.
       safetyTimerId = setTimeout(() => {
@@ -218,7 +224,7 @@ export class HLSEngine {
         this._destroyHls();
         this.onFallback?.();
         settle(false);
-      }, 8000);
+      }, manifestTimeoutMs + 2000);
 
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (isPlaybackTraceEnabled()) {
@@ -269,7 +275,7 @@ export class HLSEngine {
             slug:    capturedUrl ? new URL(capturedUrl, "http://x").searchParams.get("slug") : null,
           });
           this._destroyHls();
-          this.loadTrack(capturedUrl, capturedEl, { startPosition: currentTime, _version: capturedVersion })
+          this.loadTrack(capturedUrl, capturedEl, { startPosition: currentTime, _version: capturedVersion, manifestTimeoutMs })
             .then((ok) => {
               if (ok) this._renewalAttempts = 0;
               if (!ok) this.onSegmentFatalError?.();
@@ -300,7 +306,7 @@ export class HLSEngine {
             slug:    capturedUrl ? new URL(capturedUrl, "http://x").searchParams.get("slug") : null,
           });
           this._destroyHls();
-          this.loadTrack(capturedUrl, capturedEl, { startPosition: currentTime, _version: capturedVersion })
+          this.loadTrack(capturedUrl, capturedEl, { startPosition: currentTime, _version: capturedVersion, manifestTimeoutMs })
             .then((ok) => {
               if (ok) this._renewalAttempts = 0;
               if (!ok) this.onError?.(new Error("FRAG_DECRYPT_ERROR: unrecoverable after renewal"));

@@ -68,6 +68,33 @@ export async function getQualityLevel() {
   return -1;
 }
 
+// Manifest-fetch patience by connection quality. This is deliberately separate
+// from ABR tier selection above: a manifest can be slow for reasons that have
+// nothing to do with the client's bandwidth (a cold serverless function, a
+// brief server hiccup), and a flat generous timeout makes every session —
+// fast ones included — eat that same worst case. Fast/unknown connections
+// (4g, desktop wifi, no Network Information API) keep the original tight
+// budget so "instant playback" is never traded away to buy patience that
+// only slow-2g/2g/3g actually need.
+const ECT_MANIFEST_TIMEOUT_MS = {
+  "slow-2g": 7000,
+  "2g":      6000,
+  "3g":      4500,
+};
+const DEFAULT_MANIFEST_TIMEOUT_MS = 3000; // 4g and unknown — the common/fast case
+
+/**
+ * Return how long HLSEngine should wait for the manifest before giving up
+ * and falling back to progressive download.
+ */
+export function getManifestTimeoutMs() {
+  if (typeof navigator !== "undefined" && navigator.connection) {
+    const ect = navigator.connection.effectiveType;
+    if (ect && ect in ECT_MANIFEST_TIMEOUT_MS) return ECT_MANIFEST_TIMEOUT_MS[ect];
+  }
+  return DEFAULT_MANIFEST_TIMEOUT_MS;
+}
+
 /**
  * Pin a quality level in localStorage (user quality menu option).
  * Pass null to clear the pin and return to auto.

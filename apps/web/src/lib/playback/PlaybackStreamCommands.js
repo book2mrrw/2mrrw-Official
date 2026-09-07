@@ -45,7 +45,7 @@ import { notifyMediaEngineBridge } from "@/media/mediaEngineBridge";
 import { preloadCoverImage } from "@/lib/media/preload";
 import { getHLSEngine } from "@/lib/audio/HLSEngine";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
-import { getQualityLevel as getHLSQualityLevel } from "@/lib/audio/network-quality";
+import { getQualityLevel as getHLSQualityLevel, getManifestTimeoutMs } from "@/lib/audio/network-quality";
 import { getResolvedCdnUrl, setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
 import { preloadCsAssets } from "@/lib/audio/cs-assets";
 import { isSamePlaybackTrack } from "@/lib/music-playback";
@@ -855,6 +855,7 @@ export function attachStreamCommands(self) {
 
             hlsEngine.loadTrack(hlsManifestUrl, audio, {
               startPosition: resumeAt || 0,
+              manifestTimeoutMs: getManifestTimeoutMs(),
             }).then((loaded) => done(loaded)).catch(() => done(false));
 
             // Respect abort signal — don't block if a newer play request arrived
