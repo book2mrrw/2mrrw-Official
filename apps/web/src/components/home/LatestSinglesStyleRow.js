@@ -113,6 +113,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
         ref={videoRef}
         className="release-card-artwork-video"
         data-single-carousel
+        data-release-slug={mediaItem?.slug || ""}
         poster={mediaItem.cover || undefined}
         muted
         loop
@@ -144,6 +145,7 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
         ref={videoRef}
         className="release-card-artwork-video"
         data-single-carousel
+        data-release-slug={mediaItem?.slug || ""}
         poster={mediaItem.cover || undefined}
         muted
         loop

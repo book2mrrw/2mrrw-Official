@@ -29,12 +29,14 @@ export function isStorefrontCarouselCardInView(video) {
 /**
  * Persistent contract: start or resume muted loops; never pause on scroll, never load().
  * @param {HTMLElement | null} row - singles row container (singlesRowRef.current)
+ * @param {string | null} [exceptSlug] - the release whose own video is currently
+ *   playing full audio and must stay animated (see pauseStorefrontCarouselVideos).
  * @returns {boolean} anyCarouselInView - for mobile hero coordination
  */
-export function ensureStorefrontCarouselVideosPlaying(row) {
+export function ensureStorefrontCarouselVideosPlaying(row, exceptSlug = null) {
   if (!row || document.hidden) return false;
   if (getAudioMediaPrioritySnapshot().active) {
-    pauseStorefrontCarouselVideos(row);
+    pauseStorefrontCarouselVideos(row, exceptSlug);
     return false;
   }
   let anyCarouselInView = false;
@@ -47,16 +49,23 @@ export function ensureStorefrontCarouselVideosPlaying(row) {
   return anyCarouselInView;
 }
 
-/** Document hidden only — OS/tab background, not scroll offscreen. */
+/** Document hidden only — OS/tab background, not scroll offscreen. Pauses everything, no exception: the tab isn't visible at all. */
 export function pauseStorefrontCarouselVideosWhenDocumentHidden(row) {
   if (!row || !document.hidden) return;
   pauseStorefrontCarouselVideos(row);
 }
 
-/** Pause carousel decoders (playback contention / memory trim — not scroll offscreen). */
-export function pauseStorefrontCarouselVideos(row) {
+/**
+ * Pause carousel decoders (playback contention / memory trim — not scroll offscreen).
+ * @param {HTMLElement | null} row
+ * @param {string | null} [exceptSlug] - skip the video tagged with this
+ *   data-release-slug — the release actually playing right now keeps its
+ *   own cover animated instead of being blanket-suspended with the rest.
+ */
+export function pauseStorefrontCarouselVideos(row, exceptSlug = null) {
   if (!row) return;
   row.querySelectorAll(CAROUSEL_VIDEO_SELECTOR).forEach((video) => {
+    if (exceptSlug && video.dataset.releaseSlug === exceptSlug) return;
     try {
       video.pause();
     } catch {

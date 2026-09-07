@@ -1383,7 +1383,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       carouselMediaHealthyRef.current = true;
       return;
     }
-    const anyCarouselInView = ensureStorefrontCarouselVideosPlaying(row);
+    const anyCarouselInView = ensureStorefrontCarouselVideosPlaying(row, getPagePlaybackActionsBridge()?.currentTrack?.slug || null);
     carouselMediaHealthyRef.current = isStorefrontCarouselMediaHealthy(row);
     syncMobileHeroWithStorefrontCarousel(
       heroVideoRef.current,
@@ -1771,7 +1771,12 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       Object.values(ambientRefs.current).forEach((a) => {
         try { a.pause(); } catch { /* non-fatal */ }
       });
-      pauseStorefrontCarouselVideos(singlesRowRef.current);
+      // The release actually playing keeps its own cover animated — every
+      // other one still yields. Without this, this listener re-pauses the
+      // playing release's own cover art on every playback-start event,
+      // fighting SinglesStyleCardMediaSurface's own per-release logic.
+      const nowPlayingSlug = getPagePlaybackActionsBridge()?.currentTrack?.slug || null;
+      pauseStorefrontCarouselVideos(singlesRowRef.current, nowPlayingSlug);
     };
     // Pause once immediately if playback is already active on mount.
     if (document.hidden || getPagePlaybackActionsBridge()?.isPlaying) {
