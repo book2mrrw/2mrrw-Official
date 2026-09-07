@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { HLSVideoEngine } from "@/lib/hls/HLSVideoEngine";
 import { VRM } from "@/lib/media/video-resource-manager";
 import { FullVideoAuthority } from "@/lib/media/full-video-authority";
+import { AudioVisualBuyButton } from "@/components/audio-visual/AudioVisualBuyButton";
 
 export function AudioVisualPlayer({ videoId, title, posterUrl, onClose }) {
   const videoRef = useRef(null);
@@ -24,6 +25,8 @@ export function AudioVisualPlayer({ videoId, title, posterUrl, onClose }) {
   const [hasError, setHasError] = useState(false);
   const [errorMessage, setErrorMessage] = useState(null);
   const [isPeekMode, setIsPeekMode] = useState(false);
+  const [peekData, setPeekData] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     const el = videoRef.current;
@@ -31,6 +34,11 @@ export function AudioVisualPlayer({ videoId, title, posterUrl, onClose }) {
     let mounted = true;
     let engine = null;
     let sessionId = null;
+
+    setIsPeekMode(false);
+    setPeekData(null);
+    setHasError(false);
+    setIsLoading(true);
 
     VRM.register(el, VRM.PRIORITY_SYSTEM);
 
@@ -97,6 +105,7 @@ export function AudioVisualPlayer({ videoId, title, posterUrl, onClose }) {
           setIsLoading(false);
           return;
         }
+        setPeekData(data);
         el.src = data.peek_url;
         el.muted = false;
         VRM.requestPlay(el, () => el.play().catch(() => {}), () => { if (!el.paused) el.pause(); });
@@ -130,7 +139,7 @@ export function AudioVisualPlayer({ videoId, title, posterUrl, onClose }) {
       el.removeAttribute("src");
       el.load();
     };
-  }, [videoId]);
+  }, [videoId, retryCount]);
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 1000, display: "flex", flexDirection: "column" }}>
@@ -151,16 +160,15 @@ export function AudioVisualPlayer({ videoId, title, posterUrl, onClose }) {
         {isPeekMode && !hasError && (
           <div style={{ position: "absolute", bottom: 22, left: 0, right: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, pointerEvents: "none" }}>
             <div style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, letterSpacing: 1, textTransform: "uppercase" }}>Preview</div>
-            <a
-              href="/subscribe"
-              style={{
-                pointerEvents: "auto",
-                background: "#00ffff", color: "#000", fontWeight: 800, fontSize: 12,
-                padding: "9px 20px", borderRadius: 999, textDecoration: "none",
-              }}
-            >
-              Unlock the full video
-            </a>
+            {peekData?.price_cents > 0 ? (
+              <div style={{ pointerEvents: "auto", width: "min(240px, 80vw)" }}>
+                <AudioVisualBuyButton
+                  videoId={videoId}
+                  priceCents={peekData.price_cents}
+                  onPurchased={() => setRetryCount((c) => c + 1)}
+                />
+              </div>
+            ) : null}
           </div>
         )}
       </div>

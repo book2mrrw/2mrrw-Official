@@ -256,6 +256,50 @@ function LockIcon() {
   );
 }
 
+/**
+ * Owns its own local inline-preview/fullscreen state, scoped to exactly one
+ * card — mirrors CatalogCardCoverSurface's own local hover/moment state
+ * further down this file. Toggling one card's video preview must never
+ * re-render every other card in the grid, so this state deliberately does
+ * NOT live on CatalogGrid itself.
+ */
+function CatalogCardVideoPreview({ mediaItem, isAdmin }) {
+  const [inlinePreviewOpen, setInlinePreviewOpen] = useState(false);
+  const [fullscreenVideo, setFullscreenVideo] = useState(null);
+
+  if (!mediaItem.audio_visual_id) return null;
+
+  return (
+    <>
+      <VideoPreviewIcon
+        offsetTop={isAdmin ? 48 : 8}
+        onClick={() => setInlinePreviewOpen(true)}
+      />
+      {isAdmin ? <AdminVideoLinkedMarker /> : null}
+      {inlinePreviewOpen && (
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, aspectRatio: "1/1", zIndex: 20, overflow: "hidden" }}>
+          <AudioVisualInlinePreview
+            videoId={mediaItem.audio_visual_id}
+            onClose={() => setInlinePreviewOpen(false)}
+            onWatchFull={() => {
+              setInlinePreviewOpen(false);
+              setFullscreenVideo({ id: mediaItem.audio_visual_id, title: mediaItem.title, posterUrl: mediaItem.audio_visual_poster_url });
+            }}
+          />
+        </div>
+      )}
+      {fullscreenVideo && (
+        <AudioVisualPlayer
+          videoId={fullscreenVideo.id}
+          title={fullscreenVideo.title}
+          posterUrl={fullscreenVideo.posterUrl}
+          onClose={() => setFullscreenVideo(null)}
+        />
+      )}
+    </>
+  );
+}
+
 function CatalogGrid({
   items,
   type,
@@ -274,19 +318,9 @@ function CatalogGrid({
   const { entitlementAccountState, userId, isAdminStable } = useStorefrontCardChrome();
   const accountState = entitlementAccountState;
   const isAdmin = isAdminStable;
-  const [inlinePreviewSlug, setInlinePreviewSlug] = useState(null);
-  const [fullscreenVideo, setFullscreenVideo] = useState(null);
   if (!items || items.length === 0) return null;
   return (
     <div className="catalog-adaptive-container">
-    {fullscreenVideo && (
-      <AudioVisualPlayer
-        videoId={fullscreenVideo.id}
-        title={fullscreenVideo.title}
-        posterUrl={fullscreenVideo.posterUrl}
-        onClose={() => setFullscreenVideo(null)}
-      />
-    )}
     <div className={`catalog-adaptive-grid ${type}-row`}>
       {items.map((item) => {
         if (!item?.slug) return null;
@@ -394,27 +428,7 @@ function CatalogGrid({
             entitlementIdentity={entitlementIdentity}
           />
           {isAdmin ? <GiftOverlayButton onClick={() => onGift?.(mediaItem)} /> : null}
-          {mediaItem.audio_visual_id ? (
-            <>
-              <VideoPreviewIcon
-                offsetTop={isAdmin ? 48 : 8}
-                onClick={() => setInlinePreviewSlug(mediaItem.slug)}
-              />
-              {isAdmin ? <AdminVideoLinkedMarker /> : null}
-            </>
-          ) : null}
-          {inlinePreviewSlug === mediaItem.slug && (
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, aspectRatio: "1/1", zIndex: 20, overflow: "hidden" }}>
-              <AudioVisualInlinePreview
-                videoId={mediaItem.audio_visual_id}
-                onClose={() => setInlinePreviewSlug(null)}
-                onWatchFull={() => {
-                  setInlinePreviewSlug(null);
-                  setFullscreenVideo({ id: mediaItem.audio_visual_id, title: mediaItem.title, posterUrl: mediaItem.audio_visual_poster_url });
-                }}
-              />
-            </div>
-          )}
+          <CatalogCardVideoPreview mediaItem={mediaItem} isAdmin={isAdmin} />
           <CatalogCardCoverSurface
             mediaItem={mediaItem}
             coverDisplay={coverDisplay}
