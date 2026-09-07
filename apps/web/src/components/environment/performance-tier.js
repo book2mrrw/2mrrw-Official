@@ -19,7 +19,7 @@ export function getPerformanceTier({ reducedMotion, pointerFine, width, height }
 }
 
 export const TIER_PARAMS = {
-  high: { starCount: 220, pointerParallax: true, scrollParallax: true, animate: true },
-  medium: { starCount: 90, pointerParallax: false, scrollParallax: true, animate: true },
-  low: { starCount: 30, pointerParallax: false, scrollParallax: false, animate: false },
+  high: { starCount: 220, pointerParallax: true, scrollParallax: true, animate: true, glow: true },
+  medium: { starCount: 90, pointerParallax: false, scrollParallax: true, animate: true, glow: false },
+  low: { starCount: 30, pointerParallax: false, scrollParallax: false, animate: false, glow: false },
 };

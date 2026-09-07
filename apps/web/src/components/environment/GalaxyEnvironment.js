@@ -216,6 +216,7 @@ export default function GalaxyEnvironment() {
           height: canvas.clientHeight,
           elapsedSeconds: 0,
           opacityMultiplier: targetStateRef.current.starOpacity,
+          glow: TIER_PARAMS[tierRef.current].glow,
         });
       }
       applyNebulaStyles(targetStateRef.current);
@@ -256,6 +257,7 @@ export default function GalaxyEnvironment() {
           opacityMultiplier: cur.starOpacity,
           parallaxX,
           parallaxY,
+          glow: tierParams.glow,
         });
       }
 

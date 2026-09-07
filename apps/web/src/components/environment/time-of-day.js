@@ -11,9 +11,9 @@
 //   night: richest — deepest black, most stars, most depth, slightly
 //          stronger atmospheric movement.
 const PHASES = [
-  { hour: 5, phase: "dawn", starOpacity: 0.5, nebulaOpacity: 0.55, hueBias: -10, speedMultiplier: 0.9 },
-  { hour: 8, phase: "day", starOpacity: 0.35, nebulaOpacity: 0.7, hueBias: 8, speedMultiplier: 0.85 },
-  { hour: 17, phase: "dusk", starOpacity: 0.75, nebulaOpacity: 0.8, hueBias: -18, speedMultiplier: 1 },
+  { hour: 5, phase: "dawn", starOpacity: 0.65, nebulaOpacity: 0.55, hueBias: -10, speedMultiplier: 0.9 },
+  { hour: 8, phase: "day", starOpacity: 0.55, nebulaOpacity: 0.7, hueBias: 8, speedMultiplier: 0.85 },
+  { hour: 17, phase: "dusk", starOpacity: 0.8, nebulaOpacity: 0.8, hueBias: -18, speedMultiplier: 1 },
   { hour: 20, phase: "night", starOpacity: 1, nebulaOpacity: 0.9, hueBias: 0, speedMultiplier: 1.1 },
 ];
 

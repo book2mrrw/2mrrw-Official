@@ -12,8 +12,8 @@ export function createStarField(count) {
     stars.push({
       x: Math.random(),
       y: Math.random(),
-      r: 0.4 + Math.random() * 1.3,
-      baseOpacity: 0.35 + Math.random() * 0.55,
+      r: 1 + Math.random() * 1.8,
+      baseOpacity: 0.55 + Math.random() * 0.45,
       twinkleSpeed: 0.15 + Math.random() * 0.35, // cycles per second — slow, never synchronized
       twinklePhase: Math.random() * TWO_PI,
       vx: (Math.random() - 0.5) * 0.0025, // fraction of width per second — slow drift
@@ -43,18 +43,30 @@ export function stepStarField(stars, dtSeconds) {
   }
 }
 
-export function drawStarField(ctx, stars, { width, height, elapsedSeconds, color = "255,255,255", opacityMultiplier = 1, parallaxX = 0, parallaxY = 0 }) {
+export function drawStarField(ctx, stars, { width, height, elapsedSeconds, color = "255,255,255", opacityMultiplier = 1, parallaxX = 0, parallaxY = 0, glow = true }) {
   ctx.clearRect(0, 0, width, height);
   for (let i = 0; i < stars.length; i++) {
     const st = stars[i];
     const twinkle = 0.5 + 0.5 * Math.sin(elapsedSeconds * st.twinkleSpeed * TWO_PI + st.twinklePhase);
     const opacity = st.baseOpacity * (0.45 + 0.55 * twinkle) * opacityMultiplier;
-    if (opacity <= 0.01) continue;
+    if (opacity <= 0.02) continue;
+    const x = st.x * width + parallaxX;
+    const y = st.y * height + parallaxY;
+    const alpha = Math.max(0, Math.min(1, opacity)).toFixed(3);
+    // Soft glow so a star reads as a small point of light rather than a
+    // flat dot — cheap (one extra shadow per star, no extra draw calls).
+    if (glow) {
+      ctx.shadowColor = `rgba(${color},${alpha})`;
+      ctx.shadowBlur = st.r * 4;
+    } else {
+      ctx.shadowBlur = 0;
+    }
     ctx.beginPath();
-    ctx.fillStyle = `rgba(${color},${Math.max(0, Math.min(1, opacity)).toFixed(3)})`;
-    ctx.arc(st.x * width + parallaxX, st.y * height + parallaxY, st.r, 0, TWO_PI);
+    ctx.fillStyle = `rgba(${color},${alpha})`;
+    ctx.arc(x, y, st.r, 0, TWO_PI);
     ctx.fill();
   }
+  if (glow) ctx.shadowBlur = 0;
 }
 
 export function lerp(current, target, factor) {
