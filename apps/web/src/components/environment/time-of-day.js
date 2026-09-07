@@ -17,8 +17,27 @@ const PHASES = [
   { hour: 20, phase: "night", starOpacity: 1, nebulaOpacity: 0.9, hueBias: 0, speedMultiplier: 1.1 },
 ];
 
+// Sun/moon swap — a clean day/night split at 6am/6pm (not tied to the
+// softer dawn/dusk star-opacity curve above), with a short smoothed
+// crossfade window right at each boundary so it's a swap, not a snap.
+const SUNRISE_HOUR = 6;
+const SUNSET_HOUR = 18;
+const TRANSITION_HOURS = 1; // 30 min either side of each boundary
+
 function lerp(a, b, t) {
   return a + (b - a) * t;
+}
+
+function smoothstep(edge0, edge1, x) {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+function getSunOpacity(hour) {
+  const half = TRANSITION_HOURS / 2;
+  const sunrise = smoothstep(SUNRISE_HOUR - half, SUNRISE_HOUR + half, hour);
+  const sunset = 1 - smoothstep(SUNSET_HOUR - half, SUNSET_HOUR + half, hour);
+  return Math.min(sunrise, sunset);
 }
 
 export function getTimeOfDayTarget(date = new Date()) {
@@ -36,11 +55,14 @@ export function getTimeOfDayTarget(date = new Date()) {
   }
 
   const blend = Math.max(0, Math.min(1, (hour - from.hour) / (to.hour - from.hour)));
+  const sunOpacity = getSunOpacity(rawHour);
   return {
     phase: from.phase,
     starOpacity: lerp(from.starOpacity, to.starOpacity, blend),
     nebulaOpacity: lerp(from.nebulaOpacity, to.nebulaOpacity, blend),
     hueBias: lerp(from.hueBias, to.hueBias, blend),
     speedMultiplier: lerp(from.speedMultiplier, to.speedMultiplier, blend),
+    sunOpacity,
+    moonOpacity: 1 - sunOpacity,
   };
 }

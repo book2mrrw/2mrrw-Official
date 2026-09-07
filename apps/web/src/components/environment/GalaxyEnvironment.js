@@ -38,7 +38,7 @@ const TIME_CHECK_INTERVAL_MS = 60000;
 const RESIZE_DEBOUNCE_MS = 150;
 const LERP_FACTOR = 0.02;
 
-const DEFAULT_TIME_TARGET = { phase: "night", starOpacity: 1, nebulaOpacity: 0.9, hueBias: 0, speedMultiplier: 1 };
+const DEFAULT_TIME_TARGET = { phase: "night", starOpacity: 1, nebulaOpacity: 0.9, hueBias: 0, speedMultiplier: 1, moonOpacity: 0.85, sunOpacity: 0 };
 
 export default function GalaxyEnvironment() {
   const pathname = usePathname();
@@ -63,8 +63,8 @@ export default function GalaxyEnvironment() {
   const rafRef = useRef(null);
   const lastFrameRef = useRef(0);
   const elapsedRef = useRef(0);
-  const currentStateRef = useRef({ starOpacity: 1, nebulaOpacity: 0.8, hueBias: 0, speedMultiplier: 1 });
-  const targetStateRef = useRef({ starOpacity: 1, nebulaOpacity: 0.8, hueBias: 0, speedMultiplier: 1 });
+  const currentStateRef = useRef({ starOpacity: 1, nebulaOpacity: 0.8, hueBias: 0, speedMultiplier: 1, moonOpacity: 0.8, sunOpacity: 0 });
+  const targetStateRef = useRef({ starOpacity: 1, nebulaOpacity: 0.8, hueBias: 0, speedMultiplier: 1, moonOpacity: 0.8, sunOpacity: 0 });
   const pointerRef = useRef({ x: 0, y: 0 });
   const scrollRef = useRef(0);
   const tierRef = useRef("medium");
@@ -128,6 +128,8 @@ export default function GalaxyEnvironment() {
       nebulaOpacity: timeTarget.nebulaOpacity * mood.nebulaIntensity,
       hueBias: mood.hueBias + timeTarget.hueBias + (releasePalette ? 6 : 0),
       speedMultiplier: timeTarget.speedMultiplier * mood.speed,
+      moonOpacity: timeTarget.moonOpacity,
+      sunOpacity: timeTarget.sunOpacity,
     };
 
     const targetCount = Math.round(TIER_PARAMS[computedTier].starCount * mood.starDensity);
@@ -203,8 +205,13 @@ export default function GalaxyEnvironment() {
       if (!root) return;
       root.style.setProperty("--galaxy-nebula-opacity", state.nebulaOpacity.toFixed(3));
       root.style.setProperty("--galaxy-hue-bias", `${state.hueBias.toFixed(1)}deg`);
+      root.style.setProperty("--galaxy-moon-opacity", state.moonOpacity.toFixed(3));
+      root.style.setProperty("--galaxy-sun-opacity", state.sunOpacity.toFixed(3));
       const scrollOffset = tierRef.current === "low" ? 0 : scrollRef.current * 0.02;
       root.style.setProperty("--galaxy-scroll-offset", `${scrollOffset.toFixed(1)}px`);
+      // Moves slower than the nebula — a further-away layer, for depth.
+      const moonScrollOffset = tierRef.current === "low" ? 0 : scrollRef.current * 0.008;
+      root.style.setProperty("--galaxy-moon-scroll-offset", `${moonScrollOffset.toFixed(1)}px`);
     }
 
     function drawStatic() {
@@ -242,6 +249,8 @@ export default function GalaxyEnvironment() {
       cur.nebulaOpacity = lerp(cur.nebulaOpacity, tgt.nebulaOpacity, LERP_FACTOR);
       cur.hueBias = lerp(cur.hueBias, tgt.hueBias, LERP_FACTOR);
       cur.speedMultiplier = lerp(cur.speedMultiplier, tgt.speedMultiplier, LERP_FACTOR);
+      cur.moonOpacity = lerp(cur.moonOpacity, tgt.moonOpacity, LERP_FACTOR);
+      cur.sunOpacity = lerp(cur.sunOpacity, tgt.sunOpacity, LERP_FACTOR);
 
       stepStarField(starsRef.current, dt * cur.speedMultiplier);
 
@@ -280,6 +289,8 @@ export default function GalaxyEnvironment() {
         <div className="galaxy-environment__orb galaxy-environment__orb--b" />
         <div className="galaxy-environment__orb galaxy-environment__orb--c" />
       </div>
+      <div className="galaxy-environment__moon" />
+      <div className="galaxy-environment__sun" />
       <canvas ref={canvasRef} className="galaxy-environment__canvas" />
     </div>
   );

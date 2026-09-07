@@ -57,6 +57,31 @@
   animation: galaxyOrbC 64s ease-in-out infinite;
 }
 
+.galaxy-environment__moon,
+.galaxy-environment__sun {
+  position: absolute;
+  top: 6%;
+  right: 14%;
+  width: clamp(64px, 11vmin, 140px);
+  height: clamp(64px, 11vmin, 140px);
+  border-radius: 50%;
+  transform: translate3d(0, var(--galaxy-moon-scroll-offset, 0px), 0);
+  will-change: opacity, transform;
+  pointer-events: none;
+}
+
+.galaxy-environment__moon {
+  background: radial-gradient(circle at 35% 32%, #fffdf2 0%, #f3ecd2 38%, #d9cfa8 70%, transparent 100%);
+  box-shadow: 0 0 40px 6px rgba(255, 250, 220, 0.35), 0 0 90px 20px rgba(255, 250, 220, 0.12);
+  opacity: var(--galaxy-moon-opacity, 0.6);
+}
+
+.galaxy-environment__sun {
+  background: radial-gradient(circle at 35% 32%, #fffaeb 0%, #ffd54f 32%, #ff9d2f 68%, transparent 100%);
+  box-shadow: 0 0 50px 10px rgba(255, 178, 64, 0.4), 0 0 110px 26px rgba(255, 140, 32, 0.16);
+  opacity: var(--galaxy-sun-opacity, 0);
+}
+
 .galaxy-environment__canvas {
   position: absolute;
   inset: 0;
