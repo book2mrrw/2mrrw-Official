@@ -91,6 +91,7 @@ import PlaybackChromeIsland from "@/components/storefront/PlaybackChromeIsland";
 import AuthSurfaceIsland from "@/components/storefront/AuthSurfaceIsland";
 import { useAuth } from "@/context/AuthContext";
 const InlineReleasesManager = dynamic(() => import("@/components/admin/InlineReleasesManager"), { ssr: false });
+const InlineAudioVisualzManager = dynamic(() => import("@/components/admin/InlineAudioVisualzManager"), { ssr: false });
 import EntitlementSurfaceIsland from "@/components/storefront/EntitlementSurfaceIsland";
 import HomeStorefrontIsland from "@/components/storefront/HomeStorefrontIsland";
 import MusicTabCatalogPanels from "@/components/storefront/MusicTabCatalogPanels";
@@ -1089,6 +1090,73 @@ function AdminManageReleasesNavItem({ activeTab, onSwitch, mobile = false }) {
         onMouseLeave={(e) => { if (!active) { e.currentTarget.style.color = "#b0b0b0"; e.currentTarget.style.background = "transparent"; } }}
       >
         <span>MANAGE RELEASES</span>
+      </button>
+    </div>
+  );
+}
+
+// ── Admin nav item for "Manage Audio Visualz" — isolated useAuth(), same
+// pattern as AdminManageReleasesNavItem, a fully separate sibling tab. ──────
+function AdminManageAudioVisualzNavItem({ activeTab, onSwitch, mobile = false }) {
+  const { isAdmin } = useAuth();
+  if (!isAdmin) return null;
+  const active = activeTab === "manage-audio-visualz";
+  if (mobile) {
+    return (
+      <motion.div style={{ marginBottom: 2 }}>
+        <button
+          type="button"
+          onClick={() => onSwitch("manage-audio-visualz")}
+          style={{
+            width: "100%",
+            padding: "14px 24px",
+            background: "none",
+            border: "none",
+            color: active ? "#00ffff" : "#ccc",
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: 2,
+            textAlign: "left",
+            cursor: "pointer",
+            textTransform: "uppercase",
+            transition: "color 0.2s",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+          }}
+        >
+          <span>MANAGE AUDIO VISUALZ</span>
+        </button>
+      </motion.div>
+    );
+  }
+  return (
+    <div style={{ marginBottom: 2 }}>
+      <button
+        onClick={() => onSwitch("manage-audio-visualz")}
+        style={{
+          width: "100%",
+          padding: "13px 18px 13px 14px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          background: active ? "linear-gradient(90deg,rgba(0,255,255,0.09) 0%,transparent 100%)" : "transparent",
+          border: "none",
+          borderLeft: active ? "2px solid #00ffff" : "2px solid transparent",
+          color: active ? "#00ffff" : "#b0b0b0",
+          fontSize: 11,
+          fontWeight: 700,
+          letterSpacing: 2.5,
+          cursor: "pointer",
+          textAlign: "left",
+          transition: "all 0.18s",
+          textShadow: active ? "0 0 12px rgba(0,255,255,0.4)" : "none",
+        }}
+        onMouseEnter={(e) => { if (!active) { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.035)"; } }}
+        onMouseLeave={(e) => { if (!active) { e.currentTarget.style.color = "#b0b0b0"; e.currentTarget.style.background = "transparent"; } }}
+      >
+        <span>MANAGE AUDIO VISUALZ</span>
       </button>
     </div>
   );
@@ -2508,6 +2576,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 );
               })}
               <AdminManageReleasesNavItem activeTab={activeTab} onSwitch={switchTab} />
+              <AdminManageAudioVisualzNavItem activeTab={activeTab} onSwitch={switchTab} />
             </nav>
             <div style={{padding:"14px 14px 18px",borderTop:"1px solid #111",display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
               <button onClick={()=>switchTab("account")} style={{width:"100%",padding:"10px 12px",textAlign:"left",background:activeTab==="account"?"rgba(0,255,255,0.07)":"transparent",border:"none",borderLeft:activeTab==="account"?"2px solid #00ffff":"2px solid transparent",color:activeTab==="account"?"#00ffff":"#b0b0b0",fontSize:11,fontWeight:700,letterSpacing:2.5,cursor:"pointer",transition:"0.18s"}} onMouseEnter={e=>{if(activeTab!=="account")e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{if(activeTab!=="account")e.currentTarget.style.color="#b0b0b0";}}>ACCOUNT</button>
@@ -3021,6 +3090,13 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 </AuthSurfaceIsland>
               )}
 
+              {/* ══ MANAGE AUDIO VISUALZ (admin only) ══ */}
+              {activeTab === "manage-audio-visualz" && (
+                <AuthSurfaceIsland islandId="manage-audio-visualz-tab">
+                  {(auth) => auth.isAdminStable ? <InlineAudioVisualzManager /> : null}
+                </AuthSurfaceIsland>
+              )}
+
             </div>{/* end tab panel */}
             </ScrollPaddingShell>
           </div>{/* end scroll area */}
@@ -3157,6 +3233,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     );
                   })}
                   <AdminManageReleasesNavItem activeTab={activeTab} onSwitch={switchTab} mobile />
+                  <AdminManageAudioVisualzNavItem activeTab={activeTab} onSwitch={switchTab} mobile />
                   <motion.div style={{padding:"14px 24px",borderTop:"1px solid #111",marginTop:4,display:"flex",flexDirection:"column",gap:10}}>
                     <button onClick={()=>switchTab("account")} style={{width:"100%",padding:"13px 0",background:"#00ffff",color:"#000",fontWeight:900,border:"none",borderRadius:10,cursor:"pointer",fontSize:14,letterSpacing:1}}>My Account</button>
                     <button onClick={()=>setSoundOn(!soundOn)} style={{width:"100%",padding:"11px 0",background:"transparent",color:soundOn?"#00ffff":"#666",fontWeight:700,border:"1px solid #2a2a2a",borderRadius:10,cursor:"pointer",fontSize:13,letterSpacing:1}}>{soundOn?"♫ Sound On":"♫ Sound Off"}</button>

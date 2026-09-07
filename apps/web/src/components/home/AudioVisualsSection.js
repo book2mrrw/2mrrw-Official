@@ -1,282 +1,244 @@
 "use client";
 
-import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react";
-import {
-  isPlaybackTraceEnabled,
-  logUiChurn,
-  recordPlaybackTraceContext,
-} from "@/lib/diagnostics/playback-trace";
+/**
+ * Homepage "Audio Visualz" section — real, entitlement-gated content
+ * (previously a hardcoded 3-video YouTube embed with no backend
+ * connection). Sub-type filter pills, confirmed cyan-transparent with
+ * noticeable text, one per content type plus "Seriez" (a structural
+ * container, not a real video_type, but the confirmed homepage design
+ * treats it as its own filterable pill) — "All" last, not first, per the
+ * user's own instruction. Clicking a Seriez card opens its own in-section
+ * episode-list view rather than navigating away, matching this project's
+ * established "no redirect" philosophy.
+ *
+ * Isolated from the actual video pipeline it renders (only ever calls this
+ * feature's own public routes — /api/audio-visual/browse,
+ * /api/audio-visual/seriez/[id], /api/audio-visual/[videoId]/manifest via
+ * AudioVisualPlayer) — never anything release/track-shaped.
+ *
+ * `autoplay` is accepted for backward compatibility with both existing call
+ * sites (MusicTabCatalogPanels.js passes autoplay={false}, HomeStorefront.js
+ * doesn't pass it) but is now inert — there is no longer a single
+ * autoplaying hero video to gate, only a poster grid the viewer taps into.
+ */
+import { memo, useState, useEffect, useRef, useCallback } from "react";
+import { AudioVisualPlayer } from "@/components/audio-visual/AudioVisualPlayer";
 
-const musicVideos = [
-  { id: "mv-1", title: "Hour Glass", youtubeId: "tv_aS-hJ880", description: "Official Music Video" },
-  { id: "mv-2", title: "A2B", youtubeId: "kPITYHMVeXM", description: "Official Music Video" },
-  { id: "mv-3", title: "W.2.D", youtubeId: "jsrA1SL3_GU", description: "Official Music Video" },
+const PILLS = [
+  { value: "music_video", label: "Audio Visualz" },
+  { value: "podcast", label: "Podcast" },
+  { value: "interview", label: "Interviews" },
+  { value: "movie", label: "Movies" },
+  { value: "documentary", label: "Documentaries" },
+  { value: "vlog", label: "Vlogs" },
+  { value: "concert", label: "Concerts" },
+  { value: "short_film", label: "Short Filmz" },
+  { value: "seriez", label: "Seriez" },
+  { value: "all", label: "All" },
 ];
 
-const AudioVisualsSection = memo(function AudioVisualsSection({
-  onAudioVisualsFocused,
-  onAudioVisualsExit,
-}) {
-  const [featuredId, setFeaturedId] = useState(musicVideos[0].youtubeId);
-  const [hasEntered, setHasEntered] = useState(false);
-  const sectionRef = useRef(null);
-  const iframeRef = useRef(null);
-  const firedFocusRef = useRef(false);
+// Confirmed: transparent cyan pill, genuinely noticeable text color — reuses
+// the same #00ffff accent already used everywhere else in this app's own
+// admin/nav UI, not a new palette invented for this one section.
+const pillStyle = (active) => ({
+  flexShrink: 0,
+  padding: "7px 16px",
+  borderRadius: 999,
+  fontSize: 11,
+  fontWeight: 800,
+  letterSpacing: 1,
+  textTransform: "uppercase",
+  whiteSpace: "nowrap",
+  cursor: "pointer",
+  border: `1px solid ${active ? "rgba(0,255,255,0.55)" : "rgba(0,255,255,0.18)"}`,
+  background: active ? "rgba(0,255,255,0.18)" : "rgba(0,255,255,0.07)",
+  color: active ? "#00ffff" : "rgba(0,255,255,0.75)",
+  transition: "all 0.15s",
+});
 
-  const featuredVid = useMemo(
-    () => musicVideos.find((v) => v.youtubeId === featuredId) || musicVideos[0],
-    [featuredId]
+function PillRow({ activeType, onSelect }) {
+  return (
+    <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
+      {PILLS.map((p) => (
+        <button key={p.value} type="button" onClick={() => onSelect(p.value)} style={pillStyle(activeType === p.value)}>
+          {p.label}
+        </button>
+      ))}
+    </div>
   );
+}
 
-  const startAudioVisualPlayback = useCallback(() => {
-    if (!firedFocusRef.current) {
-      firedFocusRef.current = true;
-    }
-    setHasEntered(true);
-  }, []);
+function PosterCard({ item, onClick }) {
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        cursor: "pointer", borderRadius: 12, overflow: "hidden", background: "#0a0a0a",
+        border: "1px solid #1a1a1a", transition: "border-color 0.15s",
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(0,255,255,0.3)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1a1a1a"; }}
+    >
+      <div style={{ position: "relative", paddingBottom: "140%", background: "#000" }}>
+        {item.poster_url ? (
+          <img src={item.poster_url} alt={item.title} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🎬</div>
+        )}
+        {item.kind === "seriez" && (
+          <div style={{ position: "absolute", top: 8, left: 8, background: "rgba(0,255,255,0.85)", color: "#000", fontSize: 9, fontWeight: 900, letterSpacing: 1, padding: "3px 8px", borderRadius: 999, textTransform: "uppercase" }}>
+            Seriez
+          </div>
+        )}
+      </div>
+      <div style={{ padding: "8px 10px", fontSize: 12, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {item.title}
+      </div>
+    </div>
+  );
+}
 
-  const stopAudioVisualPlayback = useCallback(() => {
-    try {
-      iframeRef.current?.contentWindow?.postMessage(
-        JSON.stringify({ event: "command", func: "pauseVideo", args: [] }),
-        "*"
-      );
-    } catch {
-      /* YouTube iframe API is best-effort */
-    }
-  }, []);
+function SeriezDetailView({ seriezId, onBack, onPlay }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/audio-visual/seriez/${seriezId}`)
+      .then((r) => r.json())
+      .then((json) => { if (!cancelled) { if (json.error) setError(json.error); else setData(json); } })
+      .catch(() => { if (!cancelled) setError("Failed to load"); });
+    return () => { cancelled = true; };
+  }, [seriezId]);
+
+  if (error) return <div style={{ color: "#ff453a", fontSize: 13, padding: "20px 0" }}>{error}</div>;
+  if (!data) return <div style={{ color: "#777", fontSize: 13, padding: "20px 0" }}>Loading…</div>;
+
+  return (
+    <div>
+      <button onClick={onBack} style={{ background: "none", border: "none", color: "rgba(0,255,255,0.8)", fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", cursor: "pointer", padding: 0, marginBottom: 14 }}>
+        ← Back
+      </button>
+      <h3 style={{ color: "#fff", fontSize: 18, fontWeight: 900, margin: "0 0 6px" }}>{data.seriez.title}</h3>
+      {data.seriez.description && <p style={{ color: "#888", fontSize: 12, marginBottom: 18, maxWidth: 560 }}>{data.seriez.description}</p>}
+      {data.episodes.length === 0 ? (
+        <div style={{ color: "#666", fontSize: 12 }}>No episodes available yet.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {data.episodes.map((ep) => (
+            <div
+              key={ep.video_id}
+              onClick={() => ep.status === "playable" && onPlay(ep)}
+              style={{
+                display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10,
+                background: "#0d0d0d", border: "1px solid #1a1a1a",
+                cursor: ep.status === "playable" ? "pointer" : "default",
+                opacity: ep.status === "playable" ? 1 : 0.55,
+              }}
+            >
+              <div style={{ fontSize: 11, color: "rgba(0,255,255,0.8)", fontWeight: 800, flexShrink: 0 }}>
+                S{ep.season_number}E{ep.episode_number}
+              </div>
+              <div style={{ flex: 1, fontSize: 13, color: "#fff", fontWeight: 700 }}>{ep.title}</div>
+              {ep.status === "upcoming" ? (
+                <div style={{ fontSize: 10, color: "#999", fontWeight: 700, textTransform: "uppercase", flexShrink: 0 }}>
+                  {new Date(ep.scheduled_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </div>
+              ) : (
+                <div style={{ fontSize: 10, color: "#00ffff", fontWeight: 700, textTransform: "uppercase", flexShrink: 0 }}>▶ Play</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const AudioVisualsSection = memo(function AudioVisualsSection({ onAudioVisualsFocused, onAudioVisualsExit }) {
+  const [activeType, setActiveType] = useState("all");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [openSeriezId, setOpenSeriezId] = useState(null);
+  const [playingVideo, setPlayingVideo] = useState(null); // { video_id, title, poster_url }
+  const sectionRef = useRef(null);
 
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return;
-    const threshold = 0.45;
     let hasBeenInView = false;
-
-    const sendCmd = (cmd) => {
-      try {
-        iframeRef.current?.contentWindow?.postMessage(
-          JSON.stringify({ event: "command", func: cmd, args: [] }),
-          "*"
-        );
-      } catch {
-        /* YouTube iframe API is best-effort */
-      }
-    };
-
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          if (isPlaybackTraceEnabled()) {
-            logUiChurn("intersection", {
-              target: "audioVisuals",
-              intersecting: true,
-              ratio: entry.intersectionRatio,
-            });
-            recordPlaybackTraceContext({ lastUiSection: "audioVisuals" });
-          }
-          if (typeof onAudioVisualsFocused === "function") {
-            onAudioVisualsFocused();
-          }
-          startAudioVisualPlayback();
-          if (hasBeenInView) {
-            sendCmd("playVideo");
-          }
+          onAudioVisualsFocused?.();
           hasBeenInView = true;
         } else if (hasBeenInView) {
-          if (isPlaybackTraceEnabled()) {
-            logUiChurn("intersection", {
-              target: "audioVisuals",
-              intersecting: false,
-              ratio: entry.intersectionRatio,
-            });
-          }
-          stopAudioVisualPlayback();
-          if (typeof onAudioVisualsExit === "function") {
-            onAudioVisualsExit();
-          }
+          onAudioVisualsExit?.();
         }
       },
-      { threshold: [0, threshold] }
+      { threshold: [0, 0.45] }
     );
-
     obs.observe(el);
     return () => {
-      if (hasBeenInView && typeof onAudioVisualsExit === "function") {
-        onAudioVisualsExit();
-      }
+      if (hasBeenInView) onAudioVisualsExit?.();
       obs.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSelect = useCallback((id) => {
-    setFeaturedId(id);
+  const loadItems = useCallback((type) => {
+    setLoading(true);
+    const qs = type === "all" ? "" : `?type=${encodeURIComponent(type)}`;
+    fetch(`/api/audio-visual/browse${qs}`)
+      .then((r) => r.json())
+      .then((json) => setItems(json.items || []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
   }, []);
 
-  const iframeSrc = useMemo(
-    () => `https://www.youtube.com/embed/${featuredId}?rel=0&playsinline=1&autoplay=1&mute=0&enablejsapi=1`,
-    [featuredId]
-  );
+  useEffect(() => { loadItems(activeType); }, [activeType, loadItems]);
 
-  const handlePlaceholderClick = useCallback(() => {
-    if (typeof onAudioVisualsFocused === "function") {
-      onAudioVisualsFocused();
-    }
-    startAudioVisualPlayback();
-  }, [onAudioVisualsFocused, startAudioVisualPlayback]);
+  const handleCardClick = useCallback((item) => {
+    if (item.kind === "seriez") setOpenSeriezId(item.seriez_id);
+    else setPlayingVideo({ video_id: item.video_id, title: item.title, poster_url: item.poster_url });
+  }, []);
 
   return (
     <div ref={sectionRef}>
-      <div className="audio-visuals-heading" style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-        <h2 className="section-heading audio-visuals-heading__title" style={{ margin: 0 }}>Audio Visuals</h2>
-        <span style={{ fontSize: 10, color: "#333", letterSpacing: 3, textTransform: "uppercase", fontWeight: 700 }}>Official Visuals</span>
+      <div className="audio-visuals-heading" style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 14 }}>
+        <h2 className="section-heading audio-visuals-heading__title" style={{ margin: 0 }}>Audio Visualz</h2>
       </div>
 
-        <div className="audio-visuals-composition">
-          <div className="audio-visuals-feature" style={{ flex: "1 1 0", minWidth: 0, background: "#0e0e0e", border: "1px solid #1e1e1e", borderRadius: 20, overflow: "hidden", boxShadow: "0 8px 40px rgba(0,0,0,0.5)" }}>
-            <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, background: "#000" }}>
-              {hasEntered ? (
-                <iframe
-                  key={featuredId}
-                  ref={iframeRef}
-                  src={iframeSrc}
-                  title={featuredVid.title}
-                  frameBorder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: "none" }}
-                />
-              ) : (
-                <div
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", cursor: "pointer" }}
-                  onClick={handlePlaceholderClick}
-                >
-                  <img
-                    src={`https://img.youtube.com/vi/${featuredId}/maxresdefault.jpg`}
-                    alt={featuredVid.title}
-                    style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                    onError={(e) => {
-                      e.currentTarget.src = `https://img.youtube.com/vi/${featuredId}/mqdefault.jpg`;
-                    }}
-                  />
-                  <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.3)" }}>
-                    <div
-                      style={{ width: 72, height: 72, borderRadius: "50%", background: "rgba(0,0,0,0.65)", border: "2px solid rgba(255,255,255,0.25)", display: "flex", alignItems: "center", justifyContent: "center", transition: "transform 0.2s" }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = "scale(1.1)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = "scale(1)";
-                      }}
-                    >
-                      <svg viewBox="0 0 24 24" fill="white" width="32" height="32" style={{ marginLeft: 4 }}><path d="M8 5v14l11-7z" /></svg>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div style={{ padding: "16px 20px" }}>
-              <div style={{ fontSize: 17, fontWeight: 800, letterSpacing: 1, marginBottom: 4 }}>{featuredVid.title}</div>
-              <div style={{ fontSize: 12, color: "#555" }}>{featuredVid.description}</div>
-            </div>
-          </div>
+      <div style={{ marginBottom: 18 }}>
+        <PillRow activeType={activeType} onSelect={setActiveType} />
+      </div>
 
-          <div className="audio-visuals-playlist" style={{ flexShrink: 0 }}>
-            <div style={{ fontSize: 9, color: "#2a2a2a", letterSpacing: 3, textTransform: "uppercase", fontWeight: 700, marginBottom: 2 }}>Up Next</div>
-            {musicVideos.map((vid) => {
-              const isActive = featuredId === vid.youtubeId;
-              return (
-                <div
-                  className="audio-visuals-playlist__item"
-                  key={vid.id}
-                  onClick={() => handleSelect(vid.youtubeId)}
-                  style={{
-                    background: isActive ? "#111" : "#0a0a0a",
-                    border: `1px solid ${isActive ? "rgba(0,255,255,0.3)" : "#1a1a1a"}`,
-                    borderRadius: 14,
-                    overflow: "hidden",
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                    boxShadow: isActive ? "0 0 18px rgba(0,255,255,0.1)" : "none",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.borderColor = "rgba(0,255,255,0.2)";
-                      e.currentTarget.style.background = "#0e0e0e";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.borderColor = "#1a1a1a";
-                      e.currentTarget.style.background = "#0a0a0a";
-                    }
-                  }}
-                >
-                  <div style={{ display: "flex", gap: 10, padding: 10, alignItems: "center" }}>
-                    <div style={{ position: "relative", width: 90, height: 50, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
-                      <img
-                        src={`https://img.youtube.com/vi/${vid.youtubeId}/mqdefault.jpg`}
-                        alt={vid.title}
-                        style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                      />
-                      {isActive && (
-                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.5)" }}>
-                          <svg viewBox="0 0 24 24" fill="#00ffff" width="16" height="16"><path d="M6 19h4V5H6zm8-14v14h4V5z" /></svg>
-                        </div>
-                      )}
-                      {!isActive && (
-                        <div
-                          style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0)", transition: "background 0.2s" }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = "rgba(0,0,0,0.4)";
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = "rgba(0,0,0,0)";
-                          }}
-                        >
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="rgba(255,255,255,0)"
-                            width="16"
-                            height="16"
-                            style={{ transition: "fill 0.2s" }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.fill = "white";
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.fill = "rgba(255,255,255,0)";
-                            }}
-                          >
-                            <path d="M8 5v14l11-7z" />
-                          </svg>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: isActive ? "#00ffff" : "white",
-                          lineHeight: 1.3,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {vid.title}
-                      </div>
-                      <div style={{ fontSize: 10, color: "#444", marginTop: 2, lineHeight: 1.3 }}>{vid.description}</div>
-                      {isActive && (
-                        <div style={{ fontSize: 8, color: "#00ffff", letterSpacing: 2.5, marginTop: 4, fontWeight: 700, textTransform: "uppercase" }}>Now Playing</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+      {openSeriezId ? (
+        <SeriezDetailView
+          seriezId={openSeriezId}
+          onBack={() => setOpenSeriezId(null)}
+          onPlay={(ep) => setPlayingVideo({ video_id: ep.video_id, title: ep.title, poster_url: ep.poster_url })}
+        />
+      ) : loading ? (
+        <div style={{ color: "#666", fontSize: 13, padding: "30px 0" }}>Loading…</div>
+      ) : items.length === 0 ? (
+        <div style={{ color: "#666", fontSize: 13, padding: "30px 0" }}>Nothing here yet.</div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 14 }}>
+          {items.map((item) => (
+            <PosterCard key={item.kind === "seriez" ? `s-${item.seriez_id}` : `v-${item.video_id}`} item={item} onClick={() => handleCardClick(item)} />
+          ))}
         </div>
+      )}
+
+      {playingVideo && (
+        <AudioVisualPlayer
+          videoId={playingVideo.video_id}
+          title={playingVideo.title}
+          posterUrl={playingVideo.poster_url}
+          onClose={() => setPlayingVideo(null)}
+        />
+      )}
     </div>
   );
 });

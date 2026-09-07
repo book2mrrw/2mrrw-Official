@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "generatedAt": "2026-09-01T22:55:00.000Z",
   "sourceRoot": "src/app/api",
-  "total": 146,
+  "total": 154,
   "counts": {
-    "HUMAN_ADMIN": 34,
+    "HUMAN_ADMIN": 40,
     "SERVICE_ONLY": 20,
     "ADMIN_OR_SERVICE_CAPABILITY": 5,
     "AUTHENTICATED_USER": 24,
-    "PUBLIC": 58,
+    "PUBLIC": 60,
     "DEAD": 0
   },
   "routes": [
@@ -104,6 +104,61 @@
       ],
       "authority": "ADMIN_OR_SERVICE_CAPABILITY",
       "evidence": "canonical human MFA guard or exact scoped service capability"
+    },
+    {
+      "route": "/api/admin/audio-visual/draft",
+      "file": "src/app/api/admin/audio-visual/draft/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/audio-visual/seriez",
+      "file": "src/app/api/admin/audio-visual/seriez/route.js",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/audio-visual/seriez/[id]/next-episode",
+      "file": "src/app/api/admin/audio-visual/seriez/[id]/next-episode/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/audio-visual/upload/complete",
+      "file": "src/app/api/admin/audio-visual/upload/complete/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/audio-visual/upload/presigned",
+      "file": "src/app/api/admin/audio-visual/upload/presigned/route.js",
+      "methods": [
+        "POST"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/admin/audio-visuals",
+      "file": "src/app/api/admin/audio-visuals/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "HUMAN_ADMIN",
+      "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
     },
     {
       "route": "/api/admin/backfill-playback-keys",
@@ -496,6 +551,24 @@
       ],
       "authority": "HUMAN_ADMIN",
       "evidence": "canonical requireAdminActor/getAdminSessionUser guard"
+    },
+    {
+      "route": "/api/audio-visual/browse",
+      "file": "src/app/api/audio-visual/browse/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
+    },
+    {
+      "route": "/api/audio-visual/seriez/[id]",
+      "file": "src/app/api/audio-visual/seriez/[id]/route.js",
+      "methods": [
+        "GET"
+      ],
+      "authority": "PUBLIC",
+      "evidence": "public or token-scoped application surface"
     },
     {
       "route": "/api/audio-visual/[videoId]/key",
