@@ -1702,7 +1702,9 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
             cover: p.cover || p.thumbnail || p.thumbnail_url || p.preview_url || p.image || null,
             price: typeof p.price === "number"
               ? p.price
-              : parseFloat(p.retail_price ?? p.variants?.[0]?.retail_price ?? 0),
+              : parseFloat(p.retail_price ?? 0),
+            product_type: "merch",
+            variants: Array.isArray(p.variants) ? p.variants : [],
           }));
           setPrintfulProducts(normalized);
         }
@@ -1973,10 +1975,15 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   const cartRequiresShipping = useMemo(() => cart.some((item) => {
     const slug = String(item?.slug || "");
     if (slug === "vault-pass") return false;
+    // Merch is checked by product_type (stamped on every merch cart item —
+    // see addToCart calls from CatalogGrid's merch actions), not by slug: a
+    // real synced Printful product's slug is auto-generated from its name
+    // and will never match a hardcoded allowlist the way the old three
+    // placeholder products (hoodie/shirt/hat) happened to.
+    if (item?.product_type === "merch") return true;
     return slug.startsWith("exc-card") ||
       slug.startsWith("exc-bundle") ||
       slug.includes("vinyl") ||
-      ["hoodie", "shirt", "hat"].includes(slug) ||
       slug.startsWith("evt-");
   }), [cart]);
 
@@ -2123,8 +2130,8 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     []
   );
 
-  const handleCheckout = useCallback(async () => {
-    if (cartRef.current.length === 0) return;
+  const handleCheckoutItems = useCallback(async (items) => {
+    if (!items || items.length === 0) return;
     setCheckingOut(true);
     setCheckoutError("");
     try {
@@ -2132,7 +2139,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ cart: cartRef.current }),
+        body: JSON.stringify({ cart: items }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -2152,6 +2159,17 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       setCheckingOut(false);
     }
   }, []);
+  const handleCheckout = useCallback(() => handleCheckoutItems(cartRef.current), [handleCheckoutItems]);
+  // Merch card "Checkout" — adds the picked variant to the real cart (so it's
+  // visible in the cart panel and inventory/clear-cart on success stays
+  // correct) and immediately proceeds to checkout with the up-to-date cart,
+  // reusing the exact same payment flow rather than a parallel one. Reads
+  // `cart` state directly (not cartRef, which only catches up after a
+  // render) so the item just added is guaranteed to be included.
+  const handleMerchCheckoutNow = useCallback((item) => {
+    addToCartRaw(item);
+    handleCheckoutItems([...cart, item]);
+  }, [cart, addToCartRaw, handleCheckoutItems]);
 
   const handleCheckoutSuccess = useCallback(async (paymentIntentId) => {
     if (paymentIntentId) {
@@ -2635,6 +2653,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   singlesRowRef={singlesRowRef}
                   onCardClick={openSingleModal}
                   addToCart={addToCart}
+                  onCheckoutNow={handleMerchCheckoutNow}
                   liveStreamDate={liveStreamDate}
                   liveStreamTime={liveStreamTime}
                   onOpenFeature={openFeatureModal}
@@ -2780,7 +2799,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   {printfulLoading ? <div style={{padding:"60px 0",textAlign:"center",fontSize:13,color:"#333",letterSpacing:2}}>Loading products…</div> : (
                     <>
                       {shopIsFallback && <div style={{marginBottom:20,padding:"12px 16px",background:"rgba(255,255,255,0.02)",border:"1px solid #1a1a1a",borderRadius:10,fontSize:11,color:"#444",letterSpacing:1,lineHeight:1.7}}>Store inventory is syncing. Showing preview items — check back soon for the full Printful catalog.</div>}
-                      <CatalogGrid items={shopItems} type="products" addToCart={addToCart} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut}/>
+                      <CatalogGrid items={shopItems} type="products" addToCart={addToCart} onCheckoutNow={handleMerchCheckoutNow} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut}/>
                     </>
                   )}
                 </>

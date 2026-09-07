@@ -60,12 +60,34 @@ async function merchFromCatalog() {
     const admin = getAdminClient();
     const { data, error } = await admin
       .from("products")
-      .select("slug, title, price_cents, cover_url")
+      .select("id, slug, title, price_cents, cover_url")
       .eq("active", true)
       .eq("product_type", "merch")
       .order("title", { ascending: true });
 
     if (error || !data?.length) return [];
+
+    const productIds = data.map((row) => row.id);
+    const { data: variantRows } = await admin
+      .from("product_variants")
+      .select("id, product_id, external_variant_id, catalog_variant_id, sku, size, color, price_cents")
+      .in("product_id", productIds)
+      .eq("active", true);
+
+    const variantsByProductId = new Map();
+    for (const v of variantRows || []) {
+      const list = variantsByProductId.get(v.product_id) || [];
+      list.push({
+        id: v.id,
+        externalVariantId: v.external_variant_id,
+        catalogVariantId: v.catalog_variant_id,
+        sku: v.sku,
+        size: v.size || null,
+        color: v.color || null,
+        price: (v.price_cents || 0) / 100,
+      });
+      variantsByProductId.set(v.product_id, list);
+    }
 
     return data.map((row) => ({
       id: row.slug,
@@ -74,6 +96,7 @@ async function merchFromCatalog() {
       cover: resolveMerchCover(row.cover_url),
       price: (row.price_cents || 0) / 100,
       source: "catalog",
+      variants: variantsByProductId.get(row.id) || [],
     }));
   } catch {
     return [];

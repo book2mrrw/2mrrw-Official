@@ -15,6 +15,7 @@ const HomeStorefrontIsland = memo(function HomeStorefrontIsland({
   singlesRowRef,
   onCardClick,
   addToCart,
+  onCheckoutNow,
   liveStreamDate,
   liveStreamTime,
   onOpenFeature,
@@ -58,6 +59,7 @@ const HomeStorefrontIsland = memo(function HomeStorefrontIsland({
               onGift={auth.openGiftSheet}
               onCardClick={onCardClick}
               addToCart={addToCart}
+              onCheckoutNow={onCheckoutNow}
               accountState={ent.entitlementAccountState}
               userId={auth.userId}
               onLibraryChange={auth.handleLibraryChange}

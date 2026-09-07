@@ -77,6 +77,15 @@ export async function POST(req) {
             type: l.product_type === "merch" ? "merch" : "digital",
             release_id: l.release_id || null,
             access_type: l.access_type || "purchase",
+            // Needed to actually place the Printful order for the right
+            // size/color — see fulfillMerchItemsIfAny in fulfill-purchase.js.
+            ...(l.product_type === "merch" ? {
+              variant_id: l.variant_id || null,
+              external_variant_id: l.external_variant_id || null,
+              catalog_variant_id: l.catalog_variant_id || null,
+              size: l.size || null,
+              color: l.color || null,
+            } : {}),
           }
     );
 

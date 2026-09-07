@@ -22,10 +22,11 @@ export async function resolveCartLines(cart, admin = null) {
 
   const slugs = [...new Set(cart.map((i) => i?.slug).filter(Boolean))];
   const videoIds = [...new Set(cart.map((i) => i?.video_id).filter(Boolean))];
+  const variantIds = [...new Set(cart.map((i) => i?.variantId).filter(Boolean))];
   if (slugs.length === 0 && videoIds.length === 0) throw new Error("Cart items missing slugs");
 
   const client = admin || getAdminClient();
-  const [productsResult, audioVisualsResult] = await Promise.all([
+  const [productsResult, audioVisualsResult, variantsResult] = await Promise.all([
     slugs.length
       ? client
           .from("products")
@@ -35,13 +36,18 @@ export async function resolveCartLines(cart, admin = null) {
     videoIds.length
       ? client.from("audio_visuals").select("id, title, price_cents, poster_r2_key, publication_state").in("id", videoIds)
       : { data: [], error: null },
+    variantIds.length
+      ? client.from("product_variants").select("id, product_id, external_variant_id, catalog_variant_id, size, color, price_cents, active").in("id", variantIds)
+      : { data: [], error: null },
   ]);
 
   if (productsResult.error) throw productsResult.error;
   if (audioVisualsResult.error) throw audioVisualsResult.error;
+  if (variantsResult.error) throw variantsResult.error;
 
   const bySlug = new Map((productsResult.data || []).map((p) => [p.slug, p]));
   const byVideoId = new Map((audioVisualsResult.data || []).map((v) => [v.id, v]));
+  const variantById = new Map((variantsResult.data || []).map((v) => [v.id, v]));
   const lines = [];
 
   for (const item of cart) {
@@ -82,15 +88,37 @@ export async function resolveCartLines(cart, admin = null) {
     if (availability && !availability.canPurchase) {
       throw new Error(`Product is not currently available for purchase: ${item.slug}`);
     }
+
+    // A merch variant (size/color) is optional per line — only present for
+    // products.product_type === 'merch' cart items built by
+    // MerchCardVariantActions. Never trust the client-sent price/identity:
+    // the variant must actually belong to this product and be active, same
+    // principle as every other resolution in this function.
+    let variant = null;
+    if (item?.variantId) {
+      variant = variantById.get(item.variantId) || null;
+      if (!variant || variant.product_id !== product.id) {
+        throw new Error(`Unknown variant for product: ${item.slug}`);
+      }
+      if (!variant.active) {
+        throw new Error(`This option is no longer available: ${item.slug}`);
+      }
+    }
+
     lines.push({
       slug: product.slug,
       title: product.title,
       product_type: product.product_type,
-      price_cents: availability?.preorderPriceCents ?? product.price_cents,
+      price_cents: variant ? variant.price_cents : (availability?.preorderPriceCents ?? product.price_cents),
       cover_url: product.cover_url || item.cover,
       quantity: 1,
       release_id: product.release_id || lifecycle?.id || null,
       access_type: ["preorder", "early_access"].includes(availability?.phase) ? "preorder" : "purchase",
+      variant_id: variant?.id || null,
+      external_variant_id: variant?.external_variant_id || null,
+      catalog_variant_id: variant?.catalog_variant_id || null,
+      size: variant?.size || null,
+      color: variant?.color || null,
     });
   }
 

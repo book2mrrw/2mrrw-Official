@@ -47,6 +47,7 @@ const HomeStorefront = memo(function HomeStorefront({
   onGift,
   onCardClick,
   addToCart,
+  onCheckoutNow,
   accountState,
   userId,
   onLibraryChange,
@@ -187,6 +188,7 @@ const HomeStorefront = memo(function HomeStorefront({
               items={shopItems}
               type="products"
               addToCart={addToCart}
+              onCheckoutNow={onCheckoutNow}
               hoverIn={hoverIn}
               hoverOut={hoverOut}
               buttonHoverIn={buttonHoverIn}

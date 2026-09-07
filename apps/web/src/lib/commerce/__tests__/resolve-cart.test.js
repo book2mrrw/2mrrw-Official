@@ -6,7 +6,7 @@ import { resolveCartLines } from "../resolve-cart.js";
 // pre-existing slug/products path is untouched and was already unit-tested
 // only indirectly (no dedicated test file existed for it before this).
 
-function fakeAdmin({ audioVisuals = [], products = [] } = {}) {
+function fakeAdmin({ audioVisuals = [], products = [], variants = [] } = {}) {
   return {
     from(table) {
       if (table === "audio_visuals") {
@@ -19,6 +19,12 @@ function fakeAdmin({ audioVisuals = [], products = [] } = {}) {
         return {
           select() { return this; },
           in() { return Promise.resolve({ data: products, error: null }); },
+        };
+      }
+      if (table === "product_variants") {
+        return {
+          select() { return this; },
+          in() { return Promise.resolve({ data: variants, error: null }); },
         };
       }
       throw new Error(`fakeAdmin: unexpected table ${table}`);
@@ -92,4 +98,51 @@ test("a mixed cart resolves both a catalog slug line and an Audio Visual video l
   assert.equal(lines.length, 2);
   assert.equal(lines[0].slug, "the-shirt");
   assert.equal(lines[1].video_id, "video-1");
+});
+
+// ── merch variant (size/color) resolution ──
+
+const MERCH_PRODUCT = { id: "product-1", slug: "the-shirt", title: "The Shirt", product_type: "merch", price_cents: 2500, cover_url: null, active: true, release_id: null, releases: null };
+
+test("a merch cart item with a valid variant uses the variant's price, not the flat product's — the client's price is never trusted either way", async () => {
+  const admin = fakeAdmin({
+    products: [MERCH_PRODUCT],
+    variants: [{ id: "variant-1", product_id: "product-1", external_variant_id: "ext-1", catalog_variant_id: "cat-1", size: "L", color: "Black", price_cents: 2900, active: true }],
+  });
+  const lines = await resolveCartLines([{ slug: "the-shirt", variantId: "variant-1", price_cents: 1 }], admin);
+  assert.equal(lines[0].price_cents, 2900);
+  assert.equal(lines[0].variant_id, "variant-1");
+  assert.equal(lines[0].external_variant_id, "ext-1");
+  assert.equal(lines[0].catalog_variant_id, "cat-1");
+  assert.equal(lines[0].size, "L");
+  assert.equal(lines[0].color, "Black");
+});
+
+test("a variant belonging to a different product is rejected, not silently substituted", async () => {
+  const admin = fakeAdmin({
+    products: [MERCH_PRODUCT],
+    variants: [{ id: "variant-1", product_id: "some-other-product", external_variant_id: "ext-1", catalog_variant_id: "cat-1", size: "L", color: null, price_cents: 2900, active: true }],
+  });
+  await assert.rejects(
+    () => resolveCartLines([{ slug: "the-shirt", variantId: "variant-1" }], admin),
+    /Unknown variant for product: the-shirt/
+  );
+});
+
+test("an inactive (discontinued) variant is rejected", async () => {
+  const admin = fakeAdmin({
+    products: [MERCH_PRODUCT],
+    variants: [{ id: "variant-1", product_id: "product-1", external_variant_id: "ext-1", catalog_variant_id: "cat-1", size: "L", color: null, price_cents: 2900, active: false }],
+  });
+  await assert.rejects(
+    () => resolveCartLines([{ slug: "the-shirt", variantId: "variant-1" }], admin),
+    /This option is no longer available: the-shirt/
+  );
+});
+
+test("a merch cart item with no variantId still resolves via the flat product, unaffected", async () => {
+  const admin = fakeAdmin({ products: [MERCH_PRODUCT] });
+  const lines = await resolveCartLines([{ slug: "the-shirt" }], admin);
+  assert.equal(lines[0].price_cents, 2500);
+  assert.equal(lines[0].variant_id, null);
 });

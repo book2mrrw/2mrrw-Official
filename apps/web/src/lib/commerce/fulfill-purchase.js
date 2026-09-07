@@ -4,6 +4,7 @@ import { grantCollectorOwnerships } from "@/lib/commerce/collector-ownerships";
 import { grantVaultPassEntitlement } from "@/lib/commerce/vault-entitlements";
 import { grantAudioVisualEntitlements } from "@/lib/audio-visual/entitlements";
 import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
+import { getFulfillmentProvider } from "@/lib/fulfillment/get-fulfillment-provider";
 
 /**
  * Audio Visual items carry no slug (audio_visuals is a stable-ID-only
@@ -14,6 +15,72 @@ async function grantAudioVisualItemsIfAny(admin, { userId, purchaseId, items }) 
   const audioVisualItems = (items || []).filter((item) => item?.type === "audio_visual" && item?.video_id);
   if (!audioVisualItems.length) return;
   await grantAudioVisualEntitlements({ userId, purchaseId, items: audioVisualItems, admin });
+}
+
+/**
+ * Actually places the Printful order for any merch in this purchase — the
+ * missing half of "customer paid for merch" that neither fulfillPaymentIntent
+ * nor fulfillCheckoutSession did on their own before this. Every backend
+ * piece it calls (product_variants, FulfillmentPort/PrintfulFulfillmentAdapter,
+ * merch_fulfillments) already existed and was already tested; this is the
+ * first thing that actually wires them together.
+ *
+ * Deliberately never throws — a Printful outage must not block the
+ * customer's digital entitlements or purchase record from completing in the
+ * same webhook call. On failure it writes merch_fulfillments.status =
+ * "failed" (visible via a direct DB query, same as how earlier fulfillment
+ * gaps were diagnosed this session) rather than leaving the order silently
+ * unsubmitted; an admin retry/resubmit action is a reasonable fast-follow,
+ * not part of this pass.
+ */
+async function fulfillMerchItemsIfAny(admin, { purchaseId, items, shipping }) {
+  const merchItems = (items || []).filter((item) => item?.type === "merch" && item?.external_variant_id);
+  if (!merchItems.length) return;
+
+  const address = shipping?.address || {};
+  const recipient = {
+    name: shipping?.name || "Customer",
+    address1: address.line1 || "",
+    address2: address.line2 || undefined,
+    city: address.city || "",
+    state: address.state || "",
+    country: address.country || "",
+    zip: address.postal_code || "",
+    phone: shipping?.phone || undefined,
+  };
+
+  try {
+    const missing = ["address1", "city", "state", "country", "zip"].filter((f) => !recipient[f]);
+    if (missing.length) {
+      throw new Error(`Missing shipping fields for merch order: ${missing.join(", ")}`);
+    }
+
+    const result = await getFulfillmentProvider().createOrder({
+      recipient,
+      items: merchItems.map((item) => ({
+        catalogVariantId: item.catalog_variant_id,
+        externalVariantId: item.external_variant_id,
+        quantity: 1,
+      })),
+      externalOrderId: purchaseId,
+    });
+
+    await admin.from("merch_fulfillments").upsert(
+      { purchase_id: purchaseId, provider: "printful", external_order_id: result.externalOrderId, status: "submitted" },
+      { onConflict: "purchase_id" }
+    );
+    await admin.from("purchases").update({ shipping_address: recipient }).eq("id", purchaseId);
+  } catch (err) {
+    console.error("[fulfill-purchase] merch fulfillment failed (non-fatal)", purchaseId, err?.message);
+    try {
+      await admin.from("merch_fulfillments").upsert(
+        { purchase_id: purchaseId, provider: "printful", status: "failed" },
+        { onConflict: "purchase_id" }
+      );
+    } catch {
+      /* the failure itself is already logged above; never let recording it throw further */
+    }
+  }
 }
 
 /**
@@ -87,6 +154,7 @@ async function recordPurchaseItems(admin, { purchaseId, items, totalAmountCents 
         item_type: item.type === "merch" ? "merch" : item.type === "audio_visual" ? "audio_visual" : "digital",
         access_type: item.access_type || null,
         release_id: item.release_id || null,
+        variant_id: item.variant_id || null,
         unit_price_cents: unitPriceCents,
         quantity: 1,
       }));
@@ -165,6 +233,7 @@ export async function fulfillCheckoutSession(session) {
     ]);
   }
   await grantAudioVisualItemsIfAny(admin, { userId, purchaseId: purchase.id, items });
+  await fulfillMerchItemsIfAny(admin, { purchaseId: purchase.id, items, shipping: session.shipping_details || session.customer_details });
 
   invalidateAccountStateCache(userId).catch(() => {});
   return { purchaseId: purchase.id, slugs };
@@ -237,6 +306,7 @@ export async function fulfillPaymentIntent(paymentIntent) {
     ]);
   }
   await grantAudioVisualItemsIfAny(admin, { userId, purchaseId: purchase.id, items });
+  await fulfillMerchItemsIfAny(admin, { purchaseId: purchase.id, items, shipping: paymentIntent.shipping });
 
   invalidateAccountStateCache(userId).catch(() => {});
   return { purchaseId: purchase.id, slugs, items };
