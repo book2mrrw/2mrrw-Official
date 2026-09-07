@@ -18,16 +18,25 @@ const STORAGE_KEY = "2mrrw-hls-quality-level";
 
 // Bitrate tiers in the master playlist (highest → lowest).
 // Must match the order emitted by /api/library/hls.
+// 64k is a data-saver floor: below it, AAC-LC quality degrades audibly
+// (warble/metallic artifacts), so it's the last rung rather than a lower one.
 const TIERS = [
-  { kbps: 320, label: "high"     },
-  { kbps: 160, label: "standard" },
-  { kbps: 96,  label: "low"      },
+  { kbps: 320, label: "high"       },
+  { kbps: 160, label: "standard"   },
+  { kbps: 96,  label: "low"        },
+  { kbps: 64,  label: "data-saver" },
 ];
 
 // Effective Type → suggested tier (Network Information API)
+// slow-2g/2g start at the 64k floor rather than 96k: 96k needs ~96-120kbps
+// sustained once HTTP/segment overhead is counted, which is above what those
+// two ECT buckets reliably sustain — starting there just traded one stall
+// for another. hls.js's live ABR (abrBandWidthUpFactor: 0.7) climbs off this
+// floor within a few segments if the connection turns out better than the
+// coarse ECT guess. 3g/4g are unchanged — no evidence they need a downgrade.
 const ECT_TIER = {
-  "slow-2g": 2, // 96k
-  "2g":      2,
+  "slow-2g": 3, // 64k
+  "2g":      3, // 64k
   "3g":      1, // 160k
   "4g":      0, // 320k
 };

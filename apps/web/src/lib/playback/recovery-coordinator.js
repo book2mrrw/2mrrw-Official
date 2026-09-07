@@ -16,6 +16,7 @@
  */
 
 import { getHLSEngine } from "@/lib/audio/HLSEngine";
+import { getWebAudioEngine } from "@/lib/audio/WebAudioEngine";
 import { isEntitledFullPlaybackTrack } from "@/lib/playback/playback-track-utils";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 
@@ -250,7 +251,10 @@ class RecoveryCoordinator {
           // Do not seek if we're already inside the buffered range — that
           // would be a backward jump and could cause the same seek-loop issue.
           if (audio.currentTime < bufStart && bufStart < bufEnd) {
-            audio.currentTime = bufStart;
+            // Fade across the jump — an unfaded currentTime reposition is a sample
+            // discontinuity on the live Web Audio graph, heard as a click/pop on
+            // every recovery. See WebAudioEngine.rampAcrossReposition.
+            getWebAudioEngine().rampAcrossReposition(() => { audio.currentTime = bufStart; });
           }
           // If currentTime is already inside a buffered range, the stall is a
           // decode delay — the browser will resolve it. Release lock and wait.

@@ -162,14 +162,22 @@ export class HLSEngine {
       abrBandWidthFactor:         0.95,
       abrBandWidthUpFactor:       0.7,
 
-      // Manifest loading — fail fast, zero retries.
-      // The manifest is ~200 bytes. Any failure (404 = not transcoded, 401, timeout,
-      // cold Vercel function) means fall back to progressive download immediately.
-      // Retrying the manifest just compounds latency: 3 retries × up to 10 s each
-      // was the root cause of 30-second first-play delays. Segment/level loading
-      // keeps its own retry budget because those fail for transient reasons mid-stream.
+      // Manifest loading — zero retries, but a timeout generous enough that a
+      // merely-slow connection doesn't get misclassified as a broken one.
+      // The manifest is ~200 bytes, so a real failure (404 = not transcoded,
+      // 401) still resolves in milliseconds — this timeout only matters for a
+      // response that's genuinely crawling. Retrying the manifest compounds
+      // latency multiplicatively: 3 retries × up to 10 s each was the root
+      // cause of 30-second first-play delays, so the retry count stays at 0.
+      // The timeout is the single dial for "how long is patient, not broken" —
+      // 6 s covers slow-2G/congested-3G without reintroducing that multiplicative
+      // blowup. Falling back to progressive mid-session is itself a bigger,
+      // more audible interruption than waiting a few extra seconds for HLS
+      // (which brings ABR + per-segment retry) to come up. Segment/level
+      // loading keeps its own retry budget below — those fail for transient
+      // reasons mid-stream, not at session start.
       manifestLoadingMaxRetry:    0,
-      manifestLoadingTimeOut:     3000,       // 3 s max — manifests are tiny; slow = broken
+      manifestLoadingTimeOut:     6000,
       levelLoadingMaxRetry:       3,
       fragLoadingMaxRetry:        3,
       levelLoadingRetryDelay:     1000,
@@ -202,13 +210,15 @@ export class HLSEngine {
         resolve(value);
       };
 
-      // 5 s hard cap — belt-and-suspenders in case hls.js events are suppressed.
+      // 8 s hard cap — belt-and-suspenders in case hls.js events are suppressed.
+      // Kept ~2 s above manifestLoadingTimeOut so hls.js's own timeout is always
+      // the one that fires in the normal slow-manifest case.
       safetyTimerId = setTimeout(() => {
         if (settled) return;
         this._destroyHls();
         this.onFallback?.();
         settle(false);
-      }, 5000);
+      }, 8000);
 
       hls.on(Hls.Events.ERROR, (_, data) => {
         if (isPlaybackTraceEnabled()) {

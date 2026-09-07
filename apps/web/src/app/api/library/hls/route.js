@@ -29,6 +29,7 @@ const BITRATE_BANDWIDTH = {
   "320k": 360_000,
   "160k": 180_000,
   "96k":  108_000,
+  "64k":  72_000,
 };
 
 function cors(req, res) {

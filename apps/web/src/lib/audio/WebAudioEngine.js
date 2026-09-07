@@ -659,6 +659,39 @@ export class WebAudioEngine extends AudioEngineBase {
     this._standbyGain.gain.linearRampToValueAtTime(0, end);
   }
 
+  /**
+   * Duck mainGain to silence, run a synchronous reposition callback at the
+   * bottom of the fade, then restore. A raw `audio.currentTime` jump (or any
+   * other mid-stream reposition) on a live Web Audio graph is a sample
+   * discontinuity — audibly a click or pop. Wrapping it in a ~20ms fade
+   * (same ramp length as setUserVolume's zipper-noise guard) makes the
+   * reposition inaudible instead of eliminating it structurally.
+   * Falls back to an immediate reposition when there is no live graph to click.
+   *
+   * @param {() => void} reposition  Runs once gain has reached 0.
+   * @param {number} [fadeSec=0.02] Fade duration each way.
+   */
+  rampAcrossReposition(reposition, fadeSec = 0.02) {
+    const ctx  = this.ctx;
+    const gain = this.mainGain;
+    if (!ctx || !gain || ctx.state !== "running") {
+      reposition();
+      return;
+    }
+    const now       = ctx.currentTime;
+    const restoreTo = gain.gain.value;
+    gain.gain.cancelScheduledValues(now);
+    gain.gain.setValueAtTime(restoreTo, now);
+    gain.gain.linearRampToValueAtTime(0, now + fadeSec);
+    setTimeout(() => {
+      try { reposition(); } catch {}
+      const t = ctx.currentTime;
+      gain.gain.cancelScheduledValues(t);
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(restoreTo, t + fadeSec);
+    }, Math.round(fadeSec * 1000));
+  }
+
   /** @returns {HTMLAudioElement|null} Active (playing) audio element — public read accessor. */
   getActiveBoundElement() { return this._boundElement; }
 

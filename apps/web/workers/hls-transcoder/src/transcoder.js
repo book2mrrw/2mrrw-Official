@@ -2,7 +2,9 @@
  * HLS transcoder.
  *
  * Given a source audio stream from R2, produces AES-128 encrypted HLS segments
- * for three bitrate tiers (320k / 160k / 96k) using fMP4 (CMAF) containers.
+ * for four bitrate tiers (320k / 160k / 96k / 64k) using fMP4 (CMAF) containers.
+ * 64k is the data-saver floor for slow-2g/2g connections — see
+ * src/lib/hls/audio-renditions.js for why it stops there.
  *
  * Pipeline per bitrate:
  *   R2 download stream → FFmpeg stdin → fMP4 segmenter → AES-128 key file + segments → R2
@@ -174,7 +176,7 @@ function parseDuration(playlistText) {
  */
 export async function transcode({ job }) {
   const { id: jobId, slug, track_slug: trackSlug, source_key: sourceKey,
-          hls_prefix: prefix, bitrates = ["320k", "160k", "96k"] } = job;
+          hls_prefix: prefix, bitrates = ["320k", "160k", "96k", "64k"] } = job;
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `hls-${jobId}-`));
 
