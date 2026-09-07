@@ -66,13 +66,29 @@ test("runWorker defensively rejects a job whose job_type doesn't match this lane
   assert.match(body, /return;/);
 });
 
-test("the video processor is a real, isolated file that fails loudly instead of silently pretending to encode", async () => {
+test("the video processor is a real, wired pipeline now (Slice 15) — no longer the earlier stub", async () => {
   const src = read("workers/hls-transcoder/src/video-transcoder.js");
-  assert.match(src, /export async function processVideoTranscodeJob\(job\)/);
-  assert.match(src, /throw new Error\(/);
+  assert.match(src, /export async function processVideoTranscodeJob\(job, params\)/);
+  // Never imports db.js/r2.js directly — both throw at import time without
+  // real env vars, which would make this file (and any test of it) unsafe
+  // to import. dbClient/downloadStreamFn/uploadFn are required params
+  // instead, supplied only by video-worker.js — the same reason
+  // publication-authority.js's own header gives for the identical choice.
+  assert.doesNotMatch(src, /from ["']\.\/db\.js["']/);
+  assert.doesNotMatch(src, /from ["']\.\/r2\.js["']/);
 
   const mod = await import("../../../../workers/hls-transcoder/src/video-transcoder.js");
-  await assert.rejects(() => mod.processVideoTranscodeJob({ id: "test-job-id" }), /VIDEO_TRANSCODE is not implemented yet/);
+  await assert.rejects(
+    () => mod.processVideoTranscodeJob({ id: "test-job-id" }, {}),
+    /dbClient, downloadStreamFn, and uploadFn are all required/
+  );
+});
+
+test("video-worker.js is the one real place that imports db.js/r2.js for the video lane, closing over them for video-transcoder.js", () => {
+  const src = read("workers/hls-transcoder/src/workers/video-worker.js");
+  assert.match(src, /import \{ db \} from ["']\.\.\/db\.js["']/);
+  assert.match(src, /import \{ downloadStream, upload \} from ["']\.\.\/r2\.js["']/);
+  assert.match(src, /processVideoTranscodeJob\(job, \{ dbClient: db, downloadStreamFn: downloadStream, uploadFn: upload \}\)/);
 });
 
 test("the old shared index.js entry point is gone, not just unreferenced", () => {

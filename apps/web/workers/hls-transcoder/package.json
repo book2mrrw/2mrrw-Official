@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node src/workers/audio-worker.js",
     "dev": "node --watch src/workers/audio-worker.js",
-    "test": "node --test src/engine/__tests__/*.test.js"
+    "test": "node --test src/engine/__tests__/*.test.js src/__tests__/*.test.js"
   },
   "engines": {
     "node": ">=22"

@@ -7,10 +7,10 @@
  * path to audio processing anywhere in this file — it never imports
  * transcoder.js.
  *
- * Real VIDEO_TRANSCODE encoding is not implemented yet (see
- * ../video-transcoder.js) — this process runs on its own dedicated,
- * physically separate machine from day one, and safely idles (claiming
- * nothing, since no job_type='video' rows exist yet) until that lands.
+ * video-transcoder.js's dbClient/downloadStreamFn/uploadFn are required,
+ * never-defaulted params (see its own header) — this is the one real place
+ * that imports db.js/r2.js and closes over them, so video-transcoder.js
+ * itself stays safe to import in a test file with no env vars set.
  */
 
 import os from "os";
@@ -18,6 +18,8 @@ import crypto from "crypto";
 import { processVideoTranscodeJob } from "../video-transcoder.js";
 import { runWorker } from "../worker-runtime.js";
 import { dropPrivilegesIfRoot } from "../drop-privileges.js";
+import { db } from "../db.js";
+import { downloadStream, upload } from "../r2.js";
 
 // /data is the mounted scratch volume — owned by root the first time Fly
 // attaches a fresh volume, so this must chown it before dropping privileges.
@@ -31,6 +33,6 @@ const IDLE_POLL_MS = parseInt(process.env.IDLE_POLL_MS || "5000", 10);
 runWorker({
   jobType:   JOB_TYPE,
   workerId:  WORKER_ID,
-  processFn: processVideoTranscodeJob,
+  processFn: (job) => processVideoTranscodeJob(job, { dbClient: db, downloadStreamFn: downloadStream, uploadFn: upload }),
   idlePollMs: IDLE_POLL_MS,
 });
