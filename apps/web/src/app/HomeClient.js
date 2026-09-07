@@ -1684,7 +1684,13 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   }, [activeTab]);
 
   useEffect(() => {
-    if (activeTab !== "shop") return;
+    // Fetches once on mount, not gated on activeTab — shopItems (fed by this
+    // same printfulProducts state) renders on BOTH the home tab's own Shop
+    // section and the dedicated Shop tab. Gating this on activeTab==="shop"
+    // meant a fresh page load landing on "home" never fetched at all, so
+    // that section fell back to the hardcoded fallbackMerch placeholder
+    // array indefinitely unless the user happened to click into the Shop
+    // tab first in that same session.
     setPrintfulLoading(true);
     fetch("/api/printful/products")
       .then(r => r.json())
@@ -1703,7 +1709,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       })
       .catch(err => console.error("PRINTFUL FETCH ERROR:", err))
       .finally(() => setPrintfulLoading(false));
-  }, [activeTab]);
+  }, []);
 
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_circle");
