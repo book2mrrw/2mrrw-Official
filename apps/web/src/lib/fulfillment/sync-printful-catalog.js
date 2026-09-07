@@ -57,7 +57,27 @@ export async function syncPrintfulCatalog() {
         .eq("external_product_id", String(product.id))
         .maybeSingle();
 
-      const slug = existing?.slug || slugify(product.name);
+      // A fresh product (no existing row matched by external_product_id) must
+      // not collide with any OTHER row's slug — products.slug is unique
+      // platform-wide, and a same-named product (or a stale/manually-created
+      // row that was never linked to a real Printful id) would otherwise
+      // throw a duplicate-key error and drop this product from the sync
+      // entirely. Same numeric-suffix dedup pattern as
+      // /api/admin/audio-visual/draft's slug assignment.
+      let slug = existing?.slug;
+      if (!slug) {
+        const base = slugify(product.name);
+        slug = base;
+        for (let attempt = 1; attempt <= 10; attempt++) {
+          const { data: collision } = await admin
+            .from("products")
+            .select("id")
+            .eq("slug", slug)
+            .maybeSingle();
+          if (!collision) break;
+          slug = `${base}-${attempt + 1}`;
+        }
+      }
 
       const { data: productRow, error: productErr } = await admin
         .from("products")

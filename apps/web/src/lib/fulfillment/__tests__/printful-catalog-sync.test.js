@@ -50,9 +50,20 @@ test("the sync stores sync_variant.id as external_variant_id and sync_variant.va
 test("the sync is idempotent: matched by external_product_id, and never overwrites an already-set slug on re-sync", () => {
   const src = read("src/lib/fulfillment/sync-printful-catalog.js");
   assert.match(src, /\.eq\("external_product_id", String\(product\.id\)\)/);
-  assert.match(src, /const slug = existing\?\.slug \|\| slugify\(product\.name\);/);
+  assert.match(src, /let slug = existing\?\.slug;/);
   assert.match(src, /\{ onConflict: "external_product_id" \}/);
   assert.match(src, /\{ onConflict: "product_id,external_variant_id" \}/);
+});
+
+test("a fresh product's slug is deduped against any other row's slug, not just its own external_product_id match — a same-named or stale/unlinked row must not silently drop the product from the sync", () => {
+  const src = read("src/lib/fulfillment/sync-printful-catalog.js");
+  const ifAt = src.indexOf("if (!slug) {");
+  assert.ok(ifAt > -1);
+  const body = src.slice(ifAt, ifAt + 500);
+  assert.match(body, /const base = slugify\(product\.name\);/);
+  assert.match(body, /for \(let attempt = 1; attempt <= 10; attempt\+\+\) {/);
+  assert.match(body, /\.eq\("slug", slug\)/);
+  assert.match(body, /slug = `\$\{base\}-\$\{attempt \+ 1\}`;/);
 });
 
 test("the sync tags every product as merch and skips discontinued variants", () => {
