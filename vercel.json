@@ -1,7 +1,7 @@
 {
-  "buildCommand": "cd apps/web && npm run build",
-  "outputDirectory": "apps/web/.next",
-  "installCommand": "cd apps/web && npm install --legacy-peer-deps",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install --legacy-peer-deps",
   "crons": [
     { "path": "/api/cron/expire-gifts", "schedule": "0 0 * * *" },
     { "path": "/api/cron/gift-reminders", "schedule": "0 10 * * *" },
