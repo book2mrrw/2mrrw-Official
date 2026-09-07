@@ -1277,7 +1277,7 @@ export function SingleModal({
       >
         <div
           ref={singleCoverRef}
-          style={{ flex: "0 0 65%", position: "relative", overflow: "hidden" }}
+          style={{ flex: "1 1 auto", minHeight: 0, position: "relative", overflow: "hidden" }}
           onPointerDown={singleCoverGesture.onPointerDown}
           onPointerMove={singleCoverGesture.onPointerMove}
           onPointerUp={singleCoverGesture.onPointerUp}
@@ -1397,70 +1397,69 @@ export function SingleModal({
           </div>
         </div>
 
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: t.dark, ...vars }}>
-          <div style={{ flex: 1, padding: "20px 22px", display: "flex", flexDirection: "column", gap: 18, overflowY: "auto" }}>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 30, fontWeight: 500, color: "white", lineHeight: 1.1, marginBottom: 6 }}>
-                {track?.title}
+        <div style={{ flex: "0 0 auto", display: "flex", flexDirection: "column", overflow: "hidden", background: t.dark, ...vars }}>
+          <div style={{ padding: "14px 22px", display: "flex", flexDirection: "column", gap: 10, overflowY: "auto" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 21, fontWeight: 500, color: "white", lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {track?.title}
+                </div>
+                <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".16em", textTransform: "uppercase", color: t.accent, marginTop: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {track?.artist}
+                  {track?.feat ? ` · ft. ${track.feat}` : ""} · {track?.type || "Single"} · {isPreview ? "30 sec preview" : track?.dur || fmt(fullDur)}
+                </div>
               </div>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: t.accent }}>
-                {track?.artist}
-                {track?.feat ? ` · ft. ${track.feat}` : ""}
-              </div>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, color: "rgba(255,255,255,.28)", letterSpacing: ".18em", marginTop: 4 }}>
-                {track?.type || "Single"} · {isPreview ? "30 sec preview" : track?.dur || fmt(fullDur)}
-              </div>
-            </div>
 
-            {isPreview ? (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 52 }}>
-                <button
-                  type="button"
-                  className="icon-btn cart-pulse"
-                  style={{ color: t.accent, "--glow": t.glow, "--glow-dim": t.glowDim }}
-                  onClick={() => onAddToCart?.(track)}
-                >
-                  <I.Cart s={34} />
-                </button>
-                {showSubscribeCta ? (
-                  <Link href="/subscribe" className="icon-btn" style={{ color: t.accent, filter: `drop-shadow(0 0 6px ${t.glow})` }}>
-                    <I.Sub s={28} />
-                  </Link>
-                ) : null}
-                <button type="button" className="icon-btn" style={{ color: "rgba(255,255,255,.38)" }} onClick={() => (onGift ? onGift() : setSheet("share"))}>
-                  <I.Plus s={26} />
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 40 }}>
-                <button
-                  type="button"
-                  className="icon-btn col-glow"
-                  style={{ color: t.accent, "--glow": t.glow }}
-                  onClick={() => onLibraryChange?.()}
-                >
-                  <I.Coll s={30} />
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  aria-label="Sleep timer"
-                  style={{ color: (sleepTimerEndsAt || sleepAfterCurrentTrack) ? t.accent : "rgba(255,255,255,.38)", filter: (sleepTimerEndsAt || sleepAfterCurrentTrack) ? `drop-shadow(0 0 5px ${t.glow})` : "none" }}
-                  onClick={() => setSheet("sleep")}
-                >
-                  <I.Moon />
-                </button>
-                <button type="button" className="icon-btn" style={{ color: "rgba(255,255,255,.38)" }} onClick={() => setSheet("share")}>
-                  <I.Plus s={26} />
-                </button>
-              </div>
-            )}
+              {isPreview ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 20, flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    className="icon-btn cart-pulse"
+                    style={{ color: t.accent, "--glow": t.glow, "--glow-dim": t.glowDim }}
+                    onClick={() => onAddToCart?.(track)}
+                  >
+                    <I.Cart s={24} />
+                  </button>
+                  {showSubscribeCta ? (
+                    <Link href="/subscribe" className="icon-btn" style={{ color: t.accent, filter: `drop-shadow(0 0 6px ${t.glow})` }}>
+                      <I.Sub s={20} />
+                    </Link>
+                  ) : null}
+                  <button type="button" className="icon-btn" style={{ color: "rgba(255,255,255,.38)" }} onClick={() => (onGift ? onGift() : setSheet("share"))}>
+                    <I.Plus s={18} />
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: "flex", alignItems: "center", gap: 20, flexShrink: 0 }}>
+                  <button
+                    type="button"
+                    className="icon-btn col-glow"
+                    style={{ color: t.accent, "--glow": t.glow }}
+                    onClick={() => onLibraryChange?.()}
+                  >
+                    <I.Coll s={22} />
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label="Sleep timer"
+                    style={{ color: (sleepTimerEndsAt || sleepAfterCurrentTrack) ? t.accent : "rgba(255,255,255,.38)", filter: (sleepTimerEndsAt || sleepAfterCurrentTrack) ? `drop-shadow(0 0 5px ${t.glow})` : "none" }}
+                    onClick={() => setSheet("sleep")}
+                  >
+                    <I.Moon />
+                  </button>
+                  <button type="button" className="icon-btn" style={{ color: "rgba(255,255,255,.38)" }} onClick={() => setSheet("share")}>
+                    <I.Plus s={18} />
+                  </button>
+                </div>
+              )}
+            </div>
 
             {isPreview ? (
               <div
                 style={{
-                  padding: "14px 18px",
-                  borderRadius: 14,
+                  padding: "10px 14px",
+                  borderRadius: 12,
                   background: `linear-gradient(135deg,${t.glowDim},rgba(0,0,0,.3))`,
                   border: `1px solid ${t.p1}44`,
                   display: "flex",
@@ -1469,26 +1468,25 @@ export function SingleModal({
                 }}
               >
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: t.accent, marginBottom: 2 }}>Own this track</div>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.35)", letterSpacing: ".1em" }}>
-                    FULL QUALITY · {track?.dur || fmt(fullDur)}
-                    {priceLabel ? ` · ${priceLabel}` : ""}
+                  <div style={{ fontSize: 11, fontWeight: 700, color: t.accent, marginBottom: 1 }}>Own this track</div>
+                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, color: "rgba(255,255,255,.35)", letterSpacing: ".1em" }}>
+                    FULL QUALITY{priceLabel ? ` · ${priceLabel}` : ""}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => onAddToCart?.(track)}
                   style={{
-                    padding: "9px 16px",
-                    borderRadius: 20,
+                    padding: "8px 15px",
+                    borderRadius: 18,
                     background: t.p1,
                     border: "none",
-                    fontSize: 11,
+                    fontSize: 10,
                     fontWeight: 800,
                     color: "rgba(0,0,0,.9)",
                     cursor: "pointer",
                     letterSpacing: ".06em",
-                    boxShadow: `0 0 20px ${t.glowDim}`,
+                    boxShadow: `0 0 16px ${t.glowDim}`,
                   }}
                 >
                   BUY
@@ -1497,19 +1495,19 @@ export function SingleModal({
             ) : (
               <div
                 style={{
-                  padding: "12px 16px",
-                  borderRadius: 14,
+                  padding: "8px 14px",
+                  borderRadius: 12,
                   background: `linear-gradient(135deg,${t.glowDim},rgba(0,0,0,.2))`,
                   border: `1px solid ${t.p1}44`,
                   display: "flex",
                   alignItems: "center",
-                  gap: 10,
+                  gap: 9,
                 }}
               >
                 <div
                   style={{
-                    width: 28,
-                    height: 28,
+                    width: 20,
+                    height: 20,
                     borderRadius: "50%",
                     background: t.glow,
                     border: `1px solid ${t.accent}`,
@@ -1519,21 +1517,16 @@ export function SingleModal({
                     flexShrink: 0,
                   }}
                 >
-                  <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke={t.dark} strokeWidth="2.5" strokeLinecap="round">
+                  <svg width="10" height="10" viewBox="0 0 14 14" fill="none" stroke={t.dark} strokeWidth="2.5" strokeLinecap="round">
                     <polyline points="2,7 6,11 12,3" />
                   </svg>
                 </div>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: t.accent }}>You own this track</div>
-                  <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, color: "rgba(255,255,255,.35)", letterSpacing: ".1em" }}>
-                    Full quality stream unlocked
-                  </div>
-                </div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: t.accent }}>You own this track</div>
               </div>
             )}
 
             {onAddVinyl && isPreview ? (
-              <button type="button" className="modal-immersive-vinyl-link" onClick={() => onAddVinyl(track)} style={{ background: "none", border: "none", color: "rgba(255,255,255,.4)", fontSize: 11, cursor: "pointer" }}>
+              <button type="button" className="modal-immersive-vinyl-link" onClick={() => onAddVinyl(track)} style={{ background: "none", border: "none", color: "rgba(255,255,255,.4)", fontSize: 11, cursor: "pointer", alignSelf: "flex-start" }}>
                 + Add Vinyl (Optional)
               </button>
             ) : null}
@@ -2108,14 +2101,11 @@ function AlbumModalView({
         </div>
 
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: t.dark, ...vars }}>
-          <div style={{ flexShrink: 0, padding: "14px 20px 10px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
-            <div>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".26em", textTransform: "uppercase", color: t.accent }}>
-                {album?.type || "Album"} · {album?.year || ""}
-              </div>
-              <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 22, fontWeight: 500, color: "white", lineHeight: 1.1, marginTop: 2 }}>{album?.title}</div>
-              <div style={{ fontSize: 11, fontWeight: 300, color: "rgba(255,255,255,.38)", marginTop: 2 }}>
-                {album?.artist} · {tracks.length} tracks{totalRuntimeLabel ? ` · ${totalRuntimeLabel}` : ""}
+          <div style={{ flexShrink: 0, padding: "10px 20px 8px", display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 19, fontWeight: 500, color: "white", lineHeight: 1.15, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{album?.title}</div>
+              <div style={{ fontSize: 10, fontWeight: 300, color: "rgba(255,255,255,.38)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {album?.artist} · {album?.type || "Album"}{album?.year ? ` · ${album.year}` : ""} · {tracks.length} tracks{totalRuntimeLabel ? ` · ${totalRuntimeLabel}` : ""}
               </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 7, alignItems: "flex-end", flexShrink: 0 }}>
@@ -2176,14 +2166,14 @@ function AlbumModalView({
             </div>
           </div>
 
-          <div style={{ flexShrink: 0, display: "flex", gap: 8, padding: "10px 20px 4px" }}>
+          <div style={{ flexShrink: 0, display: "flex", gap: 8, padding: "8px 20px 4px" }}>
             <button
               type="button"
               aria-label="Play all tracks from the beginning"
               onClick={handlePlayAll}
               style={{
                 flex: 1,
-                padding: "9px 0",
+                padding: "7px 0",
                 borderRadius: 22,
                 border: "none",
                 background: t.p1,
@@ -2208,7 +2198,7 @@ function AlbumModalView({
               onClick={handleShufflePlay}
               style={{
                 flex: 1,
-                padding: "9px 0",
+                padding: "7px 0",
                 borderRadius: 22,
                 border: `1px solid ${t.p1}55`,
                 background: "rgba(255,255,255,.05)",
