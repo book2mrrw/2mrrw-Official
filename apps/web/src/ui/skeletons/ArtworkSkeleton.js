@@ -2,6 +2,7 @@
 
 import { useState, useRef, useLayoutEffect, useEffect } from "react";
 import { resolveCoverMediaType } from "@/lib/media/cover-media-type";
+import { imagePipeline } from "@/media/imagePipeline";
 import { VRM } from "@/lib/media/video-resource-manager";
 import SkeletonBase from "./SkeletonBase";
 import ProgressiveReveal from "./ProgressiveReveal";
@@ -119,9 +120,15 @@ export default function ArtworkSkeleton({
   onVideoLoadedMetadata,
   onVideoLoadedData,
 }) {
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
   const mediaType = resolveCoverMediaType(src, type);
+  const [loadedSrc, setLoadedSrc] = useState(() =>
+    imagePipeline.getFromCache(src, { coverArtType: type }) ? src : null
+  );
+  const [failedSrc, setFailedSrc] = useState(null);
+  const loaded = loadedSrc === src || Boolean(
+    mediaType !== "video" && imagePipeline.getFromCache(src, { coverArtType: type })
+  );
+  const failed = failedSrc === src;
 
   if (!src || failed) {
     return (
@@ -146,7 +153,7 @@ export default function ArtworkSkeleton({
       }}
       className={className}
     >
-      {!loaded ? (
+      {!loaded && !(mediaType === "video" && baseCover) ? (
         <SkeletonBase
           width="100%"
           height="100%"
@@ -154,7 +161,10 @@ export default function ArtworkSkeleton({
           style={{ position: "absolute", inset: 0 }}
         />
       ) : null}
-      <ProgressiveReveal visible={loaded}>
+      <ProgressiveReveal
+        visible={loaded || mediaType !== "video" || Boolean(baseCover)}
+        style={{ position: "relative" }}
+      >
         {mediaType === "video" ? (
           <VideoArt
             src={src}
@@ -166,11 +176,11 @@ export default function ArtworkSkeleton({
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
             onLoaded={(event) => {
-              setLoaded(true);
+              setLoadedSrc(src);
               onVideoLoadedData?.(event);
             }}
             onLoadedMetadata={onVideoLoadedMetadata}
-            onError={() => setFailed(true)}
+            onError={() => setFailedSrc(src)}
           />
         ) : (
           <img
@@ -179,10 +189,10 @@ export default function ArtworkSkeleton({
             decoding="async"
             draggable={false}
             onLoad={(event) => {
-              setLoaded(true);
+              setLoadedSrc(src);
               onImageLoad?.(event);
             }}
-            onError={() => setFailed(true)}
+            onError={() => setFailedSrc(src)}
             onClick={onClick}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}

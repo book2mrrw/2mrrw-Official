@@ -1246,7 +1246,9 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     }
   });
   const [activeTab, setActiveTab]                 = useState("home");
-  const [musicPrepared, setMusicPrepared]         = useState(false);
+  // Mount the complete music destination tree with the first storefront render.
+  // Asset/data warming below then proceeds in visible homepage order.
+  const [musicPrepared, setMusicPrepared]         = useState(true);
   const [accountSubTab, setAccountSubTab]         = useState("overview");
   const [musicSubTab, setMusicSubTab]             = useState("singles");
   const [searchQuery, setSearchQuery]             = useState("");
@@ -1633,6 +1635,31 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   useEffect(() => {
     warmDestination(activeTab, "selected");
   }, [activeTab, warmDestination]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const warmTopToBottom = async () => {
+      const surface = getCatalogSurfaceRef();
+      const rows = [
+        surface.displaySingles,
+        surface.displayFeatures,
+        surface.displayAlbums,
+        surface.displayMixtapesAndEps,
+        enrichedRadioSlides,
+      ];
+      for (const row of rows) {
+        if (cancelled) return;
+        await warmImages(row, "high");
+      }
+      if (cancelled) return;
+      await warmAudioVisualz("all");
+      if (cancelled) return;
+      warmCollectorCards(COLLECTOR_CARDS_CATALOG, router);
+      warmVault();
+    };
+    void warmTopToBottom();
+    return () => { cancelled = true; };
+  }, [enrichedRadioSlides, router]);
 
   useEffect(() => {
     if (activeTab !== "home") return undefined;

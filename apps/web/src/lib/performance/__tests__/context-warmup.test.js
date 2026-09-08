@@ -16,13 +16,28 @@ test("warm caches are deduplicated, bounded, expiring, and invalidatable", () =>
   assert.match(source, /const MAX_WARM_VIDEOS = 3/);
 });
 
-test("music siblings stay mounted and the radio-only Turnt snapshot is isolated", () => {
+test("music siblings stay mounted before visibility and the radio-only snapshot is isolated", () => {
   const panels = fs.readFileSync("src/components/storefront/MusicTabCatalogPanels.js", "utf8");
   for (const tab of ["singles", "albums", "mixtapes", "mymusic"]) {
     assert.match(panels, new RegExp(`hidden=\\{activeTab !== "${tab}"\\}`));
   }
   const home = fs.readFileSync("src/app/HomeClient.js", "utf8");
+  assert.match(home, /const \[musicPrepared, setMusicPrepared\]\s*= useState\(true\)/);
+  assert.match(home, /const warmTopToBottom = async \(\) =>/);
   assert.match(home, /RADIO_TURNT_SNAPSHOT = "\/images\/radio\/turnt-me-2-dis\.jpg"/);
   assert.match(home, /slide\.slug === "turnt-me-2-dis"/);
   assert.ok(fs.existsSync("public/images/radio/turnt-me-2-dis.jpg"));
+});
+
+test("asset warming preserves static fallbacks and respects motion cover types", () => {
+  const source = fs.readFileSync("src/lib/performance/context-warmup.js", "utf8");
+  assert.match(source, /const staticCover = item\?\.baseCover \|\| item\?\.artwork \|\| item\?\.poster_url/);
+  assert.match(source, /item\?\.coverArtType \|\| "image"/);
+});
+
+test("pre-mounted artwork consumes decoded images and exposes native motion posters", () => {
+  const source = fs.readFileSync("src/ui/skeletons/ArtworkSkeleton.js", "utf8");
+  assert.match(source, /imagePipeline\.getFromCache\(src, \{ coverArtType: type \}\)/);
+  assert.match(source, /visible=\{loaded \|\| mediaType !== "video" \|\| Boolean\(baseCover\)\}/);
+  assert.match(source, /poster=\{baseCover \|\| undefined\}/);
 });

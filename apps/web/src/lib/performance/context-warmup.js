@@ -8,15 +8,23 @@ const MAX_WARM_VIDEOS = 3;
 const MAX_REQUESTS = 24;
 const REQUEST_TTL_MS = 5 * 60 * 1000;
 
-export function warmImage(src, priority = "normal") {
+export function warmImage(src, priority = "normal", coverArtType = "image") {
   if (!src) return Promise.resolve(null);
-  return imagePipeline.preload(src, priority, { coverArtType: "image" }).catch(() => null);
+  return imagePipeline.preload(src, priority, { coverArtType }).catch(() => null);
 }
 
 export function warmImages(items, priority = "normal") {
-  return Promise.allSettled((items || []).map((item) =>
-    warmImage(item?.baseCover || item?.artwork || item?.poster_url || item?.cover || item, priority)
-  ));
+  return Promise.allSettled((items || []).flatMap((item) => {
+    if (typeof item === "string") return [warmImage(item, priority)];
+    const staticCover = item?.baseCover || item?.artwork || item?.poster_url;
+    const displayCover = item?.cover;
+    const work = [];
+    if (staticCover) work.push(warmImage(staticCover, priority, "image"));
+    if (displayCover && displayCover !== staticCover) {
+      work.push(warmImage(displayCover, priority, item?.coverArtType || "image"));
+    }
+    return work;
+  }));
 }
 
 /** Dedupe lightweight data warming. Normal browser caching remains authoritative. */
