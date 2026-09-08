@@ -106,7 +106,7 @@ test("the admin dashboard has a Sync Printful Catalog button wired to the sync r
   // Shared between the standalone /admin dashboard and the home page's Shop
   // tab (admin-only) — the button itself lives in its own component now.
   const button = read("src/components/admin/SyncPrintfulButton.js");
-  assert.match(button, /export default function SyncPrintfulButton\(\) \{/);
+  assert.match(button, /export default function SyncPrintfulButton\(\{ onSynced \} = \{\}\) \{/);
   assert.match(button, /fetch\("\/api\/admin\/printful\/sync", \{ method: "POST" \}\)/);
 
   const dashboard = read("src/app/admin/page.js");
@@ -115,7 +115,7 @@ test("the admin dashboard has a Sync Printful Catalog button wired to the sync r
 
   const homeClient = read("src/app/HomeClient.js");
   assert.match(homeClient, /const SyncPrintfulButton = dynamic\(\(\) => import\("@\/components\/admin\/SyncPrintfulButton"\), \{ ssr: false \}\);/);
-  assert.match(homeClient, /auth\.isAdminStable \? <SyncPrintfulButton \/> : null/);
+  assert.match(homeClient, /auth\.isAdminStable \? <SyncPrintfulButton onSynced=\{refreshShop\} \/> : null/);
 });
 
 // ── /api/printful/products: the synced catalog is primary, not a pass-through ──
@@ -124,8 +124,8 @@ test("the merch listing route reads the synced catalog first — a live Printful
   const src = read("src/app/api/printful/products/route.js");
   const fnAt = src.indexOf("export async function GET() {");
   assert.ok(fnAt > -1);
-  const body = src.slice(fnAt, fnAt + 400);
-  assert.match(body, /const catalog = await merchFromCatalog\(\);/);
+  const body = src.slice(fnAt);
+  assert.match(body, /catalog = await merchFromCatalog\(\);/);
   assert.match(body, /if \(catalog\.length > 0\) \{\s*\n\s*return Response\.json\(\{ success: true, products: catalog, source: "catalog" \}\);/);
 });
 

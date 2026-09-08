@@ -1683,35 +1683,39 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     };
   }, [activeTab]);
 
+  const [shopError, setShopError] = useState(null);
+  const [shopRefreshVersion, setShopRefreshVersion] = useState(0);
+  const refreshShop = useCallback(() => setShopRefreshVersion((version) => version + 1), []);
+
   useEffect(() => {
-    // Fetches once on mount, not gated on activeTab — shopItems (fed by this
-    // same printfulProducts state) renders on BOTH the home tab's own Shop
-    // section and the dedicated Shop tab. Gating this on activeTab==="shop"
-    // meant a fresh page load landing on "home" never fetched at all, so
-    // that section fell back to the hardcoded fallbackMerch placeholder
-    // array indefinitely unless the user happened to click into the Shop
-    // tab first in that same session.
+    const controller = new AbortController();
+    setShopError(null);
     setPrintfulLoading(true);
-    fetch("/api/printful/products")
-      .then(r => r.json())
-      .then(data => {
-        if (data.success && Array.isArray(data.products) && data.products.length > 0) {
-          const normalized = data.products.map(p => ({
-            slug:  p.slug  || String(p.id),
-            title: p.title || p.name || "Untitled",
-            cover: p.cover || p.thumbnail || p.thumbnail_url || p.preview_url || p.image || null,
-            price: typeof p.price === "number"
-              ? p.price
-              : parseFloat(p.retail_price ?? 0),
-            product_type: "merch",
-            variants: Array.isArray(p.variants) ? p.variants : [],
-          }));
-          setPrintfulProducts(normalized);
-        }
+    fetch("/api/printful/products", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || "Shop could not be loaded");
+        return data;
       })
-      .catch(err => console.error("PRINTFUL FETCH ERROR:", err))
-      .finally(() => setPrintfulLoading(false));
-  }, []);
+      .then((data) => {
+        setPrintfulProducts((data.products || []).map((p) => ({
+          ...p,
+          slug: p.slug || String(p.id),
+          title: p.title || p.name || "Untitled",
+          cover: p.cover || p.thumbnail_url || null,
+          product_type: "merch",
+          variants: Array.isArray(p.variants) ? p.variants : [],
+        })));
+      })
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        console.error("PRINTFUL FETCH ERROR:", err);
+        setShopError("Shop options could not be loaded. Please try again.");
+        setPrintfulProducts([]);
+      })
+      .finally(() => { if (!controller.signal.aborted) setPrintfulLoading(false); });
+    return () => controller.abort();
+  }, [shopRefreshVersion]);
 
   useEffect(() => {
     const stored = localStorage.getItem("2mrrw_circle");
@@ -1961,7 +1965,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
   // ── HELPERS ───────────────────────────────────────────────────────────────
   const addToCartRaw   = useCallback(item => {
-    if (item.slug && getPageAuthRef().owns?.(item.slug)) return;
+    if (item.product_type !== "merch" && item.slug && getPageAuthRef().owns?.(item.slug)) return;
     setCart(p => [...p, item]);
     setAddedFlash(item.slug);
     setTimeout(() => setAddedFlash(null), 400);
@@ -2680,6 +2684,8 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   shopItems={shopItems}
                   printfulLoading={printfulLoading}
                   shopIsFallback={shopIsFallback}
+                  shopError={shopError}
+                  onRetryShop={refreshShop}
                   events={liveEvents}
                   onSelectEvent={setSelectedEvent}
                   onOpenCollection={openCollection}
@@ -2794,11 +2800,12 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 <>
                   <h2 className="section-heading" style={{marginBottom:16}}>Merch</h2>
                   <AuthSurfaceIsland islandId="shop-tab-admin">
-                    {(auth) => auth.isAdminStable ? <SyncPrintfulButton /> : null}
+                    {(auth) => auth.isAdminStable ? <SyncPrintfulButton onSynced={refreshShop} /> : null}
                   </AuthSurfaceIsland>
                   {printfulLoading ? <div style={{padding:"60px 0",textAlign:"center",fontSize:13,color:"#333",letterSpacing:2}}>Loading products…</div> : (
                     <>
-                      {shopIsFallback && <div style={{marginBottom:20,padding:"12px 16px",background:"rgba(255,255,255,0.02)",border:"1px solid #1a1a1a",borderRadius:10,fontSize:11,color:"#444",letterSpacing:1,lineHeight:1.7}}>Store inventory is syncing. Showing preview items — check back soon for the full Printful catalog.</div>}
+                      {shopError && <div role="alert" style={{ marginBottom: 16 }}>{shopError} <button onClick={refreshShop}>Retry</button></div>}
+                      {!shopError && shopIsFallback && <div style={{marginBottom:20,padding:"12px 16px",background:"rgba(255,255,255,0.02)",border:"1px solid #1a1a1a",borderRadius:10,fontSize:11,color:"#444",letterSpacing:1,lineHeight:1.7}}>Store inventory is syncing. Showing preview items — check back soon for the full Printful catalog.</div>}
                       <CatalogGrid items={shopItems} type="products" addToCart={addToCart} onCheckoutNow={handleMerchCheckoutNow} hoverIn={hoverIn} hoverOut={hoverOut} buttonHoverIn={buttonHoverIn} buttonHoverOut={buttonHoverOut}/>
                     </>
                   )}

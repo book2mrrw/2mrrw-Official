@@ -78,6 +78,8 @@ const HomeStorefront = memo(function HomeStorefront({
   shopItems,
   printfulLoading,
   shopIsFallback,
+  shopError,
+  onRetryShop,
   events,
   onSelectEvent,
   onOpenCollection,
@@ -181,7 +183,8 @@ const HomeStorefront = memo(function HomeStorefront({
           <div style={{ padding: "32px 0", textAlign: "center", fontSize: 13, color: "#333", letterSpacing: 2 }}>Loading products…</div>
         ) : (
           <>
-            {shopIsFallback && (
+            {shopError && <div role="alert" style={{ marginBottom: 16 }}>{shopError} <button onClick={onRetryShop}>Retry</button></div>}
+            {!shopError && shopIsFallback && (
               <div style={{ fontSize: 11, color: "#333", letterSpacing: 1, marginBottom: 16 }}>Store coming soon — preview below</div>
             )}
             <CatalogGrid

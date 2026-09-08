@@ -94,6 +94,9 @@ export async function resolveCartLines(cart, admin = null) {
     // MerchCardVariantActions. Never trust the client-sent price/identity:
     // the variant must actually belong to this product and be active, same
     // principle as every other resolution in this function.
+    if (product.product_type === "merch" && product.external_product_id && !item?.variantId) {
+      throw new Error(`Choose an available size and color for: ${item.slug}`);
+    }
     let variant = null;
     if (item?.variantId) {
       variant = variantById.get(item.variantId) || null;

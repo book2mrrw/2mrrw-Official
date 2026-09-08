@@ -17,7 +17,7 @@ const C = {
  * /admin Control Center and the home page's Shop tab, so an admin can sync
  * from wherever they actually look at the merch, not just a separate page.
  */
-export default function SyncPrintfulButton() {
+export default function SyncPrintfulButton({ onSynced } = {}) {
   const [status, setStatus] = useState("idle"); // idle | syncing | done | error
   const [summary, setSummary] = useState(null);
 
@@ -27,9 +27,14 @@ export default function SyncPrintfulButton() {
     try {
       const res = await fetch("/api/admin/printful/sync", { method: "POST" });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Sync failed");
+      if (!res.ok) {
+        setSummary(data);
+        setStatus("error");
+        return;
+      }
       setSummary(data);
-      setStatus("done");
+      setStatus(data.errors?.length ? "error" : "done");
+      onSynced?.();
     } catch (err) {
       setSummary({ error: err.message });
       setStatus("error");
@@ -61,7 +66,12 @@ export default function SyncPrintfulButton() {
           </div>
         )}
         {status === "error" && (
-          <div style={{ fontSize: 12, color: "#ff453a", marginTop: 8 }}>✗ {summary?.error}</div>
+          <div style={{ fontSize: 12, color: "#ff453a", marginTop: 8 }}>✗ {summary?.error || "Some products could not be synced."}</div>
+        )}
+        {summary?.errors?.length > 0 && (
+          <ul style={{ color: "#ff9f0a", fontSize: 12, marginTop: 8 }}>
+            {summary.errors.map((item, index) => <li key={item.printfulProductId || index}>{item.name || "Product"}: {item.message}</li>)}
+          </ul>
         )}
       </div>
       <button

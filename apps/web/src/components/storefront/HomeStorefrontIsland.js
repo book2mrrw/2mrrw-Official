@@ -42,6 +42,8 @@ const HomeStorefrontIsland = memo(function HomeStorefrontIsland({
   shopItems,
   printfulLoading,
   shopIsFallback,
+  shopError,
+  onRetryShop,
   events,
   onSelectEvent,
   onOpenCollection,
@@ -90,6 +92,8 @@ const HomeStorefrontIsland = memo(function HomeStorefrontIsland({
               shopItems={shopItems}
               printfulLoading={printfulLoading}
               shopIsFallback={shopIsFallback}
+              shopError={shopError}
+              onRetryShop={onRetryShop}
               events={events}
               onSelectEvent={onSelectEvent}
               onOpenCollection={onOpenCollection}

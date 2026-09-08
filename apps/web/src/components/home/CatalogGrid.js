@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
+import MerchProductCard from "@/components/home/MerchProductCard";
 import CoverArt from "@/components/ui/CoverArt";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import GiftIcon from "@/components/gifts/GiftIcon";
@@ -230,86 +231,6 @@ function CatalogCardCoverSurface({
   );
 }
 
-const merchSelectStyle = {
-  background: "#111", color: "#ccc", border: "1px solid #2a2a2a", borderRadius: 6,
-  padding: "6px 8px", fontSize: 12, fontFamily: "inherit", flex: "1 1 auto", minWidth: 0,
-};
-
-/**
- * Size/color variant picker + real Add to Cart / Checkout actions for a
- * merch card — own local state (which variant is selected), scoped to this
- * one card, same reasoning as CatalogCardVideoPreview above: this must never
- * live on the grid-mapping parent, or picking a variant on one card would
- * re-render every other card in the grid.
- */
-function MerchCardVariantActions({ mediaItem, addToCart, onCheckoutNow, buttonHoverIn, buttonHoverOut }) {
-  const variants = mediaItem.variants || [];
-  const sizes = [...new Set(variants.map((v) => v.size).filter(Boolean))];
-  const colors = [...new Set(variants.map((v) => v.color).filter(Boolean))];
-  const [selectedSize, setSelectedSize] = useState(sizes[0] || null);
-  const [selectedColor, setSelectedColor] = useState(colors[0] || null);
-
-  const selectedVariant =
-    variants.find((v) =>
-      (sizes.length === 0 || v.size === selectedSize) &&
-      (colors.length === 0 || v.color === selectedColor)
-    ) || variants[0];
-
-  const variantLabel = [selectedVariant?.size, selectedVariant?.color].filter(Boolean).join(" / ");
-  const cartItem = selectedVariant ? {
-    slug: mediaItem.slug,
-    title: variantLabel ? `${mediaItem.title} (${variantLabel})` : mediaItem.title,
-    cover: mediaItem.cover,
-    price: selectedVariant.price,
-    product_type: "merch",
-    variantId: selectedVariant.id,
-    externalVariantId: selectedVariant.externalVariantId,
-    catalogVariantId: selectedVariant.catalogVariantId,
-    size: selectedVariant.size || null,
-    color: selectedVariant.color || null,
-  } : null;
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }} onClick={(e) => e.stopPropagation()}>
-      {(sizes.length > 1 || colors.length > 1) && (
-        <div style={{ display: "flex", gap: 6 }}>
-          {sizes.length > 1 && (
-            <select aria-label="Size" value={selectedSize || ""} onChange={(e) => setSelectedSize(e.target.value)} style={merchSelectStyle}>
-              {sizes.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          )}
-          {colors.length > 1 && (
-            <select aria-label="Color" value={selectedColor || ""} onChange={(e) => setSelectedColor(e.target.value)} style={merchSelectStyle}>
-              {colors.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          )}
-        </div>
-      )}
-      {selectedVariant?.price != null && (
-        <div style={{ color: "#00ffff", fontWeight: 700, fontSize: 13 }}>${selectedVariant.price.toFixed(2)}</div>
-      )}
-      <div style={{ display: "flex", gap: 8 }}>
-        <button
-          disabled={!cartItem}
-          onClick={() => cartItem && addToCart(cartItem)}
-          onMouseEnter={buttonHoverIn}
-          onMouseLeave={buttonHoverOut}
-          style={{ flex: 1, background: "#1a1a1a", color: "white", border: "1px solid #2a2a2a", borderRadius: 6, padding: "9px 0", cursor: cartItem ? "pointer" : "not-allowed", transition: "0.25s", fontWeight: 600, minWidth: 72, opacity: cartItem ? 1 : 0.5 }}
-        >
-          Add to Cart
-        </button>
-        <button
-          disabled={!cartItem}
-          onClick={() => cartItem && onCheckoutNow?.(cartItem)}
-          style={{ flex: 1, background: "#00ffff", color: "#000", border: "none", borderRadius: 6, padding: "9px 0", cursor: cartItem ? "pointer" : "not-allowed", transition: "0.25s", fontWeight: 800, minWidth: 72, opacity: cartItem ? 1 : 0.5 }}
-        >
-          Checkout
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function LockIcon() {
   return (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -388,6 +309,9 @@ function CatalogGrid({
     <div className={`catalog-adaptive-grid ${type}-row`}>
       {items.map((item) => {
         if (!item?.slug) return null;
+        if (type === "products") {
+          return <MerchProductCard key={item.slug} item={item} addToCart={addToCart} onCheckoutNow={onCheckoutNow} />;
+        }
         const mediaItem = withR2CatalogMedia(item);
         const coverDisplay = catalogCoverDisplay(mediaItem);
         const access = resolveContentAccess(mediaItem, accountState);
@@ -562,14 +486,6 @@ function CatalogGrid({
                     cartLabel="+ Cart"
                   />
                 </div>
-              ) : type === "products" && mediaItem.variants?.length > 0 ? (
-                <MerchCardVariantActions
-                  mediaItem={mediaItem}
-                  addToCart={addToCart}
-                  onCheckoutNow={onCheckoutNow}
-                  buttonHoverIn={buttonHoverIn}
-                  buttonHoverOut={buttonHoverOut}
-                />
               ) : access?.showCart ? (
                 <button className="catalog-adaptive-card__cart" onClick={()=>addToCart(mediaItem)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>
               ) : null}

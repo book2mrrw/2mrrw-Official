@@ -13,9 +13,11 @@ function slugify(str) {
 async function printfulGet(path, apiKey) {
   const res = await fetch(`${PRINTFUL_BASE_URL}${path}`, {
     headers: { Authorization: `Bearer ${apiKey}` },
+    cache: "no-store",
+    signal: AbortSignal.timeout(20000),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
+  if (!res.ok || (data.code && data.code !== 200)) {
     const message = data?.error?.message || `Printful request failed (HTTP ${res.status})`;
     throw new Error(message);
   }
@@ -32,14 +34,20 @@ async function printfulGet(path, apiKey) {
  * instead of duplicating them, and never overwrites an existing slug once
  * set, so a product's storefront URL survives a rename in Printful.
  */
-export async function syncPrintfulCatalog() {
+export async function syncPrintfulCatalog({ admin: suppliedAdmin } = {}) {
   const apiKey = process.env.PRINTFUL_API_KEY;
   if (!apiKey) throw new Error("PRINTFUL_API_KEY is not configured");
 
-  const admin = getAdminClient();
+  const admin = suppliedAdmin || getAdminClient();
   const summary = { products: 0, variants: 0, errors: [] };
 
-  const syncProducts = await printfulGet("/store/products", apiKey);
+  const syncProducts = [];
+  for (let offset = 0; ; offset += 100) {
+    const page = await printfulGet(`/store/products?limit=100&offset=${offset}`, apiKey);
+    if (!Array.isArray(page)) throw new Error("Invalid Printful product list");
+    syncProducts.push(...page);
+    if (page.length < 100) break;
+  }
 
   for (const summaryRow of syncProducts || []) {
     try {
@@ -51,11 +59,13 @@ export async function syncPrintfulCatalog() {
 
       const priceCents = Math.round(parseFloat(activeVariants[0].retail_price) * 100) || 0;
 
-      const { data: existing } = await admin
+      const { data: existing, error: lookupError } = await admin
         .from("products")
         .select("id, slug")
         .eq("external_product_id", String(product.id))
         .maybeSingle();
+
+      if (lookupError) throw lookupError;
 
       // A fresh product (no existing row matched by external_product_id) must
       // not collide with any OTHER row's slug — products.slug is unique
@@ -69,11 +79,12 @@ export async function syncPrintfulCatalog() {
         const base = slugify(product.name);
         slug = base;
         for (let attempt = 1; attempt <= 10; attempt++) {
-          const { data: collision } = await admin
+          const { data: collision, error: collisionError } = await admin
             .from("products")
             .select("id")
             .eq("slug", slug)
             .maybeSingle();
+          if (collisionError) throw collisionError;
           if (!collision) break;
           slug = `${base}-${attempt + 1}`;
         }
@@ -98,8 +109,12 @@ export async function syncPrintfulCatalog() {
         .select("id")
         .single();
 
-      if (productErr) throw productErr;
-      summary.products += 1;
+      if (productErr) {
+        if (productErr.code === "42P10") {
+          throw new Error("Apply migration 20260907120000_printful_product_upsert_index.sql, then run Sync Now again.");
+        }
+        throw productErr;
+      }
 
       const variantRows = activeVariants.map((v) => ({
         product_id: productRow.id,
@@ -117,6 +132,7 @@ export async function syncPrintfulCatalog() {
         .upsert(variantRows, { onConflict: "product_id,external_variant_id" });
 
       if (variantErr) throw variantErr;
+      summary.products += 1;
       summary.variants += variantRows.length;
     } catch (err) {
       summary.errors.push({ printfulProductId: summaryRow.id, name: summaryRow.name, message: err.message });

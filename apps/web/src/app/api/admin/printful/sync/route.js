@@ -24,7 +24,11 @@ export async function POST(req) {
   try {
     const summary = await syncPrintfulCatalog();
     revalidateStorefront();
-    return NextResponse.json({ ok: true, ...summary });
+    const failed = summary.errors.length > 0;
+    return NextResponse.json({
+      ok: !failed, ...summary,
+      ...(failed ? { error: "Some Printful products failed to sync. See the product errors below." } : {}),
+    }, { status: failed && summary.products === 0 ? 502 : 200 });
   } catch (err) {
     console.error("[admin/printful/sync] failed", err.message);
     return NextResponse.json({ error: err.message || "Sync failed" }, { status: 500 });

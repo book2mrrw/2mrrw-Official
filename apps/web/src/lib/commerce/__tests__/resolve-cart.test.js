@@ -146,3 +146,8 @@ test("a merch cart item with no variantId still resolves via the flat product, u
   assert.equal(lines[0].price_cents, 2500);
   assert.equal(lines[0].variant_id, null);
 });
+
+test("Printful-linked merch cannot be purchased without a fulfillment variant", async () => {
+  const admin = fakeAdmin({ products: [{ ...MERCH_PRODUCT, external_product_id: "432602191" }] });
+  await assert.rejects(() => resolveCartLines([{ slug: "the-shirt" }], admin), /Choose an available size and color/);
+});

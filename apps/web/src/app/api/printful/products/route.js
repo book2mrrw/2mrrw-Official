@@ -1,4 +1,5 @@
-﻿import { getAdminClient } from "@/lib/supabase/admin";
+import { getAdminClient } from "@/lib/supabase/admin";
+import { readMerchCatalog } from "@/lib/commerce/merch-catalog";
 
 // Without this, Next.js can statically cache this route's response at build/
 // first-request time and keep serving that frozen snapshot indefinitely — a
@@ -7,19 +8,6 @@
 // which is exactly why it looked like syncing "didn't stick" until the next
 // deploy. This route must always read the live merch table.
 export const dynamic = "force-dynamic";
-
-const MERCH_COVER_FALLBACK = {
-  hoodie: "/images/albums/tbh.jpg",
-  shirt: "/images/albums/ad.jpg",
-  hat: "/images/albums/lovehz.jpg",
-};
-
-function resolveMerchCover(url) {
-  if (!url) return "";
-  const match = url.match(/\/images\/merch\/(\w+)\./);
-  if (match && MERCH_COVER_FALLBACK[match[1]]) return MERCH_COVER_FALLBACK[match[1]];
-  return url;
-}
 
 function pickCover(item) {
   const direct =
@@ -41,66 +29,20 @@ function pickCover(item) {
 }
 
 function normalizePrintfulItem(item) {
-  const priceRaw =
-    item.retail_price ||
-    item.sync_variants?.[0]?.retail_price ||
-    0;
   return {
     id: item.id,
     slug: String(item.external_id || item.id),
     title: item.name || item.sync_product?.name || "Product",
     cover: pickCover(item),
-    price: typeof priceRaw === "number" ? priceRaw : parseFloat(priceRaw) || 0,
+    price: null,
+    variants: [],
+    product_type: "merch",
     source: "printful",
   };
 }
 
 async function merchFromCatalog() {
-  try {
-    const admin = getAdminClient();
-    const { data, error } = await admin
-      .from("products")
-      .select("id, slug, title, price_cents, cover_url")
-      .eq("active", true)
-      .eq("product_type", "merch")
-      .order("title", { ascending: true });
-
-    if (error || !data?.length) return [];
-
-    const productIds = data.map((row) => row.id);
-    const { data: variantRows } = await admin
-      .from("product_variants")
-      .select("id, product_id, external_variant_id, catalog_variant_id, sku, size, color, price_cents")
-      .in("product_id", productIds)
-      .eq("active", true);
-
-    const variantsByProductId = new Map();
-    for (const v of variantRows || []) {
-      const list = variantsByProductId.get(v.product_id) || [];
-      list.push({
-        id: v.id,
-        externalVariantId: v.external_variant_id,
-        catalogVariantId: v.catalog_variant_id,
-        sku: v.sku,
-        size: v.size || null,
-        color: v.color || null,
-        price: (v.price_cents || 0) / 100,
-      });
-      variantsByProductId.set(v.product_id, list);
-    }
-
-    return data.map((row) => ({
-      id: row.slug,
-      slug: row.slug,
-      title: row.title,
-      cover: resolveMerchCover(row.cover_url),
-      price: (row.price_cents || 0) / 100,
-      source: "catalog",
-      variants: variantsByProductId.get(row.id) || [],
-    }));
-  } catch {
-    return [];
-  }
+  return readMerchCatalog(getAdminClient());
 }
 
 // The synced catalog (products/product_variants, kept current by
@@ -112,7 +54,16 @@ async function merchFromCatalog() {
 // been synced — checkout would not work correctly for whatever it returns,
 // but showing *something* beats an empty shop tab.
 export async function GET() {
-  const catalog = await merchFromCatalog();
+  let catalog;
+  try {
+    catalog = await merchFromCatalog();
+  } catch (error) {
+    console.error("[printful/products] Catalog read failed", error.message);
+    return Response.json({
+      success: false, products: [], source: "catalog_error",
+      error: "Shop options could not be loaded. Please try again shortly.",
+    }, { status: 503 });
+  }
   if (catalog.length > 0) {
     return Response.json({ success: true, products: catalog, source: "catalog" });
   }
@@ -130,7 +81,7 @@ export async function GET() {
   try {
     const res = await fetch("https://api.printful.com/store/products?limit=100", {
       headers: { Authorization: `Bearer ${apiKey}` },
-      next: { revalidate: 300 },
+      cache: "no-store",
     });
 
     const data = await res.json();
