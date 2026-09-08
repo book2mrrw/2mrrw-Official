@@ -6,6 +6,7 @@ import { ownsAudioVisual } from "@/lib/audio-visual/entitlements";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getRequestUser } from "@/lib/guest-session";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
+import { encodeStripeCartMetadata } from "@/lib/commerce/stripe-cart-metadata";
 
 /**
  * A cart line is "already owned" via two entirely different mechanisms
@@ -99,8 +100,7 @@ export async function POST(req) {
         guest_user_id: user.id,
         email: user.email || "",
         phone: user.phone || "",
-        slugs: JSON.stringify(purchasable.map((l) => l.slug).filter(Boolean)),
-        items: JSON.stringify(items),
+        ...encodeStripeCartMetadata(items),
       },
     });
 

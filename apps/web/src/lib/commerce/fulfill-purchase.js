@@ -5,6 +5,7 @@ import { grantVaultPassEntitlement } from "@/lib/commerce/vault-entitlements";
 import { grantAudioVisualEntitlements } from "@/lib/audio-visual/entitlements";
 import { invalidateAccountStateCache } from "@/lib/server/account-state-cache";
 import { getFulfillmentProvider } from "@/lib/fulfillment/get-fulfillment-provider";
+import { decodeStripeCartMetadata } from "@/lib/commerce/stripe-cart-metadata";
 
 /**
  * Audio Visual items carry no slug (audio_visuals is a stable-ID-only
@@ -249,19 +250,8 @@ export async function fulfillPaymentIntent(paymentIntent) {
     throw new Error(`payment_intent ${paymentIntent.id} missing metadata.user_id`);
   }
 
-  let slugs = [];
-  try {
-    slugs = JSON.parse(paymentIntent.metadata.slugs || "[]");
-  } catch {
-    slugs = [];
-  }
-
-  let items = [];
-  try {
-    items = JSON.parse(paymentIntent.metadata.items || "[]");
-  } catch {
-    items = [];
-  }
+  const items = decodeStripeCartMetadata(paymentIntent.metadata);
+  const slugs = [...new Set(items.map((item) => item?.slug).filter(Boolean))];
 
   const admin = getAdminClient();
   const amountCents = paymentIntent.amount_received ?? paymentIntent.amount;
