@@ -22,8 +22,11 @@ test("music siblings stay mounted before visibility and the radio-only snapshot 
     assert.match(panels, new RegExp(`hidden=\\{activeTab !== "${tab}"\\}`));
   }
   const home = fs.readFileSync("src/app/HomeClient.js", "utf8");
-  assert.match(home, /const \[musicPrepared, setMusicPrepared\]\s*= useState\(true\)/);
+  assert.doesNotMatch(home, /musicPrepared|setMusicPrepared/);
   assert.match(home, /const warmTopToBottom = async \(\) =>/);
+  assert.doesNotMatch(home, /warmDestination\(activeTab, "selected"\)/);
+  assert.doesNotMatch(home, /const preloadItems =/);
+  assert.match(home, /eslint-disable-next-line react-hooks\/exhaustive-deps\s*\n\s*\}, \[\]\);/);
   assert.match(home, /RADIO_TURNT_SNAPSHOT = "\/images\/radio\/turnt-me-2-dis\.jpg"/);
   assert.match(home, /slide\.slug === "turnt-me-2-dis"/);
   assert.ok(fs.existsSync("public/images/radio/turnt-me-2-dis.jpg"));

@@ -101,13 +101,12 @@ import {
 } from "@/components/storefront/catalog-surface-context";
 import MobileCartFab from "@/components/storefront/MobileCartFab";
 import ScrollPaddingShell from "@/components/storefront/ScrollPaddingShell";
-import { withR2CatalogMedia, catalogCoverDisplay } from "@/components/home/catalogMedia";
+import { withR2CatalogMedia } from "@/components/home/catalogMedia";
 import {
   getStorefrontAlbums,
   getStorefrontMixtapesAndEps,
 } from "@/lib/media/canonical-catalog";
 import { buildSearchIndex, searchCatalog } from "@/lib/catalog-search";
-import { imagePipeline } from "@/media/imagePipeline";
 import { COLLECTOR_CARDS_CATALOG } from "@/components/collectors-cards/collectorCardCatalog";
 import { warmAudioVisualz, warmCollectorCards, warmImages, warmJson, warmVault } from "@/lib/performance/context-warmup";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
@@ -1246,9 +1245,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     }
   });
   const [activeTab, setActiveTab]                 = useState("home");
-  // Mount the complete music destination tree with the first storefront render.
-  // Asset/data warming below then proceeds in visible homepage order.
-  const [musicPrepared, setMusicPrepared]         = useState(true);
   const [accountSubTab, setAccountSubTab]         = useState("overview");
   const [musicSubTab, setMusicSubTab]             = useState("singles");
   const [searchQuery, setSearchQuery]             = useState("");
@@ -1614,7 +1610,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
   const warmDestination = useCallback((tabId, phase = "selected") => {
     if (MUSIC_TAB_IDS.has(tabId)) {
-      setMusicPrepared(true);
       const surface = getCatalogSurfaceRef();
       void warmImages([
         ...surface.displaySingles,
@@ -1633,11 +1628,6 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   }, [router]);
 
   useEffect(() => {
-    warmDestination(activeTab, "selected");
-  }, [activeTab, warmDestination]);
-
-  useEffect(() => {
-    let cancelled = false;
     const warmTopToBottom = async () => {
       const surface = getCatalogSurfaceRef();
       const rows = [
@@ -1648,33 +1638,18 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
         enrichedRadioSlides,
       ];
       for (const row of rows) {
-        if (cancelled) return;
         await warmImages(row, "high");
       }
-      if (cancelled) return;
       await warmAudioVisualz("all");
-      if (cancelled) return;
       warmCollectorCards(COLLECTOR_CARDS_CATALOG, router);
       warmVault();
     };
     void warmTopToBottom();
-    return () => { cancelled = true; };
-  }, [enrichedRadioSlides, router]);
-
-  useEffect(() => {
-    if (activeTab !== "home") return undefined;
-    const preloadItems = [
-      ...getCatalogSurfaceRef().displaySingles.slice(0, 8),
-      ...features.slice(0, 4),
-      ...albums.slice(0, 6),
-      ...enrichedRadioSlides,
-    ];
-    preloadItems.forEach((item) => {
-      const { src, type } = catalogCoverDisplay(withR2CatalogMedia(item));
-      if (src) imagePipeline.preload(src, "high", { coverArtType: type });
-    });
-    return undefined;
-  }, [activeTab, enrichedRadioSlides]);
+    // Initial storefront preparation is deliberately one-shot. Catalog/cache
+    // refreshes have their own targeted paths and must never restart this
+    // full-page queue or reload media that is already prepared.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (activeTab !== "home") return undefined;
@@ -2750,7 +2725,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               </div>
 
               {/* ══ MUSIC TAB ══ */}
-              {musicPrepared && <div hidden={!MUSIC_TAB_IDS.has(activeTab)} aria-hidden={!MUSIC_TAB_IDS.has(activeTab)} inert={MUSIC_TAB_IDS.has(activeTab) ? undefined : ""}>
+              <div hidden={!MUSIC_TAB_IDS.has(activeTab)} aria-hidden={!MUSIC_TAB_IDS.has(activeTab)} inert={MUSIC_TAB_IDS.has(activeTab) ? undefined : ""}>
                 <EntitlementSurfaceIsland islandId="music-tab">
                   {(ent) => (
                     <AuthSurfaceIsland islandId="music-tab" onGiftRequest={setGiftSheetRelease}>
@@ -2850,7 +2825,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     </AuthSurfaceIsland>
                   )}
                 </EntitlementSurfaceIsland>
-              </div>}
+              </div>
 
               {/* ══ SHOP ══ */}
               {activeTab==="shop" && (
