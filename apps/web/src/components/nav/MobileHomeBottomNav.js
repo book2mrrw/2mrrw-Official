@@ -40,6 +40,7 @@ const MobileHomeBottomNav = memo(function MobileHomeBottomNav({
   mobileNavOpen,
   onSwitchTab,
   onOpenMore,
+  onWarmTab,
 }) {
   const homeSection = useHomeScrollSection();
 
@@ -97,6 +98,9 @@ const MobileHomeBottomNav = memo(function MobileHomeBottomNav({
             key={tab.id}
             type="button"
             onClick={() => (tab.more ? onOpenMore() : onSwitchTab(tab.id))}
+            onPointerEnter={() => !tab.more && onWarmTab?.(tab.id, "intent")}
+            onPointerDown={() => !tab.more && onWarmTab?.(tab.id, "intent")}
+            onFocus={() => !tab.more && onWarmTab?.(tab.id, "intent")}
             style={{
               display: "flex",
               flexDirection: "column",

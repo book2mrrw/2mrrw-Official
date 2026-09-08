@@ -108,6 +108,8 @@ import {
 } from "@/lib/media/canonical-catalog";
 import { buildSearchIndex, searchCatalog } from "@/lib/catalog-search";
 import { imagePipeline } from "@/media/imagePipeline";
+import { COLLECTOR_CARDS_CATALOG } from "@/components/collectors-cards/collectorCardCatalog";
+import { warmAudioVisualz, warmCollectorCards, warmImages, warmJson, warmVault } from "@/lib/performance/context-warmup";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { ModalErrorBoundary } from "@/system/errors";
 import { useBlackscreenMountTrace } from "@/lib/diagnostics/useBlackscreenMountTrace";
@@ -121,6 +123,8 @@ const MOBILE_NAV_TABS = [
   { id: "shop", label: "Shop" },
   { id: "more", label: "More", more: true },
 ];
+const MUSIC_TAB_IDS = new Set(["singles", "albums", "mixtapes", "mymusic"]);
+const RADIO_TURNT_SNAPSHOT = "/images/radio/turnt-me-2-dis.jpg";
 const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
 const MOBILE_NAV_SHEET_MS = 300;
 const OVERLAY_FADE = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.22 } };
@@ -1242,6 +1246,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     }
   });
   const [activeTab, setActiveTab]                 = useState("home");
+  const [musicPrepared, setMusicPrepared]         = useState(false);
   const [accountSubTab, setAccountSubTab]         = useState("overview");
   const [musicSubTab, setMusicSubTab]             = useState("singles");
   const [searchQuery, setSearchQuery]             = useState("");
@@ -1592,7 +1597,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
             video: slide.video || match.video,
           }
         : slide;
-      return withR2CatalogMedia(merged);
+      const resolved = withR2CatalogMedia(merged);
+      return slide.slug === "turnt-me-2-dis"
+        ? { ...resolved, cover: RADIO_TURNT_SNAPSHOT, baseCover: RADIO_TURNT_SNAPSHOT, coverArtType: "image" }
+        : resolved;
     },
     []
   );
@@ -1602,13 +1610,37 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     [radioSlidesData, enrichRadioSlide]
   );
 
+  const warmDestination = useCallback((tabId, phase = "selected") => {
+    if (MUSIC_TAB_IDS.has(tabId)) {
+      setMusicPrepared(true);
+      const surface = getCatalogSurfaceRef();
+      void warmImages([
+        ...surface.displaySingles,
+        ...surface.displayFeatures,
+        ...surface.displayAlbums,
+        ...surface.displayMixtapesAndEps,
+      ], phase === "intent" ? "normal" : "high");
+      void warmAudioVisualz("all");
+      return;
+    }
+    if (tabId === "cards") {
+      warmCollectorCards(COLLECTOR_CARDS_CATALOG, router);
+      return;
+    }
+    if (tabId === "vault") warmVault();
+  }, [router]);
+
+  useEffect(() => {
+    warmDestination(activeTab, "selected");
+  }, [activeTab, warmDestination]);
+
   useEffect(() => {
     if (activeTab !== "home") return undefined;
     const preloadItems = [
       ...getCatalogSurfaceRef().displaySingles.slice(0, 8),
       ...features.slice(0, 4),
       ...albums.slice(0, 6),
-      ...enrichedRadioSlides.slice(0, 4),
+      ...enrichedRadioSlides,
     ];
     preloadItems.forEach((item) => {
       const { src, type } = catalogCoverDisplay(withR2CatalogMedia(item));
@@ -1652,9 +1684,8 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     let cancelled = false;
     (async () => {
       try {
-        const response = await fetch("/api/catalog/exclusive-drops", { cache: "no-store" });
-        const payload = await response.json();
-        if (!cancelled && response.ok && Array.isArray(payload.items) && payload.items.length) {
+        const payload = await warmJson("/api/catalog/exclusive-drops");
+        if (!cancelled && Array.isArray(payload?.items) && payload.items.length) {
           setExclusiveCatalog(payload.items);
         }
       } catch {
@@ -1671,9 +1702,8 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     let cancelled = false;
     (async () => {
       try {
-        const response = await fetch("/api/public/vault", { cache: "no-store" });
-        const payload = await response.json();
-        if (!cancelled && response.ok) setPublicVault(payload);
+        const payload = await warmJson("/api/public/vault");
+        if (!cancelled && payload) setPublicVault(payload);
       } catch {
         if (!cancelled) setPublicVault(null);
       }
@@ -2603,14 +2633,14 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 const isExpanded    = expandedGroup === group.groupId;
                 return (
                   <div key={group.groupId} style={{marginBottom:2}}>
-                    <button onClick={()=>{ if(group.subTabs.length===0){switchTab(group.directTab);}else{setExpandedGroup(isExpanded?null:group.groupId);}}} style={{width:"100%",padding:"13px 18px 13px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",background:isGroupActive?"linear-gradient(90deg,rgba(0,255,255,0.09) 0%,transparent 100%)":"transparent",border:"none",borderLeft:isGroupActive?"2px solid #00ffff":"2px solid transparent",color:isGroupActive?"#00ffff":"#b0b0b0",fontSize:11,fontWeight:700,letterSpacing:2.5,cursor:"pointer",textAlign:"left",transition:"all 0.18s",textShadow:isGroupActive?"0 0 12px rgba(0,255,255,0.4)":"none"}} onMouseEnter={e=>{if(!isGroupActive){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.035)";}}} onMouseLeave={e=>{if(!isGroupActive){e.currentTarget.style.color="#b0b0b0";e.currentTarget.style.background="transparent";}}}>
+                    <button onClick={()=>{ if(group.subTabs.length===0){switchTab(group.directTab);}else{setExpandedGroup(isExpanded?null:group.groupId);}}} onPointerEnter={()=>warmDestination(group.directTab,"intent")} onPointerDown={()=>warmDestination(group.directTab,"intent")} onFocus={()=>warmDestination(group.directTab,"intent")} style={{width:"100%",padding:"13px 18px 13px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",background:isGroupActive?"linear-gradient(90deg,rgba(0,255,255,0.09) 0%,transparent 100%)":"transparent",border:"none",borderLeft:isGroupActive?"2px solid #00ffff":"2px solid transparent",color:isGroupActive?"#00ffff":"#b0b0b0",fontSize:11,fontWeight:700,letterSpacing:2.5,cursor:"pointer",textAlign:"left",transition:"all 0.18s",textShadow:isGroupActive?"0 0 12px rgba(0,255,255,0.4)":"none"}} onMouseEnter={e=>{if(!isGroupActive){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.035)";}}} onMouseLeave={e=>{if(!isGroupActive){e.currentTarget.style.color="#b0b0b0";e.currentTarget.style.background="transparent";}}}>
                       <span>{group.label}</span>
                       {group.subTabs.length>0 && <span style={{fontSize:14,color:isExpanded?"#888":"#555",display:"inline-block",transform:isExpanded?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.22s ease",lineHeight:1}}>›</span>}
                     </button>
                     {isExpanded && group.subTabs.length>0 && (
                       <div style={{animation:"expandDown 0.2s ease forwards"}}>
                         {group.subTabs.map(st=>(
-                          <button key={st.id} onClick={()=>switchTab(st.id)} style={{width:"100%",padding:"10px 18px 10px 30px",background:activeTab===st.id?"rgba(0,255,255,0.055)":"transparent",border:"none",color:activeTab===st.id?"#00ffff":"#999",fontSize:12,letterSpacing:1.5,cursor:"pointer",textAlign:"left",transition:"all 0.14s",fontWeight:activeTab===st.id?700:400,display:"flex",alignItems:"center",gap:8}} onMouseEnter={e=>{if(activeTab!==st.id)e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{if(activeTab!==st.id)e.currentTarget.style.color="#999";}}>
+                          <button key={st.id} onClick={()=>switchTab(st.id)} onPointerEnter={()=>warmDestination(st.id,"intent")} onPointerDown={()=>warmDestination(st.id,"intent")} onFocus={()=>warmDestination(st.id,"intent")} style={{width:"100%",padding:"10px 18px 10px 30px",background:activeTab===st.id?"rgba(0,255,255,0.055)":"transparent",border:"none",color:activeTab===st.id?"#00ffff":"#999",fontSize:12,letterSpacing:1.5,cursor:"pointer",textAlign:"left",transition:"all 0.14s",fontWeight:activeTab===st.id?700:400,display:"flex",alignItems:"center",gap:8}} onMouseEnter={e=>{if(activeTab!==st.id)e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{if(activeTab!==st.id)e.currentTarget.style.color="#999";}}>
                             <span style={{width:4,height:4,borderRadius:"50%",flexShrink:0,background:activeTab===st.id?"#00ffff":"transparent",boxShadow:activeTab===st.id?"0 0 6px rgba(0,255,255,0.9)":"none",transition:"all 0.15s"}}/>
                             {st.label}
                           </button>
@@ -2693,7 +2723,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               </div>
 
               {/* ══ MUSIC TAB ══ */}
-              {(activeTab==="singles"||activeTab==="albums"||activeTab==="mixtapes"||activeTab==="mymusic") && (
+              {musicPrepared && <div hidden={!MUSIC_TAB_IDS.has(activeTab)} aria-hidden={!MUSIC_TAB_IDS.has(activeTab)} inert={MUSIC_TAB_IDS.has(activeTab) ? undefined : ""}>
                 <EntitlementSurfaceIsland islandId="music-tab">
                   {(ent) => (
                     <AuthSurfaceIsland islandId="music-tab" onGiftRequest={setGiftSheetRelease}>
@@ -2751,7 +2781,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   <div style={{marginTop:8,marginBottom:0}}>
                     <div className="storefront-subtab-rail" style={{display:"flex",gap:0,borderBottom:"1px solid #1a1a1a",marginBottom:24}}>
                       {[{id:"singles",label:"Singles"},{id:"albums",label:"Albums"},{id:"mixtapes",label:"Mixtapes & EPs"},{id:"mymusic",label:"Collection"}].map(sub=>(
-                        <button key={sub.id} onClick={()=>switchTab(sub.id)} style={{padding:"12px 22px",background:"none",border:"none",borderBottom:activeTab===sub.id?"2px solid #00ffff":"2px solid transparent",color:activeTab===sub.id?"#00ffff":"#555",fontSize:13,fontWeight:700,letterSpacing:1.5,cursor:"pointer",transition:"all 0.18s",textTransform:"uppercase",marginBottom:-1}}>
+                        <button key={sub.id} onClick={()=>switchTab(sub.id)} onPointerEnter={()=>warmDestination(sub.id,"intent")} onPointerDown={()=>warmDestination(sub.id,"intent")} onFocus={()=>warmDestination(sub.id,"intent")} style={{padding:"12px 22px",background:"none",border:"none",borderBottom:activeTab===sub.id?"2px solid #00ffff":"2px solid transparent",color:activeTab===sub.id?"#00ffff":"#555",fontSize:13,fontWeight:700,letterSpacing:1.5,cursor:"pointer",transition:"all 0.18s",textTransform:"uppercase",marginBottom:-1}}>
                           {sub.label}
                         </button>
                       ))}
@@ -2793,7 +2823,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     </AuthSurfaceIsland>
                   )}
                 </EntitlementSurfaceIsland>
-              )}
+              </div>}
 
               {/* ══ SHOP ══ */}
               {activeTab==="shop" && (
@@ -3190,6 +3220,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
             mobileNavOpen={mobileNavOpen}
             onSwitchTab={switchTab}
             onOpenMore={openMobileNav}
+            onWarmTab={warmDestination}
           />
 
           <AnimatePresence>

@@ -9,6 +9,7 @@ import { resolveContentAccess } from "@/lib/music-access";
 import { withR2CatalogMedia } from "@/components/home/catalogMedia";
 import { VideoPreviewIcon, AdminVideoLinkedMarker } from "@/components/audio-visual/VideoPreviewIcon";
 import { AudioVisualInlinePreview } from "@/components/audio-visual/AudioVisualInlinePreview";
+import { useCarouselPreloader } from "@/media/preloader";
 
 const AudioVisualPlayer = dynamic(() => import("@/components/audio-visual/AudioVisualPlayer").then((m) => m.AudioVisualPlayer), { ssr: false });
 
@@ -28,6 +29,7 @@ function RadioCarousel({
   currentUserId,
   onLibraryChange,
 }) {
+  useCarouselPreloader(radioSlides, radioIndex);
   const [inlinePreviewOpen, setInlinePreviewOpen] = useState(false);
   const [fullscreenVideo, setFullscreenVideo] = useState(null);
   const [previewedSlug, setPreviewedSlug] = useState(currentSlide?.slug);

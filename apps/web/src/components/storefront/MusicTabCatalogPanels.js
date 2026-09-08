@@ -96,9 +96,9 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
     [singleIndex, displaySingles]
   );
 
-  if (activeTab === "singles") {
-    return (
-      <>
+  return (
+    <>
+      <section hidden={activeTab !== "singles"} aria-hidden={activeTab !== "singles"}>
         <h2 className="section-heading" style={{ marginBottom: 14 }}>
           Singles
         </h2>
@@ -144,13 +144,8 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           onAudioVisualsFocused={handleAudioVisualsFocused}
           onAudioVisualsExit={handleAudioVisualsExit}
         />
-      </>
-    );
-  }
-
-  if (activeTab === "albums") {
-    return (
-      <>
+      </section>
+      <section hidden={activeTab !== "albums"} aria-hidden={activeTab !== "albums"}>
         <h2 className="section-heading" style={{ marginBottom: 16 }}>
           Albums
         </h2>
@@ -172,13 +167,8 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           onGift={openGiftSheet}
           onLibraryChange={handleLibraryChange}
         />
-      </>
-    );
-  }
-
-  if (activeTab === "mixtapes") {
-    return (
-      <>
+      </section>
+      <section hidden={activeTab !== "mixtapes"} aria-hidden={activeTab !== "mixtapes"}>
         <h2 className="section-heading" style={{ marginBottom: 16 }}>
           Mixtapes & EPs
         </h2>
@@ -200,12 +190,8 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           onGift={openGiftSheet}
           onLibraryChange={handleLibraryChange}
         />
-      </>
-    );
-  }
-
-  if (activeTab === "mymusic") {
-    return (
+      </section>
+      <section hidden={activeTab !== "mymusic"} aria-hidden={activeTab !== "mymusic"}>
       <MyMusicTab
         singles={displaySingles}
         albums={albums}
@@ -220,10 +206,9 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
           setAlbumTracklistRelease(resolved || album);
         }}
       />
-    );
-  }
-
-  return null;
+      </section>
+    </>
+  );
 });
 
 export default MusicTabCatalogPanels;

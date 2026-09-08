@@ -5,11 +5,17 @@ import { imagePipeline } from "@/media/imagePipeline";
 
 export function useCarouselPreloader(items = [], activeIndex = 0) {
   useEffect(() => {
-    const neighbors = [activeIndex - 1, activeIndex + 1]
-      .filter((i) => i >= 0 && i < items.length)
-      .map((i) => items[i]);
-    for (const item of neighbors) {
-      if (item?.cover) imagePipeline.preload(item.cover, "normal", { coverArtType: item.coverArtType });
+    if (!items.length) return;
+    const ordered = [activeIndex, (activeIndex + 1) % items.length, (activeIndex - 1 + items.length) % items.length];
+    const immediate = new Set(ordered);
+    for (const index of ordered) {
+      const item = items[index];
+      if (item?.cover) void imagePipeline.preload(item.cover, "critical", { coverArtType: "image" });
+    }
+    for (let index = 0; index < items.length; index += 1) {
+      if (immediate.has(index)) continue;
+      const item = items[index];
+      if (item?.cover) void imagePipeline.preload(item.cover, "high", { coverArtType: "image" });
     }
   }, [items, activeIndex]);
 }

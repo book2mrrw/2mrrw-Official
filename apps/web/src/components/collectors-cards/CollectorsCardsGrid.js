@@ -9,6 +9,7 @@ import { COLLECTOR_CARDS_CATALOG } from "./collectorCardCatalog";
 import { CollectorCardItem } from "./CollectorCardItem";
 import { CollectorCardModal } from "./CollectorCardModal";
 import { useCollectorInventory } from "./useCollectorInventory";
+import { invalidateWarmJson, warmCollectorCards } from "@/lib/performance/context-warmup";
 
 const fadeUp = {
   initial: { opacity: 0, y: 20 },
@@ -23,9 +24,14 @@ export function CollectorsCardsGrid() {
   const { refreshAccountState } = useAuth();
 
   const handlePurchaseComplete = (slug) => {
+    invalidateWarmJson("/api/catalog/exclusive-drops");
     decrement(slug);
     void refreshAccountState({ reason: "collector:updated", source: "CollectorsCardsGrid" });
   };
+
+  useEffect(() => {
+    warmCollectorCards(COLLECTOR_CARDS_CATALOG);
+  }, []);
 
   useEffect(() => {
     const mql = window.matchMedia("(max-width: 768px)");

@@ -23,6 +23,7 @@
  */
 import { memo, useState, useEffect, useRef, useCallback } from "react";
 import { AudioVisualPlayer } from "@/components/audio-visual/AudioVisualPlayer";
+import { warmAudioVisualItem, warmAudioVisualz, warmJson } from "@/lib/performance/context-warmup";
 
 const PILLS = [
   { value: "music_video", label: "Audio Visualz" },
@@ -60,7 +61,7 @@ function PillRow({ activeType, onSelect }) {
   return (
     <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
       {PILLS.map((p) => (
-        <button key={p.value} type="button" onClick={() => onSelect(p.value)} style={pillStyle(activeType === p.value)}>
+        <button key={p.value} type="button" onClick={() => onSelect(p.value)} onPointerEnter={() => void warmAudioVisualz(p.value)} onFocus={() => void warmAudioVisualz(p.value)} style={pillStyle(activeType === p.value)}>
           {p.label}
         </button>
       ))}
@@ -72,6 +73,7 @@ function PosterCard({ item, onClick }) {
   return (
     <div
       onClick={onClick}
+      onPointerEnter={() => warmAudioVisualItem(item)}
       style={{
         cursor: "pointer", borderRadius: 12, overflow: "hidden", background: "#0a0a0a",
         border: "1px solid #1a1a1a", transition: "border-color 0.15s",
@@ -104,9 +106,8 @@ function SeriezDetailView({ seriezId, onBack, onPlay }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/audio-visual/seriez/${seriezId}`)
-      .then((r) => r.json())
-      .then((json) => { if (!cancelled) { if (json.error) setError(json.error); else setData(json); } })
+    warmJson(`/api/audio-visual/seriez/${seriezId}`)
+      .then((json) => { if (!cancelled) { if (!json || json.error) setError(json?.error || "Failed to load"); else setData(json); } })
       .catch(() => { if (!cancelled) setError("Failed to load"); });
     return () => { cancelled = true; };
   }, [seriezId]);
@@ -188,10 +189,8 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ onAudioVisualsFo
 
   const loadItems = useCallback((type) => {
     setLoading(true);
-    const qs = type === "all" ? "" : `?type=${encodeURIComponent(type)}`;
-    fetch(`/api/audio-visual/browse${qs}`)
-      .then((r) => r.json())
-      .then((json) => setItems(json.items || []))
+    warmAudioVisualz(type)
+      .then((json) => setItems(json?.items || []))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
   }, []);

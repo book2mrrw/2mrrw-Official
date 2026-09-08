@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { COLLECTOR_CARDS_CATALOG } from "./collectorCardCatalog";
+import { warmJson } from "@/lib/performance/context-warmup";
 
 function defaultRemaining() {
   return Object.fromEntries(COLLECTOR_CARDS_CATALOG.map((c) => [c.slug, c.editionSize]));
@@ -16,9 +17,7 @@ export function useCollectorInventory() {
 
     async function load() {
       try {
-        const res = await fetch("/api/catalog/exclusive-drops", { cache: "no-store" });
-        if (!res.ok) return;
-        const data = await res.json();
+        const data = await warmJson("/api/catalog/exclusive-drops");
         const items = Array.isArray(data?.items) ? data.items : [];
         if (!items.length) return;
 
