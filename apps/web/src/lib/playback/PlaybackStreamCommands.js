@@ -43,6 +43,7 @@ import { classifySourceUrl, isDirectlyBufferable } from "@/lib/playback/audio-so
 import { clearPlaybackPosition, getSavedPlaybackPosition } from "@/lib/playback/position-memory";
 import { notifyMediaEngineBridge } from "@/media/mediaEngineBridge";
 import { preloadCoverImage } from "@/lib/media/preload";
+import { waitForPlaybackBuffer } from "@/lib/audio/playback-buffer";
 import { getHLSEngine } from "@/lib/audio/HLSEngine";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 import { getQualityLevel as getHLSQualityLevel, getManifestTimeoutMs } from "@/lib/audio/network-quality";
@@ -114,8 +115,8 @@ export function attachStreamCommands(self) {
           skipPauseInterruptionRef.current = true;
           audioEl.pause();
         }
-        audioEl.src = track.src;
         if (!willAttemptHLS) {
+          audioEl.src = track.src;
           audioEl.load();
         }
       }
@@ -818,7 +819,7 @@ export function attachStreamCommands(self) {
           hlsEngine.detach();
 
           const qualityLevel = await getHLSQualityLevel();
-          if (qualityLevel >= 0) hlsEngine.setQualityLevel(qualityLevel);
+          hlsEngine.setQualityLevel(qualityLevel);
 
           hlsDidLoad = await new Promise((resolve) => {
             let settled = false;
@@ -890,97 +891,16 @@ export function attachStreamCommands(self) {
           const srcReadyTimeout = isLibraryStreamRedirectSrc(syncSrc) ? 12000 : AUDIO_SRC_READY_TIMEOUT_MS;
           await waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: srcReadyTimeout });
         }
-        // Industry-level buffer gate: require readyState >= 4 (HAVE_ENOUGH_DATA) AND
-        // at least 5 s buffered ahead of currentTime before starting playback.
-        //
-        // Why both conditions together:
-        //   • readyState 4 alone fires optimistically when signed URLs share HTTP cache
-        //     with the preload element — real decode buffer can still be < 1 s, causing
-        //     the audible "plays → silence → continues" pattern at 2–3 s in.
-        //   • 5 s ahead covers one full HLS segment (6 s) and gives the decoder enough
-        //     runway to absorb mobile bandwidth variance without stalling.
-        //   • 8 s timeout cap: if network hasn't buffered 5 s in 8 s we start anyway
-        //     (graceful degradation beats infinite spinner). The cap will NOT fire if the
-        //     browser has literally no data yet (readyState 0) — it extends up to 12 s
-        //     in that case to avoid starting into guaranteed silence.
-        //   • Cache-warm preloaded streams pass both conditions in < 5 ms.
+        // Resolve on media events, abort, or lock. Hidden playback must not wait
+        // for throttled JS timers; HTMLMediaElement.play owns its buffering then.
         if (!isSameTrack && !streamAbortController.signal.aborted) {
-          // Buffer gate: do not call play() until 3 s of decoded audio is ahead
-          // of currentTime at readyState >= 3 (HAVE_FUTURE_DATA). 3 s covers half
-          // an HLS segment (segments are ~6 s) — the decoder has a full segment's
-          // runway before needing the next one, eliminating the play→stall→resume
-          // double-play pattern caused by starting with only a partial segment
-          // in the buffer. On typical connections this gate clears in < 500 ms.
-          // readyState >= 4 + 5 s caused 5+ second start delays — not used.
-          const MIN_BUF = 3;
-          const goodBuffer = () => {
-            try {
-              const buf = audio.buffered;
-              const t = audio.currentTime;
-              for (let i = 0; i < buf.length; i++) {
-                if (buf.start(i) <= t + 0.5 && buf.end(i) - t >= MIN_BUF) return true;
-              }
-            } catch {}
-            return false;
-          };
-          const isReady = () => audio.readyState >= 3 && goodBuffer();
-          if (!isReady()) {
-            await new Promise((resolve) => {
-              if (isReady() || streamAbortController.signal.aborted) { resolve(); return; }
-              let pollId = null;
-              const done = () => {
-                audio.removeEventListener("canplay", onCanPlay);
-                audio.removeEventListener("progress", onProgress);
-                clearInterval(pollId);
-                clearTimeout(capId);
-                resolve();
-              };
-              // canplay fires at readyState >= 3 — enough data to start without stalling.
-              // progress fires as bytes arrive on slower connections.
-              // 100 ms poll guards against Safari/Edge suppressing events.
-              const onCanPlay = () => { if (isReady()) done(); };
-              const onProgress = () => { if (isReady()) done(); };
-              pollId = setInterval(() => { if (isReady() || streamAbortController.signal.aborted) done(); }, 100);
-              // 4 s primary cap — three distinct extension paths:
-              //
-              //   readyState 0 (HAVE_NOTHING): zero bytes after 4 s. Allow 2 more seconds
-              //   for cold CDN / Vercel function warm-up before starting into silence.
-              //
-              //   readyState 1–2 (HAVE_METADATA / HAVE_CURRENT_DATA): some bytes arrived
-              //   but the goodBuffer() gate is not satisfied. readyState 2 = only the
-              //   current frame decoded, zero lookahead — starting here guarantees an
-              //   immediate buffer underrun → the stop/load/play rebuffering cascade the
-              //   user experiences as the song stalling every few seconds. Wait up to 2
-              //   more seconds for canplaythrough (browser confirms stall-free playback),
-              //   then start regardless as a graceful-degradation last resort.
-              //
-              //   isReady() (readyState ≥ 3 AND ≥ 3 s buffered): gate satisfied — fire now.
-              const capId = setTimeout(() => {
-                if (streamAbortController.signal.aborted) { done(); return; }
-                if (isReady()) { done(); return; }
-                if (audio.readyState === 0) {
-                  // HAVE_NOTHING — 2 s cold-CDN extension.
-                  const extId = setTimeout(done, 2000);
-                  streamAbortController.signal.addEventListener("abort", () => { clearTimeout(extId); done(); }, { once: true });
-                  return;
-                }
-                // readyState 1 or 2 — data arrived but buffer too shallow.
-                // canplaythrough = browser reports enough data to play without stalling.
-                // Hard cap after 2 s so we never spin forever on a slow connection.
-                const extId = setTimeout(done, 2000);
-                audio.addEventListener("canplaythrough", () => { clearTimeout(extId); done(); }, { once: true });
-                streamAbortController.signal.addEventListener("abort", () => { clearTimeout(extId); done(); }, { once: true });
-              }, 4000);
-              audio.addEventListener("canplay", onCanPlay, { once: true });
-              audio.addEventListener("progress", onProgress);
-              streamAbortController.signal.addEventListener("abort", done, { once: true });
-            });
-          }
+          await waitForPlaybackBuffer(audio, { signal: streamAbortController.signal });
         }
         // HLS stall fallback: manifest loaded but segments never arrived (CORS error, CDN failure,
         // or ManagedMediaSource init race on iOS). readyState 0 = browser received zero bytes.
         // Fall back to progressive download so iOS users get audio instead of silence.
-        if (hlsDidLoad && !streamAbortController.signal.aborted && audio.readyState < 2) {
+        if (hlsDidLoad && !streamAbortController.signal.aborted && audio.readyState < 2 &&
+            globalThis.document?.visibilityState !== "hidden") {
           const hlsEng = hlsEngineRef.current;
           if (hlsEng) { hlsEng.detach(); hlsEngineRef.current = null; }
           reportPlaybackDiagnostic({

@@ -51,7 +51,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     wasPlayingBeforeViewportPauseRef, resumeEligibleRef, lastTrackIdRef,
     lastUserActionRef, isInAudioVisualViewportRef,
     csHoldSavedRef, csHoldActiveRef, bassFilterRef, webAudioAvailableRef,
-    lifecycleRecoveryLockRef, audibilitySampleRef, shuffledOrderRef, shufflePositionRef,
+    lifecycleRecoveryLockRef, audibilitySampleRef, shuffledOrderRef, shufflePositionRef, stopAfterEachTrackRef,
     sleepTimerRef, listeningUserIdRef,
   } = refs;
 
@@ -304,7 +304,14 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     resetPlaybackTimingCapture();
     const normalized = (tracks || []).map(normalizeTrack).filter((t) => t.src);
     const sameQueue = playbackQueuesMatch(normalized, queueRef.current);
-    const startTrack = tracks[Math.max(0, Math.min(startIndex, tracks.length - 1))];
+    if (!normalized.length) return false;
+    const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
+    const startTrack = normalized[index];
+    stopAfterEachTrackRef.current = options.autoAdvance === false;
+    if (!sameQueue) {
+      shuffledOrderRef.current = null;
+      shufflePositionRef.current = 0;
+    }
     const scenario = inferPlaybackScenario(audioRef.current, startTrack, {
       ...options,
       _hasStarted: stateRef.current.hasStarted,
@@ -317,15 +324,16 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     resumeWebAudioContextFromUserGesture(audioCtxRef, "playQueue:gesture");
     void dispatchPlaybackCommand(
       PLAYBACK_COMMANDS.SET_QUEUE,
-      { tracks, startIndex },
+      { tracks: normalized, startIndex: index },
       { serial: false },
     );
     return requestAuthoritativePlay(startTrack, {
       ...options,
       preserveActiveStream: sameQueue,
+      resumeAt: options.resumeAt ?? 0,
     }, {
-      queueEntries: tracks,
-      queueIndex: startIndex,
+      queueEntries: normalized,
+      queueIndex: index,
       source: options.source ?? "user",
     });
   }, [
@@ -333,6 +341,9 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     audioRef,
     initWebAudio,
     queueRef,
+    shuffledOrderRef,
+    shufflePositionRef,
+    stopAfterEachTrackRef,
     requestAuthoritativePlay,
     stateRef,
   ]);

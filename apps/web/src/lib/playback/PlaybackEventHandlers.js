@@ -71,6 +71,7 @@ import {
 } from "@/media/PlaybackStateMachine";
 import { classifySourceUrl, isDirectlyBufferable } from "@/lib/playback/audio-source-resolver";
 import { normalizePlaybackSrc } from "@/lib/audio/audio-element-utils";
+import { cancelHlsSegmentPrefetch } from "@/lib/audio/hls-segment-prefetcher";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 
 // ── Exported constants ─────────────────────────────────────────────────────────
@@ -161,6 +162,8 @@ export function createPlaybackEventHandlers({
   recentStallTimeRef,
   bufferShowTimerRef,
   nextTrackPreloadRef,
+  nextNextTrackPreloadRef,
+  intentPrewarmRef,
   prevTrackPreloadRef,
   pendingSessionUpgradeRef,
   broadcastChannelRef,
@@ -201,6 +204,7 @@ export function createPlaybackEventHandlers({
   emitPhase21AudibleSnapshot,
   emitBackgroundPlaybackDiagnostics,
   scheduleNextTrackPreload,
+  advanceShuffleOrder,
 
   // SM UI channel write — replaces individual React state setters
   patchUI,
@@ -256,7 +260,18 @@ export function createPlaybackEventHandlers({
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
+  const releaseSpeculativeDownloads = () => {
+    cancelHlsSegmentPrefetch();
+    for (const preloadRef of [nextTrackPreloadRef, nextNextTrackPreloadRef, prevTrackPreloadRef, intentPrewarmRef]) {
+      const element = preloadRef?.current;
+      if (!element || element === audioRef.current || !element.getAttribute("src")) continue;
+      element.removeAttribute("src");
+      element.load();
+    }
+  };
+
   const onWaiting = () => {
+    releaseSpeculativeDownloads();
     recentStallTimeRef.current = Date.now();
     startStallRecovery();
     if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
@@ -274,6 +289,7 @@ export function createPlaybackEventHandlers({
   };
 
   const onStalled = () => {
+    releaseSpeculativeDownloads();
     recentStallTimeRef.current = Date.now();
     startStallRecovery();
     if (bufferShowTimerRef.current) clearTimeout(bufferShowTimerRef.current);
@@ -313,6 +329,7 @@ export function createPlaybackEventHandlers({
   };
 
   const onPlay = () => {
+    lastCompletedTrack = null;
     // Cancel any pending buffer-show timer: onPlay means the element has started (or
     // resumed) playing, so isBuffering must not be set true by a stale 500ms timer that
     // fired after the element already began playing. Without this clear, the timer fires
@@ -798,27 +815,17 @@ export function createPlaybackEventHandlers({
 
   const onDuration = () => patchState({ duration: isFinite(audio.duration) ? audio.duration : 0 });
 
+  let lastCompletedTrack = null;
+
   const onEnded = () => {
     const track = stateRef.current.currentTrack;
     const previewOnly = track?.metadata?.access?.previewOnly;
 
-    if (stateRef.current.isPlaying) {
-      patchState({ isPlaying: false });
-    }
-
-    if (Date.now() < spuriousEndedGuardRef.current) {
-      const dur = isFinite(audio.duration) ? audio.duration : 0;
-      if (dur > 0 && audio.currentTime >= dur - RESTORE_NEAR_END_BUFFER_SEC) {
-        audio.currentTime = Math.max(0, dur - RESTORE_NEAR_END_BUFFER_SEC - 0.5);
-      } else {
-        audio.currentTime = 0;
-      }
-      patchState({
-        playbackState: stateRef.current.playbackState === "ending" ? null : stateRef.current.playbackState,
-      });
-      syncProgressTime(audio.currentTime);
-      return;
-    }
+    // Source swaps can emit an old ended event. Never seek or stop the new source.
+    if (Date.now() < spuriousEndedGuardRef.current && !audio.ended) return;
+    if (lastCompletedTrack === track) return;
+    lastCompletedTrack = track;
+    if (stateRef.current.isPlaying) patchState({ isPlaying: false });
 
     if (previewOnly) {
       // If a session upgrade is already queued for this track, fire it now instead
@@ -877,13 +884,12 @@ export function createPlaybackEventHandlers({
     const repeatMode = repeatModeRef.current;
     const queue = queueRef.current;
     const queueIndex = queueIndexRef.current;
-    const endedTrackSlug = track?.slug;
-    if (!endedTrackSlug) return;
+    if (!track) return;
 
     const finishEnded = () => {
-      // If the user tapped a new track between the `ended` event and this microtask,
+      // If the user tapped a new track during completion processing,
       // currentTrack will have changed — stale auto-advance must not proceed.
-      if (stateRef.current.currentTrack?.slug !== endedTrackSlug) return;
+      if (stateRef.current.currentTrack !== track || userPausedRef.current || userIntentPausedRef.current) return;
 
       if (repeatMode === "one" && stateRef.current.currentTrack) {
         audio.currentTime = 0;
@@ -926,7 +932,8 @@ export function createPlaybackEventHandlers({
         let nextIndex = queueIndex + 1;
         if (shuffleRef.current && queue.length > 1) {
           nextIndex = advanceShuffleOrder(queue, queueIndex);
-        } else if (nextIndex >= queue.length) {
+        }
+        if (nextIndex < 0 || nextIndex >= queue.length) {
           if (repeatMode === "all") nextIndex = 0;
           else {
             // End of queue, no repeat: wrap silently to track 1, stay paused
@@ -1010,10 +1017,10 @@ export function createPlaybackEventHandlers({
               },
             });
           }
-          void playTrackRef.current?.(nextTrack, {
+          Promise.resolve(playTrackRef.current?.(nextTrack, {
             resumeAt: 0,
             playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE,
-          }).then((ok) => {
+          })).then((ok) => {
             if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
           });
           return;
@@ -1029,7 +1036,8 @@ export function createPlaybackEventHandlers({
       if (track) void updateMediaSession(track, { playing: false });
     };
 
-    queueMicrotask(finishEnded);
+    // Media events run while locked; do not defer queue advancement to UI work.
+    finishEnded();
   };
 
   const onError = async () => {

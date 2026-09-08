@@ -45,6 +45,12 @@ const MAX_PRELOAD_SEGS = 3;
 let _activeKey = null;
 let _activeController = null;
 
+export function cancelHlsSegmentPrefetch() {
+  _activeController?.abort();
+  _activeController = null;
+  _activeKey = null;
+}
+
 /**
  * Begin prefetching HLS segments for the given track in the background.
  * Fire-and-forget (no need to await).
@@ -137,7 +143,7 @@ export async function prefetchHlsSegmentsForTrack(slug, trackSlug = null) {
     // do not re-enter, clear the cache, and re-fetch already-cached segments.
     // This prevents the onTime safety-net from triggering a wasteful re-fetch
     // immediately after a successful completion.
-    if (_activeKey === key && signal.aborted) _activeKey = null;
+    if (_activeController?.signal === signal && signal.aborted) _activeKey = null;
   }
 }
 

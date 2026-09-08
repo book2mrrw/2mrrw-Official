@@ -1,8 +1,7 @@
 /**
  * Network quality estimator for HLS adaptive bitrate selection.
  *
- * Uses the Network Information API where available, and falls back to
- * a passive bandwidth probe using a small R2-served probe file.
+ * Uses the Network Information API where available, otherwise leaves bandwidth estimation to hls.js.
  *
  * The quality preference is persisted to localStorage so the player
  * starts at the right tier across sessions instead of always starting
@@ -41,31 +40,17 @@ const ECT_TIER = {
   "4g":      0, // 320k
 };
 
-/**
- * Return the recommended hls.js quality level index:
- *   -1 = auto (let hls.js ABR decide)
- *    0 = 320k (highest)
- *    1 = 160k
- *    2 = 96k
- *
- * Decision precedence:
- *  1. Explicit user preference (localStorage pin)
- *  2. Network Information API effective type
- *  3. Auto (-1) — hls.js ABR handles it
- */
+/** Explicit menu selection only. Network hints must never pin ABR. */
 export async function getQualityLevel() {
-  // 1. User has pinned a quality level
-  const pinned = readPinnedLevel();
-  if (pinned !== null) return pinned;
+  return readPinnedLevel() ?? -1;
+}
 
-  // 2. Network Information API (Chrome, Android)
-  if (typeof navigator !== "undefined" && navigator.connection) {
-    const ect = navigator.connection.effectiveType;
-    if (ect && ect in ECT_TIER) return ECT_TIER[ect];
-  }
-
-  // 3. Hand ABR control to hls.js
-  return -1;
+/** Starting tier only: live ABR remains free to move in either direction. */
+export function getStartupQualityLevel() {
+  if (typeof navigator === "undefined") return -1;
+  const connection = navigator.connection;
+  if (connection?.saveData) return 3;
+  return ECT_TIER[connection?.effectiveType] ?? -1;
 }
 
 // Manifest-fetch patience by connection quality. This is deliberately separate

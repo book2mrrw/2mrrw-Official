@@ -64,6 +64,8 @@ import {
 import { recordAudioContextState } from "@/lib/dev/performanceMarks";
 import { prefetchHlsSegmentsForTrack } from "@/lib/audio/hls-segment-prefetcher";
 import { evictOverflowingCaches } from "@/lib/playback/playback-cache-manager";
+import { nextQueueIndex } from "./queue-order";
+import { bufferedAhead, canPreloadAudio } from "@/lib/audio/playback-buffer";
 import { isHlsJsActive } from "@/lib/audio/HLSEngine";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
@@ -1426,17 +1428,10 @@ export function createPlaybackHelpers(initialDeps) {
     // CDN tracks: load bytes directly into a hidden Audio element.
     // Library streams: pre-fetch the signed URL so the swap is instant.
     async scheduleNextTrackPreload() {
-      // Adaptive preload: skip on slow connections (2G/slow-2G) — bandwidth is too scarce
-      // to buffer the next track without starving the current one. Also skip while the
-      // current track is still buffering for the same reason.
-      if (typeof navigator !== "undefined") {
-        const effectiveType = navigator.connection?.effectiveType;
-        if (effectiveType === "slow-2g" || effectiveType === "2g") return;
-      }
-      if (self._deps.stateRef.current.isBuffering) return;
-      // After a stall, give the current track 15 s of undivided bandwidth before
-      // starting any preload that would compete with its recovery download.
-      if (Date.now() - self._deps.recentStallTimeRef.current < 15_000) return;
+      if (!canPreloadAudio(self._deps.audioRef.current, {
+        buffering: self._deps.stateRef.current.isBuffering,
+        recentStallAt: self._deps.recentStallTimeRef.current,
+      })) return;
 
       // Opportunistic sweep: any registered cache over its maxEntries limit is trimmed
       // here since scheduleNextTrackPreload runs as a natural playback-time background job.
@@ -1444,8 +1439,8 @@ export function createPlaybackHelpers(initialDeps) {
 
       const queue = self._deps.queueRef.current;
       const idx = self._deps.queueIndexRef.current;
-      const nextIdx = idx + 1;
-      if (nextIdx >= queue.length) return;
+      const nextIdx = nextQueueIndex(queue, idx, self._deps);
+      if (nextIdx < 0) return;
       const next = queue[nextIdx];
       if (!next?.src) return;
       const preloadEl = self._deps.nextTrackPreloadRef.current;
@@ -1513,6 +1508,8 @@ export function createPlaybackHelpers(initialDeps) {
         try {
           const data = await fetchLibraryStream(slug, { force: false, trackSlug });
           if (data?.url) {
+            if (self._deps.queueRef.current !== queue || self._deps.queueIndexRef.current !== idx) return;
+            if (!canPreloadAudio(self._deps.audioRef.current, { buffering: self._deps.stateRef.current.isBuffering, recentStallAt: self._deps.recentStallTimeRef.current })) return;
             self._deps.nextTrackSignedUrlCacheRef.current[cacheKey] = {
               url: data.url,
               fetchedAt: Date.now(),
@@ -1552,7 +1549,8 @@ export function createPlaybackHelpers(initialDeps) {
 
       // 2nd-ahead passive preload: buffer index+2 CDN preview for deeper gapless coverage.
       const nnIdx = nextIdx + 1;
-      if (nnIdx < queue.length && self._deps.nextNextTrackPreloadRef.current) {
+      if (!self._deps.shuffleRef.current && bufferedAhead(self._deps.audioRef.current) >= 30 &&
+          nnIdx < queue.length && self._deps.nextNextTrackPreloadRef.current) {
         const nn = queue[nnIdx];
         const nnSrc = nn?.src;
         if (nnSrc) {
@@ -1628,6 +1626,8 @@ export function createPlaybackHelpers(initialDeps) {
         try {
           const data = await fetchLibraryStream(slug, { force: false, trackSlug });
           if (data?.url) {
+            if (self._deps.queueRef.current !== queue || self._deps.queueIndexRef.current !== idx) return;
+            if (!canPreloadAudio(self._deps.audioRef.current, { buffering: self._deps.stateRef.current.isBuffering, recentStallAt: self._deps.recentStallTimeRef.current })) return;
             self._deps.nextTrackSignedUrlCacheRef.current[cacheKey] = {
               url: data.url,
               fetchedAt: Date.now(),

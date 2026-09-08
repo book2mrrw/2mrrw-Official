@@ -546,6 +546,7 @@ export function usePlaybackEffects({
       listeningProgressRef: refs.listeningProgressRef, lifecycleAudioTruthStateRef: refs.lifecycleAudioTruthStateRef,
       lastMediaSessionPlaybackStateRef: refs.lastMediaSessionPlaybackStateRef,
       recentStallTimeRef: refs.recentStallTimeRef, bufferShowTimerRef, nextTrackPreloadRef,
+      nextNextTrackPreloadRef: refs.nextNextTrackPreloadRef, intentPrewarmRef: refs.intentPrewarmRef,
       prevTrackPreloadRef: refs.prevTrackPreloadRef, pendingSessionUpgradeRef, broadcastChannelRef,
       tabIdRef, audibilitySampleRef, lastPersistRef: refs.lastPersistRef,
       playTrackRef, applyCSModeToTrackRef, dispatchPlaybackCommandRef,

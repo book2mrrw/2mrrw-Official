@@ -28,6 +28,7 @@ let _prefetchLoaderClass = null;
  */
 import { isPlaybackTraceEnabled } from "@/lib/diagnostics/playback-trace";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
+import { getStartupQualityLevel } from "./network-quality";
 import { createPrefetchLoaderClass } from "./hls-prefetch-loader";
 
 async function importHls() {
@@ -57,10 +58,19 @@ function _getPrefetchLoaderClass(Hls) {
   return _prefetchLoaderClass;
 }
 
+export function qualityTierLevel(levels, tier) {
+  if (!Number.isInteger(tier) || tier < 0 || !levels.length) return -1;
+  const sorted = levels.map((level, index) => ({ bitrate: level.bitrate || 0, index }))
+    .sort((a, b) => b.bitrate - a.bitrate);
+  return sorted[Math.min(tier, sorted.length - 1)].index;
+}
+
 export class HLSEngine {
   constructor() {
     /** @type {import("hls.js").default|null} */
     this._hls = null;
+    this._native = false;
+    this._cancelPendingLoad = null;
     /** @type {HTMLAudioElement|null} */
     this._audioEl = null;
     /** @type {string|null} Currently loaded manifest URL */
@@ -87,7 +97,7 @@ export class HLSEngine {
   }
 
   get isLoaded() {
-    return Boolean(this._hls && this._manifestUrl);
+    return Boolean((this._hls || this._native) && this._manifestUrl);
   }
 
   get currentBitrateKbps() {
@@ -118,11 +128,16 @@ export class HLSEngine {
     // firing and this point, abort immediately without touching any engine state.
     if (_version >= 0 && this._manifestVersion !== _version) return false;
 
+    const version = _version >= 0 ? _version : this._manifestVersion;
     const Hls = await importHls();
+    if (this._destroyed || version !== this._manifestVersion) return false;
 
     // Safari handles HLS natively via src= — no hls.js needed
     if (!Hls || !Hls.isSupported()) {
+      if (!audioEl.canPlayType?.("application/vnd.apple.mpegurl")) return false;
       // Assign the manifest URL directly — Safari's native HLS player takes over
+      this._destroyHls();
+      this._native = true;
       audioEl.src = manifestUrl;
       this._audioEl = audioEl;
       this._manifestUrl = manifestUrl;
@@ -158,10 +173,8 @@ export class HLSEngine {
       // guaranteed; startLevel: -1 is ordering-independent. The MANIFEST_PARSED
       // handler below remaps _currentLevel by actual bitrate after the manifest lands.
       startLevel:                 -1,
-      // 500 Kbps conservative start: hls.js probes real bandwidth and upgrades quickly
-      // (abrBandWidthUpFactor: 0.7), but a 3 Mbps cold-start estimate selected 320k
-      // immediately and caused multi-second stalls on 3G/slow WiFi before the first
-      // segment arrived. 500 Kbps starts at 96k, buffers instantly, then climbs to 320k.
+      // Initial estimate for browsers without network hints. Live ABR measures
+      // segment throughput; known connections seed startLevel after parsing.
       abrEwmaDefaultEstimate:     500_000,
       abrBandWidthFactor:         0.95,
       abrBandWidthUpFactor:       0.7,
@@ -213,20 +226,25 @@ export class HLSEngine {
         if (settled) return;
         settled = true;
         clearTimeout(safetyTimerId);
+        this._cancelPendingLoad = null;
         resolve(value);
       };
+
+      this._cancelPendingLoad = () => settle(false);
 
       // Hard cap — belt-and-suspenders in case hls.js events are suppressed.
       // Kept ~2 s above manifestLoadingTimeOut so hls.js's own timeout is always
       // the one that fires in the normal slow-manifest case.
       safetyTimerId = setTimeout(() => {
         if (settled) return;
+        if (version !== this._manifestVersion) { settle(false); return; }
         this._destroyHls();
         this.onFallback?.();
         settle(false);
       }, manifestTimeoutMs + 2000);
 
       hls.on(Hls.Events.ERROR, (_, data) => {
+        if (version !== this._manifestVersion) { settle(false); return; }
         if (isPlaybackTraceEnabled()) {
           console.log("[PLAY-CHAIN] hls.js error", {
             fatal: data.fatal,
@@ -345,6 +363,7 @@ export class HLSEngine {
       });
 
       hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+        if (version !== this._manifestVersion) { settle(false); return; }
         const levels = data.levels || [];
         if (isPlaybackTraceEnabled()) {
           console.log("[PLAY-CHAIN] hls.js MANIFEST_PARSED", {
@@ -352,22 +371,14 @@ export class HLSEngine {
             startPosition,
           });
         }
-        if (levels.length > 0 && this._currentLevel >= 0) {
-          // The master playlist does not guarantee a level ordering. Sort by
-          // descending bitrate to produce a stable tier index regardless of how
-          // the server emits the manifest. Tier 0 = highest bitrate, tier N-1 = lowest.
-          const byBitrate = levels
-            .map((lvl, i) => ({ bitrate: lvl.bitrate ?? 0, i }))
-            .sort((a, b) => b.bitrate - a.bitrate);
-          // Map the caller's quality tier index (0 = highest) to the manifest's
-          // actual hls.js level index so quality always corresponds to bitrate,
-          // not to manifest insertion order.
-          if (this._currentLevel < byBitrate.length) {
-            hls.currentLevel = byBitrate[this._currentLevel].i;
-          }
-          // If _currentLevel is out of range, leave ABR in control.
+        const tier = this._currentLevel >= 0 ? this._currentLevel : getStartupQualityLevel();
+        const level = qualityTierLevel(levels, tier);
+        if (this._currentLevel >= 0) {
+          hls.currentLevel = level;
+        } else if (level >= 0) {
+          // currentLevel selects manual mode; startLevel only seeds the first fragment.
+          hls.startLevel = level;
         }
-        // _currentLevel < 0 means full auto — no override needed.
         settle(true);
       });
 
@@ -434,7 +445,7 @@ export class HLSEngine {
   setQualityLevel(levelIndex) {
     this._currentLevel = levelIndex;
     if (this._hls) {
-      this._hls.currentLevel = levelIndex;
+      this._hls.currentLevel = qualityTierLevel(this._hls.levels || [], levelIndex);
     }
   }
 
@@ -460,6 +471,8 @@ export class HLSEngine {
   }
 
   _destroyHls() {
+    this._cancelPendingLoad?.();
+    this._native = false;
     if (this._hls) {
       try { this._hls.detachMedia(); } catch {}
       try { this._hls.destroy();     } catch {}

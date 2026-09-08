@@ -1,8 +1,9 @@
 "use client";
 
 import { startTransition } from "react";
+import { nextQueueIndex } from "./queue-order";
 import { MARKS, PLAYBACK_SCENARIOS, perfMark, perfMeasure } from "@/lib/dev/performanceMarks";
-import { fisherYatesShuffle, playbackQueuesMatch, normalizeTrack } from "@/lib/playback/playback-track-utils";
+import { playbackQueuesMatch, normalizeTrack } from "@/lib/playback/playback-track-utils";
 
 /**
  * Attaches Group 4 (queue management) commands to the shared `self` service object.
@@ -44,7 +45,7 @@ export function attachQueueCommands(self) {
   self.playNextInternal = async function playNextInternal({ autoAdvance = false } = {}) {
     const {
       patchState, requestAuthoritativePlay,
-      stateRef, queueRef, queueIndexRef, shuffleRef, repeatModeRef,
+      stateRef, queueRef, queueIndexRef, repeatModeRef,
     } = self._deps;
 
     const current = stateRef.current.currentTrack;
@@ -53,13 +54,8 @@ export function attachQueueCommands(self) {
     }
     const queue = queueRef.current;
     if (!queue.length) return false;
-    let nextIndex = queueIndexRef.current + 1;
-    if (shuffleRef.current && queue.length > 1) {
-      nextIndex = self.advanceShuffleOrder(queue, queueIndexRef.current);
-    } else if (nextIndex >= queue.length) {
-      if (repeatModeRef.current === "all") nextIndex = 0;
-      else return false;
-    }
+    let nextIndex = nextQueueIndex(queue, queueIndexRef.current, self._deps, { advance: true });
+    if (nextIndex < 0) return false;
     let attempts = 0;
     while (attempts < queue.length) {
       const track = queue[nextIndex];
@@ -134,30 +130,9 @@ export function attachQueueCommands(self) {
   };
 
   // Advance the Fisher-Yates shuffle permutation and return the next queue index.
-  // Generates a new permutation when the current one is exhausted (repeat-all semantics).
+  // Repeat-all reuses the complete permutation; repeat-off stops after one cycle.
   self.advanceShuffleOrder = function advanceShuffleOrder(queue, currentIndex) {
-    const { shuffledOrderRef, shufflePositionRef } = self._deps;
-    if (!shuffledOrderRef.current || shuffledOrderRef.current.length !== queue.length) {
-      const indices = Array.from({ length: queue.length }, (_, i) => i);
-      shuffledOrderRef.current = fisherYatesShuffle(indices);
-      // Ensure the current track is not the first to be played in the new order.
-      const ci = shuffledOrderRef.current.indexOf(currentIndex);
-      if (ci === 0 && queue.length > 1) {
-        shuffledOrderRef.current[0] = shuffledOrderRef.current[1];
-        shuffledOrderRef.current[1] = currentIndex;
-      }
-      shufflePositionRef.current = 0;
-    }
-    const nextPos = shufflePositionRef.current + 1;
-    if (nextPos >= shuffledOrderRef.current.length) {
-      // All tracks played — reshuffle for next cycle.
-      const indices = Array.from({ length: queue.length }, (_, i) => i);
-      shuffledOrderRef.current = fisherYatesShuffle(indices);
-      shufflePositionRef.current = 0;
-    } else {
-      shufflePositionRef.current = nextPos;
-    }
-    return shuffledOrderRef.current[shufflePositionRef.current];
+    return nextQueueIndex(queue, currentIndex, self._deps, { advance: true });
   };
 
   self.playQueueInternal = async function playQueueInternal(tracks = [], startIndex = 0, options = {}) {
