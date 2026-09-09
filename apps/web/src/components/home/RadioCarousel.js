@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import GiftOverlayButton from "@/components/gifts/GiftOverlayButton";
 import MusicPlusButton from "@/components/music/MusicPlusButton";
@@ -10,6 +10,9 @@ import { withR2CatalogMedia } from "@/components/home/catalogMedia";
 import { VideoPreviewIcon, AdminVideoLinkedMarker } from "@/components/audio-visual/VideoPreviewIcon";
 import { AudioVisualInlinePreview } from "@/components/audio-visual/AudioVisualInlinePreview";
 import { useCarouselPreloader } from "@/media/preloader";
+import CoverArt from "@/components/ui/CoverArt";
+import { VRM } from "@/lib/media/video-resource-manager";
+import { createReleasePresentationIdentity } from "@/hooks/useReleasePresentation";
 
 const AudioVisualPlayer = dynamic(() => import("@/components/audio-visual/AudioVisualPlayer").then((m) => m.AudioVisualPlayer), { ssr: false });
 
@@ -38,6 +41,17 @@ function RadioCarousel({
     setInlinePreviewOpen(false);
   }
   const radioAccess = resolveContentAccess(currentSlide, accountState);
+  // currentSlide arrives already resolved (HomeClient's enrichRadioSlide runs
+  // it through withR2CatalogMedia) — cover/baseCover/coverArtType are already
+  // the correct final URLs/type, not raw paths needing catalogCoverDisplay().
+  const presentationIdentity = useMemo(
+    () => createReleasePresentationIdentity(
+      currentSlide,
+      "home_radio_carousel",
+      currentSlide?.cover
+    ),
+    [currentSlide]
+  );
   const kindLabel = currentSlide.contentKind === "podcast"
     ? (["album", "ep", "mixtape"].includes(currentSlide.type) ? "SERIES" : "EPISODE")
     : (RADIO_TYPE_LABELS[currentSlide.type] || "SINGLE");
@@ -97,10 +111,21 @@ function RadioCarousel({
               }}
             />
           )}
-          <img
+          {/* Was a bare <img> with no video/motion-cover handling and no error
+              fallback at all — routed through CoverArt so this surface gets
+              the same motion-cover rendering, PRIORITY_HERO decode budget,
+              and graceful fallback-on-error as every other cover surface. */}
+          <CoverArt
             src={currentSlide.cover}
+            baseCover={currentSlide.baseCover || undefined}
+            type={currentSlide.coverArtType || "image"}
+            presentationIdentity={presentationIdentity}
+            videoPriority={VRM.PRIORITY_HERO}
+            skeleton
             alt={currentSlide.title}
-            style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+            width="100%"
+            height="100%"
+            style={{ display: "block", aspectRatio: "auto" }}
           />
           <div
             style={{

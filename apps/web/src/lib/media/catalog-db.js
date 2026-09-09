@@ -132,11 +132,28 @@ export function mapProductRow(row, videoMatch = null) {
     image_path: row.image_path || null,
 
     // Resolved display URLs
+    //
+    // `video`/`coverArtType` used to special-case singles (video: visual) vs.
+    // everything else (video: row.video_path — a bare `videos/{folder}/{slug}/`
+    // FOLDER string, not a URL). That bare path can't be turned into a working
+    // URL by catalogMotionVideoUrl() (it only handles an already-concrete file
+    // key or a flat legacy key, never a folder), so it silently produced a
+    // broken "folder" URL — and because catalogCoverDisplay() prefers `video`
+    // over `visual` once `type` reads "video", that broken URL SHADOWED the
+    // perfectly working discovery URL already sitting in `visual`. Every
+    // non-single release with a motion cover was affected; singles never hit
+    // this because they always used `visual` directly. Routing every release
+    // type through the same discovery-backed `visual` value — exactly what
+    // singles already did — fixes this uniformly and safely: resolveVisualMedia
+    // (behind that URL) does a real R2 folder lookup and falls back to the
+    // static cover on its own if no video is actually there, so this is
+    // never worse than the old behavior, even for a release with no motion
+    // cover at all.
     visual,
     cover: visual || legacyCover || "",
     preview: previewDiscoveryUrl(preview_path),
-    video: isSingle ? visual : (row.video_path || undefined),
-    coverArtType: isSingle ? "video" : (row.video_path ? "video" : "image"),
+    video: hasVideo ? visual : undefined,
+    coverArtType: hasVideo ? "video" : "image",
 
     // Legacy cover for <img> fallback
     baseCover: legacyCover || null,

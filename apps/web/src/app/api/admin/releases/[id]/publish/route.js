@@ -17,6 +17,7 @@ import {
 import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
 import { validateLifecycleConfiguration } from "@/lib/releases/release-availability";
 import { clearPersistedPreviewKey } from "@/lib/playback/resolve-playback-key";
+import { clearEntityResolverCaches } from "@/lib/media/entity-resolver";
 
 export const dynamic = "force-dynamic";
 
@@ -441,6 +442,43 @@ export async function POST(req, { params }) {
     }
   }
 
+  // ── 5d. Canonicalize motion/animated cover video path ──────────────────────
+  // Same wizard draft-slug problem as audio/preview/cover above: the animated
+  // cover uploaded during the wizard lands at videos/{folder}/draft-xxx/draft-xxx.ext
+  // and its key is recorded ONLY in releases.metadata.animated_cover_r2_key —
+  // nothing here ever moved it to videos/{folder}/{slug}/, so it stayed
+  // orphaned under the draft path forever. The catalog's video resolution
+  // (mapProductRow → resolveVisualMedia) does a live R2 folder lookup against
+  // videos/{folder}/{slug}/, so a video that was never moved there is
+  // functionally invisible — the release silently falls back to its static
+  // cover (or, before the catalog-db.js fix, showed nothing at all). Optional
+  // and non-fatal, same as cover art: a release with no motion cover has no
+  // animated_cover_r2_key and this block is a no-op.
+  const resolvedVideoKey = release.metadata?.animated_cover_r2_key || null;
+  let canonicalVideoKey = null;
+  if (resolvedVideoKey) {
+    const videoExt = extFromKey(resolvedVideoKey);
+    const targetVideoKey = videoExt
+      ? `videos/${typeFolder}/${releaseSlug}/${releaseSlug}${videoExt}`
+      : resolvedVideoKey;
+    canonicalVideoKey = resolvedVideoKey;
+    if (targetVideoKey !== resolvedVideoKey) {
+      try {
+        await copyR2Object(resolvedVideoKey, targetVideoKey);
+        await deleteR2Object(resolvedVideoKey).catch(() => {});
+        canonicalVideoKey = targetVideoKey;
+      } catch (err) {
+        console.warn("[publish] motion cover canonicalize error (non-fatal)", err?.message);
+        // canonicalVideoKey stays as resolvedVideoKey — display degrades but publish succeeds
+      }
+    }
+    // A stale "no video here" negative from an earlier discovery attempt
+    // (e.g. someone loading the release while it was still a draft) must not
+    // outlive this fix for up to CACHE_TTL_MS — the freshly-canonicalized
+    // video should be discoverable immediately, not after a 5-minute wait.
+    clearEntityResolverCaches();
+  }
+
   // ── 6. Build storefront media paths ───────────────────────────────────────
   const storage_path = resolveStoragePath(typeFolder, releaseSlug);
   const artwork_path = resolveArtworkPath(typeFolder, releaseSlug);
@@ -505,6 +543,7 @@ export async function POST(req, { params }) {
           content_rating:           content_rating || null,
           featured_artists:         featured_artists || [],
           cover_art_r2_key:         canonicalCoverKey,
+          animated_cover_r2_key:    canonicalVideoKey || null,
           preview_r2_key:           canonicalPreviewKey || null,
           preview_start_seconds:    canonicalPreviewKey ? resolvedPreviewStartSeconds : null,
           lifecycle_managed:        true,
