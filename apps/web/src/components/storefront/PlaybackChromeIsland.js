@@ -9,6 +9,7 @@ import {
 import {
   setPagePlaybackActionsBridge,
 } from "@/lib/playback/page-playback-actions-bridge";
+import { playbackStateMachine } from "@/media/PlaybackStateMachine";
 import AmbientPlaybackBackground from "@/components/home/AmbientPlaybackBackground";
 
 const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
@@ -59,6 +60,7 @@ const PlaybackChromeIsland = memo(function PlaybackChromeIsland({
       seek,
       enterAudioVisualViewport,
       exitAudioVisualViewport,
+      get queue() { return playbackStateMachine.getContext().queue; },
       get currentTrack() { return currentTrackRef.current; },
       get hasStarted() { return hasStartedRef.current; },
       get playbackState() { return playbackStateRef.current; },

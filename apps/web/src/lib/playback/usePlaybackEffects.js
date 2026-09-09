@@ -562,6 +562,7 @@ export function usePlaybackEffects({
       tracePlayback, emitPhase21AudibleSnapshot, emitBackgroundPlaybackDiagnostics,
       scheduleNextTrackPreload, advanceShuffleOrder,
       requestAuthoritativePlay: publicApi.requestAuthoritativePlay,
+      completeQueuePlayback: publicApi.completeQueuePlayback,
       // SM UI channel write path
       patchUI,
     });
@@ -636,6 +637,7 @@ export function usePlaybackEffects({
       resetPlaybackTelemetry();
     };
   }, [
+    publicApi.completeQueuePlayback,
     patchState, updateMediaSession, syncPositionState, recordLocalListening,
     finalizeStreamSession, startPositionSaveTimer, stopPositionSaveTimer,
     startProgressRaf, stopProgressRaf, startKeepAlivePing, stopKeepAlivePing,

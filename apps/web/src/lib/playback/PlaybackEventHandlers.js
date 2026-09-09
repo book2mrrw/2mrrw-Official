@@ -208,6 +208,7 @@ export function createPlaybackEventHandlers({
   scheduleNextTrackPreload,
   advanceShuffleOrder,
   requestAuthoritativePlay,
+  completeQueuePlayback,
 
   // SM UI channel write — replaces individual React state setters
   patchUI,
@@ -896,6 +897,19 @@ export function createPlaybackEventHandlers({
     const queueIndex = queueIndexRef.current;
     if (!track) return;
 
+    const finishQueue = () => {
+      // Keep the final selection and source. Wrapping the UI to track one while
+      // Core still wants PLAYING lets convergence reload/replay an exhausted queue.
+      completeQueuePlayback(track);
+      if (pendingResumeAfterInterruptRef.current) {
+        audio.removeEventListener("canplay", pendingResumeAfterInterruptRef.current);
+        pendingResumeAfterInterruptRef.current = null;
+      }
+      patchState({ isPlaying: false, playbackState: "idle", isBuffering: false });
+      patchUI({ previewEnded: false });
+      if (track) void updateMediaSession(track, { playing: false });
+    };
+
     const finishEnded = () => {
       // If the user tapped a new track during completion processing,
       // currentTrack will have changed — stale auto-advance must not proceed.
@@ -915,28 +929,16 @@ export function createPlaybackEventHandlers({
         return;
       }
 
-      // Singles/features mode: stop after this track unless repeat-all is on
+      // Explicit single-track playback uses the same authoritative stop contract.
       if (stopAfterEachTrackRef.current && repeatMode !== "all") {
-        patchState({ isPlaying: false, playbackState: "idle" });
-        syncProgressTime(0);
-        patchUI({ previewEnded: false });
-        if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
-          navigator.mediaSession.playbackState = "none";
-        }
-        if (track) void updateMediaSession(track, { playing: false });
+        finishQueue();
         return;
       }
 
-      // Sleep after current track
       if (sleepTimerRef.current.afterCurrentTrack) {
         sleepTimerRef.current = { endsAt: null, afterCurrentTrack: false };
-        patchUI({ sleepTimerEndsAt: null, sleepAfterCurrentTrack: false, previewEnded: false });
-        patchState({ isPlaying: false, playbackState: "idle" });
-        syncProgressTime(0);
-        if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
-          navigator.mediaSession.playbackState = "none";
-        }
-        if (track) void updateMediaSession(track, { playing: false });
+        patchUI({ sleepTimerEndsAt: null, sleepAfterCurrentTrack: false });
+        finishQueue();
         return;
       }
 
@@ -948,25 +950,7 @@ export function createPlaybackEventHandlers({
         if (nextIndex < 0 || nextIndex >= queue.length) {
           if (repeatMode === "all") nextIndex = 0;
           else {
-            // End of queue, no repeat: wrap silently to track 1, stay paused
-            const firstTrack = queue[0];
-            queueIndexRef.current = 0;
-            skipPauseInterruptionRef.current = true;
-            audio.removeAttribute("src");
-            audio.load();
-            patchState({
-              isPlaying: false,
-              playbackState: "paused",
-              queueIndex: 0,
-              currentTrack: firstTrack || track,
-              currentTrackId: firstTrack?.id || firstTrack?.trackId || null,
-            });
-            syncProgressTime(0);
-            patchUI({ previewEnded: false });
-            if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
-              navigator.mediaSession.playbackState = "paused";
-            }
-            void updateMediaSession(firstTrack || track, { playing: false });
+            finishQueue();
             return;
           }
         }
@@ -978,24 +962,7 @@ export function createPlaybackEventHandlers({
             if (nextIndex >= queue.length) {
               if (repeatMode === "all") nextIndex = 0;
               else {
-                const firstTrack = queue[0];
-                queueIndexRef.current = 0;
-                skipPauseInterruptionRef.current = true;
-                audio.removeAttribute("src");
-                audio.load();
-                patchState({
-                  isPlaying: false,
-                  playbackState: "paused",
-                  queueIndex: 0,
-                  currentTrack: firstTrack || track,
-                  currentTrackId: firstTrack?.id || firstTrack?.trackId || null,
-                });
-                syncProgressTime(0);
-                patchUI({ previewEnded: false });
-                if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
-                  navigator.mediaSession.playbackState = "paused";
-                }
-                void updateMediaSession(firstTrack || track, { playing: false });
+                finishQueue();
                 return;
               }
             }
@@ -1045,13 +1012,7 @@ export function createPlaybackEventHandlers({
         }
       }
 
-      patchState({ isPlaying: false, playbackState: "idle" });
-      syncProgressTime(0);
-      patchUI({ previewEnded: false });
-      if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
-        navigator.mediaSession.playbackState = "none";
-      }
-      if (track) void updateMediaSession(track, { playing: false });
+      finishQueue();
     };
 
     // Media events run while locked; do not defer queue advancement to UI work.

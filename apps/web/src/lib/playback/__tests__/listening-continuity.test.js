@@ -283,3 +283,44 @@ test('a queue that starts with preview access can continue after access upgrades
   await service.playQueueInternal(queue);
   assert.equal(deps.stopAfterEachTrackRef.current, false);
 });
+
+for (const source of ['home_single_card', 'home_feature_card', 'feature_card']) {
+  test(`${source} advances its full queue then stops on the final selection with repeat off`, () => {
+    const h = completionHarness();
+    const completed = [];
+    h.deps.queueRef.current = queue.map(track => ({ ...track, source }));
+    h.state.currentTrack = h.deps.queueRef.current[0];
+    h.deps.completeQueuePlayback = track => completed.push(track.id);
+    const handlers = createPlaybackEventHandlers(h.deps);
+    for (let i = 0; i < queue.length; i++) handlers.onEnded();
+    assert.deepEqual(h.played, queue.map(track => track.id));
+    assert.deepEqual(completed, [queue.at(-1).id]);
+    assert.equal(h.state.currentTrack.id, queue.at(-1).id);
+    assert.equal(h.deps.queueIndexRef.current, queue.length - 1);
+    assert.equal(h.state.playbackState, 'idle');
+  });
+}
+
+test('explicit repeat-all wraps the queue without completing transport', () => {
+  const h = completionHarness();
+  h.deps.repeatModeRef.current = 'all';
+  h.deps.completeQueuePlayback = () => assert.fail('repeat-all must continue');
+  const handlers = createPlaybackEventHandlers(h.deps);
+  for (let i = 0; i < queue.length; i++) handlers.onEnded();
+  assert.equal(h.played.length, queue.length + 1);
+  assert.equal(h.state.currentTrack.id, queue[0].id);
+});
+
+for (const policy of ['stopAfterEachTrack', 'sleepAfterCurrentTrack']) {
+  test(`${policy} ends through the authoritative completion contract`, () => {
+    const h = completionHarness();
+    if (policy === 'stopAfterEachTrack') h.deps.stopAfterEachTrackRef.current = true;
+    else h.deps.sleepTimerRef.current.afterCurrentTrack = true;
+    let completed = 0;
+    h.deps.completeQueuePlayback = () => completed++;
+    createPlaybackEventHandlers(h.deps).onEnded();
+    assert.equal(completed, 1);
+    assert.equal(h.played.length, 1);
+    assert.equal(h.state.playbackState, 'idle');
+  });
+}

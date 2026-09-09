@@ -1,4 +1,6 @@
 "use client";
+
+import { playSectionQueue } from "@/lib/playback/section-queue";
 import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -1899,81 +1901,21 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     [playAlbumTracks]
   );
 
-  // Stable queue callbacks — read live refs at call time, safe to have [] deps.
-  // Singles/features: no auto-advance. Play button restarts same song if it ended; toggles if playing.
-  const playSinglesQueue = useCallback((e, clickedItem) => {
+  // Both sections keep their own complete queue on start, resume, and restart.
+  const playSection = useCallback((e, clickedItem, section, source) => {
     e.stopPropagation();
     const auth = getPageAuthRef();
     const account = { ...auth.accountState, userId: auth.currentUser?.id, isAdmin: auth.isAdmin };
-    const surface = getCatalogSurfaceRef();
-    const bridge = getPagePlaybackActionsBridge();
-
-    const isSameTrack = bridge?.currentTrack?.slug === clickedItem.slug;
-    if (isSameTrack) {
-      if (bridge?.playbackState === "idle") {
-        const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_single_card");
-        if (track?.src) {
-          const { startTrack } = toInstantStartTrack(track);
-          void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
-        }
-      } else {
-        void bridge?.toggle?.();
-      }
-      return;
-    }
-
-    const allSingles = surface.displaySingles || [];
-    const streamable = allSingles.filter((item) => {
-      const access = resolveTrackAccess(item, account);
-      return access.canStream || Boolean(item.preview_path || item.previewPath || item.preview);
+    playSectionQueue({
+      items: getCatalogSurfaceRef()[section], clickedItem, source,
+      bridge: getPagePlaybackActionsBridge(),
+      toTrack: (item) => toPlaybackTrack(withR2CatalogMedia(item), account, source),
     });
-    const idx = streamable.findIndex((s) => s.slug === clickedItem.slug);
-    if (idx === -1) return;
-    const tracks = streamable
-      .map((item) => toPlaybackTrack(withR2CatalogMedia(item), account, "home_single_card"))
-      .filter((t) => t?.src);
-    if (tracks.length) {
-      const { startTrack } = toInstantStartTrack(tracks[idx]);
-      void bridge?.playQueue?.(tracks.map((t, i) => (i === idx ? startTrack : t)), idx, { resumeAt: 0 });
-    }
   }, []);
-
-  const playFeaturesQueue = useCallback((e, clickedItem) => {
-    e.stopPropagation();
-    const auth = getPageAuthRef();
-    const account = { ...auth.accountState, userId: auth.currentUser?.id, isAdmin: auth.isAdmin };
-    const surface = getCatalogSurfaceRef();
-    const bridge = getPagePlaybackActionsBridge();
-
-    const isSameTrack = bridge?.currentTrack?.slug === clickedItem.slug;
-    if (isSameTrack) {
-      if (bridge?.playbackState === "idle") {
-        const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "home_feature_card");
-        if (track?.src) {
-          const { startTrack } = toInstantStartTrack(track);
-          void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
-        }
-      } else {
-        void bridge?.toggle?.();
-      }
-      return;
-    }
-
-    const allFeatures = surface.displayFeatures || [];
-    const streamable = allFeatures.filter((item) => {
-      const access = resolveTrackAccess(item, account);
-      return access.canStream || Boolean(item.preview_path || item.previewPath || item.preview);
-    });
-    const idx = streamable.findIndex((s) => s.slug === clickedItem.slug);
-    if (idx === -1) return;
-    const tracks = streamable
-      .map((item) => toPlaybackTrack(withR2CatalogMedia(item), account, "home_feature_card"))
-      .filter((t) => t?.src);
-    if (tracks.length) {
-      const { startTrack } = toInstantStartTrack(tracks[idx]);
-      void bridge?.playQueue?.(tracks.map((t, i) => (i === idx ? startTrack : t)), idx, { resumeAt: 0 });
-    }
-  }, []);
+  const playSinglesQueue = useCallback((e, item) =>
+    playSection(e, item, "displaySingles", "home_single_card"), [playSection]);
+  const playFeaturesQueue = useCallback((e, item) =>
+    playSection(e, item, "displayFeatures", "home_feature_card"), [playSection]);
 
   const playCanonicalCatalogItem = useCallback((item, source) => {
     const auth = getPageAuthRef();

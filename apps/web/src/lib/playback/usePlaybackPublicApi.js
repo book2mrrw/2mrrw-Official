@@ -1,5 +1,6 @@
 "use client";
 
+import { completeQueuePlayback as completeCoreQueue } from "@/lib/playback/queue-completion";
 import { useCallback, startTransition, useMemo } from "react";
 import { dispatchPlaybackCommand } from "@/lib/playback/command-dispatcher";
 import { getProductionPlaybackCore } from "@/lib/playback-core/production/wireProductionCore";
@@ -95,6 +96,8 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     });
     return true;
   }, [playbackCore, playbackPort, queueRef]);
+
+  const completeQueuePlayback = useCallback((track) => completeCoreQueue(playbackCore, track), [playbackCore]);
 
   // ─── Repeat / Shuffle ────────────────────────────────────────────────────────
 
@@ -614,7 +617,7 @@ export function usePlaybackPublicApi({ refs, delegates }) {
     toggleSpaceMode, toggleBassBoost, cycleAtmosphere,
     setSleepTimer,
     setQueue, pause, resume, seek, playPrevious, stop, toggle, playNext,
-    playTrack, playQueue, requestAuthoritativePlay,
+    playTrack, playQueue, requestAuthoritativePlay, completeQueuePlayback,
     enqueueTrack, removeFromQueue, moveInQueue,
     beginCsHoldPreview, setCsHoldPlaybackRate, endCsHoldPreview,
     shouldAutoResumeViewport, getCurrentPlaybackSnapshot,

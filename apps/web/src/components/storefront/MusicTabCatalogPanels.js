@@ -1,5 +1,6 @@
 "use client";
 
+import { playSectionQueue } from "@/lib/playback/section-queue";
 import { memo, useCallback, useMemo } from "react";
 import CarouselUI from "@/components/home/CarouselUI";
 import FeaturesRail from "@/components/home/FeaturesRail";
@@ -7,8 +8,8 @@ import CatalogGrid from "@/components/home/CatalogGrid";
 import AudioVisualsSection from "@/components/home/AudioVisualsSection";
 import MyMusicTab from "@/components/music/MyMusicTab";
 import { useCatalogSurface } from "@/components/storefront/catalog-surface-context";
-import { resolveContentAccess, resolveTrackAccess } from "@/lib/music-access";
-import { resolveCatalogPlaybackItem, toInstantStartTrack, toPlaybackTrack } from "@/lib/music-playback";
+import { resolveContentAccess } from "@/lib/music-access";
+import { resolveCatalogPlaybackItem, toPlaybackTrack } from "@/lib/music-playback";
 import { withR2CatalogMedia } from "@/components/home/catalogMedia";
 import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
 
@@ -52,35 +53,11 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
   const handleFeaturePlay = useCallback((e, clickedItem) => {
     e.stopPropagation();
     const account = { ...entitlementAccountState, userId, isAdmin: isAdminStable || entitlementAccountState?.isAdmin || Boolean(entitlementAccountState?.permissions?.admin) };
-    const bridge = getPagePlaybackActionsBridge();
-
-    const isSameTrack = bridge?.currentTrack?.slug === clickedItem.slug;
-    if (isSameTrack) {
-      if (bridge?.playbackState === "idle") {
-        const track = toPlaybackTrack(withR2CatalogMedia(clickedItem), account, "feature_card");
-        const { startTrack } = toInstantStartTrack(track);
-        if (track.src) {
-          void bridge?.playQueue?.([startTrack], 0, { resumeAt: 0 });
-        }
-      } else {
-        void bridge?.toggle?.();
-      }
-      return;
-    }
-
-    const streamable = displayFeatures.filter((item) => {
-      const access = resolveTrackAccess(item, account);
-      return access.canStream || Boolean(item.preview_path || item.previewPath || item.preview);
+    playSectionQueue({
+      items: displayFeatures, clickedItem, source: "feature_card",
+      bridge: getPagePlaybackActionsBridge(),
+      toTrack: (item) => toPlaybackTrack(withR2CatalogMedia(item), account, "feature_card"),
     });
-    const idx = streamable.findIndex((s) => s.slug === clickedItem.slug);
-    if (idx === -1) return;
-    const tracks = streamable
-      .map((item) => toPlaybackTrack(withR2CatalogMedia(item), account, "feature_card"))
-      .filter((t) => t.src);
-    if (tracks.length) {
-      const { startTrack } = toInstantStartTrack(tracks[idx]);
-      void bridge?.playQueue?.(tracks.map((t, i) => (i === idx ? startTrack : t)), idx, { resumeAt: 0 });
-    }
   }, [displayFeatures, entitlementAccountState, userId, isAdminStable]);
 
   const prevSingle = useCallback(
