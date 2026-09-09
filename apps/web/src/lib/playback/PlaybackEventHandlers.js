@@ -35,6 +35,7 @@ import {
 import { savePlaybackPosition } from "@/lib/playback/position-memory";
 import { updateAudibilitySample } from "@/lib/playback/audibility";
 
+import { isSamePlaybackTrack } from "@/lib/music-playback";
 import { dispatchPreviewEnded } from "@/lib/playback/playback-track-utils";
 import { setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
 import { isDocumentPlaybackHidden } from "@/lib/playback/playback-transport-utils";
@@ -171,6 +172,7 @@ export function createPlaybackEventHandlers({
   audibilitySampleRef,
   lastPersistRef,
   playTrackRef,
+  playRequestIdRef,
   applyCSModeToTrackRef,
   dispatchPlaybackCommandRef,
   queueRef,
@@ -205,6 +207,7 @@ export function createPlaybackEventHandlers({
   emitBackgroundPlaybackDiagnostics,
   scheduleNextTrackPreload,
   advanceShuffleOrder,
+  requestAuthoritativePlay,
 
   // SM UI channel write — replaces individual React state setters
   patchUI,
@@ -484,6 +487,11 @@ export function createPlaybackEventHandlers({
         gain.gain.linearRampToValueAtTime(userVolumeRef.current, now + 0.08);
       }
     }
+    // At natural completion the browser emits pause before ended. Only ended
+    // owns that handoff; interruption recovery would resume the exhausted source
+    // or attach a stale canplay listener to its successor.
+    if (audio.ended && !userPausedRef.current && !userIntentPausedRef.current) return;
+
     const userInitiated = userPausedRef.current;
     const wasViewportPause = viewportPauseRef.current;
     userPausedRef.current = false;
@@ -823,8 +831,10 @@ export function createPlaybackEventHandlers({
 
     // Source swaps can emit an old ended event. Never seek or stop the new source.
     if (Date.now() < spuriousEndedGuardRef.current && !audio.ended) return;
-    if (lastCompletedTrack === track) return;
-    lastCompletedTrack = track;
+    const completionRequestId = playRequestIdRef?.current;
+    if (lastCompletedTrack && lastCompletedTrack.requestId === completionRequestId &&
+        (lastCompletedTrack.track === track || isSamePlaybackTrack(lastCompletedTrack.track, track))) return;
+    lastCompletedTrack = { track, requestId: completionRequestId };
     if (stateRef.current.isPlaying) patchState({ isPlaying: false });
 
     if (previewOnly) {
@@ -889,7 +899,9 @@ export function createPlaybackEventHandlers({
     const finishEnded = () => {
       // If the user tapped a new track during completion processing,
       // currentTrack will have changed — stale auto-advance must not proceed.
-      if (stateRef.current.currentTrack !== track || userPausedRef.current || userIntentPausedRef.current) return;
+      if (playRequestIdRef?.current !== completionRequestId ||
+          (stateRef.current.currentTrack !== track && !isSamePlaybackTrack(stateRef.current.currentTrack, track)) ||
+          userPausedRef.current || userIntentPausedRef.current) return;
 
       if (repeatMode === "one" && stateRef.current.currentTrack) {
         audio.currentTime = 0;
@@ -1017,11 +1029,17 @@ export function createPlaybackEventHandlers({
               },
             });
           }
-          Promise.resolve(playTrackRef.current?.(nextTrack, {
+          // Carry the exact queue occurrence into Core. Looking it up by id
+          // again selects the first occurrence in playlists with repeated songs.
+          requestAuthoritativePlay(nextTrack, {
             resumeAt: 0,
             playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE,
-          })).then((ok) => {
-            if (ok && csModeRef.current) void applyCSModeToTrackRef.current?.(nextTrack);
+          }, {
+            queueEntries: queue,
+            queueIndex: nextIndex,
+            source: "autoplay",
+            requireCurrentPlaying: true,
+            expectedCurrentMediaIdentity: track.id ?? track.trackId ?? track.slug ?? null,
           });
           return;
         }

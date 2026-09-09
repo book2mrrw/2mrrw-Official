@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { attachQueueCommands } from '../PlaybackQueueCommands.js';
+import { reduceDesiredState } from '../../playback-core/desired/DesiredStateReducer.js';
 import { nextQueueIndex } from '../queue-order.js';
 import { createPlaybackEventHandlers } from '../PlaybackEventHandlers.js';
 import { getQualityLevel, getStartupQualityLevel } from '../../audio/network-quality.js';
@@ -50,7 +52,11 @@ function completionHarness(shuffle = false) {
     spuriousEndedGuardRef: ref(0), userPausedRef: ref(false), userIntentPausedRef: ref(false),
     csModeRef: ref(false), stopAfterEachTrackRef: ref(false), sleepTimerRef: ref({}),
     streamMetaRef: ref(null), lastPersistRef: ref({}), listeningProgressRef: ref({}),
-    activeCommandRef: ref(null), nextTrackPreloadRef: ref(null),
+    activeCommandRef: ref(null), nextTrackPreloadRef: ref(null), playRequestIdRef: ref(1),
+    requestAuthoritativePlay(track, options, policy) {
+      deps.lastAdvancePolicy = policy;
+      return deps.playTrackRef.current(track, options);
+    },
     patchState(patch) { Object.assign(state, patch); },
     advanceShuffleOrder(q, i) { return nextQueueIndex(q, i, refs, { advance: true }); },
   }, { get(target, key) { return key in target ? target[key] : key.endsWith('Ref') ? ref(null) : () => {}; } });
@@ -191,4 +197,89 @@ test('sleep after current track stops queue advancement', async (t) => {
   h.handlers.onEnded();
   assert.equal(h.played.length, 1);
   assert.equal(h.state.isPlaying, false);
+});
+
+// Real browsers emit pause before ended at the natural media boundary.
+for (const [hidden, shuffle] of [[false, false], [false, true], [true, false], [true, true]]) {
+  test(`natural completion does not register interruption recovery (${hidden ? 'locked' : 'visible'}, ${shuffle ? 'shuffle' : 'ordered'})`, async (t) => {
+    t.mock.method(globalThis, 'fetch', async () => ({ ok: true }));
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const oldDoc = Object.getOwnPropertyDescriptor(globalThis, 'document');
+    Object.defineProperty(globalThis, 'document', { configurable: true, value: { visibilityState: hidden ? 'hidden' : 'visible' } });
+    t.after(() => { if (oldDoc) Object.defineProperty(globalThis, 'document', oldDoc); else delete globalThis.document; });
+    const h = completionHarness(shuffle);
+    h.audio.paused = true;
+    const listeners = [];
+    h.audio.addEventListener = (name) => listeners.push(name);
+    h.audio.removeEventListener = () => {};
+    for (let i = 1; i < queue.length; i++) {
+      h.handlers.onPause();
+      assert.deepEqual(listeners, [], 'natural end must not attach a stale canplay resume');
+      assert.equal(h.state.isPlaying, true, 'ended owns the queue handoff');
+      h.handlers.onEnded();
+      assert.equal(h.played.length, i + 1);
+    }
+    assert.equal(new Set(h.played).size, queue.length);
+  });
+}
+
+test('metadata refresh during completion does not cancel the next track', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: true }));
+  const h = completionHarness();
+  h.deps.patchState = (patch) => {
+    Object.assign(h.state, patch);
+    h.state.currentTrack = { ...h.state.currentTrack };
+  };
+  const handlers = createPlaybackEventHandlers(h.deps);
+  handlers.onEnded();
+  assert.equal(h.played.length, 2);
+});
+
+
+test('automatic playback preserves repeated playlist occurrences through Core selection', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: true }));
+  const h = completionHarness();
+  const repeated = [queue[0], queue[0], queue[1], queue[0], queue[2]];
+  h.deps.queueRef.current = repeated;
+  const selected = [];
+  h.deps.requestAuthoritativePlay = (track, options, policy) => {
+    const desired = reduceDesiredState({}, { type: 'PLAY', ...policy, options });
+    selected.push(policy.queueIndex);
+    assert.equal(desired.requestedMediaEntry, repeated[policy.queueIndex]);
+    assert.equal(policy.source, 'autoplay');
+    assert.equal(policy.requireCurrentPlaying, true);
+    h.state.currentTrack = desired.requestedMediaEntry;
+    h.deps.playRequestIdRef.current++;
+    return true;
+  };
+  const handlers = createPlaybackEventHandlers(h.deps);
+  for (let i = 1; i < repeated.length; i++) handlers.onEnded();
+  assert.deepEqual(selected, [1, 2, 3, 4]);
+});
+
+test('a replacement play request wins even when it selects the same track', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: true }));
+  const h = completionHarness();
+  h.deps.patchState = (patch) => {
+    Object.assign(h.state, patch);
+    if (patch.playbackState === 'ending') h.deps.playRequestIdRef.current++;
+  };
+  createPlaybackEventHandlers(h.deps).onEnded();
+  assert.equal(h.played.length, 1);
+});
+
+test('a queue that starts with preview access can continue after access upgrades', async () => {
+  const deps = {
+    stopAfterEachTrackRef: ref(false), requestAuthoritativePlay: () => true,
+    logDirectInternalCallViolation() {},
+  };
+  const service = { _deps: deps };
+  attachQueueCommands(service);
+  service.setQueueInternal = (tracks) => tracks;
+  await service.playQueueInternal([{ ...queue[0], metadata: { access: { previewOnly: true } } }, queue[1]]);
+  assert.equal(deps.stopAfterEachTrackRef.current, false);
+  await service.playQueueInternal(queue, 0, { autoAdvance: false });
+  assert.equal(deps.stopAfterEachTrackRef.current, true);
+  await service.playQueueInternal(queue);
+  assert.equal(deps.stopAfterEachTrackRef.current, false);
 });

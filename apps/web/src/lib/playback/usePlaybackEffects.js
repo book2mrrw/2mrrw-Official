@@ -549,7 +549,7 @@ export function usePlaybackEffects({
       nextNextTrackPreloadRef: refs.nextNextTrackPreloadRef, intentPrewarmRef: refs.intentPrewarmRef,
       prevTrackPreloadRef: refs.prevTrackPreloadRef, pendingSessionUpgradeRef, broadcastChannelRef,
       tabIdRef, audibilitySampleRef, lastPersistRef: refs.lastPersistRef,
-      playTrackRef, applyCSModeToTrackRef, dispatchPlaybackCommandRef,
+      playTrackRef, playRequestIdRef: refs.playRequestIdRef, applyCSModeToTrackRef, dispatchPlaybackCommandRef,
       queueRef, queueIndexRef, repeatModeRef, shuffleRef, csModeRef,
       stopAfterEachTrackRef: refs.stopAfterEachTrackRef, onPreviewEndedRef: refs.onPreviewEndedRef,
       spuriousEndedGuardRef: refs.spuriousEndedGuardRef, sleepTimerRef: refs.sleepTimerRef,
@@ -561,6 +561,7 @@ export function usePlaybackEffects({
       updateMediaSession, finalizeStreamSession, recordLocalListening,
       tracePlayback, emitPhase21AudibleSnapshot, emitBackgroundPlaybackDiagnostics,
       scheduleNextTrackPreload, advanceShuffleOrder,
+      requestAuthoritativePlay: publicApi.requestAuthoritativePlay,
       // SM UI channel write path
       patchUI,
     });

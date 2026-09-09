@@ -143,10 +143,10 @@ export function attachQueueCommands(self) {
     } = self._deps;
     logDirectInternalCallViolation("playQueueInternal");
     // autoAdvance defaults to true — singles/features pass false to stop after each track.
-    // Preview-only tracks always stop after play; no queue advance for entry-level users.
-    const startTrack = tracks[Math.max(0, Math.min(startIndex, tracks.length - 1))];
-    const isPreviewOnlyStart = Boolean(startTrack?.metadata?.access?.previewOnly);
-    stopAfterEachTrackRef.current = options.autoAdvance === false || isPreviewOnlyStart;
+    // Preview limits are enforced against the live track by the event handlers.
+    // Do not latch temporary preview access onto the whole queue: after an
+    // entitlement upgrade, the entitled tracklist must continue automatically.
+    stopAfterEachTrackRef.current = options.autoAdvance === false;
     const normalized = self.setQueueInternal(tracks, startIndex);
     if (!normalized.length) return false;
     const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
