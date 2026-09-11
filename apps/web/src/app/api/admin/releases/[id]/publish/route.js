@@ -488,7 +488,16 @@ export async function POST(req, { params }) {
   // a release with no generated preview at all falls back to the folder
   // convention (legacy discovery path, single/feature releases predating P0).
   const preview_path = canonicalPreviewKey || resolvePreviewPath(typeFolder, releaseSlug);
-  const video_path   = resolveVideoPath(typeFolder, releaseSlug);
+  // video_path must reflect reality, not a guess: it's the one field
+  // mapProductRow() uses to decide whether a non-single release has a motion
+  // cover at all (hasVideo = Boolean(legacyVideo || row.video_path)). Setting
+  // it unconditionally — as this used to — told every static-only release
+  // "you might have a video," forcing a video-typed render + discovery
+  // attempt + fallback for a release that was never meant to have one.
+  // Whichever cover type was actually uploaded is the release's one true
+  // type; video_path is now only set when canonicalVideoKey confirms a
+  // motion cover genuinely exists.
+  const video_path   = canonicalVideoKey ? resolveVideoPath(typeFolder, releaseSlug) : null;
   const visual       = visualDiscoveryUrl(typeFolder, releaseSlug, {});
   const preview      = previewDiscoveryUrl(preview_path);
 
