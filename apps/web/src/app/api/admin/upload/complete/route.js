@@ -6,6 +6,7 @@ import { getAdminClient } from "@/lib/supabase/admin";
 import { headR2ObjectKey } from "@/lib/storage/r2";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
+import { clearEntityResolverCaches } from "@/lib/media/entity-resolver";
 import { ADMIN_UPLOAD_CONTRACTS } from "@/lib/media/admin-upload-contract";
 import { emitServerEvent } from "@/lib/observability/server-events";
 
@@ -179,6 +180,25 @@ export async function POST(req) {
         const { error } = await admin
           .from("releases").update({ cover_art_r2_key: key }).eq("id", releaseId);
         if (error) throw error;
+
+        // The storefront reads exclusively from products, never from releases —
+        // a release that's already live (has a linked products row) needs this
+        // mirrored there, or the edit succeeds here and is invisible on the
+        // actual site. Drafts have no products row yet (created at first
+        // publish), so there's nothing to sync until then.
+        if (relRow.status !== "draft") {
+          const { data: linkedProduct } = await admin
+            .from("products").select("metadata").eq("release_id", releaseId).maybeSingle();
+          if (linkedProduct) {
+            const coverFolder = key.split("/").slice(0, -1).join("/") + "/";
+            const { error: syncErr } = await admin.from("products").update({
+              image_path: coverFolder,
+              metadata: { ...(linkedProduct.metadata || {}), cover_art_r2_key: key },
+            }).eq("release_id", releaseId);
+            if (syncErr) throw syncErr;
+            clearEntityResolverCaches();
+          }
+        }
       } else {
         // Catalog product (products table) — update image_path + metadata
         const { data: product, error: prodErr } = await admin
@@ -210,6 +230,22 @@ export async function POST(req) {
         const { error } = await admin.from("releases")
           .update({ metadata: { ...meta, animated_cover_r2_key: key } }).eq("id", releaseId);
         if (error) throw error;
+
+        // Same reasoning as the cover branch above — mirror to products so an
+        // already-live release's new motion cover actually reaches the site.
+        if (rel.status !== "draft") {
+          const { data: linkedProduct } = await admin
+            .from("products").select("metadata").eq("release_id", releaseId).maybeSingle();
+          if (linkedProduct) {
+            const videoFolder = key.split("/").slice(0, -1).join("/") + "/";
+            const { error: syncErr } = await admin.from("products").update({
+              video_path: videoFolder,
+              metadata: { ...(linkedProduct.metadata || {}), animated_cover_r2_key: key },
+            }).eq("release_id", releaseId);
+            if (syncErr) throw syncErr;
+            clearEntityResolverCaches();
+          }
+        }
       } else {
         const { data: product, error: productError } = await admin.from("products")
           .select("metadata").eq("id", releaseId).single();
