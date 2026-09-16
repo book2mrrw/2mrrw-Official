@@ -1,5 +1,7 @@
 "use client";
 
+import CrossfadeToggle from "@/components/audio/CrossfadeToggle";
+
 import { forwardRef, memo, useMemo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useMountEnterAnimation } from "@/hooks/useMountEnterAnimation";
 import {
@@ -370,6 +372,9 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
             />
           </div>
         ) : null}
+        {source === "home_mixtape_ep_card" && (
+          <div style={{ marginTop: 8 }}><CrossfadeToggle /></div>
+        )}
       </div>
     </PlaybackPrewarmCardShell>
   );

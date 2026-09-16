@@ -698,6 +698,18 @@ export class WebAudioEngine extends AudioEngineBase {
   /** @returns {HTMLAudioElement|null} Standby element wired to the silent standby gain. */
   getStandbyElement() { return this._standbyElement; }
 
+  /** Transfer active ownership without stopping either deck or changing gains.
+   * Song crossfade schedules its own ramps; representation switching retains
+   * the existing completeCrossfade contract below. */
+  adoptStandbyElement() {
+    if (!this.mainGain || !this._standbyGain || !this._standbyElement) return null;
+    [this.mainGain, this._standbyGain] = [this._standbyGain, this.mainGain];
+    [this.source, this._standbySource] = [this._standbySource, this.source];
+    [this._boundElement, this._standbyElement] = [this._standbyElement, this._boundElement];
+    this._attachAudioElementListeners(this._boundElement);
+    return this._boundElement;
+  }
+
   /**
    * Complete a crossfade: swap active and standby deck identities in the JS layer.
    * The Web Audio graph topology is unchanged — both gains remain wired to userGain.

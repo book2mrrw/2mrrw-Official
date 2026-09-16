@@ -1,5 +1,7 @@
 "use client";
 
+import CrossfadeToggle from "@/components/audio/CrossfadeToggle";
+
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
@@ -2264,7 +2266,7 @@ function AlbumModalView({
             </div>
           </div>
 
-          <div style={{ flexShrink: 0, display: "flex", gap: 8, padding: "8px 20px 4px" }}>
+          <div style={{ flexShrink: 0, display: "flex", flexWrap: "wrap", gap: 8, padding: "8px 20px 4px" }}>
             <button
               type="button"
               aria-label="Play all tracks from the beginning"
@@ -2314,6 +2316,7 @@ function AlbumModalView({
               <I.Shuffle />
               SHUFFLE
             </button>
+            <CrossfadeToggle />
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>

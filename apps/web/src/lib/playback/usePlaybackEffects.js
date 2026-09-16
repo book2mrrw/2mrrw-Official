@@ -78,6 +78,8 @@ import {
 } from "@/lib/playback/audio-engine-runtime";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 import { registerPlaybackKeyboardShortcuts } from "@/lib/playback/keyboard-shortcuts";
+import { getAudioEngineRuntime } from "./audio-engine-runtime";
+import { configureCrossfade } from "./crossfade/browser-runtime";
 
 const GESTURE_UNLOCK_EVENTS = ["touchstart", "touchend", "click", "keydown"];
 const AUDIBILITY_WATCHDOG_MS = 1250;
@@ -532,7 +534,7 @@ export function usePlaybackEffects({
     const audio = audioRef.current;
     if (!audio) return;
 
-    const handlers = createPlaybackEventHandlers({
+    const createHandlers = (audio) => createPlaybackEventHandlers({
       audio,
       // Refs
       stateRef, audioRef, audioCtxRef, mainGainRef: refs.mainGainRef,
@@ -566,10 +568,28 @@ export function usePlaybackEffects({
       // SM UI channel write path
       patchUI,
     });
-    const { onPlay, onPause, onTime, onDuration, onEnded, onError, onEmptied,
-            onWaiting, onStalled, onPlaying, onCanPlayThrough } = handlers;
-
-    const detachPlaybackDevTelemetry = attachPlaybackElementDevTelemetry(audio);
+    let handlers = createHandlers(audio);
+    let detachPlaybackDevTelemetry = attachPlaybackElementDevTelemetry(audio);
+    const runtime = getAudioEngineRuntime();
+    const rebind = (element) => {
+      detachPlaybackDevTelemetry();
+      handlers = createHandlers(element);
+      detachPlaybackDevTelemetry = attachPlaybackElementDevTelemetry(element);
+      return handlers;
+    };
+    runtime.rebindPlaybackElement = rebind;
+    // Event ownership follows the active deck without remounting the provider.
+    const onPlay = (...args) => handlers.onPlay(...args);
+    const onPause = (...args) => handlers.onPause(...args);
+    const onTime = (...args) => handlers.onTime(...args);
+    const onDuration = (...args) => handlers.onDuration(...args);
+    const onEnded = (...args) => handlers.onEnded(...args);
+    const onError = (...args) => handlers.onError(...args);
+    const onEmptied = (...args) => handlers.onEmptied(...args);
+    const onWaiting = (...args) => handlers.onWaiting(...args);
+    const onStalled = (...args) => handlers.onStalled(...args);
+    const onPlaying = (...args) => handlers.onPlaying(...args);
+    const onCanPlayThrough = (...args) => handlers.onCanPlayThrough(...args);
 
     const audioEngine = getWebAudioEngine();
     audioEngine._attachAudioElementListeners(audio);
@@ -620,6 +640,7 @@ export function usePlaybackEffects({
 
     return () => {
       detachPlaybackDevTelemetry();
+      if (runtime.rebindPlaybackElement === rebind) runtime.rebindPlaybackElement = null;
       window.removeEventListener("online", onOnline);
       engineUnsubs.forEach((unsub) => unsub());
       audioEngine._detachAudioElementListeners();
@@ -644,6 +665,9 @@ export function usePlaybackEffects({
     startStallRecovery, stopStallRecovery, tracePlayback, readIsAudiblyPlaying,
     emitBackgroundPlaybackDiagnostics, emitPhase21AudibleSnapshot,
   ]);
+
+  // Refresh references only; the optional owner and its audio nodes persist.
+  useEffect(() => { configureCrossfade(refs, delegates, publicApi); });
 
   // ─── Effect 12–15: Stable Ref Syncs ─────────────────────────────────────────
   useEffect(() => {

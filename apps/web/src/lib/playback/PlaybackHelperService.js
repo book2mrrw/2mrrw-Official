@@ -1,5 +1,7 @@
 "use client";
 
+import { getAudioEngineRuntime } from "./audio-engine-runtime";
+
 import {
   playbackStateMachine,
   PLAYBACK_ORCHESTRATION_EVENTS,
@@ -753,7 +755,8 @@ export function createPlaybackHelpers(initialDeps) {
         durationSeconds,
         completed,
       });
-      self._deps.streamMetaRef.current = null;
+      // A crossfade tail can finish after the successor owns the session ref.
+      if (self._deps.streamMetaRef.current === meta) self._deps.streamMetaRef.current = null;
     },
 
     recordLocalListening(track, meta = {}) {
@@ -1428,6 +1431,7 @@ export function createPlaybackHelpers(initialDeps) {
     // CDN tracks: load bytes directly into a hidden Audio element.
     // Library streams: pre-fetch the signed URL so the swap is instant.
     async scheduleNextTrackPreload() {
+      if (getAudioEngineRuntime().crossfade?.ownsNextPreload()) return;
       if (!canPreloadAudio(self._deps.audioRef.current, {
         buffering: self._deps.stateRef.current.isBuffering,
         recentStallAt: self._deps.recentStallTimeRef.current,

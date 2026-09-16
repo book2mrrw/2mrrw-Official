@@ -1,5 +1,7 @@
 "use client";
 
+import CrossfadeToggle from "@/components/audio/CrossfadeToggle";
+
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAudioPlayer } from "@/context/AudioContext";
@@ -749,6 +751,7 @@ function OwnedReleaseList({
                     Tracks
                   </button>
                   <MusicPlusButton track={merged} userId={userId} access={access} onLibraryChange={onLibraryChange} />
+                  <CrossfadeToggle />
                 </div>
               </div>
             </div>

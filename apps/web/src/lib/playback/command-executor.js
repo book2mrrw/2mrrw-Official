@@ -28,6 +28,7 @@ export async function executePlaybackCommand(command) {
   if (command.requestId !== activeCommandRef.current?.requestId) return false;
 
   const h = commandHandlersRef.current;
+  getAudioEngineRuntime().crossfade?.beforeCommand(command);
 
   switch (command.type) {
     case PLAYBACK_COMMANDS.PLAY_TRACK: {

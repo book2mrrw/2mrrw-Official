@@ -1,5 +1,7 @@
 "use client";
 
+import CrossfadeToggle from "@/components/audio/CrossfadeToggle";
+
 import { memo, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useStorefrontCardChrome } from "@/hooks/useStorefrontCardChrome";
@@ -490,6 +492,9 @@ function CatalogGrid({
                 <button className="catalog-adaptive-card__cart" onClick={()=>addToCart(mediaItem)} onMouseEnter={buttonHoverIn} onMouseLeave={buttonHoverOut} style={{flex:1,background:"#1a1a1a",color:"white",border:"1px solid #2a2a2a",cursor:"pointer",transition:"0.25s",fontWeight:600,minWidth:72}}>Add to Cart</button>
               ) : null}
             </div>
+            {(type === "albums" || type === "mixtapes") && (
+              <div style={{ marginTop: 8 }}><CrossfadeToggle /></div>
+            )}
           </div>
         </PlaybackPrewarmCardShell>
       );
