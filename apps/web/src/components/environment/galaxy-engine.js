@@ -54,18 +54,39 @@ export function drawStarField(ctx, stars, { width, height, elapsedSeconds, color
     if (opacity <= 0.02) continue;
     const x = st.x * width + parallaxX;
     const y = st.y * height + parallaxY;
-    const alpha = Math.max(0, Math.min(1, opacity)).toFixed(3);
-    // Soft glow so a star reads as a small point of light rather than a
-    // flat dot — cheap (one extra shadow per star, no extra draw calls).
+    const alpha = Math.max(0, Math.min(1, opacity));
+    const colorStr = `rgba(${color},${alpha.toFixed(3)})`;
+
+    // Real-looking star: a small bright core plus four tapered points —
+    // the classic sparkle/diffraction-spike look of an actual bright star
+    // — instead of a flat blurred dot. A little shadowBlur still softens
+    // the core so it doesn't look like a hard vector icon, but the sparkle
+    // shape (not the blur) is what reads as "real" now.
     if (glow) {
-      ctx.shadowColor = `rgba(${color},${alpha})`;
-      ctx.shadowBlur = st.r * 5.5;
+      ctx.shadowColor = colorStr;
+      ctx.shadowBlur = st.r * 2.2;
     } else {
       ctx.shadowBlur = 0;
     }
+
+    const tip = st.r * 3.4;
+    const inner = st.r * 0.85;
     ctx.beginPath();
-    ctx.fillStyle = `rgba(${color},${alpha})`;
-    ctx.arc(x, y, st.r, 0, TWO_PI);
+    ctx.moveTo(x, y - tip);
+    ctx.lineTo(x + inner, y - inner);
+    ctx.lineTo(x + tip, y);
+    ctx.lineTo(x + inner, y + inner);
+    ctx.lineTo(x, y + tip);
+    ctx.lineTo(x - inner, y + inner);
+    ctx.lineTo(x - tip, y);
+    ctx.lineTo(x - inner, y - inner);
+    ctx.closePath();
+    ctx.fillStyle = colorStr;
+    ctx.fill();
+
+    // Bright pinpoint core on top so small/dim stars still read crisply.
+    ctx.beginPath();
+    ctx.arc(x, y, st.r * 0.42, 0, TWO_PI);
     ctx.fill();
   }
   if (glow) ctx.shadowBlur = 0;

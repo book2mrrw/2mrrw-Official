@@ -60,10 +60,10 @@
 .galaxy-environment__moon,
 .galaxy-environment__sun {
   position: absolute;
-  top: 6%;
-  right: 14%;
-  width: clamp(64px, 11vmin, 140px);
-  height: clamp(64px, 11vmin, 140px);
+  top: 3%;
+  right: 4%;
+  width: clamp(110px, 18vmin, 260px);
+  height: clamp(110px, 18vmin, 260px);
   border-radius: 50%;
   transform: translate3d(0, var(--galaxy-moon-scroll-offset, 0px), 0);
   will-change: opacity, transform;
@@ -83,13 +83,16 @@
   /* No border-radius clip here — the rendered asset is a square composition
      (real lit crescent + its nested companion star, pushed to the right of
      the opening) and a circular clip inscribed in the square would cut the
-     star off. mix-blend-mode: screen drops the render's pure-black backdrop
-     against the environment behind it, so only the crescent/star glow show. */
+     star off. The PNG itself now carries a real alpha channel (converted
+     from the raw black-background render, alpha = brightness) instead of
+     relying on mix-blend-mode: screen -- that approach broke as soon as it
+     sat under this element's `opacity` fade, since opacity < 1 isolates
+     blend modes into their own compositing group, unable to blend with the
+     real page behind it. Real alpha has no such issue. */
   background-image: url("/environment/moon.png");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  mix-blend-mode: screen;
 }
 
 .galaxy-environment__moon-shadow {
@@ -156,7 +159,6 @@
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  mix-blend-mode: screen;
   box-shadow:
     inset -10px -8px 22px rgba(190, 55, 10, 0.4),
     0 0 34px 5px rgba(255, 222, 145, 0.65),
