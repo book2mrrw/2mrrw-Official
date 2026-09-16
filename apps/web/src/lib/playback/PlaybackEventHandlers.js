@@ -986,7 +986,7 @@ export function createPlaybackEventHandlers({
               source: "onEnded",
               trackId: nextTrack.slug,
               extra: {
-                endedSlug: endedTrackSlug,
+                endedSlug: track.slug,
                 nextSlug: nextTrack.slug,
                 nextIndex,
                 queueLength: queue.length,
