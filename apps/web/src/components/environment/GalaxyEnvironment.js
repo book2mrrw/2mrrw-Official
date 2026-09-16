@@ -316,10 +316,21 @@ export default function GalaxyEnvironment() {
       <div className="galaxy-environment__moon">
         <div className="galaxy-environment__moon-core" />
         <div className="galaxy-environment__moon-shadow" />
+        <div className="galaxy-environment__moon-star" />
       </div>
       <div className="galaxy-environment__sun">
         <div className="galaxy-environment__sun-corona" />
-        <div className="galaxy-environment__sun-core" />
+        <video
+          className="galaxy-environment__sun-core"
+          src="/environment/sun.mp4"
+          poster="/environment/sun-poster.png"
+          autoPlay={!reducedMotion}
+          loop={!reducedMotion}
+          muted
+          playsInline
+          preload="auto"
+          aria-hidden="true"
+        />
       </div>
       {shootingStarKey > 0 && <div key={shootingStarKey} className="galaxy-environment__shooting-star" />}
       <canvas ref={canvasRef} className="galaxy-environment__canvas" />

@@ -72,27 +72,51 @@
 
 .galaxy-environment__moon {
   opacity: var(--galaxy-moon-opacity, 0.6);
-  /* Soft ambient halo for the whole disc, dimmer than a full moon would
-     cast — most of the disc is unlit, only the crescent is bright. */
-  box-shadow: 0 0 26px 4px rgba(255, 250, 220, 0.22), 0 0 60px 14px rgba(255, 250, 220, 0.08);
+  /* No box-shadow here anymore. That halo used to make sense as a soft
+     ambient glow around a flat, full-disc gradient art. With the real
+     rendered crescent (whose own glow is already baked into the image),
+     a box-shadow instead just draws a visible ring around the WHOLE
+     circular container regardless of the crescent's actual shape/position
+     — reading as a distracting "circle around the crescent" rather than
+     the crescent's own light. */
 }
 
 .galaxy-environment__moon-core {
   position: absolute;
   inset: 0;
   /* No border-radius clip here — the rendered asset is a square composition
-     (real lit crescent + its nested companion star, pushed to the right of
-     the opening) and a circular clip inscribed in the square would cut the
-     star off. The PNG itself now carries a real alpha channel (converted
-     from the raw black-background render, alpha = brightness) instead of
-     relying on mix-blend-mode: screen -- that approach broke as soon as it
-     sat under this element's `opacity` fade, since opacity < 1 isolates
-     blend modes into their own compositing group, unable to blend with the
-     real page behind it. Real alpha has no such issue. */
+     and a circular clip inscribed in the square would cut into the crescent.
+     The PNG carries a real alpha channel (converted from the raw
+     black-background render, alpha = brightness, thresholded to remove
+     bloom haze) instead of relying on mix-blend-mode: screen -- that
+     approach broke as soon as it sat under this element's `opacity` fade,
+     since opacity < 1 isolates blend modes into their own compositing
+     group, unable to blend with the real page behind it. Real alpha has no
+     such issue. The companion star used to be baked into this same image;
+     it's now its own element (.galaxy-environment__moon-star) below so it
+     can pulse independently — this file is crescent-only. */
   background-image: url("/environment/moon.png");
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
+}
+
+.galaxy-environment__moon-star {
+  position: absolute;
+  left: 52%;
+  top: 26.8%;
+  width: 22%;
+  height: 22%;
+  background-image: url("/environment/moon-star.png");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  animation: moonStarPulse 3.2s ease-in-out infinite;
+}
+
+@keyframes moonStarPulse {
+  0%, 100% { opacity: 0.5; filter: brightness(0.8); }
+  50% { opacity: 1; filter: brightness(1.3); }
 }
 
 .galaxy-environment__moon-shadow {
@@ -113,12 +137,25 @@
 
 .galaxy-environment__sun {
   opacity: var(--galaxy-sun-opacity, 0);
+  /* mix-blend-mode lives here, on the SAME element as `opacity`, not on a
+     descendant. opacity < 1 makes an element an isolated group for its
+     OWN children's blend modes (their backdrop starts fresh at this
+     element, unable to see past it to the real page -- that's the bug
+     that broke the moon's mix-blend-mode: screen approach earlier). But an
+     element's OWN blend-mode still resolves against ITS parent's real
+     backdrop regardless of its own opacity/isolation -- isolation only
+     walls off descendants, not the element itself. So the fix is simply:
+     never split `opacity` and `mix-blend-mode` across an ancestor/child
+     pair; keep them on the same element. This is what lets the sun video's
+     pure-black background disappear against the real starfield while
+     still correctly fading in/out with the day/night crossfade. */
+  mix-blend-mode: screen;
 }
 
 .galaxy-environment__sun-corona {
-  /* Disabled, not deleted: the rendered sun.png already carries its own
-     soft bloom/glow falloff (real post-process bloom, not a gradient), so
-     this spinning conic-gradient ring would just visually compete with it
+  /* Disabled, not deleted: the sun.mp4 footage (see .galaxy-environment__sun-core
+     below) already carries its own living corona/flare/bloom, so this
+     spinning conic-gradient ring would just visually compete with it
      rather than add anything. */
   display: none;
   position: absolute;
@@ -148,32 +185,27 @@
 }
 
 .galaxy-environment__sun-core {
+  /* Now a real <video> element (see GalaxyEnvironment.js) playing the
+     user-supplied sun footage untouched -- its own living motion (flare,
+     flicker, corona) replaces the old CSS sunPulse animation and gradient
+     art entirely, so neither is applied here anymore. No border-radius
+     clip either: the footage's corona fringe is organic/fibrous, not a
+     clean circle, and fades to black at its own edges -- a hard circular
+     clip would slice across that fringe. The screen-blend on the parent
+     `.galaxy-environment__sun` (see above) is what drops the footage's
+     black background out against the real starfield. No box-shadow bloom
+     rings either: the footage already carries its own glow/bloom, and a
+     synthetic halo on top double-counts it the same way it did on the
+     moon before that was removed. */
   position: absolute;
   inset: 0;
-  border-radius: 50%;
-  /* Real physically-lit sun render (limb color gradient, granulation noise,
-     bloom) replaces the flat layered-gradient art. Sun disc sits centered
-     with generous padding in the source square, so the border-radius clip
-     above is safe here (unlike the moon, nothing near the edges to cut off). */
-  background-image: url("/environment/sun.png");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  box-shadow:
-    inset -10px -8px 22px rgba(190, 55, 10, 0.4),
-    0 0 34px 5px rgba(255, 222, 145, 0.65),
-    0 0 68px 16px rgba(255, 172, 62, 0.4),
-    0 0 130px 34px rgba(255, 132, 32, 0.2);
-  animation: sunPulse 6s ease-in-out infinite;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 @keyframes sunCoronaSpin {
   to { transform: rotate(360deg); }
-}
-
-@keyframes sunPulse {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.07); }
 }
 
 .galaxy-environment__shooting-star {
@@ -231,11 +263,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* .galaxy-environment__sun-core is a <video> now -- its autoplay/loop are
+     gated by the same reducedMotion flag directly in GalaxyEnvironment.js
+     (showing just the poster frame instead), so there's no CSS animation
+     on it left to cancel here. */
   .galaxy-environment__orb--a,
   .galaxy-environment__orb--b,
   .galaxy-environment__orb--c,
   .galaxy-environment__sun-corona,
-  .galaxy-environment__sun-core {
+  .galaxy-environment__moon-star {
     animation: none !important;
   }
   .galaxy-environment__shooting-star {
