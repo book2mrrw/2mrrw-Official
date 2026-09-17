@@ -16,12 +16,83 @@
  * Render loop discipline: only low-frequency context (route, tab, time-of-
  * day bucket, reduced-motion, viewport tier, release palette) is ever held
  * in React state — updating it re-renders only this isolated component, not
- * the rest of the tree. Every per-frame value (star positions/twinkle,
- * lerp progress, parallax offset) lives in refs and is written straight to
- * the canvas / DOM style properties inside a single shared
- * requestAnimationFrame loop — never via setState. This mirrors the
- * ref+RAF / direct-DOM-write convention already established in this
- * codebase by GlobalAudioPlayerBar for its own frequently-updating values.
+ * the rest of the tree. Every per-frame value (opacity/hue lerp progress,
+ * scroll offset) lives in refs and is written straight to DOM style
+ * properties (CSS custom properties consumed by the video/nebula layers)
+ * inside a single shared requestAnimationFrame loop — never via setState.
+ * This mirrors the ref+RAF / direct-DOM-write convention already
+ * established in this codebase by GlobalAudioPlayerBar for its own
+ * frequently-updating values.
+ *
+ * Layers (star-background/galaxy/sun/shooting-star) are real <video>/<img>
+ * elements playing user-supplied footage, autoplaying/looping natively —
+ * their own motion needs no JS driving it frame-by-frame. Sun's `opacity`
+ * and `mix-blend-mode: screen` live on the SAME CSS rule (see
+ * environment.css) — splitting them across an ancestor/child pair breaks
+ * the blend-mode (an ancestor's opacity<1 isolates a descendant's blend
+ * mode from the real page behind it), which bit this exact setup before
+ * landing on this pattern.
+ *
+ * Moon, earth and galaxy are a further exception: they need to show only
+ * their actual silhouette (a real object, or in the galaxy's case a nebula
+ * with soft, irregular glowing edges) with genuinely transparent
+ * surroundings — not a geometric shape, not a CSS clip, not a blend-mode
+ * approximation. An earlier pass tried cutting a circular alpha hole via
+ * Canvas destination-in — that was wrong: it clipped the canvas's own
+ * frame into a circle, but never touched the video content's own
+ * background margin *inside* that circle, so a visible dark/gray disk
+ * remained (the actual bug the user's screenshot caught). CSS clipping
+ * (border-radius, overflow:hidden, clip-path, mask-image) was ruled out
+ * earlier for a different reason: <video> elements can get promoted to
+ * their own hardware compositing layer that bypasses normal CSS clipping
+ * in some browsers. And no video codec's own alpha channel survives in
+ * real WebKit — verified directly this round (a VP9-alpha WebM played in
+ * real Playwright/WebKit and sampled via canvas came back alpha=255
+ * everywhere, i.e. silently flattened to opaque).
+ *
+ * The fix operates on the ASSETS, not the container, but how differs by
+ * object. The galaxy's nebula has no fixed geometry, so it's matted with
+ * flood-fill (from the frame border, following the real gradual falloff
+ * already in the footage rather than imposing a shape, protecting the
+ * black hole's own dark core from being punched transparent by a naive
+ * brightness key). Moon and earth ARE fixed geometry — real spheres — and
+ * flood-fill matting fought that: a sphere's own unlit side is genuinely
+ * near-black and blends into black space with literally no detectable edge
+ * there, so per-pixel classification landed inconsistently frame to frame
+ * (a visible staircase along the terminator) and sometimes ate real dark
+ * surface detail outright (mistaking it for background). The fix: measure
+ * the sphere's true (cx, cy, radius) once from the footage's reliably-
+ * detectable LIT portion (stable across a locked-off shot) and fill that
+ * whole real disk — lit or naturally dark — as one circle, the shape a
+ * sphere actually has, instead of an artifact of where a brightness/texture
+ * decision happened to land. The unlit portion's opacity still scales with
+ * how much of the disk is actually lit that frame (a thin crescent fades
+ * its dark side toward transparent instead of dragging along one big solid
+ * black disk; once enough is lit it reads as a complete sphere) — a
+ * continuous function of the frame's own real lit fraction, not a
+ * synthetic shape choice.
+ *
+ * Whichever matting path produced it, each source video's real per-pixel
+ * alpha channel is packed into a single ordinary H.264 video:
+ * each frame stacks the real color on top and the alpha mask (as
+ * grayscale) on the bottom, same width, double height. A first version
+ * used two SEPARATE videos (color + alpha) combined in JS — technically
+ * correct in a single still frame, but visibly flickered during real
+ * playback: two independent <video> elements have no guaranteed frame
+ * lock, so color and alpha could momentarily show different points in the
+ * sequence. Packing them into one video file makes that impossible —
+ * there's physically only one stream to decode, so color and alpha are
+ * always the exact same decoded frame. No experimental codec alpha
+ * feature involved either way — this is ordinary, hardware-decoded video.
+ *
+ * Each frame, the hidden decode-source video's top half (color) is drawn
+ * straight onto the visible canvas and its bottom half (alpha) is drawn to
+ * a scratch canvas; the scratch's luminance is then copied into the
+ * canvas image's alpha channel before it's painted — genuine per-pixel
+ * transparency that follows the real object silhouette, computed from
+ * real matted asset data, not a synthetic mask shape. This is throttled to
+ * ~15fps (matching the source encode) inside the SAME shared RAF loop as
+ * everything else below — no new render loop, no setState.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -31,7 +102,7 @@ import { useReducedMotion } from "./use-reduced-motion";
 import { resolveMood } from "./mood-table";
 import { getTimeOfDayTarget } from "./time-of-day";
 import { getPerformanceTier, TIER_PARAMS } from "./performance-tier";
-import { createStarField, resizeStarField, stepStarField, drawStarField, lerp } from "./galaxy-engine";
+import { lerp } from "./galaxy-engine";
 import "./environment.css";
 
 const TIME_CHECK_INTERVAL_MS = 60000;
@@ -61,15 +132,24 @@ export default function GalaxyEnvironment() {
   const [shootingStarKey, setShootingStarKey] = useState(0);
 
   const rootRef = useRef(null);
-  const canvasRef = useRef(null);
+  const moonVideoRef = useRef(null);
+  const moonCanvasRef = useRef(null);
+  const earthVideoRef = useRef(null);
+  const earthCanvasRef = useRef(null);
+  const galaxyVideoRef = useRef(null);
+  const galaxyCanvasRef = useRef(null);
+  // Scratch canvas used to decode each object's alpha-mask video frame long
+  // enough to read its pixels -- reused across all three objects since the
+  // RAF loop draws them one at a time, never concurrently. Never attached
+  // to the DOM.
+  const scratchCanvasRef = useRef(null);
+  const lastCombineRef = useRef(0);
 
-  const starsRef = useRef([]);
   const rafRef = useRef(null);
   const lastFrameRef = useRef(0);
   const elapsedRef = useRef(0);
   const currentStateRef = useRef({ starOpacity: 1, nebulaOpacity: 0.8, hueBias: 0, speedMultiplier: 1, moonOpacity: 0.8, sunOpacity: 0 });
   const targetStateRef = useRef({ starOpacity: 1, nebulaOpacity: 0.8, hueBias: 0, speedMultiplier: 1, moonOpacity: 0.8, sunOpacity: 0 });
-  const pointerRef = useRef({ x: 0, y: 0 });
   const scrollRef = useRef(0);
   const tierRef = useRef("medium");
 
@@ -100,7 +180,7 @@ export default function GalaxyEnvironment() {
     return () => clearInterval(id);
   }, []);
 
-  // Roughly every 30 minutes (with jitter so it never feels metronomic),
+  // Roughly every 3 minutes (with jitter so it never feels metronomic),
   // and only when it's night-ish (moon dominant) — a shooting star against
   // a bright daytime sky wouldn't read as anything. Gated here, not in CSS,
   // so a daytime tick just reschedules without ever rendering the element.
@@ -108,7 +188,7 @@ export default function GalaxyEnvironment() {
     if (reducedMotion) return undefined;
     let timeoutId;
     function schedule() {
-      const delayMs = (25 + Math.random() * 10) * 60 * 1000;
+      const delayMs = (2.5 + Math.random() * 1) * 60 * 1000;
       timeoutId = setTimeout(() => {
         if (targetStateRef.current.moonOpacity > 0.5) {
           setShootingStarKey((k) => k + 1);
@@ -155,11 +235,6 @@ export default function GalaxyEnvironment() {
       moonOpacity: timeTarget.moonOpacity,
       sunOpacity: timeTarget.sunOpacity,
     };
-
-    const targetCount = Math.round(TIER_PARAMS[computedTier].starCount * mood.starDensity);
-    starsRef.current = starsRef.current.length
-      ? resizeStarField(starsRef.current, targetCount)
-      : createStarField(targetCount);
   }, [pathname, tabId, reducedMotion, pointerFine, viewport.width, viewport.height, timeTarget, releasePalette]);
 
   // --- release-modal artwork palette -> nebula tint (occasional, not per-frame) --
@@ -175,36 +250,7 @@ export default function GalaxyEnvironment() {
     else root.style.removeProperty("--galaxy-p3");
   }, [releasePalette]);
 
-  // --- canvas sizing: updates in place on resize, never recreated ------
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const width = viewport.width || (typeof window !== "undefined" ? window.innerWidth : 0);
-    const height = viewport.height || (typeof window !== "undefined" ? window.innerHeight : 0);
-    if (!width || !height) return;
-    const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 1;
-    canvas.width = Math.round(width * dpr);
-    canvas.height = Math.round(height * dpr);
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-    const ctx = canvas.getContext("2d");
-    if (ctx) ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  }, [viewport.width, viewport.height]);
-
-  // --- pointer / scroll: passive listeners, refs only, never blocking --
-
-  useEffect(() => {
-    function onPointerMove(e) {
-      if (!TIER_PARAMS[tierRef.current].pointerParallax) return;
-      const w = window.innerWidth || 1;
-      const h = window.innerHeight || 1;
-      pointerRef.current.x = (e.clientX / w - 0.5) * 2;
-      pointerRef.current.y = (e.clientY / h - 0.5) * 2;
-    }
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
-    return () => window.removeEventListener("pointermove", onPointerMove);
-  }, []);
+  // --- scroll: passive listener, ref only, never blocking --------------
 
   useEffect(() => {
     function onScroll() {
@@ -224,9 +270,56 @@ export default function GalaxyEnvironment() {
   useEffect(() => {
     let cancelled = false;
 
+    // Draws the top half of `video`'s current frame (real color) to
+    // `canvas`, then replaces its alpha channel with the bottom half's
+    // luminance (the matted alpha mask, stacked into the same file at
+    // encode time) -- genuine per-pixel transparency read from a real,
+    // content-matted asset, not a shape computed at render time. A single
+    // packed video (not two separate color/alpha videos) guarantees color
+    // and alpha are always the same decoded frame -- see the header
+    // comment for why that matters (two independent <video> elements
+    // visibly flickered when their decode timing drifted). readyState < 2
+    // means the video has no decoded frame yet -- skip rather than draw a
+    // blank/stale one.
+    function combinePacked(canvas, video) {
+      if (!canvas || !video || video.readyState < 2) return;
+      const scratch = scratchCanvasRef.current;
+      if (!scratch) return;
+      const ctx = canvas.getContext("2d");
+      const scratchCtx = scratch.getContext("2d");
+      if (!ctx || !scratchCtx) return;
+      const w = canvas.width;
+      const h = canvas.height;
+      const vw = video.videoWidth;
+      const vh = video.videoHeight / 2; // top half color, bottom half alpha
+      if (!vw || !vh) return;
+
+      ctx.drawImage(video, 0, 0, vw, vh, 0, 0, w, h);
+      const rgbData = ctx.getImageData(0, 0, w, h);
+
+      scratch.width = w;
+      scratch.height = h;
+      scratchCtx.drawImage(video, 0, vh, vw, vh, 0, 0, w, h);
+      const alphaData = scratchCtx.getImageData(0, 0, w, h);
+
+      const rgbPixels = rgbData.data;
+      const alphaPixels = alphaData.data;
+      for (let i = 0; i < rgbPixels.length; i += 4) {
+        rgbPixels[i + 3] = alphaPixels[i];
+      }
+      ctx.putImageData(rgbData, 0, 0);
+    }
+
+    function drawCelestialBodies() {
+      combinePacked(moonCanvasRef.current, moonVideoRef.current);
+      combinePacked(earthCanvasRef.current, earthVideoRef.current);
+      combinePacked(galaxyCanvasRef.current, galaxyVideoRef.current);
+    }
+
     function applyNebulaStyles(state) {
       const root = rootRef.current;
       if (!root) return;
+      root.style.setProperty("--galaxy-star-opacity", state.starOpacity.toFixed(3));
       root.style.setProperty("--galaxy-nebula-opacity", state.nebulaOpacity.toFixed(3));
       root.style.setProperty("--galaxy-hue-bias", `${state.hueBias.toFixed(1)}deg`);
       root.style.setProperty("--galaxy-moon-opacity", state.moonOpacity.toFixed(3));
@@ -238,27 +331,21 @@ export default function GalaxyEnvironment() {
       root.style.setProperty("--galaxy-moon-scroll-offset", `${moonScrollOffset.toFixed(1)}px`);
     }
 
-    function drawStatic() {
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext("2d");
-      if (ctx) {
-        drawStarField(ctx, starsRef.current, {
-          width: canvas.clientWidth,
-          height: canvas.clientHeight,
-          elapsedSeconds: 0,
-          opacityMultiplier: targetStateRef.current.starOpacity,
-          glow: TIER_PARAMS[tierRef.current].glow,
-        });
-      }
-      applyNebulaStyles(targetStateRef.current);
-    }
+    // The combine sources are encoded at up to 30fps (earth) -- recombining
+    // faster than that on every RAF tick (which can run well past 60fps)
+    // would just burn CPU on getImageData/putImageData for pixel data
+    // that hasn't changed. Matches the fastest source so no asset is ever
+    // bottlenecked below its own encoded rate. Throttled independently of
+    // the nebula/opacity lerps above, which stay smooth every frame.
+    const COMBINE_INTERVAL_MS = 1000 / 30;
 
     function frame(ts) {
       if (cancelled) return;
 
       const tierParams = TIER_PARAMS[tierRef.current];
       if (!tierParams.animate) {
-        drawStatic();
+        applyNebulaStyles(targetStateRef.current);
+        drawCelestialBodies(); // one static paint, matches poster-frame behavior
         return; // low tier / reduced motion: one paint, no further frames
       }
 
@@ -276,47 +363,107 @@ export default function GalaxyEnvironment() {
       cur.moonOpacity = lerp(cur.moonOpacity, tgt.moonOpacity, LERP_FACTOR);
       cur.sunOpacity = lerp(cur.sunOpacity, tgt.sunOpacity, LERP_FACTOR);
 
-      stepStarField(starsRef.current, dt * cur.speedMultiplier);
-
-      const canvas = canvasRef.current;
-      const ctx = canvas?.getContext("2d");
-      if (ctx) {
-        const parallaxX = tierParams.pointerParallax ? pointerRef.current.x * 6 : 0;
-        const parallaxY = tierParams.pointerParallax ? pointerRef.current.y * 6 : 0;
-        drawStarField(ctx, starsRef.current, {
-          width: canvas.clientWidth,
-          height: canvas.clientHeight,
-          elapsedSeconds: elapsedRef.current,
-          opacityMultiplier: cur.starOpacity,
-          parallaxX,
-          parallaxY,
-          glow: tierParams.glow,
-        });
-      }
-
       applyNebulaStyles(cur);
+      if (ts - lastCombineRef.current >= COMBINE_INTERVAL_MS) {
+        lastCombineRef.current = ts;
+        drawCelestialBodies();
+      }
 
       rafRef.current = requestAnimationFrame(frame);
     }
 
+    if (!scratchCanvasRef.current) {
+      scratchCanvasRef.current = document.createElement("canvas");
+    }
+
     rafRef.current = requestAnimationFrame(frame);
+
+    // Static low-tier/reduced-motion paint only draws once, at whatever
+    // instant that first frame() call happens to land -- if a hidden
+    // decode-source video hasn't reached readyState 2 yet by then (still
+    // loading), combinePacked's guard skips it and, with no further
+    // frames coming, that canvas would stay blank forever. "loadeddata"
+    // fires once a video's first frame is actually decoded, so catch up
+    // with one more paint then. Harmless to attach unconditionally (cheap,
+    // idempotent, and the normal per-frame branch is already redrawing
+    // regularly anyway).
+    const videoEls = [moonVideoRef.current, earthVideoRef.current, galaxyVideoRef.current];
+    function handleAnySourceReady() {
+      drawCelestialBodies();
+    }
+    videoEls.forEach((el) => el?.addEventListener("loadeddata", handleAnySourceReady));
+
     return () => {
       cancelled = true;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      videoEls.forEach((el) => el?.removeEventListener("loadeddata", handleAnySourceReady));
     };
   }, [tier]);
 
   return (
     <div ref={rootRef} className="galaxy-environment" aria-hidden="true">
+      <video
+        className="galaxy-environment__star-background"
+        src="/environment/star-background.mp4"
+        poster="/environment/star-background-poster.png"
+        autoPlay={!reducedMotion}
+        loop={!reducedMotion}
+        muted
+        playsInline
+        preload="auto"
+      />
+      <div className="galaxy-environment__galaxy">
+        {/* Hidden decode source, never shown directly -- a single packed
+            video (real color on top, real alpha mask on the bottom half,
+            matted offline from the actual footage -- see the header
+            comment) combined onto the visible canvas below every frame. */}
+        <video
+          ref={galaxyVideoRef}
+          className="galaxy-environment__celestial-source"
+          src="/environment/galaxy-packed.mp4"
+          autoPlay={!reducedMotion}
+          loop={!reducedMotion}
+          muted
+          playsInline
+          preload="auto"
+        />
+        <canvas
+          ref={galaxyCanvasRef}
+          className="galaxy-environment__galaxy-core"
+          width={640}
+          height={360}
+        />
+      </div>
       <div className="galaxy-environment__nebula">
         <div className="galaxy-environment__orb galaxy-environment__orb--a" />
         <div className="galaxy-environment__orb galaxy-environment__orb--b" />
         <div className="galaxy-environment__orb galaxy-environment__orb--c" />
       </div>
       <div className="galaxy-environment__moon">
-        <div className="galaxy-environment__moon-core" />
-        <div className="galaxy-environment__moon-shadow" />
-        <div className="galaxy-environment__moon-star" />
+        {/* Hidden decode source, never displayed directly -- the canvas
+            below combines this single packed video's color + alpha-mask
+            halves (see the header comment for why one packed video, not
+            two separate ones). */}
+        <video
+          ref={moonVideoRef}
+          className="galaxy-environment__celestial-source"
+          src="/environment/moon-packed.mp4"
+          autoPlay={!reducedMotion}
+          // Trimmed to end exactly on the full moon, deliberately not
+          // looping -- a real <video> without loop just holds on its last
+          // decoded frame once it ends, so this settles on the full moon
+          // and stays there rather than cycling back through the phases.
+          loop={false}
+          muted
+          playsInline
+          preload="auto"
+        />
+        <canvas
+          ref={moonCanvasRef}
+          className="galaxy-environment__moon-core"
+          width={480}
+          height={480}
+        />
       </div>
       <div className="galaxy-environment__sun">
         <div className="galaxy-environment__sun-corona" />
@@ -332,8 +479,41 @@ export default function GalaxyEnvironment() {
           aria-hidden="true"
         />
       </div>
-      {shootingStarKey > 0 && <div key={shootingStarKey} className="galaxy-environment__shooting-star" />}
-      <canvas ref={canvasRef} className="galaxy-environment__canvas" />
+      <div className="galaxy-environment__earth">
+        <video
+          ref={earthVideoRef}
+          className="galaxy-environment__celestial-source"
+          src="/environment/earth-packed.mp4"
+          autoPlay={!reducedMotion}
+          loop={!reducedMotion}
+          muted
+          playsInline
+          preload="auto"
+        />
+        <canvas
+          ref={earthCanvasRef}
+          className="galaxy-environment__earth-video"
+          width={480}
+          height={480}
+        />
+      </div>
+      {shootingStarKey > 0 && (
+        // Animated WebP with a real alpha channel (converted from the raw
+        // footage: alpha = brightness above a threshold, so only the bright
+        // streak itself survives -- the source's own Milky Way backdrop is
+        // dropped entirely, "completely separate from its original
+        // background" per explicit feedback). <img>, not <video>: WebP
+        // animation autoplays/loops natively via <img>, and real alpha
+        // composites correctly with normal img rendering -- no
+        // mix-blend-mode needed, sidestepping that whole class of bug.
+        <img
+          key={shootingStarKey}
+          className="galaxy-environment__shooting-star"
+          src="/environment/shootingstar.webp"
+          alt=""
+          aria-hidden="true"
+        />
+      )}
     </div>
   );
 }

@@ -52,6 +52,17 @@ const nextConfig = {
         source: "/(.*)",
         headers: securityHeaders,
       },
+      {
+        // Persistent background environment assets (sun/moon/star/galaxy/
+        // earth/shooting-star video+poster files) -- long-lived immutable
+        // caching so repeat visits don't re-fetch them. Updates to these
+        // files go out under a new deploy, which Vercel's build/edge cache
+        // already keys separately, so "immutable" here is safe.
+        source: "/environment/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
     ];
   },
   async redirects() {

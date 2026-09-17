@@ -12,6 +12,43 @@
   contain: strict;
 }
 
+.galaxy-environment__star-background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* opacity + mix-blend-mode on the SAME element (this video has no
+     opacity-bearing ancestor to conflict with) -- see GalaxyEnvironment.js's
+     header comment for why that pairing matters. This is the deepest layer:
+     a real starfield loop (crossfade-blended into a seamless 5s loop from
+     non-looping source footage) replacing the old canvas-drawn stars. */
+  opacity: var(--galaxy-star-opacity, 1);
+  mix-blend-mode: screen;
+}
+
+.galaxy-environment__galaxy {
+  position: absolute;
+  top: 14%;
+  left: 6%;
+  width: clamp(200px, 26vw, 460px);
+  aspect-ratio: 16 / 9;
+  pointer-events: none;
+  /* Deliberately small and contained -- not a full-bleed layer. The source
+     footage is a very bright/dramatic black-hole shot; keeping it small and
+     distant-feeling (rather than dialing down its own brightness/color) is
+     how it stays "phenomenal" up close while not dominating the sky. Sits
+     behind the nebula orbs (painted after it below). Full opacity, always --
+     no day/night dimming at all, per explicit feedback that any dimming
+     "missed the point" ("it's a galaxy, it's not supposed to be see
+     through"). No border-radius/overflow/clip-path/mask/mix-blend-mode --
+     galaxy-core is a <canvas> now (see .galaxy-environment__moon below for
+     the full rationale): the nebula's own real silhouette (soft, irregular
+     glowing edges, not a rectangle) is matted into a real per-pixel alpha
+     channel offline, same technique as moon/earth. */
+  opacity: 1;
+}
+
 .galaxy-environment__nebula {
   position: absolute;
   inset: -15%;
@@ -64,7 +101,6 @@
   right: 4%;
   width: clamp(110px, 18vmin, 260px);
   height: clamp(110px, 18vmin, 260px);
-  border-radius: 50%;
   transform: translate3d(0, var(--galaxy-moon-scroll-offset, 0px), 0);
   will-change: opacity, transform;
   pointer-events: none;
@@ -72,67 +108,49 @@
 
 .galaxy-environment__moon {
   opacity: var(--galaxy-moon-opacity, 0.6);
-  /* No box-shadow here anymore. That halo used to make sense as a soft
-     ambient glow around a flat, full-disc gradient art. With the real
-     rendered crescent (whose own glow is already baked into the image),
-     a box-shadow instead just draws a visible ring around the WHOLE
-     circular container regardless of the crescent's actual shape/position
-     — reading as a distracting "circle around the crescent" rather than
-     the crescent's own light. */
+  /* No border-radius/overflow/clip-path/mask/mix-blend-mode here at all --
+     moon-core is a <canvas> now (see GalaxyEnvironment.js), not a <video>.
+     Every CSS clipping technique proved unreliable across browsers for a
+     <video> (WebKit can promote a <video> to its own compositing layer
+     that bypasses clipping), and no video codec's own alpha channel
+     survives in real WebKit either (verified directly: a VP9-alpha WebM
+     came back alpha=255 everywhere when sampled via canvas). An earlier
+     attempt cut a circular alpha hole into the canvas itself via
+     destination-in -- wrong fix: it clipped the canvas's own frame, not
+     the video content's background margin *inside* that circle, leaving a
+     visible dark/gray disk. The real fix operates on the asset: each
+     frame the canvas combines two matted, ordinary H.264 videos (real
+     color + a real per-pixel alpha mask, built offline via flood-fill
+     matting that follows the footage's own silhouette/glow, not a
+     geometric shape) -- actual per-pixel transparency from real asset
+     data. No mix-blend-mode either: moon 1.mp4's dense Milky Way backdrop
+     would screen-blend into a glowing wash regardless of clipping, so it's
+     solid/opaque, same as earth. */
 }
 
-.galaxy-environment__moon-core {
+.galaxy-environment__celestial-source {
+  /* The actual decode source for moon/earth's canvases -- never shown
+     directly. Not display:none (which can pause video decode in some
+     browsers): sized to 1x1 and fully transparent instead, so it keeps
+     playing invisibly while the canvas reads its frames. */
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.galaxy-environment__moon-core,
+.galaxy-environment__galaxy-core {
+  /* A <canvas>, not a <video> -- see .galaxy-environment__moon above and
+     GalaxyEnvironment.js for why. Its own drawn pixels already carry real
+     per-object alpha (0 outside the matted silhouette), so this is just
+     plain sizing, no clip properties needed. */
   position: absolute;
   inset: 0;
-  /* No border-radius clip here — the rendered asset is a square composition
-     and a circular clip inscribed in the square would cut into the crescent.
-     The PNG carries a real alpha channel (converted from the raw
-     black-background render, alpha = brightness, thresholded to remove
-     bloom haze) instead of relying on mix-blend-mode: screen -- that
-     approach broke as soon as it sat under this element's `opacity` fade,
-     since opacity < 1 isolates blend modes into their own compositing
-     group, unable to blend with the real page behind it. Real alpha has no
-     such issue. The companion star used to be baked into this same image;
-     it's now its own element (.galaxy-environment__moon-star) below so it
-     can pulse independently — this file is crescent-only. */
-  background-image: url("/environment/moon.png");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-.galaxy-environment__moon-star {
-  position: absolute;
-  left: 52%;
-  top: 26.8%;
-  width: 22%;
-  height: 22%;
-  background-image: url("/environment/moon-star.png");
-  background-size: contain;
-  background-position: center;
-  background-repeat: no-repeat;
-  animation: moonStarPulse 3.2s ease-in-out infinite;
-}
-
-@keyframes moonStarPulse {
-  0%, 100% { opacity: 0.5; filter: brightness(0.8); }
-  50% { opacity: 1; filter: brightness(1.3); }
-}
-
-.galaxy-environment__moon-shadow {
-  /* Disabled, not deleted: the crescent shape is now baked into the
-     rendered moon.png itself (a real lit/shadow terminator, not a CSS
-     overlay trick), so this masking disc has nothing left to do. Kept
-     inert (display: none) rather than removed so --galaxy-moon-phase-offset
-     stays a live reference here, in case a future admin phase/eclipse
-     control still wants to build on this exact mechanism. */
-  display: none;
-  position: absolute;
-  inset: -6%;
-  border-radius: 50%;
-  background: #07070f;
-  filter: blur(2.5px);
-  transform: translate3d(var(--galaxy-moon-phase-offset, 38%), -6%, 0);
+  width: 100%;
+  height: 100%;
 }
 
 .galaxy-environment__sun {
@@ -208,43 +226,64 @@
   to { transform: rotate(360deg); }
 }
 
-.galaxy-environment__shooting-star {
+.galaxy-environment__earth {
   position: absolute;
-  top: 11%;
-  left: -6%;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.9), 0 0 14px 4px rgba(255, 255, 255, 0.4);
-  animation: shootingStarTravel 2.6s cubic-bezier(0.3, 0.6, 0.4, 1) forwards;
+  bottom: 4%;
+  /* Nudged left of the sun/moon's own 4% offset so it doesn't sit directly
+     stacked under them -- a small offset, not centered. */
+  right: 16%;
+  width: clamp(90px, 15vmin, 210px);
+  height: clamp(90px, 15vmin, 210px);
+  pointer-events: none;
+  /* No border-radius/overflow/clip-path/mask/mix-blend-mode here -- see
+     the long comment on .galaxy-environment__moon: earth-video is a
+     <canvas> now, drawn each frame with a REAL circular alpha cutout
+     (Canvas 2D destination-in compositing), not clipped by any CSS
+     property. Always visible (not tied to the day/night crossfade like
+     sun/moon) -- a distant planet in the corner, not a light source. */
+  opacity: 1;
 }
 
-.galaxy-environment__shooting-star::before {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: 100%;
-  width: 90px;
-  height: 1.5px;
-  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.7) 100%);
-  transform: translateY(-50%);
-}
-
-/* Left-to-right, fading out well before it would ever reach the sun (which
-   sits around left:86%) — it dissipates, it never crosses paths with it. */
-@keyframes shootingStarTravel {
-  0% { left: -6%; opacity: 0; }
-  8% { opacity: 1; }
-  65% { opacity: 1; }
-  100% { left: 76%; opacity: 0; }
-}
-
-.galaxy-environment__canvas {
-  position: absolute;
-  inset: 0;
+.galaxy-environment__earth-video {
+  /* A <canvas>, not a <video> -- its own drawn pixels already carry real
+     per-object alpha (see .galaxy-environment__moon above for the full
+     matting rationale). Plain opaque content within the matted silhouette
+     (no mix-blend-mode): a real planet is solid, it shouldn't blend with
+     or let the star-background layer's own moving stars show through it. */
+  display: block;
   width: 100%;
   height: 100%;
+}
+
+.galaxy-environment__shooting-star {
+  position: absolute;
+  /* Starts top-right, crossing the sky left-to-right (matches the original
+     shooting-star spec: same general area as the sun, dissipating as it
+     travels). transform rotates the streak's own baked-in angle shallower
+     ("more upward"/less steep) -- a first-pass estimate, not verified in an
+     actual browser, easy to nudge further once seen live. */
+  top: 8%;
+  right: 4%;
+  width: 46vw;
+  max-width: 640px;
+  aspect-ratio: 16 / 9;
+  object-fit: contain;
+  transform: rotate(15deg);
+  pointer-events: none;
+  /* No mix-blend-mode: this is a real alpha-channel WebP image now (see
+     GalaxyEnvironment.js), so it composites correctly on its own -- the
+     source's own background was dropped entirely during conversion, not
+     just hidden via blending. Real footage of a single meteor streak (sped
+     up ~3.5x from source so it reads as fast, not a slow glide), not a
+     CSS-animated dot+trail. Plays once per trigger -- this fade only
+     softens the very end so it doesn't hard-cut on the image's last frame,
+     then stays hidden (forwards) until the next trigger remounts it via key. */
+  animation: shootingStarFadeOut 2.934s linear forwards;
+}
+
+@keyframes shootingStarFadeOut {
+  0%, 88% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 @keyframes galaxyOrbA {
@@ -263,15 +302,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* .galaxy-environment__sun-core is a <video> now -- its autoplay/loop are
-     gated by the same reducedMotion flag directly in GalaxyEnvironment.js
-     (showing just the poster frame instead), so there's no CSS animation
-     on it left to cancel here. */
+  /* Every <video> layer's autoplay/loop is already gated by the same
+     reducedMotion flag directly in GalaxyEnvironment.js (showing just its
+     poster frame instead), so there's no CSS animation left to cancel on
+     any of them. The shooting-star scheduler itself never fires under
+     reduced motion (gated in GalaxyEnvironment.js), so it never mounts. */
   .galaxy-environment__orb--a,
   .galaxy-environment__orb--b,
   .galaxy-environment__orb--c,
-  .galaxy-environment__sun-corona,
-  .galaxy-environment__moon-star {
+  .galaxy-environment__sun-corona {
     animation: none !important;
   }
   .galaxy-environment__shooting-star {
