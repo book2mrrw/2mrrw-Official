@@ -109,6 +109,31 @@ const TIME_CHECK_INTERVAL_MS = 60000;
 const RESIZE_DEBOUNCE_MS = 150;
 const LERP_FACTOR = 0.02;
 
+// Same UA check already proven this session in
+// video-resource-manager.js's _isLikelyIOS() -- kept as its own local
+// copy here (not a shared import) since this is a narrow, self-contained
+// hotfix, not the platform-detection module the fuller iOS/Android
+// architecture pass will introduce.
+function isLikelyIOS() {
+  if (typeof navigator === "undefined") return false;
+  const ua = String(navigator.userAgent || "");
+  const hasTouchDocument = typeof document !== "undefined" && "ontouchend" in document;
+  return /iP(hone|ad|od)/i.test(ua) || (/Macintosh/i.test(ua) && hasTouchDocument);
+}
+
+// iOS has a real, low, fixed concurrent-video-decode ceiling. This
+// component mounts 6 <video autoPlay> elements at once; on iOS, asking
+// it to arbitrate that many simultaneous play/decode requests in the
+// same tick is a known trigger for some of them silently never starting
+// -- which for the 3 hidden decode-source videos means their canvas
+// (moon/earth/galaxy) stays permanently blank, since combinePacked()
+// bails whenever readyState never reaches 2, and for the spaceship
+// means it just never appears. Staggering their .play() calls lets iOS
+// grant one decoder at a time instead of four at once. Android/Chromium
+// has far more headroom and keeps using the plain `autoPlay` attribute,
+// untouched.
+const IOS_SOURCE_PLAY_STAGGER_MS = 150;
+
 const DEFAULT_TIME_TARGET = { phase: "night", starOpacity: 1, nebulaOpacity: 0.9, hueBias: 0, speedMultiplier: 1, moonOpacity: 0.85, sunOpacity: 0 };
 
 export default function GalaxyEnvironment() {
@@ -138,6 +163,8 @@ export default function GalaxyEnvironment() {
   const earthCanvasRef = useRef(null);
   const galaxyVideoRef = useRef(null);
   const galaxyCanvasRef = useRef(null);
+  const spaceshipVideoRef = useRef(null);
+  const spaceshipCanvasRef = useRef(null);
   // Scratch canvas used to decode each object's alpha-mask video frame long
   // enough to read its pixels -- reused across all three objects since the
   // RAF loop draws them one at a time, never concurrently. Never attached
@@ -152,6 +179,29 @@ export default function GalaxyEnvironment() {
   const targetStateRef = useRef({ starOpacity: 1, nebulaOpacity: 0.8, hueBias: 0, speedMultiplier: 1, moonOpacity: 0.8, sunOpacity: 0 });
   const scrollRef = useRef(0);
   const tierRef = useRef("medium");
+
+  // --- iOS: stagger the hidden decode-source + spaceship videos' play ---
+  // start instead of letting all 6 <video autoPlay> elements race for a
+  // decoder slot in the same tick. Client-only, runs once on mount,
+  // touches nothing about the JSX autoPlay attribute (avoids any
+  // SSR/hydration mismatch) -- it just pauses whatever autoplay already
+  // started on these elements and restarts them 150ms apart.
+  // Android/Chromium is untouched: this effect no-ops immediately there.
+  useEffect(() => {
+    if (!isLikelyIOS()) return undefined;
+    const sources = [moonVideoRef.current, earthVideoRef.current, galaxyVideoRef.current, spaceshipVideoRef.current];
+    sources.forEach((el) => {
+      if (!el) return;
+      try { el.pause(); } catch { /* ignore */ }
+    });
+    const timers = sources.map((el, i) => {
+      if (!el) return null;
+      return setTimeout(() => {
+        el.play()?.catch(() => { /* ignore -- gesture/policy rejection, not fatal */ });
+      }, i * IOS_SOURCE_PLAY_STAGGER_MS);
+    });
+    return () => timers.forEach((t) => { if (t) clearTimeout(t); });
+  }, []);
 
   // --- low-frequency signal wiring: tab, palette, clock, viewport -----
 
@@ -314,6 +364,7 @@ export default function GalaxyEnvironment() {
       combinePacked(moonCanvasRef.current, moonVideoRef.current);
       combinePacked(earthCanvasRef.current, earthVideoRef.current);
       combinePacked(galaxyCanvasRef.current, galaxyVideoRef.current);
+      combinePacked(spaceshipCanvasRef.current, spaceshipVideoRef.current);
     }
 
     function applyNebulaStyles(state) {
@@ -387,7 +438,7 @@ export default function GalaxyEnvironment() {
     // with one more paint then. Harmless to attach unconditionally (cheap,
     // idempotent, and the normal per-frame branch is already redrawing
     // regularly anyway).
-    const videoEls = [moonVideoRef.current, earthVideoRef.current, galaxyVideoRef.current];
+    const videoEls = [moonVideoRef.current, earthVideoRef.current, galaxyVideoRef.current, spaceshipVideoRef.current];
     function handleAnySourceReady() {
       drawCelestialBodies();
     }
@@ -438,6 +489,29 @@ export default function GalaxyEnvironment() {
         <div className="galaxy-environment__orb galaxy-environment__orb--a" />
         <div className="galaxy-environment__orb galaxy-environment__orb--b" />
         <div className="galaxy-environment__orb galaxy-environment__orb--c" />
+      </div>
+      <div className="galaxy-environment__spaceship">
+        {/* Hidden decode source, never shown directly -- same packed
+            color+alpha video / canvas-combine technique as galaxy/moon/
+            earth below (see the header comment for why: this footage's
+            own background isn't true black, so mix-blend-mode: screen
+            alone left a visible rectangle). */}
+        <video
+          ref={spaceshipVideoRef}
+          className="galaxy-environment__celestial-source"
+          src="/environment/spaceship-packed.mp4"
+          autoPlay={!reducedMotion}
+          loop={!reducedMotion}
+          muted
+          playsInline
+          preload="auto"
+        />
+        <canvas
+          ref={spaceshipCanvasRef}
+          className="galaxy-environment__spaceship-core"
+          width={960}
+          height={540}
+        />
       </div>
       <div className="galaxy-environment__moon">
         {/* Hidden decode source, never displayed directly -- the canvas
