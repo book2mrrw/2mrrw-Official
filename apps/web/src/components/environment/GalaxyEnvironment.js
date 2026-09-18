@@ -25,8 +25,17 @@
  * frequently-updating values.
  *
  * Layers (star-background/galaxy/sun/shooting-star) are real <video>/<img>
- * elements playing user-supplied footage, autoplaying/looping natively —
- * their own motion needs no JS driving it frame-by-frame. Sun's `opacity`
+ * elements playing user-supplied footage. None of the five <video> elements
+ * below carry a native `autoPlay` attribute -- all five are registered with
+ * VideoResourceManager (VRM) at mount and play only once VRM grants them,
+ * via VRM's own onGranted/onRevoked callbacks (see the "VRM" effects below).
+ * This is what actually fixed a live iOS regression: with plain `autoPlay`
+ * on all of them, iOS's real, low, fixed concurrent-decode ceiling meant some
+ * of them (galaxy, earth) silently never started, leaving their canvases
+ * permanently blank. VRM staggers grants on iOS so that never happens
+ * again, and the same protection now covers every other video-bearing
+ * surface in the app, not just this component (see
+ * video-resource-manager.js's header comment). Sun's `opacity`
  * and `mix-blend-mode: screen` live on the SAME CSS rule (see
  * environment.css) — splitting them across an ancestor/child pair breaks
  * the blend-mode (an ancestor's opacity<1 isolates a descendant's blend
@@ -98,6 +107,8 @@
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { usePointerCapability } from "@/hooks/usePointerCapability";
+import { usePlatform } from "@/hooks/usePlatform";
+import { VRM } from "@/lib/media/video-resource-manager";
 import { useReducedMotion } from "./use-reduced-motion";
 import { resolveMood } from "./mood-table";
 import { getTimeOfDayTarget } from "./time-of-day";
@@ -109,37 +120,13 @@ const TIME_CHECK_INTERVAL_MS = 60000;
 const RESIZE_DEBOUNCE_MS = 150;
 const LERP_FACTOR = 0.02;
 
-// Same UA check already proven this session in
-// video-resource-manager.js's _isLikelyIOS() -- kept as its own local
-// copy here (not a shared import) since this is a narrow, self-contained
-// hotfix, not the platform-detection module the fuller iOS/Android
-// architecture pass will introduce.
-function isLikelyIOS() {
-  if (typeof navigator === "undefined") return false;
-  const ua = String(navigator.userAgent || "");
-  const hasTouchDocument = typeof document !== "undefined" && "ontouchend" in document;
-  return /iP(hone|ad|od)/i.test(ua) || (/Macintosh/i.test(ua) && hasTouchDocument);
-}
-
-// iOS has a real, low, fixed concurrent-video-decode ceiling. This
-// component mounts 6 <video autoPlay> elements at once; on iOS, asking
-// it to arbitrate that many simultaneous play/decode requests in the
-// same tick is a known trigger for some of them silently never starting
-// -- which for the 3 hidden decode-source videos means their canvas
-// (moon/earth/galaxy) stays permanently blank, since combinePacked()
-// bails whenever readyState never reaches 2, and for the spaceship
-// means it just never appears. Staggering their .play() calls lets iOS
-// grant one decoder at a time instead of four at once. Android/Chromium
-// has far more headroom and keeps using the plain `autoPlay` attribute,
-// untouched.
-const IOS_SOURCE_PLAY_STAGGER_MS = 150;
-
 const DEFAULT_TIME_TARGET = { phase: "night", starOpacity: 1, nebulaOpacity: 0.9, hueBias: 0, speedMultiplier: 1, moonOpacity: 0.85, sunOpacity: 0 };
 
 export default function GalaxyEnvironment() {
   const pathname = usePathname();
   const pointerFine = usePointerCapability();
   const reducedMotion = useReducedMotion();
+  const platform = usePlatform();
 
   const [tabId, setTabId] = useState("home");
   const [timeTarget, setTimeTarget] = useState(DEFAULT_TIME_TARGET);
@@ -157,20 +144,24 @@ export default function GalaxyEnvironment() {
   const [shootingStarKey, setShootingStarKey] = useState(0);
 
   const rootRef = useRef(null);
+  const starBackgroundVideoRef = useRef(null);
+  const sunVideoRef = useRef(null);
   const moonVideoRef = useRef(null);
   const moonCanvasRef = useRef(null);
+  const moonActiveRef = useRef(false);
   const earthVideoRef = useRef(null);
   const earthCanvasRef = useRef(null);
+  const earthActiveRef = useRef(false);
   const galaxyVideoRef = useRef(null);
   const galaxyCanvasRef = useRef(null);
-  const spaceshipVideoRef = useRef(null);
-  const spaceshipCanvasRef = useRef(null);
+  const galaxyActiveRef = useRef(false);
   // Scratch canvas used to decode each object's alpha-mask video frame long
   // enough to read its pixels -- reused across all three objects since the
   // RAF loop draws them one at a time, never concurrently. Never attached
   // to the DOM.
   const scratchCanvasRef = useRef(null);
   const lastCombineRef = useRef(0);
+  const combineRoundRobinRef = useRef(0);
 
   const rafRef = useRef(null);
   const lastFrameRef = useRef(0);
@@ -180,28 +171,99 @@ export default function GalaxyEnvironment() {
   const scrollRef = useRef(0);
   const tierRef = useRef("medium");
 
-  // --- iOS: stagger the hidden decode-source + spaceship videos' play ---
-  // start instead of letting all 6 <video autoPlay> elements race for a
-  // decoder slot in the same tick. Client-only, runs once on mount,
-  // touches nothing about the JSX autoPlay attribute (avoids any
-  // SSR/hydration mismatch) -- it just pauses whatever autoplay already
-  // started on these elements and restarts them 150ms apart.
-  // Android/Chromium is untouched: this effect no-ops immediately there.
+  // --- VRM: register every video once on mount --------------------------
+  // No <video> below carries autoPlay; VRM's onGranted/onRevoked (wired in
+  // the next effect) are the only things that ever call .play()/.pause()
+  // on them. PRIORITY_DECORATIVE is the lowest tier -- if the shared
+  // budget is ever under real pressure, this purely-decorative background
+  // is the first thing evicted, before Vault/Ambient/CoverArt.
   useEffect(() => {
-    if (!isLikelyIOS()) return undefined;
-    const sources = [moonVideoRef.current, earthVideoRef.current, galaxyVideoRef.current, spaceshipVideoRef.current];
-    sources.forEach((el) => {
-      if (!el) return;
-      try { el.pause(); } catch { /* ignore */ }
+    const videos = [
+      starBackgroundVideoRef.current,
+      sunVideoRef.current,
+      moonVideoRef.current,
+      earthVideoRef.current,
+      galaxyVideoRef.current,
+    ];
+    videos.forEach((video) => {
+      if (video) VRM.register(video, VRM.PRIORITY_DECORATIVE);
     });
-    const timers = sources.map((el, i) => {
-      if (!el) return null;
-      return setTimeout(() => {
-        el.play()?.catch(() => { /* ignore -- gesture/policy rejection, not fatal */ });
-      }, i * IOS_SOURCE_PLAY_STAGGER_MS);
-    });
-    return () => timers.forEach((t) => { if (t) clearTimeout(t); });
+    return () => {
+      videos.forEach((video) => {
+        if (!video) return;
+        video.pause();
+        VRM.unregister(video);
+      });
+    };
   }, []);
+
+  // --- VRM: request/release play based on reduced-motion + tab visibility
+  // This is where the actual .play()/.pause() calls happen, only ever from
+  // VRM's onGranted/onRevoked. On iOS, VRM staggers grants when several
+  // land in the same pass instead of firing them all synchronously (see
+  // video-resource-manager.js) -- this is what fixed galaxy/earth never
+  // appearing on iPhone. onGranted/onRevoked for the 4 canvas-fed videos
+  // also flips an "active" ref that gates their combinePacked() calls
+  // below: revoked means paused + the canvas just keeps its last painted
+  // frame (graceful freeze under real memory pressure), not blank.
+  useEffect(() => {
+    const canvasFed = [
+      { video: moonVideoRef.current, activeRef: moonActiveRef },
+      { video: earthVideoRef.current, activeRef: earthActiveRef },
+      { video: galaxyVideoRef.current, activeRef: galaxyActiveRef },
+    ];
+    const direct = [starBackgroundVideoRef.current, sunVideoRef.current];
+
+    function requestAll() {
+      canvasFed.forEach(({ video, activeRef }) => {
+        if (!video) return;
+        VRM.requestPlay(
+          video,
+          () => { activeRef.current = true; video.play()?.catch(() => { /* gesture/policy rejection, not fatal */ }); },
+          () => { activeRef.current = false; video.pause(); }
+        );
+      });
+      direct.forEach((video) => {
+        if (!video) return;
+        VRM.requestPlay(
+          video,
+          () => { video.play()?.catch(() => { /* gesture/policy rejection, not fatal */ }); },
+          () => video.pause()
+        );
+      });
+    }
+
+    function releaseAll() {
+      canvasFed.forEach(({ video, activeRef }) => {
+        if (!video) return;
+        VRM.requestPause(video);
+        video.pause();
+        activeRef.current = false;
+      });
+      direct.forEach((video) => {
+        if (!video) return;
+        VRM.requestPause(video);
+        video.pause();
+      });
+    }
+
+    if (reducedMotion) {
+      releaseAll();
+      return undefined;
+    }
+
+    if (!document.hidden) requestAll();
+
+    function handleVisibility() {
+      if (document.hidden) releaseAll();
+      else requestAll();
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      releaseAll();
+    };
+  }, [reducedMotion]);
 
   // --- low-frequency signal wiring: tab, palette, clock, viewport -----
 
@@ -354,17 +416,50 @@ export default function GalaxyEnvironment() {
 
       const rgbPixels = rgbData.data;
       const alphaPixels = alphaData.data;
+      // The packed alpha mask never decodes as a true 0..255. Measured in a
+      // real browser: background floors at 14-33 (not 0) and an object's own
+      // disk tops out at 196-237 (not 255) -- limited/TV-range H.264 signalling,
+      // plus, on the moon, its own lit/unlit alpha split (196 vs 223). Copied
+      // straight across, that left every "solid" object only 77-93% opaque,
+      // which is why the star-background layer visibly showed through the moon.
+      // Normalising 40..190 to a full 0..255 clamps background to truly
+      // invisible and the disk to truly opaque; the narrow band between still
+      // carries the anti-aliased rim, so edges stay smooth.
       for (let i = 0; i < rgbPixels.length; i += 4) {
-        rgbPixels[i + 3] = alphaPixels[i];
+        const a = (alphaPixels[i] - 40) * 255 / 150;
+        rgbPixels[i + 3] = a < 0 ? 0 : a > 255 ? 255 : a;
       }
       ctx.putImageData(rgbData, 0, 0);
     }
 
-    function drawCelestialBodies() {
-      combinePacked(moonCanvasRef.current, moonVideoRef.current);
-      combinePacked(earthCanvasRef.current, earthVideoRef.current);
-      combinePacked(galaxyCanvasRef.current, galaxyVideoRef.current);
-      combinePacked(spaceshipCanvasRef.current, spaceshipVideoRef.current);
+    // `respectActive`: gate each object on VRM's onGranted/onRevoked
+    // ("active") flag instead of always drawing -- used by the continuous
+    // per-frame path below so a revoked object's canvas just keeps its
+    // last painted frame (graceful freeze) instead of burning decode/CPU
+    // work on a video VRM has asked to pause. The one-time static paint
+    // (reduced-motion/low-tier) always draws regardless, matching prior
+    // behavior -- combinePacked's own readyState check already prevents it
+    // from drawing anything before the video has decoded a first frame.
+    // `roundRobin`: on iOS, recombine only one object per call (cycling
+    // through in turn) instead of all four, halving peak per-frame
+    // getImageData/putImageData cost -- iOS Safari enforces a stricter
+    // per-frame budget than desktop/Android, where all four still update
+    // every call.
+    function drawCelestialBodies({ respectActive = false, roundRobin = false } = {}) {
+      const objects = [
+        { active: moonActiveRef.current, draw: () => combinePacked(moonCanvasRef.current, moonVideoRef.current) },
+        { active: earthActiveRef.current, draw: () => combinePacked(earthCanvasRef.current, earthVideoRef.current) },
+        { active: galaxyActiveRef.current, draw: () => combinePacked(galaxyCanvasRef.current, galaxyVideoRef.current) },
+      ];
+      if (roundRobin) {
+        const obj = objects[combineRoundRobinRef.current % objects.length];
+        combineRoundRobinRef.current += 1;
+        if (!respectActive || obj.active) obj.draw();
+        return;
+      }
+      objects.forEach((obj) => {
+        if (!respectActive || obj.active) obj.draw();
+      });
     }
 
     function applyNebulaStyles(state) {
@@ -387,8 +482,12 @@ export default function GalaxyEnvironment() {
     // would just burn CPU on getImageData/putImageData for pixel data
     // that hasn't changed. Matches the fastest source so no asset is ever
     // bottlenecked below its own encoded rate. Throttled independently of
-    // the nebula/opacity lerps above, which stay smooth every frame.
-    const COMBINE_INTERVAL_MS = 1000 / 30;
+    // the nebula/opacity lerps above, which stay smooth every frame. iOS
+    // gets a slower rate (paired with the round-robin single-object update
+    // below) since its stricter per-frame budget makes the full-rate,
+    // all-objects-every-tick cost that Android/desktop absorbs comfortably
+    // relatively more expensive there.
+    const COMBINE_INTERVAL_MS = platform.isIOS ? 1000 / 15 : 1000 / 30;
 
     function frame(ts) {
       if (cancelled) return;
@@ -417,7 +516,7 @@ export default function GalaxyEnvironment() {
       applyNebulaStyles(cur);
       if (ts - lastCombineRef.current >= COMBINE_INTERVAL_MS) {
         lastCombineRef.current = ts;
-        drawCelestialBodies();
+        drawCelestialBodies({ respectActive: true, roundRobin: platform.isIOS });
       }
 
       rafRef.current = requestAnimationFrame(frame);
@@ -438,7 +537,7 @@ export default function GalaxyEnvironment() {
     // with one more paint then. Harmless to attach unconditionally (cheap,
     // idempotent, and the normal per-frame branch is already redrawing
     // regularly anyway).
-    const videoEls = [moonVideoRef.current, earthVideoRef.current, galaxyVideoRef.current, spaceshipVideoRef.current];
+    const videoEls = [moonVideoRef.current, earthVideoRef.current, galaxyVideoRef.current];
     function handleAnySourceReady() {
       drawCelestialBodies();
     }
@@ -449,15 +548,15 @@ export default function GalaxyEnvironment() {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       videoEls.forEach((el) => el?.removeEventListener("loadeddata", handleAnySourceReady));
     };
-  }, [tier]);
+  }, [tier, platform.isIOS]);
 
   return (
     <div ref={rootRef} className="galaxy-environment" aria-hidden="true">
       <video
+        ref={starBackgroundVideoRef}
         className="galaxy-environment__star-background"
         src="/environment/star-background.mp4"
         poster="/environment/star-background-poster.png"
-        autoPlay={!reducedMotion}
         loop={!reducedMotion}
         muted
         playsInline
@@ -472,7 +571,6 @@ export default function GalaxyEnvironment() {
           ref={galaxyVideoRef}
           className="galaxy-environment__celestial-source"
           src="/environment/galaxy-packed.mp4"
-          autoPlay={!reducedMotion}
           loop={!reducedMotion}
           muted
           playsInline
@@ -486,32 +584,8 @@ export default function GalaxyEnvironment() {
         />
       </div>
       <div className="galaxy-environment__nebula">
-        <div className="galaxy-environment__orb galaxy-environment__orb--a" />
         <div className="galaxy-environment__orb galaxy-environment__orb--b" />
         <div className="galaxy-environment__orb galaxy-environment__orb--c" />
-      </div>
-      <div className="galaxy-environment__spaceship">
-        {/* Hidden decode source, never shown directly -- same packed
-            color+alpha video / canvas-combine technique as galaxy/moon/
-            earth below (see the header comment for why: this footage's
-            own background isn't true black, so mix-blend-mode: screen
-            alone left a visible rectangle). */}
-        <video
-          ref={spaceshipVideoRef}
-          className="galaxy-environment__celestial-source"
-          src="/environment/spaceship-packed.mp4"
-          autoPlay={!reducedMotion}
-          loop={!reducedMotion}
-          muted
-          playsInline
-          preload="auto"
-        />
-        <canvas
-          ref={spaceshipCanvasRef}
-          className="galaxy-environment__spaceship-core"
-          width={960}
-          height={540}
-        />
       </div>
       <div className="galaxy-environment__moon">
         {/* Hidden decode source, never displayed directly -- the canvas
@@ -522,7 +596,6 @@ export default function GalaxyEnvironment() {
           ref={moonVideoRef}
           className="galaxy-environment__celestial-source"
           src="/environment/moon-packed.mp4"
-          autoPlay={!reducedMotion}
           // Trimmed to end exactly on the full moon, deliberately not
           // looping -- a real <video> without loop just holds on its last
           // decoded frame once it ends, so this settles on the full moon
@@ -542,10 +615,10 @@ export default function GalaxyEnvironment() {
       <div className="galaxy-environment__sun">
         <div className="galaxy-environment__sun-corona" />
         <video
+          ref={sunVideoRef}
           className="galaxy-environment__sun-core"
           src="/environment/sun.mp4"
           poster="/environment/sun-poster.png"
-          autoPlay={!reducedMotion}
           loop={!reducedMotion}
           muted
           playsInline
@@ -558,7 +631,6 @@ export default function GalaxyEnvironment() {
           ref={earthVideoRef}
           className="galaxy-environment__celestial-source"
           src="/environment/earth-packed.mp4"
-          autoPlay={!reducedMotion}
           loop={!reducedMotion}
           muted
           playsInline

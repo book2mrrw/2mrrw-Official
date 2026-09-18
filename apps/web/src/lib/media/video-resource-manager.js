@@ -2,55 +2,70 @@
  * VideoResourceManager — centralized decoder budget for all non-carousel animated artwork.
  *
  * Priority tiers (lower number = higher priority):
- *   PRIORITY_SYSTEM  1  Ambient background, GlobalAudioPlayerBar
- *   PRIORITY_HERO    2  HeroSection, immersive player full-screen
- *   PRIORITY_VISIBLE 3  CoverArt in viewport
- *   PRIORITY_NEAR    4  CoverArt within 150px rootMargin (preloading)
+ *   PRIORITY_SYSTEM      1  Ambient background, GlobalAudioPlayerBar
+ *   PRIORITY_HERO        2  HeroSection, immersive player full-screen
+ *   PRIORITY_VISIBLE     3  CoverArt in viewport
+ *   PRIORITY_NEAR        4  CoverArt within 150px rootMargin (preloading)
+ *   PRIORITY_DECORATIVE  5  Always-on decoration with no content stakes
+ *                           (GalaxyEnvironment's celestial bodies) -- first
+ *                           to be evicted under real budget pressure.
  *
- * Carousel videos (data-single-carousel) are EXCLUDED — they are managed by
- * storefront-persistent-media.js and must never be touched here.
+ * Carousel videos (data-single-carousel) are EXCLUDED from registration —
+ * they are managed by storefront-persistent-media.js and must never be
+ * touched here. That file instead calls reserveExternal() with its own
+ * concurrent decode count, so this manager's budget math accounts for real
+ * system-wide pressure without ever registering or evicting a carousel
+ * video itself.
  *
  * Budget is derived from navigator.deviceMemory / hardwareConcurrency on first call.
  * Tests can override with setBudgetForTesting().
  *
  * iOS gets its own fixed, conservative budget instead of falling through
- * this detection (see _isLikelyIOS below): Safari doesn't implement
- * navigator.deviceMemory at all, and hardwareConcurrency reflects CPU core
- * count, not concurrent hardware video decoder capacity -- those are
- * unrelated on iOS, where the real decoder ceiling is much lower and
- * roughly fixed regardless of core count. Without this check, every
- * iPhone (commonly hardwareConcurrency=6, matching neither the <=2 nor
- * <=4 branch below) fell through to the same budget=8 a powerful desktop
- * gets -- effectively no cap at all on the platform that needs one most.
+ * this detection: Safari doesn't implement navigator.deviceMemory at all,
+ * and hardwareConcurrency reflects CPU core count, not concurrent hardware
+ * video decoder capacity -- those are unrelated on iOS, where the real
+ * decoder ceiling is much lower and roughly fixed regardless of core count.
+ * Without this check, every iPhone (commonly hardwareConcurrency=6,
+ * matching neither the <=2 nor <=4 branch below) fell through to the same
+ * budget=8 a powerful desktop gets -- effectively no cap at all on the
+ * platform that needs one most.
+ *
+ * iOS also gets its grants staggered in time (see IOS_GRANT_STAGGER_MS):
+ * asking it to arbitrate several simultaneous play/decode requests in the
+ * same tick is a known trigger for some of them silently never starting.
+ * This was first found and fixed narrowly inside GalaxyEnvironment.js (a
+ * local, one-off pause-then-staggered-play effect); that fix is now
+ * generalized here so every VRM consumer benefits, not just that one
+ * component. Android/desktop keeps firing all grants synchronously in the
+ * same pass, same as always.
  */
+
+import { isIOS } from "@/lib/platform/detect";
 
 export const PRIORITY_SYSTEM = 1;
 export const PRIORITY_HERO = 2;
 export const PRIORITY_VISIBLE = 3;
 export const PRIORITY_NEAR = 4;
+export const PRIORITY_DECORATIVE = 5;
+
+const IOS_GRANT_STAGGER_MS = 150;
 
 // Map<HTMLVideoElement, { priority, wantsPlay, isGranted, onGranted, onRevoked }>
 const _registry = new Map();
 let _budget = 6;
 let _budgetDetected = false;
 let _rebalanceId = null;
-
-// Local, minimal duplicate of lib/audio/audio-element-utils.js's
-// isLikelyIOS() -- kept inline here (rather than importing an audio-domain
-// util from a video-domain module) until platform detection gets a
-// canonical shared home. Keep this logic in sync with that copy.
-function _isLikelyIOS() {
-  if (typeof navigator === "undefined") return false;
-  const ua = String(navigator.userAgent || "");
-  const hasTouchDocument = typeof document !== "undefined" && "ontouchend" in document;
-  return /iP(hone|ad|od)/i.test(ua) || (/Macintosh/i.test(ua) && hasTouchDocument);
-}
+// Concurrent decode count the caller reports from OUTSIDE the registry
+// (currently just the storefront carousel) -- subtracted from the
+// effective budget below without those videos ever being registered or
+// evicted. See reserveExternal().
+let _externalReserved = 0;
 
 function _detectBudget() {
   if (_budgetDetected) return;
   _budgetDetected = true;
   try {
-    if (_isLikelyIOS()) {
+    if (isIOS()) {
       _budget = 3;
       return;
     }
@@ -81,27 +96,45 @@ function _rebalance() {
   _rebalanceId = null;
   _detectBudget();
 
+  const effectiveBudget = Math.max(0, _budget - _externalReserved);
+
   const wantsPlay = Array.from(_registry.entries())
     .filter(([, e]) => e.wantsPlay)
     .sort(([, a], [, b]) => a.priority - b.priority);
 
   const granted = new Set();
-  for (let i = 0; i < Math.min(wantsPlay.length, _budget); i++) {
+  for (let i = 0; i < Math.min(wantsPlay.length, effectiveBudget); i++) {
     granted.add(wantsPlay[i][0]);
   }
 
+  const newlyGranted = [];
   for (const [el, entry] of _registry.entries()) {
     if (!entry.wantsPlay) continue;
     if (granted.has(el)) {
       if (!entry.isGranted) {
         entry.isGranted = true;
-        try { entry.onGranted?.(); } catch { /* never throw from budget callback */ }
+        newlyGranted.push({ el, entry });
       }
     } else {
       if (entry.isGranted) {
         entry.isGranted = false;
         try { entry.onRevoked?.(); } catch { /* never throw from budget callback */ }
       }
+    }
+  }
+
+  if (newlyGranted.length > 1 && isIOS()) {
+    newlyGranted.forEach(({ el, entry }, i) => {
+      setTimeout(() => {
+        // Re-check liveness: unregister()/requestPause() may have run
+        // during the stagger delay.
+        if (_registry.get(el) !== entry || !entry.isGranted) return;
+        try { entry.onGranted?.(); } catch { /* never throw from budget callback */ }
+      }, i * IOS_GRANT_STAGGER_MS);
+    });
+  } else {
+    for (const { entry } of newlyGranted) {
+      try { entry.onGranted?.(); } catch { /* never throw from budget callback */ }
     }
   }
 }
@@ -111,6 +144,7 @@ export const VRM = {
   PRIORITY_HERO,
   PRIORITY_VISIBLE,
   PRIORITY_NEAR,
+  PRIORITY_DECORATIVE,
 
   register(el, priority = PRIORITY_VISIBLE) {
     _registry.set(el, {
@@ -180,6 +214,17 @@ export const VRM = {
     return _registry.size;
   },
 
+  /**
+   * Report concurrent decode load VRM doesn't control (currently just the
+   * storefront carousel) so its budget math accounts for real pressure
+   * without registering or evicting those videos. Call with 0 when
+   * nothing external is playing.
+   */
+  reserveExternal(n) {
+    _externalReserved = Math.max(0, n);
+    _scheduleRebalance();
+  },
+
   /** Test-only: override budget without device detection. */
   setBudgetForTesting(n) {
     _budget = n;
@@ -192,6 +237,7 @@ export const VRM = {
     _registry.clear();
     _budget = 6;
     _budgetDetected = false;
+    _externalReserved = 0;
     if (_rebalanceId) { clearTimeout(_rebalanceId); _rebalanceId = null; }
   },
 };

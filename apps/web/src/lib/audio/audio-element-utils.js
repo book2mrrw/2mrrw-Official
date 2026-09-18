@@ -5,6 +5,7 @@
  */
 
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
+import { hasExclusiveAudioFocus } from "@/lib/audio/exclusive-focus";
 import { isPlaybackTraceEnabled, logStreamLifecycle } from "@/lib/diagnostics/playback-trace";
 import {
   parseStreamSlugFromSrc,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/playback/stream-client";
 import { createPlaybackError } from "@/lib/playback/playback-errors";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
+import { isIOS } from "@/lib/platform/detect";
 import { catalogPreviewAudioUrl } from "@/lib/media-urls";
 import { isSiteApiMediaPath } from "@/lib/media/site-api-url";
 import {
@@ -43,6 +45,7 @@ function canBecomeAudible({
   state,
   context,
 } = {}) {
+  if (hasExclusiveAudioFocus()) return false;
   const hasAuthority = effectAuthority != null;
   const hasGuard = typeof canApplyEffect === "function";
   const isCurrentCoreEffect =
@@ -462,12 +465,10 @@ function getTrackPreviewSrc(track) {
   return null;
 }
 
-function isLikelyIOS() {
-  if (typeof navigator === "undefined") return false;
-  const ua = String(navigator.userAgent || "");
-  const hasTouchDocument = typeof document !== "undefined" && "ontouchend" in document;
-  return /iP(hone|ad|od)/i.test(ua) || (/Macintosh/i.test(ua) && hasTouchDocument);
-}
+// Re-exported under this file's existing name for any caller already
+// depending on it -- the real implementation now lives in
+// lib/platform/detect.js, the canonical, shared copy.
+const isLikelyIOS = isIOS;
 
 export {
   normalizePlaybackSrc,

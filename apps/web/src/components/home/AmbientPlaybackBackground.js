@@ -1,17 +1,33 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { resolveCoverMediaType } from "@/components/ui/CoverArt";
 import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
+import { VRM } from "@/lib/media/video-resource-manager";
 
-function AmbientVideoLayer({ src, style }) {
+// `baseSrc` and `csSrc` each render one of these, but only one is ever the
+// currently-shown layer (opacity 0 vs 0.4/0.45, toggled by `showCs` below)
+// -- `visible` makes that explicit instead of leaving both instances to
+// decode/play regardless of which one is actually on screen.
+function AmbientVideoLayer({ src, visible, style }) {
   const videoRef = useRef(null);
   const audioPriority = useAudioMediaPriority();
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return undefined;
+    VRM.register(el, VRM.PRIORITY_SYSTEM);
+    return () => {
+      el.pause();
+      VRM.unregister(el);
+    };
+  }, []);
 
   useLayoutEffect(() => {
     const el = videoRef.current;
     if (!el) return;
     if (audioPriority.startupActive || !src) {
+      VRM.requestPause(el);
       if (!el.paused) el.pause();
       el.preload = "none";
       if (el.hasAttribute("src")) {
@@ -25,8 +41,17 @@ function AmbientVideoLayer({ src, style }) {
       el.preload = "auto";
       el.load();
     }
-    if (!document.hidden && el.paused) el.play().catch(() => {});
-  }, [audioPriority.startupActive, src]);
+    if (!visible || document.hidden) {
+      VRM.requestPause(el);
+      if (!el.paused) el.pause();
+      return;
+    }
+    VRM.requestPlay(
+      el,
+      () => { if (el.paused) el.play().catch(() => {}); },
+      () => el.pause()
+    );
+  }, [audioPriority.startupActive, src, visible]);
 
   return (
     <video
@@ -80,6 +105,7 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode }) {
       {resolveCoverMediaType(baseSrc, baseType) === "video" ? (
         <AmbientVideoLayer
           src={baseSrc}
+          visible={!showCs}
           style={{ ...mediaStyle, opacity: showCs ? 0 : 0.4 }}
         />
       ) : (
@@ -97,6 +123,7 @@ export default function AmbientPlaybackBackground({ currentTrack, csMode }) {
         (resolveCoverMediaType(csSrc, csType) === "video" ? (
           <AmbientVideoLayer
             src={csSrc}
+            visible={showCs}
             style={{ ...mediaStyle, opacity: showCs ? 0.4 : 0 }}
           />
         ) : (
