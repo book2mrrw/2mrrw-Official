@@ -12,6 +12,16 @@
  *
  * Budget is derived from navigator.deviceMemory / hardwareConcurrency on first call.
  * Tests can override with setBudgetForTesting().
+ *
+ * iOS gets its own fixed, conservative budget instead of falling through
+ * this detection (see _isLikelyIOS below): Safari doesn't implement
+ * navigator.deviceMemory at all, and hardwareConcurrency reflects CPU core
+ * count, not concurrent hardware video decoder capacity -- those are
+ * unrelated on iOS, where the real decoder ceiling is much lower and
+ * roughly fixed regardless of core count. Without this check, every
+ * iPhone (commonly hardwareConcurrency=6, matching neither the <=2 nor
+ * <=4 branch below) fell through to the same budget=8 a powerful desktop
+ * gets -- effectively no cap at all on the platform that needs one most.
  */
 
 export const PRIORITY_SYSTEM = 1;
@@ -25,10 +35,25 @@ let _budget = 6;
 let _budgetDetected = false;
 let _rebalanceId = null;
 
+// Local, minimal duplicate of lib/audio/audio-element-utils.js's
+// isLikelyIOS() -- kept inline here (rather than importing an audio-domain
+// util from a video-domain module) until platform detection gets a
+// canonical shared home. Keep this logic in sync with that copy.
+function _isLikelyIOS() {
+  if (typeof navigator === "undefined") return false;
+  const ua = String(navigator.userAgent || "");
+  const hasTouchDocument = typeof document !== "undefined" && "ontouchend" in document;
+  return /iP(hone|ad|od)/i.test(ua) || (/Macintosh/i.test(ua) && hasTouchDocument);
+}
+
 function _detectBudget() {
   if (_budgetDetected) return;
   _budgetDetected = true;
   try {
+    if (_isLikelyIOS()) {
+      _budget = 3;
+      return;
+    }
     const mem = typeof navigator !== "undefined" ? navigator.deviceMemory : undefined;
     const cores = typeof navigator !== "undefined" ? navigator.hardwareConcurrency : undefined;
     if (mem !== undefined) {
