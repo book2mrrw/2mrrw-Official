@@ -16,7 +16,9 @@ const _cache = new Map();
 let _totalBytes = 0;
 
 /**
- * Returns the cached ArrayBuffer for this segment URL, or null on miss.
+ * Returns a consumer-owned copy for this segment URL, or null on miss.
+ * HLS may transfer this buffer to its decoding worker, detaching it. Never
+ * expose the cache's retained bytes to a consumer's mutation or transfer.
  * Updates the lastUsed timestamp on every hit (LRU accounting).
  * @param {string} url
  * @returns {ArrayBuffer|null}
@@ -24,12 +26,17 @@ let _totalBytes = 0;
 export function getSegment(url) {
   const entry = _cache.get(url);
   if (!entry) return null;
+  if (entry.buf.byteLength === 0) {
+    _cache.delete(url);
+    _totalBytes -= entry.size;
+    return null;
+  }
   entry.lastUsed = Date.now();
-  return entry.buf;
+  return entry.buf.slice(0);
 }
 
 /**
- * Stores segment bytes. No-ops if the URL is already cached.
+ * Stores an owned snapshot of segment bytes. No-ops if already cached.
  * Evicts LRU entries to stay within MAX_BYTES.
  * @param {string} url
  * @param {ArrayBuffer} buf
@@ -37,6 +44,10 @@ export function getSegment(url) {
 export function setSegment(url, buf) {
   if (_cache.has(url)) return;
   const size = buf.byteLength;
+  // Invalid data must fall through to the normal network loader. Reject an
+  // oversized entry before eviction so it cannot empty or exceed the cache.
+  if (size === 0 || size > MAX_BYTES) return;
+  const owned = buf.slice(0);
 
   // Evict least-recently-used entries until there is room.
   while (_totalBytes + size > MAX_BYTES && _cache.size > 0) {
@@ -53,7 +64,7 @@ export function setSegment(url, buf) {
     _cache.delete(lruKey);
   }
 
-  _cache.set(url, { buf, size, lastUsed: Date.now() });
+  _cache.set(url, { buf: owned, size, lastUsed: Date.now() });
   _totalBytes += size;
 }
 
