@@ -493,7 +493,7 @@ function CatalogGrid({
               ) : null}
             </div>
             {(type === "albums" || type === "mixtapes") && (
-              <div style={{ marginTop: 8 }}><CrossfadeToggle /></div>
+              <div style={{ marginTop: 8 }}><CrossfadeToggle release={mediaItem} /></div>
             )}
           </div>
         </PlaybackPrewarmCardShell>

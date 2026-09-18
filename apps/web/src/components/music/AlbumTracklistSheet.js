@@ -356,7 +356,7 @@ export default function AlbumTracklistSheet({
               Shuffle
             </button>
             <CSModeButton />
-            <CrossfadeToggle />
+            <CrossfadeToggle release={album} />
           </div>
 
           <div

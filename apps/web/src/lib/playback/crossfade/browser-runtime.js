@@ -10,7 +10,7 @@ import { recoveryCoordinator } from '../recovery-coordinator';
 import { clearPlaybackPosition } from '../position-memory';
 import { CrossfadeTransition, CROSSFADE_SECONDS, eligiblePair, fadeCurves, trackIdentity } from './transition';
 import { prepareDeck } from './deck';
-import { getCrossfadeEnabled, initializeCrossfadePreference, subscribeCrossfade } from './preference';
+import { getCrossfadeEnabled, hasEnabledCrossfade, trackCrossfadeScope, initializeCrossfadePreference, subscribeCrossfade } from './preference';
 
 /** Optional personal-player extension. No Broadcast dependency; no new queue,
  * AudioContext, or authority. Installed once and configured with live delegates. */
@@ -25,6 +25,8 @@ export function configureCrossfade(refs, delegates, publicApi) {
   let subscriptions = [];
   let account = null;
   let accountEpoch = 0;
+
+  const currentEnabled = () => getCrossfadeEnabled(trackCrossfadeScope(deps().refs.stateRef.current.currentTrack));
 
   function snapshot() {
     const { refs: r } = deps();
@@ -42,7 +44,7 @@ export function configureCrossfade(refs, delegates, publicApi) {
     const remaining = audio ? audio.duration - audio.currentTime : NaN;
     return {
       track, next, queue, index, nextIndex, audio, remaining,
-      key: JSON.stringify([r.playRequestIdRef.current, index, nextIndex, accountEpoch,
+      key: JSON.stringify([r.playRequestIdRef.current, index, nextIndex, accountEpoch, trackCrossfadeScope(track),
         r.shuffleRef.current, r.repeatModeRef.current, queue.map((t) => [trackIdentity(t), t.src])]),
       playing: Boolean(state.isPlaying && audio && !audio.paused && !audio.ended),
       blocked: Boolean(tail || state.isBuffering || r.userPausedRef.current || r.userIntentPausedRef.current ||
@@ -83,7 +85,7 @@ export function configureCrossfade(refs, delegates, publicApi) {
       durationSeconds: ending.audio.duration,
       completed: ending.audio.ended,
     });
-    if (!getCrossfadeEnabled()) detach();
+    if (!hasEnabledCrossfade()) detach();
   }
 
   const transition = new CrossfadeTransition({
@@ -101,6 +103,7 @@ export function configureCrossfade(refs, delegates, publicApi) {
   });
 
   function tick() {
+    transition.setEnabled(currentEnabled());
     if (tail && (engine.ctx?.state !== 'running' || deps().refs.csModeRef.current ||
         deps().refs.stateRef.current.currentTrack?.metadata?.access?.previewOnly)) finishTail();
     transition.tick();
@@ -111,19 +114,19 @@ export function configureCrossfade(refs, delegates, publicApi) {
     subscriptions = [];
   }
   function applyPreference() {
-    transition.setEnabled(getCrossfadeEnabled());
-    if (getCrossfadeEnabled() && !subscriptions.length) {
+    transition.setEnabled(currentEnabled());
+    if (hasEnabledCrossfade() && !subscriptions.length) {
       subscriptions = [
         engine.on(EVENTS.TIMEUPDATE, tick), engine.on(EVENTS.PLAY, tick),
         engine.on(EVENTS.PAUSE, interrupt), engine.on(EVENTS.BUFFERING, interrupt),
         engine.on(EVENTS.STALLED, interrupt), engine.on(EVENTS.ERROR, interrupt),
       ];
-    } else if (!getCrossfadeEnabled() && !tail) detach();
+    } else if (!hasEnabledCrossfade() && !tail) detach();
   }
 
   runtime.crossfade = {
     ownsNextPreload() {
-      if (!getCrossfadeEnabled()) return false;
+      if (!currentEnabled()) return false;
       const current = snapshot();
       return eligiblePair(current) && (Boolean(transition.candidate) || transition.attempted !== current.key);
     },

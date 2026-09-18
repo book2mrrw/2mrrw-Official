@@ -2316,7 +2316,7 @@ function AlbumModalView({
               <I.Shuffle />
               SHUFFLE
             </button>
-            <CrossfadeToggle />
+            <CrossfadeToggle release={album} />
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", overscrollBehavior: "contain", WebkitOverflowScrolling: "touch" }}>

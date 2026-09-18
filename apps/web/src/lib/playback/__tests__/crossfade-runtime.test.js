@@ -197,3 +197,39 @@ test('real Core, dispatcher and stream handoff converge without reloading; emerg
     assert.equal(starts, 2); assert.equal(outgoing.loads + incoming.loads, 0);
   } finally { core.destroy(); }
 });
+
+test('release override warms and hands off while the homepage default stays off', async () => {
+  const albumTracks = tracks.map((track) => ({ ...track, source: 'album', metadata: { ...track.metadata, albumSlug: 'scoped-album' } }));
+  r.queueRef.current = albumTracks; r.stateRef.current.currentTrack = albumTracks[0];
+  setCrossfadeEnabled(true, 'release:scoped-album');
+  try {
+    engine._emit('timeupdate'); await flush(); outgoing.currentTime = 96; engine._emit('timeupdate'); await flush();
+    assert.equal(requests.length, 1);
+    const request = requests[0];
+    assert.equal(runtime.crossfade.adopt(request.track, { ...request.options, effectAuthorityMode: 'CORE', effectAuthority: { revision: 2 }, canApplyEffect: () => true }), true);
+    assert.equal(r.audioRef.current, incoming); assert.equal(r.queueIndexRef.current, 1);
+  } finally { setCrossfadeEnabled(false, 'release:scoped-album'); }
+});
+
+test('explicit release off excludes preparation even when homepage default is on', async () => {
+  r.stateRef.current.currentTrack = { ...tracks[0], metadata: { ...tracks[0].metadata, albumSlug: 'disabled-album' }, source: 'album' };
+  setCrossfadeEnabled(false, 'release:disabled-album'); setCrossfadeEnabled(true);
+  engine._emit('timeupdate'); await flush();
+  assert.equal(preparations, 0); assert.equal(requests.length, 0);
+});
+
+for (const event of ['ended', 'pause', 'error', 'timeupdate']) {
+  test(`queued ${event} from a replaced native attachment cannot reach successor handlers`, () => {
+    engine._attachAudioElementListeners(outgoing);
+    const retired = engine._elListeners.find(([name]) => name === event)[1];
+    let delivered = 0;
+    const unsubscribe = engine.on(event, () => delivered++);
+    engine.adoptStandbyElement();
+    retired();
+    assert.equal(delivered, 0);
+    // Reusing the same element later must not revive an older attachment.
+    engine.adoptStandbyElement(); retired();
+    assert.equal(delivered, 0);
+    unsubscribe();
+  });
+}

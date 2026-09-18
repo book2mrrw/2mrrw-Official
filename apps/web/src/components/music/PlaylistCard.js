@@ -90,7 +90,7 @@ export default function PlaylistCard({ playlist, trackCount, cover, onOpen, onPl
           {trackCount} track{trackCount !== 1 ? "s" : ""}
         </div>
       </button>
-      <div style={{ padding: "0 12px 12px" }}><CrossfadeToggle /></div>
+      <div style={{ padding: "0 12px 12px" }}><CrossfadeToggle playlist={playlist} /></div>
     </div>
   );
 }

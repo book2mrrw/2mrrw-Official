@@ -751,7 +751,7 @@ function OwnedReleaseList({
                     Tracks
                   </button>
                   <MusicPlusButton track={merged} userId={userId} access={access} onLibraryChange={onLibraryChange} />
-                  <CrossfadeToggle />
+                  <CrossfadeToggle release={merged} />
                 </div>
               </div>
             </div>
@@ -1029,7 +1029,8 @@ function MyMusicTab({
       let tracks = refs
         .map((item) => {
           const merged = { ...catalogBySlug.get(item.slug), ...item };
-          return toPlaybackTrack(merged, { ...accountState, userId: user?.id, isAdmin }, "playlist");
+          const track = toPlaybackTrack(merged, { ...accountState, userId: user?.id, isAdmin }, "playlist");
+          return { ...track, metadata: { ...track.metadata, playlistId: playlist.id } };
         })
         .filter((t) => t.src);
       if (!tracks.length) return;

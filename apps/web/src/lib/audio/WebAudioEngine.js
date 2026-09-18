@@ -532,6 +532,8 @@ export class WebAudioEngine extends AudioEngineBase {
     this._detachAudioElementListeners();
     const E = AUDIO_ENGINE_EVENTS;
 
+    const lease = {};
+    this._listenerLease = lease;
     this._elListeners = [
       ["play",           () => this._emit(E.PLAY,           { currentTime: el.currentTime })],
       ["pause",          () => this._emit(E.PAUSE,          { currentTime: el.currentTime })],
@@ -554,6 +556,10 @@ export class WebAudioEngine extends AudioEngineBase {
       ["ratechange",     () => this._emit(E.RATE_CHANGE,    { playbackRate: el.playbackRate })],
     ];
 
+    this._elListeners = this._elListeners.map(([event, handler]) => [event, (...args) => {
+      if (this._listenerLease !== lease) return;
+      handler(...args);
+    }]);
     for (const [evt, fn] of this._elListeners) {
       el.addEventListener(evt, fn);
     }
@@ -565,6 +571,7 @@ export class WebAudioEngine extends AudioEngineBase {
    * Safe to call even if no listeners are attached.
    */
   _detachAudioElementListeners() {
+    this._listenerLease = null;
     if (!this._listenerElement || !this._elListeners) return;
     for (const [evt, fn] of this._elListeners) {
       try { this._listenerElement.removeEventListener(evt, fn); } catch {}

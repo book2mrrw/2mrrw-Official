@@ -23,8 +23,9 @@ export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobi
   const tracks = useMemo(
     () => rawTracks
       .map((track) => toPlaybackTrack(track, { ...accountState, userId, isAdmin }, "playlist"))
-      .filter((t) => t?.src),
-    [rawTracks, accountState, userId, isAdmin]
+      .filter((t) => t?.src)
+      .map((t) => ({ ...t, metadata: { ...t.metadata, playlistId: playlist.id } })),
+    [rawTracks, accountState, userId, isAdmin, playlist.id]
   );
 
   const playFrom = (startIndex) => {
@@ -73,7 +74,7 @@ export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobi
         >
           Repeat {repeatMode === "one" ? "1" : repeatMode === "all" ? "∞" : ""}
         </button>
-        <CrossfadeToggle />
+        <CrossfadeToggle playlist={playlist} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {tracks.map((track, i) => (

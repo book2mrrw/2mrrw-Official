@@ -1020,6 +1020,10 @@ export function createPlaybackEventHandlers({
   };
 
   const onError = async () => {
+    const generation = playRequestIdRef?.current;
+    const errorTrack = stateRef.current.currentTrack;
+    const stillCurrent = () => audioRef.current === audio && playRequestIdRef?.current === generation &&
+      isSamePlaybackTrack(stateRef.current.currentTrack, errorTrack);
     stopStallRecovery();
     const track = stateRef.current.currentTrack;
     const slug = track?.slug || streamMetaRef.current?.slug;
@@ -1049,7 +1053,7 @@ export function createPlaybackEventHandlers({
       const onOnline = () => {
         window.removeEventListener("online", onOnline);
         const current = stateRef.current.currentTrack;
-        if (current) {
+        if (current && stillCurrent()) {
           streamErrorRetriedRef.current = 0;
           void playTrackRef.current?.(current, {
             resumeAt: audio.currentTime || 0,
@@ -1079,13 +1083,13 @@ export function createPlaybackEventHandlers({
       if (retryDelayMs > 0) {
         patchState({ playbackNetworkState: "retrying_stream", isBuffering: true, error: `Reconnecting… (attempt ${attempt}/${MAX_STREAM_RETRIES})` });
         await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-        if (activeCommandRef.current?.requestId !== retryRequestId) return;
+        if (!stillCurrent() || activeCommandRef.current?.requestId !== retryRequestId) return;
       }
       patchState({ playbackNetworkState: "retrying_stream", isBuffering: true });
       try {
         const data = await fetchLibraryStream(slug, { force: true, signal: activeStreamAbortRef.current?.signal });
         // Bail if a new track command superseded this error-retry
-        if (activeCommandRef.current?.requestId !== retryRequestId) return;
+        if (!stillCurrent() || activeCommandRef.current?.requestId !== retryRequestId) return;
         streamMetaRef.current = {
           slug,
           url: data.url,
@@ -1097,12 +1101,12 @@ export function createPlaybackEventHandlers({
         skipPauseInterruptionRef.current = true;
         await waitAudioSrcReady(audio, data.url, { signal: activeStreamAbortRef.current?.signal });
         // Check again after the potentially long src-ready wait
-        if (activeCommandRef.current?.requestId !== retryRequestId) return;
+        if (!stillCurrent() || activeCommandRef.current?.requestId !== retryRequestId) return;
         if (resumeAt > 0) {
           let seekAfterLoadTimeout;
           const seekAfterLoad = () => {
             clearTimeout(seekAfterLoadTimeout);
-            if (resumeAt > 0 && isFinite(audio.duration)) {
+            if (stillCurrent() && resumeAt > 0 && isFinite(audio.duration)) {
               audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
             }
           };
@@ -1123,6 +1127,7 @@ export function createPlaybackEventHandlers({
           context: { source: "onError_stream_retry" },
           effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
         });
+        if (!stillCurrent()) return;
         if (!retryPlayed || audio.paused) {
           patchState({
             isPlaying: false,
@@ -1148,6 +1153,7 @@ export function createPlaybackEventHandlers({
         });
         return;
       } catch (retryErr) {
+        if (!stillCurrent()) return;
         if (retryErr?.code === "ACCESS_DENIED") {
           finalizeStreamSession(meta, { durationSeconds: resumeAt, completed: false });
           streamErrorRetriedRef.current = 0;
@@ -1168,6 +1174,7 @@ export function createPlaybackEventHandlers({
       }
     }
 
+    if (!stillCurrent()) return;
     if (meta) {
       finalizeStreamSession(meta, {
         completed: false,
@@ -1211,17 +1218,14 @@ export function createPlaybackEventHandlers({
     }
   };
 
-  return {
-    onPlay,
-    onPause,
-    onTime,
-    onDuration,
-    onEnded,
-    onError,
-    onEmptied,
-    onWaiting,
-    onStalled,
-    onPlaying,
-    onCanPlayThrough,
+  // Media ownership, not a timeout, determines which deck can mutate playback.
+  // This also protects retained callbacks after a handoff or representation swap.
+  const activeOnly = (handler) => (...args) => {
+    if (audioRef.current !== audio) return;
+    return handler(...args);
   };
+  return Object.fromEntries(Object.entries({
+    onPlay, onPause, onTime, onDuration, onEnded, onError, onEmptied,
+    onWaiting, onStalled, onPlaying, onCanPlayThrough,
+  }).map(([name, handler]) => [name, activeOnly(handler)]));
 }

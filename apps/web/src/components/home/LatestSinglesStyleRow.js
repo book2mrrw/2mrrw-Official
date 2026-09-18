@@ -373,7 +373,7 @@ const SinglesStyleCard = memo(function SinglesStyleCard({
           </div>
         ) : null}
         {source === "home_mixtape_ep_card" && (
-          <div style={{ marginTop: 8 }}><CrossfadeToggle /></div>
+          <div style={{ marginTop: 8 }}><CrossfadeToggle release={mediaItem} /></div>
         )}
       </div>
     </PlaybackPrewarmCardShell>
