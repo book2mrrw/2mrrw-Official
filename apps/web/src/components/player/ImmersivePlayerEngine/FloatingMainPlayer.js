@@ -1,7 +1,5 @@
 "use client";
 
-import CrossfadeToggle from "@/components/audio/CrossfadeToggle";
-
 import { memo, useRef } from "react";
 import GiftIcon from "@/components/gifts/GiftIcon";
 import PlayerCsBarButton from "@/components/audio/PlayerCsBarButton";
@@ -227,7 +225,6 @@ function FloatingMainPlayer({
           </div>
 
           <div className="player-controls-row" style={{ gap: 20, marginTop: 8 }}>
-            {(currentTrack?.source === "playlist" || currentTrack?.metadata?.albumSlug) && <CrossfadeToggle track={currentTrack} />}
             <RepeatButton
               repeatMode={repeatMode}
               size={isSmallScreen ? 40 : 44}

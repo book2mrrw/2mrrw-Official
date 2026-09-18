@@ -1,7 +1,5 @@
 "use client";
 
-import CrossfadeToggle from "@/components/audio/CrossfadeToggle";
-
 const COVER_GRADIENT = "linear-gradient(135deg, rgba(0,255,255,0.12), rgba(162,89,255,0.12))";
 
 export default function PlaylistCard({ playlist, trackCount, cover, onOpen, onPlay, onPlayIntent, isMobile }) {
@@ -90,7 +88,6 @@ export default function PlaylistCard({ playlist, trackCount, cover, onOpen, onPl
           {trackCount} track{trackCount !== 1 ? "s" : ""}
         </div>
       </button>
-      <div style={{ padding: "0 12px 12px" }}><CrossfadeToggle playlist={playlist} /></div>
     </div>
   );
 }

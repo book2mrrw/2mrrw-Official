@@ -1,7 +1,5 @@
 "use client";
 
-import CrossfadeToggle from "@/components/audio/CrossfadeToggle";
-
 import { memo, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
@@ -99,7 +97,6 @@ const HomeStorefront = memo(function HomeStorefront({
         <button type="button" className={styles.donateBtn} onClick={onDonateOpen}>
           ♥ Donate
         </button>
-        <CrossfadeToggle />
         {showSubscribeCta && (
           <button type="button" className={styles.subscribeBtn} onClick={() => router.push("/subscribe")}>
             Subscribe

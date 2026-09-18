@@ -1,7 +1,5 @@
 "use client";
 
-import CrossfadeToggle from "@/components/audio/CrossfadeToggle";
-
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useAudioPlayer } from "@/context/AudioContext";
@@ -751,7 +749,6 @@ function OwnedReleaseList({
                     Tracks
                   </button>
                   <MusicPlusButton track={merged} userId={userId} access={access} onLibraryChange={onLibraryChange} />
-                  <CrossfadeToggle release={merged} />
                 </div>
               </div>
             </div>
@@ -1029,8 +1026,7 @@ function MyMusicTab({
       let tracks = refs
         .map((item) => {
           const merged = { ...catalogBySlug.get(item.slug), ...item };
-          const track = toPlaybackTrack(merged, { ...accountState, userId: user?.id, isAdmin }, "playlist");
-          return { ...track, metadata: { ...track.metadata, playlistId: playlist.id } };
+          return toPlaybackTrack(merged, { ...accountState, userId: user?.id, isAdmin }, "playlist");
         })
         .filter((t) => t.src);
       if (!tracks.length) return;

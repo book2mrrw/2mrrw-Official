@@ -1,7 +1,5 @@
 "use client";
 
-import CrossfadeToggle from "@/components/audio/CrossfadeToggle";
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useMotionValue, useTransform, animate, useDragControls } from "framer-motion";
 import {
@@ -316,7 +314,7 @@ export default function AlbumTracklistSheet({
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", padding: "10px 16px", flexShrink: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", flexShrink: 0 }}>
             <button
               type="button"
               onClick={() => playAndClose(false)}
@@ -356,7 +354,6 @@ export default function AlbumTracklistSheet({
               Shuffle
             </button>
             <CSModeButton />
-            <CrossfadeToggle release={album} />
           </div>
 
           <div

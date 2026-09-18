@@ -6,7 +6,6 @@ import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authori
 import { MARKS, perfMark, recordAudioContextState, PLAYBACK_SCENARIOS } from "@/lib/dev/performanceMarks";
 import { writeAvailabilityCache } from "@/lib/media/availability-cache";
 import {
-  libraryHlsManifestUrl,
   clearLibraryStreamSession,
   fetchLibraryStream,
   isLibraryStreamRedirectSrc,
@@ -46,7 +45,6 @@ import { notifyMediaEngineBridge } from "@/media/mediaEngineBridge";
 import { preloadCoverImage } from "@/lib/media/preload";
 import { waitForPlaybackBuffer } from "@/lib/audio/playback-buffer";
 import { getHLSEngine } from "@/lib/audio/HLSEngine";
-import { getAudioEngineRuntime } from "./audio-engine-runtime";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 import { getQualityLevel as getHLSQualityLevel, getManifestTimeoutMs } from "@/lib/audio/network-quality";
 import { getResolvedCdnUrl, setResolvedCdnUrl } from "@/lib/playback/redirect-resolve-cache";
@@ -64,11 +62,6 @@ import {
  */
 export function attachStreamCommands(self) {
   self.playTrackInternal = async function playTrackInternal(track, options = {}) {
-    getAudioEngineRuntime().crossfade?.beforeCommand({ type: "PLAY_TRACK", payload: { track, options } });
-    if (options.crossfadeToken != null) {
-      const adopted = getAudioEngineRuntime().crossfade?.adopt(track, options);
-      if (adopted != null) return adopted;
-    }
     const {
       patchState, patchTransport, updateMediaSession, applyCsToElement,
       recordLocalListening, resolveLibraryStreamForTrack, finalizeStreamSession,
@@ -818,7 +811,9 @@ export function attachStreamCommands(self) {
           // For singles, trackSlug equals the product slug — no real sub-track identifier.
           // Normalize to null so the HLS manifest query matches track_slug IS NULL in the DB.
           const hlsTrackSlug = (hlsTrackSlugRaw && hlsTrackSlugRaw !== streamSlug) ? hlsTrackSlugRaw : null;
-          const hlsManifestUrl = libraryHlsManifestUrl(streamSlug, hlsTrackSlug);
+          const hlsParams = new URLSearchParams({ slug: streamSlug });
+          if (hlsTrackSlug) hlsParams.set("trackSlug", hlsTrackSlug);
+          const hlsManifestUrl = `/api/library/hls?${hlsParams}`;
 
           const hlsEngine = getHLSEngine();
           hlsEngine.detach();

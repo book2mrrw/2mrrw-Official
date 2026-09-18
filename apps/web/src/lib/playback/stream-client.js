@@ -332,10 +332,3 @@ export async function endStreamAnalytics(payload) {
     });
   });
 }
-
-/** Shared canonical HLS identity for ordinary loading and silent preparation. */
-export function libraryHlsManifestUrl(slug, trackSlug = null) {
-  const params = new URLSearchParams({ slug });
-  if (trackSlug && trackSlug !== slug) params.set("trackSlug", trackSlug);
-  return `/api/library/hls?${params}`;
-}

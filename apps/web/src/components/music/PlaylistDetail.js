@@ -1,7 +1,5 @@
 "use client";
 
-import CrossfadeToggle from "@/components/audio/CrossfadeToggle";
-
 import { useMemo } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { useAuth } from "@/context/AuthContext";
@@ -23,9 +21,8 @@ export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobi
   const tracks = useMemo(
     () => rawTracks
       .map((track) => toPlaybackTrack(track, { ...accountState, userId, isAdmin }, "playlist"))
-      .filter((t) => t?.src)
-      .map((t) => ({ ...t, metadata: { ...t.metadata, playlistId: playlist.id } })),
-    [rawTracks, accountState, userId, isAdmin, playlist.id]
+      .filter((t) => t?.src),
+    [rawTracks, accountState, userId, isAdmin]
   );
 
   const playFrom = (startIndex) => {
@@ -74,7 +71,6 @@ export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobi
         >
           Repeat {repeatMode === "one" ? "1" : repeatMode === "all" ? "∞" : ""}
         </button>
-        <CrossfadeToggle playlist={playlist} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {tracks.map((track, i) => (

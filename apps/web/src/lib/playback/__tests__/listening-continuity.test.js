@@ -324,21 +324,3 @@ for (const policy of ['stopAfterEachTrack', 'sleepAfterCurrentTrack']) {
     assert.equal(h.state.playbackState, 'idle');
   });
 }
-
-for (const event of ['onEnded', 'onError']) {
-  test(`retired crossfade deck ${event} cannot skip or stop its successor`, async (t) => {
-    const descriptor = Object.getOwnPropertyDescriptor(globalThis, "navigator");
-    Object.defineProperty(globalThis, "navigator", { configurable: true, value: { onLine: true } });
-    t.after(() => { if (descriptor) Object.defineProperty(globalThis, "navigator", descriptor); else delete globalThis.navigator; });
-    const h = completionHarness();
-    h.state.currentTrack = queue[1];
-    h.deps.queueIndexRef.current = 1;
-    h.deps.playRequestIdRef.current++;
-    h.deps.audioRef.current = { currentTime: 1, duration: 180, paused: false, ended: false };
-    await h.handlers[event]();
-    assert.equal(h.deps.queueIndexRef.current, 1);
-    assert.equal(h.state.currentTrack, queue[1]);
-    assert.equal(h.state.isPlaying, true);
-    assert.equal(h.played.length, 1);
-  });
-}
