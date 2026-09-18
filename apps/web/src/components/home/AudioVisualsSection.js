@@ -21,7 +21,7 @@
  * doesn't pass it) but is now inert — there is no longer a single
  * autoplaying hero video to gate, only a poster grid the viewer taps into.
  */
-import { memo, useState, useEffect, useRef, useCallback } from "react";
+import { memo, useState, useEffect, useCallback } from "react";
 import { AudioVisualPlayer } from "@/components/audio-visual/AudioVisualPlayer";
 import { warmAudioVisualItem, warmAudioVisualz, warmJson } from "@/lib/performance/context-warmup";
 
@@ -156,37 +156,12 @@ function SeriezDetailView({ seriezId, onBack, onPlay }) {
   );
 }
 
-const AudioVisualsSection = memo(function AudioVisualsSection({ onAudioVisualsFocused, onAudioVisualsExit }) {
+const AudioVisualsSection = memo(function AudioVisualsSection() {
   const [activeType, setActiveType] = useState("all");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [openSeriezId, setOpenSeriezId] = useState(null);
   const [playingVideo, setPlayingVideo] = useState(null); // { video_id, title, poster_url }
-  const sectionRef = useRef(null);
-
-  useEffect(() => {
-    const el = sectionRef.current;
-    if (!el) return;
-    let hasBeenInView = false;
-    const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          onAudioVisualsFocused?.();
-          hasBeenInView = true;
-        } else if (hasBeenInView) {
-          onAudioVisualsExit?.();
-        }
-      },
-      { threshold: [0, 0.45] }
-    );
-    obs.observe(el);
-    return () => {
-      if (hasBeenInView) onAudioVisualsExit?.();
-      obs.disconnect();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const loadItems = useCallback((type) => {
     setLoading(true);
     warmAudioVisualz(type)
@@ -203,7 +178,7 @@ const AudioVisualsSection = memo(function AudioVisualsSection({ onAudioVisualsFo
   }, []);
 
   return (
-    <div ref={sectionRef}>
+    <div>
       <div className="audio-visuals-heading" style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 14 }}>
         <h2 className="section-heading audio-visuals-heading__title" style={{ margin: 0 }}>Audio Visualz</h2>
       </div>
