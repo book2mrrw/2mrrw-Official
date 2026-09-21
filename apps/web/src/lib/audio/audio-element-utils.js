@@ -5,7 +5,6 @@
  */
 
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
-import { hasExclusiveAudioFocus } from "@/lib/audio/exclusive-focus";
 import { isPlaybackTraceEnabled, logStreamLifecycle } from "@/lib/diagnostics/playback-trace";
 import {
   parseStreamSlugFromSrc,
@@ -45,7 +44,6 @@ function canBecomeAudible({
   state,
   context,
 } = {}) {
-  if (hasExclusiveAudioFocus()) return false;
   const hasAuthority = effectAuthority != null;
   const hasGuard = typeof canApplyEffect === "function";
   const isCurrentCoreEffect =
