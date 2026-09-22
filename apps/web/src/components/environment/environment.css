@@ -248,18 +248,19 @@
 
 .galaxy-environment__shooting-star {
   position: absolute;
-  /* Starts top-right, crossing the sky left-to-right (matches the original
-     shooting-star spec: same general area as the sun, dissipating as it
-     travels). transform rotates the streak's own baked-in angle shallower
-     ("more upward"/less steep) -- a first-pass estimate, not verified in an
-     actual browser, easy to nudge further once seen live. */
-  top: 8%;
-  right: 4%;
+  /* Starts just above the galaxy, on the left, and actually travels
+     left-to-right across the sky (previously this only faded in place --
+     no translation at all, so "crossing the sky" was really just a static
+     streak image). transform is owned entirely by the shootingStarMove
+     keyframes below (translateX + the streak's own baked-in-angle rotate
+     together, since an element's `transform` can't be split between a
+     static base value and an animation -- the animation always wins). */
+  top: 16%;
+  left: -8%;
   width: 46vw;
   max-width: 640px;
   aspect-ratio: 16 / 9;
   object-fit: contain;
-  transform: rotate(15deg);
   pointer-events: none;
   /* No mix-blend-mode: this is a real alpha-channel WebP image now (see
      GalaxyEnvironment.js), so it composites correctly on its own -- the
@@ -269,7 +270,12 @@
      CSS-animated dot+trail. Plays once per trigger -- this fade only
      softens the very end so it doesn't hard-cut on the image's last frame,
      then stays hidden (forwards) until the next trigger remounts it via key. */
-  animation: shootingStarFadeOut 2.934s linear forwards;
+  animation: shootingStarMove 2.934s linear forwards, shootingStarFadeOut 2.934s linear forwards;
+}
+
+@keyframes shootingStarMove {
+  from { transform: translateX(0) rotate(15deg); }
+  to { transform: translateX(75vw) rotate(15deg); }
 }
 
 @keyframes shootingStarFadeOut {
