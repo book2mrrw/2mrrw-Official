@@ -119,6 +119,9 @@ import "./environment.css";
 const TIME_CHECK_INTERVAL_MS = 60000;
 const RESIZE_DEBOUNCE_MS = 150;
 const LERP_FACTOR = 0.02;
+// The moon's real footage reads a bit dim/gray at native brightness -- a
+// straight multiplier on its decoded color (not touched for earth/galaxy).
+const MOON_BRIGHTNESS = 1.3;
 
 const DEFAULT_TIME_TARGET = { phase: "night", starOpacity: 1, nebulaOpacity: 0.9, hueBias: 0, speedMultiplier: 1, moonOpacity: 0.85, sunOpacity: 0 };
 
@@ -393,7 +396,7 @@ export default function GalaxyEnvironment() {
     // visibly flickered when their decode timing drifted). readyState < 2
     // means the video has no decoded frame yet -- skip rather than draw a
     // blank/stale one.
-    function combinePacked(canvas, video) {
+    function combinePacked(canvas, video, brightness) {
       if (!canvas || !video || video.readyState < 2) return;
       const scratch = scratchCanvasRef.current;
       if (!scratch) return;
@@ -425,9 +428,15 @@ export default function GalaxyEnvironment() {
       // Normalising 40..190 to a full 0..255 clamps background to truly
       // invisible and the disk to truly opaque; the narrow band between still
       // carries the anti-aliased rim, so edges stay smooth.
+      const b = brightness || 1;
       for (let i = 0; i < rgbPixels.length; i += 4) {
         const a = (alphaPixels[i] - 40) * 255 / 150;
         rgbPixels[i + 3] = a < 0 ? 0 : a > 255 ? 255 : a;
+        if (b !== 1) {
+          rgbPixels[i] = Math.min(255, rgbPixels[i] * b);
+          rgbPixels[i + 1] = Math.min(255, rgbPixels[i + 1] * b);
+          rgbPixels[i + 2] = Math.min(255, rgbPixels[i + 2] * b);
+        }
       }
       ctx.putImageData(rgbData, 0, 0);
     }
@@ -447,7 +456,7 @@ export default function GalaxyEnvironment() {
     // every call.
     function drawCelestialBodies({ respectActive = false, roundRobin = false } = {}) {
       const objects = [
-        { active: moonActiveRef.current, draw: () => combinePacked(moonCanvasRef.current, moonVideoRef.current) },
+        { active: moonActiveRef.current, draw: () => combinePacked(moonCanvasRef.current, moonVideoRef.current, MOON_BRIGHTNESS) },
         { active: earthActiveRef.current, draw: () => combinePacked(earthCanvasRef.current, earthVideoRef.current) },
         { active: galaxyActiveRef.current, draw: () => combinePacked(galaxyCanvasRef.current, galaxyVideoRef.current) },
       ];

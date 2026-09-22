@@ -29,7 +29,7 @@
 
 .galaxy-environment__galaxy {
   position: absolute;
-  top: 22%;
+  top: 27%;
   left: 6%;
   width: clamp(200px, 26vw, 460px);
   aspect-ratio: 16 / 9;
