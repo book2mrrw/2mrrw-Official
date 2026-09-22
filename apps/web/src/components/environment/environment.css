@@ -219,7 +219,7 @@
 
 .galaxy-environment__earth {
   position: absolute;
-  bottom: 12%;
+  bottom: 22%;
   /* Nudged left of the sun/moon's own 4% offset so it doesn't sit directly
      stacked under them -- a small offset, not centered. */
   right: 16%;
