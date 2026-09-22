@@ -15,6 +15,7 @@ import {
   repairMisboundR2ApiUrl,
 } from "@/lib/media/site-api-url";
 import { getPublicCdnBase, warnPublicCdnEnvMismatch } from "@/lib/storage/r2-public-cdn";
+import { resolveStorageBucket } from "@/lib/storage/storage-scope";
 
 export const r2Client = new S3Client({
   region: "auto",
@@ -51,7 +52,8 @@ export function buildR2Key(prefix, path) {
  */
 let warnedMissingR2PublicUrl = false;
 
-export function getPublicR2Url(path) {
+export function getPublicR2Url(path, options = {}) {
+  if (options.storageScope && options.storageScope !== "public") throw new Error("Private media cannot use a public CDN URL");
   const raw = String(path || "").trim();
   if (!raw) {
     return getPublicCdnBase();
@@ -79,14 +81,14 @@ export function getPublicR2Url(path) {
   return `${base}/${normalized}`;
 }
 
-export async function createR2SignedGetUrl(key, expiresIn = 3600) {
-  const command = new GetObjectCommand({ Bucket: R2_BUCKET, Key: key });
+export async function createR2SignedGetUrl(key, expiresIn = 3600, options = {}) {
+  const command = new GetObjectCommand({ Bucket: resolveStorageBucket(options.storageScope), Key: key });
   return getSignedUrl(r2Client, command, { expiresIn });
 }
 
-export async function createR2SignedPutUrl(key, contentType, expiresIn = 300) {
+export async function createR2SignedPutUrl(key, contentType, expiresIn = 300, options = {}) {
   const command = new PutObjectCommand({
-    Bucket: R2_BUCKET,
+    Bucket: resolveStorageBucket(options.storageScope),
     Key: key,
     ContentType: contentType,
   });
@@ -137,7 +139,8 @@ export function isDirectChildObjectKey(folderPrefix, key) {
 let _r2BucketWarned = false;
 export async function listR2Objects(prefix, options = {}) {
   const { recursive = false } = options;
-  if (!R2_BUCKET) {
+  const bucket = resolveStorageBucket(options.storageScope);
+  if (!bucket) {
     if (!_r2BucketWarned) {
       _r2BucketWarned = true;
       console.error("[R2] CLOUDFLARE_R2_BUCKET_NAME is not set — all R2 object listing returns empty; audio discovery will fail");
@@ -156,7 +159,7 @@ export async function listR2Objects(prefix, options = {}) {
   do {
     const response = await r2Client.send(
       new ListObjectsV2Command({
-        Bucket: R2_BUCKET,
+        Bucket: bucket,
         Prefix: searchPrefix,
         ...(recursive ? {} : { Delimiter: "/" }),
         ContinuationToken: continuationToken,
@@ -184,11 +187,12 @@ export async function listR2Objects(prefix, options = {}) {
  * @returns {Promise<string | null>} full R2 object key
  */
 /** True when an exact object key exists in the configured R2 bucket. */
-export async function headR2ObjectKey(key) {
+export async function headR2ObjectKey(key, options = {}) {
+  const bucket = resolveStorageBucket(options.storageScope);
   const normalized = String(key || "").replace(/^\//, "");
-  if (!R2_BUCKET || !normalized) return false;
+  if (!bucket || !normalized) return false;
   try {
-    await r2Client.send(new HeadObjectCommand({ Bucket: R2_BUCKET, Key: normalized }));
+    await r2Client.send(new HeadObjectCommand({ Bucket: bucket, Key: normalized }));
     return true;
   } catch (err) {
     const status = err?.$metadata?.httpStatusCode;
@@ -205,12 +209,13 @@ export async function headR2ObjectKey(key) {
  * this to prove the immutable staged object matches the server-issued byte
  * length and Content-Type before any processing job can be queued.
  */
-export async function getR2ObjectMetadata(key) {
+export async function getR2ObjectMetadata(key, options = {}) {
+  const bucket = resolveStorageBucket(options.storageScope);
   const normalized = String(key || "").replace(/^\//, "");
-  if (!R2_BUCKET || !normalized) return null;
+  if (!bucket || !normalized) return null;
   try {
     const result = await r2Client.send(
-      new HeadObjectCommand({ Bucket: R2_BUCKET, Key: normalized })
+      new HeadObjectCommand({ Bucket: bucket, Key: normalized })
     );
     return {
       key: normalized,
@@ -234,14 +239,15 @@ export async function getR2ObjectMetadata(key) {
  * @param {string} sourceKey - existing R2 key
  * @param {string} destKey   - destination R2 key (must not equal sourceKey)
  */
-export async function copyR2Object(sourceKey, destKey) {
+export async function copyR2Object(sourceKey, destKey, options = {}) {
+  const bucket = resolveStorageBucket(options.storageScope);
   const src  = String(sourceKey || "").replace(/^\//, "");
   const dest = String(destKey   || "").replace(/^\//, "");
-  if (!R2_BUCKET || !src || !dest) throw new Error("copyR2Object: missing bucket or keys");
+  if (!bucket || !src || !dest) throw new Error("copyR2Object: missing bucket or keys");
   await r2Client.send(
     new CopyObjectCommand({
-      Bucket:     R2_BUCKET,
-      CopySource: `${R2_BUCKET}/${src}`,
+      Bucket:     bucket,
+      CopySource: `${bucket}/${src.split("/").map(encodeURIComponent).join("/")}`,
       Key:        dest,
     })
   );
@@ -251,18 +257,19 @@ export async function copyR2Object(sourceKey, destKey) {
  * Delete a single R2 object by key. Non-throwing for missing objects.
  * @param {string} key - R2 object key to delete
  */
-export async function deleteR2Object(key) {
+export async function deleteR2Object(key, options = {}) {
+  const bucket = resolveStorageBucket(options.storageScope);
   const normalized = String(key || "").replace(/^\//, "");
-  if (!R2_BUCKET || !normalized) return;
-  await r2Client.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: normalized }));
+  if (!bucket || !normalized) return;
+  await r2Client.send(new DeleteObjectCommand({ Bucket: bucket, Key: normalized }));
 }
 
-export async function discoverFileByExtensions(prefix, extensionsInPriorityOrder) {
+export async function discoverFileByExtensions(prefix, extensionsInPriorityOrder, options = {}) {
   const normalized = String(prefix || "").replace(/^\//, "").replace(/\/$/, "");
   if (!normalized || !extensionsInPriorityOrder?.length) return null;
 
   const listPrefix = `${normalized}/`;
-  const objects = await listR2Objects(listPrefix, { recursive: false });
+  const objects = await listR2Objects(listPrefix, { ...options, recursive: false });
   const files = objects
     .map((item) => item.Key)
     .filter((key) => key && isDirectChildObjectKey(listPrefix, key));

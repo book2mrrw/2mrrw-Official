@@ -5,6 +5,20 @@ import { releaseAvailability, validateLifecycleConfiguration } from "../release-
 const NOW = new Date("2026-09-10T12:00:00.000Z");
 const TYPES = ["single", "feature", "album", "mixtape", "ep"];
 
+test("UNRELZD overrides stale storefront, entitlement, and past publication flags", () => {
+  for (const privateState of [{ status: "unrelzd" }, { status: "draft", publication_state: "unrelzd" }, { status: "published", publication_state: "unrelzd" }]) {
+    const release = { ...privateState, storefront_visible: true, upcoming_visible: true,
+      available_at: "2020-01-01T00:00:00Z", preview_before_release: true, early_access_enabled: true,
+      early_access_starts_at: "2020-01-01T00:00:00Z", preorder_enabled: true };
+    const result = releaseAvailability(release, { owned: true, normallyEntitled: true, subscriber: true, collector: true, preorderOwned: true }, NOW);
+    for (const key of ["visible", "live", "canPurchase", "canPlayFull", "canPreview", "earlyEligible", "preorderOpen"]) assert.equal(result[key], false, key);
+    const admin = releaseAvailability(release, { admin: true }, NOW);
+    assert.equal(admin.visible, true);
+    assert.equal(admin.canPlayFull, true);
+    assert.equal(admin.canPurchase, false);
+  }
+});
+
 for (const releaseType of TYPES) {
   test(`${releaseType}: release now is visible and entitlement-gated`, () => {
     const release = { release_type: releaseType, status: "published", available_at: "2026-09-10T11:00:00Z" };

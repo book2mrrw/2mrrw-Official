@@ -21,6 +21,7 @@ const C = {
 };
 
 const NAV_ITEMS = [
+  { label: "2MRRW Live", href: "/admin/broadcast", icon: "📡", desc: "Prepare Broadcast projects and control listening sessions" },
   { label: "Manage Releases", href: "/admin/releases", icon: "📋", desc: "View all releases, replace master audio, manage scheduled drops" },
   { label: "Podcast", href: "/admin/podcast", icon: "🎙️", desc: "Upload podcast episodes and series — separate from music releases" },
   { label: "Audio Refresh", href: "/admin/media", icon: "🎵", desc: "Re-ingest R2 audio, clear HLS caches, re-queue transcoding" },

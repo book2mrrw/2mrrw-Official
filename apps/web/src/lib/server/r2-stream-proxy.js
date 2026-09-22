@@ -8,7 +8,7 @@ import { applyMediaCors } from "@/lib/server/media-cors";
  * @param {string} signedUrl
  * @param {{ timing?: ReturnType<import("@/lib/server/server-timing").createServerTiming> }} [options]
  */
-export async function proxySignedR2Get(req, signedUrl, { timing } = {}) {
+export async function proxySignedR2Get(req, signedUrl, { timing, cacheControl = "private, max-age=3300", opaqueErrors = false } = {}) {
   const rangeHeader = req.headers.get("range") || req.headers.get("Range");
   const fetchHeaders = rangeHeader ? { Range: rangeHeader } : {};
   const method = req.method === "HEAD" ? "HEAD" : "GET";
@@ -25,7 +25,7 @@ export async function proxySignedR2Get(req, signedUrl, { timing } = {}) {
     if (err?.name === "AbortError") {
       return new Response(null, { status: 499 });
     }
-    console.error("[r2-stream-proxy] upstream fetch failed", { message: err?.message });
+    console.error("[r2-stream-proxy] upstream fetch failed", opaqueErrors ? { code: "UPSTREAM_ERROR" } : { message: err?.message });
     return applyMediaCors(
       req,
       new Response(JSON.stringify({ error: "Stream unavailable", code: "UPSTREAM_ERROR" }), {
@@ -35,11 +35,18 @@ export async function proxySignedR2Get(req, signedUrl, { timing } = {}) {
     );
   }
   timing?.mark("cdn");
+  if (opaqueErrors && !r2Response.ok) {
+    await r2Response.body?.cancel();
+    return new Response(method === "HEAD" ? null : JSON.stringify({ error: "Media unavailable" }), {
+      status: r2Response.status === 416 ? 416 : 502,
+      headers: { "Content-Type": "application/json", "Cache-Control": "private, no-store" },
+    });
+  }
 
   const headers = {
     "Content-Type": r2Response.headers.get("Content-Type") ?? "audio/mpeg",
     "Accept-Ranges": r2Response.headers.get("Accept-Ranges") ?? "bytes",
-    "Cache-Control": "private, max-age=3300",
+    "Cache-Control": cacheControl,
     "X-Content-Type-Options": "nosniff",
   };
 

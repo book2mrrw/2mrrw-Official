@@ -15,6 +15,15 @@ export function releaseAvailability(release, context = {}, now = new Date()) {
   const unavailableMs = instant(release?.unavailable_at);
   const status = String(release?.status || "draft").toLowerCase();
   const admin = Boolean(context.admin);
+  // Private canonical releases stay private even if stale public flags or dates exist.
+  if (status === "unrelzd" || release?.publication_state === "unrelzd") {
+    return {
+      phase: "unrelzd", visible: admin, live: false, preorderOpen: false,
+      earlyEligible: false, canPurchase: false, canPlayFull: admin, canPreview: false,
+      availableAt: null, earlyAccessAt: null, earlyAccessEnabled: false,
+      preorderPriceCents: null, scope: { mode: "full_release", track_ids: [] },
+    };
+  }
   const owned = Boolean(context.owned);
   const preorderOwned = Boolean(context.preorderOwned);
   const releasable = status === "scheduled" || LIVE_STATUSES.has(status);

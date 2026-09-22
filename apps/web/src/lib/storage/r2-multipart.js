@@ -20,17 +20,19 @@ import {
   UploadPartCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { r2Client, R2_BUCKET } from "@/lib/storage/r2";
+import { r2Client } from "@/lib/storage/r2";
+import { resolveStorageBucket } from "@/lib/storage/storage-scope";
 
 const DEFAULT_PART_URL_EXPIRES_IN = 3600; // 1h — large parts over slow connections need real headroom
 
 /** Begin a multipart upload. Returns the uploadId the browser needs for every subsequent part/complete/abort call. */
-export async function createMultipartUpload(key, contentType) {
+export async function createMultipartUpload(key, contentType, options = {}) {
+  const bucket = resolveStorageBucket(options.storageScope);
   const normalized = String(key || "").replace(/^\//, "");
-  if (!R2_BUCKET || !normalized) throw new Error("createMultipartUpload: missing bucket or key");
+  if (!bucket || !normalized) throw new Error("createMultipartUpload: missing bucket or key");
   const result = await r2Client.send(
     new CreateMultipartUploadCommand({
-      Bucket: R2_BUCKET,
+      Bucket: bucket,
       Key: normalized,
       ContentType: contentType,
     })
@@ -39,14 +41,15 @@ export async function createMultipartUpload(key, contentType) {
 }
 
 /** Presigned URL for one part — the browser PUTs raw bytes here directly, never through this server. */
-export async function getMultipartPartUploadUrl(key, uploadId, partNumber, expiresIn = DEFAULT_PART_URL_EXPIRES_IN) {
+export async function getMultipartPartUploadUrl(key, uploadId, partNumber, expiresIn = DEFAULT_PART_URL_EXPIRES_IN, options = {}) {
+  const bucket = resolveStorageBucket(options.storageScope);
   const normalized = String(key || "").replace(/^\//, "");
-  if (!R2_BUCKET || !normalized || !uploadId) throw new Error("getMultipartPartUploadUrl: missing bucket, key, or uploadId");
+  if (!bucket || !normalized || !uploadId) throw new Error("getMultipartPartUploadUrl: missing bucket, key, or uploadId");
   if (!Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10000) {
     throw new Error("getMultipartPartUploadUrl: partNumber must be an integer between 1 and 10000");
   }
   const command = new UploadPartCommand({
-    Bucket: R2_BUCKET,
+    Bucket: bucket,
     Key: normalized,
     UploadId: uploadId,
     PartNumber: partNumber,
@@ -59,16 +62,17 @@ export async function getMultipartPartUploadUrl(key, uploadId, partNumber, expir
  * `{ partNumber, etag }` (the ETag the browser received back from each part
  * PUT response header), in ascending partNumber order.
  */
-export async function completeMultipartUpload(key, uploadId, parts) {
+export async function completeMultipartUpload(key, uploadId, parts, options = {}) {
+  const bucket = resolveStorageBucket(options.storageScope);
   const normalized = String(key || "").replace(/^\//, "");
-  if (!R2_BUCKET || !normalized || !uploadId) throw new Error("completeMultipartUpload: missing bucket, key, or uploadId");
+  if (!bucket || !normalized || !uploadId) throw new Error("completeMultipartUpload: missing bucket, key, or uploadId");
   if (!Array.isArray(parts) || parts.length === 0) throw new Error("completeMultipartUpload: parts must be a non-empty array");
 
   const sortedParts = [...parts].sort((a, b) => a.partNumber - b.partNumber);
 
   const result = await r2Client.send(
     new CompleteMultipartUploadCommand({
-      Bucket: R2_BUCKET,
+      Bucket: bucket,
       Key: normalized,
       UploadId: uploadId,
       MultipartUpload: {
@@ -80,12 +84,13 @@ export async function completeMultipartUpload(key, uploadId, parts) {
 }
 
 /** Cancel an in-progress upload — releases any already-uploaded part bytes on R2's side. Non-throwing if already gone. */
-export async function abortMultipartUpload(key, uploadId) {
+export async function abortMultipartUpload(key, uploadId, options = {}) {
+  const bucket = resolveStorageBucket(options.storageScope);
   const normalized = String(key || "").replace(/^\//, "");
-  if (!R2_BUCKET || !normalized || !uploadId) return;
+  if (!bucket || !normalized || !uploadId) return;
   try {
     await r2Client.send(
-      new AbortMultipartUploadCommand({ Bucket: R2_BUCKET, Key: normalized, UploadId: uploadId })
+      new AbortMultipartUploadCommand({ Bucket: bucket, Key: normalized, UploadId: uploadId })
     );
   } catch (err) {
     const status = err?.$metadata?.httpStatusCode;
@@ -101,9 +106,10 @@ export async function abortMultipartUpload(key, uploadId) {
  * anything itself; call abortMultipartUpload per result if the caller
  * decides to clean up.
  */
-export async function listStaleMultipartUploads(prefix, olderThanMs) {
+export async function listStaleMultipartUploads(prefix, olderThanMs, options = {}) {
+  const bucket = resolveStorageBucket(options.storageScope);
   const normalized = String(prefix || "").replace(/^\//, "");
-  if (!R2_BUCKET) return [];
+  if (!bucket) return [];
   const cutoff = Date.now() - olderThanMs;
 
   const stale = [];
@@ -113,7 +119,7 @@ export async function listStaleMultipartUploads(prefix, olderThanMs) {
   do {
     const response = await r2Client.send(
       new ListMultipartUploadsCommand({
-        Bucket: R2_BUCKET,
+        Bucket: bucket,
         Prefix: normalized || undefined,
         KeyMarker: keyMarker,
         UploadIdMarker: uploadIdMarker,
@@ -133,10 +139,10 @@ export async function listStaleMultipartUploads(prefix, olderThanMs) {
 }
 
 /** Convenience wrapper: find and abort every stale upload under `prefix` in one call. Returns the list it cleaned up. */
-export async function cleanupStaleMultipartUploads(prefix, olderThanMs) {
-  const stale = await listStaleMultipartUploads(prefix, olderThanMs);
+export async function cleanupStaleMultipartUploads(prefix, olderThanMs, options = {}) {
+  const stale = await listStaleMultipartUploads(prefix, olderThanMs, options);
   for (const { key, uploadId } of stale) {
-    await abortMultipartUpload(key, uploadId);
+    await abortMultipartUpload(key, uploadId, options);
   }
   return stale;
 }
