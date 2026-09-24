@@ -1068,8 +1068,13 @@ export function createPlaybackEventHandlers({
     const onLibraryStreamSrc =
       isLibraryStreamSrc(audio.currentSrc || audio.src || "") ||
       isLibraryStreamSrc(track?.src || "");
+    // A track that has not produced audio yet has no streamMeta, and its src may not be a
+    // library-stream URL — but a first-load failure is the case most worth retrying, not
+    // least: entitlement granted moments ago (gift claim, purchase) can still be
+    // propagating, so resolving the stream again is what makes the track playable.
+    const firstPlayFailure = !stateRef.current.hasStarted;
     const MAX_STREAM_RETRIES = 3;
-    if (slug && (streamMetaRef.current || onLibraryStreamSrc) && streamErrorRetriedRef.current < MAX_STREAM_RETRIES) {
+    if (slug && (streamMetaRef.current || onLibraryStreamSrc || firstPlayFailure) && streamErrorRetriedRef.current < MAX_STREAM_RETRIES) {
       streamErrorRetriedRef.current += 1;
       const attempt = streamErrorRetriedRef.current;
       const retryRequestId = activeCommandRef.current?.requestId;
@@ -1178,9 +1183,14 @@ export function createPlaybackEventHandlers({
     // Auto-advance past unrecoverable track errors (missing file, 404, expired URL) to match
     // Spotify/Apple Music behavior — the queue never stops because one file is unavailable.
     // Only skip when in a multi-track queue where auto-advance makes sense.
+    //
+    // A track that never produced audio is excluded even after the retries above. Skipping
+    // it spends the track the listener actually chose — opening an album and landing on
+    // track 2 — and a first-load failure is far more often transient than a truly missing
+    // file. Those stop on the track as retryable instead of silently moving on.
     const errQueue = queueRef.current;
     const errQueueIdx = queueIndexRef.current;
-    if (!stopAfterEachTrackRef.current && errQueue.length > 0) {
+    if (stateRef.current.hasStarted && !stopAfterEachTrackRef.current && errQueue.length > 0) {
       let skipIdx = errQueueIdx + 1;
       while (skipIdx < errQueue.length) {
         const skipTrack = errQueue[skipIdx];
