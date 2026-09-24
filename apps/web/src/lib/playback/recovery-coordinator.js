@@ -107,6 +107,7 @@ class RecoveryCoordinator {
    * and releases the lock. Cooldown stays active — buffer still needs time.
    */
   onPlaybackResumed() {
+    getWebAudioEngine().cancelPendingReposition();
     this._clearGrace();
     this._locked     = false;
     this._stallSince = null;
@@ -129,6 +130,7 @@ class RecoveryCoordinator {
    * intentional audio state transition: stall recovery AND src-swaps.
    */
   notifyStreamUpgrade() {
+    getWebAudioEngine().cancelPendingReposition();
     this._clearGrace();
     this._locked     = false;
     this._stallSince = null;
@@ -142,6 +144,7 @@ class RecoveryCoordinator {
    * Full reset — new track, clean slate.
    */
   resetForNewTrack() {
+    getWebAudioEngine().cancelPendingReposition();
     this._clearGrace();
     this._locked        = false;
     this._cooldownUntil = 0;

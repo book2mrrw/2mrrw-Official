@@ -27,6 +27,7 @@ export class WebAudioEngine extends AudioEngineBase {
 
     /** @type {AudioContext|null} */
     this.ctx = null;
+    this._pendingReposition = null;
     /** @type {MediaElementAudioSourceNode|null} */
     this.source = null;
     /** @type {GainNode|null} Per-track normalization + crossfade fader. */
@@ -671,24 +672,67 @@ export class WebAudioEngine extends AudioEngineBase {
    * @param {() => void} reposition  Runs once gain has reached 0.
    * @param {number} [fadeSec=0.02] Fade duration each way.
    */
+  cancelPendingReposition() {
+    const pending = this._pendingReposition;
+    if (!pending) return;
+    this._pendingReposition = null;
+    clearTimeout(pending.timer);
+    pending.restore();
+  }
+
   rampAcrossReposition(reposition, fadeSec = 0.02) {
-    const ctx  = this.ctx;
+    const previousTarget = this._pendingReposition?.restoreTo;
+    this.cancelPendingReposition();
+    const ctx = this.ctx;
     const gain = this.mainGain;
     if (!ctx || !gain || ctx.state !== "running") {
       reposition();
       return;
     }
-    const now       = ctx.currentTime;
-    const restoreTo = gain.gain.value;
-    gain.gain.cancelScheduledValues(now);
-    gain.gain.setValueAtTime(restoreTo, now);
+    const audio = this._boundElement;
+    const src = audio?.src;
+    const position = audio?.currentTime;
+    const now = ctx.currentTime;
+    const restoreTo = previousTarget ?? gain.gain.value;
+    const pending = {
+      restoreTo,
+      timer: null,
+      restore: () => {
+        // An old operation must never schedule gain changes on a replacement graph.
+        if (this.ctx !== ctx || this.mainGain !== gain || ctx.state === "closed") return;
+        const t = ctx.currentTime;
+        if (typeof gain.gain.cancelAndHoldAtTime === "function") {
+          gain.gain.cancelAndHoldAtTime(t);
+        } else {
+          const current = gain.gain.value;
+          gain.gain.cancelScheduledValues(t);
+          gain.gain.setValueAtTime(current, t);
+        }
+        gain.gain.linearRampToValueAtTime(restoreTo, t + fadeSec);
+      },
+    };
+    this._pendingReposition = pending;
+    if (typeof gain.gain.cancelAndHoldAtTime === "function") {
+      gain.gain.cancelAndHoldAtTime(now);
+    } else {
+      const current = gain.gain.value;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(current, now);
+    }
     gain.gain.linearRampToValueAtTime(0, now + fadeSec);
-    setTimeout(() => {
-      try { reposition(); } catch {}
-      const t = ctx.currentTime;
-      gain.gain.cancelScheduledValues(t);
-      gain.gain.setValueAtTime(0, t);
-      gain.gain.linearRampToValueAtTime(restoreTo, t + fadeSec);
+    pending.timer = setTimeout(() => {
+      if (this._pendingReposition !== pending) return;
+      this._pendingReposition = null;
+      const ownsGraph = this.ctx === ctx && this.mainGain === gain;
+      const ownsPosition = this._boundElement === audio && (!audio ||
+        (audio.src === src && audio.currentTime === position && !audio.paused && !audio.ended));
+      try {
+        if (ownsGraph && ownsPosition && ctx.state === "running") reposition();
+      } catch {
+        // Recovery remains best-effort; always restore the owned gain.
+      } finally {
+        pending.restore();
+      }
     }, Math.round(fadeSec * 1000));
   }
 

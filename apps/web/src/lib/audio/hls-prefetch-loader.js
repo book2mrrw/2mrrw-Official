@@ -9,14 +9,14 @@
  * Used as the `fLoader` config option so ONLY fragment (segment) loads are
  * intercepted. Manifest, variant-playlist, and key requests are unaffected.
  *
- * ABR note: cache-hit loads report bwEstimate: 0. hls.js ignores zero
- * estimates in its EWMA, so the ABR algorithm is only calibrated by real
- * CDN loads after the preloaded segments are consumed.
+ * Cache statistics retain their identity and carry delivery provenance so the
+ * paired ABR controller excludes memory delivery from network measurements.
  */
 
 import { getSegment } from "./hls-segment-cache";
 
-let _cachedClass = null;
+export const memoryDeliveredStats = new WeakSet();
+const classes = new WeakMap();
 
 /**
  * Returns a singleton hls.js loader class that checks the segment cache
@@ -26,16 +26,19 @@ let _cachedClass = null;
  * @returns {Function} Constructor for the custom loader
  */
 export function createPrefetchLoaderClass(DefaultLoaderClass) {
-  if (_cachedClass) return _cachedClass;
+  if (classes.has(DefaultLoaderClass)) return classes.get(DefaultLoaderClass);
 
-  _cachedClass = class HlsPrefetchLoader extends DefaultLoaderClass {
+  const Loader = class HlsPrefetchLoader extends DefaultLoaderClass {
     constructor(config) {
       super(config);
+      this._deliveryGeneration = 0;
     }
 
     load(context, config, callbacks) {
+      const generation = ++this._deliveryGeneration;
       const buf = getSegment(context.url);
       if (!buf) {
+        memoryDeliveredStats.delete(this.stats);
         // Cache miss — preserve all default retry / timeout behavior.
         super.load(context, config, callbacks);
         return;
@@ -45,27 +48,32 @@ export function createPrefetchLoaderClass(DefaultLoaderClass) {
       // queueMicrotask keeps the call asynchronous so hls.js internal state
       // is consistent when onSuccess fires (matching XHR async delivery).
       const now = performance.now();
-      const stats = {
-        aborted: false,
-        loaded: buf.byteLength,
-        retry: 0,
-        total: buf.byteLength,
-        chunkCount: 1,
-        // bwEstimate intentionally omitted (undefined). hls.js's ABR EWMA only
-        // incorporates samples with a defined, non-zero estimate — undefined is
-        // treated as "no bandwidth data" and skipped entirely. Supplying 0 could
-        // be interpreted as a valid 0 bps measurement in some hls.js versions,
-        // pushing the EWMA toward the lowest bitrate tier for the first 1-2 CDN
-        // segments after the preloaded cache is consumed.
+      const stats = this.stats || (this.stats = {});
+      Object.assign(stats, {
+        aborted: false, loaded: buf.byteLength, retry: 0,
+        total: buf.byteLength, chunkCount: 1,
         loading: { start: now, first: now, end: now },
         parsing: { start: 0, end: 0 },
         buffering: { start: 0, end: 0 },
-      };
+      });
+      memoryDeliveredStats.add(stats);
       queueMicrotask(() => {
+        if (generation !== this._deliveryGeneration || stats.aborted) return;
         callbacks.onSuccess({ url: context.url, data: buf }, stats, context, null);
       });
     }
+
+    abort() {
+      this._deliveryGeneration++;
+      super.abort();
+    }
+
+    destroy() {
+      this._deliveryGeneration++;
+      super.destroy();
+    }
   };
 
-  return _cachedClass;
+  classes.set(DefaultLoaderClass, Loader);
+  return Loader;
 }

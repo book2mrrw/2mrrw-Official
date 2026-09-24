@@ -29,6 +29,7 @@ let _prefetchLoaderClass = null;
 import { isPlaybackTraceEnabled } from "@/lib/diagnostics/playback-trace";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 import { getStartupQualityLevel } from "./network-quality";
+import { createCacheAwareAbrController } from "./cache-aware-abr";
 import { createPrefetchLoaderClass } from "./hls-prefetch-loader";
 
 async function importHls() {
@@ -158,6 +159,7 @@ export class HLSEngine {
     const fLoader = _getPrefetchLoaderClass(Hls) ?? undefined;
 
     const hls = new Hls({
+      abrController: createCacheAwareAbrController(Hls.DefaultConfig.abrController),
       // Playback robustness
       enableWorker:               true,
       lowLatencyMode:             false,
@@ -295,10 +297,10 @@ export class HLSEngine {
           this._destroyHls();
           this.loadTrack(capturedUrl, capturedEl, { startPosition: currentTime, _version: capturedVersion, manifestTimeoutMs })
             .then((ok) => {
-              if (ok) this._renewalAttempts = 0;
+              if (this._destroyed || this._manifestVersion !== capturedVersion) return;
               if (!ok) this.onSegmentFatalError?.();
             })
-            .catch(() => { this.onSegmentFatalError?.(); });
+            .catch(() => { if (!this._destroyed && this._manifestVersion === capturedVersion) this.onSegmentFatalError?.(); });
           return;
         }
 
@@ -326,10 +328,10 @@ export class HLSEngine {
           this._destroyHls();
           this.loadTrack(capturedUrl, capturedEl, { startPosition: currentTime, _version: capturedVersion, manifestTimeoutMs })
             .then((ok) => {
-              if (ok) this._renewalAttempts = 0;
+              if (this._destroyed || this._manifestVersion !== capturedVersion) return;
               if (!ok) this.onError?.(new Error("FRAG_DECRYPT_ERROR: unrecoverable after renewal"));
             })
-            .catch(() => { this.onError?.(new Error("FRAG_DECRYPT_ERROR: renewal error")); });
+            .catch(() => { if (!this._destroyed && this._manifestVersion === capturedVersion) this.onError?.(new Error("FRAG_DECRYPT_ERROR: renewal error")); });
           return;
         }
 
@@ -360,6 +362,15 @@ export class HLSEngine {
         this._destroyHls();
         this.onError?.(err);
         settle(false);
+      });
+
+      // A manifest is not evidence that renewed keys can deliver media.
+      // Only a successfully appended media fragment restores the renewal budget.
+      hls.on(Hls.Events.FRAG_BUFFERED, (_, { frag, part }) => {
+        if (this._destroyed || version !== this._manifestVersion || this._hls !== hls) return;
+        const stats = part?.stats || frag?.stats;
+        if (frag?.type !== "main" || frag.sn === "initSegment" || !stats?.loaded || stats.aborted) return;
+        this._renewalAttempts = 0;
       });
 
       hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
