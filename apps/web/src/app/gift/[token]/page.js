@@ -15,17 +15,33 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
+// Solid fills and borders throughout — no alpha anywhere on this screen. A
+// translucent field over the near-black page renders as an almost invisible box
+// with an almost invisible outline, which is what made this form unreadable.
+const LABEL_COLOR = "#c8ccd2";
+const FIELD_BG = "#121316";
+const FIELD_BORDER = "#3a3e45";
+
 const inputStyle = {
   width: "100%",
   padding: "12px 14px",
-  background: "rgba(255,255,255,0.05)",
-  border: "1px solid rgba(255,255,255,0.1)",
-  color: "white",
+  background: FIELD_BG,
+  border: `1px solid ${FIELD_BORDER}`,
+  color: "#ffffff",
   borderRadius: 10,
-  fontSize: 14,
+  fontSize: 15,
   outline: "none",
   boxSizing: "border-box",
   fontFamily: "inherit",
+};
+
+const labelStyle = {
+  display: "block",
+  fontSize: 12,
+  color: LABEL_COLOR,
+  marginBottom: 6,
+  letterSpacing: 1,
+  fontWeight: 600,
 };
 
 export default function GiftClaimPage() {
@@ -270,7 +286,7 @@ export default function GiftClaimPage() {
 
       <div style={{ maxWidth: 480, margin: "-60px auto 0", padding: "0 24px 60px", position: "relative" }}>
         {loading || authLoading ? (
-          <p style={{ color: "#666", fontSize: 14 }}>Loading gift…</p>
+          <p style={{ color: "#c8ccd2", fontSize: 14 }}>Loading gift…</p>
         ) : null}
 
         {/* ── VALID STATE ──────────────────────────────────────────────── */}
@@ -288,11 +304,11 @@ export default function GiftClaimPage() {
               </div>
             ) : null}
             {gift?.message ? (
-              <div style={{ padding: 14, borderRadius: 12, background: "rgba(162,89,255,0.08)", border: "1px solid rgba(162,89,255,0.2)", marginBottom: 20, fontSize: 13, lineHeight: 1.7, color: "#ddd" }}>
+              <div style={{ padding: 14, borderRadius: 12, background: "#171029", border: "1px solid #3a2560", marginBottom: 20, fontSize: 14, lineHeight: 1.7, color: "#f0f1f3" }}>
                 {gift.message}
               </div>
             ) : null}
-            <p style={{ fontSize: 12, color: "#666", marginBottom: 20 }}>Claim before {formatDate(gift?.expires_at)}</p>
+            <p style={{ fontSize: 13, color: "#c8ccd2", marginBottom: 20 }}>Claim before {formatDate(gift?.expires_at)}</p>
 
             {/* ── Logged-in correct recipient ── */}
             {user && !emailWouldMismatch ? (
@@ -306,8 +322,8 @@ export default function GiftClaimPage() {
               </button>
             ) : user && emailWouldMismatch ? (
               /* ── Wrong account (admin viewing, etc.) ── */
-              <div style={{ padding: 16, borderRadius: 14, background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.2)" }}>
-                <p style={{ margin: "0 0 12px", fontSize: 14, color: "#ffaaaa", lineHeight: 1.6 }}>
+              <div style={{ padding: 16, borderRadius: 14, background: "#2a1113", border: "1px solid #6b2a2e" }}>
+                <p style={{ margin: "0 0 12px", fontSize: 14, color: "#ffc9c9", lineHeight: 1.6 }}>
                   This gift was sent to {giftEmail}. Sign in with that account to claim it.
                 </p>
                 <Link href={`/login?gift=${token}`} style={{ color: "#00ffff", fontSize: 13, fontWeight: 700 }}>
@@ -317,24 +333,24 @@ export default function GiftClaimPage() {
             ) : (
               /* ── Not logged in — inline sign-up form ── */
               <form onSubmit={handleSignupClaim} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ fontSize: 13, color: "#888", marginBottom: 4 }}>
+                <div style={{ fontSize: 14, color: "#e2e5e9", marginBottom: 4 }}>
                   Create your account to reveal your gift
                 </div>
 
                 {/* Email — pre-filled, read-only */}
                 <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#666", marginBottom: 5, letterSpacing: 1 }}>EMAIL</label>
+                  <label style={labelStyle}>EMAIL</label>
                   <input
                     type="email"
                     value={giftEmail}
                     readOnly
-                    style={{ ...inputStyle, color: "#aaa", cursor: "default", background: "rgba(255,255,255,0.03)" }}
+                    style={{ ...inputStyle, color: "#cfd3d9", cursor: "default", background: "#0e0f11" }}
                   />
                 </div>
 
                 {/* Password */}
                 <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#666", marginBottom: 5, letterSpacing: 1 }}>PASSWORD</label>
+                  <label style={labelStyle}>PASSWORD</label>
                   <input
                     type="password"
                     value={password}
@@ -349,7 +365,7 @@ export default function GiftClaimPage() {
                 {/* City + State row */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   <div>
-                    <label style={{ display: "block", fontSize: 11, color: "#666", marginBottom: 5, letterSpacing: 1 }}>CITY</label>
+                    <label style={labelStyle}>CITY</label>
                     <input
                       type="text"
                       value={city}
@@ -360,7 +376,7 @@ export default function GiftClaimPage() {
                     />
                   </div>
                   <div>
-                    <label style={{ display: "block", fontSize: 11, color: "#666", marginBottom: 5, letterSpacing: 1 }}>STATE</label>
+                    <label style={labelStyle}>STATE</label>
                     <input
                       type="text"
                       value={state}
@@ -375,7 +391,7 @@ export default function GiftClaimPage() {
 
                 {/* Gender */}
                 <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#666", marginBottom: 8, letterSpacing: 1 }}>GENDER</label>
+                  <label style={{ ...labelStyle, marginBottom: 8 }}>GENDER</label>
                   <div style={{ display: "flex", gap: 10 }}>
                     {VALID_GENDERS.map(g => (
                       <button
@@ -384,10 +400,10 @@ export default function GiftClaimPage() {
                         onClick={() => setGender(g)}
                         style={{
                           flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid",
-                          borderColor: gender === g ? "#a259ff" : "rgba(255,255,255,0.1)",
-                          background: gender === g ? "rgba(162,89,255,0.15)" : "rgba(255,255,255,0.03)",
-                          color: gender === g ? "#c9b8ff" : "#888",
-                          fontWeight: gender === g ? 700 : 400,
+                          borderColor: gender === g ? "#a259ff" : FIELD_BORDER,
+                          background: gender === g ? "#241634" : FIELD_BG,
+                          color: gender === g ? "#d9ccff" : LABEL_COLOR,
+                          fontWeight: gender === g ? 700 : 500,
                           fontSize: 13, cursor: "pointer", textTransform: "capitalize",
                           fontFamily: "inherit",
                         }}
@@ -400,7 +416,7 @@ export default function GiftClaimPage() {
 
                 {/* Age range */}
                 <div>
-                  <label style={{ display: "block", fontSize: 11, color: "#666", marginBottom: 8, letterSpacing: 1 }}>AGE RANGE</label>
+                  <label style={{ ...labelStyle, marginBottom: 8 }}>AGE RANGE</label>
                   <div style={{ display: "flex", gap: 8 }}>
                     {VALID_AGE_RANGES.map(r => (
                       <button
@@ -409,10 +425,10 @@ export default function GiftClaimPage() {
                         onClick={() => setAgeRange(r)}
                         style={{
                           flex: 1, padding: "10px 0", borderRadius: 10, border: "1px solid",
-                          borderColor: ageRange === r ? "#00ffff" : "rgba(255,255,255,0.1)",
-                          background: ageRange === r ? "rgba(0,255,255,0.08)" : "rgba(255,255,255,0.03)",
-                          color: ageRange === r ? "#00ffff" : "#888",
-                          fontWeight: ageRange === r ? 700 : 400,
+                          borderColor: ageRange === r ? "#00ffff" : FIELD_BORDER,
+                          background: ageRange === r ? "#06282c" : FIELD_BG,
+                          color: ageRange === r ? "#00ffff" : LABEL_COLOR,
+                          fontWeight: ageRange === r ? 700 : 500,
                           fontSize: 13, cursor: "pointer",
                           fontFamily: "inherit",
                         }}
@@ -476,8 +492,8 @@ export default function GiftClaimPage() {
         ) : null}
 
         {emailMismatch ? (
-          <div style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.25)" }}>
-            <p style={{ margin: "0 0 14px", fontSize: 14, color: "#ffaaaa", lineHeight: 1.6 }}>
+          <div style={{ marginTop: 20, padding: 16, borderRadius: 14, background: "#2a1113", border: "1px solid #7a3034" }}>
+            <p style={{ margin: "0 0 14px", fontSize: 14, color: "#ffc9c9", lineHeight: 1.6 }}>
               This gift was sent to {giftEmail || "a different email"}. Sign in with the correct account to claim it.
             </p>
             <Link
