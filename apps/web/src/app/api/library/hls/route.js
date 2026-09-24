@@ -10,6 +10,7 @@
  * authorises the /api/library/hls/variant endpoint without a DB round-trip.
  */
 
+import { renditionBandwidthAttributes } from "@/lib/hls/rendition-metadata";
 import { NextResponse } from "next/server";
 import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
 import { getFanSessionUser } from "@/lib/auth/session-user";
@@ -23,14 +24,6 @@ import { getOrFetchManifest } from "@/lib/server/hls-manifest-cache";
 import { resolveReleaseAccessForProduct } from "@/lib/releases/release-availability-server";
 
 export const dynamic = "force-dynamic";
-
-// Bitrate → approximate bandwidth in bits/second (for ABR hint in master playlist)
-const BITRATE_BANDWIDTH = {
-  "320k": 360_000,
-  "160k": 180_000,
-  "96k":  108_000,
-  "64k":  72_000,
-};
 
 function cors(req, res) {
   return applyMediaCors(req, res);
@@ -86,7 +79,7 @@ export async function GET(req) {
       const admin = getAdminClient();
       let q = admin
         .from("hls_manifests")
-        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts")
+        .select("*")
         .eq("slug", slug);
       q = effectiveTrackSlug ? q.eq("track_slug", effectiveTrackSlug) : q.is("track_slug", null);
       const { data, error } = await q.maybeSingle();
@@ -122,14 +115,14 @@ export async function GET(req) {
 
   for (let i = 0; i < bitrates.length; i++) {
     const br        = bitrates[i];
-    const bandwidth = BITRATE_BANDWIDTH[br] ?? 160_000;
+    const bandwidth = renditionBandwidthAttributes(manifest, br);
     const token     = variantTokens[i];
     const params    = new URLSearchParams({ slug, bitrate: br, token });
     if (effectiveTrackSlug) params.set("trackSlug", effectiveTrackSlug);
     const variantUrl = `${origin}/api/library/hls/variant?${params}`;
 
     lines.push(
-      `#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth},CODECS="mp4a.40.2",CHANNELS="2"`,
+      `#EXT-X-STREAM-INF:${bandwidth},CODECS="mp4a.40.2",CHANNELS="2"`,
       variantUrl
     );
   }

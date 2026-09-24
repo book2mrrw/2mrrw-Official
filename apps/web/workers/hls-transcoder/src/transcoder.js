@@ -26,6 +26,7 @@ import fs from "fs";
 import os from "os";
 import crypto from "crypto";
 import { pipeline } from "stream/promises";
+import { measureAudioRendition } from "./audio-rendition-metadata.js";
 import { logger } from "./logger.js";
 import { downloadStream, upload } from "./r2.js";
 
@@ -139,31 +140,13 @@ async function transcodeOneBitrate({ sourceStream, bitrate, slug, trackSlug, tmp
     proc.on("error", reject);
   });
 
-  // Parse duration from the generated playlist
-  const playlistText  = fs.readFileSync(playlistPath, "utf8");
-  const durationSeconds = parseDuration(playlistText);
-
-  // Collect segment paths in order
-  const entries = fs.readdirSync(bitrateDir)
-    .filter((f) => f.endsWith(".ts"))
-    .sort();
-  const segmentPaths = entries.map((f) => path.join(bitrateDir, f));
-
+  const playlistText = fs.readFileSync(playlistPath, "utf8");
+  const { segments, metadata } = measureAudioRendition(playlistText,
+    (name) => fs.statSync(path.join(bitrateDir, name)).size);
+  const segmentPaths = segments.map(({ name }) => path.join(bitrateDir, name));
+  const durationSeconds = segments.reduce((total, segment) => total + segment.duration, 0);
   logger.info("ffmpeg done", { bitrate, segments: segmentPaths.length, durationSeconds });
-
-  return { segmentPaths, durationSeconds };
-}
-
-/** Sum all #EXTINF durations from an HLS playlist string */
-function parseDuration(playlistText) {
-  let total = 0;
-  for (const line of playlistText.split("\n")) {
-    if (line.startsWith("#EXTINF:")) {
-      const val = parseFloat(line.replace("#EXTINF:", "").replace(",", ""));
-      if (!isNaN(val)) total += val;
-    }
-  }
-  return total;
+  return { segmentPaths, durationSeconds, metadata };
 }
 
 /**
@@ -185,6 +168,7 @@ export async function transcode({ job }) {
     const keyInfoFile = await writeKeyInfoFile(tmpDir, key, iv);
 
     const segmentCounts = {};
+    const renditionMetadata = {};
     let durationSeconds = 0;
 
     for (const bitrate of bitrates) {
@@ -193,7 +177,7 @@ export async function transcode({ job }) {
       // Fresh download per bitrate — streaming, not buffered
       const sourceStream = await downloadStream(sourceKey);
 
-      const { segmentPaths, durationSeconds: dur } = await transcodeOneBitrate({
+      const { segmentPaths, durationSeconds: dur, metadata } = await transcodeOneBitrate({
         sourceStream, bitrate, slug, trackSlug, tmpDir, keyInfoFile,
       });
 
@@ -204,6 +188,7 @@ export async function transcode({ job }) {
         await upload(segKey, fs.readFileSync(segmentPaths[i]), "video/mp2t");
       }
 
+      renditionMetadata[bitrate] = metadata;
       segmentCounts[bitrate] = segmentPaths.length;
       if (dur > durationSeconds) durationSeconds = dur; // use the longest (all should match)
 
@@ -220,6 +205,7 @@ export async function transcode({ job }) {
       segment_duration_secs: SEG_DURATION,
       duration_seconds:      durationSeconds,
       segment_counts:        segmentCounts,
+      rendition_metadata:    renditionMetadata,
     };
   } finally {
     // Always clean up temp files — segments can be 50–200 MB per bitrate

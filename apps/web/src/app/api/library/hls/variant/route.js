@@ -14,6 +14,7 @@
  *   - Key server is the single entitlement checkpoint
  */
 
+import { measuredRendition } from "@/lib/hls/rendition-metadata";
 import { NextResponse } from "next/server";
 import { applyMediaCors, mediaCorsPreflightResponse } from "@/lib/server/media-cors";
 import { verifyVariantToken, signKeyToken } from "@/lib/hls/token";
@@ -74,7 +75,7 @@ export async function GET(req) {
       const admin = getAdminClient();
       let q = admin
         .from("hls_manifests")
-        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts")
+        .select("*")
         .eq("slug", slug);
       q = effectiveTrackSlug ? q.eq("track_slug", effectiveTrackSlug) : q.is("track_slug", null);
       const { data, error } = await q.maybeSingle();
@@ -91,7 +92,8 @@ export async function GET(req) {
 
   const prefix      = manifest.hls_prefix;
   const segCount    = (manifest.segment_counts?.[bitrate]) ?? 0;
-  const segDuration = manifest.segment_duration_secs ?? 6;
+  const measured = measuredRendition(manifest, bitrate);
+  const segDuration = measured?.target_duration ?? manifest.segment_duration_secs ?? 6;
   const totalDur    = manifest.duration_seconds ?? 0;
 
   if (segCount === 0) {
@@ -123,7 +125,7 @@ export async function GET(req) {
     const segNum  = String(i + 1).padStart(5, "0");
     const segUrl  = `${R2_CDN}/${prefix}${bitrate}/seg_${segNum}.ts`;
     const isLast  = i === segCount - 1;
-    const segDur  = isLast && totalDur > 0
+    const segDur  = measured ? measured.segment_durations[i].toFixed(6) : isLast && totalDur > 0
       ? Math.max(0.001, totalDur - (segDuration * i)).toFixed(6)
       : segDuration.toFixed(6);
 
