@@ -1,36 +1,19 @@
 /**
- * HLS transcoder.
- *
- * Given a source audio stream from R2, produces AES-128 encrypted HLS segments
- * for four bitrate tiers (320k / 160k / 96k / 64k) using fMP4 (CMAF) containers.
- * 64k is the data-saver floor for slow-2g/2g connections — see
- * src/lib/hls/audio-renditions.js for why it stops there.
- *
- * Pipeline per bitrate:
- *   R2 download stream → FFmpeg stdin → fMP4 segmenter → AES-128 key file + segments → R2
- *
- * All three bitrates are transcoded serially to avoid saturating the CPU
- * on a single Fly.io machine. Parallelising across machines is handled by
- * the job queue — separate jobs per track.
- *
- * FFmpeg flags:
- *   -hls_segment_type fmp4      → CMAF-compatible fMP4 segments (required for HLS v7)
- *   -hls_flags independent_segments → #EXT-X-INDEPENDENT-SEGMENTS for seek correctness
- *   -hls_key_info_file          → AES-128 encryption at the muxer level
- *   -hls_time 6                 → 6-second target segment duration (music streaming standard)
+ * Audio-only AAC-LC / encrypted MPEG-TS worker.
+ * Snapshot source once, encode every tier with common static attenuation,
+ * verify decoded true peaks, then upload the entire accepted ladder.
  */
 
-import { spawn } from "child_process";
 import path from "path";
 import fs from "fs";
 import os from "os";
 import crypto from "crypto";
 import { pipeline } from "stream/promises";
+import { runAudioFfmpeg, measureTruePeak, initialHeadroomGain, nextHeadroomGain, TRUE_PEAK_CEILING_DBTP, MAX_HEADROOM_PASSES } from "./audio-headroom.js";
 import { measureAudioRendition } from "./audio-rendition-metadata.js";
 import { logger } from "./logger.js";
 import { downloadStream, upload } from "./r2.js";
 
-const FFMPEG_BIN  = process.env.FFMPEG_PATH || "ffmpeg";
 const SEG_DURATION = 6; // seconds
 
 /**
@@ -74,11 +57,11 @@ async function writeKeyInfoFile(tmpDir, key, iv) {
 }
 
 /**
- * Run FFmpeg for a single bitrate, segmenting into fMP4 chunks.
- * Returns { initPath, segmentPaths, durationSeconds }.
+ * Encode and measure one encrypted MPEG-TS rendition without publishing it.
  */
-async function transcodeOneBitrate({ sourceStream, bitrate, slug, trackSlug, tmpDir, keyInfoFile }) {
+async function transcodeOneBitrate({ sourcePath, gainDb, bitrate, slug, trackSlug, tmpDir, keyInfoFile }) {
   const bitrateDir = path.join(tmpDir, bitrate);
+  fs.rmSync(bitrateDir, { recursive: true, force: true });
   fs.mkdirSync(bitrateDir, { recursive: true });
 
   const segPattern  = path.join(bitrateDir, "seg_%05d.ts");
@@ -87,8 +70,11 @@ async function transcodeOneBitrate({ sourceStream, bitrate, slug, trackSlug, tmp
   const kbps = bitrate.replace("k", "");
 
   const ffmpegArgs = [
-    // Input: piped from stdin (R2 download stream)
-    "-i", "pipe:0",
+    // Every tier/pass reads the same immutable local source snapshot.
+    "-hide_banner", "-nostats", "-xerror", "-y",
+    "-i", sourcePath,
+    "-map", "0:a:0", "-vn",
+    "-af", `volume=${gainDb}dB:precision=double`,
 
     // Audio codec: AAC-LC, the universally compatible choice for HLS
     "-c:a", "aac",
@@ -112,33 +98,7 @@ async function transcodeOneBitrate({ sourceStream, bitrate, slug, trackSlug, tmp
 
   logger.info("ffmpeg start", { bitrate, slug, trackSlug });
 
-  await new Promise((resolve, reject) => {
-    const proc = spawn(FFMPEG_BIN, ffmpegArgs, { stdio: ["pipe", "pipe", "pipe"] });
-
-    let stderr = "";
-    proc.stderr.on("data", (d) => { stderr += d.toString(); });
-    proc.stdout.on("data", () => {}); // unused but must drain
-
-    // Pipe source audio into FFmpeg
-    pipeline(sourceStream, proc.stdin).catch((err) => {
-      // FFmpeg closes stdin when done — ignore EPIPE at end of stream
-      if (err.code !== "EPIPE") {
-        logger.warn("stdin pipeline error", { code: err.code, message: err.message });
-      }
-    });
-
-    proc.on("close", (code) => {
-      if (code !== 0) {
-        const tail = stderr.slice(-2000); // last 2000 chars of FFmpeg output
-        logger.error("ffmpeg failed", { code, bitrate, tail });
-        reject(new Error(`FFmpeg exited ${code} for bitrate ${bitrate}:\n${tail}`));
-      } else {
-        resolve();
-      }
-    });
-
-    proc.on("error", reject);
-  });
+  await runAudioFfmpeg(ffmpegArgs);
 
   const playlistText = fs.readFileSync(playlistPath, "utf8");
   const { segments, metadata } = measureAudioRendition(playlistText,
@@ -146,17 +106,14 @@ async function transcodeOneBitrate({ sourceStream, bitrate, slug, trackSlug, tmp
   const segmentPaths = segments.map(({ name }) => path.join(bitrateDir, name));
   const durationSeconds = segments.reduce((total, segment) => total + segment.duration, 0);
   logger.info("ffmpeg done", { bitrate, segments: segmentPaths.length, durationSeconds });
-  return { segmentPaths, durationSeconds, metadata };
+  // The published playlist substitutes a signed key URI. Locally use the same key bytes.
+  const verificationPath = path.join(bitrateDir, "verify.m3u8");
+  fs.writeFileSync(verificationPath, playlistText.replace('URI="placeholder"', 'URI="../enc.key"'));
+  const decodedPeak = await measureTruePeak(verificationPath, { encrypted: true });
+  return { segmentPaths, durationSeconds, metadata, decodedPeak };
 }
 
-/**
- * Main entry point called by index.js per job.
- *
- * 1. Downloads source audio from R2 once per bitrate (three serial passes).
- * 2. Transcodes to fMP4 segments with AES-128 encryption.
- * 3. Uploads init.mp4 + all seg_XXXXX.m4s to R2.
- * 4. Returns manifest metadata for DB upsert.
- */
+/** Encode and verify before returning metadata for publication. */
 export async function transcode({ job }) {
   const { id: jobId, slug, track_slug: trackSlug, source_key: sourceKey,
           hls_prefix: prefix, bitrates = ["320k", "160k", "96k", "64k"] } = job;
@@ -167,32 +124,43 @@ export async function transcode({ job }) {
     const { key, iv } = deriveKey(slug, trackSlug);
     const keyInfoFile = await writeKeyInfoFile(tmpDir, key, iv);
 
+    // Download once: retries and tiers must encode identical bytes, never a changing source.
+    const sourcePath = path.join(tmpDir, "source");
+    await pipeline(await downloadStream(sourceKey), fs.createWriteStream(sourcePath), { signal: AbortSignal.timeout(30 * 60 * 1000) });
+    const sourcePeak = await measureTruePeak(sourcePath);
+    let gainDb = initialHeadroomGain(sourcePeak);
+    let verified = null;
+    for (let pass = 1; pass <= MAX_HEADROOM_PASSES; pass++) {
+      const ladder = [];
+      for (const bitrate of bitrates) {
+        const output = await transcodeOneBitrate({ sourcePath, gainDb, bitrate, slug, trackSlug, tmpDir, keyInfoFile });
+        ladder.push({ bitrate, ...output });
+      }
+      const nextGain = nextHeadroomGain(gainDb, ladder.map(r => r.decodedPeak));
+      if (nextGain === null) { verified = ladder; break; }
+      logger.info("audio headroom retry", { jobId, pass, gainDb, nextGain });
+      gainDb = nextGain;
+    }
+    if (!verified) throw new Error("Decoded audio exceeds true-peak ceiling after bounded headroom passes");
+
     const segmentCounts = {};
     const renditionMetadata = {};
     let durationSeconds = 0;
-
-    for (const bitrate of bitrates) {
-      logger.info("transcode bitrate", { jobId, bitrate });
-
-      // Fresh download per bitrate — streaming, not buffered
-      const sourceStream = await downloadStream(sourceKey);
-
-      const { segmentPaths, durationSeconds: dur, metadata } = await transcodeOneBitrate({
-        sourceStream, bitrate, slug, trackSlug, tmpDir, keyInfoFile,
-      });
-
-      // Upload MPEG-TS segments
+    // No upload begins until every rendition passes the decoded peak gate.
+    for (const { bitrate, segmentPaths, durationSeconds: dur, metadata, decodedPeak } of verified) {
       for (let i = 0; i < segmentPaths.length; i++) {
         const segNum = String(i + 1).padStart(5, "0");
-        const segKey = `${prefix}${bitrate}/seg_${segNum}.ts`;
-        await upload(segKey, fs.readFileSync(segmentPaths[i]), "video/mp2t");
+        await upload(`${prefix}${bitrate}/seg_${segNum}.ts`, fs.readFileSync(segmentPaths[i]), "video/mp2t");
       }
-
-      renditionMetadata[bitrate] = metadata;
+      renditionMetadata[bitrate] = { ...metadata, headroom: {
+        version: 1, gain_db: gainDb, ceiling_dbtp: TRUE_PEAK_CEILING_DBTP,
+        source_peak_dbtp: Number.isFinite(sourcePeak) ? sourcePeak : null,
+        decoded_peak_dbtp: Number.isFinite(decodedPeak) ? decodedPeak : null,
+        digital_silence: decodedPeak === -Infinity,
+      } };
       segmentCounts[bitrate] = segmentPaths.length;
-      if (dur > durationSeconds) durationSeconds = dur; // use the longest (all should match)
-
-      logger.info("bitrate uploaded", { bitrate, segments: segmentPaths.length });
+      durationSeconds = Math.max(durationSeconds, dur);
+      logger.info("verified bitrate uploaded", { bitrate, gainDb, decodedPeak, segments: segmentPaths.length });
     }
 
     // Manifest metadata returned to index.js for DB upsert
