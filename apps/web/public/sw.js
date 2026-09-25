@@ -1,5 +1,5 @@
 /* 2MRRW - push notifications, keep-alive messaging, and immutable asset caching. */
-const SW_VERSION = "account-gated-consumer-20260829";
+const SW_VERSION = "app-icon-refresh-20260925";
 const STATIC_CACHE = `2mrrw-static-${SW_VERSION}`;
 
 const STATIC_PREFIXES = ["/_next/static/", "/icons/", "/fonts/"];
