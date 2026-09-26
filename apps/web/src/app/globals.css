@@ -2383,6 +2383,31 @@ body {
   }
 }
 
+.vault-door-gate__locked {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.vault-door-gate__locked .vault-door-gate__poster {
+  filter: grayscale(0.25) brightness(0.7);
+}
+
+.vault-door-gate__locked-caption {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(16px, 6vw, 28px);
+  transform: translateX(-50%);
+  width: calc(100% - clamp(32px, 10vw, 64px));
+  max-width: 440px;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+  color: rgba(231, 230, 223, 0.68);
+}
+
 .vault-unlocked-object {
   position: relative;
   transform: rotateY(-8deg) rotateX(4deg);

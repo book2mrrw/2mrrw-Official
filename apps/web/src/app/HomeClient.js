@@ -1702,7 +1702,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   }, [activeTab]);
 
   useEffect(() => {
-    if (activeTab !== "innercircle") return;
+    if (activeTab !== "innercircle" && activeTab !== "vault") return;
     let cancelled = false;
     (async () => {
       try {
@@ -2790,8 +2790,18 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
               {activeTab==="vault" && (
                 <>
                   <h2 className="section-heading">Vault</h2>
-                  <div style={{marginTop:28,background:"#0d0d0d",border:"1px solid #1a1a1a",borderRadius:"clamp(14px,3cqi,20px)",padding:"clamp(36px,6cqi,48px) clamp(24px,5cqi,40px)",textAlign:"center",maxWidth:520}}>
-                    <p style={{fontSize:13,color:"#555",letterSpacing:1,lineHeight:1.8,margin:0}}>The Vault remains empty for now. Exclusive drops will be listed here when they launch.</p>
+                  <div style={{marginTop:28}}>
+                    <VaultDoorGate
+                      canUnlock={Boolean(publicVault?.unlocked)}
+                      sections={publicVault?.sections || []}
+                      pricing={publicVault?.pricing}
+                      vaultAccess={publicVault?.vaultAccess}
+                      lockedMessage={
+                        publicVault?.pricing
+                          ? `The Vault is sealed for now. Unlock it with a Vault Pass (${publicVault.pricing.displayRegular}) or by owning a Collector Card.`
+                          : "The Vault is sealed for now. Exclusive drops will unlock here when they launch."
+                      }
+                    />
                   </div>
                 </>
               )}

@@ -35,8 +35,14 @@ function alreadyUnlockedThisSession() {
  * never replaying the door. Skips straight to unlocked under
  * prefers-reduced-motion, the same rule GalaxyEnvironment already enforces
  * for its own video layers.
+ *
+ * `canUnlock=false` renders the same sealed door as a static, non-interactive
+ * preview instead -- for whenever the Vault genuinely has nothing to unlock
+ * yet (no real inventory, entitlement flow not live for this visitor). The
+ * door itself should still read as "a real vault exists here," never a
+ * blank placeholder, even while there's nothing behind it to open.
  */
-export function VaultDoorGate(props) {
+export function VaultDoorGate({ canUnlock = true, lockedMessage, ...props }) {
   const reducedMotion = useReducedMotion();
   const videoRef = useRef(null);
   const [phase, setPhase] = useState(() => (alreadyUnlockedThisSession() ? "unlocked" : "sealed"));
@@ -60,7 +66,7 @@ export function VaultDoorGate(props) {
 
   const { progress, isHolding, handlers } = useHoldToUnlock({
     onUnlock: handleUnlock,
-    disabled: phase !== "sealed",
+    disabled: !canUnlock || phase !== "sealed",
   });
 
   useEffect(() => {
@@ -99,7 +105,7 @@ export function VaultDoorGate(props) {
           playsInline
           onEnded={handleVideoEnded}
         />
-      ) : (
+      ) : canUnlock ? (
         <button
           type="button"
           className="vault-door-gate__trigger"
@@ -122,6 +128,18 @@ export function VaultDoorGate(props) {
             {isHolding ? "Keep holding…" : "Hold to unlock"}
           </span>
         </button>
+      ) : (
+        <div className="vault-door-gate__locked" aria-label="The Vault is sealed">
+          <img
+            className="vault-door-gate__poster"
+            src="/vault/vault-door-sealed-poster.png"
+            alt=""
+            aria-hidden="true"
+          />
+          <div className="vault-door-gate__locked-caption">
+            {lockedMessage || "The Vault is sealed for now. Exclusive drops will unlock here when they launch."}
+          </div>
+        </div>
       )}
     </div>
   );
