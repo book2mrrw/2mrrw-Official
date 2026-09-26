@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process';
 
 export const TRUE_PEAK_CEILING_DBTP = -1;
-export const MAX_HEADROOM_PASSES = 3;
+// AAC peaks need not decrease monotonically with input gain. Production
+// catalog verification required a fourth measured pass; retain a finite
+// budget without weakening the decoded-output publication gate.
+export const MAX_HEADROOM_PASSES = 6;
 
 /** Bounded logs and runtime; errors never qualify a rendition for publication. */
 export function runAudioFfmpeg(args, { binary = process.env.FFMPEG_PATH || 'ffmpeg', timeoutMs = 30 * 60 * 1000 } = {}) {
