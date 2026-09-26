@@ -2284,6 +2284,105 @@ body {
   padding-top: 12px;
 }
 
+/* --- Vault door unlock ritual --------------------------------------------
+   Sizes off viewport width via clamp(), not a fixed px value or device-class
+   breakpoints -- holds up across small phones, unfolded foldables (which
+   report an unusual, often wider-than-tall viewport no fixed breakpoint
+   anticipates), and desktop without a special case for any of them. */
+.vault-door-gate {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  aspect-ratio: 16 / 9;
+  margin: 0 auto 28px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(160deg, rgba(13, 8, 20, 0.95), rgba(8, 8, 8, 0.92));
+  border: 1px solid rgba(162, 89, 255, 0.22);
+}
+
+.vault-door-gate__video,
+.vault-door-gate__poster {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.vault-door-gate__trigger {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  /* Prevents the browser's own touch scroll/zoom gestures from fighting the
+     press-and-hold on mobile -- without this, a hold can get interpreted as
+     the start of a scroll and cancel itself the moment a finger drifts. */
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.vault-door-gate__trigger:focus-visible {
+  outline: 2px solid #a259ff;
+  outline-offset: 4px;
+}
+
+.vault-door-gate__ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: clamp(64px, 16vw, 96px);
+  height: clamp(64px, 16vw, 96px);
+  transform: translate(-50%, -50%) rotate(-90deg);
+  pointer-events: none;
+}
+
+.vault-door-gate__ring-track,
+.vault-door-gate__ring-fill {
+  fill: none;
+  stroke-width: 5;
+}
+
+.vault-door-gate__ring-track {
+  stroke: rgba(255, 255, 255, 0.12);
+}
+
+.vault-door-gate__ring-fill {
+  stroke: #a259ff;
+  stroke-linecap: round;
+  stroke-dasharray: 289.03;
+  stroke-dashoffset: calc(289.03 * (1 - var(--hold-progress, 0)));
+  transition: stroke-dashoffset 0.05s linear;
+}
+
+.vault-door-gate__trigger[data-holding] .vault-door-gate__ring-fill {
+  filter: drop-shadow(0 0 6px rgba(162, 89, 255, 0.8));
+}
+
+.vault-door-gate__label {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(16px, 6vw, 28px);
+  transform: translateX(-50%);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(231, 230, 223, 0.75);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vault-door-gate__ring-fill {
+    transition: none;
+  }
+}
+
 .vault-unlocked-object {
   position: relative;
   transform: rotateY(-8deg) rotateX(4deg);

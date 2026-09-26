@@ -19,8 +19,8 @@ const GiftBottomSheet = dynamic(() => import("@/components/gifts/GiftBottomSheet
 const CollectorCardAdminPanel = dynamic(() => import("@/components/admin/CollectorCardAdminPanel"), { ssr: false });
 const NotificationSettingsSection = dynamic(() => import("@/components/account/NotificationSettingsSection"), { ssr: false });
 const AnalyticsDashboard = dynamic(() => import("@/components/account/AnalyticsDashboard"), { ssr: false });
-const VaultUnlockedRoom = dynamic(
-  () => import("@/components/vault/VaultUnlockedRoom").then((mod) => ({ default: mod.VaultUnlockedRoom })),
+const VaultDoorGate = dynamic(
+  () => import("@/components/vault/VaultDoorGate").then((mod) => ({ default: mod.VaultDoorGate })),
   { ssr: false }
 );
 const AlbumTracklistSheet = dynamic(() => import("@/components/music/AlbumTracklistSheet"), { ssr: false });
@@ -3031,7 +3031,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                           </div>
                           {publicVault?.unlocked ? (
                             <div style={{marginBottom:32}}>
-                              <VaultUnlockedRoom
+                              <VaultDoorGate
                                 sections={publicVault.sections || []}
                                 pricing={publicVault.pricing}
                                 vaultAccess={publicVault.vaultAccess}
