@@ -2561,7 +2561,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       <PlaybackChromeIsland
         ambientRefs={ambientRefs}
       >
-      <div className="storefront-adaptive-shell">
+      <div className="storefront-adaptive-shell" data-active-tab={activeTab}>
         {/* ── PERSISTENT PRIMARY RAIL — CSS decides whether space can support it ── */}
           <aside className="storefront-primary-rail" aria-label="Primary navigation">
             <div style={{padding:"22px 18px 18px",borderBottom:"1px solid #111",flexShrink:0}}>

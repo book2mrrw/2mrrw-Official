@@ -135,6 +135,14 @@ body {
   transition: grid-template-columns 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* The Vault is its own sealed space -- no galaxy/starfield showing through
+   behind it. Uses the shell's existing opacity kill switch (see
+   --env-shell-alpha above) scoped to this one tab only; GalaxyEnvironment
+   itself stays mounted and untouched, so this never triggers a remount. */
+.storefront-adaptive-shell[data-active-tab="vault"] {
+  --env-shell-alpha: 1;
+}
+
 .storefront-primary-rail,
 .storefront-cart-rail {
   display: none;
@@ -2292,13 +2300,17 @@ body {
 .vault-door-gate {
   position: relative;
   width: 100%;
-  max-width: 640px;
-  aspect-ratio: 16 / 9;
-  margin: 0 auto 28px;
-  border-radius: 20px;
+  max-width: 920px;
+  /* The vault is its own space, not a card on a page -- fill nearly the
+     whole scrollable tab area instead of sitting in a small 16:9 strip. */
+  height: min(80dvh, 840px);
+  min-height: 360px;
+  margin: 12px auto 28px;
+  border-radius: 24px;
   overflow: hidden;
   background: linear-gradient(160deg, rgba(13, 8, 20, 0.95), rgba(8, 8, 8, 0.92));
   border: 1px solid rgba(162, 89, 255, 0.22);
+  box-shadow: 0 50px 130px -50px rgba(90, 30, 160, 0.55);
 }
 
 .vault-door-gate__video,
@@ -2336,8 +2348,8 @@ body {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: clamp(64px, 16vw, 96px);
-  height: clamp(64px, 16vw, 96px);
+  width: clamp(84px, 20vw, 160px);
+  height: clamp(84px, 20vw, 160px);
   transform: translate(-50%, -50%) rotate(-90deg);
   pointer-events: none;
 }
@@ -2367,9 +2379,9 @@ body {
 .vault-door-gate__label {
   position: absolute;
   left: 50%;
-  bottom: clamp(16px, 6vw, 28px);
+  bottom: clamp(20px, 6vh, 40px);
   transform: translateX(-50%);
-  font-size: 12px;
+  font-size: clamp(12px, 1.6vw, 15px);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(231, 230, 223, 0.75);
@@ -2397,12 +2409,12 @@ body {
 .vault-door-gate__locked-caption {
   position: absolute;
   left: 50%;
-  bottom: clamp(16px, 6vw, 28px);
+  bottom: clamp(20px, 6vh, 40px);
   transform: translateX(-50%);
   width: calc(100% - clamp(32px, 10vw, 64px));
-  max-width: 440px;
+  max-width: 480px;
   text-align: center;
-  font-size: 12px;
+  font-size: clamp(12px, 1.5vw, 15px);
   letter-spacing: 0.04em;
   line-height: 1.6;
   color: rgba(231, 230, 223, 0.68);

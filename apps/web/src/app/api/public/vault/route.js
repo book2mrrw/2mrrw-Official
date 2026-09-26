@@ -2,6 +2,8 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import { getActiveMembership } from "@/lib/commerce/entitlements";
 import { getGuestUser } from "@/lib/guest-session";
+import { getFanSessionUser } from "@/lib/auth/session-user";
+import { isAdminUser } from "@/lib/auth/constants";
 import { getUserVaultAccess, loadPublishedVaultContent } from "@/lib/vault/access";
 
 export const dynamic = "force-dynamic";
@@ -12,10 +14,15 @@ const VAULT_PASS_SUBSCRIBER_CENTS = 2799;
 export async function GET() {
   try {
     const admin = getAdminClient();
-    const user = await getGuestUser();
+    const user = (await getFanSessionUser()) ?? (await getGuestUser());
+    const isAdminTester = isAdminUser(user);
     const membership = user ? await getActiveMembership(user.id) : null;
     const vaultAccess = await getUserVaultAccess(admin, user?.id, membership);
-    const sections = await loadPublishedVaultContent(admin, vaultAccess.tier);
+    // Admins always see the Vault as if fully unlocked -- lets the account
+    // that owns this platform test the real door/gesture/shelf experience
+    // without needing a live Vault Pass purchase or collector card.
+    const effectiveTier = isAdminTester ? "vault_pass" : vaultAccess.tier;
+    const sections = await loadPublishedVaultContent(admin, effectiveTier);
 
     const { data: vaultPassProduct } = await admin
       .from("products")
@@ -36,18 +43,19 @@ export async function GET() {
       hasSubscriber,
     };
 
-    const unlocked = vaultAccess.fullAccess || cardOwnerFree;
+    const unlocked = vaultAccess.fullAccess || cardOwnerFree || isAdminTester;
     const gatedSections = sections;
 
     return NextResponse.json({
       unlocked,
       pricing,
       vaultAccess: {
-        tier: vaultAccess.tier,
+        tier: effectiveTier,
         hasInnerCircleAccess: vaultAccess.hasInnerCircleAccess,
         hasVaultPass: vaultAccess.hasVaultPass,
         fullAccess: vaultAccess.fullAccess,
         cardOwnerFree,
+        isAdminPreview: isAdminTester,
       },
       sections: unlocked ? gatedSections : gatedSections.filter((row) => row.accessTier === "public"),
       room: unlocked
