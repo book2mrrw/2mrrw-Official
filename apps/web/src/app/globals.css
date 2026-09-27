@@ -2292,41 +2292,66 @@ body {
   padding-top: 12px;
 }
 
-/* --- Vault door unlock ritual --------------------------------------------
-   Sizes off viewport width via clamp(), not a fixed px value or device-class
-   breakpoints -- holds up across small phones, unfolded foldables (which
-   report an unusual, often wider-than-tall viewport no fixed breakpoint
-   anticipates), and desktop without a special case for any of them. */
+/* --- The Vault ------------------------------------------------------------
+   Three matched frames of one vault (sealed / doors open / chamber inside),
+   cross-faded. The stage is pinned to the frames' own 3/2 ratio and the art
+   fills it exactly, so nothing is ever cropped away -- the wall, floor and
+   doorway around the door are what make it read as a vault built into a
+   room -- and so the chamber's percentage-positioned slots land on their
+   pods at every viewport size. */
 .vault-door-gate {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 28px;
+  background: #050505;
+}
+
+/* Phones: cancel the tab's own side padding so the vault runs edge to edge.
+   The frames are landscape and never cropped, so width is the only lever on
+   how big the vault gets to be on a portrait screen -- every pixel of it
+   counts. Scoped below the breakpoint where that padding switches to a
+   fixed 30px, so the two can't disagree and overflow. */
+@media (max-width: 839.98px) {
+  .vault-door-gate {
+    margin-left: calc(-1 * max(clamp(12px, 3.5vw, 24px), env(safe-area-inset-left, 0px)));
+    margin-right: calc(-1 * max(clamp(12px, 3.5vw, 24px), env(safe-area-inset-right, 0px)));
+  }
+}
+
+.vault-door-gate__stage {
   position: relative;
   width: 100%;
-  /* The vault is its own space, not a card floating on the page -- no
-     border, no rounded panel, no drop shadow. It fills nearly the whole
-     scrollable tab area and reads as a room, not a UI element. */
-  height: min(80dvh, 840px);
-  min-height: 360px;
-  margin: 0 0 28px;
+  aspect-ratio: 3 / 2;
+  max-height: 82dvh;
   overflow: hidden;
   background: #050505;
 }
 
-.vault-door-gate__video,
-.vault-door-gate__poster {
+.vault-door-gate__plate {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  /* A long press on an image is "save/copy image" to mobile browsers, whose
+     own callout menu fired straight through the unlock hold. The press has
+     to belong to the gesture, so the plates refuse the callout, the drag,
+     the selection, and the hit test entirely. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 
-/* The source render is a wide 16:9 shot; on a tall narrow panel (phones
-   especially, now that the gate fills most of the screen) a centered crop
-   loses the mechanical door detail entirely in favor of the interior glow.
-   Biasing left keeps both the door and the glow it swings open onto in
-   frame instead of showing only a wall of white. */
-.vault-door-gate__video {
-  object-position: 30% center;
+.vault-door-gate__plate--fade {
+  opacity: 0;
+  transition: opacity 1.3s ease-in-out;
+}
+
+.vault-door-gate__plate--fade[data-visible] {
+  opacity: 1;
 }
 
 .vault-door-gate__trigger {
@@ -2343,19 +2368,22 @@ body {
      the start of a scroll and cancel itself the moment a finger drifts. */
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .vault-door-gate__trigger:focus-visible {
   outline: 2px solid #a259ff;
-  outline-offset: 4px;
+  outline-offset: -4px;
 }
 
 .vault-door-gate__ring {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: clamp(84px, 20vw, 160px);
-  height: clamp(84px, 20vw, 160px);
+  width: clamp(72px, 15vw, 130px);
+  height: clamp(72px, 15vw, 130px);
   transform: translate(-50%, -50%) rotate(-90deg);
   pointer-events: none;
 }
@@ -2367,11 +2395,11 @@ body {
 }
 
 .vault-door-gate__ring-track {
-  stroke: rgba(255, 255, 255, 0.12);
+  stroke: rgba(255, 255, 255, 0.16);
 }
 
 .vault-door-gate__ring-fill {
-  stroke: #a259ff;
+  stroke: #d8c48a;
   stroke-linecap: round;
   stroke-dasharray: 289.03;
   stroke-dashoffset: calc(289.03 * (1 - var(--hold-progress, 0)));
@@ -2379,38 +2407,102 @@ body {
 }
 
 .vault-door-gate__trigger[data-holding] .vault-door-gate__ring-fill {
-  filter: drop-shadow(0 0 6px rgba(162, 89, 255, 0.8));
+  filter: drop-shadow(0 0 7px rgba(216, 196, 138, 0.85));
 }
 
 .vault-door-gate__label {
   position: absolute;
   left: 50%;
-  bottom: clamp(20px, 6vh, 40px);
+  bottom: clamp(14px, 5%, 40px);
   transform: translateX(-50%);
-  font-size: clamp(12px, 1.6vw, 15px);
-  letter-spacing: 0.08em;
+  font-size: clamp(11px, 1.5vw, 14px);
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(231, 230, 223, 0.75);
+  color: rgba(238, 232, 214, 0.82);
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9);
   white-space: nowrap;
   pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .vault-door-gate__ring-fill {
+  .vault-door-gate__ring-fill,
+  .vault-door-gate__plate--fade {
     transition: none;
   }
 }
 
+/* --- chamber slots -------------------------------------------------------
+   One button per pod in the chamber art, centred on the pod it belongs to.
+   They stay invisible until hovered, focused or selected: the art already
+   labels every pod, so a second set of labels painted over it would just
+   fight the image. */
+.vault-door-gate__slot {
+  position: absolute;
+  width: 9%;
+  height: 19%;
+  transform: translate(-50%, -50%);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.vault-door-gate__slot--core {
+  width: 15%;
+  height: 22%;
+  border-radius: 50%;
+}
+
+.vault-door-gate__slot:hover,
+.vault-door-gate__slot:focus-visible,
+.vault-door-gate__slot[data-selected] {
+  border-color: rgba(240, 206, 122, 0.85);
+  background: rgba(240, 206, 122, 0.12);
+  box-shadow: 0 0 22px rgba(240, 206, 122, 0.35);
+  outline: none;
+}
+
+.vault-door-gate__slot-name {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.vault-door-gate__readout {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(10px, 4%, 30px);
+  transform: translateX(-50%);
+  max-width: calc(100% - 32px);
+  /* The chamber floor under this is bright polished gold -- pale text alone
+     disappears into it, so the readout carries its own dark ground. */
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: rgba(5, 5, 5, 0.62);
+  text-align: center;
+  font-size: clamp(11px, 1.4vw, 14px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(240, 224, 190, 0.95);
+  pointer-events: none;
+}
+
 .vault-door-gate__exit {
   position: absolute;
-  top: clamp(14px, 3vh, 24px);
-  left: clamp(14px, 3vw, 24px);
+  top: clamp(10px, 3%, 24px);
+  left: clamp(10px, 2.5%, 24px);
   z-index: 3;
-  background: rgba(5, 5, 5, 0.4);
+  background: rgba(5, 5, 5, 0.55);
   border: none;
   border-radius: 999px;
   padding: 9px 16px;
-  color: rgba(231, 230, 223, 0.8);
+  color: rgba(238, 232, 214, 0.85);
   font-size: 12px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -2421,24 +2513,22 @@ body {
 .vault-door-gate__exit:hover,
 .vault-door-gate__exit:focus-visible {
   color: #fff;
-  background: rgba(162, 89, 255, 0.18);
+  background: rgba(240, 206, 122, 0.25);
 }
 
 .vault-door-gate__locked {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
 }
 
-.vault-door-gate__locked .vault-door-gate__poster {
+.vault-door-gate__locked .vault-door-gate__plate {
   filter: grayscale(0.25) brightness(0.7);
 }
 
 .vault-door-gate__locked-caption {
   position: absolute;
   left: 50%;
-  bottom: clamp(20px, 6vh, 40px);
+  bottom: clamp(16px, 6%, 40px);
   transform: translateX(-50%);
   width: calc(100% - clamp(32px, 10vw, 64px));
   max-width: 480px;
@@ -2446,7 +2536,8 @@ body {
   font-size: clamp(12px, 1.5vw, 15px);
   letter-spacing: 0.04em;
   line-height: 1.6;
-  color: rgba(231, 230, 223, 0.68);
+  color: rgba(238, 232, 214, 0.75);
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.95);
 }
 
 .vault-unlocked-object {
