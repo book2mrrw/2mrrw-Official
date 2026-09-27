@@ -170,10 +170,16 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
           {/* the wall the vault is set into */}
           <span className="vault-door-gate__wall" aria-hidden="true" />
 
-          {/* what is behind the doorway, cut to the doorway's own outline --
+          {/* What is behind the doorway, cut to the doorway's own outline --
               so the wall needs no hole punched in it, which matters because
-              a hole has to be a mask and a mask cannot describe the arch */}
-          <span className="vault-door-gate__peek" aria-hidden="true" />
+              a hole has to be a mask and a mask cannot describe the arch.
+              The outline and the room it frames are separate elements on
+              purpose: stepping through grows the opening while the room
+              itself holds still, which is what walking through a door
+              actually looks like. */}
+          <span className="vault-door-gate__peek" aria-hidden="true">
+            <span className="vault-door-gate__peek-art" />
+          </span>
 
           {/* light spilling out of the doorway as it parts */}
           <div className="vault-door-gate__spill" data-open={doorsMoving || undefined} aria-hidden="true" />

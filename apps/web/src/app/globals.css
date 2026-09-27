@@ -2513,11 +2513,16 @@ body {
   width: var(--vault-door-w);
   aspect-ratio: var(--vault-door-ratio);
   z-index: 2;
-  transition: opacity 0.9s ease-in-out;
+  transition: opacity 0.95s ease-in-out,
+              transform 1.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Stepping through: the wall and its opening grow past the viewer and fade,
+   the way a doorway leaves your vision when you walk through it. The room
+   beyond does not travel with it -- see __peek-art. */
 .vault-door-gate__door-frame[data-hidden] {
   opacity: 0;
+  transform: translate(-50%, -50%) scale(1.14);
   pointer-events: none;
 }
 
@@ -2544,8 +2549,26 @@ body {
 
 .vault-door-gate__peek {
   z-index: 1;
-  background-image: var(--vault-chamber-art);
   clip-path: var(--vault-door-shape);
+}
+
+/* The room seen through the opening. It is painted at exactly the size and
+   position the chamber layer underneath uses, so the hand-off between them
+   is a dissolve between two identical pictures rather than a jump in scale.
+   While the frame above grows by 1.14 on the way out, this cancels it by
+   the same amount and stays put. */
+.vault-door-gate__peek-art {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background-image: var(--vault-chamber-art);
+  background-size: cover;
+  background-position: center;
+  transition: transform 1.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.vault-door-gate__door-frame[data-hidden] .vault-door-gate__peek-art {
+  transform: scale(0.8772);
 }
 
 /* Light from inside, spilling through the parting doors. */
@@ -2601,18 +2624,23 @@ body {
    view actually steps through: before that the only way to see inside is
    the peek layer behind the doorway. Without this the chamber bled out
    around the door art wherever the two frames differ in shape. */
+/* The chamber never moves. It is already visible through the doorway at
+   exactly this size and position, so arriving is a dissolve between two
+   identical pictures -- not a zoom. It used to fade in at scale 1.14 and
+   shrink to 1, which is why the room read as bigger inside than the
+   opening had promised: the hand-off jumped 14% and then settled. All the
+   motion belongs to the wall leaving, not to the room resizing. */
 .vault-door-gate__chamber-frame {
   position: absolute;
   top: 50%;
   left: 50%;
-  transform: translate(-50%, -50%) scale(1.14);
+  transform: translate(-50%, -50%);
   z-index: 1;
   opacity: 0;
-  transition: transform 1.1s ease-out, opacity 0.8s ease-in;
+  transition: opacity 0.95s ease-in;
 }
 
 .vault-door-gate__chamber-frame[data-stepped] {
-  transform: translate(-50%, -50%) scale(1);
   opacity: 1;
 }
 
@@ -2709,6 +2737,7 @@ body {
   .vault-door-gate__ring-fill,
   .vault-door-gate__leaf,
   .vault-door-gate__door-frame,
+  .vault-door-gate__peek-art,
   .vault-door-gate__chamber-frame,
   .vault-door-gate__spill {
     transition: none;
