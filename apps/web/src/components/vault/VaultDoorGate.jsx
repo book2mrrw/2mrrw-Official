@@ -161,15 +161,19 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
         {renderChamber("wide")}
         {renderChamber("tall")}
 
+        {/* Every layer here paints from CSS custom properties rather than a
+            fixed src, because the door comes in two shapes: a round door in
+            a wide wall for landscape, an arched one in a tall wall for a
+            phone. Swapping art, doorway outline, seam and travel is then a
+            media query rather than a second copy of this markup. */}
         <div className="vault-door-gate__door-frame" data-hidden={inChamber || undefined}>
-          {/* glimpsed through the parting doors before you step through */}
-          <img
-            className="vault-door-gate__peek"
-            src="/vault/vault-chamber.webp"
-            alt=""
-            aria-hidden="true"
-            draggable={false}
-          />
+          {/* the wall the vault is set into */}
+          <span className="vault-door-gate__wall" aria-hidden="true" />
+
+          {/* what is behind the doorway, cut to the doorway's own outline --
+              so the wall needs no hole punched in it, which matters because
+              a hole has to be a mask and a mask cannot describe the arch */}
+          <span className="vault-door-gate__peek" aria-hidden="true" />
 
           {/* light spilling out of the doorway as it parts */}
           <div className="vault-door-gate__spill" data-open={doorsMoving || undefined} aria-hidden="true" />
@@ -178,22 +182,9 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
               jamb is simply gone -- that is what makes it retract into the
               frame rather than glide across the wall */}
           <div className="vault-door-gate__doorway" aria-hidden="true">
-            <div className="vault-door-gate__leaf vault-door-gate__leaf--l" data-open={doorsMoving || undefined}>
-              <img src="/vault/vault-closed.webp" alt="" draggable={false} />
-            </div>
-            <div className="vault-door-gate__leaf vault-door-gate__leaf--r" data-open={doorsMoving || undefined}>
-              <img src="/vault/vault-closed.webp" alt="" draggable={false} />
-            </div>
+            <span className="vault-door-gate__leaf vault-door-gate__leaf--l" data-open={doorsMoving || undefined} />
+            <span className="vault-door-gate__leaf vault-door-gate__leaf--r" data-open={doorsMoving || undefined} />
           </div>
-
-          {/* the wall the vault is set into, with the doorway punched out */}
-          <img
-            className="vault-door-gate__wall"
-            src="/vault/vault-closed.webp"
-            alt=""
-            aria-hidden="true"
-            draggable={false}
-          />
 
           {!canUnlock ? (
             <div className="vault-door-gate__locked-caption">

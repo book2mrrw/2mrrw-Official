@@ -2419,40 +2419,53 @@ body {
 }
 
 /* --- The Vault ------------------------------------------------------------
-   Real bank-vault art: a sealed double door set into its own wall, whose two
-   leaves genuinely slide apart -- clipped to the doorway so they retract
-   into the frame like an elevator's rather than sliding across the wall --
-   uncovering the chamber behind.
+   Real bank-vault art whose two leaves genuinely slide apart, clipped to the
+   doorway so they retract into the frame like an elevator's rather than
+   gliding across the wall, uncovering the chamber behind.
 
-   Two chambers exist, wide (3/2) and tall (2/3). A phone held upright can
-   only ever show the wide one as a strip, so orientation picks between them
-   in CSS: both are in the DOM, one is displayed, and rotating the device
-   swaps them with no JS. Every measurement is a percentage of whichever
-   art's frame it belongs to, so doorway, leaves and pods stay registered to
-   the picture at any size.
+   Everything comes in two shapes, chosen by orientation: a round door in a
+   wide wall (3/2) for landscape, an arched door in a tall wall (2/3) for a
+   phone held upright, each with its own chamber. Rather than duplicate the
+   markup, every layer paints from these custom properties and the media
+   query below swaps art, doorway outline, seam and travel together.
 
-   Doorway ellipse, measured off the door art: centre 49.87% 43.55%, radii
-   35.5% x 41.8%. A leaf has to travel 35.5% of the frame to clear it; 37%
-   gives margin. */
+   Layer order matters: the peek sits ON TOP of the wall, cut to the
+   doorway's outline, instead of the wall carrying a hole. A hole would have
+   to be a mask, and a mask can describe the round door's ellipse but not
+   the arched door's shape -- clipping the peek works for both. */
 .vault-door-gate {
+  --vault-stage-h: min(82dvh, 100vw, 900px);
+  --vault-door-art: url("/vault/vault-closed.webp");
+  --vault-chamber-art: url("/vault/vault-chamber.webp");
+  --vault-door-ratio: 3 / 2;
+  --vault-door-w: max(100%, calc(var(--vault-stage-h) * 1.5));
+  --vault-door-shape: ellipse(35.5% 41.8% at 49.87% 43.55%);
+  --vault-seam: 49.87%;
+  --vault-door-travel: 37%;
   --vault-door-cx: 49.87%;
   --vault-door-cy: 43.55%;
-  --vault-door-rx: 35.5%;
-  --vault-door-ry: 41.8%;
-  --vault-door-travel: 37%;
-  --vault-seam: 49.87%;
-  --vault-stage-h: min(82dvh, 100vw, 900px);
   display: block;
   margin: 0 0 28px;
   background: #050505;
 }
 
-/* Upright: the tall chamber's own 2/3 means the stage can take far more
-   height than the wide art would allow, which is the whole point of having
-   a second piece of art. */
+/* Upright. The arched door is 2/3 like the tall chamber, so it covers the
+   stage outright -- no letterbox bars, which is the whole reason for having
+   a second piece of art. Doorway measured off that art: leaves run
+   10.06%-90.14% across and 13.8%-90.36% down, with a 300px arch on a
+   1024x1536 frame. A leaf clears the opening after 39.9%; 42% gives room. */
 @media (orientation: portrait) {
   .vault-door-gate {
     --vault-stage-h: min(82dvh, 150vw, 1000px);
+    --vault-door-art: url("/vault/vault-closed-tall.webp");
+    --vault-chamber-art: url("/vault/vault-chamber-tall.webp");
+    --vault-door-ratio: 2 / 3;
+    --vault-door-w: max(100%, calc(var(--vault-stage-h) * 2 / 3));
+    --vault-door-shape: inset(13.8% 9.86% 9.64% 10.06% round 29.3% / 19.5%);
+    --vault-seam: 50%;
+    --vault-door-travel: 42%;
+    --vault-door-cx: 50%;
+    --vault-door-cy: 52.86%;
   }
 }
 
@@ -2492,30 +2505,15 @@ body {
   pointer-events: none;
 }
 
-/* The door art is landscape. Upright, it is fitted to the width and centred
-   rather than cropped, so the vault still reads as a door set in a wall
-   with a floor -- the thing that makes it a vault and not a hatch. The dark
-   above and below is within a few points of the art's own edges. */
 .vault-door-gate__door-frame {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: max(100%, calc(var(--vault-stage-h) * 1.5));
-  aspect-ratio: 3 / 2;
+  width: var(--vault-door-w);
+  aspect-ratio: var(--vault-door-ratio);
   z-index: 2;
   transition: opacity 0.9s ease-in-out;
-}
-
-/* Upright, the landscape door art is oversized to 140% of the stage so the
-   door itself nearly fills the width instead of sitting in a thin band.
-   140% is the most it can take: the vault door spans 14.4%-85.4% of its
-   frame, and 140% crops to exactly 14.3%-85.7% -- any wider starts cutting
-   into the door ring itself. */
-@media (orientation: portrait) {
-  .vault-door-gate__door-frame {
-    width: 140%;
-  }
 }
 
 .vault-door-gate__door-frame[data-hidden] {
@@ -2523,12 +2521,86 @@ body {
   pointer-events: none;
 }
 
+/* the wall, the doorway's contents, and the leaves are all the same two
+   pictures painted at the same size -- only their clipping differs */
+.vault-door-gate__wall,
+.vault-door-gate__peek,
+.vault-door-gate__leaf {
+  position: absolute;
+  inset: 0;
+  display: block;
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.vault-door-gate__wall {
+  z-index: 0;
+  background-image: var(--vault-door-art);
+}
+
+.vault-door-gate__peek {
+  z-index: 1;
+  background-image: var(--vault-chamber-art);
+  clip-path: var(--vault-door-shape);
+}
+
+/* Light from inside, spilling through the parting doors. */
+.vault-door-gate__spill {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  opacity: 0;
+  background: radial-gradient(
+    ellipse 26% 34% at var(--vault-door-cx) var(--vault-door-cy),
+    rgba(190, 214, 255, 0.55) 0%,
+    rgba(150, 185, 255, 0.22) 45%,
+    transparent 72%);
+  transition: opacity 1.6s ease-in;
+  pointer-events: none;
+}
+
+.vault-door-gate__spill[data-open] {
+  opacity: 1;
+}
+
+.vault-door-gate__doorway {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  clip-path: var(--vault-door-shape);
+}
+
+.vault-door-gate__leaf {
+  background-image: var(--vault-door-art);
+  /* Heavy things start slowly, find their pace, and ease into the stop. */
+  transition: transform 2.4s cubic-bezier(0.62, 0.02, 0.24, 1);
+  will-change: transform;
+}
+
+.vault-door-gate__leaf--l {
+  clip-path: inset(0 calc(100% - var(--vault-seam)) 0 0);
+}
+
+.vault-door-gate__leaf--r {
+  clip-path: inset(0 0 0 var(--vault-seam));
+}
+
+.vault-door-gate__leaf--l[data-open] {
+  transform: translateX(calc(-1 * var(--vault-door-travel)));
+}
+
+.vault-door-gate__leaf--r[data-open] {
+  transform: translateX(var(--vault-door-travel));
+}
+
 /* Each chamber covers the stage on its own terms. It stays hidden until the
    view actually steps through: before that the only way to see inside is
-   the peek layer behind the doorway, which is confined to the door frame.
-   Without this the chamber bled out around the door art wherever the frames
-   differ in shape -- most visibly on a phone, where the door is fitted to
-   the width and the tall chamber is not. */
+   the peek layer behind the doorway. Without this the chamber bled out
+   around the door art wherever the two frames differ in shape. */
 .vault-door-gate__chamber-frame {
   position: absolute;
   top: 50%;
@@ -2558,72 +2630,6 @@ body {
 @media (orientation: portrait) {
   .vault-door-gate__chamber-frame--wide { display: none; }
   .vault-door-gate__chamber-frame--tall { display: block; }
-}
-
-/* The wall the vault is set into: the closed art with the doorway punched
-   out, so whatever is behind shows through the opening. */
-.vault-door-gate__wall {
-  z-index: 3;
-  -webkit-mask-image: radial-gradient(
-    ellipse var(--vault-door-rx) var(--vault-door-ry) at var(--vault-door-cx) var(--vault-door-cy),
-    transparent 99.5%, #000 100%);
-  mask-image: radial-gradient(
-    ellipse var(--vault-door-rx) var(--vault-door-ry) at var(--vault-door-cx) var(--vault-door-cy),
-    transparent 99.5%, #000 100%);
-}
-
-.vault-door-gate__peek {
-  z-index: 0;
-}
-
-/* Light from inside, spilling through the parting doors. */
-.vault-door-gate__spill {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  opacity: 0;
-  background: radial-gradient(
-    ellipse 26% 34% at var(--vault-door-cx) var(--vault-door-cy),
-    rgba(190, 214, 255, 0.55) 0%,
-    rgba(150, 185, 255, 0.22) 45%,
-    transparent 72%);
-  transition: opacity 1.6s ease-in;
-  pointer-events: none;
-}
-
-.vault-door-gate__spill[data-open] {
-  opacity: 1;
-}
-
-.vault-door-gate__doorway {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  clip-path: ellipse(var(--vault-door-rx) var(--vault-door-ry) at var(--vault-door-cx) var(--vault-door-cy));
-}
-
-.vault-door-gate__leaf {
-  position: absolute;
-  inset: 0;
-  /* Heavy things start slowly, find their pace, and ease into the stop. */
-  transition: transform 2.4s cubic-bezier(0.62, 0.02, 0.24, 1);
-  will-change: transform;
-}
-
-.vault-door-gate__leaf--l {
-  clip-path: inset(0 calc(100% - var(--vault-seam)) 0 0);
-}
-
-.vault-door-gate__leaf--r {
-  clip-path: inset(0 0 0 var(--vault-seam));
-}
-
-.vault-door-gate__leaf--l[data-open] {
-  transform: translateX(calc(-1 * var(--vault-door-travel)));
-}
-
-.vault-door-gate__leaf--r[data-open] {
-  transform: translateX(var(--vault-door-travel));
 }
 
 .vault-door-gate__trigger {
