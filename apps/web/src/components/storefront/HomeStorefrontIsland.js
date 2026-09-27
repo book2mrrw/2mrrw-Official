@@ -47,6 +47,7 @@ const HomeStorefrontIsland = memo(function HomeStorefrontIsland({
   events,
   onSelectEvent,
   onOpenCollection,
+  onOpenVault,
 }) {
   return (
     <EntitlementSurfaceIsland islandId="home-storefront">
@@ -97,6 +98,7 @@ const HomeStorefrontIsland = memo(function HomeStorefrontIsland({
               events={events}
               onSelectEvent={onSelectEvent}
               onOpenCollection={onOpenCollection}
+              onOpenVault={onOpenVault}
             />
           )}
         </AuthSurfaceIsland>

@@ -2326,6 +2326,10 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     switchTab("mymusic");
   }, [switchTab]);
 
+  const openVault = useCallback(() => {
+    switchTab("vault");
+  }, [switchTab]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
@@ -2663,6 +2667,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   events={liveEvents}
                   onSelectEvent={setSelectedEvent}
                   onOpenCollection={openCollection}
+                  onOpenVault={openVault}
                 />
               </div>
 

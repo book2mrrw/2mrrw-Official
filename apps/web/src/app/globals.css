@@ -58,9 +58,135 @@ body {
   overscroll-behavior: contain;
 }
 
-.home-vault-card {
-  padding: clamp(28px, 5cqi, 40px) clamp(20px, 4cqi, 32px);
-  border-radius: clamp(14px, 2.2cqi, 18px);
+/* --- Homepage vault door -------------------------------------------------
+   A wide plate of the real vault art that opens the Vault tab. The gold
+   ring is the same control that gets pressed and held there, registered on
+   the door's own dial so it reads as the door's mechanism rather than a
+   button dropped onto a photo. Hover traces it partway and stops: this one
+   does not open from the homepage. */
+.home-vault-door {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 7;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #202730;
+  border-radius: clamp(12px, 2.2cqi, 16px);
+  background: #08090a;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (max-width: 719px) {
+  .home-vault-door {
+    aspect-ratio: 3 / 2;
+  }
+}
+
+.home-vault-door__art {
+  position: absolute;
+  inset: 0;
+  background-image: url("/vault/vault-closed.webp");
+  background-size: cover;
+  background-position: center 45%;
+  filter: brightness(0.54) saturate(0.8);
+  transition: filter 0.65s ease, transform 1.15s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.home-vault-door:hover .home-vault-door__art,
+.home-vault-door:focus-visible .home-vault-door__art {
+  filter: brightness(0.84) saturate(0.96);
+  transform: scale(1.035);
+}
+
+.home-vault-door__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 58% 86% at 50% 46%, transparent 26%, rgba(4, 5, 6, 0.86) 100%);
+}
+
+.home-vault-door__inner {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: clamp(9px, 1.6cqi, 14px);
+}
+
+.home-vault-door__ring {
+  position: relative;
+  display: block;
+  width: clamp(42px, 7cqi, 62px);
+  height: clamp(42px, 7cqi, 62px);
+}
+
+.home-vault-door__ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.home-vault-door__ring > svg:first-child {
+  transform: rotate(-90deg);
+}
+
+.home-vault-door__ring-track,
+.home-vault-door__ring-fill {
+  fill: none;
+  stroke-width: 4;
+}
+
+.home-vault-door__ring-track {
+  stroke: rgba(255, 255, 255, 0.16);
+}
+
+.home-vault-door__ring-fill {
+  stroke: #e3bd76;
+  stroke-linecap: round;
+  stroke-dasharray: 289;
+  stroke-dashoffset: 289;
+  transition: stroke-dashoffset 1.2s cubic-bezier(0.5, 0, 0.2, 1);
+}
+
+.home-vault-door:hover .home-vault-door__ring-fill,
+.home-vault-door:focus-visible .home-vault-door__ring-fill {
+  stroke-dashoffset: 74;
+}
+
+.home-vault-door__lock {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 42%;
+  height: 42%;
+  color: #e3bd76;
+}
+
+.home-vault-door__label {
+  font-size: clamp(9.5px, 1.5cqi, 11.5px);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: rgba(188, 195, 201, 0.92);
+  text-align: center;
+  padding: 0 14px;
+}
+
+.home-vault-door__label span {
+  color: #e3bd76;
+}
+
+.home-vault-door:focus-visible {
+  outline: 2px solid #e3bd76;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-vault-door__art,
+  .home-vault-door__ring-fill {
+    transition: none;
+  }
 }
 
 .album-tracklist-adaptive-sheet {

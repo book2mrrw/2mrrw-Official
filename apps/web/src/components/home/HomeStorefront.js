@@ -83,6 +83,7 @@ const HomeStorefront = memo(function HomeStorefront({
   events,
   onSelectEvent,
   onOpenCollection,
+  onOpenVault,
 }) {
   const router = useRouter();
   useEffect(() => {
@@ -204,12 +205,35 @@ const HomeStorefront = memo(function HomeStorefront({
       <div style={{ margin: "32px 0 24px", height: 1, background: "#1a1a1a" }} />
 
       <div id="home-vault">
-        <h2 className="section-heading" style={{ marginBottom: 8 }}>Vault</h2>
-        <div className="home-vault-card" style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", textAlign: "center" }}>
-          <p style={{ fontSize: 13, color: "#555", letterSpacing: 1, lineHeight: 1.8, margin: 0 }}>
-            The Vault remains completely empty for now. Exclusive drops will be listed here when they launch.
-          </p>
-        </div>
+        {/* No heading above it -- the door is recognisable on sight, and a
+            label would only repeat what the picture already says. The ring
+            is the same control that gets pressed and held on the Vault tab,
+            sitting on the door's own dial; it traces partway on hover and
+            stops, because it does not open from here. */}
+        <button
+          type="button"
+          className="home-vault-door"
+          onClick={onOpenVault}
+          aria-label="Enter the Vault"
+        >
+          <span className="home-vault-door__art" aria-hidden="true" />
+          <span className="home-vault-door__vignette" aria-hidden="true" />
+          <span className="home-vault-door__inner">
+            <span className="home-vault-door__ring" aria-hidden="true">
+              <svg viewBox="0 0 100 100">
+                <circle className="home-vault-door__ring-track" cx="50" cy="50" r="46" />
+                <circle className="home-vault-door__ring-fill" cx="50" cy="50" r="46" />
+              </svg>
+              <svg className="home-vault-door__lock" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <rect x="5" y="10.4" width="14" height="10.1" rx="2.2" />
+                <path d="M8.2 10.4V7.8a3.8 3.8 0 0 1 7.6 0v2.6" />
+              </svg>
+            </span>
+            <span className="home-vault-door__label">
+              Sealed — <span>enter the vault</span>
+            </span>
+          </span>
+        </button>
       </div>
 
       <div style={{ margin: "32px 0 24px", height: 1, background: "#1a1a1a" }} />
