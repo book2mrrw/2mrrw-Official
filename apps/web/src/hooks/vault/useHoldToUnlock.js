@@ -74,6 +74,15 @@ export function useHoldToUnlock({ onUnlock, disabled = false } = {}) {
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
   }, []);
 
+  // Re-arms the gesture after the door has been exited and resealed --
+  // completedRef otherwise stays true forever within this hook instance
+  // (VaultDoorGate never remounts on exit, only phase changes), which would
+  // permanently block a second hold from ever completing again.
+  const reset = useCallback(() => {
+    stop();
+    completedRef.current = false;
+  }, [stop]);
+
   const handlers = {
     onPointerDown: (e) => {
       e.preventDefault();
@@ -93,5 +102,5 @@ export function useHoldToUnlock({ onUnlock, disabled = false } = {}) {
     },
   };
 
-  return { progress, isHolding, handlers };
+  return { progress, isHolding, handlers, reset };
 }

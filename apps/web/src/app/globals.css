@@ -2300,17 +2300,14 @@ body {
 .vault-door-gate {
   position: relative;
   width: 100%;
-  max-width: 920px;
-  /* The vault is its own space, not a card on a page -- fill nearly the
-     whole scrollable tab area instead of sitting in a small 16:9 strip. */
+  /* The vault is its own space, not a card floating on the page -- no
+     border, no rounded panel, no drop shadow. It fills nearly the whole
+     scrollable tab area and reads as a room, not a UI element. */
   height: min(80dvh, 840px);
   min-height: 360px;
-  margin: 12px auto 28px;
-  border-radius: 24px;
+  margin: 0 0 28px;
   overflow: hidden;
-  background: linear-gradient(160deg, rgba(13, 8, 20, 0.95), rgba(8, 8, 8, 0.92));
-  border: 1px solid rgba(162, 89, 255, 0.22);
-  box-shadow: 0 50px 130px -50px rgba(90, 30, 160, 0.55);
+  background: #050505;
 }
 
 .vault-door-gate__video,
@@ -2321,6 +2318,15 @@ body {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* The source render is a wide 16:9 shot; on a tall narrow panel (phones
+   especially, now that the gate fills most of the screen) a centered crop
+   loses the mechanical door detail entirely in favor of the interior glow.
+   Biasing left keeps both the door and the glow it swings open onto in
+   frame instead of showing only a wall of white. */
+.vault-door-gate__video {
+  object-position: 30% center;
 }
 
 .vault-door-gate__trigger {
@@ -2393,6 +2399,29 @@ body {
   .vault-door-gate__ring-fill {
     transition: none;
   }
+}
+
+.vault-door-gate__exit {
+  position: absolute;
+  top: clamp(14px, 3vh, 24px);
+  left: clamp(14px, 3vw, 24px);
+  z-index: 3;
+  background: rgba(5, 5, 5, 0.4);
+  border: none;
+  border-radius: 999px;
+  padding: 9px 16px;
+  color: rgba(231, 230, 223, 0.8);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+}
+
+.vault-door-gate__exit:hover,
+.vault-door-gate__exit:focus-visible {
+  color: #fff;
+  background: rgba(162, 89, 255, 0.18);
 }
 
 .vault-door-gate__locked {

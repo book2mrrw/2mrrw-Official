@@ -1,40 +1,27 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { VaultUnlockedRoom } from "./VaultUnlockedRoom";
 import { useHoldToUnlock } from "@/hooks/vault/useHoldToUnlock";
 import { useReducedMotion } from "@/components/environment/use-reduced-motion";
 import { VRM } from "@/lib/media/video-resource-manager";
 
-const SESSION_KEY = "2mrrw:vault-unlocked-this-session";
-
-function alreadyUnlockedThisSession() {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.sessionStorage.getItem(SESSION_KEY) === "1";
-  } catch {
-    // Private-mode/storage-disabled browsers throw on access, not just on
-    // being empty -- treat as "not unlocked yet" rather than crash.
-    return false;
-  }
-}
-
 /**
- * Gates VaultUnlockedRoom behind a one-time-per-session unlock ritual: a
- * sealed vault door, opened by a deliberate press-and-hold (mouse/touch
- * unified via useHoldToUnlock's Pointer Events, keyboard-accessible via
- * Enter/Space), which plays the real rendered door-opening animation
- * (Blender, see apps/web/public/vault/) before revealing the actual shelf
- * content underneath. This is an entrance ceremony for already-entitled
- * users -- VaultUnlockedRoom only ever renders for someone who has already
- * passed the real (server-side) entitlement check; this component adds
- * nothing to that gate, it just makes walking through it feel like a vault.
+ * The vault door: sealed by default, opened by a deliberate press-and-hold
+ * (mouse/touch unified via useHoldToUnlock's Pointer Events, keyboard-
+ * accessible via Enter/Space), which plays the real rendered door-opening
+ * animation (Blender, see apps/web/public/vault/) and settles on its open
+ * final frame. "Exit Vault" reseals it back to the starting sealed state.
  *
- * Runs once per browser session (sessionStorage) -- switching to another
- * tab and back to Vault within the same session shows the shelves directly,
- * never replaying the door. Skips straight to unlocked under
+ * Always opens the same way -- no session/local persistence of "already
+ * unlocked." Every fresh visit to the tab starts sealed again; there is no
+ * shelf/content reveal behind the door yet (that lands with the real
+ * upload pipeline), so for now walking through the door is the whole
+ * moment.
+ *
+ * Skips straight to the open end-frame (no animated playback) under
  * prefers-reduced-motion, the same rule GalaxyEnvironment already enforces
- * for its own video layers.
+ * for its own video layers -- but still shows the correct open-door image
+ * rather than the closed one.
  *
  * `canUnlock=false` renders the same sealed door as a static, non-interactive
  * preview instead -- for whenever the Vault genuinely has nothing to unlock
@@ -42,29 +29,16 @@ function alreadyUnlockedThisSession() {
  * door itself should still read as "a real vault exists here," never a
  * blank placeholder, even while there's nothing behind it to open.
  */
-export function VaultDoorGate({ canUnlock = true, lockedMessage, ...props }) {
+export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
   const reducedMotion = useReducedMotion();
   const videoRef = useRef(null);
-  const [phase, setPhase] = useState(() => (alreadyUnlockedThisSession() ? "unlocked" : "sealed"));
-
-  const markUnlockedForSession = useCallback(() => {
-    try {
-      window.sessionStorage.setItem(SESSION_KEY, "1");
-    } catch {
-      /* best-effort only -- worst case the ritual replays next time */
-    }
-  }, []);
+  const [phase, setPhase] = useState("sealed");
 
   const handleUnlock = useCallback(() => {
-    if (reducedMotion) {
-      markUnlockedForSession();
-      setPhase("unlocked");
-      return;
-    }
-    setPhase("opening");
-  }, [reducedMotion, markUnlockedForSession]);
+    setPhase(reducedMotion ? "open" : "opening");
+  }, [reducedMotion]);
 
-  const { progress, isHolding, handlers } = useHoldToUnlock({
+  const { progress, isHolding, handlers, reset: resetHold } = useHoldToUnlock({
     onUnlock: handleUnlock,
     disabled: !canUnlock || phase !== "sealed",
   });
@@ -85,18 +59,38 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, ...props }) {
     };
   }, [phase]);
 
-  const handleVideoEnded = useCallback(() => {
-    markUnlockedForSession();
-    setPhase("unlocked");
-  }, [markUnlockedForSession]);
+  // Reduced-motion skips playback entirely, but the door should still read
+  // as open rather than sealed -- jump the (paused, unplayed) video straight
+  // to its final frame instead of showing the closed-door poster.
+  useEffect(() => {
+    if (phase !== "open" || !reducedMotion) return undefined;
+    const el = videoRef.current;
+    if (!el) return undefined;
+    const freeze = () => {
+      el.pause();
+      try { el.currentTime = el.duration || 0; } catch { /* not seekable yet */ }
+    };
+    if (el.readyState >= 1) freeze();
+    else el.addEventListener("loadedmetadata", freeze, { once: true });
+    return () => el.removeEventListener("loadedmetadata", freeze);
+  }, [phase, reducedMotion]);
 
-  if (phase === "unlocked") {
-    return <VaultUnlockedRoom {...props} />;
-  }
+  const handleVideoEnded = useCallback(() => {
+    setPhase("open");
+  }, []);
+
+  const handleExit = useCallback(() => {
+    const el = videoRef.current;
+    if (el) {
+      try { el.pause(); el.currentTime = 0; } catch { /* ignore */ }
+    }
+    resetHold();
+    setPhase("sealed");
+  }, [resetHold]);
 
   return (
     <div className="vault-door-gate" data-phase={phase}>
-      {phase === "opening" ? (
+      {phase === "opening" || phase === "open" ? (
         <video
           ref={videoRef}
           className="vault-door-gate__video"
@@ -141,6 +135,12 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, ...props }) {
           </div>
         </div>
       )}
+
+      {phase === "open" ? (
+        <button type="button" className="vault-door-gate__exit" onClick={handleExit}>
+          ← Exit Vault
+        </button>
+      ) : null}
     </div>
   );
 }
