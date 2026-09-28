@@ -2435,6 +2435,9 @@ body {
    the arched door's shape -- clipping the peek works for both. */
 .vault-door-gate {
   --vault-stage-h: min(82dvh, 100vw, 900px);
+  --pod-stage-x: 50%;
+  --pod-stage-y: 46%;
+  --pod-summon-scale: 2.55;
   --vault-door-art: url("/vault/vault-closed.webp");
   --vault-chamber-art: url("/vault/vault-chamber.webp");
   --vault-door-ratio: 3 / 2;
@@ -2457,6 +2460,8 @@ body {
 @media (orientation: portrait) {
   .vault-door-gate {
     --vault-stage-h: min(82dvh, 150vw, 1000px);
+    --pod-stage-y: 47%;
+    --pod-summon-scale: 2.9;
     --vault-door-art: url("/vault/vault-closed-tall.webp");
     --vault-chamber-art: url("/vault/vault-chamber-tall.webp");
     --vault-door-ratio: 2 / 3;
@@ -2766,8 +2771,15 @@ body {
   cursor: pointer;
   line-height: 0;
   font-size: 0;
-  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
-              filter 0.45s ease;
+  /* A curve, not a straight line: left and top run on deliberately
+     different easings, so the pod swings out and inward instead of
+     sliding along the diagonal between the two points. */
+  transition:
+    left 1.15s cubic-bezier(0.34, 0.02, 0.2, 1),
+    top 1.15s cubic-bezier(0.62, 0.05, 0.34, 1),
+    transform 1.25s cubic-bezier(0.28, 0.06, 0.18, 1),
+    filter 0.6s ease,
+    opacity 0.6s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -2850,6 +2862,102 @@ body {
     0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
+
+/* --- summon --------------------------------------------------------------
+   The pod leaves the shelf, arcs in toward the middle, turns its face to the
+   viewer and settles onto the stage. Dismissing runs the identical journey
+   backwards, because every value simply returns to what it was -- the return
+   traces the arrival instead of approximating it. */
+.vault-door-gate__pod[data-summoned] {
+  z-index: 9;
+  transform: translate(-50%, -50%) scale(var(--pod-summon-scale)) rotateY(var(--pod-turn, 0deg));
+  filter: drop-shadow(0 0 40px rgba(80, 215, 255, 0.5));
+  animation: vault-pod-land 1.35s cubic-bezier(0.3, 0.05, 0.2, 1);
+}
+
+/* The soft magnetic lock: it overshoots the stage by a hair and is pulled
+   back onto it, which is what stops the arrival reading as a hard stop. */
+@keyframes vault-pod-land {
+  0% { margin-top: 0; }
+  72% { margin-top: -1.1%; }
+  100% { margin-top: 0; }
+}
+
+.vault-door-gate__pod[data-summoned] .vault-door-gate__pod-label {
+  animation-play-state: paused;
+  opacity: 1;
+  font-size: clamp(5px, 0.42cqi, 7px);
+  color: #fff;
+}
+
+/* The other seven give the stage room: they sink back and lose their light
+   rather than disappearing, so the room still reads as full. */
+.vault-door-gate__pod[data-dimmed] {
+  transform: translate(-50%, -50%) scale(0.88);
+  filter: brightness(0.42) saturate(0.7) blur(1.4px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.vault-door-gate__pod[data-dimmed] .vault-door-gate__pod-label {
+  animation-play-state: paused;
+  opacity: 0.35;
+}
+
+/* The pod's own screen, which is where real media will live. Sized and
+   placed against the pod art's blank panel rather than drawn as a card over
+   it -- the object is the surface. */
+.vault-door-gate__pod-screen {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  transform: translate(-50%, -50%);
+  width: 58%;
+  height: 32%;
+  display: grid;
+  place-items: center;
+  padding: 2%;
+  text-align: center;
+  animation: vault-pod-screen-in 0.5s ease 0.75s both;
+}
+
+@keyframes vault-pod-screen-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.vault-door-gate__pod-empty {
+  font-size: clamp(4px, 0.38cqi, 6.5px);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  color: rgba(198, 236, 250, 0.72);
+}
+
+.vault-door-gate__pod-close {
+  position: absolute;
+  z-index: 10;
+  top: clamp(10px, 3%, 24px);
+  right: clamp(10px, 2.5%, 24px);
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(5, 5, 5, 0.6);
+  color: rgba(216, 246, 255, 0.9);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  animation: vault-pod-screen-in 0.4s ease 0.5s both;
+}
+
+.vault-door-gate__pod-close:hover,
+.vault-door-gate__pod-close:focus-visible {
+  background: rgba(80, 215, 255, 0.28);
+  color: #fff;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .vault-door-gate__pod-label {
     animation: none;
@@ -2857,6 +2965,14 @@ body {
 
   .vault-door-gate__pod {
     transition: none;
+  }
+  .vault-door-gate__pod[data-summoned] {
+    animation: none;
+  }
+
+  .vault-door-gate__pod-screen,
+  .vault-door-gate__pod-close {
+    animation: none;
   }
 }
 

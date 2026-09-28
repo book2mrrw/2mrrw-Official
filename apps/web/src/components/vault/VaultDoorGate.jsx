@@ -115,6 +115,23 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
     setPhase("sealed");
   }, [resetHold]);
 
+  // Sending a pod home is the same journey run backwards: dropping the id
+  // lets every property transition back to the value it had on the shelf,
+  // so the return traces the arrival exactly rather than approximating it.
+  const dismissPod = useCallback(() => setSelected(null), []);
+
+  useEffect(() => {
+    if (!selected) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        dismissPod();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected, dismissPod]);
+
   // A long press on an <img> is a "save/copy image" gesture to mobile
   // browsers, which fired their own context menu straight through the unlock
   // hold. Suppressing it here (with the callout/drag/select rules in CSS)
@@ -137,34 +154,61 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
             stage. A pod painted into the room could never do that. */}
         <img src={chamber.room} alt="" aria-hidden="true" draggable={false} />
 
-        {chamber.slots.map((slot, i) => (
+        {chamber.slots.map((slot, i) => {
+          const isSummoned = selected === slot.id;
+          return (
+            <button
+              key={slot.id}
+              type="button"
+              className="vault-door-gate__pod"
+              style={{
+                left: isSummoned ? "var(--pod-stage-x)" : `${slot.x}%`,
+                top: isSummoned ? "var(--pod-stage-y)" : `${slot.y}%`,
+                /* staggered so the titles breathe independently instead of
+                   pulsing in lockstep, which reads as a blinking UI */
+                "--pod-delay": `${(i * 0.83).toFixed(2)}s`,
+                /* turns its face toward the middle of the room as it comes
+                   forward -- a pod from the left wall swings right, and the
+                   other way round */
+                "--pod-turn": slot.x < 50 ? "7deg" : "-7deg",
+              }}
+              data-summoned={isSummoned || undefined}
+              data-dimmed={selected && !isSummoned ? "" : undefined}
+              aria-expanded={isSummoned}
+              tabIndex={phase === "chamber" ? undefined : -1}
+              aria-hidden={phase === "chamber" ? undefined : "true"}
+              onClick={() => setSelected(isSummoned ? null : slot.id)}
+            >
+              <img
+                className="vault-door-gate__pod-art"
+                src="/vault/pod.webp"
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+              />
+              <span className="vault-door-gate__pod-label">{slot.label}</span>
+
+              {isSummoned ? (
+                <span className="vault-door-gate__pod-screen">
+                  <span className="vault-door-gate__pod-empty">
+                    Nothing in here yet
+                  </span>
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+
+        {selected ? (
           <button
-            key={slot.id}
             type="button"
-            className="vault-door-gate__pod"
-            style={{
-              left: `${slot.x}%`,
-              top: `${slot.y}%`,
-              /* staggered so the titles breathe independently instead of
-                 pulsing in lockstep, which reads as a blinking UI */
-              "--pod-delay": `${(i * 0.83).toFixed(2)}s`,
-            }}
-            data-selected={selected === slot.id || undefined}
-            aria-pressed={selected === slot.id}
-            tabIndex={phase === "chamber" ? undefined : -1}
-            aria-hidden={phase === "chamber" ? undefined : "true"}
-            onClick={() => setSelected(selected === slot.id ? null : slot.id)}
+            className="vault-door-gate__pod-close"
+            onClick={dismissPod}
+            aria-label="Send it back"
           >
-            <img
-              className="vault-door-gate__pod-art"
-              src="/vault/pod.webp"
-              alt=""
-              aria-hidden="true"
-              draggable={false}
-            />
-            <span className="vault-door-gate__pod-label">{slot.label}</span>
+            ✕
           </button>
-        ))}
+        ) : null}
 
       </div>
     );
