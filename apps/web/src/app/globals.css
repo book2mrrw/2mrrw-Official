@@ -2772,8 +2772,8 @@ body {
 /* The tall art frames its pods differently -- wider and shorter in its own
    percentage space -- so the targets follow suit. */
 .vault-door-gate__chamber-frame--tall .vault-door-gate__slot {
-  width: 14%;
-  height: 12%;
+  width: 22%;
+  height: 14.5%;
 }
 
 .vault-door-gate__chamber-frame--tall .vault-door-gate__slot--core {

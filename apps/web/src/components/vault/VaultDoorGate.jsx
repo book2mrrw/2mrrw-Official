@@ -35,19 +35,24 @@ const CHAMBERS = {
       { id: "downloads", label: "Downloads", x: 78.4, y: 58.3 },
     ],
   },
+  /* The centre is deliberately empty here: it is the stage a section gets
+     summoned onto, not a slot of its own, so this chamber has no core.
+     Labels are the exact `vault_content.category` strings that are already
+     live in the database -- renaming one side without the other breaks the
+     mapping to R2. */
   tall: {
     src: "/vault/vault-chamber-tall.webp",
     className: "vault-door-gate__chamber-frame--tall",
-    core: { id: "core", label: "Centerpiece", x: 50.4, y: 46.3 },
+    core: null,
     slots: [
-      { id: "music", label: "Music", x: 18.8, y: 22.1 },
-      { id: "videos", label: "Videos", x: 35.0, y: 30.3 },
-      { id: "exclusive", label: "Exclusive", x: 65.1, y: 30.3 },
-      { id: "projects", label: "Projects", x: 82.8, y: 22.8 },
-      { id: "photos", label: "Photos", x: 19.6, y: 44.3 },
-      { id: "studio", label: "Studio", x: 79.2, y: 45.2 },
-      { id: "archive", label: "Archive", x: 26.6, y: 59.2 },
-      { id: "downloads", label: "Downloads", x: 73.8, y: 59.8 },
+      { id: "audio-diariez", label: "Audio Diariez", x: 20.5, y: 18.5 },
+      { id: "live-replayz", label: "Live Replayz", x: 83.0, y: 18.5 },
+      { id: "behind-the-scenez", label: "Behind the Scenez", x: 34.5, y: 33.0 },
+      { id: "exclusive-interviewz", label: "Exclusive Interviewz", x: 70.5, y: 37.5 },
+      { id: "archive-sessionz", label: "Archive Sessionz", x: 20.5, y: 49.5 },
+      { id: "true-storiez", label: "True Storiez", x: 82.5, y: 54.5 },
+      { id: "private-releasez", label: "Private Releasez", x: 29.0, y: 68.5 },
+      { id: "unmxd-unmstrd", label: "UNMXD UNMSTRD", x: 73.5, y: 71.0 },
     ],
   },
 };
@@ -123,7 +128,7 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
 
   const renderChamber = (key) => {
     const chamber = CHAMBERS[key];
-    const all = [chamber.core, ...chamber.slots];
+    const all = chamber.core ? [chamber.core, ...chamber.slots] : chamber.slots;
     const active = selected ? all.find((s) => s.id === selected) : null;
     return (
       <div
