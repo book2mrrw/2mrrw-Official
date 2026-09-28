@@ -2634,6 +2634,9 @@ body {
   position: absolute;
   top: 50%;
   left: 50%;
+  /* pod labels size in cqi, which needs this to resolve against the
+     chamber rather than the viewport */
+  container-type: inline-size;
   transform: translate(-50%, -50%);
   z-index: 1;
   opacity: 0;
@@ -2744,59 +2747,117 @@ body {
   }
 }
 
-/* --- chamber slots -------------------------------------------------------
-   One button per pod, centred on the pod it belongs to. They stay invisible
-   until hovered, focused or selected: the art already labels every pod, so
-   a second set of labels painted over it would just fight the image. */
-.vault-door-gate__slot {
+/* --- chamber pods --------------------------------------------------------
+   Each pod is its own layer composited over the empty room, not part of the
+   picture. That is the whole point: a pod painted into the room could never
+   leave the wall, and leaving the wall is what the summon has to do.
+
+   One pod render is reused for all eight. The titles are real text rather
+   than baked art, so renaming a category is a string change instead of
+   eight re-renders -- and the text stays sharp when a pod scales up. */
+.vault-door-gate__pod {
   position: absolute;
   z-index: 6;
   width: 13%;
-  height: 20%;
   transform: translate(-50%, -50%);
   padding: 0;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
+  border: 0;
+  background: none;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  line-height: 0;
+  font-size: 0;
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+              filter 0.45s ease;
   -webkit-tap-highlight-color: transparent;
 }
 
-.vault-door-gate__slot--core {
-  width: 15%;
-  height: 22%;
-  border-radius: 50%;
-}
-
-/* The tall art frames its pods differently -- wider and shorter in its own
-   percentage space -- so the targets follow suit. */
-.vault-door-gate__chamber-frame--tall .vault-door-gate__slot {
+.vault-door-gate__chamber-frame--tall .vault-door-gate__pod {
   width: 19%;
-  height: 13.5%;
 }
 
-.vault-door-gate__chamber-frame--tall .vault-door-gate__slot--core {
-  width: 24%;
-  height: 15%;
+.vault-door-gate__pod .vault-door-gate__pod-art {
+  position: static;
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
 }
 
-.vault-door-gate__slot:hover,
-.vault-door-gate__slot:focus-visible,
-.vault-door-gate__slot[data-selected] {
-  border-color: rgba(240, 206, 122, 0.85);
-  background: rgba(240, 206, 122, 0.12);
-  box-shadow: 0 0 22px rgba(240, 206, 122, 0.35);
+/* Sits on the pod's upper band, above its screen. */
+.vault-door-gate__pod-label {
+  position: absolute;
+  top: 27%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 76%;
+  text-align: center;
+  line-height: 1.15;
+  font-size: clamp(6px, 1.05cqi, 13px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #d8f6ff;
+  text-shadow:
+    0 0 4px rgba(120, 232, 255, 0.9),
+    0 0 12px rgba(60, 200, 255, 0.55),
+    0 1px 2px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+  animation: vault-pod-breathe 4.2s ease-in-out infinite;
+  animation-delay: var(--pod-delay, 0s);
+}
+
+/* A slow swell rather than a blink -- the glow gains and loses intensity,
+   the text never disappears. */
+@keyframes vault-pod-breathe {
+  0%, 100% {
+    opacity: 0.82;
+    text-shadow:
+      0 0 3px rgba(120, 232, 255, 0.65),
+      0 0 9px rgba(60, 200, 255, 0.35),
+      0 1px 2px rgba(0, 0, 0, 0.9);
+  }
+  50% {
+    opacity: 1;
+    text-shadow:
+      0 0 6px rgba(150, 240, 255, 1),
+      0 0 18px rgba(60, 200, 255, 0.75),
+      0 0 34px rgba(40, 170, 255, 0.4),
+      0 1px 2px rgba(0, 0, 0, 0.9);
+  }
+}
+
+/* Hover/focus drifts the pod very slightly forward and lifts its glow --
+   the rest state stays calm so this reads as a response, not decoration. */
+.vault-door-gate__pod:hover,
+.vault-door-gate__pod:focus-visible,
+.vault-door-gate__pod[data-selected] {
+  transform: translate(-50%, -50%) scale(1.06);
+  filter: drop-shadow(0 0 16px rgba(80, 215, 255, 0.55));
   outline: none;
 }
 
-.vault-door-gate__slot-name {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+.vault-door-gate__pod:focus-visible .vault-door-gate__pod-label,
+.vault-door-gate__pod[data-selected] .vault-door-gate__pod-label {
+  color: #fff;
+  animation-play-state: paused;
+  text-shadow:
+    0 0 7px rgba(170, 245, 255, 1),
+    0 0 22px rgba(70, 210, 255, 0.85),
+    0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vault-door-gate__pod-label {
+    animation: none;
+  }
+
+  .vault-door-gate__pod {
+    transition: none;
+  }
 }
 
 .vault-door-gate__readout {

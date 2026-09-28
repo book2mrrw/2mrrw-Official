@@ -21,9 +21,8 @@ const STEP_IN_MS = 1100;
  */
 const CHAMBERS = {
   wide: {
-    src: "/vault/vault-chamber.webp",
+    room: "/vault/vault-room.webp",
     className: "vault-door-gate__chamber-frame--wide",
-    core: null,
     slots: [
       { id: "audio-diariez", label: "Audio Diariez", x: 20.7, y: 19.5 },
       { id: "live-replayz", label: "Live Replayz", x: 79.6, y: 19.5 },
@@ -41,9 +40,8 @@ const CHAMBERS = {
      live in the database -- renaming one side without the other breaks the
      mapping to R2. */
   tall: {
-    src: "/vault/vault-chamber-tall.webp",
+    room: "/vault/vault-room-tall.webp",
     className: "vault-door-gate__chamber-frame--tall",
-    core: null,
     slots: [
       { id: "audio-diariez", label: "Audio Diariez", x: 24.9, y: 20.8 },
       { id: "live-replayz", label: "Live Replayz", x: 75.4, y: 23.2 },
@@ -128,34 +126,46 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
 
   const renderChamber = (key) => {
     const chamber = CHAMBERS[key];
-    const all = chamber.core ? [chamber.core, ...chamber.slots] : chamber.slots;
-    const active = selected ? all.find((s) => s.id === selected) : null;
     return (
       <div
         className={`vault-door-gate__chamber-frame ${chamber.className}`}
         data-stepped={inChamber || undefined}
       >
-        <img src={chamber.src} alt="" aria-hidden="true" draggable={false} />
-        {phase === "chamber" ? (
-          <>
-            {all.map((slot) => (
-              <button
-                key={slot.id}
-                type="button"
-                className={`vault-door-gate__slot${slot.id === "core" ? " vault-door-gate__slot--core" : ""}`}
-                style={{ left: `${slot.x}%`, top: `${slot.y}%` }}
-                data-selected={selected === slot.id || undefined}
-                aria-pressed={selected === slot.id}
-                onClick={() => setSelected(selected === slot.id ? null : slot.id)}
-              >
-                <span className="vault-door-gate__slot-name">{slot.label}</span>
-              </button>
-            ))}
-            <div className="vault-door-gate__readout" role="status">
-              {active ? `${active.label} — empty` : "The vault is open. Nothing stored yet."}
-            </div>
-          </>
-        ) : null}
+        {/* The room with its shelves empty. Each pod is composited over it as
+            its own layer rather than being part of the picture -- that is
+            what will let one of them leave the wall and travel to the centre
+            stage. A pod painted into the room could never do that. */}
+        <img src={chamber.room} alt="" aria-hidden="true" draggable={false} />
+
+        {chamber.slots.map((slot, i) => (
+          <button
+            key={slot.id}
+            type="button"
+            className="vault-door-gate__pod"
+            style={{
+              left: `${slot.x}%`,
+              top: `${slot.y}%`,
+              /* staggered so the titles breathe independently instead of
+                 pulsing in lockstep, which reads as a blinking UI */
+              "--pod-delay": `${(i * 0.83).toFixed(2)}s`,
+            }}
+            data-selected={selected === slot.id || undefined}
+            aria-pressed={selected === slot.id}
+            tabIndex={phase === "chamber" ? undefined : -1}
+            aria-hidden={phase === "chamber" ? undefined : "true"}
+            onClick={() => setSelected(selected === slot.id ? null : slot.id)}
+          >
+            <img
+              className="vault-door-gate__pod-art"
+              src="/vault/pod.webp"
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+            />
+            <span className="vault-door-gate__pod-label">{slot.label}</span>
+          </button>
+        ))}
+
       </div>
     );
   };
