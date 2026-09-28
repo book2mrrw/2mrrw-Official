@@ -2771,16 +2771,25 @@ body {
   cursor: pointer;
   line-height: 0;
   font-size: 0;
-  /* A curve, not a straight line: left and top run on deliberately
-     different easings, so the pod swings out and inward instead of
-     sliding along the diagonal between the two points. */
+  /* Horizontal half of the journey. Nothing here animates anything but
+     transform and opacity -- the earlier version moved left/top/margin,
+     which are layout, so every frame relaid out and repainted a large
+     image and the travel stuttered. */
+  transform: translate(-50%, -50%) translateX(var(--pod-dx, 0%));
   transition:
-    left 1.15s cubic-bezier(0.34, 0.02, 0.2, 1),
-    top 1.15s cubic-bezier(0.62, 0.05, 0.34, 1),
-    transform 1.25s cubic-bezier(0.28, 0.06, 0.18, 1),
-    filter 0.6s ease,
-    opacity 0.6s ease;
+    transform 1.05s cubic-bezier(0.32, 0.02, 0.22, 1),
+    opacity 0.5s ease;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Vertical half, plus the scale and the turn. Running Y on its own easing
+   against the X above is what bends the path into a curve -- two plain
+   transforms that read as an arc, with no layout cost. The overshoot at
+   the end of this curve is the magnetic settle. */
+.vault-door-gate__pod-body {
+  display: block;
+  transform: translateY(var(--pod-dy, 0%)) scale(var(--pod-scale, 1)) rotateY(var(--pod-face, 0deg));
+  transition: transform 1.15s cubic-bezier(0.22, 0.9, 0.24, 1.06);
 }
 
 .vault-door-gate__chamber-frame--tall .vault-door-gate__pod {
@@ -2822,38 +2831,27 @@ body {
   animation-delay: var(--pod-delay, 0s);
 }
 
-/* A slow swell rather than a blink -- the glow gains and loses intensity,
-   the text never disappears. */
+/* A slow swell rather than a blink. Only opacity moves: animating the
+   text-shadow instead meant repainting eight glowing labels on every frame,
+   which the pod travel then had to compete with. */
 @keyframes vault-pod-breathe {
-  0%, 100% {
-    opacity: 0.82;
-    text-shadow:
-      0 0 3px rgba(120, 232, 255, 0.65),
-      0 0 9px rgba(60, 200, 255, 0.35),
-      0 1px 2px rgba(0, 0, 0, 0.9);
-  }
-  50% {
-    opacity: 1;
-    text-shadow:
-      0 0 6px rgba(150, 240, 255, 1),
-      0 0 18px rgba(60, 200, 255, 0.75),
-      0 0 34px rgba(40, 170, 255, 0.4),
-      0 1px 2px rgba(0, 0, 0, 0.9);
-  }
+  0%, 100% { opacity: 0.74; }
+  50% { opacity: 1; }
 }
 
 /* Hover/focus drifts the pod very slightly forward and lifts its glow --
    the rest state stays calm so this reads as a response, not decoration. */
-.vault-door-gate__pod:hover,
-.vault-door-gate__pod:focus-visible,
-.vault-door-gate__pod[data-selected] {
-  transform: translate(-50%, -50%) scale(1.06);
-  filter: drop-shadow(0 0 16px rgba(80, 215, 255, 0.55));
+.vault-door-gate__pod:hover .vault-door-gate__pod-body,
+.vault-door-gate__pod:focus-visible .vault-door-gate__pod-body {
+  --pod-scale: 1.06;
+}
+
+.vault-door-gate__pod:focus-visible {
   outline: none;
 }
 
 .vault-door-gate__pod:focus-visible .vault-door-gate__pod-label,
-.vault-door-gate__pod[data-selected] .vault-door-gate__pod-label {
+.vault-door-gate__pod[data-summoned] .vault-door-gate__pod-label {
   color: #fff;
   animation-play-state: paused;
   text-shadow:
@@ -2870,17 +2868,23 @@ body {
    traces the arrival instead of approximating it. */
 .vault-door-gate__pod[data-summoned] {
   z-index: 9;
-  transform: translate(-50%, -50%) scale(var(--pod-summon-scale)) rotateY(var(--pod-turn, 0deg));
-  filter: drop-shadow(0 0 40px rgba(80, 215, 255, 0.5));
-  animation: vault-pod-land 1.35s cubic-bezier(0.3, 0.05, 0.2, 1);
+  /* Given its own compositor layer for the duration of the trip, so the
+     browser never has to rasterise it mid-flight. */
+  will-change: transform;
 }
 
-/* The soft magnetic lock: it overshoots the stage by a hair and is pulled
-   back onto it, which is what stops the arrival reading as a hard stop. */
-@keyframes vault-pod-land {
-  0% { margin-top: 0; }
-  72% { margin-top: -1.1%; }
-  100% { margin-top: 0; }
+.vault-door-gate__pod[data-summoned] .vault-door-gate__pod-body {
+  --pod-scale: var(--pod-summon-scale);
+  --pod-face: var(--pod-turn, 0deg);
+  will-change: transform;
+}
+
+/* The glow waits until it has arrived. Animating a drop-shadow during the
+   travel means repainting the shadow every frame for a large image, which
+   is exactly the kind of work that made this stutter. */
+.vault-door-gate__pod[data-summoned] .vault-door-gate__pod-art {
+  filter: drop-shadow(0 0 34px rgba(80, 215, 255, 0.45));
+  transition: filter 0.5s ease 0.85s;
 }
 
 .vault-door-gate__pod[data-summoned] .vault-door-gate__pod-label {
@@ -2892,11 +2896,16 @@ body {
 
 /* The other seven give the stage room: they sink back and lose their light
    rather than disappearing, so the room still reads as full. */
+/* The others sink back on opacity and scale alone. A blur or brightness
+   filter here would repaint seven large images every frame of the travel
+   for a purely decorative effect. */
 .vault-door-gate__pod[data-dimmed] {
-  transform: translate(-50%, -50%) scale(0.88);
-  filter: brightness(0.42) saturate(0.7) blur(1.4px);
-  opacity: 0.55;
+  opacity: 0.4;
   pointer-events: none;
+}
+
+.vault-door-gate__pod[data-dimmed] .vault-door-gate__pod-body {
+  --pod-scale: 0.9;
 }
 
 .vault-door-gate__pod[data-dimmed] .vault-door-gate__pod-label {

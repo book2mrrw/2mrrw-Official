@@ -23,6 +23,14 @@ const CHAMBERS = {
   wide: {
     room: "/vault/vault-room.webp",
     className: "vault-door-gate__chamber-frame--wide",
+    /* The pod's own box as a share of the frame, needed to convert a
+       distance across the room into a translate of the pod itself --
+       translate percentages resolve against the moving element, not its
+       parent. podH follows from the art's 1160x1356 and the frame ratio. */
+    podW: 13,
+    podH: 22.8,
+    stageX: 50,
+    stageY: 46,
     slots: [
       { id: "audio-diariez", label: "Audio Diariez", x: 20.7, y: 19.5 },
       { id: "live-replayz", label: "Live Replayz", x: 79.6, y: 19.5 },
@@ -42,6 +50,10 @@ const CHAMBERS = {
   tall: {
     room: "/vault/vault-room-tall.webp",
     className: "vault-door-gate__chamber-frame--tall",
+    podW: 19,
+    podH: 14.8,
+    stageX: 50,
+    stageY: 47,
     slots: [
       { id: "audio-diariez", label: "Audio Diariez", x: 24.9, y: 20.8 },
       { id: "live-replayz", label: "Live Replayz", x: 75.4, y: 23.2 },
@@ -156,14 +168,20 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
 
         {chamber.slots.map((slot, i) => {
           const isSummoned = selected === slot.id;
+          /* The trip expressed in the pod's own width and height, so the
+             whole journey is one transform and never touches layout. */
+          const dx = ((chamber.stageX - slot.x) / chamber.podW) * 100;
+          const dy = ((chamber.stageY - slot.y) / chamber.podH) * 100;
           return (
             <button
               key={slot.id}
               type="button"
               className="vault-door-gate__pod"
               style={{
-                left: isSummoned ? "var(--pod-stage-x)" : `${slot.x}%`,
-                top: isSummoned ? "var(--pod-stage-y)" : `${slot.y}%`,
+                left: `${slot.x}%`,
+                top: `${slot.y}%`,
+                "--pod-dx": isSummoned ? `${dx.toFixed(2)}%` : "0%",
+                "--pod-dy": isSummoned ? `${dy.toFixed(2)}%` : "0%",
                 /* staggered so the titles breathe independently instead of
                    pulsing in lockstep, which reads as a blinking UI */
                 "--pod-delay": `${(i * 0.83).toFixed(2)}s`,
@@ -179,22 +197,28 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
               aria-hidden={phase === "chamber" ? undefined : "true"}
               onClick={() => setSelected(isSummoned ? null : slot.id)}
             >
-              <img
-                className="vault-door-gate__pod-art"
-                src="/vault/pod.webp"
-                alt=""
-                aria-hidden="true"
-                draggable={false}
-              />
-              <span className="vault-door-gate__pod-label">{slot.label}</span>
+              {/* X lives on the outer element and Y on the inner one, each
+                  with its own easing -- two straight transforms that read as
+                  a curve, without animating anything the compositor cannot
+                  handle on its own. */}
+              <span className="vault-door-gate__pod-body">
+                <img
+                  className="vault-door-gate__pod-art"
+                  src="/vault/pod.webp"
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                />
+                <span className="vault-door-gate__pod-label">{slot.label}</span>
 
-              {isSummoned ? (
-                <span className="vault-door-gate__pod-screen">
-                  <span className="vault-door-gate__pod-empty">
-                    Nothing in here yet
+                {isSummoned ? (
+                  <span className="vault-door-gate__pod-screen">
+                    <span className="vault-door-gate__pod-empty">
+                      Nothing in here yet
+                    </span>
                   </span>
-                </span>
-              ) : null}
+                ) : null}
+              </span>
             </button>
           );
         })}
