@@ -2751,8 +2751,8 @@ body {
 .vault-door-gate__slot {
   position: absolute;
   z-index: 6;
-  width: 9%;
-  height: 19%;
+  width: 13%;
+  height: 20%;
   transform: translate(-50%, -50%);
   padding: 0;
   border: 1px solid transparent;
@@ -2772,8 +2772,8 @@ body {
 /* The tall art frames its pods differently -- wider and shorter in its own
    percentage space -- so the targets follow suit. */
 .vault-door-gate__chamber-frame--tall .vault-door-gate__slot {
-  width: 22%;
-  height: 14.5%;
+  width: 19%;
+  height: 13.5%;
 }
 
 .vault-door-gate__chamber-frame--tall .vault-door-gate__slot--core {
