@@ -7,6 +7,9 @@ import { playVaultDoorOpen } from "@/lib/audio/vault-door-sfx";
 
 const SLIDE_MS = 2400;
 const STEP_IN_MS = 1100;
+// How long the summon takes to settle, after which the frame art can be
+// painted without competing with the pod that is still travelling.
+const SUMMON_SETTLE_MS = 1300;
 
 /**
  * Two chambers, two shapes. The wide one (3/2) suits tablets, foldables and
@@ -94,6 +97,10 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
   const reducedMotion = useReducedMotion();
   const [phase, setPhase] = useState("sealed");
   const [selected, setSelected] = useState(null);
+  // The third step. A pod is only allowed to become the frame once it has
+  // already travelled to the stage -- expanding is a second, separate tap
+  // on a pod that is standing in the middle, never a shortcut from the shelf.
+  const [expanded, setExpanded] = useState(false);
   const timerRef = useRef(null);
 
   const handleUnlock = useCallback(() => {
@@ -130,7 +137,21 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
   // Sending a pod home is the same journey run backwards: dropping the id
   // lets every property transition back to the value it had on the shelf,
   // so the return traces the arrival exactly rather than approximating it.
-  const dismissPod = useCallback(() => setSelected(null), []);
+  // One dismiss goes the whole way, from wherever it is -- full screen does
+  // not make you climb back down through the centre stage to escape.
+  const dismissPod = useCallback(() => {
+    setExpanded(false);
+    setSelected(null);
+  }, []);
+
+  // Rest -> centre stage -> frame. Each tap advances exactly one step.
+  const tapPod = useCallback((id) => {
+    setSelected((current) => {
+      if (current !== id) return id;
+      setExpanded((wasExpanded) => !wasExpanded);
+      return id;
+    });
+  }, []);
 
   useEffect(() => {
     if (!selected) return undefined;
@@ -144,11 +165,44 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
     return () => window.removeEventListener("keydown", onKey);
   }, [selected, dismissPod]);
 
+  // Decode the frame art while the viewer is still in the chamber. Left to
+  // load on demand it cost one 58ms frame at 6x CPU -- landing exactly on
+  // the tap that expands a pod, which is the worst possible moment for it.
+  useEffect(() => {
+    if (phase !== "chamber" || typeof window === "undefined") return;
+    for (const src of ["/vault/vault-fullscreen.webp", "/vault/vault-fullscreen-tall.webp"]) {
+      const img = new window.Image();
+      img.src = src;
+      if (img.decode) img.decode().catch(() => {});
+    }
+  }, [phase]);
+
   // A long press on an <img> is a "save/copy image" gesture to mobile
   // browsers, which fired their own context menu straight through the unlock
   // hold. Suppressing it here (with the callout/drag/select rules in CSS)
   // leaves the press belonging to the gesture, not the browser.
   const swallowContextMenu = useCallback((e) => e.preventDefault(), []);
+
+  // Rasterising a full-viewport chassis at 3x DPR costs one long frame
+  // wherever it happens, so the only question is when. On the expand tap it
+  // was 50ms; mounted at the summon tap it became 82ms landing in the middle
+  // of the pod's flight, which is far worse -- that is the one stretch of
+  // continuous motion here. So it waits for the pod to actually arrive and
+  // paints in the still moment after, where a long frame costs nothing.
+  const [staged, setStaged] = useState(false);
+
+  useEffect(() => {
+    if (!selected) {
+      setStaged(false);
+      return undefined;
+    }
+    const t = setTimeout(() => setStaged(true), SUMMON_SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [selected]);
+
+  const stagedSlot = selected && (staged || expanded)
+    ? CHAMBERS.wide.slots.find((s) => s.id === selected) || null
+    : null;
 
   const doorsMoving = phase === "opening" || phase === "stepping" || phase === "chamber";
   const inChamber = phase === "stepping" || phase === "chamber";
@@ -195,7 +249,7 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
               aria-expanded={isSummoned}
               tabIndex={phase === "chamber" ? undefined : -1}
               aria-hidden={phase === "chamber" ? undefined : "true"}
-              onClick={() => setSelected(isSummoned ? null : slot.id)}
+              onClick={() => tapPod(slot.id)}
             >
               {/* X lives on the outer element and Y on the inner one, each
                   with its own easing -- two straight transforms that read as
@@ -223,7 +277,7 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
           );
         })}
 
-        {selected ? (
+        {selected && !expanded ? (
           <button
             type="button"
             className="vault-door-gate__pod-close"
@@ -298,6 +352,60 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
             </button>
           ) : null}
         </div>
+
+        {stagedSlot ? (
+          <div
+            className="vault-door-gate__frame-layer"
+            data-open={expanded || undefined}
+            role={expanded ? "dialog" : undefined}
+            aria-modal={expanded ? "true" : undefined}
+            aria-hidden={expanded ? undefined : "true"}
+            aria-label={stagedSlot.label}
+          >
+            {/* The pod itself is the boundary: its chassis is the border of
+                the view and the content sits on its screen. Not a panel
+                drawn over the pod -- the pod, opened up. */}
+            {/* Pinned to the chassis art's own ratio and sized to cover, so
+                the screen rectangle below stays registered to the screen
+                painted into the art. Measuring it against the stage instead
+                let the two drift apart as soon as the stage was a different
+                shape from the picture. */}
+            <div className="vault-door-gate__frame-stage">
+              <div className="vault-door-gate__frame-art" aria-hidden="true" />
+              {/* Above the chassis but beneath the screen, so tapping the
+                  surround backs out while tapping the content does not.
+                  It has to live inside this box rather than beside it: a
+                  sibling cannot sit between a parent's own children. */}
+              <button
+                type="button"
+                className="vault-door-gate__frame-scrim"
+                onClick={dismissPod}
+                tabIndex={-1}
+                aria-hidden="true"
+              />
+              <div className="vault-door-gate__frame-screen">
+                <h3 className="vault-door-gate__frame-title">{stagedSlot.label}</h3>
+                <p className="vault-door-gate__frame-empty">
+                  Nothing in here yet
+                </p>
+              </div>
+            </div>
+
+            {/* Signposted rather than hidden: a labelled control, always
+                visible, plus the two gestures people already try. */}
+            <button
+              type="button"
+              className="vault-door-gate__frame-close"
+              onClick={dismissPod}
+              tabIndex={expanded ? undefined : -1}
+            >
+              ✕ Close
+            </button>
+            <p className="vault-door-gate__frame-hint" aria-hidden="true">
+              Esc or tap outside to go back
+            </p>
+          </div>
+        ) : null}
 
         {phase === "chamber" ? (
           <button type="button" className="vault-door-gate__exit" onClick={handleExit}>

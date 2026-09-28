@@ -2752,6 +2752,180 @@ body {
   }
 }
 
+/* --- the pod as frame ----------------------------------------------------
+   The third step. A pod that has already reached the stage opens up on a
+   second tap: its chassis becomes the boundary of the view and the content
+   sits on its screen. The screen rectangles below are measured off the two
+   pieces of art -- everything inside them is real DOM, so media laid in
+   here stays sharp and scrollable rather than being part of the picture. */
+.vault-door-gate__frame-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  --frame-art: url("/vault/vault-fullscreen.webp");
+  --screen-l: 15.5%;
+  --screen-t: 14%;
+  --screen-w: 68.5%;
+  --screen-h: 53.5%;
+  /* Painted but out of the way until the pod is actually expanded. Not
+     display:none and not visibility:hidden -- either would skip the paint
+     this is here to get done early. */
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.9);
+  will-change: opacity, transform;
+  transition: opacity 0.42s ease, transform 0.55s cubic-bezier(0.22, 0.9, 0.26, 1.02);
+}
+
+.vault-door-gate__frame-layer[data-open] {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1);
+}
+
+@media (orientation: portrait) {
+  .vault-door-gate__frame-layer {
+    --frame-art: url("/vault/vault-fullscreen-tall.webp");
+    --screen-l: 15.5%;
+    --screen-t: 16.5%;
+    --screen-w: 69.5%;
+    --screen-h: 61%;
+  }
+}
+
+/* The chassis at its own ratio, covering the stage. Screen coordinates are
+   percentages of this box, never of the stage. */
+.vault-door-gate__frame-stage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: max(100%, calc(var(--vault-stage-h) * 1.5));
+  aspect-ratio: 3 / 2;
+  z-index: 2;
+  container-type: inline-size;
+}
+
+@media (orientation: portrait) {
+  .vault-door-gate__frame-stage {
+    width: max(100%, calc(var(--vault-stage-h) * 2 / 3));
+    aspect-ratio: 2 / 3;
+  }
+}
+
+.vault-door-gate__frame-art {
+  position: absolute;
+  inset: 0;
+  background-image: var(--frame-art);
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+
+.vault-door-gate__frame-screen {
+  position: absolute;
+  left: var(--screen-l);
+  top: var(--screen-t);
+  width: var(--screen-w);
+  height: var(--screen-h);
+  /* The rect is measured off the art, so padding has to sit inside it --
+     content-box pushed the screen 2x its padding wider than the screen
+     actually painted into the chassis. */
+  box-sizing: border-box;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(8px, 1.4cqi, 16px);
+  padding: clamp(10px, 2cqi, 26px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  text-align: center;
+}
+
+.vault-door-gate__frame-title {
+  margin: 0;
+  font-size: clamp(13px, 2.4cqi, 26px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #eaf7ff;
+  text-shadow: 0 0 10px rgba(120, 232, 255, 0.6);
+}
+
+.vault-door-gate__frame-empty {
+  margin: 0;
+  font-size: clamp(9px, 1.3cqi, 14px);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(198, 236, 250, 0.6);
+}
+
+/* The way out is a labelled control that is always on screen, not an icon
+   you have to discover. */
+.vault-door-gate__frame-close {
+  position: absolute;
+  z-index: 6;
+  top: clamp(8px, 2%, 22px);
+  right: clamp(8px, 2%, 22px);
+  padding: 8px 16px;
+  border: 1px solid rgba(130, 225, 255, 0.45);
+  border-radius: 999px;
+  background: rgba(4, 10, 14, 0.72);
+  color: #dff4ff;
+  font-size: clamp(10px, 1.2cqi, 13px);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.vault-door-gate__frame-close:hover,
+.vault-door-gate__frame-close:focus-visible {
+  background: rgba(80, 215, 255, 0.28);
+  border-color: rgba(170, 240, 255, 0.9);
+  color: #fff;
+  outline: none;
+}
+
+.vault-door-gate__frame-hint {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: clamp(8px, 2.5%, 26px);
+  transform: translateX(-50%);
+  margin: 0;
+  /* The podium under this is lit -- pale text alone disappears into it. */
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(4, 10, 14, 0.62);
+  font-size: clamp(8px, 1.05cqi, 12px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(206, 234, 246, 0.72);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Tapping the chassis around the screen also backs out. Sits beneath the
+   screen and the close control so it never swallows their taps. */
+.vault-door-gate__frame-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vault-door-gate__frame-layer {
+    transition: none;
+  }
+}
+
 /* --- chamber pods --------------------------------------------------------
    Each pod is its own layer composited over the empty room, not part of the
    picture. That is the whole point: a pod painted into the room could never
