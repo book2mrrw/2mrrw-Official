@@ -11,32 +11,6 @@ const STEP_IN_MS = 1100;
 // painted without competing with the pod that is still travelling.
 const SUMMON_SETTLE_MS = 1300;
 
-/* How each media_type wants to be laid out. "card" carries a picture and so
-   needs a thumbnail; "row" is a line of text and fills the width, which is
-   what makes an audio or written section sit properly in the tall screen
-   where a grid of thumbnails would leave it half empty. */
-const SHAPE_OF = {
-  video: "card",
-  image: "card",
-  mixed: "card",
-  archive: "card",
-  audio: "row",
-  text: "row",
-  commentary: "row",
-  schedule: "row",
-};
-
-function formatDuration(totalSeconds) {
-  const s = Math.max(0, Math.round(totalSeconds));
-  const m = Math.floor(s / 60);
-  const rem = s % 60;
-  if (m >= 60) {
-    const h = Math.floor(m / 60);
-    return `${h}h ${String(m % 60).padStart(2, "0")}m`;
-  }
-  return `${m}:${String(rem).padStart(2, "0")}`;
-}
-
 /**
  * Two chambers, two shapes. The wide one (3/2) suits tablets, foldables and
  * desktop; the tall one (2/3) suits a phone held upright, where the wide art
@@ -119,7 +93,7 @@ const CHAMBERS = {
  * preview instead -- for whenever the Vault genuinely has nothing to unlock
  * yet. The door itself should still read as "a real vault exists here."
  */
-export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }) {
+export function VaultDoorGate({ canUnlock = true, lockedMessage }) {
   const reducedMotion = useReducedMotion();
   const [phase, setPhase] = useState("sealed");
   const [selected, setSelected] = useState(null);
@@ -226,13 +200,6 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
     return () => clearTimeout(t);
   }, [selected]);
 
-  // Rows belonging to the pod on the stage. A category is not one kind of
-  // thing -- Archive Sessionz alone holds an archive row and a video row --
-  // so each item is drawn to its own media_type rather than the section's.
-  const stagedItems = selected
-    ? sections.filter((s) => s.category === (CHAMBERS.wide.slots.find((x) => x.id === selected)?.label))
-    : [];
-
   const stagedSlot = selected && (staged || expanded)
     ? CHAMBERS.wide.slots.find((s) => s.id === selected) || null
     : null;
@@ -326,7 +293,7 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
   };
 
   return (
-    <div className="vault-door-gate" data-phase={phase} data-expanded={expanded || undefined} onContextMenu={swallowContextMenu}>
+    <div className="vault-door-gate" data-phase={phase} onContextMenu={swallowContextMenu}>
       <div className="vault-door-gate__stage">
         {renderChamber("wide")}
         {renderChamber("tall")}
@@ -403,13 +370,12 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
                 painted into the art. Measuring it against the stage instead
                 let the two drift apart as soon as the stage was a different
                 shape from the picture. */}
-            {/* Chassis and content are siblings sized identically, not
-                parent and child. As a child of the chassis box the content
-                was being painted over by it no matter what z-index either
-                carried; as a sibling that comes after, it simply wins. */}
-            <div className="vault-door-gate__frame-stage" aria-hidden="true" />
-
-            <div className="vault-door-gate__frame-content">
+            <div className="vault-door-gate__frame-stage">
+              <div className="vault-door-gate__frame-art" aria-hidden="true" />
+              {/* Above the chassis but beneath the screen, so tapping the
+                  surround backs out while tapping the content does not.
+                  It has to live inside this box rather than beside it: a
+                  sibling cannot sit between a parent's own children. */}
               <button
                 type="button"
                 className="vault-door-gate__frame-scrim"
@@ -419,38 +385,9 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
               />
               <div className="vault-door-gate__frame-screen">
                 <h3 className="vault-door-gate__frame-title">{stagedSlot.label}</h3>
-                {stagedItems.length ? (
-                  <ul className="vault-door-gate__list">
-                    {stagedItems.map((item) => (
-                      <li
-                        key={item.id || item.slug}
-                        className="vault-door-gate__item"
-                        data-shape={SHAPE_OF[item.mediaType] || "card"}
-                        data-locked={item.unlocked ? undefined : ""}
-                      >
-                        {(SHAPE_OF[item.mediaType] || "card") === "card" ? (
-                          <span className="vault-door-gate__item-thumb">
-                            {item.cover ? (
-                              <img src={item.cover} alt="" aria-hidden="true" loading="lazy" draggable={false} />
-                            ) : null}
-                          </span>
-                        ) : null}
-                        <span className="vault-door-gate__item-meta">
-                          <span className="vault-door-gate__item-kind">{item.mediaType}</span>
-                          <strong className="vault-door-gate__item-title">{item.title}</strong>
-                          {item.durationSeconds ? (
-                            <span className="vault-door-gate__item-sub">{formatDuration(item.durationSeconds)}</span>
-                          ) : null}
-                        </span>
-                        {item.unlocked ? null : (
-                          <span className="vault-door-gate__item-lock">{item.accessLabel}</span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="vault-door-gate__frame-empty">Nothing in here yet</p>
-                )}
+                <p className="vault-door-gate__frame-empty">
+                  Nothing in here yet
+                </p>
               </div>
             </div>
 
