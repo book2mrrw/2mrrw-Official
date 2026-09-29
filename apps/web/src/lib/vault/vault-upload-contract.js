@@ -112,6 +112,92 @@ export function buildVaultKey({ category, slug, ext }) {
   return `videos/vault/${folder}/${slug}.${safeExt}`;
 }
 
+/* --- section covers -------------------------------------------------------
+   The still or short loop a pod shows on its shelf before it is summoned, so
+   a section is never sitting there blank.
+
+   A third isolated contract alongside `cover` and `av-cover`, following the
+   precedent Audio Visualz set: same proven shape, its own entry, its own R2
+   prefix, no shared code path with either. Nothing here reaches
+   lib/media/admin-upload-contract.js or /api/admin/upload/*.
+
+   Formats are restricted to what browsers will actually play rather than
+   what sounds accommodating:
+
+   - .mov is a QuickTime container. Chrome and Firefox generally will not
+     decode it, and resolveCoverMediaType() does not even recognise it as
+     video. The existing cover-video contract accepts .mov and then silently
+     fails to play it; that trap is not repeated here.
+   - .gif animates without a decoder but costs 10-50x the bytes of an
+     equivalent mp4 for worse quality, and these play on a shelf behind a
+     vault door on a phone.
+
+   Both are rejected at the door with a message saying what to export
+   instead, because a file that uploads and then does not play is worse than
+   one that was never accepted. */
+export const SECTION_COVER_KINDS = Object.freeze({
+  still: {
+    maxBytes: 20_000_000,
+    extensions: { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" },
+  },
+  motion: {
+    maxBytes: 200_000_000,
+    maxDurationSeconds: 30,
+    extensions: { mp4: "video/mp4", webm: "video/webm" },
+  },
+});
+
+/** Extensions we deliberately turn away, with the reason and the fix. */
+export const REJECTED_COVER_EXTENSIONS = Object.freeze({
+  mov: ".mov is a QuickTime container that most browsers will not play. Export as .mp4.",
+  gif: ".gif is many times larger than the same clip as .mp4, for worse quality. Export as .mp4.",
+  avi: ".avi will not play in a browser. Export as .mp4.",
+  mkv: ".mkv will not play in a browser. Export as .mp4.",
+  heic: ".heic is not supported by most browsers. Export as .jpg or .webp.",
+});
+
+export const SECTION_COVER_ACCEPT =
+  "video/mp4,video/webm,image/jpeg,image/png,image/webp,.mp4,.webm,.jpg,.jpeg,.png,.webp";
+
+/** Section covers live beside the content they belong to, still inside the
+ *  never-public prefix. One fixed name per section per kind, so replacing a
+ *  cover overwrites rather than accumulating orphans. */
+export function buildSectionCoverKey({ category, kind, ext }) {
+  const folder = folderForCategory(category);
+  if (!folder) return null;
+  if (kind !== "still" && kind !== "motion") return null;
+  const safeExt = String(ext || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!safeExt) return null;
+  return `videos/vault/_section-covers/${folder}-${kind}.${safeExt}`;
+}
+
+export function validateSectionCover({ category, filename, size }) {
+  if (!folderForCategory(category)) return { error: "Unknown vault section" };
+
+  const ext = extensionForFilename(filename);
+  if (!ext) return { error: "File has no extension" };
+  if (REJECTED_COVER_EXTENSIONS[ext]) return { error: REJECTED_COVER_EXTENSIONS[ext] };
+
+  let kind = null;
+  if (SECTION_COVER_KINDS.still.extensions[ext]) kind = "still";
+  else if (SECTION_COVER_KINDS.motion.extensions[ext]) kind = "motion";
+  if (!kind) {
+    return { error: `.${ext} is not a supported cover format. Use .mp4, .webm, .jpg, .png or .webp.` };
+  }
+
+  const rules = SECTION_COVER_KINDS[kind];
+  const bytes = Number(size);
+  if (!Number.isFinite(bytes) || bytes <= 0) return { error: "Missing file size" };
+  if (bytes > rules.maxBytes) {
+    return { error: `Too large — max ${Math.round(rules.maxBytes / 1_000_000)}MB for a ${kind} cover` };
+  }
+
+  const key = buildSectionCoverKey({ category, kind, ext });
+  if (!key) return { error: "Could not build storage key" };
+
+  return { kind, ext, key, bytes, contentType: rules.extensions[ext] };
+}
+
 /** Shared validation so the presign and complete routes cannot disagree about
  *  what counts as an acceptable upload. */
 export function validateUploadRequest({ category, slug, filename, mimeType, size }) {

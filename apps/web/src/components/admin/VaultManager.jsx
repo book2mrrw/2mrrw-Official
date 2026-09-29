@@ -6,6 +6,7 @@ import {
   MEDIA_TYPES,
   ACCESS_TIERS,
   MULTIPART_THRESHOLD_BYTES,
+  SECTION_COVER_ACCEPT,
   slugify,
   kindForUpload,
 } from "@/lib/vault/vault-upload-contract";
@@ -64,6 +65,11 @@ export default function VaultManager() {
   const [items, setItems] = useState([]);
   const fileRef = useRef(null);
 
+  const [cover, setCover] = useState(null);
+  const [coverBusy, setCoverBusy] = useState(false);
+  const [coverMsg, setCoverMsg] = useState(null);
+  const coverRef = useRef(null);
+
   const loadItems = useCallback(async (cat) => {
     try {
       const res = await fetch(`/api/admin/vault/list?category=${encodeURIComponent(cat)}`, {
@@ -77,9 +83,91 @@ export default function VaultManager() {
     }
   }, []);
 
+  const loadCover = useCallback(async (cat) => {
+    try {
+      const res = await fetch("/api/admin/vault/section-cover", { cache: "no-store" });
+      if (!res.ok) return;
+      const json = await res.json();
+      setCover((json.covers || []).find((c) => c.category === cat) || null);
+    } catch {
+      /* the cover panel is secondary to uploading */
+    }
+  }, []);
+
   useEffect(() => {
     loadItems(category);
-  }, [category, loadItems]);
+    loadCover(category);
+  }, [category, loadItems, loadCover]);
+
+  /** Reads a local video's duration before upload so an over-long loop is
+   *  caught here rather than after the bytes have been sent. */
+  const probeDuration = (f) =>
+    new Promise((resolve) => {
+      if (!f.type.startsWith("video/")) return resolve(null);
+      const el = document.createElement("video");
+      el.preload = "metadata";
+      el.onloadedmetadata = () => {
+        URL.revokeObjectURL(el.src);
+        resolve(Number.isFinite(el.duration) ? el.duration : null);
+      };
+      el.onerror = () => resolve(null);
+      el.src = URL.createObjectURL(f);
+    });
+
+  const uploadCover = async (e) => {
+    const f = e.target.files?.[0] || null;
+    if (!f) return;
+    setCoverBusy(true);
+    setCoverMsg(null);
+    try {
+      const presignRes = await fetch("/api/admin/vault/section-cover/presigned", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, filename: f.name, size: f.size }),
+      });
+      const presign = await presignRes.json();
+      if (!presignRes.ok) throw new Error(presign.error || "Could not prepare cover upload");
+
+      await putWithProgress(presign.url, f, presign.contentType, () => {});
+
+      const durationSeconds = await probeDuration(f);
+      const doneRes = await fetch("/api/admin/vault/section-cover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, filename: f.name, size: f.size, durationSeconds }),
+      });
+      const done = await doneRes.json();
+      if (!doneRes.ok) throw new Error(done.error || "Could not save cover");
+
+      setCover(done.cover);
+      setCoverMsg(
+        done.needsStill
+          ? { kind: "warn", msg: "Loop saved. Add a still too — it is the poster and the fallback if the video cannot play." }
+          : { kind: "ok", msg: `${done.kind === "motion" ? "Loop" : "Still"} saved.` }
+      );
+    } catch (err) {
+      setCoverMsg({ kind: "error", msg: err.message || "Cover upload failed" });
+    } finally {
+      setCoverBusy(false);
+      if (coverRef.current) coverRef.current.value = "";
+    }
+  };
+
+  const clearCover = async (kind) => {
+    setCoverBusy(true);
+    try {
+      const res = await fetch(
+        `/api/admin/vault/section-cover?category=${encodeURIComponent(category)}&kind=${kind}`,
+        { method: "DELETE" }
+      );
+      if (res.ok) {
+        await loadCover(category);
+        setCoverMsg({ kind: "ok", msg: `${kind === "motion" ? "Loop" : "Still"} cleared.` });
+      }
+    } finally {
+      setCoverBusy(false);
+    }
+  };
 
   const onPickFile = (e) => {
     const f = e.target.files?.[0] || null;
@@ -217,6 +305,54 @@ export default function VaultManager() {
               <option key={s.folder} value={s.category}>{s.category}</option>
             ))}
           </select>
+        </div>
+
+        {/* Section cover: what the pod shows on its shelf before it is
+            summoned, so a section is never sitting there blank. Separate
+            from the item upload below -- this is the section's chrome, not
+            a thing in the archive. */}
+        <div style={{
+          padding: 14, border: "1px solid #1c1c1c",
+          borderRadius: 12, background: "#0a0a0a",
+        }}>
+          <label style={LABEL} htmlFor="vm-cover">Section cover</label>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+            {["motion", "still"].map((k) => {
+              const has = Boolean(cover?.[k === "motion" ? "motion_key" : "still_key"]);
+              return (
+                <span key={k} style={{
+                  display: "inline-flex", alignItems: "center", gap: 8,
+                  padding: "5px 11px", borderRadius: 999, fontSize: 11,
+                  letterSpacing: 1, textTransform: "uppercase",
+                  color: has ? "#4ade80" : "#5a5a5a",
+                  border: `1px solid ${has ? "rgba(74,222,128,0.35)" : "#242424"}`,
+                }}>
+                  {k === "motion" ? "Loop" : "Still"} {has ? "set" : "none"}
+                  {has ? (
+                    <button type="button" disabled={coverBusy} onClick={() => clearCover(k)}
+                      style={{
+                        background: "none", border: "none", color: "#777",
+                        cursor: "pointer", fontSize: 13, lineHeight: 1, padding: 0,
+                      }} aria-label={`Clear ${k}`}>×</button>
+                  ) : null}
+                </span>
+              );
+            })}
+          </div>
+          <input id="vm-cover" ref={coverRef} type="file" disabled={coverBusy}
+            accept={SECTION_COVER_ACCEPT} onChange={uploadCover}
+            style={{ ...FIELD, padding: 10 }} />
+          <p style={{ fontSize: 11, color: "#4a4a4a", marginTop: 8, lineHeight: 1.6 }}>
+            .mp4 or .webm for a loop (max 30s), .jpg/.png/.webp for the still.
+            A loop wants a still as well — it is the poster and the fallback.
+          </p>
+          {coverMsg ? (
+            <p style={{
+              fontSize: 12, marginTop: 8, marginBottom: 0, lineHeight: 1.6,
+              color: coverMsg.kind === "error" ? "#ff6b6b"
+                : coverMsg.kind === "warn" ? "#e3bd76" : "#4ade80",
+            }}>{coverMsg.msg}</p>
+          ) : null}
         </div>
 
         <div>
