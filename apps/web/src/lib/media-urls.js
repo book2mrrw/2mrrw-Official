@@ -1,5 +1,6 @@
 import {
   ensureRelativeSiteApiPath,
+  isLegacyPublicMediaPath,
   isSiteApiMediaPath,
   repairMisboundR2ApiUrl,
 } from "@/lib/media/site-api-url";
@@ -34,6 +35,15 @@ function toCatalogCdnUrl(relativePath) {
   }
   if (isSiteApiMediaPath(normalized)) {
     return ensureRelativeSiteApiPath(normalized);
+  }
+  // Legacy public/ assets (images/, videos/, audio/) ship with the app bundle
+  // and were never uploaded to R2 — serve same-origin, never CDN-prefix. This
+  // is the single choke point every catalog media URL builder in this file
+  // funnels through (catalogPublicMediaUrl, catalogCoverUrl, and
+  // catalogPreviewAudioUrl's fallback all call this), so the guard only needs
+  // to exist here once, not separately in each of them.
+  if (isLegacyPublicMediaPath(normalized)) {
+    return `/${normalized}`;
   }
   const r2 = getPublicR2Url(normalized);
   if (r2 && isSiteApiMediaPath(r2)) return ensureRelativeSiteApiPath(r2);
@@ -178,9 +188,7 @@ export function catalogVisualMediaUrl(visualPath) {
   if (isSiteApiMediaPath(normalized)) {
     return ensureRelativeSiteApiPath(normalized);
   }
-  // public/ assets (images/, videos/, audio/) — serve same-origin, never CDN-prefix.
-  // These files live in the Next.js public/ directory, not in R2.
-  if (/^(images|videos|audio)\//.test(normalized)) {
+  if (isLegacyPublicMediaPath(normalized)) {
     return `/${normalized}`;
   }
   return catalogPublicMediaUrl(normalized);

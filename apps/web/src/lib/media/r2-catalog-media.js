@@ -1,5 +1,5 @@
 import { mergeCanonicalMetadata } from "@/lib/media/canonical-catalog";
-import { isSiteApiMediaPath } from "@/lib/media/site-api-url";
+import { isLegacyPublicMediaPath, isSiteApiMediaPath } from "@/lib/media/site-api-url";
 import {
   catalogCoverUrl,
   catalogMotionVideoUrl,
@@ -42,12 +42,12 @@ function isResolvedCatalogMediaUrl(url) {
   return isSiteApiMediaPath(s);
 }
 
-/** Legacy storefront static paths served from same origin before CDN rewrite. */
-export function isStorefrontInlineMediaPath(url) {
-  const s = String(url || "").trim();
-  if (!s) return false;
-  return /^\/(images|videos|audio)\//.test(s) || /^(images|videos|audio)\//.test(s);
-}
+/**
+ * Legacy storefront static paths served from same origin before CDN rewrite.
+ * @deprecated Use isLegacyPublicMediaPath from site-api-url.js directly — kept
+ * as a re-export so this module's own call sites below don't need to change.
+ */
+export const isStorefrontInlineMediaPath = isLegacyPublicMediaPath;
 
 /**
  * Merge API track onto inline fallback — preserve inline cover/video when API fields are empty

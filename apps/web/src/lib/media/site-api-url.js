@@ -2,6 +2,7 @@
 
 const R2_DEV_HOST_RE = /^pub-[a-z0-9]+\.r2\.dev$/i;
 const R2_DEV_API_URL_RE = /^https?:\/\/pub-[a-z0-9]+\.r2\.dev\/(api\/.*)$/i;
+const LEGACY_PUBLIC_MEDIA_RE = /^\/?(images|videos|audio)\//;
 
 function pathLooksLikeSiteApi(path) {
   const normalized = String(path || "")
@@ -60,6 +61,29 @@ export function ensureRelativeSiteApiPath(value) {
   if (!raw || !isSiteApiMediaPath(raw)) return raw;
   if (raw.startsWith("/")) return raw;
   return `/${raw.replace(/^\//, "")}`;
+}
+
+/**
+ * True when value is a legacy Next.js public/ directory asset (images/, videos/,
+ * or audio/, with or without a leading slash) — these ship with the app bundle
+ * and are served same-origin. They were never uploaded to R2 and must never be
+ * prefixed with the R2 CDN base, the same way a site-API path never is.
+ *
+ * This is the single source of truth for that distinction. Every catalog media
+ * URL builder in media-urls.js must route through it rather than re-deriving
+ * its own version of this check — a prior drift (one builder had the guard,
+ * four others didn't) was the root cause of the release cover / player-bar /
+ * lock-screen artwork bug this comment accompanies the fix for.
+ */
+export function isLegacyPublicMediaPath(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return false;
+  if (LEGACY_PUBLIC_MEDIA_RE.test(raw)) return true;
+  try {
+    return LEGACY_PUBLIC_MEDIA_RE.test(new URL(raw).pathname);
+  } catch {
+    return false;
+  }
 }
 
 export function isR2PublicCdnBaseUrl(baseUrl) {
