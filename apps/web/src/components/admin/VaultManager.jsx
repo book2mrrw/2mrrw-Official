@@ -10,6 +10,11 @@ import {
   slugify,
   kindForUpload,
 } from "@/lib/vault/vault-upload-contract";
+import {
+  VAULT_AUDIO_ACCEPT,
+  VAULT_AUDIO_MULTIPART_THRESHOLD_BYTES,
+  isAudioNativeCategory,
+} from "@/lib/vault/vault-audio-contract";
 
 /** XHR rather than fetch: fetch still cannot report upload progress, and a
  *  multi-gigabyte phone video with no progress bar is indistinguishable from
@@ -49,8 +54,28 @@ const LABEL = {
   marginBottom: 6,
 };
 
+/** Transcode states worth waiting on. Anything else is settled. */
+const LIVE_JOB_STATES = new Set(["pending", "processing"]);
+
 export default function VaultManager() {
   const [category, setCategory] = useState(VAULT_SECTIONS[0].category);
+  /**
+   * "item"  — the file is served as-is through /api/vault/media.
+   * "audio" — the file is a master: transcoded to an encrypted HLS ladder and
+   *           streamed, the way a song release is. Audio sections default here.
+   *
+   * Derived from the section rather than synced to it with an effect. An
+   * explicit choice is stored together with the section it was made for, so
+   * changing sections falls back to that section's own default without a
+   * setState in an effect body and the cascading render that causes.
+   */
+  const [modeChoice, setModeChoice] = useState(null);
+  const mode = modeChoice?.category === category
+    ? modeChoice.mode
+    : (isAudioNativeCategory(category) ? "audio" : "item");
+  const setMode = (m) => setModeChoice({ category, mode: m });
+  const [audioItems, setAudioItems] = useState([]);
+  const [requeuing, setRequeuing] = useState(null);
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -94,10 +119,37 @@ export default function VaultManager() {
     }
   }, []);
 
+  const loadAudio = useCallback(async (cat) => {
+    try {
+      const res = await fetch(
+        `/api/admin/vault/audio/status?category=${encodeURIComponent(cat)}`,
+        { cache: "no-store" }
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      setAudioItems(json.items || []);
+    } catch {
+      /* transcode state is informational; the upload form still works */
+    }
+  }, []);
+
   useEffect(() => {
     loadItems(category);
     loadCover(category);
-  }, [category, loadItems, loadCover]);
+    loadAudio(category);
+  }, [category, loadItems, loadCover, loadAudio]);
+
+  /**
+   * Poll only while something is genuinely encoding, and stop the moment the
+   * queue settles — an admin screen left open should not sit there issuing
+   * requests forever.
+   */
+  const hasLiveJob = audioItems.some((it) => LIVE_JOB_STATES.has(it.job?.status));
+  useEffect(() => {
+    if (!hasLiveJob) return undefined;
+    const id = setInterval(() => loadAudio(category), 5000);
+    return () => clearInterval(id);
+  }, [hasLiveJob, category, loadAudio]);
 
   /** Reads a local video's duration before upload so an over-long loop is
    *  caught here rather than after the bytes have been sent. */
@@ -197,11 +249,115 @@ export default function VaultManager() {
     if (fileRef.current) fileRef.current.value = "";
   };
 
+  /**
+   * Sends the bytes and returns the multipart part list (null for a single
+   * PUT). Shared by both upload paths because the transport is identical --
+   * only the endpoints and what gets recorded differ.
+   */
+  const sendBytes = async (presign, f) => {
+    if (presign.mode === "single") {
+      setStatus({ kind: "info", msg: "Uploading…" });
+      await putWithProgress(presign.url, f, presign.contentType || f.type, setProgress);
+      return null;
+    }
+    // Chunked: progress is the share of bytes finished, so it keeps moving
+    // smoothly across part boundaries.
+    setStatus({ kind: "info", msg: `Uploading in ${presign.parts.length} parts…` });
+    const parts = [];
+    const size = presign.partSize;
+    for (const part of presign.parts) {
+      const start = (part.partNumber - 1) * size;
+      const blob = f.slice(start, Math.min(start + size, f.size));
+      const etag = await putWithProgress(part.url, blob, null, (p) =>
+        setProgress((start + p * blob.size) / f.size)
+      );
+      parts.push({ PartNumber: part.partNumber, ETag: etag });
+    }
+    return parts;
+  };
+
+  /**
+   * The master path: upload, record the item, queue the encode. Playback does
+   * not exist until the worker finishes, which is why this reports the queue
+   * state rather than claiming the item is ready.
+   */
+  const uploadAudioMaster = async () => {
+    setBusy(true);
+    setProgress(0);
+    setStatus({ kind: "info", msg: "Preparing…" });
+
+    try {
+      const presignRes = await fetch("/api/admin/vault/audio/presigned", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category, slug, filename: file.name, size: file.size }),
+      });
+      const presign = await presignRes.json();
+      if (!presignRes.ok) throw new Error(presign.error || "Could not prepare upload");
+
+      const parts = await sendBytes(presign, file);
+
+      setProgress(1);
+      setStatus({ kind: "info", msg: "Saving and queueing…" });
+
+      const completeRes = await fetch("/api/admin/vault/audio/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category,
+          slug,
+          filename: file.name,
+          size: file.size,
+          title,
+          description,
+          accessTier,
+          uploadId: presign.uploadId || null,
+          parts,
+        }),
+      });
+      const done = await completeRes.json();
+      if (!completeRes.ok) throw new Error(done.error || "Could not save entry");
+
+      setStatus({
+        kind: "ok",
+        msg: done.queued
+          ? "Master uploaded. Encoding now — it appears below as it progresses."
+          : "Master uploaded, but encoding was not queued. Re-queue it below.",
+      });
+      reset();
+      loadItems(category);
+      loadAudio(category);
+    } catch (err) {
+      setStatus({ kind: "error", msg: err.message || "Upload failed" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const requeue = async (itemSlug) => {
+    setRequeuing(itemSlug);
+    try {
+      const res = await fetch("/api/admin/vault/audio/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: itemSlug }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not re-queue");
+      loadAudio(category);
+    } catch (err) {
+      setStatus({ kind: "error", msg: err.message });
+    } finally {
+      setRequeuing(null);
+    }
+  };
+
   const upload = async () => {
     if (!file || !title.trim() || !slug) {
       setStatus({ kind: "error", msg: "Pick a file and give it a title." });
       return;
     }
+    if (mode === "audio") return uploadAudioMaster();
     setBusy(true);
     setProgress(0);
     setStatus({ kind: "info", msg: "Preparing…" });
@@ -221,26 +377,7 @@ export default function VaultManager() {
       const presign = await presignRes.json();
       if (!presignRes.ok) throw new Error(presign.error || "Could not prepare upload");
 
-      let parts = null;
-
-      if (presign.mode === "single") {
-        setStatus({ kind: "info", msg: "Uploading…" });
-        await putWithProgress(presign.url, file, file.type, setProgress);
-      } else {
-        // Chunked: progress is the share of bytes finished, so it keeps
-        // moving smoothly across part boundaries.
-        setStatus({ kind: "info", msg: `Uploading in ${presign.parts.length} parts…` });
-        parts = [];
-        const size = presign.partSize;
-        for (const part of presign.parts) {
-          const start = (part.partNumber - 1) * size;
-          const blob = file.slice(start, Math.min(start + size, file.size));
-          const etag = await putWithProgress(part.url, blob, null, (p) =>
-            setProgress((start + p * blob.size) / file.size)
-          );
-          parts.push({ PartNumber: part.partNumber, ETag: etag });
-        }
-      }
+      const parts = await sendBytes(presign, file);
 
       setProgress(1);
       setStatus({ kind: "info", msg: "Saving…" });
@@ -286,7 +423,9 @@ export default function VaultManager() {
     }
   };
 
-  const big = file && file.size >= MULTIPART_THRESHOLD_BYTES;
+  const big = file && file.size >= (
+    mode === "audio" ? VAULT_AUDIO_MULTIPART_THRESHOLD_BYTES : MULTIPART_THRESHOLD_BYTES
+  );
 
   return (
     <div style={{ maxWidth: 720 }}>
@@ -305,6 +444,45 @@ export default function VaultManager() {
               <option key={s.folder} value={s.category}>{s.category}</option>
             ))}
           </select>
+        </div>
+
+        {/* What kind of upload this is. Audio sections open on "master"
+            because that is what they are for, but any section can take
+            either -- an interview section might still want one audio-only
+            episode streamed properly. */}
+        <div>
+          <span style={LABEL}>Upload as</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            {[
+              { id: "audio", label: "Audio master", hint: "Transcoded + streamed" },
+              { id: "item", label: "File", hint: "Served as uploaded" },
+            ].map((m) => {
+              const on = mode === m.id;
+              return (
+                <button key={m.id} type="button" disabled={busy}
+                  onClick={() => setMode(m.id)}
+                  style={{
+                    flex: 1, padding: "10px 12px", borderRadius: 10, cursor: busy ? "default" : "pointer",
+                    textAlign: "left", lineHeight: 1.35,
+                    border: `1px solid ${on ? "rgba(0,255,255,0.35)" : "#232323"}`,
+                    background: on ? "rgba(0,255,255,0.07)" : "#0d0d0d",
+                    color: on ? "#00ffff" : "#7a7a7a",
+                  }}>
+                  <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>{m.label}</span>
+                  <span style={{ display: "block", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: on ? "rgba(0,255,255,0.6)" : "#4a4a4a" }}>
+                    {m.hint}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {mode === "audio" ? (
+            <p style={{ fontSize: 11, color: "#4a4a4a", marginTop: 8, lineHeight: 1.6 }}>
+              Same pipeline shape as a song release: the master is archived, an
+              encrypted ladder is encoded from it, and playback is gated. Nothing
+              streams until encoding finishes.
+            </p>
+          ) : null}
         </div>
 
         {/* Section cover: what the pod shows on its shelf before it is
@@ -356,13 +534,22 @@ export default function VaultManager() {
         </div>
 
         <div>
-          <label style={LABEL} htmlFor="vm-file">File</label>
+          <label style={LABEL} htmlFor="vm-file">
+            {mode === "audio" ? "Master" : "File"}
+          </label>
           {/* No capture attribute: on a phone this offers camera, photo
               library and Files, which is the whole point of uploading from
               the device you recorded on. */}
           <input id="vm-file" ref={fileRef} type="file" disabled={busy}
-            accept="video/*,audio/*,image/*" onChange={onPickFile}
+            accept={mode === "audio" ? VAULT_AUDIO_ACCEPT : "video/*,audio/*,image/*"}
+            onChange={onPickFile}
             style={{ ...FIELD, padding: 10 }} />
+          {mode === "audio" ? (
+            <p style={{ fontSize: 11, color: "#4a4a4a", marginTop: 6, lineHeight: 1.6 }}>
+              .wav, .flac or .aiff for a real master. .m4a and .mp3 are accepted
+              for voice recordings that never existed losslessly.
+            </p>
+          ) : null}
           {file ? (
             <p style={{ fontSize: 11, color: "#6d6d6d", marginTop: 6 }}>
               {(file.size / 1e6).toFixed(1)} MB{big ? " · will upload in parts" : ""}
@@ -386,13 +573,18 @@ export default function VaultManager() {
         </div>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <label style={LABEL} htmlFor="vm-type">Type</label>
-            <select id="vm-type" style={FIELD} value={mediaType} disabled={busy}
-              onChange={(e) => setMediaType(e.target.value)}>
-              {MEDIA_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
+          {/* No Type picker in master mode: the type is audio by definition,
+              and offering a choice that gets overridden server-side would be
+              a lie about what the form does. */}
+          {mode === "audio" ? null : (
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <label style={LABEL} htmlFor="vm-type">Type</label>
+              <select id="vm-type" style={FIELD} value={mediaType} disabled={busy}
+                onChange={(e) => setMediaType(e.target.value)}>
+                {MEDIA_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          )}
           <div style={{ flex: 1, minWidth: 160 }}>
             <label style={LABEL} htmlFor="vm-access">Access</label>
             <select id="vm-access" style={FIELD} value={accessTier} disabled={busy}
@@ -445,9 +637,73 @@ export default function VaultManager() {
             fontSize: 13,
             cursor: busy || !file ? "default" : "pointer",
           }}>
-          {busy ? "WORKING…" : "UPLOAD TO VAULT"}
+          {busy ? "WORKING…" : mode === "audio" ? "UPLOAD MASTER" : "UPLOAD TO VAULT"}
         </button>
       </div>
+
+      {/* Transcode state, derived from the job and manifest rows rather than a
+          status column, so a worker that died mid-job shows as stalled instead
+          of as whatever it last claimed. */}
+      {audioItems.length ? (
+        <>
+          <div style={{ margin: "34px 0 12px", height: 1, background: "#1a1a1a" }} />
+          <h3 style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "#6d6d6d", marginBottom: 14 }}>
+            Audio · {audioItems.length}
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {audioItems.map((it) => {
+              const st = it.job?.status;
+              const live = LIVE_JOB_STATES.has(st);
+              const badge = it.streamable && st === "complete"
+                ? { text: "streaming", color: "#4ade80" }
+                : st === "processing" ? { text: "encoding", color: "#00ffff" }
+                : st === "pending"    ? { text: "queued",   color: "#8a8a8a" }
+                : st === "failed"     ? { text: "failed",   color: "#ff6b6b" }
+                : it.streamable       ? { text: "streaming", color: "#4ade80" }
+                : { text: "no encode", color: "#b0893a" };
+              const secs = it.manifest?.durationSeconds ?? it.duration_seconds;
+              return (
+                <div key={it.id} style={{
+                  display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+                  padding: "12px 14px", background: "#0c0c0c",
+                  border: "1px solid #1c1c1c", borderRadius: 12,
+                }}>
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#e8e8e8" }}>{it.title}</div>
+                    <div style={{ fontSize: 11, color: "#5a5a5a", marginTop: 3 }}>
+                      {it.slug}
+                      {secs ? ` · ${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, "0")}` : ""}
+                      {it.manifest?.bitrates?.length ? ` · ${it.manifest.bitrates.length} rungs` : ""}
+                    </div>
+                    {st === "failed" && it.job?.error ? (
+                      <div style={{ fontSize: 11, color: "#ff6b6b", marginTop: 5, lineHeight: 1.5 }}>
+                        {it.job.failureCategory}: {it.job.error}
+                      </div>
+                    ) : null}
+                  </div>
+                  <span style={{
+                    fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase",
+                    padding: "4px 10px", borderRadius: 999,
+                    color: badge.color, border: `1px solid ${badge.color}59`,
+                  }}>{badge.text}</span>
+                  {live ? null : (
+                    <button type="button" disabled={requeuing === it.slug}
+                      onClick={() => requeue(it.slug)}
+                      style={{
+                        padding: "7px 13px", borderRadius: 9,
+                        cursor: requeuing === it.slug ? "default" : "pointer",
+                        border: "1px solid #2a2a2a", background: "transparent",
+                        color: "#9a9a9a", fontSize: 11, letterSpacing: 1,
+                      }}>
+                      {requeuing === it.slug ? "…" : "RE-ENCODE"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
 
       <div style={{ margin: "34px 0 12px", height: 1, background: "#1a1a1a" }} />
       <h3 style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "#6d6d6d", marginBottom: 14 }}>
