@@ -76,6 +76,13 @@ export default function VaultManager() {
   const setMode = (m) => setModeChoice({ category, mode: m });
   const [audioItems, setAudioItems] = useState([]);
   const [requeuing, setRequeuing] = useState(null);
+  // The row being edited, as a draft -- edits are not written until saved, so
+  // abandoning one leaves the entry exactly as it was.
+  const [editing, setEditing] = useState(null);
+  // Delete asks twice, inline. A destructive action on a one-click row is too
+  // easy to hit by accident, and a browser confirm() dialog is worse.
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [rowBusy, setRowBusy] = useState(null);
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -410,16 +417,111 @@ export default function VaultManager() {
     }
   };
 
+  const patchItem = async (payload) => {
+    const res = await fetch("/api/admin/vault/list", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}));
+      throw new Error(json.error || "Could not save");
+    }
+    return res.json();
+  };
+
   const setVisibility = async (id, visibility) => {
     try {
-      const res = await fetch("/api/admin/vault/list", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, visibility }),
-      });
-      if (res.ok) loadItems(category);
+      await patchItem({ id, visibility });
+      loadItems(category);
     } catch {
       /* leave the row as it was; the next load reconciles */
+    }
+  };
+
+  const startEdit = (it) => {
+    setConfirmDelete(null);
+    setEditing({
+      id: it.id,
+      title: it.title || "",
+      description: it.description || "",
+      accessTier: it.access_tier,
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    setRowBusy(editing.id);
+    try {
+      await patchItem({
+        id: editing.id,
+        title: editing.title,
+        description: editing.description,
+        accessTier: editing.accessTier,
+      });
+      setEditing(null);
+      loadItems(category);
+    } catch (err) {
+      setStatus({ kind: "error", msg: err.message });
+    } finally {
+      setRowBusy(null);
+    }
+  };
+
+  /**
+   * Move an item one place and renumber the section.
+   *
+   * Every row starts life at the same default sort_order, so swapping two
+   * values would be a no-op on a section that has never been ordered. Instead
+   * the whole visible list is renumbered by position and only the rows whose
+   * number actually changed are written -- which normalises the section the
+   * first time it is touched and costs two writes every time after.
+   */
+  const move = async (index, direction) => {
+    const target = index + direction;
+    if (target < 0 || target >= items.length) return;
+
+    const next = [...items];
+    [next[index], next[target]] = [next[target], next[index]];
+    // Optimistic: the list reorders under the finger, then reconciles.
+    setItems(next);
+    setRowBusy(next[target].id);
+
+    try {
+      const writes = next
+        .map((it, i) => ({ it, order: i * 10 }))
+        .filter(({ it, order }) => it.sort_order !== order)
+        .map(({ it, order }) => patchItem({ id: it.id, sortOrder: order }));
+      await Promise.all(writes);
+    } catch (err) {
+      setStatus({ kind: "error", msg: err.message });
+    } finally {
+      setRowBusy(null);
+      loadItems(category);
+    }
+  };
+
+  const removeItem = async (id) => {
+    setRowBusy(id);
+    try {
+      const res = await fetch(`/api/admin/vault/list?id=${encodeURIComponent(id)}`, {
+        method: "DELETE",
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || "Could not delete");
+      setConfirmDelete(null);
+      setStatus({
+        kind: "ok",
+        msg: json.removed?.segments
+          ? `Deleted, along with ${json.removed.segments} encoded segments.`
+          : "Deleted.",
+      });
+      loadItems(category);
+      loadAudio(category);
+    } catch (err) {
+      setStatus({ kind: "error", msg: err.message });
+    } finally {
+      setRowBusy(null);
     }
   };
 
@@ -714,35 +816,135 @@ export default function VaultManager() {
         <p style={{ fontSize: 13, color: "#444" }}>Nothing here yet.</p>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {items.map((it) => (
-            <div key={it.id} style={{
-              display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
-              padding: "12px 14px", background: "#0c0c0c",
-              border: "1px solid #1c1c1c", borderRadius: 12,
-            }}>
-              <div style={{ flex: 1, minWidth: 180 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#e8e8e8" }}>{it.title}</div>
-                <div style={{ fontSize: 11, color: "#5a5a5a", marginTop: 3 }}>
-                  {it.media_type} · {it.access_tier} · {it.slug}
+          {items.map((it, index) => {
+            const isEditing = editing?.id === it.id;
+            const busyRow = rowBusy === it.id;
+            return (
+              <div key={it.id} style={{
+                display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+                padding: "12px 14px", background: "#0c0c0c",
+                border: `1px solid ${isEditing ? "rgba(0,255,255,0.35)" : "#1c1c1c"}`,
+                borderRadius: 12,
+                opacity: busyRow ? 0.6 : 1,
+              }}>
+                {/* Order controls. The chamber lists a section by sort_order,
+                    so this is the order people actually see. */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  {[["▲", -1, index === 0], ["▼", 1, index === items.length - 1]].map(
+                    ([glyph, dir, disabled]) => (
+                      <button key={glyph} type="button" disabled={disabled || busyRow}
+                        onClick={() => move(index, dir)}
+                        aria-label={dir === -1 ? `Move ${it.title} up` : `Move ${it.title} down`}
+                        style={{
+                          width: 22, height: 18, padding: 0, borderRadius: 5,
+                          border: "1px solid #242424", background: "transparent",
+                          color: disabled ? "#333" : "#8a8a8a", fontSize: 9,
+                          cursor: disabled || busyRow ? "default" : "pointer", lineHeight: 1,
+                        }}>{glyph}</button>
+                    )
+                  )}
                 </div>
+
+                {isEditing ? (
+                  <div style={{ flex: 1, minWidth: 220, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <input style={{ ...FIELD, padding: "8px 10px" }} value={editing.title}
+                      onChange={(e) => setEditing({ ...editing, title: e.target.value })}
+                      aria-label="Title" placeholder="Title" />
+                    <textarea style={{ ...FIELD, padding: "8px 10px", minHeight: 56, resize: "vertical" }}
+                      value={editing.description}
+                      onChange={(e) => setEditing({ ...editing, description: e.target.value })}
+                      aria-label="Description" placeholder="Description" />
+                    <select style={{ ...FIELD, padding: "8px 10px" }} value={editing.accessTier}
+                      onChange={(e) => setEditing({ ...editing, accessTier: e.target.value })}
+                      aria-label="Access tier">
+                      {ACCESS_TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    {/* Neither can be edited: both are baked into the object
+                        key in storage, so changing one here would point the
+                        row at a file that has moved. */}
+                    <p style={{ fontSize: 10, color: "#4a4a4a", margin: 0, lineHeight: 1.5 }}>
+                      {it.slug} · {it.category} — re-upload to change either
+                    </p>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button type="button" onClick={saveEdit} disabled={busyRow}
+                        style={{
+                          padding: "7px 14px", borderRadius: 9, cursor: "pointer",
+                          border: "1px solid rgba(0,255,255,0.35)",
+                          background: "rgba(0,255,255,0.09)", color: "#00ffff",
+                          fontSize: 11, letterSpacing: 1, fontWeight: 700,
+                        }}>SAVE</button>
+                      <button type="button" onClick={() => setEditing(null)} disabled={busyRow}
+                        style={{
+                          padding: "7px 14px", borderRadius: 9, cursor: "pointer",
+                          border: "1px solid #2a2a2a", background: "transparent",
+                          color: "#8a8a8a", fontSize: 11, letterSpacing: 1,
+                        }}>CANCEL</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ flex: 1, minWidth: 180 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#e8e8e8" }}>{it.title}</div>
+                      <div style={{ fontSize: 11, color: "#5a5a5a", marginTop: 3 }}>
+                        {it.media_type} · {it.access_tier} · {it.slug}
+                      </div>
+                    </div>
+                    <span style={{
+                      fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase",
+                      padding: "4px 10px", borderRadius: 999,
+                      color: it.visibility === "published" ? "#4ade80" : "#b0893a",
+                      border: `1px solid ${it.visibility === "published" ? "rgba(74,222,128,0.35)" : "rgba(176,137,58,0.35)"}`,
+                    }}>{it.visibility}</span>
+
+                    <button type="button" disabled={busyRow}
+                      onClick={() => setVisibility(it.id, it.visibility === "published" ? "draft" : "published")}
+                      style={{
+                        padding: "7px 13px", borderRadius: 9, cursor: "pointer",
+                        border: "1px solid #2a2a2a", background: "transparent",
+                        color: "#9a9a9a", fontSize: 11, letterSpacing: 1,
+                      }}>
+                      {it.visibility === "published" ? "UNPUBLISH" : "PUBLISH"}
+                    </button>
+
+                    <button type="button" onClick={() => startEdit(it)} disabled={busyRow}
+                      style={{
+                        padding: "7px 13px", borderRadius: 9, cursor: "pointer",
+                        border: "1px solid #2a2a2a", background: "transparent",
+                        color: "#9a9a9a", fontSize: 11, letterSpacing: 1,
+                      }}>EDIT</button>
+
+                    {confirmDelete === it.id ? (
+                      <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <span style={{ fontSize: 10, color: "#ff6b6b", letterSpacing: 0.5 }}>
+                          Delete for good?
+                        </span>
+                        <button type="button" onClick={() => removeItem(it.id)} disabled={busyRow}
+                          style={{
+                            padding: "7px 11px", borderRadius: 9, cursor: "pointer",
+                            border: "1px solid rgba(255,107,107,0.5)",
+                            background: "rgba(255,107,107,0.12)", color: "#ff8a8a",
+                            fontSize: 11, letterSpacing: 1, fontWeight: 700,
+                          }}>{busyRow ? "…" : "YES"}</button>
+                        <button type="button" onClick={() => setConfirmDelete(null)} disabled={busyRow}
+                          style={{
+                            padding: "7px 11px", borderRadius: 9, cursor: "pointer",
+                            border: "1px solid #2a2a2a", background: "transparent",
+                            color: "#8a8a8a", fontSize: 11, letterSpacing: 1,
+                          }}>NO</button>
+                      </span>
+                    ) : (
+                      <button type="button" onClick={() => setConfirmDelete(it.id)} disabled={busyRow}
+                        style={{
+                          padding: "7px 13px", borderRadius: 9, cursor: "pointer",
+                          border: "1px solid #2a2a2a", background: "transparent",
+                          color: "#7a5a5a", fontSize: 11, letterSpacing: 1,
+                        }}>DELETE</button>
+                    )}
+                  </>
+                )}
               </div>
-              <span style={{
-                fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase",
-                padding: "4px 10px", borderRadius: 999,
-                color: it.visibility === "published" ? "#4ade80" : "#b0893a",
-                border: `1px solid ${it.visibility === "published" ? "rgba(74,222,128,0.35)" : "rgba(176,137,58,0.35)"}`,
-              }}>{it.visibility}</span>
-              <button type="button"
-                onClick={() => setVisibility(it.id, it.visibility === "published" ? "draft" : "published")}
-                style={{
-                  padding: "7px 13px", borderRadius: 9, cursor: "pointer",
-                  border: "1px solid #2a2a2a", background: "transparent",
-                  color: "#9a9a9a", fontSize: 11, letterSpacing: 1,
-                }}>
-                {it.visibility === "published" ? "UNPUBLISH" : "PUBLISH"}
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
