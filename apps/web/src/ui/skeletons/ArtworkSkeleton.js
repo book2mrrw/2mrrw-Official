@@ -1,9 +1,12 @@
 "use client";
 
-import { useState, useRef, useLayoutEffect, useEffect } from "react";
+import { useCallback, useState, useRef, useLayoutEffect, useEffect } from "react";
 import { resolveCoverMediaType } from "@/lib/media/cover-media-type";
 import { imagePipeline } from "@/media/imagePipeline";
 import { VRM } from "@/lib/media/video-resource-manager";
+import { isMediaElementReady } from "@/lib/media/element-readiness";
+import { COVER_SIZES, coverSrcSet } from "@/lib/media/cover-srcset";
+import { useCoverReady } from "@/hooks/useCoverReady";
 import SkeletonBase from "./SkeletonBase";
 import ProgressiveReveal from "./ProgressiveReveal";
 
@@ -41,6 +44,11 @@ function VideoArt({
 
     VRM.register(el, VRM.PRIORITY_NEAR);
 
+    // A re-attached element can already hold a decoded frame, and `loadeddata`
+    // will not fire a second time for it. Read the element rather than waiting
+    // for an event that has already been dispatched.
+    if (isMediaElementReady(el, "video")) onLoaded?.({ currentTarget: el });
+
     if (typeof IntersectionObserver === "undefined") {
       el.preload = "auto";
       if (el.src) el.load();
@@ -76,6 +84,9 @@ function VideoArt({
       obs.disconnect();
       VRM.unregister(el);
     };
+    // Registers the decoder budget observer once on mount — re-running it on a
+    // changed `onLoaded` identity would tear down and rebuild the observer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -119,16 +130,40 @@ export default function ArtworkSkeleton({
   onImageLoad,
   onVideoLoadedMetadata,
   onVideoLoadedData,
+  coverSizes = COVER_SIZES,
 }) {
   const mediaType = resolveCoverMediaType(src, type);
-  const [loadedSrc, setLoadedSrc] = useState(() =>
-    imagePipeline.getFromCache(src, { coverArtType: type }) ? src : null
+  const isVideo = mediaType === "video";
+
+  // Video keeps its own event-driven state: its load is deliberately deferred
+  // to an IntersectionObserver inside an effect, so it cannot settle before
+  // this component's handlers exist. VideoArt above additionally reads element
+  // state on attach, which covers a re-attached, already-decoded element.
+  const [videoLoadedSrc, setVideoLoadedSrc] = useState(null);
+  const [videoFailedSrc, setVideoFailedSrc] = useState(null);
+
+  const handleImageReady = useCallback(
+    (element, resolvedSrc) => onImageLoad?.({ currentTarget: element }, resolvedSrc),
+    [onImageLoad]
   );
-  const [failedSrc, setFailedSrc] = useState(null);
-  const loaded = loadedSrc === src || Boolean(
+
+  // Images can and routinely do settle before hydration, so they are gated on
+  // element state rather than on an event that may already have been missed.
+  const { ready: imageReady, failed: imageFailed, attach: attachImage } = useCoverReady({
+    src: isVideo ? null : src,
+    kind: "image",
+    onReady: handleImageReady,
+  });
+
+  // A decoded entry in the shared pipeline is an equally valid proof that the
+  // bytes are in memory, so it stays as a second state source. What it is no
+  // longer allowed to be is the *only* non-event source of readiness.
+  const pipelineDecoded = Boolean(
     mediaType !== "video" && imagePipeline.getFromCache(src, { coverArtType: type })
   );
-  const failed = failedSrc === src;
+
+  const loaded = isVideo ? videoLoadedSrc === src : imageReady || pipelineDecoded;
+  const failed = isVideo ? videoFailedSrc === src : imageFailed;
 
   if (!src || failed) {
     return (
@@ -176,23 +211,21 @@ export default function ArtworkSkeleton({
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}
             onLoaded={(event) => {
-              setLoadedSrc(src);
+              setVideoLoadedSrc(src);
               onVideoLoadedData?.(event);
             }}
             onLoadedMetadata={onVideoLoadedMetadata}
-            onError={() => setFailedSrc(src)}
+            onError={() => setVideoFailedSrc(src)}
           />
         ) : (
           <img
+            ref={attachImage}
             src={src}
+            srcSet={coverSrcSet(src) || undefined}
+            sizes={coverSizes}
             alt={alt}
             decoding="async"
             draggable={false}
-            onLoad={(event) => {
-              setLoadedSrc(src);
-              onImageLoad?.(event);
-            }}
-            onError={() => setFailedSrc(src)}
             onClick={onClick}
             onTouchStart={onTouchStart}
             onTouchEnd={onTouchEnd}

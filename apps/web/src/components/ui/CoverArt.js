@@ -10,6 +10,8 @@ import { logVisualVideoError, logVisualVideoFallback, logVisualImageError } from
 import { useAudioMediaPriority } from "@/hooks/useAudioMediaPriority";
 import { usePlaybackIdentity } from "@/context/AudioContext";
 import { useReleaseCoverLifecycle } from "@/hooks/useReleasePresentation";
+import { COVER_SIZES, coverSrcSet } from "@/lib/media/cover-srcset";
+import { useCoverReady } from "@/hooks/useCoverReady";
 import {
   getReleasePresentation,
   recordReleasePresentationEvent,
@@ -54,6 +56,7 @@ function CoverArt({
   loadPriority = "normal",
   presentationIdentity = null,
   videoPriority = VRM.PRIORITY_NEAR,
+  coverSizes = COVER_SIZES,
 }) {
   // Failure state is keyed to the src that triggered it.
   // When src changes the old failure is automatically ignored — no manual reset needed.
@@ -101,7 +104,53 @@ function CoverArt({
     imagePipeline.preload(src, loadPriority, { coverArtType: type });
   }, [src, type, skeleton, loadPriority]);
 
-  if (skeleton && src && !presentationSnapshot?.coverReady) {
+  // Resolved before the early returns below so the readiness hook is
+  // unconditional. Pure function of `src`/`type`, so moving it up changes
+  // nothing about what it computes.
+  const mediaType = resolveCoverMediaType(src, type);
+
+  // The one <img> this component may own: the static fallback after a motion
+  // cover failed, otherwise the primary image source. Exactly one is ever live,
+  // so a single readiness subscription covers both branches.
+  const ownedImageSrc =
+    mediaType === "video" ? (eff === FL_STATIC ? baseCover : null) : src;
+
+  // Depend on the memoized callback rather than the lifecycle object, which is
+  // rebuilt every render — a changing ref identity would re-attach on every
+  // pass for no benefit.
+  const { onImageLoad } = coverLifecycle;
+  const handleImageReady = useCallback(
+    (element, resolvedSrc) => onImageLoad({ currentTarget: element }, resolvedSrc),
+    [onImageLoad]
+  );
+
+  // Element-state readiness. A static cover routinely finishes loading before
+  // React hydrates, and the `load` event it fired then is gone for good, so
+  // reading the element is the only way this can be reported at all.
+  const { attach: attachCoverImage } = useCoverReady({
+    src: ownedImageSrc,
+    kind: "image",
+    onReady: handleImageReady,
+    onFailed: handleImgError,
+  });
+
+  // Deliberately NOT gated on presentationSnapshot?.coverReady.
+  //
+  // It used to be. That was safe only by accident: coverReady could never
+  // become true, because the sole thing that set it was a React onLoad handler
+  // attached after the image had already finished loading, so the event was
+  // always dropped. The condition was permanently true and this branch never
+  // moved.
+  //
+  // Making readiness real (useCoverReady) switched that flag on for the first
+  // time, and the branch then flipped mid-life: ArtworkSkeleton unmounted and a
+  // different <img> mounted in its place, on every card, moments after load.
+  // A remount inside the release card subtree swallows the first press on the
+  // play button — press, nothing, press again.
+  //
+  // Whichever element this component starts with, it keeps. The reveal is
+  // handled inside ArtworkSkeleton by opacity, never by swapping branches.
+  if (skeleton && src) {
     return (
       <ArtworkSkeleton
         src={src}
@@ -119,6 +168,7 @@ function CoverArt({
         onImageLoad={coverLifecycle.onImageLoad}
         onVideoLoadedMetadata={coverLifecycle.onVideoLoadedMetadata}
         onVideoLoadedData={coverLifecycle.onVideoLoadedData}
+        coverSizes={coverSizes}
       />
     );
   }
@@ -134,8 +184,6 @@ function CoverArt({
       />
     );
   }
-
-  const mediaType = resolveCoverMediaType(src, type);
 
   const baseStyle = {
     width: width ?? "100%",
@@ -164,14 +212,15 @@ function CoverArt({
       }
       return (
         <img
+          ref={attachCoverImage}
           src={baseCover}
+          srcSet={coverSrcSet(baseCover) || undefined}
+          sizes={coverSizes}
           alt={alt}
           decoding="async"
           draggable={false}
           className={className}
           {...touchProps}
-          onLoad={(event) => coverLifecycle.onImageLoad(event, baseCover)}
-          onError={handleImgError}
           style={baseStyle}
         />
       );
@@ -196,14 +245,15 @@ function CoverArt({
 
   return (
     <img
+      ref={attachCoverImage}
       src={src}
+      srcSet={coverSrcSet(src) || undefined}
+      sizes={coverSizes}
       alt={alt}
       decoding="async"
       draggable={false}
       className={className}
       {...touchProps}
-      onLoad={coverLifecycle.onImageLoad}
-      onError={handleImgError}
       style={baseStyle}
     />
   );

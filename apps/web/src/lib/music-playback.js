@@ -134,7 +134,11 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
           slug: streamSlug,
           title: canonicalTrack.title,
           storage_path: canonicalTrack.storage_path,
+          // Full cover identity, same reason as the object-track branch below.
           cover: albumNorm.cover,
+          baseCover: albumNorm.baseCover,
+          coverArtType: albumNorm.coverArtType,
+          video: albumNorm.video,
           preview: canonicalTrack.preview || albumNorm.preview,
           audio: albumNorm.audio,
           artist: albumNorm.artist || "2MRRW",
@@ -144,7 +148,11 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
         : {
             slug: streamSlug,
             title,
+            // Full cover identity, same reason as the object-track branch below.
             cover: albumNorm.cover,
+            baseCover: albumNorm.baseCover,
+            coverArtType: albumNorm.coverArtType,
+            video: albumNorm.video,
             preview: albumNorm.preview,
             audio: albumNorm.audio,
             artist: albumNorm.artist || "2MRRW",
@@ -174,7 +182,33 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
     albumSlug,
     release_type: albumNorm.release_type || album.release_type,
     trackIndex: index,
-    cover: track.cover || albumNorm.cover,
+    // A track inherits the release's FULL cover identity, not just `cover`.
+    //
+    // Inheriting `cover` alone leaves coverArtType undefined, so
+    // normalizeCatalogItemForPlayback falls back to `track.video ? "video" :
+    // "image"` and settles on "image" — and with no baseCover to separate them
+    // it then sets cover AND baseCover to the same value. For a release with a
+    // motion cover that value is the .mp4, which means two failures at once:
+    // the player's `coverArtType === "video" && cover !== baseCover` gate can
+    // never pass (so a mixtape/EP plays with no animated art), and the static
+    // layer gets a video URL handed to an <img>.
+    // All-or-nothing: a track that brings its own art keeps it whole, and one
+    // that brings none inherits the release's whole. Mixing the two is what
+    // breaks — a track cover paired with the release's baseCover resolves back
+    // to the release image and the track's own art is lost.
+    ...(track.cover || track.baseCover
+      ? {
+          cover: track.cover,
+          baseCover: track.baseCover || track.cover,
+          coverArtType: track.coverArtType || "image",
+          video: track.video || null,
+        }
+      : {
+          cover: albumNorm.cover,
+          baseCover: albumNorm.baseCover,
+          coverArtType: albumNorm.coverArtType,
+          video: albumNorm.video,
+        }),
     preview: track.preview || canonicalTrack?.preview || catalogItem?.preview || albumNorm.preview,
     audio: track.audio || catalogItem?.audio || albumNorm.audio,
     artist: track.artist || albumNorm.artist || "2MRRW",

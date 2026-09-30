@@ -1,4 +1,8 @@
 import { mergeCanonicalMetadata } from "@/lib/media/canonical-catalog";
+import {
+  coverDescriptorToLegacyFields,
+  resolveCoverDescriptor,
+} from "@/lib/media/cover-descriptor";
 import { isLegacyPublicMediaPath, isSiteApiMediaPath } from "@/lib/media/site-api-url";
 import {
   catalogCoverUrl,
@@ -102,29 +106,64 @@ export function withR2CatalogMedia(item) {
   if (next.visual) {
     next.visual = resolveCatalogMediaField(next.visual, catalogVisualMediaUrl);
   }
-  // Preserve static image BEFORE cover is overwritten with the visual (video) URL.
-  // baseCover is the always-safe static image for <img> tags and system artwork.
-  // This must run before the cover field is mutated so we capture the original value.
-  if (next.visual && !next.baseCover && next.cover) {
-    next.baseCover = resolveCatalogMediaField(next.cover, catalogCoverUrl);
-  }
-  if (next.cover) {
-    const coverRaw = next.visual || next.cover;
-    next.cover = next.visual
-      ? resolveCatalogMediaField(coverRaw, catalogVisualMediaUrl)
-      : resolveCatalogMediaField(next.cover, catalogCoverUrl);
-  }
-  if (next.video) {
-    const videoRaw = String(next.video || "").trim();
-    if (isResolvedCatalogMediaUrl(videoRaw)) {
-      next.video = videoRaw;
-    } else {
-      next.video = catalogMotionVideoUrl(videoRaw.replace(/^\//, ""), {
-        slug: next.slug,
-        legacyKey: next.video_legacy,
-      });
-    }
-  }
+
+  // ── Cover identity: decided once, then derived ────────────────────────────
+  //
+  // This used to be four fields resolved independently — cover, baseCover,
+  // coverArtType and video — each with its own resolver and its own idea of
+  // what the release's artwork was. Nothing reconciled them, so they could and
+  // did disagree. Every cover defect this week came from that:
+  //
+  //   - baseCover was derived from `cover` with no check that `cover` was a
+  //     still, so a motion release put its .mp4 into <img> and <video poster>
+  //   - coverArtType was recomputed from `video` alone, so a track that
+  //     inherited only `cover` silently became "image" and the player's
+  //     animated-art gate could never pass
+  //   - `cover` was overwritten with `visual`, losing the still entirely
+  //
+  // Now one descriptor decides, and the legacy fields are views over it. A
+  // video can no longer reach a still slot, because resolveCoverDescriptor
+  // skips any candidate that is not image-safe rather than accepting it.
+  //
+  // Candidates are listed best-first and resolved with the resolver that
+  // matches their kind — stills through catalogCoverUrl, motion through
+  // catalogMotionVideoUrl — so the descriptor chooses between already-correct
+  // URLs rather than trying to own URL resolution too.
+  const resolveMotionCandidate = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    if (isResolvedCatalogMediaUrl(raw)) return raw;
+    return catalogMotionVideoUrl(raw.replace(/^\//, ""), {
+      slug: next.slug,
+      legacyKey: next.video_legacy,
+    });
+  };
+  const resolveStillCandidate = (value) => {
+    const raw = String(value || "").trim();
+    if (!raw) return null;
+    // Pass the value through untouched — resolveCatalogMediaField already
+    // strips the leading slash where the resolver needs it. Stripping it here
+    // too turns "/images/x.jpg" into the RELATIVE "images/x.jpg", which
+    // resolves against whatever route the browser is on.
+    return resolveCatalogMediaField(raw, catalogCoverUrl);
+  };
+
+  const coverIdentity = resolveCoverDescriptor({
+    // baseCover first: it is the field that is meant to be a still. `cover`
+    // and legacy_cover are fallbacks for rows that never carried one.
+    still: [next.baseCover, next.legacy_cover, next.cover].map(resolveStillCandidate),
+    // A concrete video URL beats the discovery endpoint — same asset, one
+    // fewer redirect on every play.
+    motion: [resolveMotionCandidate(next.video), next.visual],
+  });
+
+  const legacy = coverDescriptorToLegacyFields(coverIdentity);
+  next.cover = legacy.cover;
+  next.baseCover = legacy.baseCover;
+  next.video = legacy.video;
+  next.coverArtType = legacy.coverArtType;
+  next.coverIdentity = coverIdentity;
+
   if (next.preview) {
     next.preview = resolveCatalogMediaField(next.preview, catalogPreviewAudioUrl);
   }
@@ -134,11 +173,10 @@ export function withR2CatalogMedia(item) {
   if (next.csCover) {
     next.csCover = resolveCatalogMediaField(next.csCover, catalogCoverUrl);
   }
-  next.coverArtType = next.video ? "video" : (next.coverArtType || "image");
-  // Ensure baseCover is always a resolved URL (never a bare relative path used as <img src>).
-  if (next.baseCover && !isResolvedCatalogMediaUrl(next.baseCover) && !isStorefrontInlineMediaPath(next.baseCover)) {
-    next.baseCover = resolveCatalogMediaField(String(next.baseCover).replace(/^\//, ""), catalogCoverUrl);
-  }
+  // coverArtType and baseCover are set from the descriptor above — they are no
+  // longer recomputed here. Recomputing coverArtType from `video` alone is what
+  // let a track that inherited only `cover` become "image", and re-resolving
+  // baseCover separately is what let a video URL land in it.
 
   if (slug) {
     if (catalogMediaStableCache.size >= CATALOG_CACHE_MAX) {

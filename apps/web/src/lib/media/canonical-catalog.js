@@ -83,6 +83,15 @@ export const CANONICAL_SINGLES = [
     price_cents: 299,
     preview_ext: "mp3",
     legacy_cover_stem: "turnt",
+    // Kept, deliberately. Removing it does NOT let the R2 upload win: baseCover
+    // then falls through to the visual discovery URL, which resolves to the
+    // .mp4 and puts a video in the poster slot. `isStorefrontInlineMediaPath`
+    // forces any `images/` path same-origin, so an R2-only key cannot win here
+    // either. The real defect was the file itself — public/images/singles/
+    // turnt.jpg was byte-identical to artificial.jpg (md5
+    // d9e792ff5b7a9d386dcb3e7b219cd89e), so this release rendered ArTiFiCiAL's
+    // artwork. The file now holds the correct cover, matching the R2 object at
+    // images/singles/turnt-me-2-dis/ the way every other release already does.
     legacy_cover: "/images/singles/turnt.jpg",
     legacy_video_stem: "turntme2dis",
     preview_legacy: "previews/singles/turnt-me-2-dis/turntme2dis-preview.mp3",

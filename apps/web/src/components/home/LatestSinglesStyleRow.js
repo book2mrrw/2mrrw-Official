@@ -136,7 +136,17 @@ const SinglesStyleCardMediaSurface = memo(function SinglesStyleCardMediaSurface(
         className="release-card-artwork-video"
         data-single-carousel
         data-release-slug={mediaItem?.slug || ""}
-        poster={mediaItem.cover || undefined}
+        // baseCover, never cover. For a single, `cover` is the visual discovery
+        // URL, which resolves to the .mp4 — a video URL in a poster slot renders
+        // nothing, so the card falls back to bare black. Every other poster in
+        // the app already uses baseCover; this was the one exception.
+        //
+        // It stayed invisible while the element carried `autoPlay` and
+        // `preload="auto"` with a declarative src: the video started instantly
+        // and the poster was never seen. Now that src is assigned only after
+        // hasEnteredView, and dropped again whenever audio priority suspends
+        // the card, the poster is what shows most of the time.
+        poster={mediaItem.baseCover || undefined}
         muted
         loop
         playsInline

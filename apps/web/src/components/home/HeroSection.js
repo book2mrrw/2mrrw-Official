@@ -2,7 +2,38 @@
 
 import { memo } from "react";
 import { motion } from "framer-motion";
-import { catalogMotionVideoUrl } from "@/lib/media-urls";
+import { optimizedImageUrl } from "@/lib/media/cover-srcset";
+
+/**
+ * Site chrome, deliberately NOT resolved through catalogMotionVideoUrl.
+ *
+ * That resolver sends anything under `videos/` to the R2 public CDN, which
+ * serves no Cache-Control at all — so this 72 MB background was re-downloaded
+ * on every single visit. It is not catalog media: it ships with the deploy and
+ * changes only when the deploy does, exactly like /environment/. Served
+ * same-origin it picks up the cache policy in src/lib/static-asset-manifest.js.
+ *
+ * Re-encoded from the 1920x1080 / 7,174 kb/s master to 1280x720 / 1,160 kb/s
+ * with the audio track stripped — it was 133 kb/s of AAC on a muted element,
+ * inaudible to everyone who has ever loaded this page. 72.1 MB -> 11.5 MB,
+ * visually indistinguishable at the 0.35 opacity it renders at.
+ *
+ * Encoded with +faststart so the moov atom precedes mdat: without it the
+ * browser must pull far more of the file before it can begin playing, which
+ * was a second, separate cause of the delay beyond raw size.
+ *
+ * The untouched master remains on R2 at videos/A2B.mp4 (md5
+ * fd997ac1674df9e479cc6fc65d5e20ab) — nothing was destroyed to produce this.
+ */
+const HERO_VIDEO = "/videos/A2B-720p.mp4";
+
+/**
+ * First frame of the same video. The hero autoplays a large file, so without a
+ * poster the section is solid black until enough of it has buffered. This
+ * paints immediately instead, and goes through the image optimizer so it
+ * arrives as AVIF at a few KB.
+ */
+const HERO_POSTER = optimizedImageUrl("/images/hero/A2B-poster.jpg", { width: 1080 });
 
 const SOCIALS = [
   { name: "YouTube", href: "https://youtube.com/@callme2mrrw?si=Bwvli5p7hhvED7eq", svg: (<svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>) },
@@ -45,7 +76,8 @@ const HeroSection = memo(function HeroSection({
         playsInline
         preload="metadata"
         webkit-playsinline="true"
-        src={catalogMotionVideoUrl("videos/A2B.mp4")}
+        src={HERO_VIDEO}
+        poster={HERO_POSTER}
         onError={(e) => { e.currentTarget.style.display = "none"; }}
         className="storefront-adaptive-hero__video"
         style={{
