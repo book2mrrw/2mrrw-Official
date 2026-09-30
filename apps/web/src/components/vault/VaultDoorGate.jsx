@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { useHoldToUnlock } from "@/hooks/vault/useHoldToUnlock";
 import { useReducedMotion } from "@/components/environment/use-reduced-motion";
 import { playVaultDoorOpen } from "@/lib/audio/vault-door-sfx";
+import { useAudioPlayer } from "@/context/AudioContext";
+import { VaultAudioTransport } from "@/components/vault/VaultAudioTransport";
 
 const SLIDE_MS = 2400;
 const STEP_IN_MS = 1100;
@@ -129,6 +131,23 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
   const [expanded, setExpanded] = useState(false);
   const timerRef = useRef(null);
 
+  // The track currently loaded into the chamber's transport. Null is idle --
+  // the transport stays mounted either way so that starting a track never
+  // mounts a fresh <audio> element mid-gesture.
+  const [playingSlug, setPlayingSlug] = useState(null);
+  const { pause: pauseSiteAudio } = useAudioPlayer();
+
+  // Two players sharing one pair of ears is never right: starting something in
+  // the Vault stops whatever the site player was doing, the same way opening
+  // a vault video does.
+  const playTrack = useCallback((slug) => {
+    setPlayingSlug((current) => {
+      if (current === slug) return null;
+      pauseSiteAudio?.();
+      return slug;
+    });
+  }, [pauseSiteAudio]);
+
   const handleUnlock = useCallback(() => {
     if (reducedMotion) {
       setPhase("chamber");
@@ -157,6 +176,7 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
     clearTimeout(timerRef.current);
     resetHold();
     setSelected(null);
+    setPlayingSlug(null);
     setPhase("sealed");
   }, [resetHold]);
 
@@ -168,12 +188,19 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
   const dismissPod = useCallback(() => {
     setExpanded(false);
     setSelected(null);
+    // Leaving the section takes its sound with it. A track still playing over
+    // a chamber the listener has walked out of is a stuck sound, not a feature.
+    setPlayingSlug(null);
   }, []);
 
   // Rest -> centre stage -> frame. Each tap advances exactly one step.
   const tapPod = useCallback((id) => {
     setSelected((current) => {
-      if (current !== id) return id;
+      if (current !== id) {
+        // Summoning a different pod is leaving this one.
+        setPlayingSlug(null);
+        return id;
+      }
       setExpanded((wasExpanded) => !wasExpanded);
       return id;
     });
@@ -232,6 +259,13 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
   const stagedItems = selected
     ? sections.filter((s) => s.category === (CHAMBERS.wide.slots.find((x) => x.id === selected)?.label))
     : [];
+
+  // Whether this section needs a transport at all. A section of videos gets
+  // no audio element mounted into it.
+  const stagedHasAudio = stagedItems.some((s) => s.mediaType === "audio" && s.unlocked);
+  const playingTitle = playingSlug
+    ? (stagedItems.find((s) => s.slug === playingSlug)?.title || "")
+    : "";
 
   const stagedSlot = selected && (staged || expanded)
     ? CHAMBERS.wide.slots.find((s) => s.id === selected) || null
@@ -421,36 +455,77 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
                 <h3 className="vault-door-gate__frame-title">{stagedSlot.label}</h3>
                 {stagedItems.length ? (
                   <ul className="vault-door-gate__list">
-                    {stagedItems.map((item) => (
-                      <li
-                        key={item.id || item.slug}
-                        className="vault-door-gate__item"
-                        data-shape={SHAPE_OF[item.mediaType] || "card"}
-                        data-locked={item.unlocked ? undefined : ""}
-                      >
-                        {(SHAPE_OF[item.mediaType] || "card") === "card" ? (
-                          <span className="vault-door-gate__item-thumb">
-                            {item.cover ? (
-                              <img src={item.cover} alt="" aria-hidden="true" loading="lazy" draggable={false} />
+                    {stagedItems.map((item) => {
+                      const shape = SHAPE_OF[item.mediaType] || "card";
+                      // Only an unlocked audio row is a control. A locked one
+                      // keeps its badge and stays inert -- offering a play
+                      // button that answers 403 is worse than not offering one.
+                      const playable = item.mediaType === "audio" && item.unlocked;
+                      const isPlaying = playable && playingSlug === item.slug;
+
+                      const body = (
+                        <>
+                          {shape === "card" ? (
+                            <span className="vault-door-gate__item-thumb">
+                              {item.cover ? (
+                                <img src={item.cover} alt="" aria-hidden="true" loading="lazy" draggable={false} />
+                              ) : null}
+                            </span>
+                          ) : null}
+                          <span className="vault-door-gate__item-meta">
+                            <span className="vault-door-gate__item-kind">{item.mediaType}</span>
+                            <strong className="vault-door-gate__item-title">{item.title}</strong>
+                            {item.durationSeconds ? (
+                              <span className="vault-door-gate__item-sub">{formatDuration(item.durationSeconds)}</span>
                             ) : null}
                           </span>
-                        ) : null}
-                        <span className="vault-door-gate__item-meta">
-                          <span className="vault-door-gate__item-kind">{item.mediaType}</span>
-                          <strong className="vault-door-gate__item-title">{item.title}</strong>
-                          {item.durationSeconds ? (
-                            <span className="vault-door-gate__item-sub">{formatDuration(item.durationSeconds)}</span>
-                          ) : null}
-                        </span>
-                        {item.unlocked ? null : (
-                          <span className="vault-door-gate__item-lock">{item.accessLabel}</span>
-                        )}
-                      </li>
-                    ))}
+                          {item.unlocked ? null : (
+                            <span className="vault-door-gate__item-lock">{item.accessLabel}</span>
+                          )}
+                        </>
+                      );
+
+                      return (
+                        <li
+                          key={item.id || item.slug}
+                          className="vault-door-gate__item"
+                          data-shape={shape}
+                          data-locked={item.unlocked ? undefined : ""}
+                          data-playing={isPlaying ? "" : undefined}
+                        >
+                          {playable ? (
+                            <button
+                              type="button"
+                              className="vault-door-gate__item-hit"
+                              onClick={() => playTrack(item.slug)}
+                              aria-pressed={isPlaying}
+                              aria-label={`${isPlaying ? "Stop" : "Play"} ${item.title}`}
+                            >
+                              <span className="vault-door-gate__item-cue" aria-hidden="true">
+                                {isPlaying ? "❚❚" : "▶"}
+                              </span>
+                              {body}
+                            </button>
+                          ) : (
+                            body
+                          )}
+                        </li>
+                      );
+                    })}
                   </ul>
                 ) : (
                   <p className="vault-door-gate__frame-empty">Nothing in here yet</p>
                 )}
+
+                {/* Mounted for the whole time a section is open, idle until a
+                    track is chosen, so picking one never mounts a new element. */}
+                {stagedHasAudio ? (
+                  <VaultAudioTransport
+                    slug={playingSlug}
+                    title={playingTitle}
+                    onEnded={() => setPlayingSlug(null)}
+                  />
+                ) : null}
               </div>
             </div>
 
