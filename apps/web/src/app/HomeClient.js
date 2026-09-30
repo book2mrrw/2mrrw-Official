@@ -2851,6 +2851,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                     <VaultDoorGate
                       canUnlock={Boolean(publicVault?.unlocked)}
                       sections={publicVault?.sections || []}
+                      sectionCovers={publicVault?.sectionCovers || {}}
                       pricing={publicVault?.pricing}
                       vaultAccess={publicVault?.vaultAccess}
                       lockedMessage={
@@ -3100,6 +3101,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                             <div style={{marginBottom:32}}>
                               <VaultDoorGate
                                 sections={publicVault.sections || []}
+                                sectionCovers={publicVault.sectionCovers || {}}
                                 pricing={publicVault.pricing}
                                 vaultAccess={publicVault.vaultAccess}
                               />

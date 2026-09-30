@@ -3396,6 +3396,70 @@ body {
   opacity: 0.35;
 }
 
+
+/* The section's cover, on the same panel the summoned screen uses -- so a pod
+   carries its section's face from the moment the chamber opens instead of
+   sitting there blank.
+
+   pointer-events stay off: the pod button owns the gesture, and a child that
+   swallowed the hit test would break both the tap and the unlock hold. */
+.vault-door-gate__pod-cover {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  transform: translate(-50%, -50%);
+  width: 58%;
+  height: 32%;
+  overflow: hidden;
+  border-radius: 2px;
+  background: #04121a;
+  line-height: 0;
+  pointer-events: none;
+}
+
+/* Two class selectors, not one.
+   `.vault-door-gate__stage img` (0-1-1) lays the room and door plates over the
+   whole stage, and it matches every img inside it -- including this one. A
+   single-class rule (0-1-0) loses to it and the cover would be stretched
+   across the entire chamber. This is the same leak that once painted a
+   thumbnail over the pod screen; see the item-thumb rule above. */
+.vault-door-gate__pod .vault-door-gate__pod-cover-still,
+.vault-door-gate__pod .vault-door-gate__pod-cover-motion {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+/* The loop rides on top of the still and stays invisible until it is actually
+   running, so an unloaded or paused video never shows through as a black
+   panel. Revealed by the same three states that start playback, in CSS, so
+   hovering a pod costs no React render. */
+.vault-door-gate__pod .vault-door-gate__pod-cover-motion {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+.vault-door-gate__pod:hover .vault-door-gate__pod-cover-motion,
+.vault-door-gate__pod:focus-visible .vault-door-gate__pod-cover-motion,
+.vault-door-gate__pod[data-summoned] .vault-door-gate__pod-cover-motion {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The still is the whole cover here -- a looping video is exactly what this
+     preference is asking us not to do. */
+  .vault-door-gate__pod .vault-door-gate__pod-cover-motion {
+    display: none;
+  }
+}
 /* The pod's own screen, which is where real media will live. Sized and
    placed against the pod art's blank panel rather than drawn as a card over
    it -- the object is the surface. */

@@ -5,11 +5,54 @@ import { getGuestUser } from "@/lib/guest-session";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getUserVaultAccess, loadPublishedVaultContent } from "@/lib/vault/access";
+import { createR2SignedGetUrl } from "@/lib/storage/r2";
 
 export const dynamic = "force-dynamic";
 
 const VAULT_PASS_REGULAR_CENTS = 7000;
 const VAULT_PASS_SUBSCRIBER_CENTS = 2799;
+
+/** Long enough that a chamber left open all evening keeps its covers, short
+ *  enough that a leaked URL is not a permanent one. Matches the vault video
+ *  token's 8h window. */
+const COVER_URL_TTL_SECONDS = 28_800;
+
+/**
+ * Signed URLs for each section's pod cover.
+ *
+ * These objects live under videos/vault/_section-covers/, which is in
+ * R2_NEVER_PUBLIC_PREFIXES -- so they cannot simply be linked, and every URL
+ * has to be signed per request. Signing is a local HMAC with no network call,
+ * so doing all sixteen (a still and a loop per section) costs nothing.
+ *
+ * Resolved here rather than through a per-pod endpoint because the chamber
+ * paints eight pods at once; eight extra round trips to fill them would be
+ * visible as pods popping in one at a time.
+ */
+async function loadSectionCovers(admin) {
+  const { data, error } = await admin
+    .from("vault_section_covers")
+    .select("category, motion_key, still_key");
+
+  if (error) {
+    // A missing cover leaves a pod looking plain. That is not worth failing
+    // the whole Vault payload over.
+    console.error("vault section covers load failed:", error.message);
+    return {};
+  }
+
+  const out = {};
+  await Promise.all(
+    (data || []).map(async (row) => {
+      const [still, motion] = await Promise.all([
+        row.still_key ? createR2SignedGetUrl(row.still_key, COVER_URL_TTL_SECONDS).catch(() => null) : null,
+        row.motion_key ? createR2SignedGetUrl(row.motion_key, COVER_URL_TTL_SECONDS).catch(() => null) : null,
+      ]);
+      if (still || motion) out[row.category] = { still, motion };
+    })
+  );
+  return out;
+}
 
 export async function GET() {
   try {
@@ -46,6 +89,11 @@ export async function GET() {
     const unlocked = vaultAccess.fullAccess || cardOwnerFree || isAdminTester;
     const gatedSections = sections;
 
+    // Only signed for a viewer who can actually open the door. The pods that
+    // show these live inside the chamber, which a locked viewer never reaches,
+    // so signing them for one would hand out media for nothing.
+    const sectionCovers = unlocked ? await loadSectionCovers(admin) : {};
+
     return NextResponse.json({
       unlocked,
       pricing,
@@ -58,6 +106,7 @@ export async function GET() {
         isAdminPreview: isAdminTester,
       },
       sections: unlocked ? gatedSections : gatedSections.filter((row) => row.accessTier === "public"),
+      sectionCovers,
       room: unlocked
         ? {
             mode: "unlocked",
@@ -87,6 +136,7 @@ export async function GET() {
         cardOwnerFree: false,
       },
       sections: [],
+      sectionCovers: {},
       room: { mode: "locked" },
       source: "fallback",
       syncedAt: new Date().toISOString(),

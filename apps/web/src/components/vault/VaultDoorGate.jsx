@@ -6,6 +6,7 @@ import { useReducedMotion } from "@/components/environment/use-reduced-motion";
 import { playVaultDoorOpen } from "@/lib/audio/vault-door-sfx";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { VaultAudioTransport } from "@/components/vault/VaultAudioTransport";
+import { VaultPodCover } from "@/components/vault/VaultPodCover";
 
 const SLIDE_MS = 2400;
 const STEP_IN_MS = 1100;
@@ -121,7 +122,7 @@ const CHAMBERS = {
  * preview instead -- for whenever the Vault genuinely has nothing to unlock
  * yet. The door itself should still read as "a real vault exists here."
  */
-export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }) {
+export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], sectionCovers = {} }) {
   const reducedMotion = useReducedMotion();
   const [phase, setPhase] = useState("sealed");
   const [selected, setSelected] = useState(null);
@@ -147,6 +148,53 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
       return slug;
     });
   }, [pauseSiteAudio]);
+
+  /**
+   * Handles to each pod's cover, keyed by chamber and slot.
+   *
+   * Both chambers are rendered at once (CSS picks by orientation), so the same
+   * slot id exists twice -- a single key would have the second overwrite the
+   * first, leaving whichever chamber is actually on screen unable to start its
+   * own loop.
+   *
+   * A ref map rather than state on purpose: a hover needs to reach exactly one
+   * video element, and putting it in state would re-render all eight pods,
+   * some mid-transition, on every pointer-enter.
+   */
+  const coverRefs = useRef(new Map());
+  const coverKey = (chamberKey, slotId) => `${chamberKey}:${slotId}`;
+
+  const hoverPod = useCallback((chamberKey, slotId, on) => {
+    const handle = coverRefs.current.get(coverKey(chamberKey, slotId));
+    if (on) handle?.play();
+    else handle?.pause();
+  }, []);
+
+  const pauseAllCovers = useCallback(() => {
+    for (const handle of coverRefs.current.values()) handle?.pause();
+  }, []);
+
+  /**
+   * A summoned pod runs its loop. This is how touch gets it -- there is no
+   * hover to key off, and the tap that brought the pod forward is the gesture.
+   *
+   * Asks both chambers because only one is laid out at a time and this does not
+   * know which; play() no-ops on the hidden one. Synchronising a DOM element
+   * with React state is exactly what an effect is for, and no state is set
+   * here, so this costs no extra render.
+   */
+  useEffect(() => {
+    if (!selected) return undefined;
+    // Captured for the cleanup rather than read from the ref again later: the
+    // map itself is never replaced, but reading a ref in cleanup is the shape
+    // that silently breaks when that stops being true.
+    const covers = coverRefs.current;
+    const keys = ["wide", "tall"].map((c) => coverKey(c, selected));
+    for (const k of keys) covers.get(k)?.play();
+    return () => {
+      for (const k of keys) covers.get(k)?.pause();
+    };
+  }, [selected]);
 
   const handleUnlock = useCallback(() => {
     if (reducedMotion) {
@@ -177,8 +225,9 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
     resetHold();
     setSelected(null);
     setPlayingSlug(null);
+    pauseAllCovers();
     setPhase("sealed");
-  }, [resetHold]);
+  }, [resetHold, pauseAllCovers]);
 
   // Sending a pod home is the same journey run backwards: dropping the id
   // lets every property transition back to the value it had on the shelf,
@@ -191,20 +240,26 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
     // Leaving the section takes its sound with it. A track still playing over
     // a chamber the listener has walked out of is a stuck sound, not a feature.
     setPlayingSlug(null);
-  }, []);
+    // A touch-started cover loop has no pointer-leave to stop it, so going
+    // home is what ends it.
+    pauseAllCovers();
+  }, [pauseAllCovers]);
 
   // Rest -> centre stage -> frame. Each tap advances exactly one step.
+  //
+  // Reads `selected` directly rather than branching inside a setState updater:
+  // stopping a cover loop is a DOM side effect, and updaters must stay pure --
+  // React is free to run them more than once.
   const tapPod = useCallback((id) => {
-    setSelected((current) => {
-      if (current !== id) {
-        // Summoning a different pod is leaving this one.
-        setPlayingSlug(null);
-        return id;
-      }
+    if (selected === id) {
       setExpanded((wasExpanded) => !wasExpanded);
-      return id;
-    });
-  }, []);
+      return;
+    }
+    // Summoning a different pod is leaving this one.
+    setSelected(id);
+    setPlayingSlug(null);
+    pauseAllCovers();
+  }, [selected, pauseAllCovers]);
 
   useEffect(() => {
     if (!selected) return undefined;
@@ -317,6 +372,20 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
               tabIndex={phase === "chamber" ? undefined : -1}
               aria-hidden={phase === "chamber" ? undefined : "true"}
               onClick={() => tapPod(slot.id)}
+              /* Hover is a mouse idea. pointerenter fires for touch too, but
+                 there it means "a finger landed here on the way to tapping",
+                 and pointerleave follows the instant it lifts -- so honouring
+                 it on touch would start a loop and kill it again in the same
+                 gesture. Touch gets its loop from being summoned instead,
+                 which is what the tap does anyway. */
+              onPointerEnter={(e) => {
+                if (e.pointerType === "mouse") hoverPod(key, slot.id, true);
+              }}
+              onPointerLeave={(e) => {
+                if (e.pointerType === "mouse") hoverPod(key, slot.id, false);
+              }}
+              onFocus={() => hoverPod(key, slot.id, true)}
+              onBlur={() => hoverPod(key, slot.id, false)}
             >
               {/* X lives on the outer element and Y on the inner one, each
                   with its own easing -- two straight transforms that read as
@@ -332,7 +401,22 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [] }
                 />
                 <span className="vault-door-gate__pod-label">{slot.label}</span>
 
-                {isSummoned ? (
+                {/* The section's own cover, sitting on the pod's panel from the
+                    moment the chamber opens -- the point being that a pod is
+                    never blank before it is summoned. */}
+                <VaultPodCover
+                  ref={(handle) => {
+                    const k = coverKey(key, slot.id);
+                    if (handle) coverRefs.current.set(k, handle);
+                    else coverRefs.current.delete(k);
+                  }}
+                  cover={sectionCovers?.[slot.label]}
+                />
+
+                {/* Only says so once summoned: an empty pod at rest just shows
+                    its cover, and captioning all eight at rest would turn the
+                    room into a list of apologies. */}
+                {isSummoned && !sections.some((s) => s.category === slot.label) ? (
                   <span className="vault-door-gate__pod-screen">
                     <span className="vault-door-gate__pod-empty">
                       Nothing in here yet
