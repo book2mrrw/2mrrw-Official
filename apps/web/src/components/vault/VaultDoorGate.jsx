@@ -1,12 +1,22 @@
 "use client";
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import dynamic from "next/dynamic";
 import { useHoldToUnlock } from "@/hooks/vault/useHoldToUnlock";
 import { useReducedMotion } from "@/components/environment/use-reduced-motion";
 import { playVaultDoorOpen } from "@/lib/audio/vault-door-sfx";
 import { useAudioPlayer } from "@/context/AudioContext";
 import { VaultAudioTransport } from "@/components/vault/VaultAudioTransport";
 import { VaultPodCover } from "@/components/vault/VaultPodCover";
+
+/* The vault's own long-form player: full-screen, HLS-first with a direct-file
+   fallback, and portalled onto document.body so it escapes the chamber's
+   transforms and clipping. Loaded on demand -- it pulls in hls.js, which has
+   no business in the bundle for anyone who never opens a video. */
+const VaultVideoPlayer = dynamic(
+  () => import("@/components/vault/VaultVideoPlayer").then((m) => m.VaultVideoPlayer ?? m.default),
+  { ssr: false }
+);
 
 const SLIDE_MS = 2400;
 const STEP_IN_MS = 1100;
@@ -174,6 +184,18 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], 
     for (const handle of coverRefs.current.values()) handle?.pause();
   }, []);
 
+  // The item whose video is open, or null. The player is full-screen, so
+  // everything the chamber was making noise with stops first -- a cover loop
+  // or a diary entry playing underneath a video is just two things at once.
+  const [videoItem, setVideoItem] = useState(null);
+
+  const openVideo = useCallback((item) => {
+    setPlayingSlug(null);
+    pauseSiteAudio?.();
+    pauseAllCovers();
+    setVideoItem(item);
+  }, [pauseSiteAudio, pauseAllCovers]);
+
   /**
    * A summoned pod runs its loop. This is how touch gets it -- there is no
    * hover to key off, and the tap that brought the pod forward is the gesture.
@@ -225,6 +247,8 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], 
     resetHold();
     setSelected(null);
     setPlayingSlug(null);
+    // Sealing the door cannot leave a player running over the top of it.
+    setVideoItem(null);
     pauseAllCovers();
     setPhase("sealed");
   }, [resetHold, pauseAllCovers]);
@@ -261,8 +285,12 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], 
     pauseAllCovers();
   }, [selected, pauseAllCovers]);
 
+  // Escape belongs to the innermost thing that is open. While a video is up,
+  // that is the video -- the player has its own Escape handler, and dismissing
+  // the pod as well would send one keypress through two layers and leave the
+  // listener back in the room instead of where they were.
   useEffect(() => {
-    if (!selected) return undefined;
+    if (!selected || videoItem) return undefined;
     const onKey = (e) => {
       if (e.key === "Escape") {
         e.stopPropagation();
@@ -271,7 +299,7 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selected, dismissPod]);
+  }, [selected, videoItem, dismissPod]);
 
   // Decode the frame art while the viewer is still in the chamber. Left to
   // load on demand it cost one 58ms frame at 6x CPU -- landing exactly on
@@ -541,11 +569,21 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], 
                   <ul className="vault-door-gate__list">
                     {stagedItems.map((item) => {
                       const shape = SHAPE_OF[item.mediaType] || "card";
-                      // Only an unlocked audio row is a control. A locked one
-                      // keeps its badge and stays inert -- offering a play
-                      // button that answers 403 is worse than not offering one.
-                      const playable = item.mediaType === "audio" && item.unlocked;
-                      const isPlaying = playable && playingSlug === item.slug;
+                      // Only unlocked items are controls. A locked one keeps
+                      // its badge and stays inert -- offering a play button
+                      // that answers 403 is worse than not offering one.
+                      //
+                      // Audio plays inside the pod; video takes over the
+                      // screen through the vault's own player. A video item
+                      // with neither a stored file nor a URL has nothing to
+                      // open, so it stays a listing.
+                      const isAudio = item.mediaType === "audio" && item.unlocked;
+                      const isVideo =
+                        item.mediaType === "video" &&
+                        item.unlocked &&
+                        Boolean(item.contentUrl || item.hasMedia);
+                      const playable = isAudio || isVideo;
+                      const isPlaying = isAudio && playingSlug === item.slug;
 
                       const body = (
                         <>
@@ -581,8 +619,11 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], 
                             <button
                               type="button"
                               className="vault-door-gate__item-hit"
-                              onClick={() => playTrack(item.slug)}
-                              aria-pressed={isPlaying}
+                              onClick={() => (isAudio ? playTrack(item.slug) : openVideo(item))}
+                              /* aria-pressed only where there is a toggled
+                                 state to report. Opening a video is an action,
+                                 not a switch the button holds down. */
+                              aria-pressed={isAudio ? isPlaying : undefined}
                               aria-label={`${isPlaying ? "Stop" : "Play"} ${item.title}`}
                             >
                               <span className="vault-door-gate__item-cue" aria-hidden="true">
@@ -635,6 +676,22 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], 
           </button>
         ) : null}
       </div>
+
+      {/* Portals onto document.body, so it is not subject to the stage's
+          transforms, clipping or stacking -- the pod stays exactly as it was
+          and is still there when the video closes. */}
+      {videoItem ? (
+        <VaultVideoPlayer
+          contentSlug={videoItem.slug}
+          contentId={videoItem.id}
+          title={videoItem.title}
+          coverUrl={videoItem.cover}
+          fallbackUrl={videoItem.contentUrl}
+          savedPositionSeconds={0}
+          onClose={() => setVideoItem(null)}
+          onPauseAudio={pauseSiteAudio}
+        />
+      ) : null}
     </div>
   );
 }
