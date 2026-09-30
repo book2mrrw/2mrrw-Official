@@ -15,9 +15,34 @@
 # --enable-libdav1d --enable-libvmaf` — every codec this worker already depends on is
 # still present, plus libplacebo/Vulkan.
 #
-# Pinned by exact release tag + a sha256 computed from the actual downloaded file (BtbN
-# publishes no checksum of its own), not a floating "latest" tag — matching how this
-# Dockerfile already pins its other versions.
+# SOURCE URL CHANGED 2026-09-30 — the previous pin BROKE THE BUILD ENTIRELY.
+#
+# This previously pinned autobuild-2026-09-06-13-06. BtbN's autobuild releases are
+# rotated and DELETED — the GitHub releases API now lists autobuilds no further back
+# than 14 days — so that tag 404'd and every image build failed at this layer, for all
+# three lanes, not just the newest one. The running machines survived only because they
+# still hold the old image; nothing could be rebuilt or redeployed.
+#
+# So an exact autobuild tag is not actually a durable pin: it is a pin with a ~2-week
+# shelf life. The `latest` release's per-branch assets are the stable-URL alternative —
+# `ffmpeg-n9.0-latest-...` stays on the SAME 9.0 release branch this already tracked
+# (was n9.0.1-26, now n9.0.2-17), so it takes 9.0.x bugfixes and never a major jump.
+#
+# The sha256 is still verified, so this is not a floating unverified pull. The trade is
+# deliberate: BtbN rebuilds that asset in place, and when they do this layer fails LOUDLY
+# with a checksum mismatch that names its own fix (recompute and update the ARG below)
+# rather than 404ing on a tag that no longer exists anywhere. Fail-closed either way; the
+# difference is that this failure is self-describing and the old one required research.
+#
+# Verified for this exact tarball, same method as the original (downloaded and inspected,
+# not assumed): `strings <binary> | grep -- --enable` reports --enable-libplacebo,
+# --enable-vulkan, --enable-libzimg, --enable-libsvtav1, --enable-libx264,
+# --enable-libx265, --enable-libaom, --enable-libdav1d and --enable-libvmaf — every
+# library above is still present. Reported version: n9.0.2-17-g2a571b6068-20260930.
+#
+# PERMANENT FIX, not yet done: mirror this tarball into R2 (already owned) and point this
+# ARG at that immutable object. That removes the dependency on anyone else's retention
+# policy, which is the actual root cause of this outage.
 #
 # NOT YET CONFIRMED LIVE: the binary's enabled libraries are verified above, but the
 # actual libplacebo tone-map invocation in hdr-tonemap.js has not been run against a real
@@ -26,8 +51,8 @@
 FROM debian:bookworm-slim AS ffmpeg-stage
 RUN apt-get update && apt-get install -y --no-install-recommends curl xz-utils ca-certificates \
   && rm -rf /var/lib/apt/lists/*
-ARG FFMPEG_BUILD_URL=https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-06-13-06/ffmpeg-n9.0.1-26-g5c8e7e2433-linux64-gpl-9.0.tar.xz
-ARG FFMPEG_BUILD_SHA256=e60c4187c792cc35d2558adbae5582c470713f5afed7212999200340f1394f8d
+ARG FFMPEG_BUILD_URL=https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-n9.0-latest-linux64-gpl-9.0.tar.xz
+ARG FFMPEG_BUILD_SHA256=943ae354eb18a6fad05119786c1ad4a44025954ad5f400f2794ac960afe4c2e0
 RUN curl -fsSL "$FFMPEG_BUILD_URL" -o /tmp/ffmpeg.tar.xz \
   && echo "$FFMPEG_BUILD_SHA256  /tmp/ffmpeg.tar.xz" | sha256sum -c - \
   && mkdir /tmp/ffmpeg-extract \

@@ -7,6 +7,10 @@ primary_region = 'iad'
 [env]
   LOG_LEVEL    = "info"
   IDLE_POLL_MS = "5000"
+  # Without this, track-visual-transcoder.js falls back to os.tmpdir() — the
+  # root disk — and the visual_scratch volume below is mounted but never used.
+  # Safe to set globally: only the visual lane's transcoder reads it.
+  TRACK_VISUAL_SCRATCH = "/visual-scratch"
 
 # Two physically separate scheduling lanes so a long video encode can never
 # occupy the audio worker's claim slot (and vice versa). "app" is kept as
@@ -18,8 +22,9 @@ primary_region = 'iad'
 # audio-worker.js never imports the video processor and video-worker.js
 # never imports transcoder.js.
 [processes]
-  app   = "node src/workers/audio-worker.js"
-  video = "node src/workers/video-worker.js"
+  app    = "node src/workers/audio-worker.js"
+  video  = "node src/workers/video-worker.js"
+  visual = "node src/workers/track-visual-worker.js"
 
 [[vm]]
   processes = ["app"]
@@ -50,7 +55,84 @@ primary_region = 'iad'
 # Fly volumes are host-local), matching one volume per machine below.
 # Scheduled snapshots are disabled on both — this is disposable transcode
 # scratch, not data needing backup; nothing here is canonical.
-[mounts]
+# Array-of-tables form ([[mounts]], not [mounts]) because the app now has two
+# mounts. TOML allows a given table name once; a second [mounts] is a parse
+# error ("table mounts already exists"). For the single video entry the two
+# forms are semantically identical, so promoting it changes nothing about the
+# video lane — it only makes room for the visual lane's mount below.
+[[mounts]]
   source      = "video_scratch"
   destination = "/data"
   processes   = ["video"]
+
+# Initial production baseline for the track-visual lane — like the video lane
+# above, a starting size rather than a tuned one.
+#
+# 'performance' rather than 'shared' because the worst case is genuinely heavy
+# even though it is short: track-visual-policy.js plans up to FOUR renditions
+# (3840/1920/1280/854 long edge) encoded sequentially at `libx264 -preset slow
+# -crf 18`, and an HDR source additionally runs libplacebo tone-mapping over
+# Mesa lavapipe — software Vulkan, because these machines have no GPU (see the
+# Dockerfile's runtime stage). That is a sustained all-core load, which is
+# exactly the workload Fly's shared CPUs throttle once burst credits are gone.
+#
+# 4 cpus / 8gb, sized against a MEASUREMENT on this machine, not an estimate.
+#
+# Benchmarked 2026-09-30 on this exact config: a 30s 4K HDR10 source
+# (bt2020nc/smpte2084) through the real visualEncodeArgs chain — scale ->
+# libplacebo tone-map on Mesa lavapipe -> libx264 -preset slow -crf 18 —
+# completed in 846s at 2.84gb peak RSS, producing 15 AES-encrypted segments
+# that probed as 3840x2160 h264 with no audio track and passed a full -xerror
+# decode. The 4K HDR path works; it is no longer an unverified assumption.
+#
+# THE CORE COUNT IS THE BINDING CONSTRAINT, NOT THE MEMORY. Measured peak was
+# 2.84gb, well under 8gb — an earlier draft of this block predicted 4-6gb and
+# was simply wrong. 8gb is here because Fly requires 2gb per performance core
+# and the workload needs 4 of them; it is a consequence of the cpu choice, not
+# an independent memory requirement.
+#
+# 4 cores is required because visualFfmpeg kills a rendition on a fixed timer,
+# so encode time is a correctness constraint rather than a comfort one. At the
+# measured ~1.18s per 4K frame, halving the cores roughly doubles that, which
+# pushes even the 24fps case toward the cap and puts every higher frame rate
+# past it. A kill spends one of only three attempts before the visual is marked
+# failed for good. (The timeout itself was raised 30 -> 90 minutes off the same
+# measurement — see the note above visualFfmpeg in track-visual-transcoder.js
+# for the frame-count arithmetic that forced it.)
+#
+# Lease expiry is NOT a sizing constraint. claim_track_visual_job reclaims a job
+# only when heartbeat_at falls 5 minutes behind, and track-visual-worker.js
+# heartbeats on an independent 30s setInterval while ffmpeg runs as an async
+# spawn — the event loop stays free throughout. A slower machine costs
+# wall-clock time, never correctness.
+#
+# Note the shape of the load when tuning further: the measurement above is ONE
+# rendition. planTrackVisual emits up to four for a 4K source (3840/1920/1280/
+# 854), encoded sequentially, so whole-job wall time is their sum — roughly 20
+# minutes for a 24fps 4K HDR upload.
+[[vm]]
+  processes = ["visual"]
+  memory    = '8gb'
+  cpu_kind  = 'performance'
+  cpus      = 4
+
+# Dedicated scratch for the visual lane. It needs a volume for the same reason
+# the video lane does — the default ~7.8gb ephemeral root (7.4gb usable,
+# measured on the live video machine) cannot safely hold this lane's peak.
+#
+# Peak is concurrent, not sequential: transcodeTrackVisual downloads the source
+# once and every rendition re-reads it, so the source stays on disk for the
+# whole job, and the upload loop runs only AFTER all four renditions are encoded
+# and verified — so every rendition's segments are on disk simultaneously too.
+# That is up to 5gb of source (VISUAL_MAX_BYTES) plus the full ladder's output,
+# which leaves too little margin on the root disk; running out mid-encode burns
+# one of only three attempts, and three failures mark the visual permanently
+# failed rather than retrying.
+#
+# 40gb is scratch, not storage: the published segments live in R2, and the whole
+# temp directory is removed in transcodeTrackVisual's finally block. One volume
+# per machine, no snapshots — same disposable posture as video_scratch.
+[[mounts]]
+  source      = "visual_scratch"
+  destination = "/visual-scratch"
+  processes   = ["visual"]
