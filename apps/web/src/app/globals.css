@@ -3453,6 +3453,12 @@ body {
   opacity: 1;
 }
 
+/* A loop uploaded without a still has to be its own resting frame, or the pod
+   shows a black rectangle -- worse than the blank pod this replaces. */
+.vault-door-gate__pod .vault-door-gate__pod-cover-motion[data-solo] {
+  opacity: 1;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* The still is the whole cover here -- a looping video is exactly what this
      preference is asking us not to do. */

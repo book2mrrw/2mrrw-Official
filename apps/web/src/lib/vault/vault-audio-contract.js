@@ -31,7 +31,7 @@
  * change, no migration, and no second Fly deployment.
  */
 
-import { folderForCategory } from "./vault-upload-contract.js";
+import { folderForCategory, VAULT_SLUG_RE } from "./vault-upload-contract.js";
 
 /**
  * Sections whose contents are audio by nature, so the manager opens in audio
@@ -127,7 +127,10 @@ export function audioExtensionForFilename(filename) {
 export function buildVaultAudioMasterKey({ category, slug, ext }) {
   const folder = folderForCategory(category);
   if (!folder) return null;
-  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(String(slug || ""))) return null;
+  // The same slug rule the rest of the vault uses, imported rather than
+  // restated: these strings become object keys, so the two drifting apart
+  // would be a path-traversal gap, not a formatting inconsistency.
+  if (!VAULT_SLUG_RE.test(String(slug || ""))) return null;
   const e = safeExt(ext);
   if (!e) return null;
   return `videos/vault/_audio-masters/${folder}/${slug}.${e}`;
@@ -148,7 +151,7 @@ export function buildVaultAudioMasterKey({ category, slug, ext }) {
 export function buildVaultAudioHlsPrefix({ category, slug }) {
   const folder = folderForCategory(category);
   if (!folder) return null;
-  if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(String(slug || ""))) return null;
+  if (!VAULT_SLUG_RE.test(String(slug || ""))) return null;
   return `hls/vault/${folder}/${slug}/`;
 }
 

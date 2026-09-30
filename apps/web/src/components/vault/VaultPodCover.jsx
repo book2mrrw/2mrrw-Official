@@ -93,10 +93,20 @@ export const VaultPodCover = forwardRef(function VaultPodCover({ cover }, ref) {
           ref={videoRef}
           className="vault-door-gate__pod-cover-motion"
           src={motion}
-          // preload="none" keeps eight loops off the wire until one is asked
-          // for -- play() is what triggers the fetch. poster is the still, so
-          // the video box is never a black hole while it loads.
-          preload="none"
+          /**
+           * A loop is meant to come with a still -- the still is the poster,
+           * the resting frame and the fallback, and the manager says so on
+           * upload. When one was uploaded without a still anyway, the loop has
+           * to stand in for it: shown at rest rather than hidden, and given
+           * preload="metadata" so the browser has a first frame to paint.
+           * Otherwise the pod is a black rectangle, which is worse than the
+           * blank pod this feature exists to fix.
+           *
+           * With a still present, preload stays "none" so eight loops never
+           * touch the wire until one is actually asked for.
+           */
+          data-solo={still ? undefined : ""}
+          preload={still ? "none" : "metadata"}
           poster={still || undefined}
           muted
           loop

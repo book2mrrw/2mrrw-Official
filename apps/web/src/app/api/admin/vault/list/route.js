@@ -225,8 +225,10 @@ export async function DELETE(req) {
       const objects = await listR2Objects(hlsPrefix, { recursive: true });
       for (const obj of objects) {
         if (!obj?.Key?.startsWith(hlsPrefix)) continue;
-        await deleteR2Object(obj.Key).catch(() => {});
-        removed.segments += 1;
+        // Counted only when it actually went, because this number is reported
+        // back to the admin as what was cleaned up.
+        const gone = await deleteR2Object(obj.Key).then(() => true).catch(() => false);
+        if (gone) removed.segments += 1;
       }
     } catch (err) {
       console.error("vault delete segments failed:", hlsPrefix, err?.message);

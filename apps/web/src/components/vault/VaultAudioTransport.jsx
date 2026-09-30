@@ -45,7 +45,7 @@ function formatClock(seconds) {
   return `${m}:${String(s % 60).padStart(2, "0")}`;
 }
 
-export function VaultAudioTransport({ slug, title, onEnded, onError }) {
+export function VaultAudioTransport({ slug, title, onEnded }) {
   const audioRef = useRef(null);
   const hlsRef = useRef(null);
   // Guards against a slow load for an abandoned track resolving after the
@@ -114,7 +114,6 @@ export function VaultAudioTransport({ slug, title, onEnded, onError }) {
       if (!res.ok) {
         setStatus("error");
         setMessage("Could not load this track.");
-        onError?.(slug);
         return;
       }
       const json = await res.json();
@@ -211,7 +210,10 @@ export function VaultAudioTransport({ slug, title, onEnded, onError }) {
     return () => {
       cancelled = true;
     };
-  }, [slug, teardownHls, onError]);
+    // Deliberately depends on the slug alone. A callback prop in here would
+    // re-run the whole load -- and restart playback -- on every parent render
+    // that passed a fresh arrow function.
+  }, [slug, teardownHls]);
 
   const toggle = useCallback(() => {
     const el = audioRef.current;

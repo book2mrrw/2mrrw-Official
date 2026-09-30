@@ -189,11 +189,31 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], 
   // or a diary entry playing underneath a video is just two things at once.
   const [videoItem, setVideoItem] = useState(null);
 
-  const openVideo = useCallback((item) => {
+  const openVideo = useCallback(async (item) => {
     setPlayingSlug(null);
     pauseSiteAudio?.();
     pauseAllCovers();
-    setVideoItem(item);
+
+    /**
+     * The player tries HLS first and falls back to a plain URL. Nothing
+     * enqueues vault video for transcoding yet, so that fallback is in
+     * practice the only path -- and an item uploaded through Vault Manager has
+     * no content_url at all: its bytes sit in R2 under a key only the server
+     * will sign. Without resolving it here the player opens on a null source
+     * and just shows an error.
+     */
+    let fallbackUrl = item.contentUrl || null;
+    if (!fallbackUrl) {
+      try {
+        const res = await fetch(`/api/vault/media?slug=${encodeURIComponent(item.slug)}`, {
+          cache: "no-store",
+        });
+        if (res.ok) fallbackUrl = (await res.json())?.url || null;
+      } catch {
+        // Leave it null: the player still attempts HLS and reports honestly.
+      }
+    }
+    setVideoItem({ ...item, resolvedUrl: fallbackUrl });
   }, [pauseSiteAudio, pauseAllCovers]);
 
   /**
@@ -686,7 +706,7 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], 
           contentId={videoItem.id}
           title={videoItem.title}
           coverUrl={videoItem.cover}
-          fallbackUrl={videoItem.contentUrl}
+          fallbackUrl={videoItem.resolvedUrl}
           savedPositionSeconds={0}
           onClose={() => setVideoItem(null)}
           onPauseAudio={pauseSiteAudio}

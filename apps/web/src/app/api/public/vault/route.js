@@ -54,6 +54,43 @@ async function loadSectionCovers(admin) {
   return out;
 }
 
+/**
+ * Fills in runtimes for vault audio.
+ *
+ * An audio master's real duration is only known once the encoder has measured
+ * it, so the upload deliberately does not guess one from the browser -- which
+ * left vault_content.duration_seconds null and every audio row in the chamber
+ * showing no runtime at all. The manifest has the measured value, so it is
+ * read back here for the rows that lack one.
+ *
+ * Pinned to release_type 'vault': a release manifest that happened to share a
+ * slug must never supply a duration to a vault item.
+ */
+async function withAudioDurations(admin, rows) {
+  const needy = rows.filter((r) => r.mediaType === "audio" && !r.durationSeconds && r.slug);
+  if (!needy.length) return rows;
+
+  const { data, error } = await admin
+    .from("hls_manifests")
+    .select("slug, duration_seconds")
+    .eq("release_type", "vault")
+    .is("track_slug", null)
+    .in("slug", needy.map((r) => r.slug));
+
+  if (error) {
+    console.error("vault audio duration lookup failed:", error.message);
+    return rows;
+  }
+
+  const bySlug = new Map((data || []).map((m) => [m.slug, Number(m.duration_seconds)]));
+  return rows.map((r) => {
+    const measured = bySlug.get(r.slug);
+    return measured > 0 && r.mediaType === "audio" && !r.durationSeconds
+      ? { ...r, durationSeconds: Math.round(measured) }
+      : r;
+  });
+}
+
 export async function GET() {
   try {
     const admin = getAdminClient();
@@ -93,6 +130,7 @@ export async function GET() {
     // show these live inside the chamber, which a locked viewer never reaches,
     // so signing them for one would hand out media for nothing.
     const sectionCovers = unlocked ? await loadSectionCovers(admin) : {};
+    const withDurations = await withAudioDurations(admin, gatedSections);
 
     return NextResponse.json({
       unlocked,
@@ -105,7 +143,7 @@ export async function GET() {
         cardOwnerFree,
         isAdminPreview: isAdminTester,
       },
-      sections: unlocked ? gatedSections : gatedSections.filter((row) => row.accessTier === "public"),
+      sections: unlocked ? withDurations : withDurations.filter((row) => row.accessTier === "public"),
       sectionCovers,
       room: unlocked
         ? {

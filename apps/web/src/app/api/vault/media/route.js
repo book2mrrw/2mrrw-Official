@@ -7,6 +7,24 @@ import { buildR2Key, createR2SignedGetUrl, R2_PREFIX } from "@/lib/storage/r2";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Top-level R2 prefixes that mean "this is already a complete object key".
+ *
+ * Older vault rows store a path relative to digital-assets/, which is what
+ * buildR2Key below is for. Anything uploaded through Vault Manager stores the
+ * full key instead (videos/vault/...), and prefixing that produced
+ * digital-assets/videos/vault/... -- a key that does not exist. The signed URL
+ * came back fine and then 404'd on fetch, so playback fell through to nothing
+ * with no error to explain it.
+ */
+const R2_ABSOLUTE_PREFIXES = ["videos/", "digital-assets/", "protected-media/", "hls/"];
+
+function resolveVaultObjectKey(storagePath) {
+  const path = String(storagePath || "").replace(/^\//, "");
+  if (R2_ABSOLUTE_PREFIXES.some((prefix) => path.startsWith(prefix))) return path;
+  return buildR2Key(R2_PREFIX.DIGITAL_ASSETS, path);
+}
+
 export async function GET(req) {
   try {
     const slug = req.nextUrl.searchParams.get("slug");
@@ -52,7 +70,7 @@ export async function GET(req) {
       return NextResponse.json({ error: requestedPreview ? "No preview asset available" : "No media asset available" }, { status: 404 });
     }
 
-    const key = buildR2Key(R2_PREFIX.DIGITAL_ASSETS, storagePath);
+    const key = resolveVaultObjectKey(storagePath);
     const url = await createR2SignedGetUrl(key, 3600);
 
     return NextResponse.json({
