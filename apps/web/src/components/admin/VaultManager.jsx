@@ -3,12 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   VAULT_SECTIONS,
-  MEDIA_TYPES,
   ACCESS_TIERS,
   MULTIPART_THRESHOLD_BYTES,
   SECTION_COVER_ACCEPT,
   ITEM_COVER_ACCEPT,
-  slugify,
   kindForUpload,
 } from "@/lib/vault/vault-upload-contract";
 import {
@@ -70,11 +68,19 @@ export default function VaultManager() {
    * changing sections falls back to that section's own default without a
    * setState in an effect body and the cascading render that causes.
    */
-  const [modeChoice, setModeChoice] = useState(null);
-  const mode = modeChoice?.category === category
-    ? modeChoice.mode
+  /**
+   * Which pipeline the upload takes, read off the file itself rather than
+   * asked as a question. An audio file is always better served by the
+   * streaming ladder, and a video or image is always served as the file --
+   * so there was never a real decision here, only a word to understand.
+   *
+   * Before a file is chosen the section's own nature is the best guess, which
+   * is what lets the form describe what will happen in advance.
+   */
+  const detectedKind = file ? kindForUpload({ mimeType: file.type, filename: file.name }) : null;
+  const mode = file
+    ? (detectedKind === "audio" ? "audio" : "item")
     : (isAudioNativeCategory(category) ? "audio" : "item");
-  const setMode = (m) => setModeChoice({ category, mode: m });
   const [audioItems, setAudioItems] = useState([]);
   const [videoItems, setVideoItems] = useState([]);
   const [requeuing, setRequeuing] = useState(null);
@@ -91,8 +97,11 @@ export default function VaultManager() {
   const artInputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState("");
+  // Generated from the section and the title by /api/admin/vault/slug, which
+  // also guarantees it is free -- the upload upserts on slug, so a collision
+  // would mean one item silently replacing another.
   const [slug, setSlug] = useState("");
-  const [slugTouched, setSlugTouched] = useState(false);
+  const [slugNote, setSlugNote] = useState(null);
   const [description, setDescription] = useState("");
   const [mediaType, setMediaType] = useState("video");
   const [accessTier, setAccessTier] = useState("vault_pass");
@@ -260,26 +269,40 @@ export default function VaultManager() {
     if (!f) return;
     const guessed = kindForUpload({ mimeType: f.type, filename: f.name });
     if (guessed) setMediaType(guessed);
-    if (!title) {
-      const base = f.name.replace(/\.[^.]+$/, "");
-      setTitle(base);
-      if (!slugTouched) setSlug(slugify(base));
-    }
-  };
-
-  const onTitle = (v) => {
-    setTitle(v);
-    if (!slugTouched) setSlug(slugify(v));
+    // The filename is usually most of the title already.
+    if (!title) setTitle(f.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim());
   };
 
   const reset = () => {
     setFile(null);
     setTitle("");
     setSlug("");
-    setSlugTouched(false);
+    setSlugNote(null);
     setDescription("");
     setProgress(0);
     if (fileRef.current) fileRef.current.value = "";
+  };
+
+  /**
+   * Asks the server for this item's storage name.
+   *
+   * Done at upload time rather than as you type: it is a round trip per call,
+   * and the answer only has to be right once -- at the moment the upload
+   * actually claims it.
+   */
+  const claimSlug = async () => {
+    const res = await fetch("/api/admin/vault/slug", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ category, title }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Could not work out a name for this");
+    setSlug(json.slug);
+    setSlugNote(json.disambiguated
+      ? `There is already something called "${title}" here, so this one is saved as ${json.slug}.`
+      : null);
+    return json.slug;
   };
 
   /**
@@ -314,7 +337,7 @@ export default function VaultManager() {
    * not exist until the worker finishes, which is why this reports the queue
    * state rather than claiming the item is ready.
    */
-  const uploadAudioMaster = async () => {
+  const uploadAudioMaster = async (itemSlug) => {
     setBusy(true);
     setProgress(0);
     setStatus({ kind: "info", msg: "Preparing…" });
@@ -323,7 +346,7 @@ export default function VaultManager() {
       const presignRes = await fetch("/api/admin/vault/audio/presigned", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category, slug, filename: file.name, size: file.size }),
+        body: JSON.stringify({ category, slug: itemSlug, filename: file.name, size: file.size }),
       });
       const presign = await presignRes.json();
       if (!presignRes.ok) throw new Error(presign.error || "Could not prepare upload");
@@ -338,7 +361,7 @@ export default function VaultManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category,
-          slug,
+          slug: itemSlug,
           filename: file.name,
           size: file.size,
           title,
@@ -386,11 +409,31 @@ export default function VaultManager() {
   };
 
   const upload = async () => {
-    if (!file || !title.trim() || !slug) {
-      setStatus({ kind: "error", msg: "Pick a file and give it a title." });
+    if (!file) {
+      setStatus({ kind: "error", msg: "Choose a file first." });
       return;
     }
-    if (mode === "audio") return uploadAudioMaster();
+    if (!title.trim()) {
+      setStatus({ kind: "error", msg: "Give it a title." });
+      return;
+    }
+
+    // The storage name is claimed here, once, immediately before the upload
+    // that uses it.
+    let itemSlug;
+    setBusy(true);
+    try {
+      itemSlug = await claimSlug();
+    } catch (err) {
+      setStatus({ kind: "error", msg: err.message });
+      setBusy(false);
+      return;
+    }
+
+    if (mode === "audio") {
+      setBusy(false);
+      return uploadAudioMaster(itemSlug);
+    }
     setBusy(true);
     setProgress(0);
     setStatus({ kind: "info", msg: "Preparing…" });
@@ -401,7 +444,7 @@ export default function VaultManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category,
-          slug,
+          slug: itemSlug,
           filename: file.name,
           mimeType: file.type,
           size: file.size,
@@ -420,7 +463,7 @@ export default function VaultManager() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           category,
-          slug,
+          slug: itemSlug,
           filename: file.name,
           title,
           description,
@@ -643,7 +686,7 @@ export default function VaultManager() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <div>
-          <label style={LABEL} htmlFor="vm-section">Section</label>
+          <label style={LABEL} htmlFor="vm-section">Where does this go?</label>
           <select id="vm-section" style={FIELD} value={category} disabled={busy}
             onChange={(e) => setCategory(e.target.value)}>
             {VAULT_SECTIONS.map((s) => (
@@ -652,45 +695,112 @@ export default function VaultManager() {
           </select>
         </div>
 
-        {/* What kind of upload this is. Audio sections open on "master"
-            because that is what they are for, but any section can take
-            either -- an interview section might still want one audio-only
-            episode streamed properly. */}
         <div>
-          <span style={LABEL}>Upload as</span>
-          <div style={{ display: "flex", gap: 8 }}>
-            {[
-              { id: "audio", label: "Audio master", hint: "Transcoded + streamed" },
-              { id: "item", label: "File", hint: "Served as uploaded" },
-            ].map((m) => {
-              const on = mode === m.id;
-              return (
-                <button key={m.id} type="button" disabled={busy}
-                  onClick={() => setMode(m.id)}
-                  style={{
-                    flex: 1, padding: "10px 12px", borderRadius: 10, cursor: busy ? "default" : "pointer",
-                    textAlign: "left", lineHeight: 1.35,
-                    border: `1px solid ${on ? "rgba(0,255,255,0.35)" : "#232323"}`,
-                    background: on ? "rgba(0,255,255,0.07)" : "#0d0d0d",
-                    color: on ? "#00ffff" : "#7a7a7a",
-                  }}>
-                  <span style={{ display: "block", fontSize: 13, fontWeight: 600 }}>{m.label}</span>
-                  <span style={{ display: "block", fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: on ? "rgba(0,255,255,0.6)" : "#4a4a4a" }}>
-                    {m.hint}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {mode === "audio" ? (
-            <p style={{ fontSize: 11, color: "#4a4a4a", marginTop: 8, lineHeight: 1.6 }}>
-              Same pipeline shape as a song release: the master is archived, an
-              encrypted ladder is encoded from it, and playback is gated. Nothing
-              streams until encoding finishes.
+          <label style={LABEL} htmlFor="vm-file">The file</label>
+          {/* No capture attribute: on a phone this offers camera, photo
+              library and Files, which is the whole point of uploading from
+              the device you recorded on. */}
+          <input id="vm-file" ref={fileRef} type="file" disabled={busy}
+            accept={mode === "audio" ? VAULT_AUDIO_ACCEPT : "video/*,audio/*,image/*"}
+            onChange={onPickFile}
+            style={{ ...FIELD, padding: 10 }} />
+          {/* Says what is about to happen in plain words, rather than asking
+              which pipeline to use -- the answer was always the file's own. */}
+          <p style={{ fontSize: 11, color: "#4a4a4a", marginTop: 6, lineHeight: 1.6 }}>
+            {file
+              ? mode === "audio"
+                ? "Music or audio \u2014 this gets converted for streaming, so it plays instantly and stays protected."
+                : detectedKind === "image"
+                  ? "A photo \u2014 stored and shown as-is."
+                  : "Video \u2014 uploaded as-is. You can make it stream from the list below once it is in."
+              : "Audio, video or a photo. Audio is converted for streaming automatically."}
+          </p>
+          {file ? (
+            <p style={{ fontSize: 11, color: "#6d6d6d", marginTop: 6 }}>
+              {(file.size / 1e6).toFixed(1)} MB{big ? " · will upload in parts" : ""}
             </p>
           ) : null}
         </div>
 
+        <div>
+          <label style={LABEL} htmlFor="vm-title">Title</label>
+          <input id="vm-title" style={FIELD} value={title} disabled={busy}
+            onChange={(e) => setTitle(e.target.value)} placeholder="What is this called?" />
+        </div>
+
+
+
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          {/* No Type picker at all: the file says what it is, and offering a
+              choice that the file overrules would be a lie about the form. */}
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <label style={LABEL} htmlFor="vm-access">Who can see it?</label>
+            <select id="vm-access" style={FIELD} value={accessTier} disabled={busy}
+              onChange={(e) => setAccessTier(e.target.value)}>
+              <option value="vault_pass">Vault Pass holders</option>
+              <option value="inner_circle">Inner Circle and above</option>
+              <option value="public">Anyone who opens the Vault</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label style={LABEL} htmlFor="vm-desc">Notes (optional)</label>
+          <textarea id="vm-desc" style={{ ...FIELD, minHeight: 80, resize: "vertical" }}
+            value={description} disabled={busy}
+            onChange={(e) => setDescription(e.target.value)} />
+        </div>
+
+        {busy ? (
+          <div>
+            <div style={{ height: 6, background: "#1a1a1a", borderRadius: 999, overflow: "hidden" }}>
+              <div style={{
+                height: "100%",
+                width: `${Math.round(progress * 100)}%`,
+                background: "linear-gradient(90deg,#00ffff,#a259ff)",
+                transition: "width 0.2s ease",
+              }} />
+            </div>
+            <p style={{ fontSize: 11, color: "#6d6d6d", marginTop: 6 }}>
+              {Math.round(progress * 100)}%
+            </p>
+          </div>
+        ) : null}
+
+        {slugNote ? (
+          <p style={{ fontSize: 12, color: "#e3bd76", margin: 0, lineHeight: 1.6 }}>{slugNote}</p>
+        ) : null}
+
+        {status ? (
+          <p style={{
+            fontSize: 13,
+            margin: 0,
+            color: status.kind === "error" ? "#ff6b6b" : status.kind === "ok" ? "#4ade80" : "#888",
+          }}>{status.msg}</p>
+        ) : null}
+
+        <button type="button" onClick={upload} disabled={busy || !file}
+          style={{
+            padding: "13px 18px",
+            borderRadius: 12,
+            border: "1px solid rgba(0,255,255,0.3)",
+            background: busy || !file ? "#111" : "rgba(0,255,255,0.1)",
+            color: busy || !file ? "#555" : "#00ffff",
+            fontWeight: 700,
+            letterSpacing: 1.5,
+            fontSize: 13,
+            cursor: busy || !file ? "default" : "pointer",
+          }}>
+          {busy ? "WORKING…" : "ADD TO VAULT"}
+        </button>
+      </div>
+
+      {/* Belongs to the section, not to the item being added -- sitting inside
+          the item form it read as one more field of the upload. */}
+      <div style={{ margin: "34px 0 12px", height: 1, background: "#1a1a1a" }} />
+      <h3 style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "#6d6d6d", marginBottom: 14 }}>
+        Cover for {category}
+      </h3>
         {/* Section cover: what the pod shows on its shelf before it is
             summoned, so a section is never sitting there blank. Separate
             from the item upload below -- this is the section's chrome, not
@@ -738,114 +848,6 @@ export default function VaultManager() {
             }}>{coverMsg.msg}</p>
           ) : null}
         </div>
-
-        <div>
-          <label style={LABEL} htmlFor="vm-file">
-            {mode === "audio" ? "Master" : "File"}
-          </label>
-          {/* No capture attribute: on a phone this offers camera, photo
-              library and Files, which is the whole point of uploading from
-              the device you recorded on. */}
-          <input id="vm-file" ref={fileRef} type="file" disabled={busy}
-            accept={mode === "audio" ? VAULT_AUDIO_ACCEPT : "video/*,audio/*,image/*"}
-            onChange={onPickFile}
-            style={{ ...FIELD, padding: 10 }} />
-          {mode === "audio" ? (
-            <p style={{ fontSize: 11, color: "#4a4a4a", marginTop: 6, lineHeight: 1.6 }}>
-              .wav, .flac or .aiff for a real master. .m4a and .mp3 are accepted
-              for voice recordings that never existed losslessly.
-            </p>
-          ) : null}
-          {file ? (
-            <p style={{ fontSize: 11, color: "#6d6d6d", marginTop: 6 }}>
-              {(file.size / 1e6).toFixed(1)} MB{big ? " · will upload in parts" : ""}
-            </p>
-          ) : null}
-        </div>
-
-        <div>
-          <label style={LABEL} htmlFor="vm-title">Title</label>
-          <input id="vm-title" style={FIELD} value={title} disabled={busy}
-            onChange={(e) => onTitle(e.target.value)} placeholder="What is this?" />
-        </div>
-
-        <div>
-          <label style={LABEL} htmlFor="vm-slug">Slug</label>
-          <input id="vm-slug" style={FIELD} value={slug} disabled={busy}
-            onChange={(e) => { setSlugTouched(true); setSlug(slugify(e.target.value)); }} />
-          <p style={{ fontSize: 11, color: "#4a4a4a", marginTop: 6 }}>
-            Becomes the filename in storage. Re-using one replaces that entry.
-          </p>
-        </div>
-
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          {/* No Type picker in master mode: the type is audio by definition,
-              and offering a choice that gets overridden server-side would be
-              a lie about what the form does. */}
-          {mode === "audio" ? null : (
-            <div style={{ flex: 1, minWidth: 160 }}>
-              <label style={LABEL} htmlFor="vm-type">Type</label>
-              <select id="vm-type" style={FIELD} value={mediaType} disabled={busy}
-                onChange={(e) => setMediaType(e.target.value)}>
-                {MEDIA_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </div>
-          )}
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <label style={LABEL} htmlFor="vm-access">Access</label>
-            <select id="vm-access" style={FIELD} value={accessTier} disabled={busy}
-              onChange={(e) => setAccessTier(e.target.value)}>
-              {ACCESS_TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label style={LABEL} htmlFor="vm-desc">Description</label>
-          <textarea id="vm-desc" style={{ ...FIELD, minHeight: 80, resize: "vertical" }}
-            value={description} disabled={busy}
-            onChange={(e) => setDescription(e.target.value)} />
-        </div>
-
-        {busy ? (
-          <div>
-            <div style={{ height: 6, background: "#1a1a1a", borderRadius: 999, overflow: "hidden" }}>
-              <div style={{
-                height: "100%",
-                width: `${Math.round(progress * 100)}%`,
-                background: "linear-gradient(90deg,#00ffff,#a259ff)",
-                transition: "width 0.2s ease",
-              }} />
-            </div>
-            <p style={{ fontSize: 11, color: "#6d6d6d", marginTop: 6 }}>
-              {Math.round(progress * 100)}%
-            </p>
-          </div>
-        ) : null}
-
-        {status ? (
-          <p style={{
-            fontSize: 13,
-            margin: 0,
-            color: status.kind === "error" ? "#ff6b6b" : status.kind === "ok" ? "#4ade80" : "#888",
-          }}>{status.msg}</p>
-        ) : null}
-
-        <button type="button" onClick={upload} disabled={busy || !file}
-          style={{
-            padding: "13px 18px",
-            borderRadius: 12,
-            border: "1px solid rgba(0,255,255,0.3)",
-            background: busy || !file ? "#111" : "rgba(0,255,255,0.1)",
-            color: busy || !file ? "#555" : "#00ffff",
-            fontWeight: 700,
-            letterSpacing: 1.5,
-            fontSize: 13,
-            cursor: busy || !file ? "default" : "pointer",
-          }}>
-          {busy ? "WORKING…" : mode === "audio" ? "UPLOAD MASTER" : "UPLOAD TO VAULT"}
-        </button>
-      </div>
 
       {/* Transcode state, derived from the job and manifest rows rather than a
           status column, so a worker that died mid-job shows as stalled instead
