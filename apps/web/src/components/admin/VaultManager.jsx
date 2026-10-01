@@ -68,19 +68,6 @@ export default function VaultManager() {
    * changing sections falls back to that section's own default without a
    * setState in an effect body and the cascading render that causes.
    */
-  /**
-   * Which pipeline the upload takes, read off the file itself rather than
-   * asked as a question. An audio file is always better served by the
-   * streaming ladder, and a video or image is always served as the file --
-   * so there was never a real decision here, only a word to understand.
-   *
-   * Before a file is chosen the section's own nature is the best guess, which
-   * is what lets the form describe what will happen in advance.
-   */
-  const detectedKind = file ? kindForUpload({ mimeType: file.type, filename: file.name }) : null;
-  const mode = file
-    ? (detectedKind === "audio" ? "audio" : "item")
-    : (isAudioNativeCategory(category) ? "audio" : "item");
   const [audioItems, setAudioItems] = useState([]);
   const [videoItems, setVideoItems] = useState([]);
   const [requeuing, setRequeuing] = useState(null);
@@ -96,6 +83,20 @@ export default function VaultManager() {
   const artForRef = useRef(null);
   const artInputRef = useRef(null);
   const [file, setFile] = useState(null);
+
+  /**
+   * Which pipeline the upload takes, read off the file itself rather than
+   * asked as a question. An audio file is always better served by the
+   * streaming ladder, and a video or image is always served as the file --
+   * so there was never a real decision here, only a word to understand.
+   *
+   * Before a file is chosen the section's own nature is the best guess, which
+   * is what lets the form describe what will happen in advance.
+   */
+  const detectedKind = file ? kindForUpload({ mimeType: file.type, filename: file.name }) : null;
+  const mode = file
+    ? (detectedKind === "audio" ? "audio" : "item")
+    : (isAudioNativeCategory(category) ? "audio" : "item");
   const [title, setTitle] = useState("");
   // Generated from the section and the title by /api/admin/vault/slug, which
   // also guarantees it is free -- the upload upserts on slug, so a collision

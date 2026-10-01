@@ -35,8 +35,9 @@
     "test:storage": "node --import ./scripts/register-alias.mjs --test src/lib/storage/__tests__/*.test.js",
     "test:audio-visual": "node --import ./scripts/register-alias.mjs --test src/lib/audio-visual/__tests__/*.test.js",
     "test:vault-audio": "node --import ./scripts/register-alias.mjs --test src/lib/vault/__tests__/*.test.js",
+    "test:vault-ui": "node --import ./scripts/register-alias.mjs --test src/components/admin/__tests__/*.test.js",
     "test:commerce": "node --import ./scripts/register-alias.mjs --test src/lib/commerce/__tests__/*.test.js",
-    "test:architecture-critical": "npm run test:core-invariants && npm run test:playback-physical && npm run test:auth-security && npm run test:admin-upload && npm run test:release-lifecycle && npm run test:signal-path-contracts && npm run test:livestream && npm run test:fulfillment && npm run test:storage && npm run test:audio-visual && npm run test:vault-audio && npm run test:commerce"
+    "test:architecture-critical": "npm run test:core-invariants && npm run test:playback-physical && npm run test:auth-security && npm run test:admin-upload && npm run test:release-lifecycle && npm run test:signal-path-contracts && npm run test:livestream && npm run test:fulfillment && npm run test:storage && npm run test:audio-visual && npm run test:vault-audio && npm run test:vault-ui && npm run test:commerce"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1051.0",
