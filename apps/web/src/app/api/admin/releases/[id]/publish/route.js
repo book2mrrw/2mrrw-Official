@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { headR2ObjectKey, copyR2Object, deleteR2Object } from "@/lib/storage/r2";
+import { headR2ObjectKey, copyR2Object, deleteR2Object, getPublicR2Url } from "@/lib/storage/r2";
 import { buildHLSPrefix } from "@/lib/hls/derive-key";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
@@ -498,7 +498,29 @@ export async function POST(req, { params }) {
   // type; video_path is now only set when canonicalVideoKey confirms a
   // motion cover genuinely exists.
   const video_path   = canonicalVideoKey ? resolveVideoPath(typeFolder, releaseSlug) : null;
-  const visual       = visualDiscoveryUrl(typeFolder, releaseSlug, {});
+  // cover_url is the STATIC cover, always — never a discovery redirect, and
+  // never the motion cover. The motion cover travels separately, as
+  // metadata.animated_cover_r2_key and video_path.
+  //
+  // Two things depend on that separation:
+  //
+  //   1. catalog-db derives `baseCover` straight from cover_url. Writing a
+  //      discovery URL there makes baseCover resolve to the VIDEO (discovery
+  //      prefers video), so `cover` and `baseCover` collapse to the same value.
+  //      GlobalAudioPlayerBar gates animated art on `cover !== baseCover`, so
+  //      that collapse is exactly why a mixtape/EP played with no animated
+  //      cover — and it also hands an .mp4 to the static <img> layer.
+  //   2. /api/media/visual is a force-dynamic 302 and the image optimizer will
+  //      not follow it, so a cover published that way was served unoptimized
+  //      at full size.
+  //
+  // The key here is the same object step 3 verified with headR2ObjectKey, so
+  // this is a direct reference to something already proven present.
+  // catalog-db still builds the discovery URL for `visual`/`video` when a
+  // motion cover exists — that indirection stays where it does real work.
+  const visual       = canonicalCoverKey
+    ? getPublicR2Url(canonicalCoverKey)
+    : visualDiscoveryUrl(typeFolder, releaseSlug, {});
   const preview      = previewDiscoveryUrl(preview_path);
 
   // Price: body price_cents takes priority, then parse price string, then defaults

@@ -31,10 +31,34 @@ test("recomputing via visualDiscoveryUrl only happens as a fallback for rows whe
   assert.doesNotMatch(legacyCoverLine, /row\.cover_url/);
 });
 
-test("the publish route writes cover_url as exactly visualDiscoveryUrl(typeFolder, releaseSlug, {}) — confirming resolveCoverUrl's trust in the stored value is well-founded, not a guess", () => {
+test("the publish route writes cover_url from a value it has already verified in R2 — confirming resolveCoverUrl's trust in the stored value is well-founded, not a guess", () => {
   const src = read("src/app/api/admin/releases/[id]/publish/route.js");
-  assert.match(src, /const visual\s*=\s*visualDiscoveryUrl\(typeFolder, releaseSlug, \{\}\);/);
+
+  // The trust property is unchanged: cover_url is still derived only from
+  // values this route has proven. What changed is the form it takes.
+  //
+  // cover_url is now ALWAYS the concrete canonical R2 key of the STATIC cover
+  // — the same object the blocking headR2ObjectKey check verified — and never
+  // a discovery redirect. catalog-db reads baseCover straight off cover_url,
+  // so a redirect there resolved to the video and collapsed cover === baseCover,
+  // which is what stopped mixtapes/EPs showing animated art in the player and
+  // put an .mp4 behind an <img>. The motion cover travels separately as
+  // metadata.animated_cover_r2_key / video_path, and catalog-db still builds
+  // the discovery URL for `visual`/`video` where that indirection earns its keep.
+  assert.match(
+    src,
+    /const visual\s+= canonicalCoverKey\s*\n?\s*\? getPublicR2Url\(canonicalCoverKey\)\s*\n?\s*: visualDiscoveryUrl\(typeFolder, releaseSlug, \{\}\);/,
+    "cover_url must be the concrete verified static cover key"
+  );
+
+  // The discovery URL remains only as the fallback for a release with no
+  // canonical cover key at all.
+  assert.match(src, /visualDiscoveryUrl\(typeFolder, releaseSlug, \{\}\)/);
   assert.match(src, /cover_url:\s*visual \|\| null,/);
+
+  // Whichever branch is taken, the value is one of exactly two verified
+  // sources — never an unchecked guess.
+  assert.match(src, /const canonicalCoverKey = resolvedCoverKey;|let canonicalCoverKey = resolvedCoverKey;/);
 });
 
 test("cover art is verified to exist in R2 (a real HEAD check) before a release can publish at all, so a modern release's cover_url is never a dangling reference", () => {
