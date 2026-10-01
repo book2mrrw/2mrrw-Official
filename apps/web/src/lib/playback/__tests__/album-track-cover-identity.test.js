@@ -93,21 +93,97 @@ test("a static-cover release is unaffected and never claims to be animated", () 
   assert.match(String(track.baseCover), /\.jpg$/i);
 });
 
-test("a track's own baseCover is preserved rather than overwritten by the release", () => {
-  // Documents real behaviour, which is narrower than it looks: an album track
-  // is normalised under the RELEASE slug, so mergeCanonicalMetadata re-derives
-  // coverArtType and cover from the canonical release and the release wins
-  // those two. Per-track art is not a supported override today.
+test("the release's art wins over a track's own when played from its track list", () => {
+  // SUPERSEDES an earlier assertion that a track's own baseCover survived here.
   //
-  // What the fix must still guarantee is that inheritance is all-or-nothing:
-  // a track carrying its own art keeps that art as its static layer, instead
-  // of being handed the release's baseCover and silently losing it.
+  // That assertion documented observed behaviour rather than an intended rule —
+  // its own note conceded "per-track art is not a supported override today" —
+  // and it was really guarding against a narrower bug: a track cover paired with
+  // the release's baseCover, which lost the track's art while keeping neither
+  // identity whole. The guarantee it was protecting (never a mixed pair, never a
+  // video URL in the static slot) still holds, and is still asserted below.
+  //
+  // The rule is now explicit: playing from a release's track list means the
+  // release's artwork. Letting a track's own art win is precisely what made the
+  // player swap covers partway through an album, because a track that is also a
+  // single arrives carrying the single's artwork.
   const album = {
     ...MOTION_ALBUM,
     tracks: [{ slug: "x", title: "X", cover: "/images/track-x.jpg", coverArtType: "image" }],
   };
   const track = resolveAlbumTrackPlaybackItem(album, album.tracks[0], 0, null);
 
-  assert.match(String(track.baseCover), /track-x\.jpg$/, "the track's own art must survive");
+  assert.equal(track.baseCover, MOTION_ALBUM.baseCover, "the release's static layer must win");
+  assert.equal(track.coverArtType, "video", "and its motion identity with it");
+  // The original guarantee, unchanged: the static layer is never a video URL.
   assert.doesNotMatch(String(track.baseCover), /\.(mp4|webm|mov)(\?|#|$)/i);
+});
+
+// ── A track that is ALSO released as a single ────────────────────────────────
+//
+// The reported symptom: track 1 of Love Hz Vol. 1 showed the right animated
+// cover in the global player and later tracks did not. The cause is that a track
+// which is also a single resolves through the catalog lookup, and that lookup
+// returns the SINGLE's artwork. Playing from the release's track list must use
+// the RELEASE's artwork regardless.
+
+/** A catalogLookup whose entries carry their own (single) cover identity. */
+const SINGLE_LOOKUP = {
+  bySlug: new Map([
+    ["02-all-yourz", {
+      slug: "all-yourz",
+      title: "ALL YOURZ",
+      cover: "https://pub-643e.r2.dev/images/singles/all-yourz/all-yourz.jpeg",
+      baseCover: "https://pub-643e.r2.dev/images/singles/all-yourz/all-yourz.jpeg",
+      coverArtType: "image",
+    }],
+  ]),
+  byTitle: new Map([
+    ["all yourz", {
+      slug: "all-yourz",
+      title: "ALL YOURZ",
+      cover: "https://pub-643e.r2.dev/images/singles/all-yourz/all-yourz.jpeg",
+      baseCover: "https://pub-643e.r2.dev/images/singles/all-yourz/all-yourz.jpeg",
+      coverArtType: "image",
+    }],
+  ]),
+};
+
+test("an album track that is also a single uses the ALBUM's cover, not the single's", () => {
+  const track = resolveAlbumTrackPlaybackItem(
+    MOTION_ALBUM,
+    { slug: "02-all-yourz", title: "ALL YOURZ" },
+    1,
+    SINGLE_LOOKUP
+  );
+  assert.equal(track.coverArtType, "video", "the album is animated, so the track must be too");
+  assert.equal(track.baseCover, MOTION_ALBUM.baseCover);
+  assert.doesNotMatch(String(track.baseCover), /all-yourz/, "the single's artwork leaked in");
+  assert.ok(playerWouldAnimate(track), "the player would not animate this track");
+});
+
+test("same track as a bare title string also uses the album's cover", () => {
+  // The string branch resolves through byTitle, which returns the single too.
+  const track = resolveAlbumTrackPlaybackItem(MOTION_ALBUM, "ALL YOURZ", 1, SINGLE_LOOKUP);
+  assert.equal(track.coverArtType, "video");
+  assert.doesNotMatch(String(track.baseCover), /all-yourz/);
+  assert.ok(playerWouldAnimate(track));
+});
+
+test("every track in a release resolves the same cover identity", () => {
+  // The property behind the symptom: walking the whole track list must not
+  // change artwork partway through.
+  const tracks = [
+    "Roll Call",
+    { slug: "02-all-yourz", title: "ALL YOURZ" },
+    { slug: "03-own-art", title: "Own Art", cover: "/images/singles/turnt.jpg" },
+  ];
+  const resolved = tracks.map((t, i) =>
+    resolveAlbumTrackPlaybackItem(MOTION_ALBUM, t, i, SINGLE_LOOKUP)
+  );
+  const identities = new Set(
+    resolved.map((t) => `${t.cover}|${t.baseCover}|${t.coverArtType}`)
+  );
+  assert.equal(identities.size, 1, `artwork changed mid-album: ${[...identities].join(" vs ")}`);
+  for (const t of resolved) assert.ok(playerWouldAnimate(t));
 });

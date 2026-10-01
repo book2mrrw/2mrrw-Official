@@ -125,6 +125,34 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
   const albumSlug = albumNorm.slug || album.slug;
   const streamSlug = resolveAlbumTrackStreamSlug(albumSlug);
 
+  // ── The release's cover identity, decided ONCE for every track shape ────────
+  //
+  // Playing from a release's track list means the release's artwork, full stop —
+  // animated or static. That is the product rule, and it has to be one object
+  // applied at the end of every branch rather than re-derived per branch, which
+  // is how the branches drifted apart in the first place.
+  //
+  // The drift was observable: track 1 of a release showed the right animated
+  // cover and later tracks did not. The reason is that the branches below
+  // disagree about where a cover comes from. A track that is ALSO released as a
+  // single resolves through the catalog lookup, and that lookup returns the
+  // SINGLE's own artwork — so the moment a track list contained a track that is
+  // also a single, the player switched to the single's cover mid-album.
+  //
+  // Spreading this last is what makes it authoritative: it overrides whatever a
+  // spread catalogItem or track object brought with it. All four fields move
+  // together — inheriting `cover` alone leaves coverArtType undefined, and
+  // normalizeCatalogItemForPlayback then collapses cover and baseCover to the
+  // same value, which both hides the animated cover (the player gates on
+  // `coverArtType === "video" && cover !== baseCover`) and feeds a video URL to
+  // an <img>.
+  const albumCoverIdentity = {
+    cover: albumNorm.cover,
+    baseCover: albumNorm.baseCover,
+    coverArtType: albumNorm.coverArtType,
+    video: albumNorm.video,
+  };
+
   if (typeof track === "string") {
     const title = track;
     const canonicalTrack = getCanonicalTrack(albumSlug, titleToCatalogSlug(title));
@@ -159,6 +187,9 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
           };
     return normalizeCatalogItemForPlayback({
       ...base,
+      // Applied after ...base so it also covers the catalogItem branch, which
+      // spreads a single's whole catalog entry — including that single's cover.
+      ...albumCoverIdentity,
       albumSlug,
       release_type: albumNorm.release_type || album.release_type,
       trackIndex: index,
@@ -192,23 +223,13 @@ export function resolveAlbumTrackPlaybackItem(album, track, index, catalogLookup
     // the player's `coverArtType === "video" && cover !== baseCover` gate can
     // never pass (so a mixtape/EP plays with no animated art), and the static
     // layer gets a video URL handed to an <img>.
-    // All-or-nothing: a track that brings its own art keeps it whole, and one
-    // that brings none inherits the release's whole. Mixing the two is what
-    // breaks — a track cover paired with the release's baseCover resolves back
-    // to the release image and the track's own art is lost.
-    ...(track.cover || track.baseCover
-      ? {
-          cover: track.cover,
-          baseCover: track.baseCover || track.cover,
-          coverArtType: track.coverArtType || "image",
-          video: track.video || null,
-        }
-      : {
-          cover: albumNorm.cover,
-          baseCover: albumNorm.baseCover,
-          coverArtType: albumNorm.coverArtType,
-          video: albumNorm.video,
-        }),
+    // The release's identity wins unconditionally — it is NOT "the track's own
+    // art if it has any, else the release's". That earlier rule is what broke a
+    // track list containing a track that is also a single: the track arrives
+    // carrying the single's cover, so the player swapped to the single's artwork
+    // partway through the album. Playing from a release's track list means the
+    // release's artwork, so there is nothing to choose between here.
+    ...albumCoverIdentity,
     preview: track.preview || canonicalTrack?.preview || catalogItem?.preview || albumNorm.preview,
     audio: track.audio || catalogItem?.audio || albumNorm.audio,
     artist: track.artist || albumNorm.artist || "2MRRW",

@@ -21,6 +21,7 @@ import {
   resolveVideoPath,
   visualDiscoveryUrl,
 } from "@/lib/media/canonical-paths";
+import { catalogCoverUrl } from "@/lib/media-urls";
 import { normalizeReleaseType } from "@/lib/media/utils/normalize-release-type";
 import { releaseAvailability } from "@/lib/releases/release-availability";
 import { getMusicVideosForReleaseIds } from "@/lib/audio-visual/release-video-lookup";
@@ -71,6 +72,28 @@ export function mapProductRow(row, videoMatch = null) {
 
   // Cover: DB explicit cover, or fall back to legacy public path in metadata
   const legacyCover = row.cover_url || row.image_path || meta.legacy_cover || null;
+
+  // The STILL, resolved separately from legacyCover above — they are not the same
+  // thing, and conflating them is what blanked every upload-manager release.
+  //
+  // `row.cover_url` is NOT reliably a still. The publish/upload path writes a
+  // `/api/media/visual?...` discovery URL into it, and that endpoint prefers
+  // VIDEO — exactly the wrong answer for an <img> or a <video poster>. Confirmed
+  // in production: all-yourz and n-2-k-6 both carry a discovery URL there, while
+  // the real artwork sat unread in metadata.cover_art_r2_key. Releases seeded by
+  // hand (2-heavy, i-dont-believe-you) happen to have a real image path in
+  // cover_url, which is the only reason they render — so this looked like "two
+  // broken releases" rather than "every release the upload manager created".
+  //
+  // `row.image_path` is excluded on purpose: it is an entity FOLDER
+  // ("images/singles/all-yourz/"), not a file. It is still-SHAPED — no video
+  // extension, not a discovery URL — so resolveCoverDescriptor would accept it
+  // and hand an unloadable directory URL to an <img>.
+  //
+  // metadata.cover_art_r2_key is the one field that always holds the canonical
+  // static artwork key. It was already being read here, but only to build a
+  // revision string — never to answer "what is this release's cover?".
+  const staticCover = meta.cover_art_r2_key || row.cover_url || meta.legacy_cover || null;
   const legacyVideo = meta.animated_cover_r2_key || (meta.legacy_video_stem
     ? `videos/${releaseTypeFolder}/${row.slug}/${meta.legacy_video_stem}.mp4`
     : null);
@@ -155,8 +178,12 @@ export function mapProductRow(row, videoMatch = null) {
     video: hasVideo ? visual : undefined,
     coverArtType: hasVideo ? "video" : "image",
 
-    // Legacy cover for <img> fallback
-    baseCover: legacyCover || null,
+    // Legacy cover for <img> fallback. Takes the canonical static key first —
+    // see staticCover above. withR2CatalogMedia reads this as its first still
+    // candidate and resolves an R2 key to a public URL, so handing it the raw
+    // key is correct; handing it a discovery URL yields baseCover: null, which
+    // is an <img> with no src.
+    baseCover: staticCover ? catalogCoverUrl(staticCover) : null,
     legacy_cover: legacyCover || null,
     legacy_cover_stem: meta.legacy_cover_stem || null,
     legacy_video_stem: meta.legacy_video_stem || null,
