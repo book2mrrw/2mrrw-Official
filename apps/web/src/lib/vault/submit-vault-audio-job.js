@@ -34,62 +34,26 @@
  */
 
 import {
+  assertVaultSlugIsOurs,
+  VaultJobConflict,
+  VaultIdentityCollision,
+} from "./vault-job-identity.js";
+import {
   VAULT_AUDIO_RENDITIONS,
   VAULT_AUDIO_SEGMENT_SECONDS,
   VAULT_AUDIO_RELEASE_TYPE,
   buildVaultAudioHlsPrefix,
 } from "./vault-audio-contract.js";
 
-export class VaultAudioJobConflict extends Error {
-  constructor(message = "This item is already being transcoded; retry once it finishes") {
-    super(message);
-    this.status = 409;
-  }
-}
-
-/** Thrown when the slug is already spoken for by something that is not a
- *  vault audio item. Never recovered from automatically. */
-export class VaultAudioIdentityCollision extends Error {
-  constructor(slug, where) {
-    super(
-      `The slug "${slug}" already has ${where} belonging to another pipeline. ` +
-      `Rename this vault item — writing here would overwrite published media.`
-    );
-    this.status = 409;
-  }
-}
+/* The conflict and collision types keep their vault-audio names: routes and
+   tests import them, and the distinction they draw is about this lane. They
+   are the shared types -- the guard behind them is one implementation in
+   vault-job-identity.js, so a fix there cannot reach one lane and miss the
+   other. */
+export const VaultAudioJobConflict = VaultJobConflict;
+export const VaultAudioIdentityCollision = VaultIdentityCollision;
 
 const OURS = VAULT_AUDIO_RELEASE_TYPE;
-
-/**
- * Refuses if either shared table already holds a row at this identity that
- * was not written by this pipeline.
- */
-async function assertSlugIsOurs(admin, slug) {
-  const { data: job, error: jobErr } = await admin
-    .from("hls_transcode_jobs")
-    .select("id, release_type, job_type")
-    .eq("slug", slug)
-    .is("track_slug", null)
-    .maybeSingle();
-  if (jobErr) throw jobErr;
-  if (job && job.release_type !== OURS) {
-    throw new VaultAudioIdentityCollision(slug, "a transcode job");
-  }
-
-  const { data: manifest, error: manErr } = await admin
-    .from("hls_manifests")
-    .select("id, release_type")
-    .eq("slug", slug)
-    .is("track_slug", null)
-    .maybeSingle();
-  if (manErr) throw manErr;
-  if (manifest && manifest.release_type !== OURS) {
-    throw new VaultAudioIdentityCollision(slug, "a published manifest");
-  }
-
-  return job || null;
-}
 
 /**
  * @param {object}  opts
@@ -112,7 +76,7 @@ export async function submitVaultAudioJob({
   if (!hlsPrefix) throw new Error("Invalid vault audio identity");
   if (!sourceKey) throw new Error("A source key is required");
 
-  const existing = await assertSlugIsOurs(admin, slug);
+  const existing = await assertVaultSlugIsOurs(admin, slug);
 
   // Nothing changed and it already finished: hand back what is there rather
   // than paying for an identical encode.

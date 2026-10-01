@@ -62,7 +62,8 @@ export async function GET(req) {
       const admin = getAdminClient();
       const { data, error } = await admin
         .from("hls_manifests")
-        .select("bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts")
+        .select("release_type, bitrates, segment_duration_secs, duration_seconds, hls_prefix, segment_counts")
+        .eq("release_type", "vault")
         .eq("slug", contentSlug)
         .is("track_slug", null)
         .maybeSingle();
@@ -74,7 +75,13 @@ export async function GET(req) {
     return cors(req, NextResponse.json({ error: "Internal error" }, { status: 500 }));
   }
 
-  if (!manifest) {
+
+  // Pinned to this pipeline's own rows. hls_manifests is shared with the
+  // release pipeline and its unique index is keyed on slug alone, and the
+  // manifest cache this reads through is keyed the same way -- so the filter
+  // goes on the query AND the returned value is re-checked, which is what
+  // covers an entry another pipeline may have cached under this slug.
+  if (!manifest || manifest.release_type !== "vault") {
     return cors(req, NextResponse.json({ error: "Manifest not found" }, { status: 404 }));
   }
 

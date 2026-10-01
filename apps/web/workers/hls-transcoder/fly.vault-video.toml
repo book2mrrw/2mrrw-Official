@@ -1,0 +1,43 @@
+# Independently deployed app, following the track-visual lane's precedent:
+# deploying this never restarts the music/audio worker or the Audio Visualz
+# video worker. Same image, different entry point.
+app = '2mrrw-vault-video'
+primary_region = 'iad'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  LOG_LEVEL    = 'info'
+  IDLE_POLL_MS = '5000'
+  # vault-video-transcoder.js reads this for its working directory; without it
+  # the encode would land on the small ephemeral root disk.
+  SCRATCH_DIR  = '/data'
+
+[processes]
+  vaultvideo = 'node src/workers/vault-video-worker.js'
+
+# UNMEASURED starting point, unlike the track-visual lane's sizing above --
+# nothing has run through this yet, so these are reasoned, not confirmed.
+#
+# This lane is deliberately lighter than the Audio Visualz video lane: libx264
+# only, no AV1, no HDR tone-mapping and no VMAF/CAMBI quality gating, so it
+# avoids the three things that made that lane need 500gb of scratch and a long
+# wall clock. 8gb is Fly's floor for the performance CPU kind rather than a
+# measured requirement.
+#
+# Resize once a real vault master has run through it.
+[[vm]]
+  processes = ['vaultvideo']
+  cpu_kind  = 'performance'
+  cpus      = 4
+  memory    = '8gb'
+
+# A vault upload is capped at 5gb, and four rungs of output plus the master
+# have to coexist on disk before anything is uploaded. 100gb leaves generous
+# headroom without reserving the 500gb the 4K/AV1 lane needs.
+[[mounts]]
+  source       = 'vault_video_scratch'
+  destination  = '/data'
+  processes    = ['vaultvideo']
+  initial_size = '100gb'

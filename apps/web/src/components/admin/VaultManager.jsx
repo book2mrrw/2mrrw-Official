@@ -76,6 +76,7 @@ export default function VaultManager() {
     : (isAudioNativeCategory(category) ? "audio" : "item");
   const setMode = (m) => setModeChoice({ category, mode: m });
   const [audioItems, setAudioItems] = useState([]);
+  const [videoItems, setVideoItems] = useState([]);
   const [requeuing, setRequeuing] = useState(null);
   // The row being edited, as a draft -- edits are not written until saved, so
   // abandoning one leaves the entry exactly as it was.
@@ -145,23 +146,43 @@ export default function VaultManager() {
     }
   }, []);
 
+  const loadVideo = useCallback(async (cat) => {
+    try {
+      const res = await fetch(
+        `/api/admin/vault/video/status?category=${encodeURIComponent(cat)}`,
+        { cache: "no-store" }
+      );
+      if (!res.ok) return;
+      const json = await res.json();
+      setVideoItems(json.items || []);
+    } catch {
+      /* transcode state is informational; the upload form still works */
+    }
+  }, []);
+
   useEffect(() => {
     loadItems(category);
     loadCover(category);
     loadAudio(category);
-  }, [category, loadItems, loadCover, loadAudio]);
+    loadVideo(category);
+  }, [category, loadItems, loadCover, loadAudio, loadVideo]);
 
   /**
    * Poll only while something is genuinely encoding, and stop the moment the
    * queue settles — an admin screen left open should not sit there issuing
    * requests forever.
    */
-  const hasLiveJob = audioItems.some((it) => LIVE_JOB_STATES.has(it.job?.status));
+  const hasLiveJob =
+    audioItems.some((it) => LIVE_JOB_STATES.has(it.job?.status)) ||
+    videoItems.some((it) => LIVE_JOB_STATES.has(it.job?.status));
   useEffect(() => {
     if (!hasLiveJob) return undefined;
-    const id = setInterval(() => loadAudio(category), 5000);
+    const id = setInterval(() => {
+      loadAudio(category);
+      loadVideo(category);
+    }, 5000);
     return () => clearInterval(id);
-  }, [hasLiveJob, category, loadAudio]);
+  }, [hasLiveJob, category, loadAudio, loadVideo]);
 
   /** Reads a local video's duration before upload so an over-long loop is
    *  caught here rather than after the bytes have been sent. */
@@ -506,6 +527,25 @@ export default function VaultManager() {
     }
   };
 
+  /** Queue a video item for the encrypted ladder, or retry a failed encode. */
+  const queueVideo = async (itemSlug) => {
+    setRequeuing(itemSlug);
+    try {
+      const res = await fetch("/api/admin/vault/video/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: itemSlug }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not queue");
+      loadVideo(category);
+    } catch (err) {
+      setStatus({ kind: "error", msg: err.message });
+    } finally {
+      setRequeuing(null);
+    }
+  };
+
   const pickArt = (it) => {
     artForRef.current = it;
     artInputRef.current?.click();
@@ -581,6 +621,7 @@ export default function VaultManager() {
       });
       loadItems(category);
       loadAudio(category);
+      loadVideo(category);
     } catch (err) {
       setStatus({ kind: "error", msg: err.message });
     } finally {
@@ -874,6 +915,70 @@ export default function VaultManager() {
       <h3 style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "#6d6d6d", marginBottom: 14 }}>
         In {category} · {items.length}
       </h3>
+
+      {/* Video transcode state. Until an item is encoded it still plays, but
+          as one progressive download of the whole file -- no ladder and no
+          encryption. Streaming is a deliberate step, not automatic on upload,
+          because a long encode should start when you decide it should. */}
+      {videoItems.length ? (
+        <>
+          <div style={{ margin: "34px 0 12px", height: 1, background: "#1a1a1a" }} />
+          <h3 style={{ fontSize: 12, letterSpacing: 2, textTransform: "uppercase", color: "#6d6d6d", marginBottom: 14 }}>
+            Video · {videoItems.length}
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {videoItems.map((it) => {
+              const st = it.job?.status;
+              const live = LIVE_JOB_STATES.has(st);
+              const badge = it.streamable
+                ? { text: "streaming", color: "#4ade80" }
+                : st === "processing" ? { text: "encoding", color: "#00ffff" }
+                : st === "pending"    ? { text: "queued",   color: "#8a8a8a" }
+                : st === "failed"     ? { text: "failed",   color: "#ff6b6b" }
+                : { text: "direct file", color: "#b0893a" };
+              const secs = it.manifest?.durationSeconds ?? it.duration_seconds;
+              return (
+                <div key={it.id} style={{
+                  display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap",
+                  padding: "12px 14px", background: "#0c0c0c",
+                  border: "1px solid #1c1c1c", borderRadius: 12,
+                }}>
+                  <div style={{ flex: 1, minWidth: 180 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#e8e8e8" }}>{it.title}</div>
+                    <div style={{ fontSize: 11, color: "#5a5a5a", marginTop: 3 }}>
+                      {it.slug}
+                      {secs ? ` · ${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, "0")}` : ""}
+                      {it.manifest?.bitrates?.length ? ` · ${it.manifest.bitrates.length} rungs` : ""}
+                    </div>
+                    {st === "failed" && it.job?.error ? (
+                      <div style={{ fontSize: 11, color: "#ff6b6b", marginTop: 5, lineHeight: 1.5 }}>
+                        {it.job.failureCategory}: {it.job.error}
+                      </div>
+                    ) : null}
+                  </div>
+                  <span style={{
+                    fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase",
+                    padding: "4px 10px", borderRadius: 999,
+                    color: badge.color, border: `1px solid ${badge.color}59`,
+                  }}>{badge.text}</span>
+                  {live ? null : (
+                    <button type="button" disabled={requeuing === it.slug}
+                      onClick={() => queueVideo(it.slug)}
+                      style={{
+                        padding: "7px 13px", borderRadius: 9,
+                        cursor: requeuing === it.slug ? "default" : "pointer",
+                        border: "1px solid #2a2a2a", background: "transparent",
+                        color: "#9a9a9a", fontSize: 11, letterSpacing: 1,
+                      }}>
+                      {requeuing === it.slug ? "…" : it.streamable ? "RE-ENCODE" : "MAKE STREAMABLE"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
 
       <input ref={artInputRef} type="file" accept={ITEM_COVER_ACCEPT}
         onChange={uploadArt} style={{ display: "none" }} tabIndex={-1} aria-hidden="true" />

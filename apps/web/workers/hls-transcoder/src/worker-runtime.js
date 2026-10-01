@@ -1,6 +1,6 @@
 /**
  * Generic worker lifecycle — the claim/heartbeat/complete-failure loop
- * shared by both lanes. Carries zero media-specific policy: no rendition
+ * shared by every lane. Carries zero media-specific policy: no rendition
  * ladder, no codec assumptions, no FFmpeg invocation, nothing that differs
  * between audio and video. That all lives in each lane's own entry point
  * (audio-worker.js / video-worker.js) and its processFn.
@@ -23,7 +23,7 @@ const HEARTBEAT_INTERVAL_MS = 30_000;
 
 /**
  * @param {object} opts
- * @param {"audio"|"video"} opts.jobType — this process's fixed lane. Every
+ * @param {"audio"|"video"|"vault_video"} opts.jobType — this process's fixed lane. Every
  *   claim request is scoped to exactly this type at the database level
  *   (hls_claim_next_job's WHERE job_type = p_job_type) — this process can
  *   never be handed a job of the other type.
