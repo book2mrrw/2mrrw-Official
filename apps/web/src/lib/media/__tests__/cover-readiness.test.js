@@ -123,6 +123,25 @@ test("CoverArt never swaps which element it renders once mounted", () => {
   );
 });
 
+test("the persisted static fallback is decided at mount, never re-read while mounted", () => {
+  // REGRESSION, same class as above. persistedStaticFallback picks VideoArt vs
+  // <img>. It read the shared presentation registry on every render; once
+  // readiness was real, another surface loading the release's still made it
+  // flip on any later re-render, swapping the video for an <img> mid-life.
+  const coverArt = read("src/components/ui/CoverArt.js");
+  const init = coverArt.match(/const \[mountFallback\] = useState\(\(\) => \{([\s\S]*?)\n  \}\);/)?.[1] || "";
+  assert.ok(init, "the fallback must be latched in a useState initializer");
+  assert.match(init, /getReleasePresentation\(presentationIdentity\)/);
+  assert.match(init, /presentationSnapshot\?\.coverReady/);
+  const outside = coverArt.replace(init, "");
+  assert.equal(
+    (outside.match(/getReleasePresentation\(/g) || []).length,
+    0,
+    "the registry must not be read during render outside the mount-time initializer"
+  );
+  assert.match(coverArt, /const persistedStaticFallback = mountFallback\.src === src && mountFallback\.isStatic;/);
+});
+
 test("the readiness hook reads element state before it ever subscribes to an event", () => {
   const hook = read("src/hooks/useCoverReady.js");
 

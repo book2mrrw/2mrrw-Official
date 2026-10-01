@@ -63,14 +63,27 @@ function CoverArt({
   const [failedSrc, setFailedSrc] = useState(null);
   const [fallbackLevel, setFallbackLevel] = useState(FL_PRIMARY);
 
-  const presentationSnapshot = presentationIdentity
-    ? getReleasePresentation(presentationIdentity)
-    : null;
-  const persistedStaticFallback = Boolean(
-    baseCover &&
-      presentationSnapshot?.coverReady &&
-      presentationSnapshot.coverResolvedUrl === baseCover
-  );
+  // Decided once, when this instance first sees `src`, and never re-read while
+  // mounted. The registry is shared across every surface showing the release
+  // and changes without notifying this component, so reading it each render
+  // let an unrelated re-render flip `eff` to FL_STATIC mid-life — unmounting
+  // VideoArt and mounting an <img> in its place. That is the same remount the
+  // skeleton branch below documents. A persisted fallback is still honoured
+  // for an instance that mounts after it was recorded.
+  const [mountFallback] = useState(() => {
+    const presentationSnapshot = presentationIdentity
+      ? getReleasePresentation(presentationIdentity)
+      : null;
+    return {
+      src,
+      isStatic: Boolean(
+        baseCover &&
+          presentationSnapshot?.coverReady &&
+          presentationSnapshot.coverResolvedUrl === baseCover
+      ),
+    };
+  });
+  const persistedStaticFallback = mountFallback.src === src && mountFallback.isStatic;
   const eff = persistedStaticFallback
     ? FL_STATIC
     : failedSrc === src
