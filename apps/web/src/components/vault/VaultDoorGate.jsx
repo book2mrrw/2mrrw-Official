@@ -390,6 +390,20 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], 
             stage. A pod painted into the room could never do that. */}
         <img src={chamber.room} alt="" aria-hidden="true" draggable={false} />
 
+        {/* Click-away. Sits above the room but below the pods, so a click that
+            lands on the room sends the summoned pod home while a click on a pod
+            still reaches the pod. That is the dismiss gesture -- there is no
+            close button, because anywhere-else is where people already aim. */}
+        {selected && !expanded ? (
+          <button
+            type="button"
+            className="vault-door-gate__chamber-scrim"
+            onClick={dismissPod}
+            tabIndex={-1}
+            aria-label="Send it back"
+          />
+        ) : null}
+
         {chamber.slots.map((slot, i) => {
           const isSummoned = selected === slot.id;
           /* The trip expressed in the pod's own width and height, so the
@@ -460,33 +474,10 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], 
                   }}
                   cover={sectionCovers?.[slot.label]}
                 />
-
-                {/* Only says so once summoned: an empty pod at rest just shows
-                    its cover, and captioning all eight at rest would turn the
-                    room into a list of apologies. */}
-                {isSummoned && !sections.some((s) => s.category === slot.label) ? (
-                  <span className="vault-door-gate__pod-screen">
-                    <span className="vault-door-gate__pod-empty">
-                      Nothing in here yet
-                    </span>
-                  </span>
-                ) : null}
               </span>
             </button>
           );
         })}
-
-        {selected && !expanded ? (
-          <button
-            type="button"
-            className="vault-door-gate__pod-close"
-            onClick={dismissPod}
-            aria-label="Send it back"
-          >
-            ✕
-          </button>
-        ) : null}
-
       </div>
     );
   };
@@ -658,9 +649,7 @@ export function VaultDoorGate({ canUnlock = true, lockedMessage, sections = [], 
                       );
                     })}
                   </ul>
-                ) : (
-                  <p className="vault-door-gate__frame-empty">Nothing in here yet</p>
-                )}
+                ) : null}
 
                 {/* Mounted for the whole time a section is open, idle until a
                     track is chosen, so picking one never mounts a new element. */}
