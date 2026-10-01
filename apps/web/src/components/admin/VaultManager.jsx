@@ -7,6 +7,7 @@ import {
   ACCESS_TIERS,
   MULTIPART_THRESHOLD_BYTES,
   SECTION_COVER_ACCEPT,
+  ITEM_COVER_ACCEPT,
   slugify,
   kindForUpload,
 } from "@/lib/vault/vault-upload-contract";
@@ -83,6 +84,10 @@ export default function VaultManager() {
   // easy to hit by accident, and a browser confirm() dialog is worse.
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [rowBusy, setRowBusy] = useState(null);
+  // Which row's "art" button opened the picker. One input is reused for every
+  // row rather than rendering an input per item.
+  const artForRef = useRef(null);
+  const artInputRef = useRef(null);
   const [file, setFile] = useState(null);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -501,6 +506,64 @@ export default function VaultManager() {
     }
   };
 
+  const pickArt = (it) => {
+    artForRef.current = it;
+    artInputRef.current?.click();
+  };
+
+  /** Card art for one item: the picture its card crops to fill in the chamber. */
+  const uploadArt = async (e) => {
+    const f = e.target.files?.[0] || null;
+    const it = artForRef.current;
+    if (artInputRef.current) artInputRef.current.value = "";
+    if (!f || !it) return;
+
+    setRowBusy(it.id);
+    try {
+      const presignRes = await fetch("/api/admin/vault/item-cover/presigned", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category: it.category, slug: it.slug, filename: f.name, size: f.size }),
+      });
+      const presign = await presignRes.json();
+      if (!presignRes.ok) throw new Error(presign.error || "Could not prepare upload");
+
+      await putWithProgress(presign.url, f, presign.contentType, () => {});
+
+      const doneRes = await fetch("/api/admin/vault/item-cover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: it.id, category: it.category, slug: it.slug, filename: f.name, size: f.size }),
+      });
+      const done = await doneRes.json();
+      if (!doneRes.ok) throw new Error(done.error || "Could not save the cover");
+
+      setStatus({ kind: "ok", msg: `Card art set for "${it.title}".` });
+      loadItems(category);
+    } catch (err) {
+      setStatus({ kind: "error", msg: err.message });
+    } finally {
+      setRowBusy(null);
+      artForRef.current = null;
+    }
+  };
+
+  const clearArt = async (it) => {
+    setRowBusy(it.id);
+    try {
+      const res = await fetch(`/api/admin/vault/item-cover?id=${encodeURIComponent(it.id)}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || "Could not clear");
+      setStatus({ kind: "ok", msg: "Card art cleared." });
+      loadItems(category);
+    } catch (err) {
+      setStatus({ kind: "error", msg: err.message });
+    } finally {
+      setRowBusy(null);
+    }
+  };
+
   const removeItem = async (id) => {
     setRowBusy(id);
     try {
@@ -812,6 +875,9 @@ export default function VaultManager() {
         In {category} · {items.length}
       </h3>
 
+      <input ref={artInputRef} type="file" accept={ITEM_COVER_ACCEPT}
+        onChange={uploadArt} style={{ display: "none" }} tabIndex={-1} aria-hidden="true" />
+
       {items.length === 0 ? (
         <p style={{ fontSize: 13, color: "#444" }}>Nothing here yet.</p>
       ) : (
@@ -883,10 +949,35 @@ export default function VaultManager() {
                   </div>
                 ) : (
                   <>
+                    {/* The card art this item shows in the chamber. Without
+                        one its card is a title on an empty cell, so the state
+                        is worth seeing at a glance in the list. */}
+                    <button type="button" onClick={() => pickArt(it)} disabled={busyRow}
+                      aria-label={it.cover_url ? `Replace art for ${it.title}` : `Add art for ${it.title}`}
+                      style={{
+                        width: 54, height: 34, flexShrink: 0, padding: 0,
+                        borderRadius: 7, overflow: "hidden", cursor: busyRow ? "default" : "pointer",
+                        border: `1px solid ${it.cover_url ? "rgba(0,255,255,0.3)" : "#262626"}`,
+                        background: "#0a0a0a", color: it.cover_url ? "#00ffff" : "#4a4a4a",
+                        fontSize: 9, letterSpacing: 1, textTransform: "uppercase",
+                      }}>
+                      {it.cover_url ? "art ✓" : "+ art"}
+                    </button>
+
                     <div style={{ flex: 1, minWidth: 180 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: "#e8e8e8" }}>{it.title}</div>
                       <div style={{ fontSize: 11, color: "#5a5a5a", marginTop: 3 }}>
                         {it.media_type} · {it.access_tier} · {it.slug}
+                        {it.cover_url ? (
+                          <>
+                            {" · "}
+                            <button type="button" onClick={() => clearArt(it)} disabled={busyRow}
+                              style={{
+                                padding: 0, border: "none", background: "none", cursor: "pointer",
+                                color: "#6a5a5a", fontSize: 11, textDecoration: "underline",
+                              }}>clear art</button>
+                          </>
+                        ) : null}
                       </div>
                     </div>
                     <span style={{

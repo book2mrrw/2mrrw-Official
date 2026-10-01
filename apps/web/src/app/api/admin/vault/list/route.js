@@ -35,7 +35,7 @@ export async function GET(req) {
   const admin = getAdminClient();
   let query = admin
     .from("vault_content")
-    .select("id, slug, category, title, description, media_type, access_tier, visibility, media_storage_path, duration_seconds, sort_order, updated_at")
+    .select("id, slug, category, title, description, media_type, access_tier, visibility, media_storage_path, cover_url, duration_seconds, sort_order, updated_at")
     .order("sort_order", { ascending: true })
     .order("updated_at", { ascending: false })
     .limit(200);

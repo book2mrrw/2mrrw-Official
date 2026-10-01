@@ -171,6 +171,57 @@ export function buildSectionCoverKey({ category, kind, ext }) {
   return `videos/vault/_section-covers/${folder}-${kind}.${safeExt}`;
 }
 
+/* --- item cover art ------------------------------------------------------
+   The picture a single item shows on its card in the chamber.
+
+   Distinct from a section cover: that one is the section's face on the pod
+   before it is summoned, one per section. This is per item, and it is what
+   the card art in the expanded frame crops to fill -- without it a card is a
+   title on an empty cell.
+
+   Stills only. A card is one of a grid of several and the pod is already
+   running a loop behind it; a wall of competing videos is not a gallery.
+*/
+export function buildVaultItemCoverKey({ category, slug, ext }) {
+  const folder = folderForCategory(category);
+  if (!folder) return null;
+  if (!VAULT_SLUG_RE.test(String(slug || ""))) return null;
+  const safeExt = String(ext || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!safeExt) return null;
+  return `videos/vault/_item-covers/${folder}/${slug}.${safeExt}`;
+}
+
+export const ITEM_COVER_ACCEPT = "image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp";
+
+export function validateItemCover({ category, slug, filename, size }) {
+  if (!folderForCategory(category)) return { error: "Unknown vault section" };
+  if (!VAULT_SLUG_RE.test(String(slug || ""))) return { error: "Invalid slug" };
+
+  const ext = extensionForFilename(filename);
+  if (!ext) return { error: "File has no extension" };
+
+  // Deliberately not REJECTED_COVER_EXTENSIONS: those messages are written for
+  // section covers, where a loop is allowed, so they say "export as .mp4" --
+  // useless advice for card art, which is only ever a still. .heic keeps its
+  // own message because the fix there really is a different still format.
+  const contentType = SECTION_COVER_KINDS.still.extensions[ext];
+  if (!contentType) {
+    if (ext === "heic") return { error: REJECTED_COVER_EXTENSIONS.heic };
+    return { error: `Card art is a still -- .${ext} will not do. Use .jpg, .png or .webp.` };
+  }
+
+  const bytes = Number(size);
+  if (!Number.isFinite(bytes) || bytes <= 0) return { error: "Missing file size" };
+  if (bytes > SECTION_COVER_KINDS.still.maxBytes) {
+    return { error: `Too large -- max ${Math.round(SECTION_COVER_KINDS.still.maxBytes / 1_000_000)}MB for cover art` };
+  }
+
+  const key = buildVaultItemCoverKey({ category, slug, ext });
+  if (!key) return { error: "Could not build storage key" };
+
+  return { ext, key, bytes, contentType };
+}
+
 export function validateSectionCover({ category, filename, size }) {
   if (!folderForCategory(category)) return { error: "Unknown vault section" };
 

@@ -66,6 +66,30 @@ async function loadSectionCovers(admin) {
  * Pinned to release_type 'vault': a release manifest that happened to share a
  * slug must never supply a duration to a vault item.
  */
+/**
+ * Signs each item's card art.
+ *
+ * Item covers live under videos/vault/_item-covers/, inside
+ * R2_NEVER_PUBLIC_PREFIXES, so the stored value is an object key and not
+ * something a browser can load. Anything already absolute is left alone: a
+ * row may carry an external URL from before this pipeline existed, and that
+ * is not ours to sign or to replace.
+ *
+ * A signing failure clears the field rather than passing the raw key through
+ * -- a card with no art is a card with a title on it, while a card pointed at
+ * a non-URL is a broken image icon.
+ */
+async function withItemCovers(rows) {
+  return Promise.all(
+    rows.map(async (row) => {
+      const key = row.cover;
+      if (!key || /^https?:\/\//i.test(key) || !key.startsWith("videos/vault/")) return row;
+      const url = await createR2SignedGetUrl(key, COVER_URL_TTL_SECONDS).catch(() => null);
+      return { ...row, cover: url, thumbnailUrl: url };
+    })
+  );
+}
+
 async function withAudioDurations(admin, rows) {
   const needy = rows.filter((r) => r.mediaType === "audio" && !r.durationSeconds && r.slug);
   if (!needy.length) return rows;
@@ -131,6 +155,9 @@ export async function GET() {
     // so signing them for one would hand out media for nothing.
     const sectionCovers = unlocked ? await loadSectionCovers(admin) : {};
     const withDurations = await withAudioDurations(admin, gatedSections);
+    const visibleSections = await withItemCovers(
+      unlocked ? withDurations : withDurations.filter((row) => row.accessTier === "public")
+    );
 
     return NextResponse.json({
       unlocked,
@@ -143,7 +170,7 @@ export async function GET() {
         cardOwnerFree,
         isAdminPreview: isAdminTester,
       },
-      sections: unlocked ? withDurations : withDurations.filter((row) => row.accessTier === "public"),
+      sections: visibleSections,
       sectionCovers,
       room: unlocked
         ? {
