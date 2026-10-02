@@ -2,6 +2,9 @@
 
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Reorder, useDragControls } from "framer-motion";
+import { orderedPlaylistTracks, playlistTrackKey } from "@/lib/playlists/identity";
+import { useEntitlementAccountState } from "@/context/AuthContext";
+import { canAddPlaylistTrack } from "@/lib/playlists/access";
 import { usePlaylists } from "@/hooks/usePlaylists";
 import PlaylistCard from "@/components/music/PlaylistCard";
 import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actions-bridge";
@@ -68,7 +71,7 @@ function PlaylistDragRow({ track, index, onRemove }) {
       <span style={{ flex: 1, minWidth: 0 }}>{track.title}</span>
       <button
         type="button"
-        onClick={() => onRemove(track.id || track.slug)}
+        onClick={() => onRemove(playlistTrackKey(track))}
         style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 11, padding: "8px 4px" }}
       >
         Remove
@@ -87,9 +90,8 @@ function PlaylistTrackList({ playlistId, tracks, isMobile, reorder, update, remo
   const commitOrder = useCallback(
     (nextTracks) => {
       setOrdered(nextTracks);
-      const trackIds = nextTracks.map((t) => t.id || t.slug).filter(Boolean);
+      const trackIds = nextTracks.map(playlistTrackKey);
       reorder(playlistId, trackIds);
-      update(playlistId, { tracks: nextTracks });
     },
     [playlistId, reorder, update]
   );
@@ -119,7 +121,7 @@ function PlaylistTrackList({ playlistId, tracks, isMobile, reorder, update, remo
       >
         {ordered.map((track, trackIndex) => (
           <PlaylistDragRow
-            key={track.slug || track.id}
+            key={playlistTrackKey(track)}
             track={track}
             index={trackIndex}
             onRemove={(key) => removeTrack(playlistId, key)}
@@ -133,7 +135,7 @@ function PlaylistTrackList({ playlistId, tracks, isMobile, reorder, update, remo
     <div style={{ marginTop: 12, display: "flex", flexDirection: "column" }}>
       {ordered.map((track, trackIndex) => (
         <div
-          key={track.slug || track.id}
+          key={playlistTrackKey(track)}
           style={{
             display: "flex",
             alignItems: "center",
@@ -178,7 +180,7 @@ function PlaylistTrackList({ playlistId, tracks, isMobile, reorder, update, remo
           </button>
           <button
             type="button"
-            onClick={() => removeTrack(playlistId, track.id || track.slug)}
+            onClick={() => removeTrack(playlistId, playlistTrackKey(track))}
             style={{ background: "none", border: "none", color: "#555", cursor: "pointer", fontSize: 11 }}
           >
             Remove
@@ -300,7 +302,8 @@ function PlaylistSection({
   subscriptionLocked = false,
   isMobile = false,
 }) {
-  const { playlists, create, update, remove, addTrack, removeTrack, reorder } = usePlaylists(userId);
+  const entitlementAccount = useEntitlementAccountState();
+  const { playlists, create, update, remove, addTrack, removeTrack, reorder, reloadSaved, pending } = usePlaylists(userId);
   const [detailId, setDetailId] = useState(null);
   const [editingTitle, setEditingTitle] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
@@ -312,7 +315,7 @@ function PlaylistSection({
     [playlists, detailId]
   );
 
-  const catalogBySlug = useMemo(() => new Map(catalogTracks.map((t) => [t.slug, t])), [catalogTracks]);
+  const catalogBySlug = useMemo(() => new Map(catalogTracks.map((t) => [playlistTrackKey(t), t])), [catalogTracks]);
 
   const openDetail = useCallback((playlist) => {
     setDetailId(playlist.id);
@@ -340,16 +343,14 @@ function PlaylistSection({
 
   const tracksInPlaylist = useMemo(() => {
     if (!detailPlaylist) return [];
-    const raw = detailPlaylist.tracks || [];
-    if (raw.length) return raw;
-    return (detailPlaylist.trackIds || []).map((id) => catalogBySlug.get(id)).filter(Boolean);
+    return orderedPlaylistTracks(detailPlaylist, catalogBySlug);
   }, [detailPlaylist, catalogBySlug]);
 
   const addableTracks = useMemo(() => {
     if (!detailPlaylist) return [];
-    const inPlaylist = new Set(tracksInPlaylist.map((t) => t.slug || t.id));
-    return catalogTracks.filter((t) => t.slug && !inPlaylist.has(t.slug));
-  }, [catalogTracks, detailPlaylist, tracksInPlaylist]);
+    const inPlaylist = new Set(tracksInPlaylist.map(playlistTrackKey));
+    return catalogTracks.filter((t) => t.slug && !inPlaylist.has(playlistTrackKey(t)) && canAddPlaylistTrack(t, entitlementAccount));
+  }, [catalogTracks, detailPlaylist, tracksInPlaylist, entitlementAccount]);
 
   const playDetail = useCallback(
     (shuffle = false) => {
@@ -359,12 +360,17 @@ function PlaylistSection({
     [detailPlaylist, onPlayPlaylist, tracksInPlaylist]
   );
 
+  const saveErrors = playlists.filter(p => p.syncError);
+  const saveStatus = saveErrors.length ? <div role="alert" style={{color:'#ffb3b3',padding:'12px 0'}}>
+    {saveErrors[0].syncError} <button type="button" disabled={pending} onClick={() => void reloadSaved()}>Discard unsaved edits and reload</button>
+  </div> : null;
   if (detailPlaylist) {
     const cover = resolvePlaylistCover(detailPlaylist, catalogTracks);
     const trackCount = tracksInPlaylist.length;
 
     return (
       <section style={{ marginBottom: 36 }}>
+        {saveStatus}
         <button
           type="button"
           onClick={() => setDetailId(null)}
@@ -536,7 +542,7 @@ function PlaylistSection({
           <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 6, maxHeight: 240, overflowY: "auto" }}>
             {addableTracks.map((track) => (
               <button
-                key={track.slug}
+                key={playlistTrackKey(track)}
                 type="button"
                 onClick={() => {
                   addTrack(detailPlaylist.id, track);
@@ -574,6 +580,7 @@ function PlaylistSection({
 
   return (
     <section style={{ marginBottom: 36 }}>
+        {saveStatus}
       {showNewModal && (
         <NewPlaylistModal onCancel={() => setShowNewModal(false)} onCreate={handleCreateFromModal} />
       )}
@@ -635,9 +642,7 @@ function PlaylistSection({
           {playlists.map((playlist) => {
             const cover = resolvePlaylistCover(playlist, catalogTracks);
             const count = (playlist.tracks || []).length || playlist.trackIds?.length || 0;
-            const tracksForPlay = (playlist.tracks || []).length
-              ? playlist.tracks
-              : (playlist.trackIds || []).map((id) => catalogBySlug.get(id)).filter(Boolean);
+            const tracksForPlay = orderedPlaylistTracks(playlist, catalogBySlug);
             return (
               <PlaylistCard
                 key={playlist.id}

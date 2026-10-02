@@ -1,116 +1,47 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { playlistWriteGateResponse } from "@/lib/playlists/write-gate";
+import { userCanStreamProduct } from "@/lib/commerce/entitlements";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
-async function verifyOwnership(admin, playlistId, userId) {
-  const { data } = await admin
-    .from("user_playlists")
-    .select("id")
-    .eq("id", playlistId)
-    .eq("user_id", userId)
-    .maybeSingle();
-  return Boolean(data);
-}
-
-// POST — add a track
-export async function POST(req, { params }) {
+async function mutate(req, {params}, action) {
   const user = await getFanSessionUser();
-  if (!user || user.isGuest) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const limit = await checkRateLimit(req, { routeKey: "playlists.tracks.add", limit: 120, windowSeconds: 60, identifier: user.id });
+  if (!user || user.isGuest) return NextResponse.json({error:"Unauthorized"}, {status:401});
+  const limit = await checkRateLimit(req, {routeKey:`playlists.tracks.${action}`,limit:120,windowSeconds:60,identifier:user.id});
   if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
-
-  const { id: playlistId } = await params;
-  const body = await req.json().catch(() => ({}));
-  const { trackSlug, albumSlug, trackData, sortOrder } = body;
-  if (!trackSlug) return NextResponse.json({ error: "trackSlug required" }, { status: 400 });
-
-  const admin = getAdminClient();
-  if (!(await verifyOwnership(admin, playlistId, user.id))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const gated = playlistWriteGateResponse();
+  if (gated) return gated;
+  const {id} = await params;
+  const body = await req.json().catch(() => null);
+  if (!body || !Number.isSafeInteger(body.revision) || body.revision < 0) return NextResponse.json({error:"Reload this playlist before editing",code:"PLAYLIST_REVISION_REQUIRED"},{status:409});
+  let payload;
+  if (action === 'add') {
+    if (typeof body.trackSlug !== 'string' || !body.trackSlug || (body.albumSlug != null && typeof body.albumSlug !== 'string')) return NextResponse.json({error:"Invalid track identity"},{status:400});
+    payload = {trackSlug:body.trackSlug,albumSlug:body.albumSlug || null,trackData:body.trackData || {}};
+    // Playlist references do not grant rights. Resolve the owning product using
+    // authenticated server state, never trackData.access or caller tier flags.
+    try {
+      if (!await userCanStreamProduct(user.id, payload.albumSlug || payload.trackSlug, user)) {
+        return NextResponse.json({error:"Purchase or membership access is required to add this track",code:"PLAYLIST_ENTITLEMENT_REQUIRED"},{status:403});
+      }
+    } catch {
+      return NextResponse.json({error:"Access could not be verified. Your track was not saved.",code:"PLAYLIST_ENTITLEMENT_UNAVAILABLE"},{status:503,headers:{"Cache-Control":"no-store","Retry-After":"60"}});
+    }
+  } else {
+    const keys = action === 'reorder' ? (body.trackKeys || body.trackIds) : [body.trackKey];
+    if (!Array.isArray(keys) || keys.some(k => typeof k !== 'string' || !k) || new Set(keys).size !== keys.length) return NextResponse.json({error:"Invalid track keys"},{status:400});
+    payload = {keys};
   }
-
-  const { error } = await admin.from("playlist_tracks").upsert(
-    {
-      playlist_id: playlistId,
-      track_slug: trackSlug,
-      album_slug: albumSlug || null,
-      track_data: trackData || null,
-      sort_order: Number(sortOrder) || 0,
-    },
-    { onConflict: "playlist_id,track_slug" }
-  );
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  await admin
-    .from("user_playlists")
-    .update({ updated_at: new Date().toISOString() })
-    .eq("id", playlistId);
-
-  return NextResponse.json({ ok: true });
-}
-
-// PUT — reorder tracks (body: { trackIds: string[] })
-export async function PUT(req, { params }) {
-  const user = await getFanSessionUser();
-  if (!user || user.isGuest) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const limit = await checkRateLimit(req, { routeKey: "playlists.tracks.reorder", limit: 60, windowSeconds: 60, identifier: user.id });
-  if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
-
-  const { id: playlistId } = await params;
-  const body = await req.json().catch(() => ({}));
-  const { trackIds } = body;
-  if (!Array.isArray(trackIds)) return NextResponse.json({ error: "trackIds array required" }, { status: 400 });
-
-  const admin = getAdminClient();
-  if (!(await verifyOwnership(admin, playlistId, user.id))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const {data,error} = await getAdminClient().rpc('mutate_playlist_tracks', {
+    p_playlist_id:id,p_user_id:user.id,p_revision:body.revision,p_action:action,p_payload:payload,
+  });
+  if (error) {
+    const status = error.code === '42501' ? 404 : error.code === '40001' ? 409 : ['22023','22P02'].includes(error.code) ? 400 : 500;
+    return NextResponse.json({error:status===500?'Playlist could not be saved':error.message},{status});
   }
-
-  await Promise.all(
-    trackIds.map((slug, index) =>
-      admin
-        .from("playlist_tracks")
-        .update({ sort_order: index })
-        .eq("playlist_id", playlistId)
-        .eq("track_slug", slug)
-    )
-  );
-
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ok:true,revision:data.revision});
 }
-
-// DELETE — remove a track (body: { trackKey: string })
-export async function DELETE(req, { params }) {
-  const user = await getFanSessionUser();
-  if (!user || user.isGuest) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const limit = await checkRateLimit(req, { routeKey: "playlists.tracks.remove", limit: 120, windowSeconds: 60, identifier: user.id });
-  if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
-
-  const { id: playlistId } = await params;
-  const body = await req.json().catch(() => ({}));
-  const { trackKey } = body;
-  if (!trackKey) return NextResponse.json({ error: "trackKey required" }, { status: 400 });
-
-  const admin = getAdminClient();
-  if (!(await verifyOwnership(admin, playlistId, user.id))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
-
-  await admin
-    .from("playlist_tracks")
-    .delete()
-    .eq("playlist_id", playlistId)
-    .eq("track_slug", trackKey);
-
-  await admin
-    .from("user_playlists")
-    .update({ updated_at: new Date().toISOString() })
-    .eq("id", playlistId);
-
-  return NextResponse.json({ ok: true });
-}
+export const POST = (req, context) => mutate(req, context, 'add');
+export const PUT = (req, context) => mutate(req, context, 'reorder');
+export const DELETE = (req, context) => mutate(req, context, 'remove');

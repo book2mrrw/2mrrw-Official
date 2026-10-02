@@ -1,6 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { playlistWriteGateResponse } from "@/lib/playlists/write-gate";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
 export async function PATCH(req, { params }) {
@@ -10,6 +11,8 @@ export async function PATCH(req, { params }) {
   const limit = await checkRateLimit(req, { routeKey: "playlists.update", limit: 60, windowSeconds: 60, identifier: user.id });
   if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
+  const gated = playlistWriteGateResponse();
+  if (gated) return gated;
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
 
@@ -40,6 +43,8 @@ export async function DELETE(req, { params }) {
   const limit = await checkRateLimit(req, { routeKey: "playlists.delete", limit: 30, windowSeconds: 60, identifier: user.id });
   if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
+  const gated = playlistWriteGateResponse();
+  if (gated) return gated;
   const { id } = await params;
   const admin = getAdminClient();
   const { error } = await admin

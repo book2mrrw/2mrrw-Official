@@ -2,27 +2,19 @@
 
 import { useMemo } from "react";
 import { useAudioPlayer } from "@/context/AudioContext";
-import { useAuth } from "@/context/AuthContext";
-import { resolvePlaylistTracks } from "@/lib/playlists";
-import { toPlaybackTrack, toInstantStartTrack } from "@/lib/music-playback";
+import { useAuth, useEntitlementAccountState } from "@/context/AuthContext";
+import { playlistTracksForPlayback } from "@/lib/playlists/playback";
+import { toInstantStartTrack } from "@/lib/music-playback";
 
 export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobile }) {
   const { playQueue, toggleShuffle, shuffle, toggleRepeat, repeatMode, hintUpcomingPlay } = useAudioPlayer();
-  const { user, accountState, isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const accountState = useEntitlementAccountState();
   const userId = user?.id;
 
-  const rawTracks = useMemo(
-    () => resolvePlaylistTracks(playlist, catalogBySlug),
-    [playlist, catalogBySlug]
-  );
-
-  // Run every track through per-user entitlement resolution so preview-only users
-  // get preview URLs and entitled users get library stream redirect URLs.
   const tracks = useMemo(
-    () => rawTracks
-      .map((track) => toPlaybackTrack(track, { ...accountState, userId, isAdmin }, "playlist"))
-      .filter((t) => t?.src),
-    [rawTracks, accountState, userId, isAdmin]
+    () => playlistTracksForPlayback(playlist, catalogBySlug, {...accountState,userId,isAdmin}),
+    [playlist,catalogBySlug,accountState,userId,isAdmin]
   );
 
   const playFrom = (startIndex) => {
@@ -75,7 +67,7 @@ export default function PlaylistDetail({ playlist, catalogBySlug, onBack, isMobi
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {tracks.map((track, i) => (
           <div
-            key={track.slug || i}
+            key={track.playlistKey}
             style={{
               display: "flex",
               alignItems: "center",

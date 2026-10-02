@@ -1,4 +1,6 @@
 "use client";
+import { playlistCatalogTracks } from "@/lib/playlists/access";
+import { playlistTracksForPlayback } from "@/lib/playlists/playback";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
@@ -761,6 +763,7 @@ function OwnedReleaseList({
 
 function MyMusicTab({
   singles = [],
+  features = [],
   albums = [],
   mixtapesAndEps = [],
   isMobile: isMobileProp,
@@ -911,36 +914,9 @@ function MyMusicTab({
       .map((item) => ({ ...item, ...(singles.find((s) => s.slug === item.slug) || {}) }));
   }, [library, ownedSingles, singles]);
 
-  const catalogTracks = useMemo(() => {
-    const map = new Map();
-    [...ownedSingles, ...singles].forEach((item) => {
-      if (item?.slug) map.set(item.slug, { ...item, ...(singles.find((s) => s.slug === item.slug) || {}) });
-    });
-    // Subscribers, collectors, and admins can add all tracks from every release
-    if (membershipActive || isAdmin || hasCollectorCard) {
-      [...albums, ...(mixtapesAndEps || [])].forEach((album) => {
-        const trackList = album?.tracks || album?.trackTitles || [];
-        trackList.forEach((track, idx) => {
-          const isString = typeof track === "string";
-          const title = isString ? track : (track?.title || track?.name || String(track));
-          const slug = isString ? null : (track?.slug || null);
-          if (!slug) return;
-          if (!map.has(slug)) {
-            map.set(slug, {
-              ...(isString ? {} : track),
-              slug,
-              title,
-              cover: track?.cover || track?.cover_art || album?.cover || album?.cover_art || album?.cover_url || null,
-              albumSlug: album.slug,
-              albumTitle: album.title,
-              type: album.type || album.releaseType || "album",
-            });
-          }
-        });
-      });
-    }
-    return [...map.values()].filter((t) => t.preview || t.audio || t.src || t.albumSlug);
-  }, [ownedSingles, singles, albums, mixtapesAndEps, membershipActive, isAdmin, hasCollectorCard]);
+  const catalogTracks = useMemo(() => playlistCatalogTracks({
+    singles, features, releases: [...albums, ...mixtapesAndEps], library,
+  }, {...accountState, isAdmin}), [singles, features, albums, mixtapesAndEps, library, accountState, isAdmin]);
 
   // Must be defined before playItem so playItem's dep array can reference it without TDZ.
   const listeningMap = useMemo(() => {
@@ -1019,16 +995,7 @@ function MyMusicTab({
 
   const playPlaylist = useCallback(
     (playlist) => {
-      const catalogBySlug = new Map(catalogTracks.map((t) => [t.slug, t]));
-      const refs = (playlist.tracks || []).length
-        ? playlist.tracks
-        : (playlist.trackIds || []).map((id) => catalogBySlug.get(id)).filter(Boolean);
-      let tracks = refs
-        .map((item) => {
-          const merged = { ...catalogBySlug.get(item.slug), ...item };
-          return toPlaybackTrack(merged, { ...accountState, userId: user?.id, isAdmin }, "playlist");
-        })
-        .filter((t) => t.src);
+      const tracks = playlistTracksForPlayback(playlist, catalogTracks, { ...accountState, userId: user?.id, isAdmin });
       if (!tracks.length) return;
       if (playlist.shuffle) setShuffle(true);
       const { startTrack, needsUpgrade } = toInstantStartTrack(tracks[0]);

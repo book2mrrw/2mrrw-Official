@@ -14,6 +14,7 @@ import { usePlayerBodyState } from "@/lib/player/usePlayerBodyState";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { useEntitlementAccountState } from "@/context/AuthContext";
 import { useAudioPlayer } from "@/context/AudioContext";
+import { canAddPlaylistTrack } from "@/lib/playlists/access";
 import { resolveSubscriptionEntitlements } from "@/lib/commerce/entitlements";
 import { PREVIEW_HARD_CAP_SEC } from "@/lib/playback/PlaybackEventHandlers";
 import {
@@ -25,7 +26,7 @@ import { getPagePlaybackActionsBridge } from "@/lib/playback/page-playback-actio
 import GlyphLyricsPanel from "@/components/preview/GlyphLyricsPanel";
 import { postLibraryAdd } from "@/lib/library-client";
 import { queueOfflineDownload, isOfflineCached, removeOfflineCache } from "@/lib/offline-cache";
-import { loadPlaylists, addTrackToPlaylist, createPlaylist } from "@/lib/playlists";
+import { loadPlaylists, addTrackToPlaylist, createPlaylist, awaitPlaylistSave } from "@/lib/playlists";
 import { getCatalogSurfaceRef } from "@/lib/storefront/catalog-surface-ref";
 import { useArtworkGesture } from "@/hooks/useArtworkGesture";
 
@@ -876,10 +877,16 @@ function TrackContextSheet({ track, album, t, onPlayNext, onAddToQueue, onAddToP
 }
 
 function PlaylistPickerSheet({ track, album, userId, t, onClose }) {
+  const entitlementAccount = useEntitlementAccountState();
   const [playlists, setPlaylists] = useState(() => loadPlaylists(userId));
   const [added, setAdded] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
 
   const trackRef = useMemo(() => ({
+    ...track,
+    albumSlug: track?.albumSlug || track?.metadata?.albumSlug || (track?.slug && track.slug !== album?.slug ? album?.slug : null) || null,
+    trackSlug: track?.trackSlug || track?.metadata?.trackSlug || track?.slug,
     id: track?.id,
     slug: track?.slug,
     title: track?.title,
@@ -887,21 +894,32 @@ function PlaylistPickerSheet({ track, album, userId, t, onClose }) {
     cover: album?.cover || album?.coverArt || null,
   }), [track, album]);
 
-  const doAdd = useCallback((playlistId) => {
-    if (!userId || !trackRef.slug) return;
-    addTrackToPlaylist(userId, playlistId, trackRef);
-    setAdded(playlistId);
-    setTimeout(onClose, 900);
-  }, [userId, trackRef, onClose]);
+  const canAdd = canAddPlaylistTrack(trackRef, entitlementAccount);
+  const doAdd = useCallback(async (playlistId) => {
+    if (!userId || !trackRef.slug || !canAdd || saving) return;
+    setSaving(true); setSaveError(null);
+    try {
+      addTrackToPlaylist(userId, playlistId, trackRef);
+      await awaitPlaylistSave(userId, playlistId);
+      setAdded(playlistId);
+      setTimeout(onClose, 900);
+    } catch { setSaveError("Track was not saved. Your unsaved changes are retained in Playlists."); }
+    finally { setSaving(false); }
+  }, [userId, trackRef, canAdd, saving, onClose]);
 
-  const doNew = useCallback(() => {
-    if (!userId || !trackRef.slug) return;
-    const pl = createPlaylist(userId, { title: album?.title || "New Playlist" });
-    addTrackToPlaylist(userId, pl.id, trackRef);
-    setPlaylists(loadPlaylists(userId));
-    setAdded(pl.id);
-    setTimeout(onClose, 900);
-  }, [userId, trackRef, album, onClose]);
+  const doNew = useCallback(async () => {
+    if (!userId || !trackRef.slug || !canAdd || saving) return;
+    setSaving(true); setSaveError(null);
+    try {
+      const pl = createPlaylist(userId, { title: album?.title || "New Playlist" });
+      addTrackToPlaylist(userId, pl.id, trackRef);
+      setPlaylists(loadPlaylists(userId));
+      await awaitPlaylistSave(userId, pl.id);
+      setAdded(pl.id);
+      setTimeout(onClose, 900);
+    } catch { setSaveError("Track was not saved. Your unsaved changes are retained in Playlists."); }
+    finally { setSaving(false); }
+  }, [userId, trackRef, album, canAdd, saving, onClose]);
 
   return (
     <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(32px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)", maxHeight: "70vh", overflowY: "auto" }}>
@@ -912,16 +930,20 @@ function PlaylistPickerSheet({ track, album, userId, t, onClose }) {
       </div>
       <button
         type="button"
+        disabled={!canAdd || saving}
         onClick={doNew}
         style={{ width: "100%", padding: "14px 22px", background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,.05)", textAlign: "left", fontSize: 14, color: t.accent, cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}
       >
         <span style={{ width: 20, height: 20, borderRadius: "50%", border: `1px solid ${t.p1}`, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 14, lineHeight: 1, flexShrink: 0 }}>+</span>
         New Playlist
       </button>
+      {saveError && <p role="alert" style={{padding:"12px 22px"}}>{saveError}</p>}
+      {!canAdd && <p role="status" style={{padding:"12px 22px"}}>Purchase or membership access is required to add this track.</p>}
       {playlists.filter(pl => !pl.isSystem).map((pl) => (
         <button
           key={pl.id}
           type="button"
+          disabled={!canAdd || saving}
           onClick={() => doAdd(pl.id)}
           style={{ width: "100%", padding: "14px 22px", background: "transparent", border: "none", borderBottom: "1px solid rgba(255,255,255,.04)", textAlign: "left", fontSize: 13, color: added === pl.id ? t.accent : "rgba(255,255,255,.78)", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}
         >
@@ -1983,16 +2005,25 @@ function AlbumModalView({
     }
   }, [engineQueue, engineQueueIndex, removeFromQueue]);
 
-  const handleSaveQueueAsPlaylist = useCallback(() => {
+  const handleSaveQueueAsPlaylist = useCallback(async () => {
     if (!userId || !engineQueue?.length) return;
+    if (engineQueue.some(q => !canAddPlaylistTrack(q, entitlementAccountState))) {
+      showPlaybackNotice("Purchase or membership access is required for every track in this playlist.");
+      return;
+    }
     const pl = createPlaylist(userId, { title: `${album?.title || "Queue"} Mix` });
     engineQueue.forEach((q) => {
       addTrackToPlaylist(userId, pl.id, {
-        id: q.id, slug: q.slug, title: q.title, artist: q.artist, cover: q.artwork || null,
+        ...q, cover: q.cover || q.artwork || null,
       });
     });
-    showPlaybackNotice(`Saved to "${pl.title}"`);
-  }, [userId, engineQueue, album?.title, showPlaybackNotice]);
+    try {
+      await awaitPlaylistSave(userId, pl.id);
+      showPlaybackNotice(`Saved to "${pl.title}"`);
+    } catch {
+      showPlaybackNotice("Playlist was not fully saved. Your unsaved changes are retained in Playlists.");
+    }
+  }, [userId, engineQueue, album?.title, entitlementAccountState, showPlaybackNotice]);
 
   const handleSpeedChange = useCallback((rate) => {
     setPlaybackSpeed(rate);

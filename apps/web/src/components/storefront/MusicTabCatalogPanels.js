@@ -170,6 +170,7 @@ const MusicTabCatalogPanels = memo(function MusicTabCatalogPanels({
       </section>
       <section hidden={activeTab !== "mymusic"} aria-hidden={activeTab !== "mymusic"}>
       <MyMusicTab
+        features={displayFeatures}
         singles={displaySingles}
         albums={albums}
         mixtapesAndEps={mixtapesAndEps}

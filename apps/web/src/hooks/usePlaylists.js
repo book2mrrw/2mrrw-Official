@@ -7,6 +7,7 @@ import {
   deletePlaylist,
   fetchAndSyncPlaylists,
   loadPlaylists,
+  hasPendingWrites,
   migrateLocalToServer,
   removeTrackFromPlaylist,
   reorderPlaylistTracks,
@@ -50,6 +51,15 @@ export function usePlaylists(userId) {
 
   const reload = useCallback(() => {
     setPlaylists(loadPlaylists(userId));
+  }, [userId]);
+
+  useEffect(() => {
+    window.addEventListener('2mrrw:playlists', reload);
+    return () => window.removeEventListener('2mrrw:playlists', reload);
+  }, [reload]);
+  const reloadSaved = useCallback(async () => {
+    if (hasPendingWrites(userId)) return;
+    setPlaylists(await fetchAndSyncPlaylists(userId, {discardUnsaved:true}));
   }, [userId]);
 
   const create = useCallback(
@@ -108,6 +118,8 @@ export function usePlaylists(userId) {
 
   return {
     playlists,
+    reloadSaved,
+    pending: hasPendingWrites(userId),
     loading,
     synced,
     reload,

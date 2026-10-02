@@ -1,21 +1,10 @@
 ﻿import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { playlistWriteGateResponse } from "@/lib/playlists/write-gate";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 
-function toClientPlaylist(pl, tracks) {
-  return {
-    id: pl.id,
-    title: pl.title,
-    artwork: pl.artwork_url || null,
-    isSystem: pl.is_system,
-    sortOrder: pl.sort_order,
-    trackIds: tracks.map((t) => t.track_slug),
-    tracks: tracks.map((t) => ({ slug: t.track_slug, albumSlug: t.album_slug, ...(t.track_data || {}) })),
-    createdAt: pl.created_at,
-    updatedAt: pl.updated_at,
-  };
-}
+import { toClientPlaylist } from "@/lib/playlists/identity";
 
 export async function GET(req) {
   const user = await getFanSessionUser();
@@ -29,7 +18,7 @@ export async function GET(req) {
     .from("user_playlists")
     .select("*")
     .eq("user_id", user.id)
-    .order("sort_order", { ascending: true });
+    .order("sort_order", { ascending: true }).order("id", { ascending: true });
 
   if (plErr) return NextResponse.json({ error: plErr.message }, { status: 500 });
   if (!rows?.length) return NextResponse.json({ playlists: [] });
@@ -38,7 +27,7 @@ export async function GET(req) {
     .from("playlist_tracks")
     .select("*")
     .in("playlist_id", rows.map((p) => p.id))
-    .order("sort_order", { ascending: true });
+    .order("sort_order", { ascending: true }).order("id", { ascending: true });
 
   if (trErr) return NextResponse.json({ error: trErr.message }, { status: 500 });
 
@@ -58,6 +47,8 @@ export async function POST(req) {
   const limit = await checkRateLimit(req, { routeKey: "playlists.create", limit: 30, windowSeconds: 60, identifier: user.id });
   if (!limit.allowed) return rateLimitResponse(limit.retryAfterSeconds);
 
+  const gated = playlistWriteGateResponse();
+  if (gated) return gated;
   const body = await req.json().catch(() => ({}));
   const { id, title, artwork, isSystem = false, sortOrder = 0 } = body;
 
