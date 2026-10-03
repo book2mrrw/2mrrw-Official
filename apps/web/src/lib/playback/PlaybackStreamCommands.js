@@ -32,6 +32,7 @@ import {
   normalizeTrack,
   resolvePlaybackPresentation,
 } from "@/lib/playback/playback-track-utils";
+import { upgradeTrackAccessForPlay } from "@/lib/playback/access-reconciliation";
 import { isAdminAccount } from "@/lib/music-access";
 import { logPlayback } from "@/lib/observability/client-log";
 import { logStateChurn } from "@/lib/diagnostics/state-churn-log";
@@ -80,6 +81,11 @@ export function attachStreamCommands(self) {
       authLoadingRef, csImgRef, csVidRef, csAudioRef, pausedDuringCurrentLoadRef,
       spuriousEndedGuardRef, lastUserActionRef,
     } = self._deps;
+
+    // The surface's access stamp may predate session hydration — re-resolve it
+    // against the live entitlement state BEFORE anything reads track.src, so an
+    // owner is never primed onto, or capped to, a preview.
+    track = upgradeTrackAccessForPlay(track, entitlementAccountStateRef.current);
 
     logDirectInternalCallViolation("playTrackInternal");
     perfMark(MARKS.PLAYBACK_REQUEST);

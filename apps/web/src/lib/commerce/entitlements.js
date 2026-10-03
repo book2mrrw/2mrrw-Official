@@ -3,6 +3,10 @@ import crypto from "crypto";
 import { isAdminUser } from "@/lib/auth/constants";
 import { isAdminUserId } from "@/lib/auth/admin-authority";
 import { userOwnsProductViaEntitlements } from "@/lib/commerce/unified-entitlements";
+import {
+  loadReleaseRecordingIndex,
+  releasesContainingStandalone,
+} from "@/lib/commerce/release-recording-index";
 import { resolveOwnedSlugs } from "@/lib/commerce/ownership-authority";
 import {
   getCachedTier,
@@ -141,6 +145,25 @@ async function resolveAdminAuthority(admin, userId) {
   return isAdminUserId(userId, admin);
 }
 
+/**
+ * True when the user owns a release (album / mixtape / EP) that contains this
+ * standalone product's recording. One-directional: owning a single never
+ * unlocks a release. Fails closed — an index failure denies, it never grants.
+ */
+async function ownsReleaseContainingStandalone(admin, userId, productSlug) {
+  let index;
+  try {
+    index = await loadReleaseRecordingIndex(admin);
+  } catch (err) {
+    console.warn("[entitlements] release recording index unavailable", { message: err?.message });
+    return false;
+  }
+  const releaseSlugs = releasesContainingStandalone(index, productSlug);
+  if (!releaseSlugs.length) return false;
+  const owned = await Promise.all(releaseSlugs.map((slug) => userOwnsProduct(userId, slug)));
+  return owned.some(Boolean);
+}
+
 /** True when the user may stream full audio for this catalog slug (purchase, membership, or collector). */
 export async function userCanStreamProduct(userId, productSlug, user = null) {
   if (!userId || !productSlug) return false;
@@ -190,6 +213,13 @@ export async function userCanStreamProduct(userId, productSlug, user = null) {
     if (owns) {
       // PURCHASER: owns this specific slug. Cache slug=true only — tier cannot be
       // inferred (user may own just this one item and be entry-level for everything else).
+      await setCachedSlugResult(userId, productSlug, true);
+      return true;
+    }
+
+    // RELEASE OWNER: owning an album / mixtape / EP owns every recording on it,
+    // including the ones also sold as their own single or feature.
+    if (await ownsReleaseContainingStandalone(admin, userId, productSlug)) {
       await setCachedSlugResult(userId, productSlug, true);
       return true;
     }

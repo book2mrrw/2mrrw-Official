@@ -4,6 +4,7 @@ import { startTransition } from "react";
 import { nextQueueIndex } from "./queue-order";
 import { MARKS, PLAYBACK_SCENARIOS, perfMark, perfMeasure } from "@/lib/dev/performanceMarks";
 import { playbackQueuesMatch, normalizeTrack } from "@/lib/playback/playback-track-utils";
+import { upgradeTrackAccessForPlay } from "@/lib/playback/access-reconciliation";
 
 /**
  * Attaches Group 4 (queue management) commands to the shared `self` service object.
@@ -16,7 +17,13 @@ export function attachQueueCommands(self) {
     } = self._deps;
 
     logDirectInternalCallViolation("setQueueInternal");
-    const normalized = (tracks || []).map(normalizeTrack).filter((t) => t.src);
+    // Re-resolve access against the live entitlement state before the src filter:
+    // a track a surface stamped as preview (or built without a src) before the
+    // session hydrated must not be dropped or capped for its owner.
+    const accountState = self._deps.entitlementAccountStateRef?.current;
+    const normalized = (tracks || [])
+      .map((track) => normalizeTrack(upgradeTrackAccessForPlay(track, accountState)))
+      .filter((t) => t.src);
     const index = Math.max(0, Math.min(startIndex, normalized.length - 1));
     const sameTracks = playbackQueuesMatch(normalized, queueRef.current);
     queueRef.current = normalized;

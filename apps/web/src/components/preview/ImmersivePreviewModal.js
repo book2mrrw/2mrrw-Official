@@ -1656,6 +1656,13 @@ function AlbumModalView({
   }, []);
 
   const entitlementAccountState = useEntitlementAccountState();
+  // Track builders emit the full-stream src only when the account state names the
+  // user (`userId`); the entitlement state carries it as `user.id`. Without this,
+  // an owner's queued / radio tracks had no src and were silently skipped.
+  const playbackAccountState = useMemo(
+    () => ({ ...entitlementAccountState, userId: entitlementAccountState?.user?.id ?? null }),
+    [entitlementAccountState]
+  );
 
   // Memoized so `tracks` is referentially stable between renders when the album data hasn't changed.
   // Without this, a new array is created on every render, causing dependents to fire unnecessarily.
@@ -1851,10 +1858,10 @@ function AlbumModalView({
         const ok = await onPlayTrackAtIndex?.(idx, entitlementAccountState);
         if (ok === false) {
           setActiveTrackId(prevActiveTrackId); // revert optimistic highlight on failure
-          const queueTracks = albumTracksForPlayback(album, entitlementAccountState, "album_modal");
+          const queueTracks = albumTracksForPlayback(album, playbackAccountState, "album_modal");
           const blocked =
             getPagePlaybackActionsBridge()?.error ||
-            describeAlbumQueuePlaybackFailure(queueTracks, album, entitlementAccountState) ||
+            describeAlbumQueuePlaybackFailure(queueTracks, album, playbackAccountState) ||
             "Couldn't start playback. Try again.";
           showPlaybackNotice(blocked);
         }
@@ -1867,6 +1874,7 @@ function AlbumModalView({
       album,
       engineTrack,
       entitlementAccountState,
+      playbackAccountState,
       onPlayTrackAtIndex,
       setShuffle,
       showPlaybackNotice,
@@ -1882,13 +1890,13 @@ function AlbumModalView({
     const ok = await onPlayTrackAtIndex?.(0, entitlementAccountState);
     if (ok === false) {
       setActiveTrackId(null);
-      const playbackTracks = albumTracksForPlayback(album, entitlementAccountState, "album_modal");
+      const playbackTracks = albumTracksForPlayback(album, playbackAccountState, "album_modal");
       showPlaybackNotice(
-        describeAlbumQueuePlaybackFailure(playbackTracks, album, entitlementAccountState) ||
+        describeAlbumQueuePlaybackFailure(playbackTracks, album, playbackAccountState) ||
           "Couldn't start playback. Try again."
       );
     }
-  }, [tracks, album, setShuffle, onPlayTrackAtIndex, entitlementAccountState, showPlaybackNotice]);
+  }, [tracks, album, setShuffle, onPlayTrackAtIndex, entitlementAccountState, playbackAccountState, showPlaybackNotice]);
 
   const handleShufflePlay = useCallback(async () => {
     if (!tracks.length) return;
@@ -1899,13 +1907,13 @@ function AlbumModalView({
     const idx = Math.floor(Math.random() * tracks.length);
     const ok = await onPlayTrackAtIndex?.(idx, entitlementAccountState);
     if (ok === false) {
-      const playbackTracks = albumTracksForPlayback(album, entitlementAccountState, "album_modal");
+      const playbackTracks = albumTracksForPlayback(album, playbackAccountState, "album_modal");
       showPlaybackNotice(
-        describeAlbumQueuePlaybackFailure(playbackTracks, album, entitlementAccountState) ||
+        describeAlbumQueuePlaybackFailure(playbackTracks, album, playbackAccountState) ||
           "Couldn't start playback. Try again."
       );
     }
-  }, [tracks, album, setShuffle, onPlayTrackAtIndex, entitlementAccountState, showPlaybackNotice]);
+  }, [tracks, album, setShuffle, onPlayTrackAtIndex, entitlementAccountState, playbackAccountState, showPlaybackNotice]);
 
   const userId = entitlementAccountState?.user?.id ?? null;
 
@@ -1939,10 +1947,10 @@ function AlbumModalView({
   const handleEnqueue = useCallback((tr, { playNext: insertNext = false } = {}) => {
     if (!enqueueTrack || !album?.slug) return;
     const idx = tracks.findIndex((t) => t && tr && String(t.id) === String(tr.id));
-    const allPlayback = albumTracksForPlayback(album, entitlementAccountState, "album_modal", getCatalogSurfaceRef().catalogPlaybackLookup);
+    const allPlayback = albumTracksForPlayback(album, playbackAccountState, "album_modal", getCatalogSurfaceRef().catalogPlaybackLookup);
     const playbackTrack = idx >= 0 ? allPlayback[idx] : null;
     if (playbackTrack?.src) enqueueTrack(playbackTrack, { playNext: insertNext });
-  }, [album, tracks, entitlementAccountState, enqueueTrack]);
+  }, [album, tracks, playbackAccountState, enqueueTrack]);
 
   const handleDownloadAll = useCallback(async () => {
     if (!userId || !album?.slug || isPreview) return;
@@ -1984,13 +1992,13 @@ function AlbumModalView({
       .slice(0, 6)
       .map((r) => {
         const t0 = r.tracks[0];
-        const allPlayback = albumTracksForPlayback(r, entitlementAccountState, "radio", getCatalogSurfaceRef().catalogPlaybackLookup);
+        const allPlayback = albumTracksForPlayback(r, playbackAccountState, "radio", getCatalogSurfaceRef().catalogPlaybackLookup);
         return allPlayback[0];
       })
       .filter(Boolean);
     radioTracks.forEach((rt) => { if (rt?.src) enqueueTrack(rt, { playNext: false }); });
     showPlaybackNotice(`Radio started · ${radioTracks.length} tracks queued`);
-  }, [otherReleases, enqueueTrack, entitlementAccountState, showPlaybackNotice]);
+  }, [otherReleases, enqueueTrack, playbackAccountState, showPlaybackNotice]);
 
   const handleGoToArtist = useCallback(() => {
     close();

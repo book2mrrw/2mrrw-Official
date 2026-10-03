@@ -25,6 +25,13 @@ import {
 } from "@/lib/guest-session";
 import { DEFAULT_NOTIFICATION_PREFERENCES, getNotificationState } from "@/lib/notifications";
 import { deriveUserTier, derivePlaybackPolicy } from "@/lib/playback/playback-policy";
+import { reconcileEmailBoundRights } from "@/lib/commerce/email-bound-rights";
+import {
+  loadReleaseRecordingIndex,
+  standaloneSlugsUnlockedByReleases,
+} from "@/lib/commerce/release-recording-index";
+
+const LIBRARY_SELECT = "id, source, granted_at, products (slug, title, product_type, cover_url, storage_path)";
 
 function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest = true, user = null, userEntitlements = null }) {
   const hasActiveMembership = membershipHasPremiumAccess(membership) || hasEntitlement(userEntitlements, "subscriber");
@@ -107,10 +114,14 @@ export async function GET(req) {
     }
 
     const admin = getAdminClient();
-    const [libraryResult, membershipResult, productsResult, collectorResult, mediaProgressResult, collectorAccessRecords, preorderResult] = await Promise.all([
+    // Rights addressed to this user's verified email (gifts, guest-era purchases)
+    // are brought onto this account on every build. Runs alongside the reads
+    // below; the library is re-read only when it actually changed something.
+    const reconciliationPromise = reconcileEmailBoundRights(admin, user);
+    const [initialLibraryResult, membershipResult, productsResult, collectorResult, mediaProgressResult, collectorAccessRecords, preorderResult] = await Promise.all([
       admin
         .from("library_items")
-        .select("id, source, granted_at, products (slug, title, product_type, cover_url, storage_path)")
+        .select(LIBRARY_SELECT)
         .eq("user_id", user.id)
         .order("granted_at", { ascending: false }),
       admin
@@ -145,6 +156,16 @@ export async function GET(req) {
         .eq("status", "active")
         .eq("metadata->>access_type", "preorder"),
     ]);
+
+    let libraryResult = initialLibraryResult;
+    const reconciliation = await reconciliationPromise;
+    if (reconciliation.changed && !libraryResult.error) {
+      libraryResult = await admin
+        .from("library_items")
+        .select(LIBRARY_SELECT)
+        .eq("user_id", user.id)
+        .order("granted_at", { ascending: false });
+    }
 
     if (libraryResult.error) {
       return NextResponse.json({ error: libraryResult.error.message }, { status: 500 });
@@ -220,8 +241,20 @@ export async function GET(req) {
       })
       .map((item) => item.product_slug)
       .filter(Boolean);
+    // Owning a release (album / mixtape / EP) owns every recording on it — including
+    // the ones also sold as a single or feature. Same index the server stream gate
+    // (userCanStreamProduct) reads, so client and server cannot disagree.
+    let releaseUnlockedSlugs = [];
+    try {
+      releaseUnlockedSlugs = standaloneSlugsUnlockedByReleases(
+        await loadReleaseRecordingIndex(admin),
+        legacyOwnedSlugs
+      );
+    } catch (err) {
+      console.warn("[account/state] release recording index unavailable", { message: err?.message });
+    }
     const ownedSlugs = [
-      ...new Set([...legacyOwnedSlugs, ...ledgerActiveSlugs]),
+      ...new Set([...legacyOwnedSlugs, ...ledgerActiveSlugs, ...releaseUnlockedSlugs]),
     ];
     const isAdmin = isAdminUser(user);
     let finalOwnedSlugs = ownedSlugs;

@@ -52,7 +52,7 @@ import {
   isNearEndRestorePosition,
   playAudioIfNotPaused,
 } from "@/lib/audio/audio-element-utils";
-import { resolveTrackAccess, libraryStreamRedirectSrc } from "@/lib/music-access";
+import { reconcileTrackAccess } from "@/lib/playback/access-reconciliation";
 import {
   fetchLibraryStream,
   streamUrlNeedsRefresh,
@@ -247,36 +247,13 @@ export function usePlaybackEffects({
     if (!queue.length) return;
 
     let changed = false;
+    // Same rule the engine applies at play time (access-reconciliation.js), here in
+    // both directions: gained access swaps to the full stream, lost access falls
+    // back to the preview the track carried before it was upgraded.
     const updated = queue.map((track) => {
-      const fresh = resolveTrackAccess(track, entitlementAccountState);
-      const prev = track.metadata?.access;
-      if (prev?.canStream === fresh.canStream && prev?.previewOnly === fresh.previewOnly) {
-        return track;
-      }
-      changed = true;
-      const justGainedStream = !prev?.canStream && fresh.canStream && track.slug;
-      // Symmetric downgrade: a lapsed subscription/revoked entitlement flips
-      // canStream true -> false. Without this, a queued-but-unplayed track
-      // keeps its already-resolved full-stream URL even though its access
-      // flags now say it can't be streamed — only the metadata was "fixed."
-      // Fall back to whatever preview URL this track already carried before
-      // it was ever upgraded (preserved below via ...track / ...metadata).
-      const justLostStream = prev?.canStream && !fresh.canStream;
-      const rawTrackSlug = track.metadata?.trackSlug || null;
-      const subTrackSlug = rawTrackSlug && rawTrackSlug !== track.slug ? rawTrackSlug : null;
-      const freshSrc = justGainedStream
-        ? libraryStreamRedirectSrc(track.slug, { trackSlug: subTrackSlug })
-        : justLostStream
-          ? (track.metadata?.previewSrc || track.preview || track.preview_path || track.src)
-          : track.src;
-      return {
-        ...track,
-        src: freshSrc,
-        metadata: {
-          ...(track.metadata || {}),
-          access: { ...(prev || {}), ...fresh },
-        },
-      };
+      const next = reconcileTrackAccess(track, entitlementAccountState);
+      if (next !== track) changed = true;
+      return next;
     });
 
     if (!changed) return;

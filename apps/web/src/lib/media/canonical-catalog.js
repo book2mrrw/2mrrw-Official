@@ -216,7 +216,9 @@ export const CANONICAL_TRACKS = [
   { album_slug: "tbh", track_number: 1, slug: "01-glass-full", title: "Glass Full" },
   { album_slug: "tbh", track_number: 2, slug: "02-up-2-me", title: "Up 2 Me" },
   { album_slug: "tbh", track_number: 3, slug: "03-unxpcted", title: "Unxpcted" },
-  { album_slug: "tbh", track_number: 4, slug: "04-all-yours", title: "All Yours" },
+  // Same recording as the "All Yourz" single (identical 2:27.49 master). The spelling
+  // differs, so the release → single ownership link is declared, not inferred.
+  { album_slug: "tbh", track_number: 4, slug: "04-all-yours", title: "All Yours", standalone_slug: "all-yourz" },
   { album_slug: "tbh", track_number: 5, slug: "05-locomotive", title: "Locomotive" },
   { album_slug: "tbh", track_number: 6, slug: "06-left", title: "LEFT (interlude)" },
   { album_slug: "tbh", track_number: 7, slug: "07-was-wrong", title: "Was Wrong" },

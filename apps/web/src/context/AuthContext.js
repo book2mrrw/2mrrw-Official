@@ -45,6 +45,9 @@ const EMPTY_ACCOUNT_STATE = {
 const noop = () => {};
 const noopAsync = async () => null;
 
+/** Backoff for re-checking the account after a failed bootstrap refresh. */
+const BOOTSTRAP_RETRY_DELAYS_MS = [2_000, 5_000, 15_000];
+
 /** Immutable empty snapshot for SSR / pre-provider — not authenticated entitlements. */
 export const EMPTY_ENTITLEMENT_SNAPSHOT = Object.freeze({
   userId: null,
@@ -366,6 +369,9 @@ export function AuthProvider({ children }) {
               setOwnedSlugs(new Set());
               setAccountState(EMPTY_ACCOUNT_STATE);
               clearEntitlementSnapshot();
+              // Explicit: the server says there is no session. Distinct from a failed
+              // request (null), which must never be read as a sign-out.
+              return { user: null, unauthenticated: true };
             }
             return snapshotToAccountPayload(entitlementSnapshotRef.current, accountStateRef.current);
           }
@@ -456,6 +462,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
+    let bootstrapRetryTimer = null;
 
     const clearAuthenticatedState = () => {
       clearEntitlementsCache(signedInUserIdRef.current);
@@ -466,6 +473,30 @@ export function AuthProvider({ children }) {
       setOwnedSlugs(new Set());
       setAccountState(EMPTY_ACCOUNT_STATE);
       clearEntitlementSnapshot();
+    };
+
+    // A failed account check (network, 5xx, auth temporarily unavailable) is not
+    // evidence of sign-out. Previously the bootstrap treated it as one and wiped
+    // the user's ownership and entitlement cache, so every track played as a
+    // preview for the rest of the visit. Keep what we have and retry instead;
+    // only an explicit "no session" answer clears the account.
+    const retryBootstrapRefresh = (attempt = 0) => {
+      if (attempt >= BOOTSTRAP_RETRY_DELAYS_MS.length) return;
+      bootstrapRetryTimer = setTimeout(async () => {
+        bootstrapRetryTimer = null;
+        if (!mounted) return;
+        const data = await refreshAccountStateRef.current?.({
+          reason: "auth:bootstrap",
+          source: "AuthContext:bootstrap-retry",
+          force: true,
+        });
+        if (!mounted) return;
+        if (!data) {
+          retryBootstrapRefresh(attempt + 1);
+        } else if (!data.user) {
+          clearAuthenticatedState();
+        }
+      }, BOOTSTRAP_RETRY_DELAYS_MS[attempt]);
     };
 
     if (!sessionBootstrappedRef.current) {
@@ -500,7 +531,11 @@ export function AuthProvider({ children }) {
               force: true,
             });
             if (!mounted) return;
-            const verifiedUser = accountData?.user;
+            if (!accountData) {
+              retryBootstrapRefresh();
+              return;
+            }
+            const verifiedUser = accountData.user;
             const verifiedResolved = verifiedUser
               ? resolveUserFromSession({ user: verifiedUser })
               : null;
@@ -548,6 +583,7 @@ export function AuthProvider({ children }) {
 
     return () => {
       mounted = false;
+      if (bootstrapRetryTimer) clearTimeout(bootstrapRetryTimer);
       unsubscribe();
     };
   }, [clearEntitlementSnapshot, invalidateEntitlementSnapshot]);

@@ -22,6 +22,7 @@ import { signVariantToken } from "@/lib/hls/token";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { getOrFetchManifest } from "@/lib/server/hls-manifest-cache";
 import { resolveReleaseAccessForProduct } from "@/lib/releases/release-availability-server";
+import { resolveReleaseDefaultTrackSlug } from "@/lib/playback/release-default-track";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,6 @@ export async function OPTIONS(req) {
 export async function GET(req) {
   const { searchParams } = req.nextUrl;
   const slug      = searchParams.get("slug");
-  const trackSlug = searchParams.get("trackSlug") || null;
 
   if (!slug) {
     return cors(req, NextResponse.json({ error: "slug required" }, { status: 400 }));
@@ -56,6 +56,12 @@ export async function GET(req) {
     identifier: user.id,
   });
   if (!rl.allowed) return cors(req, rateLimitResponse(rl.retryAfterSeconds));
+
+  // A release requested without a track means "play it from the top".
+  const trackSlug =
+    searchParams.get("trackSlug") ||
+    (await resolveReleaseDefaultTrackSlug(getAdminClient(), slug).catch(() => null)) ||
+    null;
 
   // Entitlement — admins bypass; all others must have canStream
   if (!isAdminUser(user)) {

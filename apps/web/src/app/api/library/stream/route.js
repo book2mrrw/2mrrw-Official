@@ -30,6 +30,7 @@ import { getHybridStreamingFeatureFlags } from "@/lib/feature-flags";
 import { getPlaybackResolverDiagnostics } from "@/lib/playback/playback-resolver-diagnostics";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { resolveReleaseAccessForProduct } from "@/lib/releases/release-availability-server";
+import { resolveReleaseDefaultTrackSlug } from "@/lib/playback/release-default-track";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,21 @@ function applyResolverDiagnosticsHeaders(response, resolved) {
 
 function withStreamTiming(req, response, timing) {
   return applyMediaCors(req, timing.apply(response));
+}
+
+// A registered user being served a preview is the exact symptom an owner reports
+// ("I bought it and only hear a preview"). Log it once per play, not per Range
+// continuation, so such reports can be proven or refuted from production logs.
+function logPreviewForRegisteredUser(req, user, slug, trackSlug, reason) {
+  if (user.isGuest) return;
+  const rangeHeader = req.headers.get("range") || req.headers.get("Range") || "";
+  if (rangeHeader && !/^bytes=0-/.test(rangeHeader)) return;
+  console.info("[library/stream] preview served to registered user", {
+    userId: user.id,
+    slug,
+    trackSlug: trackSlug || null,
+    reason,
+  });
 }
 
 // Non-entitled users get their track's preview audio file served through the same
@@ -137,6 +153,13 @@ async function buildStreamResponse(req, user, slug, { force = false, trackSlug =
     if (releaseAccess.availability && !releaseAccess.availability.canPreview) {
       return applyMediaCors(req, NextResponse.json({ error: "Playback locked until release", code: "RELEASE_LOCKED" }, { status: 403 }));
     }
+    logPreviewForRegisteredUser(
+      req,
+      user,
+      slug,
+      trackSlug,
+      releaseAccess.availability ? `release_${releaseAccess.availability.phase}` : "not_entitled"
+    );
     return buildPreviewStreamResponse(req, user, slug, { trackSlug, timing });
   }
 
@@ -349,9 +372,13 @@ export async function GET(req) {
 
   try {
     logStreamR2Env("get");
+    // A release requested without a track means "play it from the top".
+    const effectiveTrackSlug =
+      (trackSlug ? String(trackSlug).trim() : null) ||
+      (await resolveReleaseDefaultTrackSlug(getAdminClient(), slug).catch(() => null));
     const response = await buildStreamResponse(req, user, slug, {
       force,
-      trackSlug: trackSlug ? String(trackSlug).trim() : null,
+      trackSlug: effectiveTrackSlug,
       timing,
     });
     return withStreamTiming(req, response, timing);

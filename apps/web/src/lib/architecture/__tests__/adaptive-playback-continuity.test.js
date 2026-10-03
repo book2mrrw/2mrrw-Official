@@ -15,11 +15,17 @@ test("a lapsed entitlement downgrades an in-progress stream instead of playing i
   // PREVIEW_HARD_CAP_SEC fade/pause in PlaybackEventHandlers.onTime — it
   // reads currentTrack.metadata.access.previewOnly live on every tick, so
   // patching that flag is enough; no new pause/fade logic was written.
+  //
+  // The per-track rule now lives in access-reconciliation.js (shared with the
+  // engine's play-time check); Effect 5 must call it with downgrades allowed.
   const effects = read("src/lib/playback/usePlaybackEffects.js");
-  assert.match(effects, /const justLostStream = prev\?\.canStream && !fresh\.canStream;/);
-  const perTrackAt = effects.indexOf("const justLostStream");
-  const freshSrcAt = effects.indexOf("justLostStream", perTrackAt + 1);
-  assert.ok(freshSrcAt > perTrackAt, "the resolved freshSrc must actually branch on justLostStream");
+  const reconciliation = read("src/lib/playback/access-reconciliation.js");
+  assert.match(reconciliation, /const justLostStream = Boolean\(prev\?\.canStream && !fresh\.canStream\);/);
+  const perTrackAt = reconciliation.indexOf("const justLostStream");
+  const freshSrcAt = reconciliation.indexOf("justLostStream", perTrackAt + 1);
+  assert.ok(freshSrcAt > perTrackAt, "the resolved src must actually branch on justLostStream");
+  assert.match(effects, /reconcileTrackAccess\(track, entitlementAccountState\)/,
+    "Effect 5 must use the default (downgrade-allowed) reconciliation");
   assert.match(effects, /wasStreamable && updatedCurrent\?\.metadata\?\.access\?\.previewOnly/);
   const handlers = read("src/lib/playback/PlaybackEventHandlers.js");
   assert.match(handlers, /const track = stateRef\.current\.currentTrack;/);
