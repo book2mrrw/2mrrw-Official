@@ -347,12 +347,34 @@ describe("removing a track in the wizard cannot let it silently reappear at publ
     assert.match(wizard, /Could not remove this track: \{removeError\}/);
   });
 
-  test("the delete route only allows track removal while the release is still a draft", () => {
-    assert.match(trackRoute, /if \(release\.status !== "draft"\) \{/);
+  test("the admin route uses the release-scoped atomic removal RPC", () => {
+    assert.match(trackRoute, /admin\.rpc\("remove_release_track"/);
+    assert.match(trackRoute, /getAdminSessionUser/);
+    assert.match(trackRoute, /isAdminUser\(user\)/);
   });
 
-  test("the delete route actually removes the DB row publish() would otherwise still find", () => {
-    assert.match(trackRoute, /await admin\.from\("tracks"\)\.delete\(\)\.eq\("id", trackId\);/);
+  test("removal preserves track/media rows and future publish filters removed rows", () => {
+    const migration = read("supabase/migrations/20261018150000_release_track_removal.sql");
+    const publishRoute = read("src/app/api/admin/releases/[id]/publish/route.js");
+    assert.match(migration, /removed_from_release_at timestamptz/);
+    assert.match(migration, /set removed_from_release_at = v_removed_at/);
+    assert.doesNotMatch(migration, /delete\s+from\s+public\.(?:tracks|catalog_tracks)/i);
+    assert.match(publishRoute, /\.is\("removed_from_release_at", null\)/);
+  });
+
+  test("the management editor requires confirmation and retains a visible accessible action", () => {
+    const manager = read("src/components/admin/InlineReleasesManager.js");
+    assert.match(manager, /aria-label=\{`Remove \$\{track\.title \|\| track\.slug\} from/);
+    assert.match(manager, /role="alertdialog"/);
+    assert.match(manager, /Remove track from release\?/);
+    assert.match(manager, /onTouchEnd=\{\(event\) => handleTrackTouchEnd/);
+  });
+
+  test("release readiness and Broadcast project enumeration exclude removed tracks", () => {
+    const statusRoute = read("src/app/api/admin/releases/[id]/status/route.js");
+    const broadcast = read("src/lib/broadcast/server-project.js");
+    assert.match(statusRoute, /\.is\("removed_from_release_at", null\)/);
+    assert.match(broadcast, /\.is\("removed_from_release_at", null\)/);
   });
 });
 

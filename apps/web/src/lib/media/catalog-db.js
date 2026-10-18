@@ -302,6 +302,7 @@ async function fetchTracksForProducts(admin, products) {
       .from("catalog_tracks")
       .select("id, product_id, slug, title, position, storage_path, preview_path, stream_path, duration_seconds, metadata")
       .in("product_id", productIds)
+      .is("removed_from_release_at", null)
       .order("position", { ascending: true });
     if (error) throw error;
 

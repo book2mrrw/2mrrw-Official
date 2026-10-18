@@ -12,9 +12,16 @@ class FakeHls {
     this.config = config;
     this.handlers = new Map();
     this.levels = [{ bitrate: 64000 }, { bitrate: 96000 }, { bitrate: 160000 }, { bitrate: 320000 }];
-    this.currentLevel = -1;
+    this._currentLevel = -1;
+    this._loadLevel = -1;
+    this.manualLevel = -1;
+    this.immediateSwitches = 0;
   }
-  get autoLevelEnabled() { return this.currentLevel === -1; }
+  get currentLevel() { return this._currentLevel; }
+  set currentLevel(value) { this._currentLevel = value; this.manualLevel = value; this.immediateSwitches++; }
+  get loadLevel() { return this._loadLevel; }
+  set loadLevel(value) { this._loadLevel = value; this.manualLevel = value; }
+  get autoLevelEnabled() { return this.manualLevel === -1; }
   on(event, fn) { this.handlers.set(event, fn); }
   startLoad() {}
   loadSource() {}
@@ -34,12 +41,13 @@ function environment(t, effectiveType) {
 }
 
 for (const [network, index] of [['2g', 0], ['3g', 2], ['4g', 3]]) {
-  test(`${network} startup keeps live adaptation enabled after manifest parsing`, async (t) => {
+  test(`${network} startup seeds a rendition without locking before playback`, async (t) => {
     environment(t, network);
     const engine = new HLSEngine();
     assert.equal(await engine.loadTrack('/master.m3u8', {}), true);
     assert.equal(engine._hls.startLevel, index);
     assert.equal(engine._hls.autoLevelEnabled, true);
+    assert.equal(engine._hls.autoLevelCapping, undefined);
     engine.detach();
     assert.equal(engine.isLoaded, false);
   });
@@ -52,8 +60,51 @@ test('an explicit quality pin remains manual and clearing it restores auto', asy
   await engine.loadTrack('/master.m3u8', {});
   assert.equal(engine._hls.currentLevel, 2);
   assert.equal(engine._hls.autoLevelEnabled, false);
+  assert.equal(engine.holdCurrentQualityForPlayback(), null, 'an explicit pin remains authoritative');
   engine.setQualityLevel(-1);
   assert.equal(engine._hls.autoLevelEnabled, true);
+  engine.detach();
+});
+
+test('automatic quality is held at the selected startup rendition after the buffer gate', async (t) => {
+  environment(t, '4g');
+  const engine = new HLSEngine();
+  await engine.loadTrack('/master.m3u8', {});
+  engine._hls._currentLevel = 3;
+  assert.equal(engine.holdCurrentQualityForPlayback(), 3);
+  assert.equal(engine._hls.autoLevelEnabled, false, 'the selected rendition is fixed for this play');
+  assert.equal(engine._hls.loadLevel, 3);
+  assert.equal(engine._hls.immediateSwitches, 0, 'locking does not flush the existing startup buffer');
+
+  engine._hls.handlers.get('level')('level', { level: 2 });
+  assert.equal(engine._hls.loadLevel, 3, 'an observed level event cannot change the fixed rendition');
+  assert.equal(engine._trackQualityCap, 3);
+  engine.detach();
+  assert.equal(engine._trackQualityCap, null, 'a new track starts with a fresh selection');
+});
+
+test('the first buffered rendition is the fallback when hls.js has no current level', async (t) => {
+  environment(t, '4g');
+  const engine = new HLSEngine();
+  await engine.loadTrack('/master.m3u8', {});
+  engine._hls._currentLevel = -1;
+  engine._hls.handlers.get('buffered')('buffered', {
+    frag: { type: 'main', sn: 1, level: 2, stats: { loaded: 1024, aborted: false } },
+  });
+  assert.equal(engine.holdCurrentQualityForPlayback(), 2);
+  assert.equal(engine._hls.loadLevel, 2);
+  engine.detach();
+});
+
+test('a token refresh reloads the same rendition during the active play', async (t) => {
+  environment(t, '4g');
+  const engine = new HLSEngine();
+  await engine.loadTrack('/master.m3u8', {});
+  engine._hls._currentLevel = 2;
+  engine.holdCurrentQualityForPlayback();
+  await engine.loadTrack('/master.m3u8', {});
+  assert.equal(engine._hls.loadLevel, 2);
+  assert.equal(engine._hls.autoLevelEnabled, false);
   engine.detach();
 });
 

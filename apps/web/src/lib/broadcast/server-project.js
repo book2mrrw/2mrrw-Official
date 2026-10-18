@@ -10,7 +10,7 @@ export async function resolveBroadcastProject({ releaseId, productId }, client =
     const release = checked(await client.from("releases").select("id,release_type,status,content_kind").eq("id", releaseId).maybeSingle());
     if (!release || (release.content_kind && release.content_kind !== "music") || !TYPES.has(release.release_type) || !["published", "scheduled", "unrelzd"].includes(release.status)) return null;
     const tracks = checked(await client.from("tracks").select("id,title,position,duration_seconds")
-      .eq("release_id", releaseId).order("position", { ascending: true }).limit(201));
+      .eq("release_id", releaseId).is("removed_from_release_at", null).order("position", { ascending: true }).limit(201));
     return { releaseId, productId: null, items: tracks.map((track) => ({ trackId: track.id, title: track.title,
       durationSeconds: track.duration_seconds, prepared: false })) };
   }
@@ -20,7 +20,7 @@ export async function resolveBroadcastProject({ releaseId, productId }, client =
   // A wizard product resolves to its original release/tracks, never a new copy.
   if (product.release_id) return resolveBroadcastProject({ releaseId: product.release_id }, client);
   const tracks = checked(await client.from("catalog_tracks").select("id,track_id,title,position")
-    .eq("product_id", productId).order("position", { ascending: true }).limit(201));
+    .eq("product_id", productId).is("removed_from_release_at", null).order("position", { ascending: true }).limit(201));
   return { releaseId: null, productId, items: tracks.length ? tracks.map((track) => ({
     trackId: track.track_id, catalogTrackId: track.id, title: track.title, prepared: false,
   })) : ["single", "feature"].includes(product.release_type || product.product_type)

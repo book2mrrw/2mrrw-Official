@@ -1,5 +1,4 @@
 "use client";
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { catalogCoverUrl, catalogMotionVideoUrl } from "@/lib/media-urls";
@@ -48,6 +47,7 @@ const TYPE_LABELS = {
   album:   "Album",
   ep:      "EP",
   mixtape: "Mixtape",
+  unclassified: "Needs classification",
 };
 
 const SLUG_PREFIXES = {
@@ -265,7 +265,21 @@ function HomeLanding({ releaseCount, onUpload, onMyReleases }) {
 }
 
 // ── Release List View ────────────────────────────────────────────────────────────
-function ReleaseListView({ releases, loading, error, filter, onFilter, onRefresh, onEdit, onNew, onBack, lastResult }) {
+const RELEASE_TYPE_FILTERS = [
+  ["all", "All Releases"], ["single", "Singles"], ["feature", "Features"],
+  ["album", "Albums"], ["ep", "EPs"], ["mixtape", "Mixtapes"],
+];
+
+function managementReleaseType(release) {
+  const type = String(release.release_category || release.release_type || "").trim().toLowerCase();
+  if (["single", "singles"].includes(type)) return "single";
+  if (["feature", "features"].includes(type)) return "feature";
+  if (["album", "albums"].includes(type)) return "album";
+  if (type === "ep" || type === "mixtape") return type;
+  return null;
+}
+
+function ReleaseListView({ releases, loading, error, filter, onFilter, typeFilter, onTypeFilter, onRefresh, onEdit, onNew, onBack, lastResult }) {
   const counts = {
     all:       releases.length,
     published: releases.filter((r) => r.status === "published").length,
@@ -276,6 +290,13 @@ function ReleaseListView({ releases, loading, error, filter, onFilter, onRefresh
   const filtered = filter === "all"
     ? releases
     : releases.filter((r) => r.status === filter);
+  const visibleReleases = typeFilter === "all"
+    ? filtered
+    : filtered.filter((release) => managementReleaseType(release) === typeFilter);
+  const typeCounts = Object.fromEntries(RELEASE_TYPE_FILTERS.map(([type]) => [
+    type,
+    type === "all" ? filtered.length : filtered.filter((release) => managementReleaseType(release) === type).length,
+  ]));
 
   return (
     <div style={{ padding: "28px 0 80px", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
@@ -329,6 +350,29 @@ function ReleaseListView({ releases, loading, error, filter, onFilter, onRefresh
         </button>
       </div>
 
+      <div role="tablist" aria-label="Filter releases by type" style={{ display: "flex", gap: 6, margin: "-8px 0 18px", flexWrap: "wrap" }}>
+        {RELEASE_TYPE_FILTERS.map(([type, label]) => (
+          <button
+            key={type}
+            type="button"
+            role="tab"
+            aria-selected={typeFilter === type}
+            onClick={() => onTypeFilter(type)}
+            style={{
+              background: typeFilter === type ? C.accentDim : C.surface2,
+              border: `1px solid ${typeFilter === type ? C.accentBorder : C.border}`,
+              borderRadius: 7, padding: "7px 12px", fontSize: 11, fontWeight: 700,
+              color: typeFilter === type ? C.accent : C.muted, cursor: "pointer", fontFamily: "inherit",
+            }}
+          >
+            {label} ({typeCounts[type]})
+          </button>
+        ))}
+      </div>
+      <div style={{ color: C.muted2, fontSize: 11, margin: "-10px 0 16px" }}>
+        Releases without an explicit type classification remain available in All Releases.
+      </div>
+
       {error && (
         <div style={{ background: "rgba(255,69,58,0.08)", border: "1px solid rgba(255,69,58,0.3)", borderRadius: 8, padding: "12px 16px", marginBottom: 16, fontSize: 13, color: C.error }}>
           {error}
@@ -337,14 +381,14 @@ function ReleaseListView({ releases, loading, error, filter, onFilter, onRefresh
 
       {loading ? (
         <div style={{ textAlign: "center", padding: "60px 0", color: C.muted }}>Loading releases…</div>
-      ) : filtered.length === 0 ? (
+      ) : visibleReleases.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 0" }}>
           <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>No releases found.</div>
-          {filter === "all" && <Btn onClick={onNew}>Upload Your First Release</Btn>}
+          {filter === "all" && typeFilter === "all" && <Btn onClick={onNew}>Upload Your First Release</Btn>}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {filtered.map((rel) => {
+          {visibleReleases.map((rel) => {
             const coverSrc = rel.cover_art_r2_key ? catalogCoverUrl(rel.cover_art_r2_key) : null;
             const prefix   = SLUG_PREFIXES[rel.release_type] || "/song/";
             const isLive   = rel.status === "published" && rel.storefront_visible;
@@ -378,7 +422,7 @@ function ReleaseListView({ releases, loading, error, filter, onFilter, onRefresh
                   border: `1px solid ${C.border}`,
                 }}>
                   {coverSrc
-                    ? <img src={coverSrc} alt={rel.title || rel.slug} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ? <img src={coverSrc} alt={rel.title || rel.slug} loading="lazy" decoding="async" onError={(event) => { event.currentTarget.remove(); }} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     : <span style={{ fontSize: 20 }}>🎵</span>
                   }
                 </div>
@@ -445,6 +489,11 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const [section,    setSection]    = useState("metadata");
   const [saving,     setSaving]     = useState(false);
   const [saveMsg,    setSaveMsg]    = useState(null);
+  const [removeCandidate, setRemoveCandidate] = useState(null);
+  const [removingTrackId, setRemovingTrackId] = useState(null);
+  const [removeTrackError, setRemoveTrackError] = useState("");
+  const [swipedTrackId, setSwipedTrackId] = useState(null);
+  const trackTouchStartRef = useRef(null);
 
   // Metadata form state
   const [editTitle,  setEditTitle]  = useState("");
@@ -503,8 +552,10 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
         const lMap = {};
         for (const t of (d.tracks || [])) lMap[t.id] = t.lyrics || "";
         setTrackLyrics(lMap);
-        // Seed cover preview from stub
-        if (relStub.cover_art_r2_key) setCoverPreview(catalogCoverUrl(relStub.cover_art_r2_key));
+        // The detail response is authoritative; the list stub may predate
+        // canonical artwork metadata resolution.
+        const coverKey = d.release?.cover_art_r2_key || relStub.cover_art_r2_key;
+        if (coverKey) setCoverPreview(catalogCoverUrl(coverKey));
         // Seed animated-cover preview from persisted server data so the "already
         // uploaded" state (and its video player) survives a reopen.
         const animatedKey = d.release?.animated_cover_r2_key;
@@ -734,6 +785,52 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
     setAudioPhase("idle");
   };
 
+  const removeTrackFromRelease = async () => {
+    if (!removeCandidate || removingTrackId) return;
+    const target = removeCandidate;
+    setRemovingTrackId(target.id);
+    setRemoveTrackError("");
+    try {
+      const response = await fetch(`/api/admin/releases/${relStub.id}/tracks/${target.id}`, { method: "DELETE" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Track removal failed");
+      setDetail((current) => current ? {
+        ...current,
+        tracks: current.tracks.filter((track) => track.id !== target.id)
+          .map((track, index) => ({ ...track, position: index + 1 })),
+      } : current);
+      setTrackLyrics((current) => {
+        const next = { ...current };
+        delete next[target.id];
+        return next;
+      });
+      setRemoveCandidate(null);
+      setSwipedTrackId(null);
+      signalCatalogMutation("release_track_removed");
+      showMsg("Track removed from this release. Its audio master and rights history were preserved.");
+      onSaved();
+    } catch (error) {
+      setRemoveTrackError(error.message || "Track removal failed");
+    } finally {
+      setRemovingTrackId(null);
+    }
+  };
+
+  const handleTrackTouchStart = (event, trackId) => {
+    const touch = event.touches?.[0];
+    if (touch) trackTouchStartRef.current = { x: touch.clientX, y: touch.clientY, trackId };
+  };
+  const handleTrackTouchEnd = (event, trackId) => {
+    const start = trackTouchStartRef.current;
+    trackTouchStartRef.current = null;
+    const touch = event.changedTouches?.[0];
+    if (!start || !touch || start.trackId !== trackId) return;
+    const dx = touch.clientX - start.x;
+    const dy = touch.clientY - start.y;
+    if (Math.abs(dx) < 56 || Math.abs(dx) < Math.abs(dy) * 1.25) return;
+    setSwipedTrackId(dx < 0 ? trackId : null);
+  };
+
   // ── Render ────────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -940,7 +1037,21 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
             )}
 
             {detail.tracks.map((track) => (
-              <div key={track.id} style={{ background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", marginBottom: 10 }}>
+              <div
+                key={track.id}
+                onTouchStart={(event) => handleTrackTouchStart(event, track.id)}
+                onTouchEnd={(event) => handleTrackTouchEnd(event, track.id)}
+                onTouchCancel={() => { trackTouchStartRef.current = null; }}
+                style={{ position: "relative", overflow: "hidden", borderRadius: 10, marginBottom: 10, touchAction: "pan-y" }}
+              >
+                <button
+                  type="button"
+                  aria-label={`Remove ${track.title || track.slug} from ${detail.product?.title || detail.release.slug}`}
+                  onClick={() => { setRemoveTrackError(""); setRemoveCandidate(track); }}
+                  disabled={audioReplacing?.id === track.id || removingTrackId === track.id}
+                  style={{ position: "absolute", inset: "0 0 0 auto", width: 104, border: 0, borderRadius: 10, background: "rgba(255,69,58,0.18)", color: C.error, font: "inherit", fontSize: 12, fontWeight: 800, cursor: "pointer", opacity: audioReplacing?.id === track.id ? 0.45 : 1 }}
+                >Remove Track</button>
+                <div style={{ position: "relative", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "14px 16px", transition: "transform 160ms ease", transform: swipedTrackId === track.id ? "translateX(-104px)" : "translateX(0)" }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
@@ -951,15 +1062,24 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                       {track.upload_status && track.upload_status !== "ready" ? ` · ${track.upload_status}` : ""}
                     </div>
                   </div>
-                  {audioReplacing?.id !== track.id && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    {audioReplacing?.id !== track.id && (
+                      <button
+                        onClick={() => startAudioReplace(track)}
+                        style={{ background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 7, padding: "7px 14px", fontSize: 11, color: C.muted, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}
+                      >
+                        Replace Master
+                      </button>
+                    )}
                     <button
-                      onClick={() => startAudioReplace(track)}
-                      style={{ background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 7, padding: "7px 14px", fontSize: 11, color: C.muted, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}
-                    >
-                      Replace Master
-                    </button>
-                  )}
+                      type="button"
+                      onClick={() => { setRemoveTrackError(""); setRemoveCandidate(track); }}
+                      disabled={removingTrackId === track.id || audioReplacing?.id === track.id}
+                      style={{ background: "rgba(255,69,58,0.08)", border: `1px solid rgba(255,69,58,0.3)`, borderRadius: 7, padding: "7px 12px", fontSize: 11, color: C.error, cursor: "pointer", fontFamily: "inherit", fontWeight: 700 }}
+                    >Remove Track</button>
+                  </div>
                 </div>
+
 
                 {/* Inline replace flow for this track */}
                 {audioReplacing?.id === track.id && (
@@ -1025,6 +1145,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
                     )}
                   </div>
                 )}
+                </div>
               </div>
             ))}
           </div>
@@ -1064,6 +1185,32 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
           </div>
         )}
       </div>
+
+      {removeCandidate && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="remove-release-track-title"
+          aria-describedby="remove-release-track-description"
+          style={{ position: "fixed", inset: 0, zIndex: 10000, background: "rgba(0,0,0,0.78)", display: "grid", placeItems: "center", padding: 20 }}
+        >
+          <div style={{ width: "min(100%, 440px)", background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 14, padding: 22, boxShadow: "0 20px 70px rgba(0,0,0,0.55)" }}>
+            <h3 id="remove-release-track-title" style={{ margin: "0 0 10px", color: C.text, fontSize: 17, fontWeight: 850 }}>Remove track from release?</h3>
+            <p style={{ margin: "0 0 8px", color: C.text, fontSize: 14, fontWeight: 700 }}>{removeCandidate.title || removeCandidate.slug}</p>
+            <p style={{ margin: "0 0 14px", color: C.muted, fontSize: 13, lineHeight: 1.55 }}>{detail.product?.title || detail.release.slug}</p>
+            <p id="remove-release-track-description" style={{ margin: "0 0 16px", color: C.muted2, fontSize: 12, lineHeight: 1.55 }}>
+              This removes the track from this release’s tracklist and compacts its order. The audio master, replacement history, visuals, and existing rights records are preserved.
+            </p>
+            {removeTrackError && <div role="alert" style={{ color: C.error, fontSize: 12, marginBottom: 14 }}>{removeTrackError}</div>}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 9, flexWrap: "wrap" }}>
+              <button type="button" autoFocus disabled={Boolean(removingTrackId)} onClick={() => { setRemoveCandidate(null); setRemoveTrackError(""); }} style={{ background: "transparent", border: `1px solid ${C.border2}`, borderRadius: 8, padding: "9px 14px", color: C.muted, font: "inherit", cursor: "pointer" }}>Cancel</button>
+              <button type="button" disabled={Boolean(removingTrackId)} onClick={removeTrackFromRelease} style={{ background: C.error, border: 0, borderRadius: 8, padding: "9px 14px", color: "#fff", font: "inherit", fontWeight: 800, cursor: "pointer", opacity: removingTrackId ? 0.65 : 1 }}>
+                {removingTrackId ? "Removing…" : "Remove Track"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1085,6 +1232,7 @@ export default function InlineReleasesManager() {
   const [loading,        setLoading]        = useState(false);
   const [loadError,      setLoadError]      = useState(null);
   const [filter,         setFilter]         = useState("all");
+  const [typeFilter,     setTypeFilter]     = useState("all");
   const [editingRelease, setEditingRelease] = useState(null);
   const [lastResult,     setLastResult]     = useState(null);
   const [reauthRequired, setReauthRequired] = useState(false);
@@ -1154,6 +1302,8 @@ export default function InlineReleasesManager() {
           error={loadError}
           filter={filter}
           onFilter={setFilter}
+          typeFilter={typeFilter}
+          onTypeFilter={setTypeFilter}
           onRefresh={loadReleases}
           onNew={() => { setEditingRelease(null); setView("upload"); }}
           onBack={() => setView("home")}

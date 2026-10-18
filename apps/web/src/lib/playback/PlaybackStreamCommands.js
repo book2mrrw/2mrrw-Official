@@ -683,8 +683,11 @@ export function attachStreamCommands(self) {
     // readyState 0/1 means no usable buffer (e.g. fresh page) — route through the full
     // hls.js path so the buffer gate runs and play() resolves instantly rather than
     // after 10–15 s of iOS-native HLS manifest+segment loading.
-    const isSameTrack = sameIdentity && audio.readyState >= 2;
-    const isReplay = isSameTrack && audio.ended;
+    // A completed track replay is a new quality-selection attempt: route it
+    // through manifest/buffer selection so an improved rendition can be used.
+    // Ordinary pause/resume on the active track keeps its existing media buffer.
+    const isReplay = sameIdentity && audio.ended;
+    const isSameTrack = sameIdentity && audio.readyState >= 2 && !isReplay;
     const previousTrack = stateRef.current.currentTrack;
 
     if (!sameIdentity) {
@@ -948,6 +951,12 @@ export function attachStreamCommands(self) {
         // Always restore gain before returning so mainGainRef never stays at 0.
         if (requestId !== playRequestIdRef.current || streamAbortController.signal.aborted) {
           return false;
+        }
+        // Let hls.js refine the startup hint while segments arrive, then hold
+        // the selected rendition immediately before playback begins. This keeps
+        // the track on one HLS level until the next track or a full replay.
+        if (hlsDidLoad && hlsEngineRef.current) {
+          hlsEngineRef.current.holdCurrentQualityForPlayback();
         }
         patchState({ hasStarted: true, playbackState: "ready" });
         const startedPlay = await playAudioIfNotPaused(audio, !pausedDuringCurrentLoadRef.current, {

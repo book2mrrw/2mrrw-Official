@@ -134,7 +134,8 @@ export async function POST(req, { params }) {
   const { data: dbTracks } = await admin
     .from("tracks")
     .select("id, title, upload_status, audio_r2_key, master_r2_key, position, lyrics, preview_r2_key, preview_start_seconds")
-    .eq("release_id", releaseId);
+    .eq("release_id", releaseId)
+    .is("removed_from_release_at", null);
 
   // Merge body track data (titles, lyrics, credits overrides) into DB rows.
   // preview_key/preview_start_seconds prefer the durable per-track DB column
@@ -673,7 +674,8 @@ export async function POST(req, { params }) {
       .from("tracks")
       .update(singleTrackUpdate)
       .eq("id", track_id)
-      .eq("release_id", releaseId);
+      .eq("release_id", releaseId)
+      .is("removed_from_release_at", null);
     if (singleTrackUpdateError) {
       console.error("[publish] single-track metadata update error", singleTrackUpdateError.message);
       return NextResponse.json(

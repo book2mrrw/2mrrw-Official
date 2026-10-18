@@ -55,7 +55,7 @@ export async function GET(req) {
   const [wizardProductsRes, wizardTracksRes, wizardDraftsRes] = releaseIds.length > 0
     ? await Promise.all([
         admin.from("products").select("release_id, title, active, price_cents").in("release_id", releaseIds),
-        admin.from("tracks").select("release_id, upload_status").in("release_id", releaseIds),
+        admin.from("tracks").select("release_id, upload_status").in("release_id", releaseIds).is("removed_from_release_at", null),
         admin.from("release_drafts").select("release_id,step_index,draft_payload,saved_at").in("release_id", releaseIds),
       ])
     : [{ data: [] }, { data: [] }, { data: [] }];
@@ -76,6 +76,7 @@ export async function GET(req) {
 
   const enrichedWizard = (wizardReleases || []).filter((r) => !pendingDumpIds.has(r.id)).map((r) => ({
     ...r,
+    release_category: r.release_type,
     title: productsByRelease[r.id]?.title || draftsByRelease[r.id]?.draft_payload?.data?.title || r.metadata?.draft_title || null,
     price_cents: productsByRelease[r.id]?.price_cents || (Number(draftsByRelease[r.id]?.draft_payload?.data?.price) * 100 || null),
     draft_step_index: draftsByRelease[r.id]?.step_index ?? r.metadata?.draft_step_index ?? null,
@@ -88,7 +89,7 @@ export async function GET(req) {
   // ── 2. Catalog releases (legacy R2-ingest system → products table) ────────
   const { data: catalogProducts, error: catalogError } = await admin
     .from("products")
-    .select("id, slug, title, product_type, release_type, content_kind, active, image_path, price_cents, created_at, updated_at, metadata")
+    .select("id, slug, title, product_type, release_type, content_kind, active, image_path, cover_url, price_cents, created_at, updated_at, metadata")
     .eq("content_kind", kind)
     .order("updated_at", { ascending: false })
     .limit(200);
@@ -100,7 +101,7 @@ export async function GET(req) {
   // Track counts from catalog_tracks
   const productIds = (catalogProducts || []).map((p) => p.id);
   const { data: catalogTracksData } = productIds.length > 0
-    ? await admin.from("catalog_tracks").select("product_id").in("product_id", productIds)
+    ? await admin.from("catalog_tracks").select("product_id").in("product_id", productIds).is("removed_from_release_at", null)
     : { data: [] };
 
   const catalogTrackCountByProduct = {};
@@ -112,12 +113,21 @@ export async function GET(req) {
     catalogTrackCountByProduct[t.product_id].ready++;
   }
 
-  // Discover cover art keys for catalog products in parallel
-  // image_path is stored as folder prefix (e.g. "images/singles/slug/")
-  // discoverFileByExtensions finds the actual file key within that folder
+  // Canonical still artwork is recorded at upload/publish time in product
+  // metadata. Only legacy rows without a concrete still key need R2 discovery.
+  // This keeps the common manager-list path to database reads instead of an
+  // additional storage listing for every catalog release.
   const catalogWithArt = await Promise.all(
     (catalogProducts || []).map(async (p) => {
-      if (!p.image_path) return { ...p, cover_art_r2_key: null };
+      const metadata = p.metadata && typeof p.metadata === "object" ? p.metadata : {};
+      const canonicalCover = metadata.cover_art_r2_key || null;
+      const legacyCover = typeof p.cover_url === "string" &&
+        /\.(?:jpe?g|png|webp)(?:[?#].*)?$/i.test(p.cover_url)
+        ? p.cover_url
+        : null;
+      if (canonicalCover || legacyCover || !p.image_path) {
+        return { ...p, cover_art_r2_key: canonicalCover || legacyCover };
+      }
       try {
         const folderPrefix = String(p.image_path).replace(/\/$/, "");
         const key = await discoverFileByExtensions(folderPrefix, [".jpg", ".jpeg", ".png", ".webp"]);
@@ -130,8 +140,20 @@ export async function GET(req) {
 
   // Normalize catalog products into the unified release shape
   const catalogAsReleases = catalogWithArt.map((p) => {
-    const releaseType = p.release_type || p.product_type || "single";
-    const isMultiTrack = ["album", "mixtape", "ep", "albums", "mixtapes-and-eps"].includes(releaseType);
+    const metadata = p.metadata && typeof p.metadata === "object" ? p.metadata : {};
+    const typeFolder = p.release_type || null;
+    const metadataCategory = String(metadata.release_category || "").trim().toLowerCase();
+    const productCategory = String(p.product_type || "").trim().toLowerCase();
+    const releaseType = ["single", "feature", "album", "ep", "mixtape"].includes(metadataCategory)
+      ? metadataCategory
+      : ["single", "feature", "ep", "mixtape"].includes(productCategory)
+        ? productCategory
+        : typeFolder === "singles" ? "single"
+          : typeFolder === "features" ? "feature"
+            : typeFolder === "albums" ? "album"
+              : typeFolder === "mixtapes-and-eps" ? "unclassified"
+                : productCategory === "album" ? "album" : (typeFolder || "unclassified");
+    const isMultiTrack = ["album", "mixtape", "ep", "albums", "mixtapes-and-eps"].includes(typeFolder || releaseType);
     const trackCounts = catalogTrackCountByProduct[p.id] || { total: 0, ready: 0 };
 
     // Singles/features that aren't multi-track are always 1 track
@@ -145,6 +167,8 @@ export async function GET(req) {
       slug: p.slug,
       status: p.active ? "published" : "draft",
       release_type: releaseType,
+      release_category: releaseType === "unclassified" ? null : releaseType,
+      release_type_folder: typeFolder,
       content_kind: p.content_kind || "music",
       release_date: p.metadata?.release_date || null,
       storefront_visible: Boolean(p.active),

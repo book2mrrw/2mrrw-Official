@@ -78,7 +78,8 @@ export async function PUT(req, { params }) {
       const { count } = await admin
         .from("tracks")
         .select("id", { count: "exact", head: true })
-        .eq("release_id", id);
+        .eq("release_id", id)
+        .is("removed_from_release_at", null);
       if (count > 0) {
         return NextResponse.json({
           error: `Cannot change release type from "${release.release_type}" to "${requestedType}" — ${count} track${count === 1 ? "" : "s"} already uploaded for this draft. Remove the existing track(s) first, then change the type.`,

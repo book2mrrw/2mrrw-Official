@@ -48,6 +48,7 @@ export async function GET(req, { params }) {
       .from("tracks")
       .select("id, title, position, lyrics, upload_status, audio_r2_key")
       .eq("release_id", id)
+      .is("removed_from_release_at", null)
       .order("position", { ascending: true }),
   ]);
 
@@ -90,7 +91,7 @@ export async function GET(req, { params }) {
   // ── Path B: catalog product (products table, R2-ingested) ─────────────────────
   const { data: product, error: productErr } = await admin
     .from("products")
-    .select("id, slug, title, product_type, release_type, active, image_path, price_cents, created_at, updated_at, metadata")
+    .select("id, slug, title, product_type, release_type, active, image_path, cover_url, price_cents, created_at, updated_at, metadata")
     .eq("id", id)
     .single();
 
@@ -103,11 +104,19 @@ export async function GET(req, { params }) {
     .from("catalog_tracks")
     .select("id, slug, title, position, metadata")
     .eq("product_id", id)
+    .is("removed_from_release_at", null)
     .order("position", { ascending: true });
 
-  // Discover cover art key from image_path folder
-  let coverKey = null;
-  if (product.image_path) {
+  // Prefer the canonical uploaded still key. Older catalog rows may have a
+  // concrete static URL or only a folder prefix, in which case preserve the
+  // legacy discovery fallback.
+  const metadata = product.metadata && typeof product.metadata === "object" ? product.metadata : {};
+  const legacyCover = typeof product.cover_url === "string" &&
+    /\.(?:jpe?g|png|webp)(?:[?#].*)?$/i.test(product.cover_url)
+    ? product.cover_url
+    : null;
+  let coverKey = metadata.cover_art_r2_key || legacyCover || null;
+  if (!coverKey && product.image_path) {
     try {
       const folder = String(product.image_path).replace(/\/$/, "");
       coverKey = await discoverFileByExtensions(folder, [".jpg", ".jpeg", ".png", ".webp"]);
@@ -115,6 +124,17 @@ export async function GET(req, { params }) {
   }
 
   const releaseType = product.release_type || product.product_type || "single";
+  const category = String(metadata.release_category || "").trim().toLowerCase();
+  const productCategory = String(product.product_type || "").trim().toLowerCase();
+  const managementType = ["single", "feature", "album", "ep", "mixtape"].includes(category)
+    ? category
+    : ["single", "feature", "ep", "mixtape"].includes(productCategory)
+      ? productCategory
+      : product.release_type === "singles" ? "single"
+        : product.release_type === "features" ? "feature"
+          : product.release_type === "albums" ? "album"
+            : product.release_type === "mixtapes-and-eps" ? "unclassified"
+              : productCategory === "album" ? "album" : releaseType;
 
   return NextResponse.json({
     source: "catalog",
@@ -122,7 +142,9 @@ export async function GET(req, { params }) {
       id:                product.id,
       slug:              product.slug,
       status:            product.active ? "published" : "draft",
-      release_type:      releaseType,
+      release_type:      managementType,
+      release_category:  managementType === "unclassified" ? null : managementType,
+      release_type_folder: product.release_type || null,
       release_date:      product.metadata?.release_date || null,
       scheduled_at:      null,
       storefront_visible: Boolean(product.active),

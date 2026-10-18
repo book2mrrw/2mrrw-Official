@@ -25,7 +25,8 @@ export async function GET(req, { params }) {
     admin
       .from("tracks")
       .select("id, slug, upload_status, audio_r2_key, master_r2_key, duration_seconds, release_id")
-      .eq("release_id", id),
+      .eq("release_id", id)
+      .is("removed_from_release_at", null),
   ]);
 
   if (releaseResult.error) {

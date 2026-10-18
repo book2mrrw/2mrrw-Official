@@ -86,6 +86,11 @@ export class HLSEngine {
     this.onSegmentFatalError = null;
     /** @type {number} Current bitrate index (0 = auto) */
     this._currentLevel = -1;
+    // Auto ABR is allowed to settle during the startup buffer window. Once
+    // playback begins, this is the selected rendition for the whole play.
+    // It is reset only by detach() (a new track/play attempt).
+    this._trackQualityCap = null;
+    this._bufferedLevel = null;
     /** @type {number} Per-track-load counter for HMAC-token renewal attempts (max 2) */
     this._renewalAttempts = 0;
     /**
@@ -173,7 +178,7 @@ export class HLSEngine {
       // ABR — let hls.js pick the starting level via its bandwidth estimate rather
       // than assuming index 0 = highest bitrate. Master playlist ordering is not
       // guaranteed; startLevel: -1 is ordering-independent. The MANIFEST_PARSED
-      // handler below remaps _currentLevel by actual bitrate after the manifest lands.
+      // handler below maps network hints by actual bitrate after the manifest lands.
       startLevel:                 -1,
       // Initial estimate for browsers without network hints. Live ABR measures
       // segment throughput; known connections seed startLevel after parsing.
@@ -370,6 +375,7 @@ export class HLSEngine {
         if (this._destroyed || version !== this._manifestVersion || this._hls !== hls) return;
         const stats = part?.stats || frag?.stats;
         if (frag?.type !== "main" || frag.sn === "initSegment" || !stats?.loaded || stats.aborted) return;
+        if (Number.isInteger(frag.level) && frag.level >= 0) this._bufferedLevel = frag.level;
         this._renewalAttempts = 0;
       });
 
@@ -387,15 +393,20 @@ export class HLSEngine {
         if (this._currentLevel >= 0) {
           hls.currentLevel = level;
         } else if (level >= 0) {
-          // currentLevel selects manual mode; startLevel only seeds the first fragment.
+          // currentLevel selects manual mode. startLevel seeds startup selection;
+          // auto ABR remains available until the playback buffer gate completes.
           hls.startLevel = level;
+        }
+        if (this._currentLevel < 0 && this._trackQualityCap != null) {
+          // A token refresh rebuilds hls.js during the same play. Restore the
+          // exact chosen rendition before loading resumes; do not reopen ABR.
+          hls.loadLevel = this._trackQualityCap;
         }
         settle(true);
       });
 
-      // Production: observe ABR quality switches for observability. hls.js handles
-      // the actual adaptation automatically (abrBandWidthFactor: 0.95); this listener
-      // logs the event so bandwidth degradation is visible in production diagnostics.
+      // Observe quality switches for diagnostics. Automatic selection is frozen
+      // before play() below the buffer gate; no in-track rendition switch is allowed.
       hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
         const levels = hls.levels || [];
         const level = levels[data.level];
@@ -455,9 +466,28 @@ export class HLSEngine {
    */
   setQualityLevel(levelIndex) {
     this._currentLevel = levelIndex;
+    this._trackQualityCap = null;
     if (this._hls) {
       this._hls.currentLevel = qualityTierLevel(this._hls.levels || [], levelIndex);
     }
+  }
+
+  /**
+   * Freeze rendition selection at the quality available when playback starts.
+   * The chosen level survives key-token reloads and is reset by detach() before
+   * a new track is loaded. This deliberately prevents mid-track quality changes.
+   */
+  holdCurrentQualityForPlayback() {
+    if (!this._hls || this._currentLevel >= 0) return null;
+    const selected = Number.isInteger(this._hls.currentLevel) && this._hls.currentLevel >= 0
+      ? this._hls.currentLevel
+      : this._bufferedLevel;
+    if (!Number.isInteger(selected) || selected < 0) return null;
+    this._trackQualityCap = selected;
+    // loadLevel changes only future requests. currentLevel would force hls.js
+    // to flush buffered audio immediately, risking a playback pause here.
+    this._hls.loadLevel = selected;
+    return selected;
   }
 
   /**
@@ -475,6 +505,8 @@ export class HLSEngine {
    */
   detach() {
     this._destroyHls();
+    this._trackQualityCap = null;
+    this._bufferedLevel = null;
     this._manifestUrl      = null;
     this._audioEl          = null;
     this._renewalAttempts  = 0;
