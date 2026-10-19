@@ -4,7 +4,7 @@ import { playSectionQueue } from "@/lib/playback/section-queue";
 import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition, Suspense } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { Elements } from "@stripe/react-stripe-js";
 import { getStripeClient } from "@/lib/commerce/stripe-client";
 const CheckoutForm = dynamic(() => import("@/components/payments/CheckoutForm"), { ssr: false });
@@ -131,11 +131,6 @@ const SPRING_SOFT = { type: "spring", stiffness: 280, damping: 32 };
 const MOBILE_NAV_SHEET_MS = 300;
 const OVERLAY_FADE = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.22 } };
 const SHEET_UP = { initial: { y: "100%" }, animate: { y: 0 }, exit: { y: "100%" }, transition: SPRING_SOFT };
-const MOBILE_NAV_SHEET_SLIDE = {
-  initial: { y: "100%" },
-  animate: { y: 0 },
-  transition: { duration: MOBILE_NAV_SHEET_MS / 1000, ease: [0.4, 0, 0.2, 1] },
-};
 const MODAL_CENTER = { initial: { opacity: 0, scale: 0.96 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.96 }, transition: SPRING_SOFT };
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 const formatTime = (s) => {
@@ -1263,6 +1258,8 @@ export default function HomeClient({ initialEvents, initialCatalog, twitchEmbedP
 }
 
 function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
+  const prefersReducedMotion = useReducedMotion();
+  const mobileNavSheetDurationMs = prefersReducedMotion ? 0 : MOBILE_NAV_SHEET_MS;
   const router = useRouter();
   useBlackscreenMountTrace("Page");
   // Shadows the module-level `albums`/`mixtapesAndEps` hardcoded fallback
@@ -2282,17 +2279,20 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
   const closeMobileNav = useCallback(() => {
     if (!mobileNavOpenRef.current || mobileNavClosingRef.current) return;
+    mobileNavClosingRef.current = true;
     setMobileNavClosing(true);
   }, []);
 
   useEffect(() => {
     if (!mobileNavClosing) return undefined;
     const timer = setTimeout(() => {
+      mobileNavOpenRef.current = false;
+      mobileNavClosingRef.current = false;
       setMobileNavOpen(false);
       setMobileNavClosing(false);
-    }, MOBILE_NAV_SHEET_MS);
+    }, mobileNavSheetDurationMs);
     return () => clearTimeout(timer);
-  }, [mobileNavClosing]);
+  }, [mobileNavClosing, mobileNavSheetDurationMs]);
 
   const mobileNavSheetOpen = mobileNavOpen || mobileNavClosing;
 
@@ -2315,6 +2315,8 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   }, [clientSecret]);
 
   const openMobileNav = useCallback(() => {
+    mobileNavClosingRef.current = false;
+    mobileNavOpenRef.current = true;
     setMobileNavClosing(false);
     setMobileNavExpandedGroups(new Set());
     setMobileNavOpen(true);
@@ -2331,6 +2333,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
 
   const switchTab = useCallback((tabId) => {
     if (tabId === "cards") {
+      if (mobileNavOpenRef.current) closeMobileNav();
       router.push(COLLECTORS_CARDS_ROUTE);
       return;
     }
@@ -2348,8 +2351,14 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     // after a resize/orientation change), and resetting this mobile-only
     // state to its already-default value on desktop is a complete no-op —
     // there's no downside to always doing it.
-    setMobileNavOpen(false);
-    setMobileNavClosing(false);
+    if (mobileNavOpenRef.current) {
+      closeMobileNav();
+    } else {
+      mobileNavOpenRef.current = false;
+      mobileNavClosingRef.current = false;
+      setMobileNavOpen(false);
+      setMobileNavClosing(false);
+    }
     setMobileNavExpandedGroups(new Set());
     // phase11: startTransition — non-urgent UI update
     startTransition(() => {
@@ -2371,7 +2380,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       };
       if (navGroupByTab[tabId]) setExpandedGroup(navGroupByTab[tabId]);
     });
-  }, [setActiveTab]);
+  }, [closeMobileNav, setActiveTab]);
 
   const openCollection = useCallback(() => {
     switchTab("mymusic");
@@ -2637,7 +2646,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                       {group.subTabs.length>0 && <span style={{fontSize:14,color:isExpanded?"#888":"#555",display:"inline-block",transform:isExpanded?"rotate(90deg)":"rotate(0deg)",transition:"transform 0.22s ease",lineHeight:1}}>›</span>}
                     </button>
                     {isExpanded && group.subTabs.length>0 && (
-                      <div style={{animation:"expandDown 0.2s ease forwards"}}>
+                      <div style={{ animation: prefersReducedMotion ? "none" : "expandDown 0.2s ease forwards" }}>
                         {group.subTabs.map(st=>(
                           <button key={st.id} onClick={()=>switchTab(st.id)} onPointerEnter={()=>warmDestination(st.id,"intent")} onPointerDown={()=>warmDestination(st.id,"intent")} onFocus={()=>warmDestination(st.id,"intent")} style={{width:"100%",padding:"10px 18px 10px 30px",background:activeTab===st.id?"rgba(0,255,255,0.055)":"transparent",border:"none",color:activeTab===st.id?"#00ffff":"#999",fontSize:12,letterSpacing:1.5,cursor:"pointer",textAlign:"left",transition:"all 0.14s",fontWeight:activeTab===st.id?700:400,display:"flex",alignItems:"center",gap:8}} onMouseEnter={e=>{if(activeTab!==st.id)e.currentTarget.style.color="#fff";}} onMouseLeave={e=>{if(activeTab!==st.id)e.currentTarget.style.color="#999";}}>
                             <span style={{width:4,height:4,borderRadius:"50%",flexShrink:0,background:activeTab===st.id?"#00ffff":"transparent",boxShadow:activeTab===st.id?"0 0 6px rgba(0,255,255,0.9)":"none",transition:"all 0.15s"}}/>
@@ -3254,14 +3263,14 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: mobileNavClosing ? 0 : 1 }}
                 exit={{ opacity: 0 }}
-                transition={{ duration: 0.22 }}
+                transition={{ duration: prefersReducedMotion ? 0 : 0.22 }}
                 onClick={closeMobileNav}
                 style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.75)",zIndex:8100,display:"flex",alignItems:"flex-end"}}
               >
                 <motion.div
-                  {...MOBILE_NAV_SHEET_SLIDE}
+                  initial={{ y: "100%" }}
                   animate={{ y: mobileNavClosing ? "100%" : 0 }}
-                  transition={{ duration: MOBILE_NAV_SHEET_MS / 1000, ease: [0.4, 0, 0.2, 1] }}
+                  transition={{ duration: mobileNavSheetDurationMs / 1000, ease: [0.4, 0, 0.2, 1] }}
                   onClick={e=>e.stopPropagation()}
                   style={{width:"100%",background:"#0a0a0a",borderRadius:"20px 20px 0 0",paddingBottom:"max(32px, env(safe-area-inset-bottom))",border:"1px solid #1e1e1e",maxHeight:"80vh",overflowY:"auto"}}
                 >
@@ -3326,7 +3335,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: "auto", opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                            transition={{ duration: prefersReducedMotion ? 0 : 0.22, ease: [0.4, 0, 0.2, 1] }}
                             style={{paddingLeft:12,paddingBottom:6}}
                           >
                             {group.subTabs.map(st=>(

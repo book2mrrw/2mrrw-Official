@@ -1,7 +1,7 @@
 "use client";
 
-import { memo, useSyncExternalStore } from "react";
-import { motion } from "framer-motion";
+import { memo, useLayoutEffect, useRef, useSyncExternalStore } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { MobileNavAnimatedIcon } from "@/components/nav/MobileNavAnimatedIcon";
 import { VaultNavLockIcon } from "@/components/nav/VaultNavLockIcon";
 import {
@@ -43,15 +43,53 @@ const MobileHomeBottomNav = memo(function MobileHomeBottomNav({
   onWarmTab,
 }) {
   const homeSection = useHomeScrollSection();
+  const reduceMotion = useReducedMotion();
+  const navRef = useRef(null);
+  const indicatorRef = useRef(null);
+  const tabNodesRef = useRef(new Map());
+  const lastActiveIndexRef = useRef(null);
 
   const activeIdx = tabs.findIndex((tab) =>
     tab.more ? mobileNavOpen : isMobileNavTabActive(tab.id, activeTab, homeSection)
   );
   const idx = activeIdx >= 0 ? activeIdx : 0;
-  const tabWidth = 100 / tabs.length;
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    const indicator = indicatorRef.current;
+    const activeButton = tabNodesRef.current.get(tabs[idx]?.id);
+    if (!nav || !indicator || !activeButton) return undefined;
+
+    const positionIndicator = (animate) => {
+      const navRect = nav.getBoundingClientRect();
+      const buttonRect = activeButton.getBoundingClientRect();
+      const left = buttonRect.left - navRect.left + buttonRect.width / 2 - 12;
+      const shouldAnimate = animate && !reduceMotion;
+      indicator.style.transition = shouldAnimate
+        ? "transform 0.28s cubic-bezier(0.4, 0, 0.2, 1)"
+        : "none";
+      indicator.style.transform = `translate3d(${left}px, 0, 0)`;
+    };
+
+    const previousIndex = lastActiveIndexRef.current;
+    positionIndicator(previousIndex !== null && previousIndex !== idx);
+    lastActiveIndexRef.current = idx;
+
+    if (typeof ResizeObserver === "undefined") {
+      const syncPosition = () => positionIndicator(false);
+      window.addEventListener("resize", syncPosition);
+      return () => window.removeEventListener("resize", syncPosition);
+    }
+
+    const observer = new ResizeObserver(() => positionIndicator(false));
+    observer.observe(nav);
+    observer.observe(activeButton);
+    return () => observer.disconnect();
+  }, [idx, reduceMotion, tabs]);
 
   return (
     <motion.div
+      ref={navRef}
       className="storefront-bottom-nav"
       style={{
         position: "fixed",
@@ -74,19 +112,20 @@ const MobileHomeBottomNav = memo(function MobileHomeBottomNav({
       }}
     >
       <div
+        ref={indicatorRef}
         aria-hidden
         style={{
-          position: "fixed",
-          left: `calc(${idx * tabWidth}% + ${tabWidth / 2}% - 12px)`,
+          position: "absolute",
+          left: 0,
           bottom: "max(10px, env(safe-area-inset-bottom, 0px))",
           width: 24,
           height: 3,
           borderRadius: 2,
           background: "#00ffff",
           boxShadow: "0 0 10px rgba(0,255,255,0.55)",
-          transition: "left 0.28s cubic-bezier(0.4, 0, 0.2, 1)",
           pointerEvents: "none",
           zIndex: 6701,
+          transform: "translate3d(0, 0, 0)",
         }}
       />
       {tabs.map((tab) => {
@@ -96,6 +135,10 @@ const MobileHomeBottomNav = memo(function MobileHomeBottomNav({
         return (
           <button
             key={tab.id}
+            ref={(node) => {
+              if (node) tabNodesRef.current.set(tab.id, node);
+              else tabNodesRef.current.delete(tab.id);
+            }}
             type="button"
             onClick={() => (tab.more ? onOpenMore() : onSwitchTab(tab.id))}
             onPointerEnter={() => !tab.more && onWarmTab?.(tab.id, "intent")}
