@@ -4,36 +4,17 @@ import { useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { parseDeepLink, consumePendingDeepLink, setPostAuthRedirect } from "@/lib/deep-links";
+import { resolveProfileStatus } from "@/lib/auth/profile-status";
 import HelpSupportSection from "@/components/support/HelpSupportSection";
-
-function resolveUserStatus(currentUser, myPurchases, circleSubmissions, accountCircleByline) {
-  if (!currentUser) return null;
-  const hasCollector = myPurchases.some((p) => p.slug?.startsWith("exc-card"));
-  const hasBundle = myPurchases.some((p) => p.slug?.startsWith("exc-bundle"));
-  const subs = circleSubmissions.filter(
-    (s) => s.by === accountCircleByline || s.by === currentUser?.name
-  ).length;
-  if ((hasCollector || hasBundle) && subs >= 1) {
-    return { label: "INNER CIRCLE", color: "#a259ff", glow: "rgba(162,89,255,0.5)" };
-  }
-  if (hasCollector || hasBundle) {
-    return { label: "COLLECTOR", color: "#ff6b35", glow: "rgba(255,107,53,0.5)" };
-  }
-  if (subs >= 3) {
-    return { label: "VISIONARY", color: "#00ffff", glow: "rgba(0,255,255,0.5)" };
-  }
-  return { label: "EARLY SUPPORTER", color: "#aaa", glow: "rgba(170,170,170,0.3)" };
-}
 
 /**
  * Phase R1 — auth-subscribed leaf: desktop sidebar user badge only.
  */
 export function PageAuthSidebarBadge({ circleSubmissions, accountCircleByline }) {
-  const { currentUser, library } = useAuth();
-  const myPurchases = library || [];
-  const userStatus = useMemo(
-    () => resolveUserStatus(currentUser, myPurchases, circleSubmissions, accountCircleByline),
-    [currentUser, myPurchases, circleSubmissions, accountCircleByline]
+  const { currentUser, accountState } = useAuth();
+  const { userStatus } = useMemo(
+    () => resolveProfileStatus({ currentUser, accountState, circleSubmissions, accountCircleByline }),
+    [currentUser, accountState, circleSubmissions, accountCircleByline]
   );
 
   if (!currentUser || !userStatus) return null;
@@ -54,11 +35,10 @@ export function PageAuthSidebarBadge({ circleSubmissions, accountCircleByline })
 
 /** Mobile nav header badge — same subscription island as sidebar. */
 export function PageAuthMobileNavBadge({ circleSubmissions, accountCircleByline }) {
-  const { currentUser, library } = useAuth();
-  const myPurchases = library || [];
-  const userStatus = useMemo(
-    () => resolveUserStatus(currentUser, myPurchases, circleSubmissions, accountCircleByline),
-    [currentUser, myPurchases, circleSubmissions, accountCircleByline]
+  const { currentUser, accountState } = useAuth();
+  const { userStatus } = useMemo(
+    () => resolveProfileStatus({ currentUser, accountState, circleSubmissions, accountCircleByline }),
+    [currentUser, accountState, circleSubmissions, accountCircleByline]
   );
   const accountDisplayName =
     currentUser?.name?.trim() || currentUser?.email?.split("@")[0] || "Member";
@@ -182,11 +162,11 @@ export function PageAuthSessionBridge({
   accountCircleByline,
   children,
 }) {
-  const { currentUser, library } = useAuth();
+  const { currentUser, library, accountState } = useAuth();
   const myPurchases = library || [];
-  const userStatus = useMemo(
-    () => resolveUserStatus(currentUser, myPurchases, circleSubmissions, accountCircleByline),
-    [currentUser, myPurchases, circleSubmissions, accountCircleByline]
+  const { userStatus, collectorCardOwner, hasInnerCircleAccess } = useMemo(
+    () => resolveProfileStatus({ currentUser, accountState, circleSubmissions, accountCircleByline }),
+    [currentUser, accountState, circleSubmissions, accountCircleByline]
   );
   const accountDisplayName =
     currentUser?.name?.trim() || currentUser?.email?.split("@")[0] || "Member";
@@ -196,6 +176,8 @@ export function PageAuthSessionBridge({
     currentUser,
     myPurchases,
     userStatus,
+    collectorCardOwner,
+    hasInnerCircleAccess,
     accountDisplayName,
     accountDisplayInitial,
     accountCircleByline,

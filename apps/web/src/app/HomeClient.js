@@ -3045,7 +3045,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   <div style={{background:"linear-gradient(135deg,#0a0a14,#0d0d0d)",border:"1px solid #1a1a2a",borderRadius:20,padding:"clamp(20px,3.5cqi,28px) clamp(20px,4cqi,30px)"}}>
                     <div style={{fontSize:11,color:"#444",letterSpacing:3,marginBottom:16,textTransform:"uppercase"}}>Community Status</div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,180px),1fr))",gap:12}}>
-                      {[{label:"EARLY SUPPORTER",color:"#aaa",desc:"Joined the ecosystem early."},{label:"COLLECTOR",color:"#ff6b35",desc:"Purchased a collector card or bundle."},{label:"VISIONARY",color:"#00ffff",desc:"3+ Circle submissions."},{label:"INNER CIRCLE",color:"#a259ff",desc:"Collector + Circle member."}].map(s=><div key={s.label} style={{padding:"14px",background:"#080808",borderRadius:14,border:`1px solid ${s.color}22`}}><div style={{fontSize:9,fontWeight:900,letterSpacing:2,color:s.color,marginBottom:6}}>{s.label}</div><div style={{fontSize:11,color:"#555",lineHeight:1.6}}>{s.desc}</div></div>)}
+                      {[{label:"EARLY SUPPORTER",color:"#aaa",desc:"Joined the ecosystem early."},{label:"COLLECTOR CARD OWNER",color:"#ff6b35",desc:"Verified collector card or bundle ownership."},{label:"VISIONARY",color:"#00ffff",desc:"3+ Circle submissions."},{label:"INNER CIRCLE",color:"#a259ff",desc:"Included with collector ownership or an active subscription."}].map(s=><div key={s.label} style={{padding:"14px",background:"#080808",borderRadius:14,border:`1px solid ${s.color}22`}}><div style={{fontSize:9,fontWeight:900,letterSpacing:2,color:s.color,marginBottom:6}}>{s.label}</div><div style={{fontSize:11,color:"#555",lineHeight:1.6}}>{s.desc}</div></div>)}
                     </div>
                     {pa.userStatus && <div style={{marginTop:20,padding:"14px 18px",background:pa.userStatus.glow+"10",borderRadius:12,border:`1px solid ${pa.userStatus.color}33`,display:"flex",alignItems:"center",gap:12}}><div style={{fontSize:10,color:"#555"}}>Your status:</div><div style={{fontSize:11,fontWeight:900,letterSpacing:2,color:pa.userStatus.color}}>{pa.userStatus.label}</div></div>}
                   </div>
@@ -3059,15 +3059,15 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                 <PageAuthSessionBridge circleSubmissions={circleSubmissions} accountCircleByline={readAccountCircleByline()}>
                 {(pa) => (
                 <>
-                  {pa.userStatus?.label !== "INNER CIRCLE" ? (
+                  {!pa.hasInnerCircleAccess ? (
                     <div style={{display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",padding:"clamp(40px,7cqi,60px) clamp(16px,3cqi,20px)"}}>
                       <div style={{fontSize:56,lineHeight:1,marginBottom:24,filter:"drop-shadow(0 0 24px rgba(162,89,255,0.5))",animation:"pulse 3s infinite"}}>🔒</div>
                       <div style={{fontSize:11,color:"#a259ff",letterSpacing:4,marginBottom:12,fontWeight:700}}>RESTRICTED ACCESS</div>
                       <div style={{fontSize:"clamp(20px,3cqi,24px)",fontWeight:900,letterSpacing:1,marginBottom:14}}>Inner Circle Access Required</div>
-                      <div style={{fontSize:14,color:"#555",maxWidth:400,lineHeight:1.9,marginBottom:36}}>This section is reserved for verified Inner Circle members — those who own a piece of the music and are active in the conversation.</div>
+                      <div style={{fontSize:14,color:"#555",maxWidth:400,lineHeight:1.9,marginBottom:36}}>Inner Circle access is included with verified collector ownership or an active subscription.</div>
                       <div style={{width:"100%",maxWidth:460,display:"flex",flexDirection:"column",gap:12,marginBottom:32}}>
                         <div style={{fontSize:11,color:"#a259ff",letterSpacing:3,marginBottom:4,fontWeight:700}}>HOW TO UNLOCK</div>
-                        {[{label:"Own a Collector Card or Bundle",done:pa.myPurchases.some(p=>p.slug?.startsWith("exc-card")||p.slug?.startsWith("exc-bundle")),link:"cards",linkLabel:"Collector's Cards →"},{label:"Submit to The Circle",done:circleSubmissions.filter(s=>s.by===pa.currentUser?.name).length>=1,link:"circle",linkLabel:"Go to Circle →"}].map((step,i)=>(
+                        {[{label:"Own a Collector Card or Bundle",done:pa.collectorCardOwner,link:"cards",linkLabel:"Collector's Cards →"}].map((step,i)=>(
                           <div key={i} style={{padding:"16px 20px",background:step.done?"rgba(162,89,255,0.06)":"#0d0d0d",border:`1px solid ${step.done?"rgba(162,89,255,0.3)":"#1e1e1e"}`,borderRadius:14,display:"flex",alignItems:"center",gap:14,textAlign:"left"}}>
                             <div style={{width:28,height:28,borderRadius:"50%",background:step.done?"rgba(162,89,255,0.2)":"#111",border:`1px solid ${step.done?"#a259ff":"#222"}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:step.done?"#a259ff":"#333",flexShrink:0}}>{step.done?"✓":i+1}</div>
                             <div style={{flex:1,fontSize:13,color:step.done?"#a259ff":"#666",fontWeight:step.done?700:400}}>{step.label}</div>
