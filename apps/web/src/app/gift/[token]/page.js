@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import GiftRevealExperience from "@/components/gifts/GiftRevealExperience";
+import { COUNTRIES } from "@/lib/auth/countries";
+import { validateEmail } from "@/lib/auth/validation";
 import { hasSeenGiftReveal } from "@/lib/gifts/session-keys";
 
 const VALID_GENDERS = ["male", "female"];
@@ -59,6 +61,8 @@ export default function GiftClaimPage() {
   // Inline signup form state (for gift recipients without an account)
   const [password, setPassword] = useState("");
   const [city, setCity] = useState("");
+  const [country, setCountry] = useState("United States");
+  const [email, setEmail] = useState("");
   const [state, setState] = useState("");
   const [gender, setGender] = useState("");
   const [ageRange, setAgeRange] = useState("");
@@ -140,10 +144,13 @@ export default function GiftClaimPage() {
     setFormError("");
     setExistsHint(false);
 
-    const recipientEmail = String(preview?.gift?.recipient_email || "").toLowerCase();
+    const emailCheck = validateEmail(preview?.gift?.recipient_email || email);
+    if (!emailCheck.ok) { setFormError(emailCheck.error); return; }
+    const recipientEmail = emailCheck.value;
     if (!password || password.length < 8) { setFormError("Password must be at least 8 characters"); return; }
     if (!city.trim()) { setFormError("City is required"); return; }
-    if (!state.trim()) { setFormError("State is required"); return; }
+    if (!country) { setFormError("Country is required"); return; }
+    if (country === "United States" && !state.trim()) { setFormError("State is required for U.S. locations"); return; }
     if (!VALID_GENDERS.includes(gender)) { setFormError("Please select your gender"); return; }
     if (!VALID_AGE_RANGES.includes(ageRange)) { setFormError("Please select your age range"); return; }
     if (signupFlightRef.current) return;
@@ -160,7 +167,8 @@ export default function GiftClaimPage() {
           password,
           giftToken: token,
           city: city.trim(),
-          state: state.trim(),
+          country,
+          state: country === "United States" ? state.trim().toUpperCase() : null,
           gender,
           age_range: ageRange,
         }),
@@ -201,7 +209,7 @@ export default function GiftClaimPage() {
       signupFlightRef.current = false;
       setClaiming(false);
     }
-  }, [preview, password, city, state, gender, ageRange, token, applySessionUser, loadPreview]);
+  }, [preview, email, password, city, state, country, gender, ageRange, token, applySessionUser, loadPreview]);
 
   const state_ = preview?.state || "invalid";
   const gift = preview?.gift;
@@ -337,14 +345,17 @@ export default function GiftClaimPage() {
                   Create your account to reveal your gift
                 </div>
 
-                {/* Email — pre-filled, read-only */}
+                {/* Email is bound to email gifts; phone-only recipients supply their own. */}
                 <div>
                   <label style={labelStyle}>EMAIL</label>
                   <input
                     type="email"
-                    value={giftEmail}
-                    readOnly
-                    style={{ ...inputStyle, color: "#cfd3d9", cursor: "default", background: "#0e0f11" }}
+                    value={giftEmail || email}
+                    onChange={e => setEmail(e.target.value)}
+                    readOnly={Boolean(giftEmail)}
+                    required
+                    autoComplete="email"
+                    style={giftEmail ? { ...inputStyle, color: "#cfd3d9", cursor: "default", background: "#0e0f11" } : inputStyle}
                   />
                 </div>
 
@@ -362,8 +373,20 @@ export default function GiftClaimPage() {
                   />
                 </div>
 
+                <div>
+                  <label style={labelStyle}>COUNTRY</label>
+                  <select
+                    value={country}
+                    onChange={e => { setCountry(e.target.value); setState(""); }}
+                    required
+                    style={inputStyle}
+                  >
+                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+
                 {/* City + State row */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: country === "United States" ? "1fr 1fr" : "1fr", gap: 10 }}>
                   <div>
                     <label style={labelStyle}>CITY</label>
                     <input
@@ -375,7 +398,7 @@ export default function GiftClaimPage() {
                       style={inputStyle}
                     />
                   </div>
-                  <div>
+                  {country === "United States" ? <div>
                     <label style={labelStyle}>STATE</label>
                     <input
                       type="text"
@@ -386,7 +409,7 @@ export default function GiftClaimPage() {
                       maxLength={2}
                       style={{ ...inputStyle, textTransform: "uppercase" }}
                     />
-                  </div>
+                  </div> : null}
                 </div>
 
                 {/* Gender */}

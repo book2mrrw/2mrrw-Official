@@ -49,6 +49,8 @@ export async function GET(req, { params }) {
         expires_at: gift.expires_at,
         status: gift.status,
         recipient_id: gift.recipient_id,
+        // The validated gift link is required to reach this recipient-bound preview.
+        recipient_email: gift.recipient_email || null,
       },
       cover_url: coverUrl,
       cover_image_url: coverImageUrl,
