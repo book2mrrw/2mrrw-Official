@@ -2,7 +2,7 @@
 import { getAdminClient } from "@/lib/supabase/admin";
 import { requireConsumerPrincipal } from "@/lib/auth/consumer-authority";
 import { loginRedirectPath } from "@/lib/auth/route-access-policy";
-import { redirect } from "next/navigation";
+import { redirect, notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,6 +18,7 @@ export async function generateMetadata({ params }) {
     const { data } = await admin
       .from("products")
       .select("title, cover_url, slug")
+      .is("deleted_at", null)
       .eq("slug", slug)
       .maybeSingle();
 
@@ -61,5 +62,8 @@ export async function generateMetadata({ params }) {
 export default async function AlbumDeepLinkPage({ params }) {
   const { slug } = await params;
   if (!(await requireConsumerPrincipal())) redirect(loginRedirectPath(`/album/${slug}`));
+  const { data, error } = await getAdminClient().from("products").select("id").eq("slug", slug).is("deleted_at", null).maybeSingle();
+  if (error) throw error;
+  if (!data) notFound();
   return <DeepLinkRedirect type="album" />;
 }

@@ -52,6 +52,7 @@ function RadioCarousel({
     ),
     [currentSlide]
   );
+  if (!currentSlide) return null;
   const kindLabel = currentSlide.contentKind === "podcast"
     ? (["album", "ep", "mixtape"].includes(currentSlide.type) ? "SERIES" : "EPISODE")
     : (RADIO_TYPE_LABELS[currentSlide.type] || "SINGLE");

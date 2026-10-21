@@ -57,7 +57,7 @@ function previewRedirectResponse(req, key, timing) {
       NextResponse.redirect(publicUrl, {
         status: 302,
         headers: {
-          "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+          "Cache-Control": "private, no-store",
         },
       })
     )
@@ -102,17 +102,20 @@ export async function GET(req) {
 
   if (type === "preview") {
     const lifecycleSlug = String(entityFolder || "").match(
-      /\/(?:singles|features|albums|mixtapes-and-eps)\/([^/]+)\/?$/
+      /\/(?:singles|features|albums|mixtapes-and-eps)\/([^/]+)(?:\/|$)/
     )?.[1] || extractSlugFromFlatPreviewKey(legacy);
     if (lifecycleSlug) {
       const admin = getAdminClient();
       const { data: product, error } = await admin
         .from("products")
-        .select("releases(status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,unavailable_at)")
+        .select("deleted_at,releases(deleted_at,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,unavailable_at)")
         .eq("slug", lifecycleSlug)
         .maybeSingle();
       if (error) {
         return applyMediaCors(req, NextResponse.json({ error: "Preview availability check failed" }, { status: 503 }));
+      }
+      if (product?.deleted_at) {
+        return applyMediaCors(req, NextResponse.json({ error: "Release deleted" }, { status: 410, headers: { "Cache-Control": "no-store" } }));
       }
       const lifecycle = Array.isArray(product?.releases) ? product.releases[0] : product?.releases;
       if (lifecycle && !releaseAvailability(lifecycle).canPreview) {

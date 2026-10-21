@@ -1,4 +1,7 @@
 "use client";
+import { getDeletedReleaseSnapshot } from "@/lib/releases/deletion-store";
+import DeleteReleaseButton from "@/components/admin/DeleteReleaseButton";
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { catalogCoverUrl, catalogMotionVideoUrl } from "@/lib/media-urls";
@@ -279,7 +282,7 @@ function managementReleaseType(release) {
   return null;
 }
 
-function ReleaseListView({ releases, loading, error, filter, onFilter, typeFilter, onTypeFilter, onRefresh, onEdit, onNew, onBack, lastResult }) {
+function ReleaseListView({ onDeleted, deletionNotice, releases, loading, error, filter, onFilter, typeFilter, onTypeFilter, onRefresh, onEdit, onNew, onBack, lastResult }) {
   const counts = {
     all:       releases.length,
     published: releases.filter((r) => r.status === "published").length,
@@ -324,6 +327,8 @@ function ReleaseListView({ releases, loading, error, filter, onFilter, typeFilte
           </div>
         </div>
       )}
+
+      {deletionNotice && <div role="status" style={{ color: C.success, marginBottom: 16 }}>{deletionNotice}</div>}
 
       {/* Filter tabs */}
       <div style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}>
@@ -445,6 +450,7 @@ function ReleaseListView({ releases, loading, error, filter, onFilter, typeFilte
 
                 {/* Actions */}
                 <div style={{ display: "flex", gap: 8, flexShrink: 0, flexWrap: "wrap" }}>
+                  <DeleteReleaseButton release={rel} onDeleted={onDeleted} />
                   {isLive && rel.slug && (
                     <a
                       href={prefix + rel.slug}
@@ -1234,6 +1240,7 @@ export default function InlineReleasesManager() {
   const [filter,         setFilter]         = useState("all");
   const [typeFilter,     setTypeFilter]     = useState("all");
   const [editingRelease, setEditingRelease] = useState(null);
+  const [deletionNotice, setDeletionNotice] = useState("");
   const [lastResult,     setLastResult]     = useState(null);
   const [reauthRequired, setReauthRequired] = useState(false);
 
@@ -1250,7 +1257,8 @@ export default function InlineReleasesManager() {
         }
         throw new Error(json.error || "Failed to load releases");
       }
-      setReleases(json.releases || []);
+      const deleted = new Set(getDeletedReleaseSnapshot());
+      setReleases((json.releases || []).filter((release) => !deleted.has(release.slug)));
       setReleasesLoaded(true);
       setReauthRequired(false);
     } catch (err) {
@@ -1297,6 +1305,11 @@ export default function InlineReleasesManager() {
     return (
       <>
         <ReleaseListView
+          onDeleted={(release) => {
+            setReleases((current) => current.filter((item) => item.id !== release.id && item.slug !== release.slug));
+            setDeletionNotice(`Deleted “${release.title || release.slug}”. Recordings and purchase history retained.`);
+          }}
+          deletionNotice={deletionNotice}
           releases={releases}
           loading={loading}
           error={loadError}

@@ -91,7 +91,7 @@ export async function GET(req) {
   const admin = getAdminClient();
   const { data, error } = await admin
     .from("library_items")
-    .select("id, source, granted_at, products (slug, title, product_type, cover_url, storage_path)")
+    .select("id, source, granted_at, products (slug, title, product_type, cover_url, storage_path, deleted_at)")
     .eq("user_id", user.id)
     .order("granted_at", { ascending: false });
 
@@ -99,7 +99,7 @@ export async function GET(req) {
     return applyMediaCors(req, NextResponse.json({ error: error.message }, { status: 500 }));
   }
 
-  const items = (data || []).map((row) => {
+  const items = (data || []).filter((row) => row.products && !row.products.deleted_at).map((row) => {
     const rawCover = row.products?.cover_url;
     const cover = rawCover
       ? /^https?:\/\//i.test(String(rawCover))

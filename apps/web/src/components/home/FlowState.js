@@ -3,6 +3,7 @@
 import { memo } from "react";
 
 function FlowState({ activeFlowMode, currentSlide, showOwnTrackConversion, onAddToCart }) {
+  if (!currentSlide) return null;
   return (
     <div
       style={{

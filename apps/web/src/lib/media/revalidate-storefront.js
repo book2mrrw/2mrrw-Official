@@ -9,7 +9,7 @@ import { revalidatePath } from "next/cache";
  */
 export function revalidateStorefront(slug = null, releaseType = null) {
   try {
-    revalidatePath("/");
+    revalidatePath("/", "layout");
     revalidatePath("/song/[slug]", "page");
     revalidatePath("/feature/[slug]", "page");
     revalidatePath("/album/[slug]", "page");

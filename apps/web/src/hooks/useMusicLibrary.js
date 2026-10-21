@@ -1,5 +1,7 @@
 "use client";
 
+import { useDeletedReleaseSlugs } from "@/lib/releases/deletion-store";
+import { excludeDeletedReleases } from "@/lib/releases/deletion-projection";
 import { useCallback, useMemo } from "react";
 import { useAuth, useEntitlementAccountState } from "@/context/AuthContext";
 import { partitionLibraryByType } from "@/lib/music-access";
@@ -12,12 +14,14 @@ import {
 export function useMusicLibrary({ singles = [], albums = [], mixtapesAndEps = [] } = {}) {
   const {
     user,
-    library,
+    library: savedLibrary,
     loading,
     refreshAccountState,
     refreshLibrary,
   } = useAuth();
   const accountState = useEntitlementAccountState();
+  const deletedSlugs = useDeletedReleaseSlugs();
+  const library = useMemo(() => excludeDeletedReleases(savedLibrary, deletedSlugs), [savedLibrary, deletedSlugs]);
 
   const refresh = useCallback(async () => {
     await refreshAccountState({ reason: "library:change", source: "useMusicLibrary" });
@@ -31,7 +35,7 @@ export function useMusicLibrary({ singles = [], albums = [], mixtapesAndEps = []
       if (item?.slug) slugToItem.set(item.slug, item);
     });
     return progress
-      .filter((row) => row.mediaType === "audio" && row.slug)
+      .filter((row) => row.mediaType === "audio" && row.slug && !deletedSlugs.includes(row.slug))
       .map((row) => {
         const catalog = slugToItem.get(row.slug);
         // Spread the full catalog item so downstream consumers (toPlaybackTrack,
@@ -45,7 +49,7 @@ export function useMusicLibrary({ singles = [], albums = [], mixtapesAndEps = []
           lastPlayedAt: row.lastPlayedAt,
         };
       });
-  }, [accountState?.mediaProgress, singles, albums, mixtapesAndEps, library]);
+  }, [accountState?.mediaProgress, singles, albums, mixtapesAndEps, library, deletedSlugs]);
 
   const permanentLibrary = useMemo(
     () => (library || []).filter(isPermanentLibraryItem),

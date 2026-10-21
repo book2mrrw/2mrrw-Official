@@ -1,5 +1,8 @@
 "use client";
 
+import { useDeletedReleaseSlugs } from "@/lib/releases/deletion-store";
+import { excludeDeletedReleases } from "@/lib/releases/deletion-projection";
+
 import { playSectionQueue } from "@/lib/playback/section-queue";
 import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition, Suspense } from "react";
 import dynamic from "next/dynamic";
@@ -1221,27 +1224,27 @@ function AdminVaultManagerNavItem({ activeTab, onSwitch, mobile = false }) {
 
 // ══════════════════════════════════════════════════════════════════════════════
 export default function HomeClient({ initialEvents, initialCatalog, twitchEmbedParent = "www.2mrrw.com", twitchBroadcasterLogin = "callme2mrrw" }) {
-  // Prefer DB-driven catalog when available; fall back to hardcoded inline arrays.
+  // Only authoritative DB arrays can establish current release availability.
   // withR2CatalogMedia resolves R2 paths to public CDN URLs for all sources.
   const effectiveSingles =
-    initialCatalog?.singles?.length > 0
+    Array.isArray(initialCatalog?.singles)
       ? initialCatalog.singles.map((r) => withR2CatalogMedia(r))
-      : INLINE_SINGLES;
+      : [];
 
   const effectiveFeatures =
-    initialCatalog?.features?.length > 0
+    Array.isArray(initialCatalog?.features)
       ? initialCatalog.features.map((r) => withR2CatalogMedia(r))
-      : INLINE_FEATURES;
+      : [];
 
   const effectiveAlbums =
-    initialCatalog?.albums?.length > 0
+    Array.isArray(initialCatalog?.albums)
       ? initialCatalog.albums.map((r) => withR2CatalogMedia(r))
-      : INLINE_ALBUMS;
+      : [];
 
   const effectiveMixtapes =
-    initialCatalog?.mixtapes?.length > 0
+    Array.isArray(initialCatalog?.mixtapes)
       ? initialCatalog.mixtapes.map((r) => withR2CatalogMedia(r))
-      : INLINE_MIXTAPES_AND_EPS;
+      : [];
 
   return (
     <CatalogSurfaceProvider
@@ -1265,16 +1268,11 @@ export default function HomeClient({ initialEvents, initialCatalog, twitchEmbedP
 function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   const router = useRouter();
   useBlackscreenMountTrace("Page");
-  // Shadows the module-level `albums`/`mixtapesAndEps` hardcoded fallback
-  // constants for the rest of this component: every existing reference below
-  // (search index, section rows, modals, Music tab) now resolves to the
-  // DB-backed catalog computed in HomeClient, with the hardcoded arrays only
-  // as their original fallback-of-last-resort when the DB has no rows of
-  // that type. Previously every one of those references silently resolved to
-  // the always-static module constants — a newly published Album/EP/Mixtape
-  // could never appear on the storefront no matter what.
-  const albums = effectiveAlbums;
-  const mixtapesAndEps = effectiveMixtapes;
+  // Page callbacks keep their existing catalog-ref boundary; deletion is the
+  // exceptional lifecycle update that also prunes already-mounted shell state.
+  const deletedReleaseSlugs = useDeletedReleaseSlugs();
+  const albums = useMemo(() => excludeDeletedReleases(effectiveAlbums, deletedReleaseSlugs), [effectiveAlbums, deletedReleaseSlugs]);
+  const mixtapesAndEps = useMemo(() => excludeDeletedReleases(effectiveMixtapes, deletedReleaseSlugs), [effectiveMixtapes, deletedReleaseSlugs]);
   const {
     playTrack,
     playQueue,
@@ -1425,12 +1423,12 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   const searchResults = useMemo(() => {
     const surface = getCatalogSurfaceRef();
     const searchIndex = buildSearchIndex(
-      surface.displaySingles?.length ? surface.displaySingles : singles,
-      surface.displayAlbums?.length ? surface.displayAlbums : albums,
-      surface.displayMixtapesAndEps?.length ? surface.displayMixtapesAndEps : mixtapesAndEps
+      excludeDeletedReleases(surface.displaySingles, deletedReleaseSlugs),
+      excludeDeletedReleases(surface.displayAlbums, deletedReleaseSlugs),
+      excludeDeletedReleases(surface.displayMixtapesAndEps, deletedReleaseSlugs)
     );
     return searchCatalog(searchIndex, searchQuery);
-  }, [searchQuery, albums, mixtapesAndEps]);
+  }, [searchQuery, albums, mixtapesAndEps, deletedReleaseSlugs]);
 
   const ensureStorefrontCarouselMedia = useCallback(() => {
     const row = singlesRowRef.current;
@@ -1611,18 +1609,15 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   // Events arrive pre-fetched from the RSC page wrapper (initialEvents prop);
   // no client fetch needed.
 
-  // radioSlidesData starts as the static fallback (so the carousel never
-  // renders empty on first paint) and is replaced by the live catalog feed
-  // (music + podcast, latest-first) once /api/catalog/releases?view=radio
-  // resolves. A failed/empty fetch just leaves the fallback in place.
-  const [radioSlidesData, setRadioSlidesData] = useState(RADIO_SLIDES_FALLBACK);
+  // Radio availability comes from the live catalog; an empty response stays empty.
+  const [radioSlidesData, setRadioSlidesData] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
     fetch("/api/catalog/releases?view=radio")
       .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
-        if (cancelled || !Array.isArray(json?.items) || !json.items.length) return;
+        if (cancelled || !Array.isArray(json?.items)) return;
         setRadioSlidesData(json.items);
       })
       .catch(() => {});
@@ -1657,8 +1652,8 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   );
 
   const enrichedRadioSlides = useMemo(
-    () => radioSlidesData.map((slide) => enrichRadioSlide(slide)),
-    [radioSlidesData, enrichRadioSlide]
+    () => excludeDeletedReleases(radioSlidesData, deletedReleaseSlugs).map((slide) => enrichRadioSlide(slide)),
+    [radioSlidesData, deletedReleaseSlugs, enrichRadioSlide]
   );
 
   const warmDestination = useCallback((tabId, phase = "selected") => {
@@ -2430,7 +2425,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   const shopItems      = useMemo(() => printfulProducts.length > 0 ? printfulProducts : fallbackMerch, [printfulProducts]);
   const shopIsFallback = useMemo(() => !printfulLoading && printfulProducts.length === 0, [printfulLoading, printfulProducts]);
 
-  const currentSlide   = useMemo(() => enrichedRadioSlides[radioIndex], [enrichedRadioSlides, radioIndex]);
+  const currentSlide   = useMemo(() => enrichedRadioSlides[radioIndex] || enrichedRadioSlides[0], [enrichedRadioSlides, radioIndex]);
   const handleDonateOpen = useCallback(() => setDonateOpen(true), []);
 
   const exclusiveItems = useMemo(() => exclusiveCatalog.map(item => ({
@@ -2469,7 +2464,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
             {(auth) => (
               <>
                 <AnimatePresence>
-                  {previewModalOpen && selectedSingle && (
+                  {previewModalOpen && selectedSingle && !deletedReleaseSlugs.includes(selectedSingle.slug) && (
                     <ModalErrorBoundary
                       stackId="immersive-preview-modal"
                       onClose={closeSingleModal}
@@ -2494,7 +2489,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                       />
                     </ModalErrorBoundary>
                   )}
-                  {featureModalOpen && featureModalItem && (
+                  {featureModalOpen && featureModalItem && !deletedReleaseSlugs.includes(featureModalItem.slug) && (
                     <ModalErrorBoundary
                       stackId="immersive-feature-modal"
                       onClose={closeFeatureModal}
@@ -2521,7 +2516,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
                   )}
                 </AnimatePresence>
                 <AnimatePresence>
-                  {albumModalOpen && selectedAlbum && (
+                  {albumModalOpen && selectedAlbum && !deletedReleaseSlugs.includes(selectedAlbum.slug) && (
                     <ModalErrorBoundary
                       stackId="immersive-album-modal"
                       onClose={closeAlbumModal}

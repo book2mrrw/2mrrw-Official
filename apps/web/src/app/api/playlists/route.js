@@ -1,4 +1,5 @@
-﻿import { NextResponse } from "next/server";
+﻿import { getDeletedReleaseSlugs } from "@/lib/releases/deletion-server";
+import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { getAdminClient } from "@/lib/supabase/admin";
 import { playlistWriteGateResponse } from "@/lib/playlists/write-gate";
@@ -31,8 +32,10 @@ export async function GET(req) {
 
   if (trErr) return NextResponse.json({ error: trErr.message }, { status: 500 });
 
+  const deleted = await getDeletedReleaseSlugs(admin);
   const byPlaylist = {};
   for (const t of trackRows || []) {
+    if (deleted.has(t.album_slug || t.track_slug)) continue;
     if (!byPlaylist[t.playlist_id]) byPlaylist[t.playlist_id] = [];
     byPlaylist[t.playlist_id].push(t);
   }

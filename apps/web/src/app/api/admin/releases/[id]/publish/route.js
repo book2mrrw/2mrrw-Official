@@ -115,6 +115,7 @@ export async function POST(req, { params }) {
     .from("releases")
     .select("id, slug, status, release_type, content_kind, cover_art_r2_key, metadata")
     .eq("id", releaseId)
+    .is("deleted_at", null)
     .single();
 
   if (relErr || !release) {

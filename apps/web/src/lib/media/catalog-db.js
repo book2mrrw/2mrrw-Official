@@ -31,11 +31,11 @@ const PRODUCT_COLS = [
   "cover_url", "storage_path", "preview_path",
   "video_path", "image_path", "stream_path",
   "release_type", "release_date",
-  "metadata", "active", "gifting_enabled",
+  "metadata", "active", "deleted_at", "gifting_enabled",
   "content_type", "content_id", "content_kind", "updated_at",
 ].join(", ");
 
-const RELEASE_LIFECYCLE_COLS = "id,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,preorder_enabled,preorder_starts_at,preorder_price_cents,early_access_enabled,early_access_starts_at,early_access_scope,early_access_audiences,release_timezone,unavailable_at";
+const RELEASE_LIFECYCLE_COLS = "id,deleted_at,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,preorder_enabled,preorder_starts_at,preorder_price_cents,early_access_enabled,early_access_starts_at,early_access_scope,early_access_audiences,release_timezone,unavailable_at";
 
 /** Map a raw products row to the canonical enriched storefront release shape.
  * @param {object} row
@@ -221,6 +221,7 @@ export async function getStorefrontSinglesPageFromDB({ offset = 0, limit = 20 } 
   const { data, error, count } = await admin
     .from("products")
     .select(`${PRODUCT_COLS}, releases(${RELEASE_LIFECYCLE_COLS})`, { count: "exact" })
+    .is("deleted_at", null)
     .eq("product_type", "single")
     .eq("content_kind", "music")
     .eq("active", true)
@@ -343,12 +344,13 @@ export async function getStorefrontCatalogFromDB() {
     const { data, error } = await admin
       .from("products")
       .select(`${PRODUCT_COLS}, releases(${RELEASE_LIFECYCLE_COLS})`)
+      .is("deleted_at", null)
       .in("product_type", ["single", "feature", "album"])
       .eq("content_kind", "music")
       .order("release_date", { ascending: false, nullsLast: true });
 
     if (error) throw error;
-    if (!data?.length) return null;
+    if (!data?.length) return { singles: [], features: [], albums: [], mixtapes: [] };
 
     const videosByReleaseId = await getMusicVideosForReleaseIds(
       data.map((row) => row.release_id),
@@ -413,11 +415,6 @@ export async function getStorefrontCatalogFromDB() {
       }
     }
 
-    // Only return if we actually got digital music products
-    const hasContent =
-      singles.length > 0 || features.length > 0 ||
-      albums.length > 0 || mixtapes.length > 0;
-
     const lifecycleOrder = (a, b) => {
       const aUpcoming = a.availability && !a.availability.live;
       const bUpcoming = b.availability && !b.availability.live;
@@ -427,7 +424,7 @@ export async function getStorefrontCatalogFromDB() {
       return aUpcoming ? aTime - bTime : bTime - aTime;
     };
     [singles, features, albums, mixtapes].forEach((items) => items.sort(lifecycleOrder));
-    return hasContent ? { singles, features, albums, mixtapes } : null;
+    return { singles, features, albums, mixtapes };
   } catch (err) {
     console.error("[catalog-db] getStorefrontCatalogFromDB error", { error: err?.message });
     return null;
@@ -454,6 +451,7 @@ export async function getRadioCarouselItemsFromDB({ limit = 8 } = {}) {
     const { data, error } = await admin
       .from("products")
       .select(`${PRODUCT_COLS}, releases(${RELEASE_LIFECYCLE_COLS})`)
+      .is("deleted_at", null)
       .in("product_type", ["single", "feature", "album"])
       .eq("active", true)
       .order("release_date", { ascending: false, nullsLast: true })

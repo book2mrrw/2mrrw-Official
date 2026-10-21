@@ -435,13 +435,14 @@ describe("Albums and Mixtapes & EPs render from the live catalog, not a hardcode
   test("PageStorefront receives the DB-backed catalog and shadows the module-level fallback constants", () => {
     assert.match(homeClient, /<PageStorefront\s*\n\s*initialEvents=\{initialEvents\}\s*\n\s*effectiveAlbums=\{effectiveAlbums\}\s*\n\s*effectiveMixtapes=\{effectiveMixtapes\}/);
     assert.match(homeClient, /function PageStorefront\(\{ initialEvents, effectiveAlbums, effectiveMixtapes \}\)/);
-    assert.match(homeClient, /const albums = effectiveAlbums;/);
-    assert.match(homeClient, /const mixtapesAndEps = effectiveMixtapes;/);
+    assert.match(homeClient, /const albums = useMemo\(\(\) => excludeDeletedReleases\(effectiveAlbums, deletedReleaseSlugs\)/);
+    assert.match(homeClient, /const mixtapesAndEps = useMemo\(\(\) => excludeDeletedReleases\(effectiveMixtapes, deletedReleaseSlugs\)/);
   });
 
-  test("effectiveAlbums/effectiveMixtapes are still DB-first with a hardcoded fallback, not the reverse", () => {
-    assert.match(homeClient, /const effectiveAlbums =\s*\n\s*initialCatalog\?\.albums\?\.length > 0/);
-    assert.match(homeClient, /const effectiveMixtapes =\s*\n\s*initialCatalog\?\.mixtapes\?\.length > 0/);
+  test("effectiveAlbums/effectiveMixtapes preserve authoritative empty arrays after deletion", () => {
+    assert.match(homeClient, /const effectiveAlbums =\s*\n\s*Array\.isArray\(initialCatalog\?\.albums\)/);
+    assert.doesNotMatch(homeClient, /:\s*INLINE_(?:ALBUMS|MIXTAPES_AND_EPS);/);
+    assert.match(homeClient, /const effectiveMixtapes =\s*\n\s*Array\.isArray\(initialCatalog\?\.mixtapes\)/);
   });
 });
 

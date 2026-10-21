@@ -31,7 +31,7 @@ import {
   standaloneSlugsUnlockedByReleases,
 } from "@/lib/commerce/release-recording-index";
 
-const LIBRARY_SELECT = "id, source, granted_at, products (slug, title, product_type, cover_url, storage_path)";
+const LIBRARY_SELECT = "id, source, granted_at, products (slug, title, product_type, cover_url, storage_path, deleted_at)";
 
 function permissionsFor({ membership, hasCollectorAccess, hasVaultPass, isGuest = true, user = null, userEntitlements = null }) {
   const hasActiveMembership = membershipHasPremiumAccess(membership) || hasEntitlement(userEntitlements, "subscriber");
@@ -183,7 +183,7 @@ export async function GET(req) {
       return NextResponse.json({ error: mediaProgressResult.error.message }, { status: 500 });
     }
 
-    const purchasedLibrary = (libraryResult.data || []).map((row) => ({
+    const purchasedLibrary = (libraryResult.data || []).filter((row) => row.products && !row.products.deleted_at).map((row) => ({
       slug: row.products?.slug,
       title: row.products?.title,
       product_type: row.products?.product_type,

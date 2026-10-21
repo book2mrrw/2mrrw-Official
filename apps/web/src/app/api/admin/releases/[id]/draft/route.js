@@ -18,7 +18,7 @@ export async function GET(_req, { params }) {
   const { id } = await params;
   const admin = getAdminClient();
   const [{ data: release, error: releaseError }, { data: snapshot, error: snapshotError }] = await Promise.all([
-    admin.from("releases").select("id,slug,status,release_type,cover_art_r2_key,metadata").eq("id", id).single(),
+    admin.from("releases").select("id,slug,status,release_type,cover_art_r2_key,metadata").is("deleted_at", null).eq("id", id).single(),
     admin.from("release_drafts").select("draft_payload,step_index,saved_at").eq("release_id", id).maybeSingle(),
   ]);
   if (releaseError || !release) return NextResponse.json({ error: "Draft not found" }, { status: 404 });
@@ -39,7 +39,7 @@ export async function PUT(req, { params }) {
 
   const admin = getAdminClient();
   const [{ data: release }, { data: existingSnapshot }] = await Promise.all([
-    admin.from("releases").select("id,status,metadata,release_type,release_date,cover_art_r2_key").eq("id", id).maybeSingle(),
+    admin.from("releases").select("id,status,metadata,release_type,release_date,cover_art_r2_key").is("deleted_at", null).eq("id", id).maybeSingle(),
     admin.from("release_drafts").select("draft_payload").eq("release_id", id).maybeSingle(),
   ]);
   if (!release) return NextResponse.json({ error: "Draft not found" }, { status: 404 });

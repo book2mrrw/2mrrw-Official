@@ -38,6 +38,7 @@ export async function GET(req) {
     .from("releases")
     .select("id, slug, status, release_type, content_kind, release_date, storefront_visible, scheduled_at, available_at, release_timezone, upcoming_visible, preview_before_release, preorder_enabled, preorder_starts_at, preorder_price_cents, early_access_enabled, early_access_starts_at, early_access_scope, early_access_audiences, published_at, unavailable_at, cover_art_r2_key, upc, metadata, created_at")
     .eq("content_kind", kind)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .limit(200);
 
@@ -91,6 +92,7 @@ export async function GET(req) {
     .from("products")
     .select("id, slug, title, product_type, release_type, content_kind, active, image_path, cover_url, price_cents, created_at, updated_at, metadata")
     .eq("content_kind", kind)
+    .is("deleted_at", null)
     .order("updated_at", { ascending: false })
     .limit(200);
 
@@ -199,5 +201,5 @@ export async function GET(req) {
     (a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0)
   );
 
-  return NextResponse.json({ releases: allReleases });
+  return NextResponse.json({ releases: allReleases }, { headers: { "Cache-Control": "private, no-store" } });
 }

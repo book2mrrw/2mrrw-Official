@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useDeletedReleaseSlugs } from "@/lib/releases/deletion-store";
+import { excludeDeletedReleases } from "@/lib/releases/deletion-projection";
+import { playlistTrackKey } from "@/lib/playlists/identity";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import {
   addTrackToPlaylist,
   createPlaylist,
@@ -16,6 +19,7 @@ import {
 
 export function usePlaylists(userId) {
   const [playlists, setPlaylists] = useState(() => loadPlaylists(userId));
+  const deletedSlugs = useDeletedReleaseSlugs();
   const [loading, setLoading] = useState(false);
   const [synced, setSynced] = useState(false);
 
@@ -116,8 +120,20 @@ export function usePlaylists(userId) {
     [userId]
   );
 
+  const availablePlaylists = useMemo(() => playlists.map((playlist) => {
+    if (!deletedSlugs.length) return playlist;
+    const tracks = excludeDeletedReleases(playlist.tracks || [], deletedSlugs);
+    const keys = new Set(tracks.map(playlistTrackKey));
+    const trackIds = (playlist.trackIds || []).filter((key) => {
+      if (playlist.tracks?.length) return keys.has(key);
+      try { const [album, track] = JSON.parse(key); return !deletedSlugs.includes(album || track); }
+      catch { return !deletedSlugs.includes(key); }
+    });
+    return { ...playlist, tracks, trackIds };
+  }), [playlists, deletedSlugs]);
+
   return {
-    playlists,
+    playlists: availablePlaylists,
     reloadSaved,
     pending: hasPendingWrites(userId),
     loading,

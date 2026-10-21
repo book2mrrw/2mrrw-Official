@@ -62,6 +62,7 @@ export async function resolveStorefrontProduct(
     const { data, error } = await admin
       .from("products")
       .select("id, slug, title, cover_url, product_type, active")
+      .is("deleted_at", null)
       .eq("id", productId)
       .maybeSingle();
     if (error) throw error;
@@ -83,6 +84,7 @@ export async function resolveStorefrontProduct(
   const { data: rows, error } = await admin
     .from("products")
     .select("id, slug, title, cover_url, product_type, active")
+    .is("deleted_at", null)
     .in("slug", candidates);
 
   if (error) throw error;

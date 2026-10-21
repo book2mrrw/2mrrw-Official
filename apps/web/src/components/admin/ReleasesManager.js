@@ -377,118 +377,6 @@ function ReplaceCoverModal({ release, onClose, typeLabels }) {
   );
 }
 
-// ── Swipe-to-Delete Row ────────────────────────────────────────────────────────
-// Swipe left to reveal a delete zone. Haptic buzz fires exactly once at the
-// threshold. Releasing past threshold commits the delete; before snaps back.
-// touchAction:"pan-y" lets vertical scroll pass through normally.
-function SwipeDeleteRow({ children, onDelete, showBorder }) {
-  const [offsetX, setOffsetX]   = useState(0);
-  const [progress, setProgress] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const startXRef      = useRef(null);
-  const currentOffRef  = useRef(0);
-  const buzzedRef      = useRef(false);
-  const committedRef   = useRef(false);
-  const rowRef         = useRef(null);
-  const revealedRef    = useRef(false);
-
-  const thresholds = () => {
-    const width = rowRef.current?.getBoundingClientRect().width || 360;
-    return { reveal: width * 0.28, commit: width * 0.60 };
-  };
-
-  const onTouchStart = (e) => {
-    if (committedRef.current) return;
-    startXRef.current = e.touches[0].clientX;
-    buzzedRef.current = false;
-    revealedRef.current = false;
-    setDragging(true);
-  };
-
-  const onTouchMove = (e) => {
-    if (startXRef.current === null || committedRef.current) return;
-    const raw = e.touches[0].clientX - startXRef.current;
-    if (raw > 6) { startXRef.current = null; setDragging(false); return; } // ignore right-swipe
-    const abs = Math.abs(Math.min(raw, 0));
-    const { reveal, commit } = thresholds();
-    const clamped = abs <= commit ? -abs : -(commit + (abs - commit) * 0.18);
-    currentOffRef.current = clamped;
-    setOffsetX(clamped);
-    const p = Math.min(1, abs / commit);
-    setProgress(p);
-    if (abs >= reveal && !revealedRef.current) {
-      revealedRef.current = true;
-      try { navigator.vibrate?.(16); } catch {}
-    }
-    if (p >= 1 && !buzzedRef.current) {
-      buzzedRef.current = true;
-      try { navigator.vibrate?.([45, 18, 55]); } catch {}
-    }
-  };
-
-  const onTouchEnd = () => {
-    setDragging(false);
-    startXRef.current = null;
-    if (committedRef.current) return;
-    if (Math.abs(currentOffRef.current) >= thresholds().commit) {
-      committedRef.current = true;
-      setOffsetX(-(typeof window !== "undefined" ? window.innerWidth : 600));
-      setTimeout(onDelete, 320);
-    } else {
-      setOffsetX(0);
-      setProgress(0);
-    }
-  };
-
-  const atThreshold = progress >= 1;
-  const showLabel   = progress > 0.25;
-
-  return (
-    <div ref={rowRef} style={{
-      position: "relative",
-      overflow: "hidden",
-      borderBottom: showBorder ? `1px solid ${C.border}` : "none",
-    }}>
-      {/* Delete zone — fades in as content slides left */}
-      <div style={{
-        position: "absolute", inset: 0,
-        background: `rgba(255,69,58,${Math.min(0.18, progress * 0.22)})`,
-        display: "flex", alignItems: "center", justifyContent: "flex-end",
-        paddingRight: 22,
-        pointerEvents: "none",
-      }}>
-        {showLabel && (
-          <span style={{
-            fontSize: 11, fontWeight: 800, letterSpacing: "0.1em",
-            textTransform: "uppercase",
-            color: atThreshold ? C.error : `rgba(255,69,58,${0.35 + progress * 0.55})`,
-            transition: dragging ? "none" : "color 0.15s",
-          }}>
-            <span style={{ fontSize: 18, marginRight: 7, display: "inline-block", transform: `rotate(${progress * -8}deg) scale(${0.85 + progress * .25})` }}>▰</span>
-            {atThreshold ? "DUMP IT" : "DUMP"}
-          </span>
-        )}
-      </div>
-      {/* Sliding content */}
-      <div
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        style={{
-          transform: `translateX(${offsetX}px)`,
-          transition: dragging ? "none" : "transform 0.32s cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-          background: C.surface,
-          position: "relative", zIndex: 1,
-          willChange: "transform",
-          touchAction: "pan-y",
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
 // ── Main Component ──────────────────────────────────────────────────────────────
 export default function ReleasesManager({ kind = "music" }) {
   const isPodcast = kind === "podcast";
@@ -506,8 +394,6 @@ export default function ReleasesManager({ kind = "music" }) {
   const [replacing, setReplacing] = useState(null); // release object for modal
   const [replacingCover, setReplacingCover] = useState(null); // release object for cover modal
   const [filter,   setFilter]   = useState("all");
-  const [deleting, setDeleting] = useState(null); // slug being deleted (for loading state)
-  const [undoDump, setUndoDump] = useState(null);
   const [reauthRequired, setReauthRequired] = useState(false);
   const reauthResumeRef = useRef(null);
 
@@ -538,50 +424,6 @@ export default function ReleasesManager({ kind = "music" }) {
     }
   };
 
-  const deleteRelease = async (rel, skipConfirm = false) => {
-    if (!skipConfirm) {
-      const isDraft = rel.status === "draft";
-      const label = isDraft ? "Delete this draft?" : "Take down this release? It will be hidden from the storefront.";
-      if (!window.confirm(label)) return;
-    }
-    setDeleting(rel.slug);
-    try {
-      const url = rel.source === "catalog"
-        ? `/api/admin/releases/${rel.id}?source=catalog`
-        : `/api/admin/releases/${rel.id}`;
-      const archive = rel.source !== "catalog" && rel.status !== "draft";
-      const res = await fetch(url, archive
-        ? { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "archive" }) }
-        : { method: "DELETE" });
-      const json = await res.json();
-      if (!res.ok) {
-        if (RECOVERABLE_ADMIN_AUTH_CODES.has(json.code)) {
-          reauthResumeRef.current = () => deleteRelease(rel, true);
-          setReauthRequired(true);
-          return;
-        }
-        throw new Error(json.error || "Delete failed");
-      }
-      if (json.staged) {
-        setReleases((current) => current.filter((item) => item.id !== rel.id));
-        setUndoDump(rel);
-        setTimeout(() => setUndoDump((current) => current?.id === rel.id ? null : current), 10_000);
-      } else await loadReleases();
-    } catch (err) {
-      alert(err.message);
-    } finally {
-      setDeleting(null);
-    }
-  };
-
-  const undoDraftDump = async () => {
-    if (!undoDump) return;
-    const rel = undoDump;
-    setUndoDump(null);
-    const res = await fetch(`/api/admin/releases/${rel.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "undo_dump" }) });
-    if (!res.ok) { const json = await res.json(); alert(json.error || "Undo failed"); return; }
-    await loadReleases();
-  };
 
   const SLUG_PREFIX = {
     single:  "/song/",
@@ -612,7 +454,7 @@ export default function ReleasesManager({ kind = "music" }) {
     <div style={{ minHeight: "100vh", background: C.bg, padding: "40px 20px", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
       <div style={{ maxWidth: 960, margin: "0 auto" }}>
 
-        {/* Header */}
+      {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32 }}>
           <div>
             <a href={backHref} style={{ fontSize: 11, color: C.muted2, textDecoration: "none", letterSpacing: "0.08em", fontWeight: 700, textTransform: "uppercase" }}>← Admin</a>
@@ -688,7 +530,6 @@ export default function ReleasesManager({ kind = "music" }) {
               const isScheduled = rel.status === "scheduled";
               const isDraft = rel.status === "draft";
               const showBorder = i < filtered.length - 1;
-              const swipeable = isDraft;
 
               const rowEl = (
                 <div
@@ -790,47 +631,10 @@ export default function ReleasesManager({ kind = "music" }) {
                         Continue Draft
                       </button>
                     )}
-                    {rel.status === "draft" && (
-                      <button
-                        onClick={() => deleteRelease(rel)}
-                        disabled={deleting === rel.slug}
-                        style={{
-                          background: "rgba(255,69,58,0.10)", border: `1px solid rgba(255,69,58,0.30)`, borderRadius: 6,
-                          padding: "5px 10px", fontSize: 11, color: C.error, cursor: "pointer", fontFamily: "inherit",
-                          opacity: deleting === rel.slug ? 0.5 : 1,
-                        }}
-                      >
-                        {deleting === rel.slug ? "Deleting…" : "Delete Draft"}
-                      </button>
-                    )}
-                    {(isLive || isScheduled) && (
-                      <button
-                        onClick={() => deleteRelease(rel)}
-                        disabled={deleting === rel.slug}
-                        style={{
-                          background: "rgba(255,159,10,0.10)", border: `1px solid rgba(255,159,10,0.30)`, borderRadius: 6,
-                          padding: "5px 10px", fontSize: 11, color: C.warn, cursor: "pointer", fontFamily: "inherit",
-                          opacity: deleting === rel.slug ? 0.5 : 1,
-                        }}
-                      >
-                        {deleting === rel.slug ? "Taking Down…" : "Take Down"}
-                      </button>
-                    )}
                   </div>
                 </div>
               );
 
-              if (swipeable) {
-                return (
-                  <SwipeDeleteRow
-                    key={rel.id}
-                    onDelete={() => deleteRelease(rel, true)}
-                    showBorder={showBorder}
-                  >
-                    {rowEl}
-                  </SwipeDeleteRow>
-                );
-              }
               return (
                 <div key={rel.id} style={{ borderBottom: showBorder ? `1px solid ${C.border}` : "none" }}>
                   {rowEl}
@@ -855,12 +659,6 @@ export default function ReleasesManager({ kind = "music" }) {
           onClose={() => { setReplacingCover(null); loadReleases(); }}
         />
       )}
-      {undoDump ? (
-        <div role="status" style={{ position: "fixed", left: "50%", bottom: 26, transform: "translateX(-50%)", zIndex: 1000, display: "flex", alignItems: "center", gap: 18, background: "rgba(12,12,12,.96)", border: `1px solid ${C.accentBorder}`, boxShadow: "0 16px 50px rgba(0,0,0,.55)", borderRadius: 12, padding: "13px 16px", color: C.text, fontSize: 13 }}>
-          <span>{isPodcast ? "Episode dumped" : "Draft dumped"}</span>
-          <button type="button" onClick={undoDraftDump} style={{ background: "none", border: 0, color: C.accent, fontWeight: 900, cursor: "pointer", letterSpacing: ".06em" }}>UNDO</button>
-        </div>
-      ) : null}
       {reauthRequired && (
         <AdminVerificationOverlay
           email={ADMIN_EMAIL}

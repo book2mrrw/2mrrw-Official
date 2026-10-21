@@ -38,6 +38,7 @@ export async function GET(req, { params }) {
       .from("releases")
       .select("id, slug, status, release_type, release_date, scheduled_at, storefront_visible, cover_art_r2_key, upc, created_at, metadata")
       .eq("id", id)
+      .is("deleted_at", null)
       .single(),
     admin
       .from("products")
@@ -93,6 +94,7 @@ export async function GET(req, { params }) {
     .from("products")
     .select("id, slug, title, product_type, release_type, active, image_path, cover_url, price_cents, created_at, updated_at, metadata")
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
   if (productErr || !product) {
@@ -226,6 +228,7 @@ export async function PATCH(req, { params }) {
     .from("releases")
     .select("id, slug, status, release_type, scheduled_at, available_at, release_timezone, upcoming_visible, preview_before_release, preorder_enabled, preorder_starts_at, preorder_price_cents, early_access_enabled, early_access_starts_at, early_access_scope, early_access_audiences, unavailable_at")
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
   if (release) {
@@ -305,6 +308,7 @@ export async function PATCH(req, { params }) {
     .from("products")
     .select("id, metadata, price_cents")
     .eq("id", id)
+    .is("deleted_at", null)
     .single();
 
   if (productErr || !product) {
@@ -361,82 +365,37 @@ export async function PATCH(req, { params }) {
   return NextResponse.json({ ok: true });
 }
 
-// ── DELETE /api/admin/releases/[id] ─────────────────────────────────────────────
-// Wizard drafts: hard-deletes releases + tracks rows (product row deactivated if exists).
-// Catalog products (source=catalog): sets active=false (takedown, preserves purchase history).
-// Query param: ?source=catalog to force catalog path when id is a product id.
+// One transaction owns logical deletion for drafts, published and legacy releases.
 export async function DELETE(req, { params }) {
   const gate = await requireAdminActor({ recentSeconds: 15 * 60 });
   if (!gate.ok) {
     const denial = classifyAdminAuthorityDenial(gate.reason);
-    return NextResponse.json(
-      { error: denial.status === 401 ? "Unauthorized" : "Forbidden", code: denial.code },
-      { status: denial.status }
-    );
+    return NextResponse.json({ error: denial.status === 401 ? "Unauthorized" : "Forbidden", code: denial.code },
+      { status: denial.status, headers: { "Cache-Control": "private, no-store" } });
   }
-  const user = gate.user;
-
   const rl = await checkRateLimit(req, {
-    routeKey: "admin.releases.delete",
-    limit: 20,
-    windowSeconds: 60,
-    identifier: user.id,
+    routeKey: "admin.releases.delete", limit: 20, windowSeconds: 60, identifier: gate.user.id,
   });
   if (!rl.allowed) return rateLimitResponse(rl.retryAfterSeconds);
-
   const { id } = await params;
-  if (!id) return NextResponse.json({ error: "Release ID required" }, { status: 400 });
-
-  const { searchParams } = new URL(req.url);
-  const forceCatalog = searchParams.get("source") === "catalog";
-
-  const admin = getAdminClient();
-
-  if (!forceCatalog) {
-    // ── Path A: wizard release ─────────────────────────────────────────────────
-    const { data: release } = await admin
-      .from("releases").select("id, slug, status").eq("id", id).maybeSingle();
-
-    if (release) {
-      if (release.status !== "draft") return NextResponse.json({ error: "Only draft, incomplete, or upload-failed releases may be dumped" }, { status: 409 });
-      const [{ data: releaseAssets }, { data: trackAssets }, { data: jobAssets }] = await Promise.all([
-        admin.from("releases").select("cover_art_r2_key,metadata").eq("id", id).single(),
-        admin.from("tracks").select("audio_r2_key,master_r2_key,master_history").eq("release_id", id),
-        admin.from("hls_transcode_jobs").select("source_key").eq("slug", release.slug),
-      ]);
-      const metadata = releaseAssets?.metadata || {};
-      const assetKeys = [...new Set([
-        releaseAssets?.cover_art_r2_key, metadata.animated_cover_r2_key, metadata.preview_r2_key,
-        ...(trackAssets || []).flatMap((track) => [track.audio_r2_key, track.master_r2_key, ...(Array.isArray(track.master_history) ? track.master_history : [])]),
-        ...(jobAssets || []).map((job) => job.source_key),
-      ].filter(Boolean))];
-      const deleteAfter = new Date(Date.now() + 10_000).toISOString();
-      const { data: job, error: stageError } = await admin.from("draft_deletion_jobs").upsert({
-        release_id: id, prior_status: release.status, asset_keys: assetKeys,
-        requested_by: user.id, requested_at: new Date().toISOString(), delete_after: deleteAfter,
-      }, { onConflict: "release_id" }).select("id,delete_after").single();
-      if (stageError) return NextResponse.json({ error: `Failed to stage draft dump: ${stageError.message}` }, { status: 500 });
-      return NextResponse.json({ ok: true, staged: true, job_id: job.id, delete_after: job.delete_after });
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || "")) {
+    return NextResponse.json({ error: "Valid release ID required" }, { status: 400 });
+  }
+  const source = new URL(req.url).searchParams.get("source") || "auto";
+  if (!["auto", "releases", "catalog"].includes(source)) return NextResponse.json({ error: "Invalid release source" }, { status: 400 });
+  try {
+    const { data, error } = await getAdminClient().rpc("delete_release", { p_id: id, p_actor_id: gate.user.id, p_source: source });
+    if (error) {
+      console.error("[admin/releases] deletion transaction failed", { id, code: error.code });
+      return NextResponse.json({ error: "Release deletion failed. Refresh and try again.", code: "RELEASE_DELETE_FAILED" },
+        { status: error.code === "42501" ? 403 : 503 });
     }
+    if (!data?.ok) return NextResponse.json({ error: data?.code === "unsupported_release" ? "Unsupported release type" : "Release not found" },
+      { status: data?.code === "unsupported_release" ? 422 : 404 });
+    revalidateStorefront(data.slug, data.release_type);
+    return NextResponse.json(data, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (error) {
+    console.error("[admin/releases] deletion request failed", { id, message: error?.message });
+    return NextResponse.json({ error: "Release deletion could not be confirmed. Refresh before retrying." }, { status: 503 });
   }
-
-  // ── Path B: catalog product — takedown (set active=false) ─────────────────────
-  const { data: product, error: productErr } = await admin
-    .from("products").select("id, slug").eq("id", id).maybeSingle();
-
-  if (productErr || !product) {
-    return NextResponse.json({ error: "Release not found" }, { status: 404 });
-  }
-
-  const { error: takedownErr } = await admin
-    .from("products")
-    .update({ active: false, updated_at: new Date().toISOString() })
-    .eq("id", id);
-
-  if (takedownErr) {
-    return NextResponse.json({ error: `Takedown failed: ${takedownErr.message}` }, { status: 500 });
-  }
-
-  revalidateStorefront();
-  return NextResponse.json({ ok: true, deleted: "catalog_takedown" });
 }

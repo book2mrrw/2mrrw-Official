@@ -30,7 +30,8 @@ export async function resolveCartLines(cart, admin = null) {
     slugs.length
       ? client
           .from("products")
-          .select("*, releases(id,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,preorder_enabled,preorder_starts_at,preorder_price_cents,early_access_enabled,early_access_starts_at,unavailable_at)")
+          .select("*, releases(id,deleted_at,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,preorder_enabled,preorder_starts_at,preorder_price_cents,early_access_enabled,early_access_starts_at,unavailable_at)")
+          .is("deleted_at", null)
           .in("slug", slugs)
       : { data: [], error: null },
     videoIds.length

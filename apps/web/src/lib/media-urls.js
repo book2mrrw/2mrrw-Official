@@ -74,6 +74,11 @@ export function catalogCoverUrl(coverUrl) {
   if (isSiteApiMediaPath(raw)) {
     return ensureRelativeSiteApiPath(raw);
   }
+  // Uploaded entity keys are R2 objects; flat or explicitly site-relative
+  // legacy artwork remains bundled. Do not infer ownership from "images/" alone.
+  if (!raw.startsWith("/") && /^images\/(singles|features|albums|mixtapes-and-eps)\/[^/]+\/[^/]+\.(?:jpe?g|png|webp|avif)$/i.test(raw)) {
+    return getPublicR2Url(raw) || `${catalogCdnBase()}/${raw}`;
+  }
   const withoutLeading = raw.replace(/^\//, "");
   return catalogPublicMediaUrl(withoutLeading) || `/${withoutLeading}`;
 }

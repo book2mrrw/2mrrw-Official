@@ -1,5 +1,9 @@
 "use client";
 
+import { commitDeletedReleaseSlugs, useDeletedReleaseSlugs } from "@/lib/releases/deletion-store";
+import { excludeDeletedReleases } from "@/lib/releases/deletion-projection";
+import { signalCatalogMutation } from "@/lib/storefront/catalog-refresh-store";
+
 import {
   createContext,
   useCallback,
@@ -128,7 +132,37 @@ export function CatalogSurfaceProvider({
   const catalogFetchAbort = useAbortController(
     `${catalogMutationRevision}:${catalogPage}`
   );
-  const lastSnapshotRevisionRef = useRef(catalogMutationRevision);
+  const deletedSlugs = useDeletedReleaseSlugs();
+  const lastSnapshotRevisionRef = useRef(-1);
+  useEffect(() => {
+    let disposed = false;
+    let controller;
+    const refresh = async () => {
+      if (document.visibilityState === "hidden") return;
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const response = await fetch("/api/catalog/deletions", { cache: "no-store", signal: controller.signal });
+        const data = await response.json();
+        if (!disposed && response.ok && Array.isArray(data.slugs) && commitDeletedReleaseSlugs(data.slugs)) {
+          signalCatalogMutation("release_deletions_refreshed");
+        }
+      } catch { /* Keep the last committed tombstones during transient failures. */ }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 30_000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      disposed = true;
+      controller?.abort();
+      clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
   const prevBrowseSinglesLenRef = useRef(0);
   const prevBrowseSinglesRef = useRef(browseSingles);
   const browseSinglesRef = useRef(browseSingles);
@@ -301,11 +335,11 @@ export function CatalogSurfaceProvider({
   // `browseSingles` starts with the SSR/static fallback. After a successful
   // canonical read it may legitimately be empty; never reinterpret empty as a
   // reason to resurrect the stale seed.
-  const displaySingles = browseSingles;
+  const displaySingles = useMemo(() => excludeDeletedReleases(browseSingles, deletedSlugs), [browseSingles, deletedSlugs]);
 
-  const displayFeatures = browseFeatures;
-  const displayAlbums = browseAlbums;
-  const displayMixtapesAndEps = browseMixtapesAndEps;
+  const displayFeatures = useMemo(() => excludeDeletedReleases(browseFeatures, deletedSlugs), [browseFeatures, deletedSlugs]);
+  const displayAlbums = useMemo(() => excludeDeletedReleases(browseAlbums, deletedSlugs), [browseAlbums, deletedSlugs]);
+  const displayMixtapesAndEps = useMemo(() => excludeDeletedReleases(browseMixtapesAndEps, deletedSlugs), [browseMixtapesAndEps, deletedSlugs]);
 
   const catalogPlaybackLookup = useMemo(
     () =>
@@ -320,7 +354,7 @@ export function CatalogSurfaceProvider({
 
   const value = useMemo(
     () => ({
-      browseSingles,
+      browseSingles: displaySingles,
       displaySingles,
       displayFeatures,
       displayAlbums,
@@ -331,7 +365,6 @@ export function CatalogSurfaceProvider({
       catalogPlaybackLookup,
     }),
     [
-      browseSingles,
       displaySingles,
       displayFeatures,
       displayAlbums,

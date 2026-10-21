@@ -1,3 +1,4 @@
+import { getDeletedReleaseSlugs } from "@/lib/releases/deletion-server";
 import { NextResponse } from "next/server";
 import { getFanSessionUser } from "@/lib/auth/session-user";
 import { getAdminClient } from "@/lib/supabase/admin";
@@ -22,6 +23,9 @@ async function mutate(req, {params}, action) {
     // Playlist references do not grant rights. Resolve the owning product using
     // authenticated server state, never trackData.access or caller tier flags.
     try {
+      if ((await getDeletedReleaseSlugs()).has(payload.albumSlug || payload.trackSlug)) {
+        return NextResponse.json({error:"This release has been deleted",code:"RELEASE_DELETED"},{status:410});
+      }
       if (!await userCanStreamProduct(user.id, payload.albumSlug || payload.trackSlug, user)) {
         return NextResponse.json({error:"Purchase or membership access is required to add this track",code:"PLAYLIST_ENTITLEMENT_REQUIRED"},{status:403});
       }

@@ -93,10 +93,10 @@ test("view=radio calls getRadioCarouselItemsFromDB and returns an items array, d
 
 // ── HomeClient: the carousel is fed by a live fetch, not a frozen array ──────
 
-test("radioSlidesData is real component state seeded by the fallback and replaced by a live /view=radio fetch, not a module-level constant", () => {
+test("radioSlidesData waits for authoritative availability and accepts an empty live response", () => {
   const src = read("src/app/HomeClient.js");
   assert.match(src, /const RADIO_SLIDES_FALLBACK = \[/);
-  assert.match(src, /const \[radioSlidesData, setRadioSlidesData\] = useState\(RADIO_SLIDES_FALLBACK\);/);
+  assert.match(src, /const \[radioSlidesData, setRadioSlidesData\] = useState\(\[\]\);/);
   const fetchAt = src.indexOf('fetch("/api/catalog/releases?view=radio")');
   assert.ok(fetchAt > -1);
   const fetchBody = src.slice(fetchAt, fetchAt + 400);
@@ -105,7 +105,7 @@ test("radioSlidesData is real component state seeded by the fallback and replace
 
 test("enrichedRadioSlides is derived from the live radioSlidesData state, not the old frozen module-level array", () => {
   const src = read("src/app/HomeClient.js");
-  assert.match(src, /const enrichedRadioSlides = useMemo\(\s*\n\s*\(\) => radioSlidesData\.map\(\(slide\) => enrichRadioSlide\(slide\)\),\s*\n\s*\[radioSlidesData, enrichRadioSlide\]/);
+  assert.match(src, /const enrichedRadioSlides = useMemo\(\s*\n\s*\(\) => excludeDeletedReleases\(radioSlidesData, deletedReleaseSlugs\)\.map\(\(slide\) => enrichRadioSlide\(slide\)\),\s*\n\s*\[radioSlidesData, deletedReleaseSlugs, enrichRadioSlide\]/);
 });
 
 test("enrichRadioSlide prefers the live catalog match's cover/preview over the slide's own value — the merge-priority bug that made new/updated cover art invisible in the carousel", () => {

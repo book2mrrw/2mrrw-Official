@@ -8,6 +8,12 @@ function instant(value) {
 }
 
 export function releaseAvailability(release, context = {}, now = new Date()) {
+  if (release?.deleted_at || release?.status === "deleted") {
+    return { phase: "deleted", visible: false, live: false, preorderOpen: false,
+      earlyEligible: false, canPurchase: false, canPlayFull: false, canPreview: false,
+      availableAt: null, earlyAccessAt: null, earlyAccessEnabled: false,
+      preorderPriceCents: null, scope: { mode: "full_release", track_ids: [] } };
+  }
   const nowMs = instant(now) ?? Date.now();
   const availableMs = instant(release?.available_at || release?.scheduled_at);
   const preorderMs = instant(release?.preorder_starts_at);
