@@ -14,6 +14,8 @@
  */
 
 import { getSegment } from "./hls-segment-cache";
+import { encryptedSegmentStore } from "./encrypted-segment-store";
+import { hlsDownloadManager } from "./hls-download-manager";
 
 export const memoryDeliveredStats = new WeakSet();
 const classes = new WeakMap();
@@ -36,14 +38,38 @@ export function createPrefetchLoaderClass(DefaultLoaderClass) {
 
     load(context, config, callbacks) {
       const generation = ++this._deliveryGeneration;
-      const buf = getSegment(context.url);
-      if (!buf) {
+      const memory = getSegment(context.url);
+      if (memory) { this._deliverCached(memory, context, callbacks, generation); return; }
+      this._endForeground?.();
+      const owner = Symbol('decoder-fragment');
+      hlsDownloadManager.foregroundStart(owner);
+      const end = () => hlsDownloadManager.foregroundEnd(owner);
+      this._endForeground = end;
+      const network = () => {
+        if (generation !== this._deliveryGeneration) { end(); return; }
         memoryDeliveredStats.delete(this.stats);
-        // Cache miss — preserve all default retry / timeout behavior.
-        super.load(context, config, callbacks);
-        return;
-      }
+        super.load(context, config, {
+          ...callbacks,
+          onSuccess: (response, stats, ...rest) => {
+            // Snapshot encrypted bytes before hls.js transfers them to its worker.
+            if (response.data instanceof ArrayBuffer) void encryptedSegmentStore.put(context.url, response.data);
+            end();
+            callbacks.onSuccess(response, stats, ...rest);
+          },
+          onError: (...args) => { end(); callbacks.onError?.(...args); },
+          onTimeout: (...args) => { end(); callbacks.onTimeout?.(...args); },
+          onAbort: (...args) => { end(); callbacks.onAbort?.(...args); },
+        });
+      };
+      if (!encryptedSegmentStore.storage) { network(); return; }
+      encryptedSegmentStore.get(context.url).then(buf => {
+        if (generation !== this._deliveryGeneration) { end(); return; }
+        if (buf) { end(); this._deliverCached(buf, context, callbacks, generation); }
+        else network();
+      }).catch(network);
+    }
 
+    _deliverCached(buf, context, callbacks, generation) {
       // Cache hit — serve pre-fetched bytes with zero network latency.
       // queueMicrotask keeps the call asynchronous so hls.js internal state
       // is consistent when onSuccess fires (matching XHR async delivery).
@@ -65,11 +91,13 @@ export function createPrefetchLoaderClass(DefaultLoaderClass) {
 
     abort() {
       this._deliveryGeneration++;
+      this._endForeground?.();
       super.abort();
     }
 
     destroy() {
       this._deliveryGeneration++;
+      this._endForeground?.();
       super.destroy();
     }
   };

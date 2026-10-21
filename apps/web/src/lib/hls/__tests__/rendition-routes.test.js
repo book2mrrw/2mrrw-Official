@@ -40,3 +40,16 @@ test('legacy rows keep old playlists and denied requests never read metadata',as
  assert.equal((await variant.GET(req('slug=song&bitrate=64k&token=signed'))).status,401);
  assert.equal(reads,0);
 });
+
+test('replacement versions change segment identities and an old variant cannot claim a new publication', async () => {
+ cache=undefined;reads=0;authorized=true;
+ row={bitrates:['64k'],hls_prefix:'audio/song/',updated_at:'2026-10-21T00:00:00Z',segment_counts:{'64k':1},segment_duration_secs:6,duration_seconds:6};
+ const first=await (await variant.GET(req('slug=song&bitrate=64k&token=signed'))).text();
+ assert.match(first,/seg_00001\.ts\?v=2026-10-21T00%3A00%3A00Z/);
+ const masterBody=await (await master.GET(req('slug=song'))).text();
+ assert.match(masterBody,/v=2026-10-21T00%3A00%3A00Z/);
+ cache=undefined;row={...row,updated_at:'2026-10-22T00:00:00Z'};
+ assert.equal((await variant.GET(req('slug=song&bitrate=64k&token=signed&v=2026-10-21T00%3A00%3A00Z'))).status,409);
+ const second=await (await variant.GET(req('slug=song&bitrate=64k&token=signed'))).text();
+ assert.notEqual(first,second);
+});

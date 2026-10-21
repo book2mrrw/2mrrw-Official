@@ -31,6 +31,8 @@ import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 import { getStartupQualityLevel } from "./network-quality";
 import { createCacheAwareAbrController } from "./cache-aware-abr";
 import { createPrefetchLoaderClass } from "./hls-prefetch-loader";
+import { encryptedSegmentStore } from "./encrypted-segment-store";
+import { hlsDownloadManager } from "./hls-download-manager";
 
 async function importHls() {
   if (typeof window === "undefined") return null;
@@ -91,6 +93,7 @@ export class HLSEngine {
     // It is reset only by detach() (a new track/play attempt).
     this._trackQualityCap = null;
     this._bufferedLevel = null;
+    this._holdRequested = false;
     /** @type {number} Per-track-load counter for HMAC-token renewal attempts (max 2) */
     this._renewalAttempts = 0;
     /**
@@ -167,6 +170,7 @@ export class HLSEngine {
       abrController: createCacheAwareAbrController(Hls.DefaultConfig.abrController),
       // Playback robustness
       enableWorker:               true,
+      autoStartLoad:              false,
       lowLatencyMode:             false,
 
       // Buffer targets — music is VOD, prioritise uninterrupted playback over low latency
@@ -263,6 +267,7 @@ export class HLSEngine {
           });
         }
         if (!data.fatal) return;
+        const failureSnapshot = { position: audioEl.currentTime || 0, wasPlaying: !audioEl.paused };
 
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR &&
             data.details === Hls.ErrorDetails.MANIFEST_LOAD_ERROR) {
@@ -303,9 +308,9 @@ export class HLSEngine {
           this.loadTrack(capturedUrl, capturedEl, { startPosition: currentTime, _version: capturedVersion, manifestTimeoutMs })
             .then((ok) => {
               if (this._destroyed || this._manifestVersion !== capturedVersion) return;
-              if (!ok) this.onSegmentFatalError?.();
+              if (!ok) this.onSegmentFatalError?.({ position: currentTime });
             })
-            .catch(() => { if (!this._destroyed && this._manifestVersion === capturedVersion) this.onSegmentFatalError?.(); });
+            .catch(() => { if (!this._destroyed && this._manifestVersion === capturedVersion) this.onSegmentFatalError?.({ position: currentTime }); });
           return;
         }
 
@@ -334,9 +339,9 @@ export class HLSEngine {
           this.loadTrack(capturedUrl, capturedEl, { startPosition: currentTime, _version: capturedVersion, manifestTimeoutMs })
             .then((ok) => {
               if (this._destroyed || this._manifestVersion !== capturedVersion) return;
-              if (!ok) this.onError?.(new Error("FRAG_DECRYPT_ERROR: unrecoverable after renewal"));
+              if (!ok) this.onError?.(new Error("FRAG_DECRYPT_ERROR: unrecoverable after renewal"), { position: currentTime });
             })
-            .catch(() => { if (!this._destroyed && this._manifestVersion === capturedVersion) this.onError?.(new Error("FRAG_DECRYPT_ERROR: renewal error")); });
+            .catch(() => { if (!this._destroyed && this._manifestVersion === capturedVersion) this.onError?.(new Error("FRAG_DECRYPT_ERROR: renewal error"), { position: currentTime }); });
           return;
         }
 
@@ -355,7 +360,7 @@ export class HLSEngine {
             // Second fatal segment failure after recovery — segments are not recoverable
             // (likely CORS, auth, or CDN failure on iOS). Notify for progressive fallback.
             this._destroyHls();
-            this.onSegmentFatalError?.();
+            this.onSegmentFatalError?.(failureSnapshot);
           }
           return;
         }
@@ -365,7 +370,7 @@ export class HLSEngine {
           `hls.js fatal error: ${data.type} / ${data.details}`
         );
         this._destroyHls();
-        this.onError?.(err);
+        this.onError?.(err, failureSnapshot);
         settle(false);
       });
 
@@ -377,9 +382,10 @@ export class HLSEngine {
         if (frag?.type !== "main" || frag.sn === "initSegment" || !stats?.loaded || stats.aborted) return;
         if (Number.isInteger(frag.level) && frag.level >= 0) this._bufferedLevel = frag.level;
         this._renewalAttempts = 0;
+        if (this._holdRequested && this._trackQualityCap == null && this._currentLevel < 0) this.holdCurrentQualityForPlayback();
       });
 
-      hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+      hls.on(Hls.Events.MANIFEST_PARSED, async (_, data) => {
         if (version !== this._manifestVersion) { settle(false); return; }
         const levels = data.levels || [];
         if (isPlaybackTraceEnabled()) {
@@ -388,7 +394,14 @@ export class HLSEngine {
             startPosition,
           });
         }
-        const tier = this._currentLevel >= 0 ? this._currentLevel : getStartupQualityLevel();
+        // Only a fresh authorized master can select a cached rendition. A full
+        // encrypted song is reusable; old tokens and keys are never reused.
+        const highest = qualityTierLevel(levels, 0);
+        const highestUrl = levels[highest]?.url?.[0];
+        const warmHighest = this._currentLevel < 0 && this._trackQualityCap == null && highestUrl
+          ? await encryptedSegmentStore.complete(highestUrl) : false;
+        if (this._destroyed || version !== this._manifestVersion || this._hls !== hls) return;
+        const tier = this._currentLevel >= 0 ? this._currentLevel : warmHighest ? 0 : getStartupQualityLevel();
         const level = qualityTierLevel(levels, tier);
         if (this._currentLevel >= 0) {
           hls.currentLevel = level;
@@ -397,11 +410,14 @@ export class HLSEngine {
           // auto ABR remains available until the playback buffer gate completes.
           hls.startLevel = level;
         }
+        if (warmHighest) this._trackQualityCap = highest;
         if (this._currentLevel < 0 && this._trackQualityCap != null) {
           // A token refresh rebuilds hls.js during the same play. Restore the
           // exact chosen rendition before loading resumes; do not reopen ABR.
           hls.loadLevel = this._trackQualityCap;
         }
+        hls.startLoad(startPosition);
+        if (this._trackQualityCap != null) this._startFullSongDownload(this._trackQualityCap);
         settle(true);
       });
 
@@ -478,7 +494,12 @@ export class HLSEngine {
    * a new track is loaded. This deliberately prevents mid-track quality changes.
    */
   holdCurrentQualityForPlayback() {
-    if (!this._hls || this._currentLevel >= 0) return null;
+    this._holdRequested = true;
+    if (!this._hls) return null;
+    if (this._currentLevel >= 0) {
+      this._startFullSongDownload(qualityTierLevel(this._hls.levels || [], this._currentLevel));
+      return null;
+    }
     const selected = Number.isInteger(this._hls.currentLevel) && this._hls.currentLevel >= 0
       ? this._hls.currentLevel
       : this._bufferedLevel;
@@ -487,7 +508,19 @@ export class HLSEngine {
     // loadLevel changes only future requests. currentLevel would force hls.js
     // to flush buffered audio immediately, risking a playback pause here.
     this._hls.loadLevel = selected;
+    this._startFullSongDownload(selected);
     return selected;
+  }
+
+  _startFullSongDownload(selected) {
+    // Standby/preview decoders must never take the active song's download lease.
+    if (_activeEngine !== this) return;
+    const levels = this._hls?.levels || [];
+    const highest = qualityTierLevel(levels, 0);
+    const selectedUrl = levels[selected]?.url?.[0];
+    if (!selectedUrl || !this._audioEl) return;
+    this._stopDownload?.();
+    this._stopDownload = hlsDownloadManager.begin(this._audioEl, selectedUrl, levels[highest]?.url?.[0]);
   }
 
   /**
@@ -507,6 +540,7 @@ export class HLSEngine {
     this._destroyHls();
     this._trackQualityCap = null;
     this._bufferedLevel = null;
+    this._holdRequested = false;
     this._manifestUrl      = null;
     this._audioEl          = null;
     this._renewalAttempts  = 0;
@@ -514,6 +548,8 @@ export class HLSEngine {
   }
 
   _destroyHls() {
+    this._stopDownload?.();
+    this._stopDownload = null;
     this._cancelPendingLoad?.();
     this._native = false;
     if (this._hls) {
@@ -558,6 +594,7 @@ export function replaceHLSEngine() {
  */
 export function setActiveHLSEngine(engine) {
   _activeEngine = engine;
+  engine?.holdCurrentQualityForPlayback();
 }
 
 /**

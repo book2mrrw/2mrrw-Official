@@ -15,6 +15,11 @@ const MAX_BYTES = 15 * 1024 * 1024;
 const _cache = new Map();
 let _totalBytes = 0;
 
+/** Readiness checks must not copy every retained audio segment. */
+export function hasSegment(url) {
+  return (_cache.get(url)?.buf.byteLength || 0) > 0;
+}
+
 /**
  * Returns a consumer-owned copy for this segment URL, or null on miss.
  * HLS may transfer this buffer to its decoding worker, detaching it. Never

@@ -90,6 +90,11 @@ export async function GET(req) {
     return cors(req, NextResponse.json({ error: "Manifest not found" }, { status: 404 }));
   }
 
+  const version = manifest.updated_at || manifest.hls_prefix;
+  if (searchParams.get("v") && searchParams.get("v") !== version) {
+    return cors(req, NextResponse.json({ error: "Audio version changed; reload master" }, { status: 409 }));
+  }
+
   const prefix      = manifest.hls_prefix;
   const segCount    = (manifest.segment_counts?.[bitrate]) ?? 0;
   const measured = measuredRendition(manifest, bitrate);
@@ -123,7 +128,7 @@ export async function GET(req) {
 
   for (let i = 0; i < segCount; i++) {
     const segNum  = String(i + 1).padStart(5, "0");
-    const segUrl  = `${R2_CDN}/${prefix}${bitrate}/seg_${segNum}.ts`;
+    const segUrl  = `${R2_CDN}/${prefix}${bitrate}/seg_${segNum}.ts?v=${encodeURIComponent(version)}`;
     const isLast  = i === segCount - 1;
     const segDur  = measured ? measured.segment_durations[i].toFixed(6) : isLast && totalDur > 0
       ? Math.max(0.001, totalDur - (segDuration * i)).toFixed(6)

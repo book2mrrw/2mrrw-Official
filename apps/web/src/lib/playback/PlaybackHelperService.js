@@ -1411,6 +1411,12 @@ export function createPlaybackHelpers(initialDeps) {
       if (nextIdx < 0) return;
       const next = queue[nextIdx];
       if (!next?.src) return;
+      if (next.metadata?.access?.canStream && isHlsJsActive()) {
+        const slug = parseStreamSlugFromSrc(next.src) || next.slug;
+        const trackSlug = parseStreamTrackSlugFromSrc(next.src) || next.metadata?.trackSlug || null;
+        if (slug) void prefetchHlsSegmentsForTrack(slug, trackSlug);
+        return;
+      }
       const preloadEl = self._deps.nextTrackPreloadRef.current;
       if (!preloadEl) return;
 

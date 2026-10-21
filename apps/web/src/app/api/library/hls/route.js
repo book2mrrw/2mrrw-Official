@@ -123,7 +123,7 @@ export async function GET(req) {
     const br        = bitrates[i];
     const bandwidth = renditionBandwidthAttributes(manifest, br);
     const token     = variantTokens[i];
-    const params    = new URLSearchParams({ slug, bitrate: br, token });
+    const params    = new URLSearchParams({ slug, bitrate: br, token, v: manifest.updated_at || manifest.hls_prefix });
     if (effectiveTrackSlug) params.set("trackSlug", effectiveTrackSlug);
     const variantUrl = `${origin}/api/library/hls/variant?${params}`;
 

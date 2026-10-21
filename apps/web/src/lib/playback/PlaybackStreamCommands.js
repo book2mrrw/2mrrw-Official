@@ -1,5 +1,6 @@
 "use client";
 
+import { createHlsFallback } from "./hls-fallback";
 import { playbackStateMachine, PLAYBACK_ORCHESTRATION_EVENTS } from "@/media/PlaybackStateMachine";
 import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
 import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
@@ -837,30 +838,18 @@ export function attachStreamCommands(self) {
               settled = true;
               resolve(loaded);
             };
-            hlsEngine.onFallback = () => done(false); // 404 — not yet transcoded
-            hlsEngine.onError    = () => done(false); // fatal error — fall back
-            hlsEngine.onSegmentFatalError = () => {
-              // Segments failed after manifest loaded (CORS, CDN, iOS network error).
-              // Detach HLS and fall back to progressive download mid-stream.
-              reportPlaybackDiagnostic({
-                level: "warn",
-                code: "HLS_SEGMENT_FATAL_FALLBACK",
-                command: PLAYBACK_COMMANDS.PLAY_TRACK,
-                requestId,
-                state: stateRef.current,
-                context: { slug: streamSlug },
-              });
-              hlsEngineRef.current = null;
-              if (isPlaybackTraceEnabled()) {
-                logPlaybackEvent({
-                  type: "play-chain:hls-segment-fatal-fallback",
-                  source: "playTrackInternal",
-                  extra: { requestId, slug: streamSlug },
-                });
-              }
-              const fallbackMs = isLibraryStreamRedirectSrc(syncSrc) ? 12000 : AUDIO_SRC_READY_TIMEOUT_MS;
-              waitAudioSrcReady(audio, syncSrc, { signal: streamAbortController.signal, timeoutMs: fallbackMs })
-                .catch(() => {});
+            const fallback = createHlsFallback({
+              refs: self._deps, requestId, signal: streamAbortController.signal,
+              src: syncSrc, patchState, resume: attemptLightweightPlaybackResume,
+            });
+            hlsEngine.onFallback = () => done(false);
+            hlsEngine.onError = (error, snapshot) => {
+              if (!settled) done(false);
+              else void fallback(snapshot);
+            };
+            hlsEngine.onSegmentFatalError = (snapshot) => {
+              if (!settled) done(false);
+              else void fallback(snapshot);
             };
 
             hlsEngine.loadTrack(hlsManifestUrl, audio, {

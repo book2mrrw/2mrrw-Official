@@ -185,3 +185,53 @@ test('a renewal cancelled by a track change cannot invoke fallback on its succes
   assert.equal(fallback,0);
   assert.equal(engine._manifestUrl,'/next.m3u8');
 });
+
+
+test('a complete highest rendition seeds replay even on a weak link; eviction returns to the network hint', async t => {
+  environment(t, '2g');
+  const { encryptedSegmentStore: store } = await import('../../audio/encrypted-segment-store.js');
+  const { setSegment, clearSegmentCache } = await import('../../audio/hls-segment-cache.js');
+  const originalAttach = FakeHls.prototype.attachMedia;
+  const high = 'https://site.test/variant?slug=replay&bitrate=320k&v=one&token=fresh';
+  const url = 'https://cdn.test/replay/320k/one.ts?v=one';
+  FakeHls.prototype.attachMedia = function () {
+    this.levels[3].url = [high];
+    originalAttach.call(this);
+  };
+  t.after(() => { FakeHls.prototype.attachMedia = originalAttach; clearSegmentCache(); });
+  await store.remember(high, [url]);
+  setSegment(url, new ArrayBuffer(4));
+  const engine = new HLSEngine();
+  await engine.loadTrack('/master', {});
+  assert.equal(engine._hls.startLevel, 3);
+  assert.equal(engine._hls.loadLevel, 3, 'fully warmed replay cannot be downgraded during startup');
+  engine.detach();
+  clearSegmentCache();
+  await engine.loadTrack('/master', {});
+  assert.equal(engine._hls.startLevel, 0);
+  engine.detach();
+});
+
+test('standby HLS initialization cannot steal the download lease; a committed deck swap transfers ownership', async t => {
+  environment(t, '4g');
+  const { setActiveHLSEngine } = await import('../../audio/HLSEngine.js');
+  const { hlsDownloadManager: downloads } = await import('../../audio/hls-download-manager.js');
+  const active = new HLSEngine(); const standby = new HLSEngine();
+  const first = new EventTarget(); const second = new EventTarget();
+  t.after(() => { active.detach(); standby.detach(); setActiveHLSEngine(null); downloads.stop(); });
+  setActiveHLSEngine(active);
+  await active.loadTrack('/first', first);
+  active._hls.levels[3].url = ['https://site.test/variant?slug=first&v=1'];
+  active._hls._currentLevel = 3;
+  active.holdCurrentQualityForPlayback();
+  assert.equal(downloads.session.audio, first);
+  await standby.loadTrack('/second', second);
+  standby._hls.levels[3].url = ['https://site.test/variant?slug=second&v=1'];
+  standby._hls._currentLevel = 3;
+  standby.holdCurrentQualityForPlayback();
+  assert.equal(downloads.session.audio, first);
+  setActiveHLSEngine(standby);
+  assert.equal(downloads.session.audio, second);
+  active.detach();
+  assert.equal(downloads.session.audio, second, 'destroying the old deck cannot stop its successor');
+});
