@@ -202,6 +202,10 @@ async function waitAudioSrcReady(audio, src, { signal, timeoutMs = AUDIO_SRC_REA
   const currentSrc = normalizePlaybackSrc(audio.src);
   const sameSrc = normalizedSrc === currentSrc;
 
+  // A failed element can retain its old readyState/source. A recovery of that
+  // same URL must clear the media error rather than treating stale data as ready.
+  if (sameSrc && audio.error) audio.load();
+
   if (sameSrc && audio.readyState >= 3) {
     perfMark(MARKS.PLAYBACK_WAIT_SRC_GUARD_SAME_SRC);
     perfMark(MARKS.PLAYBACK_SRC_ASSIGN);
@@ -369,7 +373,10 @@ async function playAudioIfNotPaused(audio, isPlaying, {
   effectGuardRequired,
   effectAuthorityMode,
   mediaIdentity,
+  isCurrent = () => true,
+  onStalePlay,
 } = {}) {
+  if (!isCurrent()) return null;
   if (!isPlaying) return true;
   if (!audio.paused) return true;
 
@@ -386,6 +393,7 @@ async function playAudioIfNotPaused(audio, isPlaying, {
 
   for (let attempt = 0; attempt <= ABORT_MAX_RETRIES; attempt++) {
     try {
+      if (!isCurrent()) return null;
       // INV-EFFECT-1: check immediately before every real play() attempt,
       // including iOS AbortError retries. Preparation above remains harmless.
       if (!canBecomeAudible({ effectAuthorityMode, effectGuardRequired, effectAuthority, canApplyEffect, mediaIdentity, command, requestId, state, context })) {
@@ -393,6 +401,10 @@ async function playAudioIfNotPaused(audio, isPlaying, {
       }
       perfMark(MARKS.PLAYBACK_AUDIO_PLAY_CALL);
       await audio.play();
+      if (!isCurrent()) {
+        onStalePlay?.();
+        return null;
+      }
       perfMark(MARKS.PLAYBACK_PLAY_PROMISE_RESOLVED);
       if (isPlaybackTraceEnabled()) {
         console.log("[PLAY-CHAIN] play() resolved OK", { command, requestId, attempt, paused: audio.paused });

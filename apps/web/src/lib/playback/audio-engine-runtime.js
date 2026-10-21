@@ -38,6 +38,8 @@ function createRuntimeState() {
       initWebAudioRef: { current: null },
       // Stable state reader — returns current playback state at call time (diagnostics).
       stateGetterRef: { current: null },
+      recoveryFailureRef: { current: null },
+      recoveryVerificationRef: { current: null },
       // Stable trace handle — populated by AudioContext; executor uses it without React.
       tracePlaybackRef: { current: null },
       // Command handler bag — keyed by short name, populated by AudioContext effects.
@@ -89,7 +91,11 @@ export function getAudioEngineRuntime() {
  * @returns {ReturnType<typeof createRuntimeState>['refs']}
  */
 export function getAudioEngineRefs() {
-  return getAudioEngineRuntime().refs;
+  const refs = getAudioEngineRuntime().refs;
+  // Retain the existing singleton on HMR/provider re-entry from an older build.
+  refs.recoveryFailureRef ??= { current: null };
+  refs.recoveryVerificationRef ??= { current: null };
+  return refs;
 }
 
 /**

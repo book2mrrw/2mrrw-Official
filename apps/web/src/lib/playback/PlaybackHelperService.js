@@ -38,6 +38,8 @@ import {
 import {
   endStreamAnalytics,
   fetchLibraryStream,
+  fetchLibraryStreamForTrack,
+  streamIdentityForTrack,
   isLibraryStreamSrc,
   parseStreamSlugFromSrc,
   parseStreamTrackSlugFromSrc,
@@ -67,6 +69,8 @@ import { evictOverflowingCaches } from "@/lib/playback/playback-cache-manager";
 import { nextQueueIndex } from "./queue-order";
 import { bufferedAhead, canPreloadAudio } from "@/lib/audio/playback-buffer";
 import { isHlsJsActive } from "@/lib/audio/HLSEngine";
+import { withRecoveryDeadline } from "./recovery-deadline";
+import { captureRecoveryOperation, confirmRecoveryPlayback } from "./recovery-operation";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 import {
@@ -1226,48 +1230,6 @@ export function createPlaybackHelpers(initialDeps) {
 
         recordAudioContextState(engine.ctx, "initWebAudio");
 
-        // Bluetooth / headphone reconnect recovery.
-        engine.registerContextRunningCallback(() => {
-          const el = self._deps.audioRef.current;
-          const s = self._deps.stateRef.current;
-          // Resume if audio was interrupted by the OS (phone call, Siri, system event) —
-          // not just when isPlaying is true, because onPause already set isPlaying:false.
-          // playbackIntentBeforeHideRef stays true through the call; osInterrupted is set
-          // by onPause specifically for this case.
-          const hasIntent =
-            s.isPlaying ||
-            s.osInterrupted ||
-            self._deps.playbackIntentBeforeHideRef.current;
-          const userStopped =
-            self._deps.userIntentPausedRef.current || self._deps.userPausedRef.current;
-          if (!hasIntent || userStopped || !el || !el.paused) return;
-          // 150 ms grace — let the OS fully stabilize the audio route before play().
-          setTimeout(() => {
-            const current = self._deps.stateRef.current;
-            const elem = self._deps.audioRef.current;
-            const stillHasIntent =
-              current.isPlaying ||
-              current.osInterrupted ||
-              self._deps.playbackIntentBeforeHideRef.current;
-            const stillUserStopped =
-              self._deps.userIntentPausedRef.current || self._deps.userPausedRef.current;
-            if (!stillHasIntent || stillUserStopped || !elem || !elem.paused) return;
-            void playAudioIfNotPaused(elem, true, {
-              command: PLAYBACK_COMMANDS.RECOVER,
-              requestId: self._deps.activeCommandRef.current?.requestId || null,
-              state: current,
-              context: { source: "audio_context_reconnect" },
-              effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
-              mediaIdentity: current.currentTrack?.id ?? current.currentTrack?.slug ?? null,
-            }).then((played) => {
-              if (played) return;
-              void playbackStateMachine.transition(
-                PLAYBACK_ORCHESTRATION_EVENTS.RECOVERY_REQUESTED,
-                { reason: "audio_context_reconnect_stall", resumeAfter: true }
-              );
-            });
-          }, 150);
-        });
       } catch (err) {
         console.warn(
           "[AUDIO] Web Audio graph init failed, routing direct:",
@@ -1312,60 +1274,69 @@ export function createPlaybackHelpers(initialDeps) {
       }
     },
 
-    async attemptLightweightPlaybackResume(source, effectContext = {}) {
-      const audio = self._deps.audioRef.current;
-      const track = self._deps.stateRef.current.currentTrack;
-      if (
-        !audio ||
-        !track ||
-        self._deps.userPausedRef.current ||
-        self._deps.userIntentPausedRef.current
-      )
-        return false;
-      if (!hasIntactPlaybackTransport(audio, track)) return false;
-
-      self._deps.internalPlaybackAuthorityRef.current = true;
-      try {
-        self.initWebAudio();
-        await resumeWebAudioContextIfSuspended(self._deps.audioCtxRef);
-        recordAudioContextState(
-          self._deps.audioCtxRef.current,
-          `lightweightResume:${source}`
-        );
-        if (!(await ensureWebAudioRunning(self._deps.audioCtxRef))) {
-          return false;
-        }
-
-        if (track?.metadata?.access?.previewOnly && audio.currentTime >= PREVIEW_HARD_CAP_SEC) {
-          audio.currentTime = 0;
-        }
-
-        if (audio.paused) {
-          self._deps.skipPauseInterruptionRef.current = true;
-          await playAudioIfNotPaused(audio, true, {
+    attemptLightweightPlaybackResume(source, effectContext = {}) {
+      const operation = captureRecoveryOperation(self._deps);
+      const { audio, track } = operation;
+      let active = true;
+      const isCurrent = () => active && operation.isCurrent();
+      if (!audio || !track || !isCurrent() || !hasIntactPlaybackTransport(audio, track) || audio.error) {
+        return Promise.resolve(false);
+      }
+      // Coalesce callers (route, lifecycle, watchdog) against the same owner.
+      if (self._lightweightResume) {
+        return self._lightweightResume.isCurrent() ? self._lightweightResume.promise : Promise.resolve(false);
+      }
+      if (self._deps.recoveryVerificationRef?.current) return Promise.resolve(false);
+      if (track.metadata?.access?.previewOnly && audio.currentTime >= PREVIEW_HARD_CAP_SEC) return Promise.resolve(false);
+      const run = async () => {
+        try {
+          // The graph already exists during a route change. Initialisation is
+          // only for the existing direct-output/first-unlock fallback.
+          self.initWebAudio();
+          await withRecoveryDeadline(resumeWebAudioContextIfSuspended(self._deps.audioCtxRef, source), {
+            onTimeout: () => { active = false; },
+          });
+          if (!isCurrent() || (self._deps.audioCtxRef.current && self._deps.audioCtxRef.current.state !== "running")) return false;
+          if (!isCurrent()) return false;
+          const played = await withRecoveryDeadline(playAudioIfNotPaused(audio, true, {
             command: PLAYBACK_COMMANDS.RECOVER,
             requestId: self._deps.activeCommandRef.current?.requestId || null,
-            state: self._deps.stateRef.current,
-            context: { source, lightweight: true },
-            effectAuthorityMode:
-              effectContext.effectAuthorityMode ?? PhysicalEffectAuthorityMode.CORE_CURRENT,
+            state: self._deps.stateRef.current, context: { source, lightweight: true },
+            effectAuthorityMode: effectContext.effectAuthorityMode ?? PhysicalEffectAuthorityMode.CORE_CURRENT,
             effectGuardRequired: effectContext.effectGuardRequired === true,
             effectAuthority: effectContext.effectAuthority ?? null,
             canApplyEffect: effectContext.canApplyEffect,
-            mediaIdentity:
-              effectContext.mediaIdentity ?? track.id ?? track.slug ?? null,
-          });
+            mediaIdentity: effectContext.mediaIdentity ?? track.id ?? track.slug ?? null,
+            isCurrent,
+            onStalePlay: () => operation.cancelStalePlay({ abandoned: !active && self._lastResumeOperation === pending }),
+          }), { onTimeout: () => {
+            if (isCurrent()) {
+              self._deps.skipPauseInterruptionRef.current = true;
+              audio.pause();
+            }
+            active = false;
+          } });
+          if (!played || !isCurrent()) return false;
+          const confirmed = await confirmRecoveryPlayback(audio, self._deps.audioCtxRef.current, { isCurrent });
+          if (!confirmed || !isCurrent() || audio.paused || audio.ended) return false;
+          self.patchState({ isPlaying: true, playbackState: "playing", isBuffering: false,
+            playbackNetworkState: "playing", osInterrupted: false, error: null });
+          playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.PLAY_SUCCESS);
+          return true;
+        } catch {
+          return false;
         }
-
-        updateAudibilitySample(audio, self._deps.audibilitySampleRef);
-        const params = self.getAudibilityParams();
-        if (isAudioActuallyAudible(params)) return true;
-        return !audio.paused && !audio.ended && audio.readyState >= 2;
-      } catch {
-        return false;
-      } finally {
-        self._deps.internalPlaybackAuthorityRef.current = false;
-      }
+      };
+      const pending = { isCurrent, promise: null };
+      self._lightweightResume = pending;
+      self._lastResumeOperation = pending;
+      if (self._deps.recoveryVerificationRef) self._deps.recoveryVerificationRef.current = pending;
+      pending.promise = run().finally(() => {
+        active = false;
+        if (self._lightweightResume === pending) self._lightweightResume = null;
+        if (self._deps.recoveryVerificationRef?.current === pending) self._deps.recoveryVerificationRef.current = null;
+      });
+      return pending.promise;
     },
 
     // ─── CS Mode / Stream ────────────────────────────────────────────────────
@@ -1391,17 +1362,14 @@ export function createPlaybackHelpers(initialDeps) {
     },
 
     async resolveLibraryStreamForTrack(track, { force = false, signal } = {}) {
-      const slug = parseStreamSlugFromSrc(track.src) || track.slug;
-      const trackSlug =
-        track.trackSlug ||
-        track.metadata?.trackSlug ||
-        track.metadata?.track_slug ||
-        parseStreamTrackSlugFromSrc(track.src) ||
-        null;
-      if (!slug || !isLibraryStreamSrc(track.src)) return { track, meta: null };
-
+      if (!isLibraryStreamSrc(track.src)) return { track, meta: null };
+      const { slug, trackSlug } = streamIdentityForTrack(track);
+      const operation = captureRecoveryOperation(self._deps, { respectPause: false });
       self.patchState({ playbackNetworkState: "loading_stream" });
-      const data = await fetchLibraryStream(slug, { force, signal, trackSlug });
+      const data = await fetchLibraryStreamForTrack(track, { force, signal });
+      if (signal?.aborted || !operation.isCurrent()) {
+        throw Object.assign(new Error("Superseded stream resolution"), { code: "AUDIO_SRC_ABORTED" });
+      }
       if (data?.contentType && !AUDIO_CONTENT_TYPE_RE.test(data.contentType)) {
         const err = new Error("stream_invalid_content_type");
         err.code = "INVALID_STREAM_CONTENT_TYPE";
@@ -1410,7 +1378,7 @@ export function createPlaybackHelpers(initialDeps) {
         throw err;
       }
       const meta = {
-        slug,
+        slug, trackSlug,
         url: data.url,
         fetchedAt: Date.now(),
         expiresIn: data.expiresIn || 3600,

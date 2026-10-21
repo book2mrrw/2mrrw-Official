@@ -2,6 +2,7 @@
 
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
 import { logStreamLifecycle } from "@/lib/diagnostics/playback-trace";
+import { withRecoveryDeadline } from "./recovery-deadline";
 import { MARKS, perfMark } from "@/lib/dev/performanceMarks";
 
 export const LIBRARY_STREAM_PATH = "/api/library/stream";
@@ -151,11 +152,41 @@ export function streamUrlNeedsRefresh(meta, now = Date.now()) {
   return expiresAt - now <= STREAM_REFRESH_BEFORE_EXPIRY_MS;
 }
 
+/** Preserve release context and the exact recording on every recovery caller. */
+export function streamIdentityForTrack(track) {
+  const slug = parseStreamSlugFromSrc(track?.src) || track?.slug;
+  const trackSlug = track?.trackSlug || track?.metadata?.trackSlug ||
+    track?.metadata?.track_slug || parseStreamTrackSlugFromSrc(track?.src) || null;
+  if (!slug || ((track?.albumSlug || track?.metadata?.albumSlug) && !trackSlug)) {
+    throw createStreamClientError("Recording identity unavailable", { code: "STREAM_TRACK_IDENTITY_MISSING" });
+  }
+  return { slug, trackSlug };
+}
+
+export function fetchLibraryStreamForTrack(track, options = {}) {
+  const { slug, trackSlug } = streamIdentityForTrack(track);
+  return fetchLibraryStream(slug, { ...options, trackSlug });
+}
+
 /**
  * Fetch signed stream URL JSON from library/stream.
  * @returns {Promise<{ url: string, expiresIn: number, streamEventId?: string, sessionId?: string }>}
  */
-export async function fetchLibraryStream(
+export async function fetchLibraryStream(slug, options = {}) {
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (options.signal?.aborted) controller.abort();
+  options.signal?.addEventListener("abort", abort, { once: true });
+  try {
+    return await withRecoveryDeadline(fetchLibraryStreamRequest(slug, { ...options, signal: controller.signal }), {
+      timeoutMs: 12000, onTimeout: abort,
+    });
+  } finally {
+    options.signal?.removeEventListener("abort", abort);
+  }
+}
+
+async function fetchLibraryStreamRequest(
   slug,
   { force = false, sessionId = null, trackSlug = null, signal = undefined } = {}
 ) {
@@ -269,6 +300,17 @@ export async function fetchLibraryStream(
     throw createStreamClientError("signed_stream_missing_url", {
       code: "SIGNED_STREAM_MISSING_URL",
       slug,
+    });
+  }
+  // The current server returns an authenticated proxy URL containing both
+  // identities. An opaque legacy CDN response needs an explicit identity echo
+  // for an album recording; never infer it from an object filename.
+  const responseSlug = isLibraryStreamSrc(body.url) ? parseStreamSlugFromSrc(body.url) : body.slug;
+  const responseTrackSlug = isLibraryStreamSrc(body.url) ? parseStreamTrackSlugFromSrc(body.url) : body.trackSlug;
+  if ((responseSlug && responseSlug !== slug) ||
+      (trackSlug && (responseSlug !== slug || responseTrackSlug !== trackSlug))) {
+    throw createStreamClientError("Stream response does not match requested recording", {
+      code: "STREAM_IDENTITY_MISMATCH", slug, trackSlug,
     });
   }
   perfMark(MARKS.PLAYBACK_RESOLVER_END);

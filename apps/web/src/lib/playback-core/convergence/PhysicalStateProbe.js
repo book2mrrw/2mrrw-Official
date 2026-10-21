@@ -43,7 +43,10 @@ export function createRuntimePhysicalProbe(getRuntime) {
 
       let transport = TransportDisposition.IDLE;
       if (mediaIdentity) {
-        transport = state?.isPlaying
+        const context = refs.audioCtxRef?.current;
+        const mediaActive = el && !el.paused && !el.ended && !el.error &&
+          (!context || context.state === "running");
+        transport = state?.isPlaying && mediaActive
           ? TransportDisposition.PLAYING
           : TransportDisposition.PAUSED;
       }

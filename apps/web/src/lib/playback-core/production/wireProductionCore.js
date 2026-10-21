@@ -99,6 +99,7 @@ export function buildWiredCore({
     logger: core.logger,
     effectAuthority: core._effectAuthority,
     liveScope,
+    onFailure: (failure) => getAudioEngineRuntime().refs.recoveryFailureRef?.current?.(failure),
   });
 
   // Synchronous injection — Core is READY before this function returns.

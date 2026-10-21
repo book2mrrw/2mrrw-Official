@@ -7,7 +7,7 @@ import {
 import { PLAYBACK_COMMANDS } from "@/lib/playback/playback-commands";
 import {
   clearLibraryStreamSession,
-  fetchLibraryStream,
+  fetchLibraryStreamForTrack,
   isLibraryStreamRedirectSrc,
   parseStreamSlugFromSrc,
   streamUrlNeedsRefresh,
@@ -24,6 +24,7 @@ import { logPlayback } from "@/lib/observability/client-log";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import { sendControlSystemPlaybackEvent } from "@/lib/control-system/playback";
 import { clearPersistedMediaSessionTrack } from "@/lib/media-session-artwork";
+import { captureRecoveryOperation } from "./recovery-operation";
 import { PhysicalEffectAuthorityMode } from "@/lib/audio/physical-effect-authority";
 
 /**
@@ -165,9 +166,10 @@ export function attachTransportCommands(self) {
       const slug = meta?.slug || parseStreamSlugFromSrc(track.src) || track.slug;
       if (slug && meta && streamUrlNeedsRefresh(meta) && !isLibraryStreamRedirectSrc(meta.url)) {
         try {
+          const operation = captureRecoveryOperation(self._deps);
           const savedPosition = audio.currentTime || 0;
-          const data = await fetchLibraryStream(slug, { force: false });
-          if (stateRef.current.currentTrack?.slug !== track.slug) return false;
+          const data = await fetchLibraryStreamForTrack(track, { force: false, signal: activeStreamAbortRef.current?.signal });
+          if (!operation.isCurrent()) return false;
           streamMetaRef.current = {
             ...meta,
             url: data.url,
@@ -178,7 +180,7 @@ export function attachTransportCommands(self) {
           };
           // audio is paused here — audio.load() fires no pause event, no stutter
           await waitAudioSrcReady(audio, data.url, { signal: activeStreamAbortRef.current?.signal });
-          if (stateRef.current.currentTrack?.slug !== track.slug) return false;
+          if (!operation.isCurrent()) return false;
           if (savedPosition > 0) {
             const seekToSaved = () => {
               if (savedPosition > 0 && isFinite(audio.duration)) {

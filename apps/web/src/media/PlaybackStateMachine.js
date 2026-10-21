@@ -251,6 +251,7 @@ class PlaybackStateMachine {
   _setState(next) {
     if (this.state === next) return;
     this.state = next;
+    this._stateVersion = (this._stateVersion || 0) + 1;
     this._emit();
   }
 
@@ -266,9 +267,7 @@ class PlaybackStateMachine {
     switch (event) {
       // ── Track load ──────────────────────────────────────────────────────────
       case E.LOAD_START:
-        if (this.state !== S.RECOVERING) {
-          this._setState(S.LOADING);
-        }
+        this._setState(S.LOADING);
         return true;
 
       case E.LOAD_END:
@@ -284,9 +283,7 @@ class PlaybackStateMachine {
         return true;
 
       case E.PLAY_PAUSE:
-        if (this.state !== S.RECOVERING) {
-          this._setState(S.PAUSED);
-        }
+        this._setState(S.PAUSED);
         return true;
 
       // ── Buffering (mid-playback stall) ──────────────────────────────────────
@@ -370,6 +367,7 @@ class PlaybackStateMachine {
 
     this._setState(PLAYBACK_ORCHESTRATION_STATES.RECOVERING);
 
+    const recoveryVersion = this._stateVersion;
     const executor = this.recoverExecutor;
     if (!executor) {
       this.transition(PLAYBACK_ORCHESTRATION_EVENTS.RECOVER_FAILED, { reason });
@@ -379,6 +377,9 @@ class PlaybackStateMachine {
     this.recoveryPromise = (async () => {
       try {
         const ok = await executor(reason, { resumeAfter });
+        // A later pause/load/play owns orchestration; stale recovery cannot
+        // overwrite it, even when its old promise settles afterwards.
+        if (this._stateVersion !== recoveryVersion) return ok;
         if (ok) {
           this.transition(PLAYBACK_ORCHESTRATION_EVENTS.RECOVER_COMPLETE, {
             playing: resumeAfter,
@@ -390,6 +391,7 @@ class PlaybackStateMachine {
         }
         return ok;
       } catch {
+        if (this._stateVersion !== recoveryVersion) return false;
         this.transition(PLAYBACK_ORCHESTRATION_EVENTS.RECOVER_FAILED, { reason });
         return false;
       } finally {

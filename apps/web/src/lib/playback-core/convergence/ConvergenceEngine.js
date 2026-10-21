@@ -50,6 +50,8 @@ const POSITION_TOLERANCE_S = 0.75;
 
 /** Hard ceiling on corrective steps per convergence pass. */
 const MAX_STEPS_PER_PASS = 8;
+export const MAX_CONVERGENCE_ATTEMPTS = 3;
+export const CONVERGENCE_RETRY_DELAY_MS = 250;
 
 export const ConvergenceStep = Object.freeze({
   LOAD:   "LOAD",
@@ -65,6 +67,10 @@ export class ConvergenceEngine {
   #logger;
   #liveScope;
   #effectAuthority;
+  #onFailure;
+  #attempts = new Map();
+  #retryAt = 0;
+  #failure = null;
 
   #inFlight = 0;
   #converging = false;
@@ -82,7 +88,7 @@ export class ConvergenceEngine {
    * @param {import('../diagnostics/CoreLogger.js').CoreLogger} [deps.logger]
    * @param {Set<string>} [deps.liveScope]
    */
-  constructor({ desiredStore, adapter, probe, logger, effectAuthority, liveScope = CoreLiveCommandScope }) {
+  constructor({ desiredStore, adapter, probe, logger, effectAuthority, liveScope = CoreLiveCommandScope, onFailure }) {
     if (!desiredStore) throw new TypeError("[ConvergenceEngine] desiredStore is required");
     if (!adapter)      throw new TypeError("[ConvergenceEngine] adapter is required");
     if (!effectAuthority) throw new TypeError("[ConvergenceEngine] effectAuthority is required");
@@ -92,6 +98,7 @@ export class ConvergenceEngine {
     this.#logger    = logger;
     this.#liveScope = liveScope;
     this.#effectAuthority = effectAuthority;
+    this.#onFailure = onFailure;
   }
 
   /** Current desired revision — convenience for diagnostics and tests. */
@@ -100,6 +107,7 @@ export class ConvergenceEngine {
   get isConverging() { return this.#converging; }
   /** Number of dispatches that have not yet settled. */
   get inFlight() { return this.#inFlight; }
+  get failure() { return this.#failure; }
 
   // ─── Execution engine surface (called by CommandGateway) ────────────────────
 
@@ -126,6 +134,13 @@ export class ConvergenceEngine {
     // including for emergency PAUSE. Bypassing the queue never bypasses authority.
     const { changed, state } = this.#store.apply(intent);
     if (!changed) return null;
+    // A new authoritative intent gets a fresh budget and synchronous first
+    // dispatch. Backoff must never consume the user's gesture activation.
+    this.#attempts.clear();
+    this.#retryAt = 0;
+    this.#failure = null;
+    if (this.#pendingTimer) clearTimeout(this.#pendingTimer);
+    this.#pendingTimer = null;
 
     // PHASE 1 — synchronous intent-time dispatch. Preserves iOS gesture, the
     // emergency PAUSE lane, and serial-queue ordering.
@@ -146,7 +161,7 @@ export class ConvergenceEngine {
    * for callers that need to await settlement.
    */
   async converge(reason = "manual") {
-    if (this.#disposed) return;
+    if (this.#disposed || this.#inFlight > 0) return;
     if (this.#converging) {
       this.#rerunRequested = true;
       return;
@@ -160,6 +175,9 @@ export class ConvergenceEngine {
         const step     = this.#planStep(physical, desired);
 
         if (!step) {
+          this.#attempts.clear();
+          this.#retryAt = 0;
+          this.#failure = null;
           this.#logger?.emit({
             type: "CONVERGENCE_SETTLED", revision, reason,
             mediaIdentity: physical.mediaIdentity, transport: physical.transport,
@@ -167,6 +185,18 @@ export class ConvergenceEngine {
           break;
         }
 
+        if (this.#failure?.revision === revision) break;
+        if (Date.now() < this.#retryAt) {
+          this.#scheduleConverge("backoff", this.#retryAt - Date.now());
+          break;
+        }
+        if ((this.#attempts.get(step.kind) || 0) >= MAX_CONVERGENCE_ATTEMPTS) {
+          this.#failure = Object.freeze({ revision, mediaIdentity: desired.requestedMediaIdentity,
+            step: step.kind, attempts: MAX_CONVERGENCE_ATTEMPTS, code: "PLAYBACK_RECOVERY_EXHAUSTED" });
+          this.#logger?.emit({ type: "CONVERGENCE_FAILED", ...this.#failure });
+          try { this.#onFailure?.(this.#failure); } catch { /* diagnostics cannot restart recovery */ }
+          break;
+        }
         this.#logger?.emit({
           type: "CONVERGENCE_STEP", revision, reason, step: step.kind,
           from: `${physical.mediaIdentity}/${physical.transport}@${physical.position}`,
@@ -178,6 +208,12 @@ export class ConvergenceEngine {
         // INV-DESIRED-3: if the user changed their mind mid-step, discard the
         // plan and re-plan against the newer revision on the next iteration.
         if (this.#store.revision !== revision) continue;
+        const remaining = this.#planStep(this.#probe.snapshot(), this.#store.current);
+        if (remaining?.kind === step.kind) {
+          this.#retryAt = Date.now() + CONVERGENCE_RETRY_DELAY_MS * (this.#attempts.get(step.kind) || 1);
+          this.#scheduleConverge("nonprogress", this.#retryAt - Date.now());
+          break;
+        }
       }
     } finally {
       this.#converging = false;
@@ -242,14 +278,24 @@ export class ConvergenceEngine {
       return Promise.resolve(null);
     }
 
-    if (step.kind === ConvergenceStep.SEEK) this.#seekSettledRevision = revisionAtPlan;
+    this.#attempts.set(step.kind, (this.#attempts.get(step.kind) || 0) + 1);
 
     this.#inFlight += 1;
     const authority = this.#effectAuthority.capture({
       desiredRevision: revisionAtPlan,
       mediaIdentity: this.#store.current.requestedMediaIdentity,
     });
-    const settled = Promise.resolve(this.#adapter.dispatchStep(step, authority))
+    let dispatched;
+    try { dispatched = this.#adapter.dispatchStep(step, authority); }
+    catch (error) { dispatched = Promise.reject(error); }
+    const settled = Promise.resolve(dispatched)
+      .then((result) => {
+        if (step.kind === ConvergenceStep.SEEK && this.#store.revision === revisionAtPlan &&
+            Math.abs(this.#probe.snapshot().position - step.position) <= POSITION_TOLERANCE_S) {
+          this.#seekSettledRevision = revisionAtPlan;
+        }
+        return result;
+      })
       .catch((err) => {
         this.#logger?.emit({
           type: "CONVERGENCE_STEP_ERROR", step: step.kind, error: err?.message ?? String(err),
@@ -258,18 +304,18 @@ export class ConvergenceEngine {
       })
       .finally(() => {
         this.#inFlight -= 1;
-        if (this.#inFlight === 0) this.#scheduleConverge(`${origin}-settled`);
+        if (this.#inFlight === 0 && !this.#converging) this.#scheduleConverge(`${origin}-settled`);
       });
     return settled;
   }
 
   /** Queue a convergence pass on a macrotask so bursts coalesce into one pass. */
-  #scheduleConverge(reason) {
-    if (this.#disposed || this.#pendingTimer) return;
+  #scheduleConverge(reason, delay = 0) {
+    if (this.#disposed || this.#pendingTimer || this.#failure?.revision === this.#store.revision) return;
     this.#pendingTimer = setTimeout(() => {
       this.#pendingTimer = null;
       void this.converge(reason);
-    }, 0);
+    }, delay);
     // Never hold the process open purely for a convergence tick.
     this.#pendingTimer?.unref?.();
   }

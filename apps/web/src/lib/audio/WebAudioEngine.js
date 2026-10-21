@@ -281,6 +281,9 @@ export class WebAudioEngine extends AudioEngineBase {
 
   _attachStateChange() {
     if (!this.ctx) return;
+    // Some browsers expose a sink change without suspending the context.
+    // This is a reconciliation hint only, never proof of physical routing.
+    this.ctx.addEventListener?.("sinkchange", () => this._onContextRunning?.());
     this.ctx.onstatechange = () => {
       const state = this.ctx?.state;
       if (state === "suspended" || state === "interrupted") {

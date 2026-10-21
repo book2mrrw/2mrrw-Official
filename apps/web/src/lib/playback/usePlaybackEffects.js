@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect } from "react";
+import { captureRecoveryOperation } from "./recovery-operation";
+import { createOutputRouteRecovery } from "./output-route-recovery";
 
 // Tracks which AudioContext objects already have a one-shot OS_SUSPENDED recovery
 // listener armed so the watchdog never stacks duplicate statechange handlers.
@@ -54,7 +56,7 @@ import {
 } from "@/lib/audio/audio-element-utils";
 import { reconcileTrackAccess } from "@/lib/playback/access-reconciliation";
 import {
-  fetchLibraryStream,
+  fetchLibraryStreamForTrack,
   streamUrlNeedsRefresh,
   isLibraryStreamRedirectSrc,
   parseStreamSlugFromSrc,
@@ -107,7 +109,7 @@ export function usePlaybackEffects({
   const {
     audioRef, audioCtxRef, stateRef, queueRef, queueIndexRef,
     commandHandlersRef, dispatchPlaybackCommandRef, initWebAudioRef,
-    stateGetterRef, tracePlaybackRef, analyserRef, webAudioAvailableRef,
+    stateGetterRef, recoveryFailureRef, tracePlaybackRef, analyserRef, webAudioAvailableRef,
     audibilitySampleRef, hlsEngineRef,
     repeatModeRef, shuffleRef, csModeRef, continuityFrozenRef,
     sessionRestoredRef, sessionSaveTimerRef, pendingSessionUpgradeRef,
@@ -512,6 +514,8 @@ export function usePlaybackEffects({
     const handlers = createPlaybackEventHandlers({
       audio,
       // Refs
+      commandRequestIdRef: refs.commandRequestIdRef, hlsEngineRef: refs.hlsEngineRef,
+      recoveryVerificationRef: refs.recoveryVerificationRef, isRecoveringRef,
       stateRef, audioRef, audioCtxRef, mainGainRef: refs.mainGainRef,
       trackGainRef: refs.trackGainRef,
       userGainRef: refs.userGainRef, activeCommandRef, activeStreamAbortRef,
@@ -538,6 +542,7 @@ export function usePlaybackEffects({
       updateMediaSession, finalizeStreamSession, recordLocalListening,
       tracePlayback, emitPhase21AudibleSnapshot, emitBackgroundPlaybackDiagnostics,
       scheduleNextTrackPreload, advanceShuffleOrder,
+      attemptLightweightPlaybackResume,
       requestAuthoritativePlay: publicApi.requestAuthoritativePlay,
       completeQueuePlayback: publicApi.completeQueuePlayback,
       // SM UI channel write path
@@ -578,24 +583,22 @@ export function usePlaybackEffects({
     };
     window.addEventListener("online", onOnline);
 
-    let onDeviceChange = null;
-    if (navigator.mediaDevices?.addEventListener) {
-      onDeviceChange = async () => {
-        try {
-          if (!navigator.mediaDevices?.enumerateDevices) return;
-          await navigator.mediaDevices.enumerateDevices();
-          logPlaybackResilience("audio-route-change", {
-            source: "AudioContext",
-            code: "DEVICE_CHANGE",
-            slug: stateRef.current.currentTrack?.slug ?? null,
-            isPlaying: stateRef.current.isPlaying,
-          });
-        } catch {}
-      };
-      navigator.mediaDevices.addEventListener("devicechange", onDeviceChange);
-    }
+    const routeRecovery = createOutputRouteRecovery({ refs,
+      resume: (reason) => attemptLightweightPlaybackResume(reason, {
+        effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
+      }), patchState });
+    audioEngine.registerContextRunningCallback(() => routeRecovery.request("context_output_change"));
+    const onDeviceChange = () => {
+      logPlaybackResilience("audio-route-change", { source: "AudioContext", code: "DEVICE_CHANGE",
+        slug: stateRef.current.currentTrack?.slug ?? null });
+      // enumerateDevices can be unavailable/denied without invalidating this hint.
+      routeRecovery.request("device_change");
+    };
+    navigator.mediaDevices?.addEventListener?.("devicechange", onDeviceChange);
 
     return () => {
+      routeRecovery.dispose();
+      audioEngine.registerContextRunningCallback(null);
       detachPlaybackDevTelemetry();
       window.removeEventListener("online", onOnline);
       engineUnsubs.forEach((unsub) => unsub());
@@ -614,13 +617,25 @@ export function usePlaybackEffects({
       resetPlaybackTelemetry();
     };
   }, [
-    publicApi.completeQueuePlayback,
+    publicApi.completeQueuePlayback, attemptLightweightPlaybackResume, isRecoveringRef,
     patchState, updateMediaSession, syncPositionState, recordLocalListening,
     finalizeStreamSession, startPositionSaveTimer, stopPositionSaveTimer,
     startProgressRaf, stopProgressRaf, startKeepAlivePing, stopKeepAlivePing,
     startStallRecovery, stopStallRecovery, tracePlayback, readIsAudiblyPlaying,
     emitBackgroundPlaybackDiagnostics, emitPhase21AudibleSnapshot,
   ]);
+
+  useEffect(() => {
+    const failureRef = recoveryFailureRef;
+    failureRef.current = (failure) => {
+      const track = stateRef.current.currentTrack;
+      if ((track?.id ?? track?.trackId ?? track?.slug) !== failure.mediaIdentity) return;
+      patchState({ isPlaying: false, playbackState: "paused", isBuffering: false,
+        playbackNetworkState: "error_stream", streamRetryable: true,
+        error: "Playback could not recover — tap play to retry." });
+    };
+    return () => { failureRef.current = null; };
+  }, [patchState, stateRef, recoveryFailureRef]);
 
   // ─── Effect 12–15: Stable Ref Syncs ─────────────────────────────────────────
   useEffect(() => {
@@ -665,7 +680,7 @@ export function usePlaybackEffects({
     const intervalId = setInterval(() => {
       if (!stateRef.current.hasStarted) return;
       if (!stateRef.current.isPlaying && !playbackIntentBeforeHideRef.current) return;
-      if (isRecoveringRef.current) return;
+      if (isRecoveringRef.current || refs.recoveryVerificationRef.current) return;
       if (Date.now() < recoveryCooldownUntilRef.current) return;
       // Only fire recovery when audio is in the stable "playing" state but is actually
       // paused. Every other state (idle, loading, ready, recovering) represents a
@@ -1034,9 +1049,10 @@ export function usePlaybackEffects({
         const meta = streamMetaRef.current;
         const slug = meta?.slug || parseStreamSlugFromSrc(track.src) || track.slug;
         if (slug && meta && streamUrlNeedsRefresh(meta) && !isLibraryStreamRedirectSrc(meta.url)) {
-          void fetchLibraryStream(slug, { force: false })
+          const operation = captureRecoveryOperation(refs, { respectPause: false });
+          void fetchLibraryStreamForTrack(track, { force: false })
             .then((data) => {
-              if (streamMetaRef.current?.slug !== slug) return;
+              if (!operation.isCurrent() || streamMetaRef.current !== meta) return;
               streamMetaRef.current = {
                 ...meta,
                 url: data.url,

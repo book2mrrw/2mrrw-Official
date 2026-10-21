@@ -21,6 +21,7 @@ export function usePlaybackRefs() {
     audioRef,
     queueRef,
     queueIndexRef,
+    commandRequestIdRef,
     commandExecutionDepthRef,
     activeCommandRef,
     queueWatchdogRef,
@@ -39,6 +40,8 @@ export function usePlaybackRefs() {
     dispatchPlaybackCommandRef,
     initWebAudioRef,
     stateGetterRef,
+    recoveryFailureRef,
+    recoveryVerificationRef,
     tracePlaybackRef,
     commandHandlersRef,
     hlsEngineRef,
@@ -177,12 +180,12 @@ export function usePlaybackRefs() {
 
   return {
     // Engine refs
-    audioRef, queueRef, queueIndexRef, commandExecutionDepthRef, activeCommandRef,
+    audioRef, queueRef, queueIndexRef, commandRequestIdRef, commandExecutionDepthRef, activeCommandRef,
     queueWatchdogRef, activeStreamAbortRef, audioCtxRef, sourceRef, analyserRef,
     stereoPannerRef, bassFilterRef, mainGainRef, userGainRef, limiterRef,
     mediaElementSourceElementRef,
     webAudioInitializedRef, webAudioAvailableRef, dispatchPlaybackCommandRef,
-    initWebAudioRef, stateGetterRef, tracePlaybackRef, commandHandlersRef, hlsEngineRef,
+    initWebAudioRef, stateGetterRef, recoveryFailureRef, recoveryVerificationRef, tracePlaybackRef, commandHandlersRef, hlsEngineRef,
     // SM proxy
     stateRef,
     // Services

@@ -9,7 +9,6 @@ import {
   parseStreamSlugFromSrc,
 } from "@/lib/playback/stream-client";
 import {
-  clampRestorePosition,
   waitAudioSrcReady,
   playAudioIfNotPaused,
 } from "@/lib/audio/audio-element-utils";
@@ -17,13 +16,6 @@ import {
   resumeWebAudioContextIfSuspended,
   ensureWebAudioRunning,
 } from "@/lib/audio/web-audio-context-utils";
-import {
-  AUDIBILITY_RECOVERY_MAX_ATTEMPTS,
-  AUDIBILITY_RECOVERY_RETRY_DELAY_MS,
-  resetAudibilitySample,
-  teardownWebAudioGraph,
-  waitForPlaybackAudibility,
-} from "@/lib/playback/audibility";
 import { isEntitledFullPlaybackTrack } from "@/lib/playback/playback-track-utils";
 import { logPlayback } from "@/lib/observability/client-log";
 import { logPlaybackResilience } from "@/lib/diagnostics/state-churn-log";
@@ -41,9 +33,12 @@ import {
 } from "@/lib/diagnostics/playback-trace";
 import { reportPlaybackDiagnostic } from "@/lib/playback/playback-diagnostics";
 import {
+  evaluatePlaybackTransportHealth,
   isGenuineTransportFailureReason,
   isLifecycleInterruptReason,
 } from "@/lib/playback/playback-transport-utils";
+
+import { captureRecoveryOperation } from "./recovery-operation";
 
 const RECOVERY_COOLDOWN_MS = 6000;
 const LIFECYCLE_RECOVERY_LOCK_MS = 4000;
@@ -55,210 +50,78 @@ const BFCACHE_RECOVERY_TIMEOUT_MS = 5000;
  */
 export function attachRecoveryCommands(self) {
   self.recoverAudioHard = async function recoverAudioHard(reason, { resumeAfter = false } = {}) {
-    const {
-      patchState, initWebAudio, resolveLibraryStreamForTrack,
-      stopKeepAlivePing, stopPositionSaveTimer, stopProgressRaf, stopStallRecovery,
-      tracePlayback, attemptLightweightPlaybackResume,
-      armLifecycleRecoverySuppression, blockRecoveryForLifecycleOsSuspended,
-      isLifecycleRecoverySuppressed,
-      stateRef, audioRef, audioCtxRef,
-      mainGainRef, trackGainRef, userGainRef,
-      activeCommandRef, activeStreamAbortRef, streamMetaRef,
-      skipPauseInterruptionRef, sourceRef, analyserRef, stereoPannerRef, bassFilterRef,
-      webAudioInitializedRef, webAudioAvailableRef,
-      nextTrackPreloadRef, audibilitySampleRef,
-      isRecoveringRef, recoveryCooldownUntilRef, internalPlaybackAuthorityRef,
-    } = self._deps;
-
-    if (isRecoveringRef.current) return false;
-    if (Date.now() < recoveryCooldownUntilRef.current && reason !== "truth_violation") {
-      return false;
-    }
-    if (blockRecoveryForLifecycleOsSuspended("recoverAudioHard", reason)) {
-      return false;
-    }
-
-    const track = stateRef.current.currentTrack;
-    const shouldResume = resumeAfter && !stateRef.current.isPlaying === false;
-
-    tracePlayback("recoverAudioHard", "recoverAudioHard", {
-      reason,
-      resumeAfter,
-      slug: track?.slug ?? null,
-    });
+    const d = self._deps;
+    const { audioRef, stateRef, isRecoveringRef, recoveryCooldownUntilRef, patchState } = d;
+    if (isRecoveringRef.current || d.recoveryVerificationRef?.current ||
+        Date.now() < recoveryCooldownUntilRef.current) return false;
+    const operation = captureRecoveryOperation(d);
+    const { audio, track, isCurrent } = operation;
+    if (!audio || !track?.src || !isCurrent() || audio.ended) return false;
+    if (d.blockRecoveryForLifecycleOsSuspended("recoverAudioHard", reason)) return false;
 
     isRecoveringRef.current = true;
-    internalPlaybackAuthorityRef.current = true;
-
+    d.internalPlaybackAuthorityRef.current = true;
+    const position = audio.currentTime;
     try {
-      const audio = audioRef.current;
-      if (!audio) return false;
-
-      if (!attemptLightweightPlaybackResume) {
-        // no-op guard
-      }
-
-      stopProgressRaf();
-      stopPositionSaveTimer();
-      stopKeepAlivePing();
-      stopStallRecovery();
-
-      if (armLifecycleRecoverySuppression && isLifecycleRecoverySuppressed) {
-        // These are used later
-      }
-
-      teardownWebAudioGraph({
-        audioCtxRef,
-        sourceRef,
-        analyserRef,
-        stereoPannerRef,
-        bassFilterRef,
-        webAudioInitializedRef,
-        webAudioAvailableRef,
-        preserveMediaElementSource: true,
-      });
-
-      resetAudibilitySample(audibilitySampleRef);
-
-      patchState({
-        isPlaying: false,
-        playbackState: "recovering",
-        isBuffering: true,
-        playbackNetworkState: "recovering",
-        error: null,
-      });
-
-      if (!audio || !track?.src) return false;
-
-      initWebAudio();
-      await resumeWebAudioContextIfSuspended(audioCtxRef);
-      recordAudioContextState(audioCtxRef.current, `recoverAudioHard:${reason}`);
-
-      let src = track.src;
-      const streamSlug = parseStreamSlugFromSrc(src) || track.slug;
-      if (streamSlug && isLibraryStreamSrc(src) && isEntitledFullPlaybackTrack(track)) {
-        try {
-          const resolved = await resolveLibraryStreamForTrack(track, { force: true });
-          src = resolved.track?.src || src;
-        } catch (error) {
-          reportPlaybackDiagnostic({
-            level: "warn",
-            code: "RECOVER_STREAM_REFRESH_FAILED",
-            command: PLAYBACK_COMMANDS.RECOVER,
-            requestId: activeCommandRef.current?.requestId || null,
-            state: stateRef.current,
-            error,
-            context: { reason, slug: streamSlug },
+      d.tracePlayback("recoverAudioHard", "recoverAudioHard", { reason, resumeAfter, slug: track.slug });
+      // An output interruption is not a source failure. Retain the element,
+      // source, graph and playhead; only failed/detached transports need reload.
+      const transport = evaluatePlaybackTransportHealth(audio, track);
+      if (!transport.intact) {
+        patchState({ isPlaying: false, playbackState: "recovering", isBuffering: true, error: null });
+        let src = track.src;
+        if (isLibraryStreamSrc(src)) {
+          const resolved = await d.resolveLibraryStreamForTrack(track, {
+            force: true, signal: d.activeStreamAbortRef.current?.signal,
           });
+          if (!isCurrent()) return false;
+          src = resolved.track.src;
         }
+        if (!isCurrent()) return false;
+        d.skipPauseInterruptionRef.current = true;
+        await waitAudioSrcReady(audio, src, { signal: d.activeStreamAbortRef.current?.signal });
+        if (!isCurrent()) return false;
+        // resumeAfter is a boolean, never a saved position.
+        if (Number.isFinite(position) && position > 0) {
+          audio.currentTime = Number.isFinite(audio.duration) && audio.duration > 0
+            ? Math.min(position, Math.max(0, audio.duration - 0.05)) : position;
+        }
+        patchState({ currentTrack: { ...track, src }, currentTrackId: track.id || track.trackId || null });
       }
-
-      skipPauseInterruptionRef.current = true;
-      await waitAudioSrcReady(audio, src, { signal: activeStreamAbortRef.current?.signal });
-      if (resumeAfter > 0 && Number.isFinite(audio.duration) && audio.duration > 0) {
-        const safe = clampRestorePosition(resumeAfter, audio.duration);
-        if (safe != null) audio.currentTime = safe;
+      if (!isCurrent()) return false;
+      if (!resumeAfter) {
+        if (!audio.paused) return false;
+        patchState({ isPlaying: false, playbackState: "paused", isBuffering: false, playbackNetworkState: "idle" });
+        return true;
       }
-
-      patchState({
-        currentTrack: { ...track, src },
-        currentTrackId: track.id || track.trackId || null,
-        playbackState: "ready",
-        isBuffering: false,
-        playbackNetworkState: "idle",
-        hasStarted: true,
+      // Continuing intent comes from the recovery request + Core's physical
+      // effect authority, not isPlaying (which an interruption already cleared).
+      const recovered = await d.attemptLightweightPlaybackResume(reason, {
+        effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
       });
-
-      if (!(await ensureWebAudioRunning(audioCtxRef))) {
-        reportPlaybackDiagnostic({
-          level: "warn",
-          code: "RECOVER_AUDIO_CONTEXT_SUSPENDED",
-          command: PLAYBACK_COMMANDS.RECOVER,
-          requestId: activeCommandRef.current?.requestId || null,
-          state: stateRef.current,
-          context: { reason },
-        });
+      if (!isCurrent()) return false;
+      if (!recovered || audio.paused || audio.ended ||
+          (d.audioCtxRef.current && d.audioCtxRef.current.state !== "running")) {
+        patchState({ isPlaying: false, playbackState: "paused", isBuffering: false,
+          playbackNetworkState: "error_stream", streamRetryable: true,
+          error: "Playback interrupted — tap play to continue." });
         return false;
       }
-
-      if (shouldResume) {
-        const audibilityParams = {
-          audio,
-          webAudioContext: audioCtxRef.current,
-          sampleRef: audibilitySampleRef,
-        };
-        let audibleAfterResume = false;
-        for (let attempt = 0; attempt < AUDIBILITY_RECOVERY_MAX_ATTEMPTS; attempt++) {
-          if (attempt > 0) {
-            await new Promise((resolve) => {
-              setTimeout(resolve, AUDIBILITY_RECOVERY_RETRY_DELAY_MS);
-            });
-          }
-          await playAudioIfNotPaused(audio, true, {
-            command: PLAYBACK_COMMANDS.RECOVER,
-            requestId: activeCommandRef.current?.requestId || null,
-            state: stateRef.current,
-            context: { reason, hard: true, audibilityAttempt: attempt + 1 },
-            effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
-          });
-          audibleAfterResume = await waitForPlaybackAudibility(audibilityParams);
-          if (audibleAfterResume) break;
-          if (isPlaybackTraceEnabled()) {
-            logPlaybackEvent({
-              type: "recovery-audibility",
-              source: "recoverAudioHard",
-              extra: { reason, attempt: attempt + 1, maxAttempts: AUDIBILITY_RECOVERY_MAX_ATTEMPTS },
-            });
-          }
-        }
-        if (!audibleAfterResume) {
-          logPlaybackResilience("recover-audibility-failed", {
-            source: "AudioContext",
-            code: "RECOVER_AUDIBILITY_FAILED",
-            reason,
-            slug: track?.slug ?? null,
-          });
-          if (isPlaybackTraceEnabled()) {
-            logPlayback("recovery_audibility_exit", { reason, slug: track?.slug ?? null });
-          }
-          patchState({
-            isPlaying: false,
-            playbackState: "ready",
-            isBuffering: false,
-            playbackNetworkState: "idle",
-          });
-          return false;
-        }
-        patchState({
-          isPlaying: true,
-          playbackState: "playing",
-          isBuffering: false,
-          playbackNetworkState: "idle",
-        });
-      }
+      patchState({ isPlaying: true, playbackState: "playing", isBuffering: false,
+        playbackNetworkState: "playing", error: null, streamRetryable: false });
       return true;
     } catch (error) {
-      reportPlaybackDiagnostic({
-        level: "warn",
-        code: "RECOVER_AUDIO_HARD_FAILED",
-        command: PLAYBACK_COMMANDS.RECOVER,
-        requestId: self._deps.activeCommandRef.current?.requestId || null,
-        state: self._deps.stateRef.current,
-        error,
-        context: { reason },
-      });
-      self._deps.patchState({
-        isPlaying: false,
-        playbackState: "paused",
-        isBuffering: false,
-        playbackNetworkState: "error_stream",
-        error: "Playback needs a moment — tap play to continue.",
-      });
+      if (!isCurrent()) return false;
+      reportPlaybackDiagnostic({ code: "RECOVER_AUDIO_HARD_FAILED", command: PLAYBACK_COMMANDS.RECOVER,
+        state: stateRef.current, error, context: { reason } });
+      patchState({ isPlaying: false, playbackState: "paused", isBuffering: false,
+        playbackNetworkState: "error_stream", streamRetryable: true,
+        error: "Playback interrupted — tap play to continue." });
       return false;
     } finally {
-      self._deps.recoveryCooldownUntilRef.current = Date.now() + RECOVERY_COOLDOWN_MS;
-      self._deps.isRecoveringRef.current = false;
-      self._deps.internalPlaybackAuthorityRef.current = false;
+      recoveryCooldownUntilRef.current = Date.now() + RECOVERY_COOLDOWN_MS;
+      isRecoveringRef.current = false;
+      d.internalPlaybackAuthorityRef.current = false;
     }
   };
 

@@ -17,7 +17,8 @@
  */
 
 import {
-  fetchLibraryStream,
+  fetchLibraryStreamForTrack,
+  streamIdentityForTrack,
   isLibraryStreamRedirectSrc,
   isLibraryStreamSrc,
   parseStreamTrackSlugFromSrc,
@@ -73,6 +74,7 @@ import {
 import { classifySourceUrl, isDirectlyBufferable } from "@/lib/playback/audio-source-resolver";
 import { normalizePlaybackSrc } from "@/lib/audio/audio-element-utils";
 import { cancelHlsSegmentPrefetch } from "@/lib/audio/hls-segment-prefetcher";
+import { captureRecoveryOperation, confirmRecoveryPlayback } from "./recovery-operation";
 import { recoveryCoordinator } from "@/lib/playback/recovery-coordinator";
 
 // ── Exported constants ─────────────────────────────────────────────────────────
@@ -141,6 +143,10 @@ export function createPlaybackEventHandlers({
 
   // Refs (from engineRefsRef + local AudioProvider refs)
   stateRef,
+  commandRequestIdRef,
+  recoveryVerificationRef,
+  isRecoveringRef,
+  hlsEngineRef,
   audioRef,
   audioCtxRef,
   mainGainRef,
@@ -207,6 +213,7 @@ export function createPlaybackEventHandlers({
   emitBackgroundPlaybackDiagnostics,
   scheduleNextTrackPreload,
   advanceShuffleOrder,
+  attemptLightweightPlaybackResume,
   requestAuthoritativePlay,
   completeQueuePlayback,
 
@@ -333,6 +340,12 @@ export function createPlaybackEventHandlers({
   };
 
   const onPlay = () => {
+    // A delayed native play event is not permission to undo a deliberate pause.
+    if (audio.paused || audio.ended) return;
+    if (userPausedRef.current || userIntentPausedRef.current) {
+      audio.pause();
+      return;
+    }
     lastCompletedTrack = null;
     // Cancel any pending buffer-show timer: onPlay means the element has started (or
     // resumed) playing, so isBuffering must not be set true by a stale 500ms timer that
@@ -353,19 +366,20 @@ export function createPlaybackEventHandlers({
       }
     }
 
+    const verifying = Boolean(recoveryVerificationRef?.current);
     patchState({
-      isPlaying: true,
+      isPlaying: !verifying,
       error: null,
       hasStarted: true,
       isBuffering: false,
-      playbackNetworkState: "playing",
-      osInterrupted: false,
+      playbackNetworkState: verifying ? "recovering" : "playing",
+      osInterrupted: verifying,
     });
     // Advance SM to PLAYING so BUFFER_START/BUFFER_END transitions are live. Without this,
     // the SM stays in IDLE (LOAD_START/PLAY_SUCCESS were never dispatched previously) and
     // BUFFER_START is silently rejected, meaning the orchestration channel never fires to
     // clear the spinner when BUFFER_END arrives.
-    playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.PLAY_SUCCESS);
+    if (!verifying) playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.PLAY_SUCCESS);
     startKeepAlivePing();
     startProgressRaf();
     startPositionSaveTimer();
@@ -503,6 +517,8 @@ export function createPlaybackEventHandlers({
       return;
     }
 
+    const interruption = captureRecoveryOperation({ audioRef, stateRef, playRequestIdRef, commandRequestIdRef,
+      userPausedRef, userIntentPausedRef });
     tracePlayback("pause", "onPause", { userInitiated, wasViewportPause });
     const sBeforePause = stateRef.current;
     const wasPlayingBeforePause =
@@ -572,15 +588,10 @@ export function createPlaybackEventHandlers({
           // iOS Safari / Chrome mobile) trigger this onPause path — this guard ensures
           // those spurious events never race against playTrackInternal's buffer gate.
           if (
-            !userPausedRef.current &&
-            !userIntentPausedRef.current &&
+            interruption.isCurrent() &&
             stateRef.current.playbackNetworkState !== "loading_stream"
           ) {
-            void playAudioIfNotPaused(audio, true, {
-              command: PLAYBACK_COMMANDS.RECOVER,
-              requestId: activeCommandRef.current?.requestId || null,
-              state: stateRef.current,
-              context: { source: "onPause_os_suspend" },
+            void attemptLightweightPlaybackResume?.("onPause_os_suspend", {
               effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
             });
           }
@@ -703,11 +714,7 @@ export function createPlaybackEventHandlers({
               trackId: track?.id ?? track?.slug ?? null,
               slug: track?.slug ?? null,
             });
-            void playAudioIfNotPaused(audio, true, {
-              command: PLAYBACK_COMMANDS.RECOVER,
-              requestId: activeCommandRef.current?.requestId || null,
-              state: stateRef.current,
-              context: { source: "onPause_canplay_interrupt" },
+            if (interruption.isCurrent()) void attemptLightweightPlaybackResume?.("onPause_canplay_interrupt", {
               effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
             });
           }
@@ -969,8 +976,6 @@ export function createPlaybackEventHandlers({
             attempts += 1;
             continue;
           }
-          queueIndexRef.current = nextIndex;
-          patchState({ queueIndex: nextIndex });
           resetPlaybackTimingCapture();
           setPlaybackScenario(PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE, { source: "ended-handler" });
           // Block any spurious second `ended` from the audio element while
@@ -998,7 +1003,7 @@ export function createPlaybackEventHandlers({
           }
           // Carry the exact queue occurrence into Core. Looking it up by id
           // again selects the first occurrence in playlists with repeated songs.
-          requestAuthoritativePlay(nextTrack, {
+          const accepted = requestAuthoritativePlay(nextTrack, {
             resumeAt: 0,
             playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE,
           }, {
@@ -1008,6 +1013,18 @@ export function createPlaybackEventHandlers({
             requireCurrentPlaying: true,
             expectedCurrentMediaIdentity: track.id ?? track.trackId ?? track.slug ?? null,
           });
+          if (accepted) {
+            queueIndexRef.current = nextIndex;
+            patchState({ queueIndex: nextIndex });
+          } else if (playRequestIdRef?.current === completionRequestId &&
+              isSamePlaybackTrack(stateRef.current.currentTrack, track) &&
+              !userPausedRef.current && !userIntentPausedRef.current) {
+            // Rejection is a terminal handoff outcome, not a silent `ending`.
+            // Preserve the ended selection; a newer intent remains authoritative.
+            patchState({ isPlaying: false, playbackState: "paused", isBuffering: false,
+              playbackNetworkState: "error_stream", streamRetryable: true,
+              error: "Next track could not start — tap next to retry." });
+          }
           return;
         }
       }
@@ -1019,7 +1036,12 @@ export function createPlaybackEventHandlers({
     finishEnded();
   };
 
-  const onError = async () => {
+  let errorRecovery = null;
+  let offlineResume = null;
+  const recoverMediaError = async () => {
+    const operation = captureRecoveryOperation({ audioRef, stateRef, playRequestIdRef, commandRequestIdRef, userPausedRef, userIntentPausedRef });
+    const { isCurrent } = operation;
+    if (!isCurrent()) return false;
     stopStallRecovery();
     const track = stateRef.current.currentTrack;
     const slug = track?.slug || streamMetaRef.current?.slug;
@@ -1045,172 +1067,103 @@ export function createPlaybackEventHandlers({
       mediaErrorCode: mediaError?.code ?? null,
     });
 
+    const terminal = (message, accessDenied = false) => {
+      if (!isCurrent()) return false;
+      patchState({ isPlaying: false, playbackState: "paused", isBuffering: false,
+        playbackNetworkState: "error_stream", streamRetryable: !accessDenied,
+        accessDenied, error: message });
+      return false;
+    };
     if (typeof navigator !== "undefined" && !navigator.onLine) {
-      const onOnline = () => {
-        window.removeEventListener("online", onOnline);
-        const current = stateRef.current.currentTrack;
-        if (current) {
-          streamErrorRetriedRef.current = 0;
-          void playTrackRef.current?.(current, {
-            resumeAt: audio.currentTime || 0,
-            forceStream: true,
-          });
-        }
+      if (offlineResume) window.removeEventListener("online", offlineResume);
+      offlineResume = () => {
+        window.removeEventListener("online", offlineResume);
+        offlineResume = null;
+        if (isCurrent()) void playTrackRef.current?.(track, {
+          resumeAt: audio.currentTime || 0, forceStream: true, preserveQueue: true,
+        });
       };
-      window.addEventListener("online", onOnline);
+      window.addEventListener("online", offlineResume, { once: true });
       patchState({ error: "RECONNECTING", isBuffering: true, playbackNetworkState: "retrying_stream" });
-      return;
+      return false;
     }
 
-    const meta = streamMetaRef.current;
     const resumeAt = audio.currentTime || 0;
-
-    const onLibraryStreamSrc =
-      isLibraryStreamSrc(audio.currentSrc || audio.src || "") ||
-      isLibraryStreamSrc(track?.src || "");
-    // A track that has not produced audio yet has no streamMeta, and its src may not be a
-    // library-stream URL — but a first-load failure is the case most worth retrying, not
-    // least: entitlement granted moments ago (gift claim, purchase) can still be
-    // propagating, so resolving the stream again is what makes the track playable.
-    const firstPlayFailure = !stateRef.current.hasStarted;
-    const MAX_STREAM_RETRIES = 3;
-    if (slug && (streamMetaRef.current || onLibraryStreamSrc || firstPlayFailure) && streamErrorRetriedRef.current < MAX_STREAM_RETRIES) {
-      streamErrorRetriedRef.current += 1;
-      const attempt = streamErrorRetriedRef.current;
-      const retryRequestId = activeCommandRef.current?.requestId;
-      // Exponential backoff: immediate on first error, 2s on second, 5s on third.
-      // Gives transient network blips time to clear without stranding the user.
-      const retryDelayMs = attempt === 1 ? 0 : attempt === 2 ? 2000 : 5000;
-      if (retryDelayMs > 0) {
-        patchState({ playbackNetworkState: "retrying_stream", isBuffering: true, error: `Reconnecting… (attempt ${attempt}/${MAX_STREAM_RETRIES})` });
-        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
-        if (activeCommandRef.current?.requestId !== retryRequestId) return;
-      }
+    const onLibraryStreamSrc = isLibraryStreamSrc(track?.src || "") ||
+      isLibraryStreamSrc(audio.currentSrc || audio.src || "");
+    const maxRetries = 3;
+    // Keep the budget until confirmed progress. Repeated error events or a
+    // resolved play promise alone must not buy an infinite new retry budget.
+    while (isCurrent() && onLibraryStreamSrc && streamErrorRetriedRef.current < maxRetries) {
+      const attempt = ++streamErrorRetriedRef.current;
+      if (attempt > 1) await new Promise(resolve => setTimeout(resolve, attempt === 2 ? 250 : 1000));
+      if (!isCurrent()) return false;
       patchState({ playbackNetworkState: "retrying_stream", isBuffering: true });
       try {
-        const data = await fetchLibraryStream(slug, { force: true, signal: activeStreamAbortRef.current?.signal });
-        // Bail if a new track command superseded this error-retry
-        if (activeCommandRef.current?.requestId !== retryRequestId) return;
+        const { slug: releaseSlug, trackSlug } = streamIdentityForTrack(track);
+        const data = await fetchLibraryStreamForTrack(track, {
+          force: true, signal: activeStreamAbortRef.current?.signal,
+        });
+        if (!isCurrent()) return false;
         streamMetaRef.current = {
-          slug,
-          url: data.url,
-          fetchedAt: Date.now(),
-          expiresIn: data.expiresIn || 3600,
-          streamEventId: data.streamEventId || meta?.streamEventId || null,
-          sessionId: data.sessionId || meta?.sessionId || null,
+          slug: releaseSlug, trackSlug, url: data.url, fetchedAt: Date.now(),
+          expiresIn: data.expiresIn || 3600, streamEventId: data.streamEventId || null,
+          sessionId: data.sessionId || null,
         };
+        // A media error is a verified source failure; route-only interruptions
+        // never enter this source-replacement path.
+        if (hlsEngineRef?.current) {
+          hlsEngineRef.current.detach();
+          hlsEngineRef.current = null;
+        }
+        recoveryCoordinator.notifyStreamUpgrade();
         skipPauseInterruptionRef.current = true;
         await waitAudioSrcReady(audio, data.url, { signal: activeStreamAbortRef.current?.signal });
-        // Check again after the potentially long src-ready wait
-        if (activeCommandRef.current?.requestId !== retryRequestId) return;
-        if (resumeAt > 0) {
-          let seekAfterLoadTimeout;
-          const seekAfterLoad = () => {
-            clearTimeout(seekAfterLoadTimeout);
-            if (resumeAt > 0 && isFinite(audio.duration)) {
-              audio.currentTime = Math.min(resumeAt, Math.max(0, audio.duration - 0.25));
-            }
-          };
-          if (isFinite(audio.duration) && audio.duration > 0) {
-            seekAfterLoad();
-          } else {
-            audio.addEventListener("loadedmetadata", seekAfterLoad, { once: true });
-            seekAfterLoadTimeout = setTimeout(
-              () => audio.removeEventListener("loadedmetadata", seekAfterLoad),
-              5000
-            );
-          }
-        }
-        const retryPlayed = await playAudioIfNotPaused(audio, true, {
-          command: PLAYBACK_COMMANDS.PLAY_TRACK,
-          requestId: activeCommandRef.current?.requestId || null,
-          state: stateRef.current,
+        if (!isCurrent()) return false;
+        if (resumeAt > 0) audio.currentTime = Number.isFinite(audio.duration) && audio.duration > 0
+          ? Math.min(resumeAt, Math.max(0, audio.duration - 0.05)) : resumeAt;
+        const played = await playAudioIfNotPaused(audio, true, {
+          command: PLAYBACK_COMMANDS.RECOVER, state: stateRef.current,
           context: { source: "onError_stream_retry" },
           effectAuthorityMode: PhysicalEffectAuthorityMode.CORE_CURRENT,
+          isCurrent, onStalePlay: operation.cancelStalePlay,
         });
-        if (!retryPlayed || audio.paused) {
-          patchState({
-            isPlaying: false,
-            error: "Stream unavailable — tap to retry",
-            streamRetryable: true,
-            isBuffering: false,
-            playbackState: "paused",
-            playbackNetworkState: "error_stream",
-          });
-          return;
-        }
-        // A successful retry fully recovered playback — reset the budget so an
-        // unrelated later blip on this same track gets its own full 3 attempts,
-        // instead of inheriting whatever count this one happened to reach.
+        if (!isCurrent()) return false;
+        if (!played) return terminal("Playback interrupted — tap play to continue.");
+        const confirmed = await confirmRecoveryPlayback(audio, audioCtxRef.current, { isCurrent });
+        if (!isCurrent()) return false;
+        if (!confirmed || audio.paused || audio.ended ||
+            (audioCtxRef.current && audioCtxRef.current.state !== "running")) continue;
         streamErrorRetriedRef.current = 0;
-        patchState({
-          error: null,
-          streamRetryable: false,
-          isBuffering: false,
-          hasStarted: true,
-          playbackState: "playing",
-          playbackNetworkState: "playing",
-        });
-        return;
-      } catch (retryErr) {
-        if (retryErr?.code === "ACCESS_DENIED") {
-          finalizeStreamSession(meta, { durationSeconds: resumeAt, completed: false });
-          streamErrorRetriedRef.current = 0;
-          if (!audio.paused) skipPauseInterruptionRef.current = true;
-          audio.pause();
-          patchState({
-            isPlaying: false,
-            accessDenied: true,
-            streamRetryable: false,
-            error: "Access unavailable",
-            playbackNetworkState: "error_stream",
-          });
-          if (typeof navigator !== "undefined" && "mediaSession" in navigator) {
-            navigator.mediaSession.playbackState = "none";
-          }
-          return;
+        patchState({ isPlaying: true, error: null, streamRetryable: false, isBuffering: false,
+          hasStarted: true, playbackState: "playing", playbackNetworkState: "playing" });
+        playbackStateMachine.transition(PLAYBACK_ORCHESTRATION_EVENTS.PLAY_SUCCESS);
+        return true;
+      } catch (error) {
+        if (!isCurrent()) return false;
+        if (error?.code === "ACCESS_DENIED") return terminal("Access unavailable", true);
+        if (error?.code === "STREAM_IDENTITY_MISMATCH" || error?.code === "STREAM_TRACK_IDENTITY_MISSING") {
+          return terminal("Recording unavailable — tap to retry.");
         }
       }
     }
-
-    if (meta) {
-      finalizeStreamSession(meta, {
-        completed: false,
-        durationSeconds: resumeAt,
-      });
-    }
-
-    // Auto-advance past unrecoverable track errors (missing file, 404, expired URL) to match
-    // Spotify/Apple Music behavior — the queue never stops because one file is unavailable.
-    // Only skip when in a multi-track queue where auto-advance makes sense.
-    //
-    // A track that never produced audio is excluded even after the retries above. Skipping
-    // it spends the track the listener actually chose — opening an album and landing on
-    // track 2 — and a first-load failure is far more often transient than a truly missing
-    // file. Those stop on the track as retryable instead of silently moving on.
-    const errQueue = queueRef.current;
-    const errQueueIdx = queueIndexRef.current;
-    if (stateRef.current.hasStarted && !stopAfterEachTrackRef.current && errQueue.length > 0) {
-      let skipIdx = errQueueIdx + 1;
-      while (skipIdx < errQueue.length) {
-        const skipTrack = errQueue[skipIdx];
-        if (skipTrack?.src) {
-          queueIndexRef.current = skipIdx;
-          patchState({ queueIndex: skipIdx });
-          void playTrackRef.current?.(skipTrack, { resumeAt: 0, playbackScenario: PLAYBACK_SCENARIOS.QUEUE_AUTO_ADVANCE });
-          return;
-        }
-        skipIdx += 1;
-      }
-    }
-
-    patchState({
-      isPlaying: false,
-      error: "Stream unavailable — tap to retry",
-      streamRetryable: true,
-      isBuffering: false,
-      playbackNetworkState: "error_stream",
+    if (!isCurrent()) return false;
+    // Do not spend an arbitrary album track because transient recovery failed.
+    // The selected occurrence remains retryable, with an explicit finite outcome.
+    return terminal("Stream unavailable — tap to retry");
+  };
+  const onError = () => {
+    if (isRecoveringRef?.current) return Promise.resolve(false);
+    if (errorRecovery) return errorRecovery;
+    if (recoveryVerificationRef?.current) return recoveryVerificationRef.current.promise;
+    const pending = { promise: null };
+    if (recoveryVerificationRef) recoveryVerificationRef.current = pending;
+    errorRecovery = recoverMediaError().finally(() => {
+      errorRecovery = null;
+      if (recoveryVerificationRef?.current === pending) recoveryVerificationRef.current = null;
     });
+    pending.promise = errorRecovery;
+    return errorRecovery;
   };
 
   const onEmptied = () => {
