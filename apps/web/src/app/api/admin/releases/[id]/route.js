@@ -1,3 +1,4 @@
+import { loadEditableRelease, commitCreditEdit } from "@/lib/credits/admin-store";
 import { NextResponse } from "next/server";
 import { getAdminSessionUser, requireAdminActor } from "@/lib/auth/admin-api-guard";
 import { classifyAdminAuthorityDenial } from "@/lib/auth/admin-authority-diagnostics";
@@ -32,142 +33,19 @@ export async function GET(req, { params }) {
 
   const admin = getAdminClient();
 
-  // ── Path A: wizard release (releases table) ───────────────────────────────────
-  const [releaseRes, productRes, tracksRes] = await Promise.all([
-    admin
-      .from("releases")
-      .select("id, slug, status, release_type, release_date, scheduled_at, storefront_visible, cover_art_r2_key, upc, created_at, metadata")
-      .eq("id", id)
-      .is("deleted_at", null)
-      .single(),
-    admin
-      .from("products")
-      .select("title, display_title, price_cents, metadata")
-      .eq("release_id", id)
-      .maybeSingle(),
-    admin
-      .from("tracks")
-      .select("id, title, position, lyrics, upload_status, audio_r2_key")
-      .eq("release_id", id)
-      .is("removed_from_release_at", null)
-      .order("position", { ascending: true }),
-  ]);
-
-  if (!releaseRes.error && releaseRes.data) {
-    const release = releaseRes.data;
-    const product = productRes.data;
-    const tracks  = tracksRes.data || [];
-    return NextResponse.json({
-      source: "releases",
-      release: {
-        id:                release.id,
-        slug:              release.slug,
-        status:            release.status,
-        release_type:      release.release_type,
-        release_date:      release.release_date,
-        scheduled_at:      release.scheduled_at,
-        storefront_visible: release.storefront_visible,
-        cover_art_r2_key:  release.cover_art_r2_key,
-        animated_cover_r2_key: release.metadata?.animated_cover_r2_key || null,
-      },
-      product: {
-        title:         product?.title         || null,
-        display_title: product?.display_title || null,
-        price_cents:   Number.isFinite(product?.price_cents) ? product.price_cents : null,
-        genre:         product?.metadata?.genre || null,
-      },
-      tracks: tracks.map((t) => ({
-        id:            t.id,
-        slug:          String(t.title || `track-${t.position || 1}`)
-          .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""),
-        title:         t.title || "",
-        position:      t.position,
-        lyrics:        t.lyrics || "",
-        upload_status: t.upload_status,
-        has_audio:     Boolean(t.audio_r2_key),
-      })),
-    });
+  try {
+    const detail = await loadEditableRelease(admin, id);
+    if (!detail) return NextResponse.json({ error: "Release not found" }, { status: 404 });
+    if (!detail.release.cover_art_r2_key) {
+      const { data: product } = await admin.from("products").select("image_path").eq(detail.source === "releases" ? "release_id" : "id", id).maybeSingle();
+      if (product?.image_path) {
+        try { detail.release.cover_art_r2_key = await discoverFileByExtensions(String(product.image_path).replace(/\/$/, ""), [".jpg", ".jpeg", ".png", ".webp"]); } catch {}
+      }
+    }
+    return NextResponse.json(detail, { headers: { "Cache-Control": "no-store" } });
+  } catch {
+    return NextResponse.json({ error: "Could not load saved release metadata" }, { status: 503 });
   }
-
-  // ── Path B: catalog product (products table, R2-ingested) ─────────────────────
-  const { data: product, error: productErr } = await admin
-    .from("products")
-    .select("id, slug, title, product_type, release_type, active, image_path, cover_url, price_cents, created_at, updated_at, metadata")
-    .eq("id", id)
-    .is("deleted_at", null)
-    .single();
-
-  if (productErr || !product) {
-    return NextResponse.json({ error: "Release not found" }, { status: 404 });
-  }
-
-  // Catalog tracks
-  const { data: catalogTracks } = await admin
-    .from("catalog_tracks")
-    .select("id, slug, title, position, metadata")
-    .eq("product_id", id)
-    .is("removed_from_release_at", null)
-    .order("position", { ascending: true });
-
-  // Prefer the canonical uploaded still key. Older catalog rows may have a
-  // concrete static URL or only a folder prefix, in which case preserve the
-  // legacy discovery fallback.
-  const metadata = product.metadata && typeof product.metadata === "object" ? product.metadata : {};
-  const legacyCover = typeof product.cover_url === "string" &&
-    /\.(?:jpe?g|png|webp)(?:[?#].*)?$/i.test(product.cover_url)
-    ? product.cover_url
-    : null;
-  let coverKey = metadata.cover_art_r2_key || legacyCover || null;
-  if (!coverKey && product.image_path) {
-    try {
-      const folder = String(product.image_path).replace(/\/$/, "");
-      coverKey = await discoverFileByExtensions(folder, [".jpg", ".jpeg", ".png", ".webp"]);
-    } catch {}
-  }
-
-  const releaseType = product.release_type || product.product_type || "single";
-  const category = String(metadata.release_category || "").trim().toLowerCase();
-  const productCategory = String(product.product_type || "").trim().toLowerCase();
-  const managementType = ["single", "feature", "album", "ep", "mixtape"].includes(category)
-    ? category
-    : ["single", "feature", "ep", "mixtape"].includes(productCategory)
-      ? productCategory
-      : product.release_type === "singles" ? "single"
-        : product.release_type === "features" ? "feature"
-          : product.release_type === "albums" ? "album"
-            : product.release_type === "mixtapes-and-eps" ? "unclassified"
-              : productCategory === "album" ? "album" : releaseType;
-
-  return NextResponse.json({
-    source: "catalog",
-    release: {
-      id:                product.id,
-      slug:              product.slug,
-      status:            product.active ? "published" : "draft",
-      release_type:      managementType,
-      release_category:  managementType === "unclassified" ? null : managementType,
-      release_type_folder: product.release_type || null,
-      release_date:      product.metadata?.release_date || null,
-      scheduled_at:      null,
-      storefront_visible: Boolean(product.active),
-      cover_art_r2_key:  coverKey,
-    },
-    product: {
-      title:         product.title || null,
-      display_title: product.title || null,
-      price_cents:   product.price_cents || null,
-      genre:         product.metadata?.genre || null,
-    },
-    tracks: (catalogTracks || []).map((t, i) => ({
-      id:            t.id,
-      slug:          t.slug,
-      title:         t.title || t.slug || "",
-      position:      t.position ?? (i + 1),
-      lyrics:        t.metadata?.lyrics || "",
-      upload_status: "ready",
-      has_audio:     true,
-    })),
-  });
 }
 
 // ── PATCH /api/admin/releases/[id] ───────────────────────────────────────────────
@@ -201,6 +79,11 @@ export async function PATCH(req, { params }) {
   ];
 
   const admin = getAdminClient();
+  if (["revision", "credit_groups", "recordings", "upc", "artist", "release_type"].some(key => Object.hasOwn(body, key))) {
+    const outcome = await commitCreditEdit(admin, id, body);
+    if (outcome.status === 200 && outcome.result?.status !== "draft") revalidateStorefront(outcome.result?.slug, outcome.result?.release_type);
+    return NextResponse.json(outcome.body, { status: outcome.status });
+  }
   const errors = [];
 
   if (body.action === "undo_dump") {

@@ -1,0 +1,1559 @@
+{
+  "project": "qvfbgkbgczyqrglvgyqr",
+  "columns": [
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "table_name": "catalog_tracks",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "album_slug",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "track_number",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": null,
+      "column_name": "slug",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "table_name": "catalog_tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "title",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "table_name": "catalog_tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "display_title",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "storage_path",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "preview_path",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "table_name": "catalog_tracks",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "table_name": "catalog_tracks",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": null,
+      "column_name": "stream_path",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "stream_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "product_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": "1",
+      "column_name": "position",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "table_name": "catalog_tracks",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": "'{}'::jsonb",
+      "column_name": "metadata",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "table_name": "catalog_tracks",
+      "udt_name": "jsonb"
+    },
+    {
+      "column_default": null,
+      "column_name": "duration_seconds",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": null,
+      "column_name": "track_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "lyrics",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": "'{}'::jsonb",
+      "column_name": "credits",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "jsonb"
+    },
+    {
+      "column_default": "'{}'::text[]",
+      "column_name": "featured_artists",
+      "data_type": "ARRAY",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "_text"
+    },
+    {
+      "column_default": null,
+      "column_name": "removed_from_release_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "catalog_tracks",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "table_name": "collaborators",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "table_name": "collaborators",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "email",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "collaborators",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "table_name": "collaborators",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "table_name": "collaborators",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "table_name": "collaborators",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "table_name": "products",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "slug",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "title",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "product_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "price_cents",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "table_name": "products",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": null,
+      "column_name": "cover_url",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "storage_path",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "preview_path",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": "'{}'::jsonb",
+      "column_name": "metadata",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "table_name": "products",
+      "udt_name": "jsonb"
+    },
+    {
+      "column_default": "true",
+      "column_name": "active",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "table_name": "products",
+      "udt_name": "bool"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "table_name": "products",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "table_name": "products",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": null,
+      "column_name": "content_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "content_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": "false",
+      "column_name": "gifting_enabled",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "table_name": "products",
+      "udt_name": "bool"
+    },
+    {
+      "column_default": null,
+      "column_name": "release_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "date"
+    },
+    {
+      "column_default": null,
+      "column_name": "display_title",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "artwork_path",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "video_path",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "album_slug",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "stream_path",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "stream_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "release_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "image_path",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "ingested_from_r2_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": null,
+      "column_name": "release_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": "'{}'::jsonb",
+      "column_name": "credits",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "jsonb"
+    },
+    {
+      "column_default": "false",
+      "column_name": "is_collector_product",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "table_name": "products",
+      "udt_name": "bool"
+    },
+    {
+      "column_default": "'music'::text",
+      "column_name": "content_kind",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "external_product_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "deleted_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "products",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "table_name": "release_collaborators",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "release_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "table_name": "release_collaborators",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "product_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "table_name": "release_collaborators",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "collaborator_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "table_name": "release_collaborators",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "role",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "release_collaborators",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "split_percent",
+      "data_type": "numeric",
+      "is_nullable": "NO",
+      "table_name": "release_collaborators",
+      "udt_name": "numeric"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "table_name": "release_collaborators",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "table_name": "release_drafts",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "release_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "table_name": "release_drafts",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "saved_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "release_drafts",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": null,
+      "column_name": "draft_payload",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "table_name": "release_drafts",
+      "udt_name": "jsonb"
+    },
+    {
+      "column_default": "0",
+      "column_name": "step_index",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "table_name": "release_drafts",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "table_name": "release_drafts",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "table_name": "releases",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": null,
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": "'Untitled'::text",
+      "column_name": "title",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "release_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": "'draft'::text",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "release_date",
+      "data_type": "date",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "date"
+    },
+    {
+      "column_default": null,
+      "column_name": "cover_art_url",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "genre",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "label",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "copyright_text",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "subtitle",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "cover_art_r2_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "mood_tags",
+      "data_type": "ARRAY",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "_text"
+    },
+    {
+      "column_default": null,
+      "column_name": "publishing_credits",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "upc",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "slug",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": "false",
+      "column_name": "storefront_visible",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "bool"
+    },
+    {
+      "column_default": null,
+      "column_name": "scheduled_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": null,
+      "column_name": "executive_producer",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "mixing_engineer",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "mastering_engineer",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "copyright_year",
+      "data_type": "smallint",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "int2"
+    },
+    {
+      "column_default": null,
+      "column_name": "p_line",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "c_line",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "available_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "'America/Chicago'::text",
+      "column_name": "release_timezone",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": "false",
+      "column_name": "upcoming_visible",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "table_name": "releases",
+      "udt_name": "bool"
+    },
+    {
+      "column_default": "false",
+      "column_name": "preview_before_release",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "table_name": "releases",
+      "udt_name": "bool"
+    },
+    {
+      "column_default": "false",
+      "column_name": "preorder_enabled",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "table_name": "releases",
+      "udt_name": "bool"
+    },
+    {
+      "column_default": null,
+      "column_name": "preorder_starts_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": null,
+      "column_name": "preorder_price_cents",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": "false",
+      "column_name": "early_access_enabled",
+      "data_type": "boolean",
+      "is_nullable": "NO",
+      "table_name": "releases",
+      "udt_name": "bool"
+    },
+    {
+      "column_default": null,
+      "column_name": "early_access_starts_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "'{\"mode\": \"full_release\", \"track_ids\": []}'::jsonb",
+      "column_name": "early_access_scope",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "table_name": "releases",
+      "udt_name": "jsonb"
+    },
+    {
+      "column_default": "ARRAY['preorder_purchasers'::text]",
+      "column_name": "early_access_audiences",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "table_name": "releases",
+      "udt_name": "_text"
+    },
+    {
+      "column_default": null,
+      "column_name": "published_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": null,
+      "column_name": "unavailable_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "'{}'::jsonb",
+      "column_name": "metadata",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "table_name": "releases",
+      "udt_name": "jsonb"
+    },
+    {
+      "column_default": "'music'::text",
+      "column_name": "content_kind",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "table_name": "releases",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "deleted_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "releases",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "table_name": "tracks",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": null,
+      "column_name": "release_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": "1",
+      "column_name": "track_number",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "table_name": "tracks",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": "'Untitled Track'::text",
+      "column_name": "title",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "table_name": "tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": "false",
+      "column_name": "explicit",
+      "data_type": "boolean",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "bool"
+    },
+    {
+      "column_default": null,
+      "column_name": "lyrics",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "audio_r2_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "master_r2_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "audio_format",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "bit_depth",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": null,
+      "column_name": "sample_rate",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": null,
+      "column_name": "file_size_bytes",
+      "data_type": "bigint",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "int8"
+    },
+    {
+      "column_default": "'pending'::text",
+      "column_name": "upload_status",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "written_by",
+      "data_type": "ARRAY",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "_text"
+    },
+    {
+      "column_default": null,
+      "column_name": "produced_by",
+      "data_type": "ARRAY",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "_text"
+    },
+    {
+      "column_default": null,
+      "column_name": "featured_artists",
+      "data_type": "ARRAY",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "_text"
+    },
+    {
+      "column_default": null,
+      "column_name": "mixing_engineer",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "mastering_engineer",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "executive_producer",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "draft_data",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "jsonb"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": null,
+      "column_name": "isrc",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "duration_seconds",
+      "data_type": "integer",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": "'[]'::jsonb",
+      "column_name": "master_history",
+      "data_type": "jsonb",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "jsonb"
+    },
+    {
+      "column_default": "1",
+      "column_name": "position",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "table_name": "tracks",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": null,
+      "column_name": "preview_r2_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "text"
+    },
+    {
+      "column_default": "0",
+      "column_name": "preview_start_seconds",
+      "data_type": "integer",
+      "is_nullable": "NO",
+      "table_name": "tracks",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": null,
+      "column_name": "removed_from_release_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "table_name": "tracks",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "gen_random_uuid()",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "table_name": "genre_taxonomy",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "parent_id",
+      "is_nullable": "YES",
+      "table_name": "genre_taxonomy",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "name",
+      "is_nullable": "NO",
+      "table_name": "genre_taxonomy",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "slug",
+      "is_nullable": "NO",
+      "table_name": "genre_taxonomy",
+      "udt_name": "text"
+    },
+    {
+      "column_default": null,
+      "column_name": "description",
+      "is_nullable": "YES",
+      "table_name": "genre_taxonomy",
+      "udt_name": "text"
+    },
+    {
+      "column_default": "0",
+      "column_name": "sort_order",
+      "is_nullable": "NO",
+      "table_name": "genre_taxonomy",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": "true",
+      "column_name": "active",
+      "is_nullable": "NO",
+      "table_name": "genre_taxonomy",
+      "udt_name": "bool"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "table_name": "genre_taxonomy",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "updated_at",
+      "is_nullable": "NO",
+      "table_name": "genre_taxonomy",
+      "udt_name": "timestamptz"
+    },
+    {
+      "column_default": null,
+      "column_name": "release_id",
+      "is_nullable": "NO",
+      "table_name": "release_genre_classifications",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "taxonomy_id",
+      "is_nullable": "NO",
+      "table_name": "release_genre_classifications",
+      "udt_name": "uuid"
+    },
+    {
+      "column_default": null,
+      "column_name": "role",
+      "is_nullable": "NO",
+      "table_name": "release_genre_classifications",
+      "udt_name": "text"
+    },
+    {
+      "column_default": "0",
+      "column_name": "sort_order",
+      "is_nullable": "NO",
+      "table_name": "release_genre_classifications",
+      "udt_name": "int4"
+    },
+    {
+      "column_default": "now()",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "table_name": "release_genre_classifications",
+      "udt_name": "timestamptz"
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "catalog_tracks_album_slug_slug_key",
+      "contype": "u",
+      "definition": "UNIQUE (album_slug, slug)",
+      "table_name": "catalog_tracks"
+    },
+    {
+      "conname": "catalog_tracks_album_slug_track_number_key",
+      "contype": "u",
+      "definition": "UNIQUE (album_slug, track_number)",
+      "table_name": "catalog_tracks"
+    },
+    {
+      "conname": "catalog_tracks_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "catalog_tracks"
+    },
+    {
+      "conname": "catalog_tracks_product_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE",
+      "table_name": "catalog_tracks"
+    },
+    {
+      "conname": "catalog_tracks_track_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (track_id) REFERENCES tracks(id)",
+      "table_name": "catalog_tracks"
+    },
+    {
+      "conname": "catalog_tracks_track_number_check",
+      "contype": "c",
+      "definition": "CHECK ((track_number > 0))",
+      "table_name": "catalog_tracks"
+    },
+    {
+      "conname": "collaborators_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "collaborators"
+    },
+    {
+      "conname": "collaborators_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL",
+      "table_name": "collaborators"
+    },
+    {
+      "conname": "products_content_kind_check",
+      "contype": "c",
+      "definition": "CHECK ((content_kind = ANY (ARRAY['music'::text, 'podcast'::text])))",
+      "table_name": "products"
+    },
+    {
+      "conname": "products_content_type_check",
+      "contype": "c",
+      "definition": "CHECK (((content_type IS NULL) OR (content_type = ANY (ARRAY['release'::text, 'collector_card'::text, 'vault_item'::text, 'vault_access'::text, 'track'::text]))))",
+      "table_name": "products"
+    },
+    {
+      "conname": "products_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "products"
+    },
+    {
+      "conname": "products_price_cents_check",
+      "contype": "c",
+      "definition": "CHECK ((price_cents >= 0))",
+      "table_name": "products"
+    },
+    {
+      "conname": "products_product_type_check",
+      "contype": "c",
+      "definition": "CHECK ((product_type = ANY (ARRAY['single'::text, 'album'::text, 'feature'::text, 'vault'::text, 'vinyl'::text, 'ticket'::text, 'merch'::text, 'bundle'::text])))",
+      "table_name": "products"
+    },
+    {
+      "conname": "products_release_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (release_id) REFERENCES releases(id)",
+      "table_name": "products"
+    },
+    {
+      "conname": "products_release_type_check",
+      "contype": "c",
+      "definition": "CHECK (((release_type IS NULL) OR (release_type = ANY (ARRAY['singles'::text, 'features'::text, 'albums'::text, 'mixtapes-and-eps'::text]))))",
+      "table_name": "products"
+    },
+    {
+      "conname": "products_slug_key",
+      "contype": "u",
+      "definition": "UNIQUE (slug)",
+      "table_name": "products"
+    },
+    {
+      "conname": "release_collaborators_collaborator_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (collaborator_id) REFERENCES collaborators(id) ON DELETE CASCADE",
+      "table_name": "release_collaborators"
+    },
+    {
+      "conname": "release_collaborators_has_target",
+      "contype": "c",
+      "definition": "CHECK (((release_id IS NOT NULL) OR (product_id IS NOT NULL)))",
+      "table_name": "release_collaborators"
+    },
+    {
+      "conname": "release_collaborators_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "release_collaborators"
+    },
+    {
+      "conname": "release_collaborators_product_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE",
+      "table_name": "release_collaborators"
+    },
+    {
+      "conname": "release_collaborators_release_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE",
+      "table_name": "release_collaborators"
+    },
+    {
+      "conname": "release_collaborators_split_percent_check",
+      "contype": "c",
+      "definition": "CHECK (((split_percent >= (0)::numeric) AND (split_percent <= (100)::numeric)))",
+      "table_name": "release_collaborators"
+    },
+    {
+      "conname": "releases_content_kind_check",
+      "contype": "c",
+      "definition": "CHECK ((content_kind = ANY (ARRAY['music'::text, 'podcast'::text])))",
+      "table_name": "releases"
+    },
+    {
+      "conname": "releases_lifecycle_time_order",
+      "contype": "c",
+      "definition": "CHECK (((available_at IS NULL) OR (((preorder_starts_at IS NULL) OR (preorder_starts_at <= available_at)) AND ((early_access_starts_at IS NULL) OR (early_access_starts_at <= available_at)))))",
+      "table_name": "releases"
+    },
+    {
+      "conname": "releases_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "releases"
+    },
+    {
+      "conname": "releases_preorder_price_nonnegative",
+      "contype": "c",
+      "definition": "CHECK (((preorder_price_cents IS NULL) OR (preorder_price_cents >= 0)))",
+      "table_name": "releases"
+    },
+    {
+      "conname": "releases_release_type_check",
+      "contype": "c",
+      "definition": "CHECK ((release_type = ANY (ARRAY['single'::text, 'ep'::text, 'album'::text, 'deluxe'::text, 'feature'::text, 'mixtape'::text])))",
+      "table_name": "releases"
+    },
+    {
+      "conname": "releases_slug_key",
+      "contype": "u",
+      "definition": "UNIQUE (slug)",
+      "table_name": "releases"
+    },
+    {
+      "conname": "releases_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['draft'::text, 'scheduled'::text, 'published'::text, 'archived'::text])))",
+      "table_name": "releases"
+    },
+    {
+      "conname": "releases_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id)",
+      "table_name": "releases"
+    },
+    {
+      "conname": "tracks_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "tracks"
+    },
+    {
+      "conname": "tracks_release_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE",
+      "table_name": "tracks"
+    },
+    {
+      "conname": "tracks_upload_status_check",
+      "contype": "c",
+      "definition": "CHECK ((upload_status = ANY (ARRAY['pending'::text, 'uploading'::text, 'processing'::text, 'ready'::text, 'error'::text])))",
+      "table_name": "tracks"
+    },
+    {
+      "conname": "tracks_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES auth.users(id)",
+      "table_name": "tracks"
+    },
+    {
+      "table_name": "genre_taxonomy",
+      "conname": "genre_taxonomy_parent_id_fkey",
+      "definition": "FOREIGN KEY (parent_id) REFERENCES genre_taxonomy(id) ON DELETE RESTRICT",
+      "contype": "f"
+    },
+    {
+      "table_name": "genre_taxonomy",
+      "conname": "genre_taxonomy_parent_id_name_key",
+      "definition": "UNIQUE NULLS NOT DISTINCT (parent_id, name)",
+      "contype": "u"
+    },
+    {
+      "table_name": "genre_taxonomy",
+      "conname": "genre_taxonomy_pkey",
+      "definition": "PRIMARY KEY (id)",
+      "contype": "p"
+    },
+    {
+      "table_name": "genre_taxonomy",
+      "conname": "genre_taxonomy_slug_key",
+      "definition": "UNIQUE (slug)",
+      "contype": "u"
+    },
+    {
+      "table_name": "release_drafts",
+      "conname": "release_drafts_pkey",
+      "definition": "PRIMARY KEY (id)",
+      "contype": "p"
+    },
+    {
+      "table_name": "release_drafts",
+      "conname": "release_drafts_release_id_fkey",
+      "definition": "FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE",
+      "contype": "f"
+    },
+    {
+      "table_name": "release_genre_classifications",
+      "conname": "release_genre_classifications_pkey",
+      "definition": "PRIMARY KEY (release_id, taxonomy_id)",
+      "contype": "p"
+    },
+    {
+      "table_name": "release_genre_classifications",
+      "conname": "release_genre_classifications_release_id_fkey",
+      "definition": "FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE",
+      "contype": "f"
+    },
+    {
+      "table_name": "release_genre_classifications",
+      "conname": "release_genre_classifications_role_check",
+      "definition": "CHECK ((role = ANY (ARRAY['primary'::text, 'subgenre'::text, 'secondary'::text])))",
+      "contype": "c"
+    },
+    {
+      "table_name": "release_genre_classifications",
+      "conname": "release_genre_classifications_taxonomy_id_fkey",
+      "definition": "FOREIGN KEY (taxonomy_id) REFERENCES genre_taxonomy(id) ON DELETE RESTRICT",
+      "contype": "f"
+    }
+  ],
+  "rls": [
+    {
+      "relforcerowsecurity": false,
+      "relname": "catalog_tracks",
+      "relrowsecurity": true
+    },
+    {
+      "relforcerowsecurity": false,
+      "relname": "collaborators",
+      "relrowsecurity": true
+    },
+    {
+      "relforcerowsecurity": false,
+      "relname": "products",
+      "relrowsecurity": true
+    },
+    {
+      "relforcerowsecurity": false,
+      "relname": "release_collaborators",
+      "relrowsecurity": true
+    },
+    {
+      "relforcerowsecurity": false,
+      "relname": "release_drafts",
+      "relrowsecurity": true
+    },
+    {
+      "relforcerowsecurity": false,
+      "relname": "releases",
+      "relrowsecurity": true
+    },
+    {
+      "relforcerowsecurity": false,
+      "relname": "tracks",
+      "relrowsecurity": true
+    }
+  ],
+  "functions": null,
+  "counts": {
+    "catalog_tracks": 30,
+    "collaborators": 0,
+    "products": 29,
+    "release_collaborators": 0,
+    "releases": 13,
+    "tracks": 8
+  }
+}

@@ -1,8 +1,11 @@
 "use client";
 import { getDeletedReleaseSnapshot } from "@/lib/releases/deletion-store";
 import DeleteReleaseButton from "@/components/admin/DeleteReleaseButton";
+import CreditsEditor from "@/components/admin/CreditsEditor";
+import { editableCreditGroups } from "@/lib/credits/contract";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+
+import { useState, useEffect, useRef, useCallback, useId, cloneElement, isValidElement } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { catalogCoverUrl, catalogMotionVideoUrl } from "@/lib/media-urls";
 import { UploadWizard } from "@/components/admin/UploadWizard";
@@ -71,18 +74,20 @@ function Label({ children }) {
 }
 
 function Field({ label, children, hint }) {
+  const fieldId = useId();
   return (
     <div style={{ marginBottom: 18 }}>
-      {label && <Label>{label}</Label>}
-      {children}
+      {label && <Label><label htmlFor={fieldId}>{label}</label></Label>}
+      {isValidElement(children) ? cloneElement(children, { id: fieldId }) : children}
       {hint && <div style={{ fontSize: 11, color: C.muted2, marginTop: 5 }}>{hint}</div>}
     </div>
   );
 }
 
-function Inp({ value, onChange, placeholder, type = "text" }) {
+function Inp({ id, value, onChange, placeholder, type = "text" }) {
   return (
     <input
+      id={id}
       type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -96,9 +101,10 @@ function Inp({ value, onChange, placeholder, type = "text" }) {
   );
 }
 
-function Sel({ value, onChange, children }) {
+function Sel({ id, value, onChange, children }) {
   return (
     <select
+      id={id}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       style={{
@@ -154,7 +160,7 @@ function SaveMsg({ msg }) {
   if (!msg) return null;
   const isErr = msg.startsWith("Error") || msg.startsWith("Failed");
   return (
-    <div style={{
+    <div role={isErr ? "alert" : "status"} style={{
       background: isErr ? "rgba(255,69,58,0.08)" : "rgba(50,215,75,0.08)",
       border: `1px solid ${isErr ? "rgba(255,69,58,0.3)" : "rgba(50,215,75,0.3)"}`,
       borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13,
@@ -487,7 +493,7 @@ function ReleaseListView({ onDeleted, deletionNotice, releases, loading, error, 
 }
 
 // ── Release Editor Panel ─────────────────────────────────────────────────────────
-function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
+export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const { currentUser } = useAuth();
   const [detail,     setDetail]     = useState(null);
   const [loading,    setLoading]    = useState(true);
@@ -506,6 +512,12 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const [editPrice,  setEditPrice]  = useState("");
   const [editGenre,  setEditGenre]  = useState("");
   const [editDate,   setEditDate]   = useState("");
+  const [creditGroups, setCreditGroups] = useState(null);
+  const [recordings, setRecordings] = useState([]);
+  const [editUpc, setEditUpc] = useState("");
+  const [editArtist, setEditArtist] = useState("");
+  const [editType, setEditType] = useState("");
+  const [editLifecycle, setEditLifecycle] = useState({});
 
   // Lyrics (keyed by track id)
   const [trackLyrics, setTrackLyrics] = useState({});
@@ -546,11 +558,21 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   useEffect(() => {
     if (!relStub?.id) return;
     setLoading(true);
-    fetch(`/api/admin/releases/${relStub.id}`)
+    setLoadError(null);
+    let cancelled = false;
+    const controller = new AbortController();
+    fetch(`/api/admin/releases/${relStub.id}`, { signal: controller.signal, cache: "no-store" })
       .then((r) => r.json())
       .then((d) => {
         if (d.error) throw new Error(d.error);
+        if (cancelled) return;
         setDetail(d);
+        setCreditGroups(d.release.credit_groups || editableCreditGroups(d.release));
+        setRecordings(d.tracks || []);
+        setEditUpc(d.release.upc || "");
+        setEditArtist(typeof d.release.artist === "string" ? d.release.artist : d.release.artist?.name || "");
+        setEditType(d.release.release_type || "");
+        setEditLifecycle(Object.fromEntries(["scheduled_at", "available_at", "release_timezone", "upcoming_visible", "preview_before_release", "preorder_enabled", "preorder_starts_at", "preorder_price_cents", "early_access_enabled", "early_access_starts_at", "unavailable_at"].map(k => [k, d.release[k]])));
         setEditTitle(d.product?.title  || "");
         setEditPrice(Number.isFinite(d.product?.price_cents) ? (d.product.price_cents / 100).toFixed(2) : "");
         setEditGenre(d.product?.genre  || "");
@@ -567,8 +589,9 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
         const animatedKey = d.release?.animated_cover_r2_key;
         if (animatedKey) setMp4Preview(catalogMotionVideoUrl(animatedKey));
       })
-      .catch((err) => setLoadError(err.message))
-      .finally(() => setLoading(false));
+      .catch((err) => { if (!cancelled && err.name !== "AbortError") setLoadError(err.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; controller.abort(); };
   }, [relStub?.id, relStub?.cover_art_r2_key]);
 
   const showMsg = useCallback((msg) => {
@@ -580,21 +603,49 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const saveMetadata = async () => {
     setSaving(true);
     try {
+      const patch = { revision: detail.revision };
+      const baselineArtist = typeof detail.release.artist === "string" ? detail.release.artist : detail.release.artist?.name || "";
+      const fields = { title: [editTitle, detail.product.title], price: [editPrice, Number.isFinite(detail.product.price_cents) ? (detail.product.price_cents / 100).toFixed(2) : ""], genre: [editGenre, detail.product.genre || ""], release_date: [editDate, detail.release.release_date || ""], upc: [editUpc, detail.release.upc || ""], artist: [editArtist, baselineArtist], release_type: [editType, detail.release.release_type] };
+      for (const [key, [next, previous]] of Object.entries(fields)) if (next !== previous) patch[key] = next;
+      for (const [key, value] of Object.entries(editLifecycle)) if (value !== detail.release[key]) patch[key] = value;
       const res  = await fetch(`/api/admin/releases/${relStub.id}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ title: editTitle, price: editPrice, genre: editGenre, release_date: editDate }),
+        body:    JSON.stringify(patch),
       });
       const json = await res.json();
-      if (!res.ok && res.status !== 207) throw new Error(json.errors?.[0] || "Save failed");
+      if (!res.ok || json.ok === false) throw new Error(json.error || json.errors?.[0] || "Save failed");
       signalCatalogMutation("release_metadata_updated");
-      showMsg("Saved — changes live on storefront");
+      setDetail(previous => ({ ...previous, revision: json.revision || previous.revision,
+        product: { ...previous.product, title: editTitle, genre: editGenre, price_cents: editPrice === "" ? previous.product.price_cents : Math.round(Number(editPrice) * 100) },
+        release: { ...previous.release, upc: editUpc, artist: editArtist, release_type: editType, release_date: editDate, ...editLifecycle },
+      }));
+      showMsg("Metadata saved");
       onSaved();
     } catch (err) {
       showMsg("Error: " + err.message);
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveCredits = async () => {
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/admin/releases/${relStub.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revision: detail.revision, credit_groups: creditGroups, upc: editUpc,
+          recordings: recordings.map(t => ({ id: t.id, title: t.title, credit_groups: t.credit_groups, isrc: t.isrc, inherit_credits: t.inherit_credits })) }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) throw new Error(body.error || "Credits could not be saved");
+      signalCatalogMutation("release_credits_updated");
+      setDetail(previous => ({ ...previous, revision: body.revision || previous.revision,
+        release: { ...previous.release, credit_groups: creditGroups, upc: editUpc }, tracks: recordings,
+      }));
+      showMsg("Credits and identifiers saved"); onSaved();
+    } catch (error) { showMsg("Error: " + error.message); }
+    finally { setSaving(false); }
   };
 
   // ── Lyrics save ───────────────────────────────────────────────────────────────
@@ -605,10 +656,11 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
       const res  = await fetch(`/api/admin/releases/${relStub.id}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ track_lyrics }),
+        body:    JSON.stringify({ revision: detail.revision, track_lyrics }),
       });
       const json = await res.json();
-      if (!res.ok && res.status !== 207) throw new Error(json.errors?.[0] || "Save failed");
+      if (!res.ok || json.ok === false) throw new Error(json.error || json.errors?.[0] || "Save failed");
+      setDetail(previous => ({ ...previous, revision: json.revision || previous.revision }));
       signalCatalogMutation("release_lyrics_updated");
       showMsg("Lyrics saved");
     } catch (err) {
@@ -857,6 +909,7 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
 
   const sectionDefs = [
     { id: "metadata", label: "Info" },
+    { id: "credits",  label: "Credits & IDs" },
     { id: "cover",    label: "Cover Art" },
     { id: "audio",    label: "Audio" },
     { id: "lyrics",   label: "Lyrics" },
@@ -921,6 +974,9 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
             <Field label="Title">
               <Inp value={editTitle} onChange={setEditTitle} placeholder="Release title" />
             </Field>
+            <Field label="Artist"><Inp value={editArtist} onChange={setEditArtist} /></Field>
+            <Field label="Release Type"><Sel value={editType} onChange={setEditType}>{Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Sel></Field>
+            <Field label="UPC / EAN (optional)"><Inp value={editUpc} onChange={setEditUpc} /></Field>
             <Field label="Price (USD)">
               <PriceSelector
                 releaseType={detail?.release?.release_type}
@@ -937,10 +993,27 @@ function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
             <Field label="Original Release Date">
               <Inp type="date" value={editDate} onChange={setEditDate} />
             </Field>
+            <details><summary>Publication and scheduling</summary>
+              {["scheduled_at", "available_at", "release_timezone", "preorder_starts_at", "early_access_starts_at", "unavailable_at"].map(key => <Field key={key} label={key.replaceAll("_", " ")}><Inp value={editLifecycle[key] || ""} onChange={value => setEditLifecycle(p => ({ ...p, [key]: value || null }))} placeholder={key === "release_timezone" ? "America/Chicago" : "ISO date and time"} /></Field>)}
+              {["upcoming_visible", "preview_before_release", "preorder_enabled", "early_access_enabled"].map(key => <label key={key} style={{ display: "block", marginBottom: 10 }}><input type="checkbox" checked={!!editLifecycle[key]} onChange={e => setEditLifecycle(p => ({ ...p, [key]: e.target.checked }))} />{key.replaceAll("_", " ")}</label>)}
+              <Field label="Preorder price (cents)"><Inp value={editLifecycle.preorder_price_cents ?? ""} onChange={value => setEditLifecycle(p => ({ ...p, preorder_price_cents: value === "" ? null : Number(value) }))} /></Field>
+            </details>
             <Btn onClick={saveMetadata} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Btn>
           </div>
         )}
 
+        {section === "credits" ? <div>
+          <h3>Release-level attribution</h3>
+          <CreditsEditor groups={creditGroups} onChange={setCreditGroups} directoryAvailable={detail.capabilities?.ready} />
+          <Field label="UPC / EAN (optional)"><Inp value={editUpc} onChange={setEditUpc} /></Field>
+          {recordings.map(track => <details key={track.id} style={{ marginBottom: 20 }}><summary>{track.title || "Recording"}</summary>
+            <Field label="Recording title"><Inp value={track.title || ""} onChange={title => setRecordings(rows => rows.map(t => t.id === track.id ? { ...t, title } : t))} /></Field>
+            <Field label="ISRC (optional)"><Inp value={track.isrc || ""} onChange={isrc => setRecordings(rows => rows.map(t => t.id === track.id ? { ...t, isrc } : t))} /></Field>
+            <label><input type="checkbox" checked={!!track.inherit_credits} onChange={e => setRecordings(rows => rows.map(t => t.id === track.id ? { ...t, inherit_credits: e.target.checked } : t))} />Use release defaults for this recording</label>
+            <CreditsEditor groups={track.inherit_credits ? creditGroups : track.credit_groups} directoryAvailable={detail.capabilities?.ready} disabled={track.inherit_credits} onChange={credit_groups => setRecordings(rows => rows.map(t => t.id === track.id ? { ...t, credit_groups } : t))} />
+          </details>)}
+          <Btn onClick={saveCredits} disabled={saving}>{saving ? "Saving…" : "Save Credits and Identifiers"}</Btn>
+        </div> : null}
         {/* ── COVER ART ── */}
         {section === "cover" && (
           <div>

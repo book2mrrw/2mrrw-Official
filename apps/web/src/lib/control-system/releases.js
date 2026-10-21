@@ -1,3 +1,4 @@
+import { publicCredits } from "@/lib/credits/contract";
 import {
   extractControlSystemArray,
   extractControlSystemRecord,
@@ -212,6 +213,7 @@ function mapTrackToFrontendTrack(track, release, fallbackTrack, apiBaseUrl) {
     fullAssetId: track?.fullAssetId || fullAsset?.assetId || fullAsset?.id || null,
     loopAssetId: track?.loopAssetId || loopAsset?.assetId || loopAsset?.id || null,
     lyricsAssetId: track?.lyricsAssetId || lyricsAsset?.assetId || lyricsAsset?.id || null,
+    credits: publicCredits(track),
     lyricsMode: track?.lyricsMode || track?.lyrics_mode || "static",
     lyricsText: track?.lyricsText || track?.lyrics_text || track?.lyrics || null,
     lyricsLrc: track?.lyricsLrc || track?.lyrics_lrc || track?.lrc || null,
@@ -298,7 +300,7 @@ export function mapControlSystemRelease(release, fallbackRelease = {}, index = 0
     controlSystemReleaseStatus: release.status,
     controlSystemTrackCount: release.playback?.trackCount ?? release.tracks?.length,
     controlSystemDurationSeconds: release.playback?.totalDurationSeconds,
-    credits: release.credits ?? [],
+    credits: publicCredits(release),
     giftingEnabled: release.giftingEnabled ?? release.gifting_enabled ?? false,
     tracks: mappedTracks,
     artworkAssetId: release.artworkAssetId || release.artwork_asset_id || artworkAsset?.assetId || artworkAsset?.id || null,

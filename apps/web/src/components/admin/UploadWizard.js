@@ -1,4 +1,8 @@
 "use client";
+import { createDraftSaveQueue } from "@/lib/credits/draft-save-queue";
+import CreditsEditor from "@/components/admin/CreditsEditor";
+import { editableCreditGroups, validateCreditGroups } from "@/lib/credits/contract";
+
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { uploadAssetToR2 } from "@/lib/media/r2-upload-client";
@@ -61,6 +65,8 @@ export function newTrack(position) {
     featured_artists: null,
     content_rating:   null,
     isrc:             "",
+    credit_groups:    null,
+    inherit_credits:  true,
     lyrics:           "",
   };
 }
@@ -530,25 +536,16 @@ function CreditsStep({ data, onChange, onNext, onBack, isMultiTrack }) {
       <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>Credits</h2>
       <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>
         {isMultiTrack
-          ? "Project-level credits — used as defaults for all tracks. Override per track in the next steps."
-          : "Internal record — not shown publicly on the fan site."}
+          ? "Release-level attribution. Each recording can explicitly use these defaults or have its own credits."
+          : "Names and roles appear in Credits. Allocation percentages remain private."}
       </p>
 
-      <MultiEntry
-        label="Produced By"
-        items={data.produced_by}
-        onAdd={(v) => onChange("produced_by", [...data.produced_by, v])}
-        onRemove={(i) => onChange("produced_by", data.produced_by.filter((_, idx) => idx !== i))}
-        placeholder="Producer name"
-      />
-
-      <MultiEntry
-        label="Written By"
-        items={data.written_by}
-        onAdd={(v) => onChange("written_by", [...data.written_by, v])}
-        onRemove={(i) => onChange("written_by", data.written_by.filter((_, idx) => idx !== i))}
-        placeholder="Writer name"
-      />
+      <CreditsEditor groups={data.credit_groups || editableCreditGroups(data)} onChange={groups => {
+        onChange("credit_groups", groups);
+        onChange("written_by", groups.songwriter.entries.map(e => e.name));
+        onChange("produced_by", groups.producer.entries.map(e => e.name));
+        onChange("featured_artists", groups.featured_artist.entries.map(e => e.name));
+      }} directoryAvailable={data.contributor_directory_available === true} />
 
       <button
         onClick={() => setShowAdvanced(!showAdvanced)}
@@ -1236,41 +1233,8 @@ function TrackDetailAccordion({ track, projectDefaults, isOpen, onToggle, onUpda
             />
           </Field>
 
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-              <Label>Featured Artists</Label>
-              {track.featured_artists !== null ? (
-                <button
-                  onClick={() => onUpdate({ featured_artists: null })}
-                  style={{ background: "none", border: "none", color: C.muted2, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
-                >
-                  Clear override
-                </button>
-              ) : (
-                <span style={{ fontSize: 11, color: C.muted2 }}>Using project defaults</span>
-              )}
-            </div>
-
-            {track.featured_artists === null ? (
-              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <div style={{ fontSize: 12, color: C.muted, fontStyle: "italic" }}>
-                  {projectDefaults.featured_artists?.length > 0 ? projectDefaults.featured_artists.join(", ") : "None"}
-                </div>
-                <button
-                  onClick={() => onUpdate({ featured_artists: [] })}
-                  style={{ background: "none", border: `1px solid ${C.border2}`, borderRadius: 5, padding: "3px 9px", fontSize: 11, color: C.muted, cursor: "pointer", fontFamily: "inherit" }}
-                >
-                  Override
-                </button>
-              </div>
-            ) : (
-              <FeaturedArtistInput
-                items={track.featured_artists}
-                onAdd={(v) => onUpdate({ featured_artists: [...track.featured_artists, v] })}
-                onRemove={(i) => onUpdate({ featured_artists: track.featured_artists.filter((_, idx) => idx !== i) })}
-              />
-            )}
-          </div>
+          <label style={{ display: "block", marginBottom: 14 }}><input type="checkbox" checked={track.inherit_credits !== false} onChange={e => onUpdate({ inherit_credits: e.target.checked })} />Use release defaults for this recording</label>
+          <CreditsEditor groups={track.inherit_credits !== false ? projectDefaults.credit_groups || editableCreditGroups(projectDefaults) : track.credit_groups || editableCreditGroups(track)} disabled={track.inherit_credits !== false} directoryAvailable={projectDefaults.contributor_directory_available === true} onChange={groups => onUpdate({ credit_groups: groups, written_by: groups.songwriter.entries.map(e => e.name), produced_by: groups.producer.entries.map(e => e.name), featured_artists: groups.featured_artist.entries.map(e => e.name) })} />
 
           <Field label="Content Rating">
             <div style={{ display: "flex", gap: 8 }}>
@@ -1595,7 +1559,7 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
 }
 
 // ── Step 5/6: Review + Publish ───────────────────────────────────────────────────
-function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete, onUploadAnother }) {
+function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete, onUploadAnother, onPreparePublish, onPublishSettled }) {
   const [publishing, setPublishing] = useState(false);
   const [result,     setResult]     = useState(null);
   const [error,      setError]      = useState(null);
@@ -1658,15 +1622,21 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
     checks.push({ label: message, ok: false, blocking: true });
   }
 
+  for (const message of [data, ...tracks.filter(t => t.inherit_credits === false)].flatMap(value => value.credit_groups ? validateCreditGroups(value.credit_groups) : [])) checks.push({ label: message, ok: false, blocking: true });
   const hasBlocker = checks.some((c) => c.blocking && !c.ok);
 
   const publish = async () => {
     setPublishing(true);
     setError(null);
+    let published = false;
     try {
       if (!releaseId) {
         throw new Error("The canonical release ID was lost before publication. Return to Release Info to recover the draft.");
       }
+      await onPreparePublish?.();
+      const detailResponse = await fetch(`/api/admin/releases/${releaseId}`, { cache: "no-store" });
+      const detail = await detailResponse.json();
+      if (!detailResponse.ok) throw new Error(detail.error || "Could not verify saved release metadata");
       let scheduled_at = null;
       if (data.publish_mode === "scheduled" && data.scheduled_date) {
         scheduled_at = wallClockToUtc(data.scheduled_date, data.scheduled_time, data.release_timezone);
@@ -1676,6 +1646,7 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          revision:           detail.revision,
           title:              data.title,
           price:              data.price,
           release_date:       data.release_date,
@@ -1686,6 +1657,9 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
             secondary: data.secondary_genre_ids || [],
           },
           content_rating:     data.content_rating,
+          artist:             data.primary_artist,
+          credit_groups:      data.credit_groups || undefined,
+          credit_patch_version: 1,
           featured_artists:   data.featured_artists,
           produced_by:        data.produced_by,
           written_by:         data.written_by,
@@ -1722,6 +1696,11 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
             title:            t.title,
             lyrics:           t.lyrics,
             isrc:             t.isrc || null,
+            inherit_credits:  t.inherit_credits !== false,
+            credit_groups:    t.credit_groups || undefined,
+            credit_patch_version: 1,
+            written_by:       t.inherit_credits === false ? t.written_by : undefined,
+            produced_by:      t.inherit_credits === false ? t.produced_by : undefined,
             featured_artists: t.featured_artists !== null ? t.featured_artists : undefined,
             content_rating:   t.content_rating   !== null ? t.content_rating   : undefined,
             preview_key:            t.preview_key || null,
@@ -1734,10 +1713,12 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
       signalCatalogMutation(
         json.status === "scheduled" ? "release_scheduled" : "release_published"
       );
+      published = true;
       setResult(json);
     } catch (err) {
       setError(err.message);
     } finally {
+      onPublishSettled?.(published);
       setPublishing(false);
     }
   };
@@ -1879,6 +1860,8 @@ const DEFAULT_DATA = {
   preorder_price:     "",
   early_access_enabled: false,
   early_access_starts_local: "",
+  credit_groups:      null,
+  contributor_directory_available: false,
   produced_by:        [],
   written_by:         [],
   mixing_engineer:    "",
@@ -1917,16 +1900,30 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null, c
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const uploadSessionIdRef = useRef(null);
   const latestDraftRef = useRef(null);
+  const [draftSaveState, setDraftSaveState] = useState({ status: "idle" });
+  const [savedDraftRevision, setSavedDraftRevision] = useState(null);
+  const draftQueue = useRef(createDraftSaveQueue({
+    onState: setDraftSaveState, onSaved: setSavedDraftRevision,
+    send: async (snapshot, expected_saved_at, options) => {
+      const response = await fetch(`/api/admin/releases/${snapshot.releaseId}/draft`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...snapshot.body, expected_saved_at }), keepalive: options.keepalive === true,
+      });
+      const body = await response.json(); return { ...body, ok: response.ok && body.ok, status: response.status };
+    },
+  }));
 
   useEffect(() => {
     let cancelled = false;
     if (initialReleaseId) {
       fetch(`/api/admin/releases/${initialReleaseId}/draft`)
         .then(async (res) => { const json = await res.json(); if (!res.ok) throw new Error(json.error || "Failed to resume draft"); return json; })
-        .then(({ release, snapshot }) => {
+        .then(({ release, snapshot, detail }) => {
           if (cancelled) return;
           const payload = snapshot?.draft_payload || {};
-          const restoredData = { ...DEFAULT_DATA, ...(payload.data || {}), cover_preview_url: "", cover_video_preview_url: "" };
+          draftQueue.current.restoreRevision(snapshot?.saved_at);
+          setSavedDraftRevision(snapshot?.saved_at || null);
+          const restoredData = { ...DEFAULT_DATA, ...(detail ? { title: detail.product.title, primary_artist: detail.release.artist, genre: detail.product.genre, release_date: detail.release.release_date, upc: detail.release.upc, credit_groups: detail.release.credit_groups, release_type: detail.release.release_type, cover_key: detail.release.cover_art_r2_key } : {}), ...(payload.data || {}), contributor_directory_available: detail?.capabilities?.ready === true, cover_preview_url: "", cover_video_preview_url: "" };
           const publicBase = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "").replace(/\/$/, "");
           if (restoredData.cover_key && publicBase) restoredData.cover_preview_url = `${publicBase}/${restoredData.cover_key}`;
           if (restoredData.cover_video_key && publicBase) restoredData.cover_video_preview_url = `${publicBase}/${restoredData.cover_video_key}`;
@@ -1936,6 +1933,7 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null, c
           setStep(Number.isInteger(snapshot?.step_index) ? snapshot.step_index : 0);
           setData(restoredData);
           if (Array.isArray(payload.tracks) && payload.tracks.length) setTracks(payload.tracks);
+          else if (detail?.tracks?.length) setTracks(detail.tracks.map(t => ({ ...newTrack(t.position), ...t, audio_key: t.audio_r2_key || "" })));
           setSessionHydrated(true);
         })
         .catch((error) => { if (!cancelled) { alert(error.message); setSessionHydrated(true); } });
@@ -1950,6 +1948,8 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null, c
       }
       uploadSessionIdRef.current = saved.uploadSessionId;
       if (saved.releaseId) setReleaseId(saved.releaseId);
+      draftQueue.current.restoreRevision(saved.savedDraftRevision);
+      setSavedDraftRevision(saved.savedDraftRevision || null);
       if (saved.draftSlug) setDraftSlug(saved.draftSlug);
       if (Number.isInteger(saved.step)) setStep(saved.step);
       if (saved.data) setData({ ...DEFAULT_DATA, ...saved.data, cover_preview_url: "", cover_video_preview_url: "" });
@@ -1969,10 +1969,11 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null, c
       releaseId,
       draftSlug,
       step,
+      savedDraftRevision,
       data: { ...data, cover_preview_url: "", cover_video_preview_url: "" },
       tracks,
     }));
-  }, [sessionHydrated, releaseId, draftSlug, step, data, tracks]);
+  }, [sessionHydrated, releaseId, draftSlug, step, data, tracks, savedDraftRevision]);
 
   useEffect(() => {
     if (!sessionHydrated || !releaseId) return;
@@ -1988,30 +1989,20 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null, c
         },
       },
     };
-    const timeout = setTimeout(() => {
-      fetch(`/api/admin/releases/${releaseId}/draft`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(latestDraftRef.current.body),
-      }).catch(() => {});
-    }, 450);
+    const timeout = setTimeout(() => { draftQueue.current.enqueue(latestDraftRef.current).catch(() => {}); }, 450);
     return () => clearTimeout(timeout);
   }, [sessionHydrated, releaseId, step, data, tracks]);
 
-  const flushPendingDraftSave = useCallback(() => {
-    const snapshot = latestDraftRef.current;
-    if (!snapshot) return;
-    fetch(`/api/admin/releases/${snapshot.releaseId}/draft`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(snapshot.body),
-      keepalive: true,
-    }).catch(() => {});
-  }, []);
+  const flushPendingDraftSave = useCallback((options = {}) => draftQueue.current.enqueue(latestDraftRef.current, options), []);
+  const preparePublish = useCallback(async () => {
+    await flushPendingDraftSave(); draftQueue.current.pause();
+  }, [flushPendingDraftSave]);
+  const settlePublish = useCallback((success) => { if (!success) draftQueue.current.resume(); }, []);
 
   useEffect(() => {
-    window.addEventListener("pagehide", flushPendingDraftSave);
-    return () => window.removeEventListener("pagehide", flushPendingDraftSave);
+    const flush = () => { flushPendingDraftSave({ keepalive: true }).catch(() => {}); };
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
   }, [flushPendingDraftSave]);
 
   // `pagehide` only fires on a true document unload (tab close/refresh) — it
@@ -2020,16 +2011,29 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null, c
   // which previously left an edit made in the last <450ms represented only in
   // the same-tab sessionStorage mirror, not the server. Flushing on unmount
   // covers that gap without touching the pagehide path above.
-  useEffect(() => () => flushPendingDraftSave(), [flushPendingDraftSave]);
+  useEffect(() => () => { flushPendingDraftSave({ keepalive: true }).catch(() => {}); }, [flushPendingDraftSave]);
+
+  useEffect(() => {
+    if (!releaseId) return;
+    const controller = new AbortController();
+    fetch(`/api/admin/releases/${releaseId}`, { signal: controller.signal, cache: "no-store" })
+      .then(async response => { if (!response.ok) throw new Error("Directory unavailable"); return response.json(); })
+      .then(detail => setData(previous => ({ ...previous, contributor_directory_available: detail.capabilities?.ready === true })))
+      .catch(() => {});
+    return () => controller.abort();
+  }, [releaseId]);
 
   const isMultiTrack = ["album", "ep", "mixtape"].includes(data.release_type);
   const STEPS        = isMultiTrack ? STEPS_MULTI : STEPS_SINGLE;
 
   const setField = useCallback((key, value) => {
-    setData((prev) => ({ ...prev, [key]: value }));
+    setData((prev) => ({ ...prev, [key]: value,
+      ...(key === "featured_artists" && prev.credit_groups ? { credit_groups: { ...prev.credit_groups, featured_artist: { state: "legacy", entries: value.map(name => prev.credit_groups.featured_artist.entries.find(e => e.name === name) || { name, percentage: "" }) } } } : {})
+    }));
   }, []);
 
   const resetWizard = useCallback(() => {
+    draftQueue.current.resume(); draftQueue.current.restoreRevision(null); setSavedDraftRevision(null); setDraftSaveState({ status: "idle" });
     setStep(0);
     setData(DEFAULT_DATA);
     setTracks([newTrack(1)]);
@@ -2082,11 +2086,13 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null, c
   const back = () => setStep((s) => Math.max(s - 1, 0));
 
   const stepName    = STEPS[step];
-  const commonProps = { data, onChange: setField, onNext: next, onBack: back, releaseId, draftSlug, contentKind };
+  const commonProps = { data, onChange: setField, onNext: next, onBack: back, releaseId, draftSlug, contentKind, onPreparePublish: preparePublish, onPublishSettled: settlePublish };
 
   return (
     <div style={{ maxWidth: 700, margin: "0 auto", padding: "32px 20px 60px", fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
 
+      {draftSaveState.status === "error" ? <p role="alert" style={{ color: C.error }}>Draft save failed: {draftSaveState.error} Your entered values are retained in this tab.</p> : null}
+      {draftSaveState.status === "saving" ? <p role="status">Saving draft…</p> : null}
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 32 }}>
         <div>
@@ -2159,6 +2165,8 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null, c
             onBack={back}
             onComplete={onComplete}
             onUploadAnother={resetWizard}
+            onPreparePublish={preparePublish}
+            onPublishSettled={settlePublish}
           />
         )}
       </div>

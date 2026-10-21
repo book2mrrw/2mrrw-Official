@@ -84,3 +84,13 @@ test("a timestamp never makes a draft public", () => {
   assert.equal(result.live, false);
   assert.equal(result.visible, false);
 });
+
+
+test("stale storefront and upcoming flags cannot expose a draft's attribution or previews", () => {
+  const release = { status: "draft", storefront_visible: true, upcoming_visible: true, preview_before_release: true, available_at: "2020-01-01" };
+  const result = releaseAvailability(release, {}, NOW);
+  assert.equal(result.visible, false);
+  assert.equal(result.canPreview, false);
+  assert.equal(result.canPurchase, false);
+  assert.equal(releaseAvailability(release, { admin: true }, NOW).visible, true);
+});

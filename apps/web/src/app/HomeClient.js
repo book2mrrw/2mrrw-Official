@@ -1308,6 +1308,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   const [featureModalItem, setFeatureModalItem]   = useState(null);
   const [featureReleaseDetail, setFeatureReleaseDetail] = useState(null);
   const [selectedReleaseDetail, setSelectedReleaseDetail] = useState(null);
+  const releaseDetailGeneration = useRef(0);
   const [selectedAlbum, setSelectedAlbum]         = useState(null);
   const [albumModalOpen, setAlbumModalOpen]       = useState(false);
   const [singleIndex, setSingleIndex]             = useState(0);
@@ -2033,6 +2034,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   const addVinylToCart= useCallback(s => addToCart({ title:`${s.title} – Vinyl`, slug:`${s.slug}-vinyl`, cover:s.cover, price:47.99 }), [addToCart]);
 
   const dismissPreviewAndFeatureModals = useCallback(() => {
+    releaseDetailGeneration.current += 1;
     setPreviewModalOpen(false);
     setSelectedSingle(null);
     setSelectedReleaseDetail(null);
@@ -2042,6 +2044,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   }, []);
 
   const openSingleModal = useCallback((single) => {
+    const generation = ++releaseDetailGeneration.current;
     if (featureModalOpenRef.current) {
       setFeatureModalOpen(false);
       setFeatureModalItem(null);
@@ -2058,12 +2061,13 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
     if (!singleItem?.slug) return;
     playCanonicalCatalogItem(singleItem, "preview_modal");
     void getControlSystemReleaseDetail({ slug: singleItem.slug, fallbackRelease: singleItem }).then((detail) => {
-      if (detail) setSelectedReleaseDetail(detail);
+      if (generation === releaseDetailGeneration.current && detail?.slug === singleItem.slug) setSelectedReleaseDetail(detail);
     });
   }, [playCanonicalCatalogItem]);
 
   const openFeatureModal = useCallback(
     (feat) => {
+      const generation = ++releaseDetailGeneration.current;
       if (previewModalOpenRef.current) {
         setPreviewModalOpen(false);
         setSelectedSingle(null);
@@ -2080,13 +2084,14 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
       if (!featItem?.slug) return;
       playCanonicalCatalogItem(featItem, "feature_modal");
       void getControlSystemReleaseDetail({ slug: featItem.slug, fallbackRelease: featItem }).then((detail) => {
-        if (detail) setFeatureReleaseDetail(detail);
+        if (generation === releaseDetailGeneration.current && detail?.slug === featItem.slug) setFeatureReleaseDetail(detail);
       });
     },
     [playCanonicalCatalogItem]
   );
 
   const closeFeatureModal = useCallback(() => {
+    releaseDetailGeneration.current += 1;
     setFeatureModalOpen(false);
     setFeatureModalItem(null);
     setFeatureReleaseDetail(null);
@@ -2125,6 +2130,7 @@ function PageStorefront({ initialEvents, effectiveAlbums, effectiveMixtapes }) {
   );
 
   const closeSingleModal = useCallback(() => {
+    releaseDetailGeneration.current += 1;
     setPreviewModalOpen(false);
     setSelectedSingle(null);
     setSelectedReleaseDetail(null);

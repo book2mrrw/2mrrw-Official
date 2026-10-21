@@ -34,9 +34,9 @@ export function releaseAvailability(release, context = {}, now = new Date()) {
   const preorderOwned = Boolean(context.preorderOwned);
   const releasable = status === "scheduled" || LIVE_STATUSES.has(status);
   const due = releasable && availableMs != null && availableMs <= nowMs;
-  const unavailable = UNAVAILABLE_STATUSES.has(status) || (unavailableMs != null && unavailableMs <= nowMs);
+  const unavailable = Boolean(release?.deleted_at) || UNAVAILABLE_STATUSES.has(status) || (unavailableMs != null && unavailableMs <= nowMs);
   const live = !unavailable && (due || (LIVE_STATUSES.has(status) && availableMs == null));
-  const visible = admin || (!unavailable && (live || Boolean(release?.upcoming_visible || release?.storefront_visible)));
+  const visible = admin || (releasable && !unavailable && (live || Boolean(release?.upcoming_visible || release?.storefront_visible)));
   const preorderOpen = releasable && !live && !unavailable && Boolean(release?.preorder_enabled)
     && (preorderMs == null || preorderMs <= nowMs);
   const audiences = Array.isArray(release?.early_access_audiences)

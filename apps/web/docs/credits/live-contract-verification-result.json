@@ -1,0 +1,21 @@
+[
+  {
+    "verification": {
+      "anon_can_read_directory": false,
+      "authenticated_can_execute_edit": false,
+      "authenticated_can_read_allocations": false,
+      "catalog_tracks": 30,
+      "collaborators": 0,
+      "credit_assignments": 0,
+      "credit_groups": 0,
+      "financial_rows": 0,
+      "products": 29,
+      "releases": 13,
+      "tracks": 8,
+      "versions": [
+        "20261021010000",
+        "20261021020000"
+      ]
+    }
+  }
+]

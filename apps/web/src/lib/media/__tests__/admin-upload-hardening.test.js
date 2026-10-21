@@ -221,26 +221,26 @@ describe("publish cannot silently half-succeed", () => {
   const publish = read("src/app/api/admin/releases/[id]/publish/route.js");
 
   test("Supabase builders are awaited and inspected instead of treated like native Promises", () => {
-    assert.doesNotMatch(
-      publish,
-      /await\s+[A-Za-z_$][\w$]*(?:(?!;)[\s\S])*?\.from\((?:(?!;)[\s\S])*?\.catch\(/,
-      "Supabase query builders do not implement Promise.catch(); destructure and inspect their error result",
-    );
-    assert.match(publish, /if \(trackCanonicalizeError\)/);
-    assert.match(publish, /if \(hlsCanonicalizeError\)/);
-    assert.match(publish, /if \(coverKeyUpdateError\) throw coverKeyUpdateError/);
-    assert.match(publish, /if \(singleTrackUpdateError\)/);
+    assert.match(publish, /await admin\.rpc\("commit_release_publication"/);
+    assert.match(publish, /if \(commitError\)/);
+    assert.match(publish, /await submitAudioJob\(/);
+    assert.match(publish, /status: error\.status \|\| 503/);
+    assert.doesNotMatch(publish, /\.from\("products"\)[\s\S]{0,50}\.upsert/);
   });
 
   test("a failed tracklist write blocks publish instead of leaving a live release with no tracks", () => {
-    assert.match(publish, /if \(trackErr\) \{\s*console\.error\("\[publish\] catalog_tracks upsert error"/);
-    assert.ok(!publish.includes('console.error("[publish] catalog_tracks upsert error (non-fatal)"'));
+    assert.match(publish, /p_payload: \{ product: productRow, catalog_tracks: trackRows/);
+    assert.match(publish, /if \(commitError\) return NextResponse\.json/);
+    const sql = read("supabase/migrations/20261021020000_atomic_credit_publication.sql");
+    assert.match(sql, /INSERT INTO public\.catalog_tracks/);
+    assert.match(sql, /no catalog or credit changes were committed/);
   });
 
   test("a failed lifecycle status transition is returned as an error, never told to the admin as success", () => {
-    assert.match(publish, /const \{ error: releaseUpdateErr \} = await admin\s*\.from\("releases"\)\s*\.update\(releaseUpdate\)\s*\.eq\("id", releaseId\);/);
-    assert.match(publish, /if \(releaseUpdateErr\) \{[\s\S]{0,500}status: 500 \}/);
-    assert.ok(!publish.includes('.eq("id", releaseId).catch((err) => {\n    console.warn("[publish] release status update error'));
+    const errorCheck = publish.indexOf("if (commitError)");
+    const success = publish.indexOf("return NextResponse.json({ ok: true");
+    assert.ok(errorCheck > 0 && success > errorCheck);
+    assert.match(read("supabase/migrations/20261021020000_atomic_credit_publication.sql"), /UPDATE public\.releases SET title=update_r\.title/);
   });
 });
 
@@ -269,15 +269,16 @@ describe("reopening a draft never re-requires an already-uploaded asset", () => 
   });
 
   test("draft autosave never nulls a previously-saved release_date or cover on a partial payload", () => {
-    assert.ok(draftRoute.includes("release_date: data.release_date ?? release.release_date"));
-    assert.ok(draftRoute.includes("cover_art_r2_key: data.cover_key ?? release.cover_art_r2_key"));
-    assert.ok(!draftRoute.includes("release_date: data.release_date || null"));
-    assert.ok(!draftRoute.includes("cover_art_r2_key: data.cover_key || null"));
+    const sql = read("supabase/migrations/20261021020000_atomic_credit_publication.sql");
+    assert.match(sql, /release_date=CASE WHEN datum\?'release_date'/);
+    assert.match(sql, /cover_art_r2_key=COALESCE\(NULLIF\(datum->>'cover_key',''\),cover_art_r2_key\)/);
+    assert.match(draftRoute, /save_release_credit_draft/);
   });
 
   test("draft PUT merges onto the prior snapshot instead of blind-replacing it", () => {
-    assert.ok(draftRoute.includes('data: { ...priorData, ...(payload.data || {}) }'),
-      "an out-of-order or partial save must never erase fields a prior save already persisted");
+    const sql = read("supabase/migrations/20261021020000_atomic_credit_publication.sql");
+    assert.match(sql, /COALESCE\(d\.draft_payload->'data','\{\}'::jsonb\)\|\|COALESCE\(p_payload->'data','\{\}'::jsonb\)/);
+    assert.match(sql, /p_expected_saved_at IS DISTINCT FROM d\.saved_at/);
   });
 });
 
@@ -306,9 +307,10 @@ describe("draft-list rows are openable without hitting a precise Edit target", (
 describe("a pending autosave is flushed on soft navigation away from the wizard, not just on tab close", () => {
   test("the wizard flushes the latest draft snapshot on unmount, not only on pagehide", () => {
     const wizard = read("src/components/admin/UploadWizard.js");
-    assert.match(wizard, /const flushPendingDraftSave = useCallback\(\(\) => \{/);
-    assert.match(wizard, /window\.addEventListener\("pagehide", flushPendingDraftSave\);/);
-    assert.match(wizard, /useEffect\(\(\) => \(\) => flushPendingDraftSave\(\), \[flushPendingDraftSave\]\);/);
+    assert.match(wizard, /const flushPendingDraftSave = useCallback/);
+    assert.match(wizard, /window\.addEventListener\("pagehide", flush\)/);
+    assert.match(wizard, /useEffect\(\(\) => \(\) => \{ flushPendingDraftSave\(\{ keepalive: true \}\)/);
+    assert.match(wizard, /draftQueue\.current\.enqueue/);
   });
 });
 
@@ -316,19 +318,19 @@ describe("release type cannot change mid-draft into a shape existing tracks don'
   const draftRoute = read("src/app/api/admin/releases/[id]/draft/route.js");
 
   test("switching single-track <-> multi-track categories is blocked once tracks exist", () => {
-    assert.match(draftRoute, /const oldIsMultiTrack = MULTI_TRACK_TYPES\.has\(release\.release_type\);/);
-    assert.match(draftRoute, /const newIsMultiTrack = MULTI_TRACK_TYPES\.has\(requestedType\);/);
-    assert.match(draftRoute, /if \(oldIsMultiTrack !== newIsMultiTrack\) \{/);
-    assert.match(draftRoute, /status: 409 \}\);/);
+    const sql = read("supabase/migrations/20261021020000_atomic_credit_publication.sql");
+    assert.match(sql, /requested IN \('album','ep','mixtape'\)\) IS DISTINCT FROM/);
+    assert.match(sql, /EXISTS\(SELECT 1 FROM public\.tracks WHERE release_id=r\.id AND removed_from_release_at IS NULL\)/);
+    assert.match(sql, /Remove uploaded tracks before changing media family/);
   });
 
   test("an invalid release_type value is rejected rather than silently stored", () => {
-    assert.match(draftRoute, /if \(!VALID_RELEASE_TYPES\.has\(requestedType\)\) \{/);
+    assert.match(read("supabase/migrations/20261021020000_atomic_credit_publication.sql"), /requested NOT IN \('single','feature','album','ep','mixtape'\)/);
   });
 
   test("same-category type changes (Single<->Feature, Album<->EP<->Mixtape) remain allowed", () => {
-    assert.match(draftRoute, /MULTI_TRACK_TYPES = new Set\(\["album", "ep", "mixtape"\]\);/);
-    assert.match(draftRoute, /VALID_RELEASE_TYPES = new Set\(\["single", "feature", "album", "ep", "mixtape"\]\);/);
+    const sql = read("supabase/migrations/20261021020000_atomic_credit_publication.sql");
+    assert.match(sql, /requested IN \('album','ep','mixtape'\)\) IS DISTINCT FROM \(r\.release_type IN/);
   });
 });
 

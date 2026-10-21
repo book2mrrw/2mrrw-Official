@@ -1,9 +1,13 @@
+import { publicationCredits, metadataPatch } from "@/lib/credits/publication";
+import { validateCreditGroups, optionalIdentifier, publicCredits } from "@/lib/credits/contract";
+import { creditStorageCapabilities } from "@/lib/credits/admin-store";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getAdminSessionUser } from "@/lib/auth/admin-api-guard";
 import { isAdminUser } from "@/lib/auth/constants";
 import { getAdminClient } from "@/lib/supabase/admin";
-import { headR2ObjectKey, copyR2Object, deleteR2Object, getPublicR2Url } from "@/lib/storage/r2";
-import { buildHLSPrefix } from "@/lib/hls/derive-key";
+import { headR2ObjectKey, copyR2Object, getPublicR2Url } from "@/lib/storage/r2";
+import { submitAudioJob } from "@/lib/hls/submit-audio-job";
 import { checkRateLimit, rateLimitResponse } from "@/lib/server/rate-limit";
 import { revalidateStorefront } from "@/lib/media/revalidate-storefront";
 import {
@@ -67,6 +71,44 @@ export async function POST(req, { params }) {
   let body;
   try { body = await req.json(); } catch { body = {}; }
 
+  const admin = getAdminClient();
+  if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "Invalid publication payload" }, { status: 400 });
+  const creditInput = body;
+  const creditErrors = [body, ...(Array.isArray(body.tracks) ? body.tracks : [])].flatMap(value => value?.credit_groups ? validateCreditGroups(value.credit_groups) : []);
+  try {
+    if (Object.hasOwn(body, "upc")) optionalIdentifier(body.upc, "UPC/EAN");
+    for (const recording of [body, ...(Array.isArray(body.tracks) ? body.tracks : [])]) if (Object.hasOwn(recording, "isrc")) optionalIdentifier(recording.isrc, "ISRC");
+  } catch (error) { creditErrors.push(error.message); }
+  if (creditErrors.length) return NextResponse.json({ error: creditErrors.join(" ") }, { status: 422 });
+  if (body.tracks !== undefined && !Array.isArray(body.tracks)) return NextResponse.json({ error: "Recordings must be a list" }, { status: 422 });
+  const capability = await creditStorageCapabilities(admin);
+  if (!capability.ready) return NextResponse.json({ error: capability.reason }, { status: 503 });
+  const { data: existingProduct, error: existingProductError } = await admin.from("products").select("id,title,price_cents,credits,metadata").eq("release_id", releaseId).maybeSingle();
+  if (existingProductError) return NextResponse.json({ error: "Could not load existing credits before publication" }, { status: 503 });
+  const { data: existingCatalogTracks, error: existingCatalogError } = existingProduct
+    ? await admin.from("catalog_tracks").select("id,track_id,slug,credits,metadata").eq("product_id", existingProduct.id)
+    : { data: [] };
+  if (existingCatalogError) return NextResponse.json({ error: "Could not load existing recording credits before publication" }, { status: 503 });
+
+  // ── 1. Load the release record ─────────────────────────────────────────────
+  const { data: release, error: relErr } = await admin
+    .from("releases")
+    .select("*")
+    .eq("id", releaseId)
+    .is("deleted_at", null)
+    .single();
+
+  if (relErr || !release) {
+    return NextResponse.json({ error: "Release not found" }, { status: 404 });
+  }
+  // Partial republish requests inherit saved metadata; omission is never deletion.
+  if (release.status !== "draft") body = {
+    title: existingProduct?.title || release.title,
+    price_cents: existingProduct?.price_cents,
+    release_date: release.release_date,
+    ...Object.fromEntries(['scheduled_at', 'release_timezone', 'upcoming_visible', 'preview_before_release', 'preorder_enabled', 'preorder_starts_at', 'preorder_price_cents', 'early_access_enabled', 'early_access_starts_at', 'early_access_scope', 'early_access_audiences'].map(key => [key, release[key]])),
+    ...body,
+  };
   // All wizard-collected data comes from the request body
   const {
     title,
@@ -76,9 +118,9 @@ export async function POST(req, { params }) {
     genre,
     genre_classifications = null,
     content_rating,
-    featured_artists = [],
-    produced_by = [],
-    written_by = [],
+    featured_artists,
+    produced_by,
+    written_by,
     mixing_engineer,
     mastering_engineer,
     executive_producer,
@@ -89,7 +131,6 @@ export async function POST(req, { params }) {
     p_line,
     publishing_credits,
     cover_key,         // R2 key set by /upload/complete
-    audio_key,         // R2 key set by /upload/complete
     preview_key,       // R2 key of the browser-derived preview clip, set by /upload/complete
     preview_start_seconds = 0,
     track_id,          // tracks row id (single/feature only)
@@ -108,19 +149,10 @@ export async function POST(req, { params }) {
     tracks: bodyTracks = [],  // per-track overrides from wizard (multi-track)
   } = body;
 
-  const admin = getAdminClient();
-
-  // ── 1. Load the release record ─────────────────────────────────────────────
-  const { data: release, error: relErr } = await admin
-    .from("releases")
-    .select("id, slug, status, release_type, content_kind, cover_art_r2_key, metadata")
-    .eq("id", releaseId)
-    .is("deleted_at", null)
-    .single();
-
-  if (relErr || !release) {
-    return NextResponse.json({ error: "Release not found" }, { status: 404 });
-  }
+  const { data: savedRevision, error: revisionError } = await admin.rpc("get_release_publication_revision", { p_release_ref_id: releaseId });
+  if (revisionError || !savedRevision) return NextResponse.json({ error: "Could not verify the release revision before publishing" }, { status: 503 });
+  const publicationRevision = creditInput.revision || savedRevision;
+  const canonicalTrackUpdates = new Map();
   // Re-publishing is an idempotent projection refresh for the same release ID.
   // Preview readiness is only enforced on the FIRST publish — a release that
   // predates this requirement must remain editable/re-publishable without
@@ -155,7 +187,7 @@ export async function POST(req, { params }) {
     const bodyTrack = bodyTracks.find((bt) =>
       bt.id === dbTrack.id || (bt.id != null && Number(bt.position) === Number(dbTrack.position))
     );
-    const stableSlug = bodyTrack?.slug || slugify(bodyTrack?.title || dbTrack.title || `track-${dbTrack.position || 1}`);
+    const stableSlug = (existingCatalogTracks || []).find(track => track.track_id === dbTrack.id)?.slug || bodyTrack?.slug || slugify(bodyTrack?.title || dbTrack.title || `track-${dbTrack.position || 1}`);
     const previewKey = dbTrack.preview_r2_key || bodyTrack?.preview_key || null;
     const previewStartSeconds = dbTrack.preview_r2_key
       ? (dbTrack.preview_start_seconds ?? 0)
@@ -198,11 +230,10 @@ export async function POST(req, { params }) {
 
   const readyTracks = (tracks || []).filter((t) => t.audio_r2_key && t.upload_status === "ready");
 
-  // For singles/features, also accept audio_key from the body (wizard state)
-  const hasAudioFromBody = Boolean(audio_key);
+  // A completed upload must have a durable track identity before publication.
   const hasAudioFromDB   = readyTracks.length > 0;
 
-  if (!isMultiTrack && !hasAudioFromBody && !hasAudioFromDB) {
+  if (!isMultiTrack && !hasAudioFromDB) {
     return NextResponse.json({ error: "BLOCKING: Audio master must be uploaded before publishing" }, { status: 422 });
   }
   if (isMultiTrack && !hasAudioFromDB) {
@@ -238,8 +269,8 @@ export async function POST(req, { params }) {
   }
 
   // ── 4. Resolve final status (needed for product active flag) ──────────────
-  const newStatus = scheduled_at ? "scheduled" : "published";
-  const availableAt = scheduled_at || new Date().toISOString();
+  const availableAt = scheduled_at || (!isFirstPublish ? release.available_at : null) || new Date().toISOString();
+  const newStatus = Date.parse(availableAt) > Date.now() ? "scheduled" : "published";
   const lifecycle = {
     status: newStatus,
     available_at: availableAt,
@@ -280,11 +311,22 @@ export async function POST(req, { params }) {
     if (!srcKey) continue;
 
     const ext = extFromKey(srcKey);
-    const destKey = isMultiTrack
-      ? `digital-assets/${typeFolder}/${releaseSlug}/${track.slug}/${track.slug}${ext}`
-      : `digital-assets/${typeFolder}/${releaseSlug}/${releaseSlug}${ext}`;
+    const folder = isMultiTrack
+      ? `digital-assets/${typeFolder}/${releaseSlug}/${track.slug}/`
+      : `digital-assets/${typeFolder}/${releaseSlug}/`;
+    const alreadyCanonical = srcKey.startsWith(folder) && !srcKey.slice(folder.length).includes("/");
+    const destKey = alreadyCanonical ? srcKey
+      : `${folder}${isMultiTrack ? track.slug : releaseSlug}-${randomUUID()}${ext}`;
 
-    if (srcKey === destKey) continue; // already at canonical path (R2-ingest releases)
+    if (srcKey === destKey) {
+      try {
+        await submitAudioJob({ admin, slug: releaseSlug, trackSlug: isMultiTrack ? track.slug : null,
+          releaseType: hlsFolder, reuseComplete: true, sourceKey: track.master_r2_key || srcKey, queuedBy: user.id });
+      } catch (error) {
+        return NextResponse.json({ error: error.message }, { status: error.status || 503 });
+      }
+      continue;
+    }
 
     // Copy audio to canonical path — blocking: a published release must have accessible audio
     try {
@@ -298,55 +340,22 @@ export async function POST(req, { params }) {
     }
 
     // Update DB: canonical audio_r2_key (and master_r2_key if it followed the same draft pattern)
-    const trackUpdateFields = { audio_r2_key: destKey };
-    if (track.master_r2_key && track.master_r2_key !== srcKey) {
-      const masterExt = extFromKey(track.master_r2_key);
-      const masterDest = isMultiTrack
-        ? `digital-assets/${typeFolder}/${releaseSlug}/${track.slug}/${track.slug}-master${masterExt}`
-        : `digital-assets/${typeFolder}/${releaseSlug}/${releaseSlug}-master${masterExt}`;
-      if (track.master_r2_key !== masterDest) {
-        try {
-          await copyR2Object(track.master_r2_key, masterDest);
-          trackUpdateFields.master_r2_key = masterDest;
-        } catch {
-          // master_r2_key is supplementary — non-fatal
-        }
-      }
-    }
-    const { error: trackCanonicalizeError } = await admin
-      .from("tracks")
-      .update(trackUpdateFields)
-      .eq("id", track.id);
-    if (trackCanonicalizeError) {
-      console.error("[publish] track audio key canonicalization failed", trackCanonicalizeError.message);
-      return NextResponse.json(
-        { error: "Publish failed — could not commit the canonical audio identity. Please try again." },
-        { status: 500 }
-      );
-    }
+    const trackUpdateFields = { audio_r2_key: destKey, ...(track.master_r2_key === srcKey ? { master_r2_key: destKey } : {}) };
+    // A separate original master remains at its immutable source location.
+    // Only the public audio projection needs a canonical catalog folder.
+    canonicalTrackUpdates.set(track.id, { id: track.id, ...trackUpdateFields });
 
-    // Update the HLS transcode job queued at upload time (used draft slug/prefix/source_key)
-    // Skip jobs currently being processed by the worker — they'll be corrected on next sync
-    const newHlsPrefix = buildHLSPrefix(releaseSlug, isMultiTrack ? track.slug : null, hlsFolder);
-    const { error: hlsCanonicalizeError } = await admin
-      .from("hls_transcode_jobs")
-      .update({
-        source_key:    destKey,
-        slug:          releaseSlug,
-        track_slug:    isMultiTrack ? track.slug : null,
-        hls_prefix:    newHlsPrefix,
-        status:        "pending",
-        attempt_count: 0,
-        error_message: null,
-      })
-      .eq("source_key", srcKey)
-      .neq("status", "processing");
-    if (hlsCanonicalizeError) {
-      console.warn("[publish] HLS job canonicalize error (non-fatal)", hlsCanonicalizeError.message);
+    try {
+      await submitAudioJob({ admin, slug: releaseSlug, trackSlug: isMultiTrack ? track.slug : null,
+        releaseType: hlsFolder, reuseComplete: true, sourceKey: trackUpdateFields.master_r2_key || track.master_r2_key || destKey,
+        queuedBy: user.id });
+    } catch (error) {
+      return NextResponse.json({ error: error.message }, { status: error.status || 503 });
     }
+    Object.assign(track, trackUpdateFields);
+    // Retain draft masters: an existing worker may still reference them.
+    // Deletion belongs to a separate reference-aware retention process.
 
-    // Clean up draft file — non-fatal; leave on failure (worker may still be reading)
-    await deleteR2Object(srcKey).catch(() => {});
   }
 
   // ── 5b2. Canonicalize preview clip path(s) ────────────────────────────────
@@ -371,7 +380,7 @@ export async function POST(req, { params }) {
     if (resolvedPreviewKey !== destKey) {
       try {
         await copyR2Object(resolvedPreviewKey, destKey);
-        await deleteR2Object(resolvedPreviewKey).catch(() => {});
+
         canonicalPreviewKey = destKey;
       } catch (err) {
         console.warn("[publish] preview canonicalize error (non-fatal for re-publish)", err?.message);
@@ -386,7 +395,7 @@ export async function POST(req, { params }) {
     // A stale negative (from a play attempt before this publish) must not
     // outlive this fix, and a re-published clip's new content should be
     // discoverable immediately rather than waiting out the cache TTL.
-    await clearPersistedPreviewKey(admin, releaseSlug).catch(() => {});
+
   }
 
   // track.slug -> exact preview object key, for direct (discovery-free) lookup
@@ -403,9 +412,9 @@ export async function POST(req, { params }) {
     }
     try {
       await copyR2Object(previewSrcKey, destKey);
-      await deleteR2Object(previewSrcKey).catch(() => {});
+
       canonicalTrackPreviewKeys.set(track.slug, destKey);
-      await clearPersistedPreviewKey(admin, releaseSlug, track.slug).catch(() => {});
+
     } catch (err) {
       console.warn(`[publish] track ${track.id} preview canonicalize error (non-fatal for re-publish)`, err?.message);
       if (isFirstPublish) {
@@ -430,12 +439,6 @@ export async function POST(req, { params }) {
     if (targetCoverKey !== resolvedCoverKey) {
       try {
         await copyR2Object(resolvedCoverKey, targetCoverKey);
-        const { error: coverKeyUpdateError } = await admin
-          .from("releases")
-          .update({ cover_art_r2_key: targetCoverKey })
-          .eq("id", releaseId);
-        if (coverKeyUpdateError) throw coverKeyUpdateError;
-        await deleteR2Object(resolvedCoverKey).catch(() => {});
         canonicalCoverKey = targetCoverKey;
       } catch (err) {
         console.warn("[publish] cover art canonicalize error (non-fatal)", err?.message);
@@ -467,7 +470,7 @@ export async function POST(req, { params }) {
     if (targetVideoKey !== resolvedVideoKey) {
       try {
         await copyR2Object(resolvedVideoKey, targetVideoKey);
-        await deleteR2Object(resolvedVideoKey).catch(() => {});
+
         canonicalVideoKey = targetVideoKey;
       } catch (err) {
         console.warn("[publish] motion cover canonicalize error (non-fatal)", err?.message);
@@ -500,6 +503,7 @@ export async function POST(req, { params }) {
   // type; video_path is now only set when canonicalVideoKey confirms a
   // motion cover genuinely exists.
   const video_path   = canonicalVideoKey ? resolveVideoPath(typeFolder, releaseSlug) : null;
+
   // cover_url is the STATIC cover, always — never a discovery redirect, and
   // never the motion cover. The motion cover travels separately, as
   // metadata.animated_cover_r2_key and video_path.
@@ -527,27 +531,19 @@ export async function POST(req, { params }) {
 
   // Price: body price_cents takes priority, then parse price string, then defaults
   const resolvedPriceCents = price_cents
-    || (price ? Math.round(parseFloat(String(price).replace(/[^0-9.]/g, "")) * 100) : null)
-    || (releaseType === "album" ? 1299 : releaseType === "ep" || releaseType === "mixtape" ? 999 : 299);
+    ?? (price ? Math.round(parseFloat(String(price).replace(/[^0-9.]/g, "")) * 100) : null)
+    ?? (releaseType === "album" ? 1299 : releaseType === "ep" || releaseType === "mixtape" ? 999 : 299);
 
   const resolvedReleaseDate = release_date || new Date().toISOString().slice(0, 10);
 
   // Build credits payload
-  const credits = {
-    produced_by:        produced_by || [],
-    written_by:         written_by || [],
-    mixing_engineer:    mixing_engineer || null,
-    mastering_engineer: mastering_engineer || null,
-    executive_producer: executive_producer || null,
-    isrc:               isrc || null,
-    featured_artists:   featured_artists || [],
-  };
+  let credits;
+  try { credits = publicationCredits(existingProduct?.credits, creditInput); }
+  catch (error) { return NextResponse.json({ error: error.message }, { status: 422 }); }
+
 
   // ── 6. Upsert products row ─────────────────────────────────────────────────
-  const { data: product, error: productErr } = await admin
-    .from("products")
-    .upsert(
-      {
+  const productRow = {
         slug:          releaseSlug,
         title:         title.trim(),
         display_title: title.trim(),
@@ -568,13 +564,15 @@ export async function POST(req, { params }) {
         image_path:    artwork_path,
         credits,
         metadata: {
+          ...metadataPatch(existingProduct?.metadata, body, ["genre", "content_rating", "artist"]),
+          ...(!isMultiTrack ? { audio_key: readyTracks[0]?.audio_r2_key } : {}),
           release_type:             releaseType,
           release_category:         releaseType,
           canonical:                false,
           published_by_upload_system: true,
-          genre:                    genre || null,
-          content_rating:           content_rating || null,
-          featured_artists:         featured_artists || [],
+          genre:                    Object.hasOwn(body, "genre") ? genre : existingProduct?.metadata?.genre || null,
+          content_rating:           Object.hasOwn(body, "content_rating") ? content_rating : existingProduct?.metadata?.content_rating || null,
+          featured_artists:         credits?.featured_artists ?? existingProduct?.metadata?.featured_artists ?? [],
           cover_art_r2_key:         canonicalCoverKey,
           animated_cover_r2_key:    canonicalVideoKey || null,
           preview_r2_key:           canonicalPreviewKey || null,
@@ -582,23 +580,13 @@ export async function POST(req, { params }) {
           lifecycle_managed:        true,
         },
         gifting_enabled: false,
-      },
-      { onConflict: "slug" }
-    )
-    .select("id")
-    .single();
-
-  if (productErr) {
-    console.error("[publish] products upsert error", productErr.message);
-    return NextResponse.json({ error: "Publish failed — could not write to storefront catalog" }, { status: 500 });
-  }
-
-  const productId = product.id;
+      };
+  let classificationRows = null;
 
   // Canonical many-classification taxonomy. The legacy metadata.genre string
   // remains a display-compatible projection, never the editing authority.
   if (genre_classifications?.primary) {
-    const classificationRows = [
+    classificationRows = [
       { taxonomy_id: genre_classifications.primary, role: "primary", sort_order: 0 },
       ...[...new Set(genre_classifications.subgenres || [])]
         .filter((id) => id && id !== genre_classifications.primary)
@@ -612,21 +600,24 @@ export async function POST(req, { params }) {
     if (taxonomyError || (validTaxonomy || []).length !== ids.length) {
       return NextResponse.json({ error: "BLOCKING: One or more genre classifications are invalid or disabled" }, { status: 422 });
     }
-    await admin.from("release_genre_classifications").delete().eq("release_id", releaseId);
-    const { error: classificationError } = await admin.from("release_genre_classifications").insert(classificationRows);
-    if (classificationError) return NextResponse.json({ error: `Genre classification failed: ${classificationError.message}` }, { status: 500 });
+
   }
 
   // ── 7. For multi-track: upsert catalog_tracks ──────────────────────────────
+  let trackRows = [];
   if (isMultiTrack && readyTracks.length > 0) {
-    const trackRows = readyTracks.map((t, i) => {
-      const tCredits = {
-        produced_by:    t.track_credits?.produced_by    ?? produced_by  ?? [],
-        written_by:     t.track_credits?.written_by     ?? written_by   ?? [],
-        isrc:           t.track_credits?.isrc           || null,
-        content_rating: t.track_credits?.content_rating || content_rating || "clean",
-      };
-      const tFeatured = t.featured_artists ?? featured_artists ?? [];
+    trackRows = readyTracks.map((t, i) => {
+      const priorTrack = (existingCatalogTracks || []).find(row => row.track_id === t.id);
+      const requestedTrack = bodyTracks.find(row => row.id === t.id) || {};
+      const tCredits = publicationCredits(priorTrack?.credits, {
+        ...requestedTrack,
+        ...((requestedTrack.inherit_credits === true || (!priorTrack && requestedTrack.inherit_credits !== false)) ? {
+          ...(written_by !== undefined ? { written_by } : {}),
+          ...(produced_by !== undefined ? { produced_by } : {}),
+          ...(featured_artists !== undefined ? { featured_artists } : {}),
+        } : {}),
+      });
+      const tFeatured = publicCredits({ credits: tCredits }).filter(credit => credit.role === "featured_artist").map(credit => credit.name);
       return {
         slug:             t.slug || `track-${i + 1}`,
         title:            t.title || `Track ${i + 1}`,
@@ -634,7 +625,7 @@ export async function POST(req, { params }) {
         album_slug:       releaseSlug,
         track_number:     t.position || (i + 1),
         position:         t.position || (i + 1),
-        product_id:       productId,
+        product_id:       existingProduct?.id || null,
         track_id:         t.id,
         storage_path:     resolveStoragePath(typeFolder, releaseSlug, t.slug),
         // Same principle as the single/feature preview_path above — a track
@@ -644,50 +635,18 @@ export async function POST(req, { params }) {
         lyrics:           t.lyrics || null,
         credits:          tCredits,
         featured_artists: tFeatured,
-        metadata:         t.preview_key ? { preview_start_seconds: Number(t.preview_start_seconds) || 0 } : {},
+        metadata:         { ...(priorTrack?.metadata || {}), audio_key: t.audio_r2_key, ...(t.preview_key ? { preview_start_seconds: Number(t.preview_start_seconds) || 0 } : {}) },
       };
     });
 
-    const { error: trackErr } = await admin
-      .from("catalog_tracks")
-      .upsert(trackRows, { onConflict: "album_slug,slug" });
-
-    // Blocking: a multi-track release must never be marked live with an
-    // incomplete or missing tracklist. Treating this as non-fatal previously
-    // meant the release could go on to be flipped to published/scheduled below
-    // with zero playable tracks in the storefront's catalog_tracks table.
-    if (trackErr) {
-      console.error("[publish] catalog_tracks upsert error", trackErr.message);
-      return NextResponse.json(
-        { error: `Publish failed — could not save the tracklist: ${trackErr.message}` },
-        { status: 500 }
-      );
-    }
   }
 
-  // For singles/features: update the tracks row with title + lyrics + isrc
-  if (!isMultiTrack && track_id) {
-    const singleTrackUpdate = { position: 1 };
-    if (title?.trim()) singleTrackUpdate.title = title.trim();
-    if (lyrics)        singleTrackUpdate.lyrics = lyrics;
-    if (isrc)          singleTrackUpdate.isrc   = isrc;
-    const { error: singleTrackUpdateError } = await admin
-      .from("tracks")
-      .update(singleTrackUpdate)
-      .eq("id", track_id)
-      .eq("release_id", releaseId)
-      .is("removed_from_release_at", null);
-    if (singleTrackUpdateError) {
-      console.error("[publish] single-track metadata update error", singleTrackUpdateError.message);
-      return NextResponse.json(
-        { error: "Publish failed — could not commit the track metadata. Please try again." },
-        { status: 500 }
-      );
-    }
-  }
 
   // ── 8. Update releases row status + canonical slug ─────────────────────────
   const releaseUpdate = {
+    title:              title.trim(),
+    cover_art_r2_key:    canonicalCoverKey,
+    metadata:           { ...(release.metadata || {}), animated_cover_r2_key: canonicalVideoKey || null },
     status:             newStatus,
     storefront_visible: !scheduled_at || Boolean(upcoming_visible),
     slug:               releaseSlug,
@@ -703,7 +662,7 @@ export async function POST(req, { params }) {
     early_access_starts_at,
     early_access_scope,
     early_access_audiences,
-    published_at:       scheduled_at ? null : new Date().toISOString(),
+    published_at:       !isFirstPublish ? release.published_at : scheduled_at ? null : new Date().toISOString(),
     release_date:       resolvedReleaseDate,
   };
 
@@ -712,29 +671,36 @@ export async function POST(req, { params }) {
   if (mixing_engineer)    releaseUpdate.mixing_engineer    = mixing_engineer;
   if (mastering_engineer) releaseUpdate.mastering_engineer = mastering_engineer;
   if (publishing_credits) releaseUpdate.publishing_credits = publishing_credits;
-  if (upc)               releaseUpdate.upc = upc;
+  if (Object.hasOwn(body, "upc")) releaseUpdate.upc = optionalIdentifier(upc, "UPC/EAN");
   if (copyright_year)    releaseUpdate.copyright_year = parseInt(copyright_year, 10) || null;
   if (c_line)            releaseUpdate.c_line = c_line;
   if (p_line)            releaseUpdate.p_line = p_line;
 
-  // Blocking: this is the actual lifecycle transition — the write that makes
-  // releaseAvailability() start returning visible:true. Every prior step in
-  // this request (R2 canonicalization, the products upsert, catalog_tracks)
-  // is preparation for this moment. Treating its failure as non-fatal meant
-  // the admin could be told "Published" while the release silently stayed in
-  // status:"draft" forever, with no visible sign anything was wrong.
-  const { error: releaseUpdateErr } = await admin
-    .from("releases")
-    .update(releaseUpdate)
-    .eq("id", releaseId);
-  if (releaseUpdateErr) {
-    console.error("[publish] release status update error", releaseUpdateErr.message);
-    return NextResponse.json(
-      { error: `Publish failed — the release lifecycle transition did not commit: ${releaseUpdateErr.message}. The release is still a draft; press Publish again once resolved.` },
-      { status: 500 }
-    );
-  }
-  await admin.from("release_drafts").delete().eq("release_id", releaseId);
+  const recordingPatches = readyTracks.map(track => {
+    const requested = bodyTracks.find(item => item.id === track.id) || {};
+    return {
+      id: track.id, ...(canonicalTrackUpdates.get(track.id) || {}),
+      title: !isMultiTrack ? title.trim() : track.title,
+      position: track.position || 1,
+      ...(Object.hasOwn(requested, "lyrics") ? { lyrics: requested.lyrics } : !isMultiTrack && Object.hasOwn(creditInput, "lyrics") ? { lyrics: creditInput.lyrics } : {}),
+      ...(Object.hasOwn(requested, "isrc") ? { isrc: requested.isrc } : !isMultiTrack && Object.hasOwn(creditInput, "isrc") ? { isrc: creditInput.isrc } : {}),
+      ...(Object.hasOwn(requested, "credit_groups") ? { credit_groups: requested.credit_groups } : {}),
+      ...(!isMultiTrack && isFirstPublish && !requested.credit_groups ? { inherit_credits: true } : {}),
+      ...(Object.hasOwn(requested, "inherit_credits") ? { inherit_credits: requested.inherit_credits } : {}),
+    };
+  });
+  const { data: committed, error: commitError } = await admin.rpc("commit_release_publication", {
+    p_release_ref_id: releaseId, p_expected_revision: publicationRevision,
+    p_payload: { product: productRow, catalog_tracks: trackRows, release: releaseUpdate,
+      recordings: recordingPatches, classifications: classificationRows,
+      ...(creditInput.credit_groups ? { credit_groups: creditInput.credit_groups } : {}),
+    },
+  });
+  if (commitError) return NextResponse.json({ error: commitError.code === "40001" ? "This release changed during publication. Reload it and retry; your draft is retained." : "Publication could not commit. The release and credits were not partially published." }, { status: commitError.code === "40001" ? 409 : commitError.code === "22023" ? 422 : 500 });
+  const productId = committed.product_id;
+
+  await clearPersistedPreviewKey(admin, releaseSlug).catch(() => {});
+  for (const track of readyTracks) if (isMultiTrack) await clearPersistedPreviewKey(admin, releaseSlug, track.slug).catch(() => {});
 
   // ── 9. Cache invalidation ──────────────────────────────────────────────────
   revalidateStorefront(releaseSlug, releaseType);

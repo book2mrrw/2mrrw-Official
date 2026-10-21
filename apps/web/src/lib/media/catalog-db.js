@@ -1,3 +1,4 @@
+import { publicCredits } from "@/lib/credits/contract";
 /**
  * Server-side catalog DB layer.
  *
@@ -31,11 +32,11 @@ const PRODUCT_COLS = [
   "cover_url", "storage_path", "preview_path",
   "video_path", "image_path", "stream_path",
   "release_type", "release_date",
-  "metadata", "active", "deleted_at", "gifting_enabled",
+  "metadata", "credits", "active", "gifting_enabled", "deleted_at",
   "content_type", "content_id", "content_kind", "updated_at",
 ].join(", ");
 
-const RELEASE_LIFECYCLE_COLS = "id,deleted_at,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,preorder_enabled,preorder_starts_at,preorder_price_cents,early_access_enabled,early_access_starts_at,early_access_scope,early_access_audiences,release_timezone,unavailable_at";
+const RELEASE_LIFECYCLE_COLS = "id,status,scheduled_at,available_at,storefront_visible,upcoming_visible,preview_before_release,preorder_enabled,preorder_starts_at,preorder_price_cents,early_access_enabled,early_access_starts_at,early_access_scope,early_access_audiences,release_timezone,unavailable_at,deleted_at";
 
 /** Map a raw products row to the canonical enriched storefront release shape.
  * @param {object} row
@@ -197,7 +198,8 @@ export function mapProductRow(row, videoMatch = null) {
     // CatalogRelease compatibility. Multi-track products replace this with
     // their set-based catalog_tracks projection below.
     tracks: [],
-    metadata: meta,
+    credits: publicCredits(row),
+    metadata: { ...meta, ...(meta.credits ? { credits: publicCredits({ credits: meta.credits }) } : {}) },
   };
 }
 
@@ -275,6 +277,8 @@ function mapTrackRow(trackRow, albumSlug, releaseTypeFolder) {
 
   return {
     id: trackRow.id,
+    track_id: trackRow.track_id || null,
+    credit_payload_present: trackRow.credits != null || trackRow.metadata?.credits != null,
     slug: trackRow.slug,
     title: trackRow.title,
     display_title: trackRow.title,
@@ -287,7 +291,8 @@ function mapTrackRow(trackRow, albumSlug, releaseTypeFolder) {
     stream_path: trackRow.stream_path || null,
     preview: previewDiscoveryUrl(preview_path),
     duration_seconds: trackRow.duration_seconds || null,
-    metadata: meta,
+    credits: publicCredits(trackRow),
+    metadata: { ...meta, ...(meta.credits ? { credits: publicCredits({ credits: meta.credits }) } : {}) },
   };
 }
 
@@ -295,13 +300,13 @@ function mapTrackRow(trackRow, albumSlug, releaseTypeFolder) {
  * Fetch every multi-track product in one indexed query and group it by product.
  * Catalog size therefore changes result volume, not database round-trip count.
  */
-async function fetchTracksForProducts(admin, products) {
+async function fetchTracksForProducts(admin, products, { strict = false } = {}) {
   const productIds = products.map((product) => product.id).filter(Boolean);
   if (productIds.length === 0) return new Map();
   try {
     const { data, error } = await admin
       .from("catalog_tracks")
-      .select("id, product_id, slug, title, position, storage_path, preview_path, stream_path, duration_seconds, metadata")
+      .select("id, track_id, product_id, slug, title, position, storage_path, preview_path, stream_path, duration_seconds, credits, metadata")
       .in("product_id", productIds)
       .is("removed_from_release_at", null)
       .order("position", { ascending: true });
@@ -322,6 +327,7 @@ async function fetchTracksForProducts(admin, products) {
       productCount: productIds.length,
       error: err?.message,
     });
+    if (strict) throw err;
     return new Map();
   }
 }
@@ -486,4 +492,29 @@ export async function getRadioCarouselItemsFromDB({ limit = 8 } = {}) {
     console.error("[catalog-db] getRadioCarouselItemsFromDB error", { error: err?.message });
     return [];
   }
+}
+
+/** A fresh, visibility-checked attribution read; errors must not become empty credits. */
+export async function getCatalogReleaseDetailFromDB(slug) {
+  const admin = getAdminClient();
+  const { data: row, error } = await admin.from("products")
+    .select(`${PRODUCT_COLS}, releases(${RELEASE_LIFECYCLE_COLS})`)
+    .eq("slug", slug).eq("content_kind", "music").is("deleted_at", null).maybeSingle();
+  if (error) throw error;
+  if (!row) return null;
+  const release = mapProductRow(row);
+  if (release.availability ? !release.availability.visible : !row.active) return null;
+  const tracks = await fetchTracksForProducts(admin, [{ id: row.id, slug: row.slug, releaseTypeFolder: row.release_type }], { strict: true });
+  const { data: recordings, error: recordingError } = row.release_id
+    ? await admin.from("tracks").select("id,title,written_by,produced_by,featured_artists,mixing_engineer,mastering_engineer,executive_producer,position,draft_data").eq("release_id", row.release_id).is("removed_from_release_at", null).order("position", { ascending: true })
+    : { data: [] };
+  if (recordingError) throw recordingError;
+  const scopedTracks = (tracks.get(row.id) || []).map(t => {
+    const original = (recordings || []).find(recording => recording.id === t.track_id);
+    return { id: t.track_id || t.id, catalog_track_id: t.id, slug: t.slug, title: t.title, attribution_present: t.credit_payload_present || original?.draft_data?.public_credits != null || !!original && ["written_by", "produced_by", "featured_artists"].some(key => original[key] != null), credits: t.credit_payload_present ? t.credits : publicCredits(original?.draft_data?.public_credits != null ? { credits: original.draft_data.public_credits } : original) };
+  });
+  for (const recording of recordings || []) if (!scopedTracks.some(t => t.id === recording.id)) scopedTracks.push({ id: recording.id, slug: recording.slug, title: recording.title, attribution_present: recording.draft_data?.public_credits != null || ["written_by", "produced_by", "featured_artists"].some(key => recording[key] != null), credits: publicCredits(recording.draft_data?.public_credits != null ? { credits: recording.draft_data.public_credits } : recording) });
+  const isSingle = row.product_type === "single" || row.product_type === "feature";
+  const recording = isSingle ? { id: scopedTracks[0]?.id || row.id, credits: scopedTracks[0]?.attribution_present ? scopedTracks[0].credits : release.credits } : null;
+  return { slug: release.slug, credits: release.credits, recording, tracks: scopedTracks.map(({ attribution_present: _presence, ...track }) => track) };
 }

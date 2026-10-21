@@ -1,0 +1,10 @@
+[
+  {
+    "verification": {
+      "credit_groups": 0,
+      "products": 29,
+      "publication_rpc_live_trigger_test": "passed and rolled back",
+      "releases": 13
+    }
+  }
+]

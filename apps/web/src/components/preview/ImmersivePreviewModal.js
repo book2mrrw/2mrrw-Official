@@ -1,4 +1,6 @@
 "use client";
+import ViewMoreSheet from "@/components/preview/CreditsSheet";
+import { useReleaseCredits } from "@/lib/credits/useReleaseCredits";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Link from "next/link";
@@ -769,31 +771,6 @@ function ShareSheet({ title, sub, t, onClose }) {
   );
 }
 
-function ViewMoreSheet({ title, sub, t, rows, onClose }) {
-  return (
-    <div className="bsheet" style={{ background: t.dark, paddingBottom: "max(28px, env(safe-area-inset-bottom))", paddingLeft: "env(safe-area-inset-left)", paddingRight: "env(safe-area-inset-right)" }}>
-      <div className="sheet-hdl" onClick={onClose} role="button" tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onClose()} />
-      <div style={{ padding: "6px 22px 10px" }}>
-        <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 22, fontWeight: 400, color: "white", marginBottom: 3 }}>{title}</div>
-        <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".2em", textTransform: "uppercase", color: t.accent }}>{sub}</div>
-      </div>
-      {rows.map(([k, v]) => (
-        <div
-          key={k}
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            padding: "10px 22px",
-            borderBottom: "1px solid rgba(255,255,255,.05)",
-          }}
-        >
-          <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".15em", color: "rgba(255,255,255,.3)" }}>{k}</span>
-          <span style={{ fontSize: 11, color: "rgba(255,255,255,.7)" }}>{v}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 function SleepTimerSheet({ t, sleepTimerEndsAt, sleepAfterCurrentTrack, setSleepTimer, onClose }) {
   const [clockNow, setClockNow] = useState(() => Date.now());
@@ -1210,27 +1187,12 @@ export function SingleModal({
   const displayDuration = isPreview ? PREVIEW_CAP_SEC : engineDur;
   const displayCurrent = isPreview ? Math.min(currentTime, PREVIEW_CAP_SEC) : currentTime;
 
+  const creditRequest = useReleaseCredits(track?.slug, open);
   const release = releaseDetail || track;
-  const lyricsText = release?.lyrics || track?.lyrics || "";
-  const editorial = useMemo(() => getReleaseEditorial(release), [release]);
+  const lyricsText = releaseDetail?.lyrics || track?.lyrics || "";
+  const editorial = useMemo(() => getReleaseEditorial(creditRequest.release?.recording || creditRequest.release), [creditRequest.release]);
   const creditRows = useMemo(() => getCreditsDisplayRows(editorial), [editorial]);
-  const viewMoreRows = useMemo(() => {
-    const rows = [];
-    if (editorial?.releaseDate || track?.year) rows.push(["RELEASE DATE", editorial?.releaseDate || track?.year]);
-    if (editorial?.label) rows.push(["LABEL", editorial.label]);
-    rows.push(["FORMAT", "Digital"]);
-    rows.push(["DURATION", track?.dur || fmt(fullDur)]);
-    if (editorial?.genre || track?.genre) rows.push(["GENRE", editorial?.genre || track?.genre]);
-    if (creditRows.length) {
-      creditRows.slice(0, 3).forEach((row) => {
-        if (row?.label && row?.value) rows.push([row.label.toUpperCase(), row.value]);
-      });
-    }
-    if (!rows.length) {
-      rows.push(["ARTIST", track?.artist || "2MRRW"], ["TYPE", track?.type || "Single"]);
-    }
-    return rows;
-  }, [editorial, track, creditRows, fullDur]);
+  const viewMoreRows = useMemo(() => creditRows.map(row => [row.label, row.value]), [creditRows]);
 
   const close = useCallback(() => {
     if (closing || !renderedOpen) return;
@@ -1610,7 +1572,7 @@ export function SingleModal({
           <ShareSheet title={`Share ${track?.type || "Single"}`} sub={`${track?.title} · ${track?.artist}`} t={t} onClose={() => setSheet(null)} />
         ) : null}
         {sheet === "credits" ? (
-          <ViewMoreSheet title="Credits" sub={`${track?.title} · ${track?.artist}`} t={t} rows={viewMoreRows} onClose={() => setSheet(null)} />
+          <ViewMoreSheet title="Credits" sub={`${track?.title} · ${track?.artist}`} t={t} rows={viewMoreRows} status={creditRequest.status} onRetry={creditRequest.retry} onClose={() => setSheet(null)} />
         ) : null}
         {sheet === "sleep" ? (
           <SleepTimerSheet t={t} sleepTimerEndsAt={sleepTimerEndsAt} sleepAfterCurrentTrack={sleepAfterCurrentTrack} setSleepTimer={setSleepTimer} onClose={() => setSheet(null)} />
@@ -1708,6 +1670,10 @@ function AlbumModalView({
   const [sheet, setSheet] = useState(null);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [lyricsFullscreen, setLyricsFullscreen] = useState(false);
+  const creditRequest = useReleaseCredits(album?.slug, open);
+  const creditTracks = creditRequest.release?.tracks || [];
+  const [creditScope, setCreditScope] = useState("release");
+  useEffect(() => setCreditScope("release"), [album?.slug]);
   const [albumCoverVideoFailed, setAlbumCoverVideoFailed] = useState(false);
   const [playbackNotice, setPlaybackNotice] = useState(null);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
@@ -2522,18 +2488,24 @@ function AlbumModalView({
 
         {sheet === "share" ? <ShareSheet title={`Share ${album?.type || "Album"}`} sub={`${album?.title} · ${album?.artist}`} t={t} onClose={() => setSheet(null)} /> : null}
         {sheet === "credits" ? (
+          <div className="bsheet" style={{ background: t.dark, maxHeight: "80vh", overflowY: "auto" }}>
+          <label style={{ display: "block", padding: 16, color: "white" }}>Credits for
+            <select aria-label="Credits scope" value={creditScope} onChange={e => setCreditScope(e.target.value)}>
+              <option value="release">Release</option>
+              {creditTracks.map(tr => <option key={tr.id} value={String(tr.id)}>{tr.title}</option>)}
+            </select>
+          </label>
           <ViewMoreSheet
             title="Credits"
+            embedded
+            status={creditRequest.status}
+            onRetry={creditRequest.retry}
             sub={`${album?.title} · ${album?.artist}`}
             t={t}
-            rows={[
-              ["RELEASE DATE", album?.year || "—"],
-              ["TRACKS", `${tracks.length} tracks`],
-              ["FORMAT", "Digital"],
-              ["LABEL", "Kastaweh Records"],
-            ]}
+            rows={getCreditsDisplayRows(getReleaseEditorial(creditScope === "release" ? creditRequest.release : creditTracks.find(tr => String(tr.id) === creditScope))).map(row => [row.label, row.value])}
             onClose={() => setSheet(null)}
           />
+          </div>
         ) : null}
         {sheet === "sleep" ? (
           <SleepTimerSheet t={t} sleepTimerEndsAt={sleepTimerEndsAt} sleepAfterCurrentTrack={sleepAfterCurrentTrack} setSleepTimer={setSleepTimer} onClose={() => setSheet(null)} />
