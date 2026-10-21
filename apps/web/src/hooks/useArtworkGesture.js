@@ -109,6 +109,8 @@ export function useArtworkGesture({ slug, elementRef, disabled = false }) {
 
   const onPointerDown = useCallback((e) => {
     if (disabled || e.button !== 0) return;
+    // Interactive descendants own their presses, including while artwork is slow-locked.
+    if (e.target?.closest?.('button, a, input, select, textarea, [role="button"], [data-artwork-gesture-ignore]')) return;
 
     // ── Multi-touch: second finger cancels active transient gesture ───────────
     if (e.pointerType === "touch" && !e.isPrimary) {

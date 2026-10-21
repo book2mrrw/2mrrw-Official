@@ -291,6 +291,7 @@ function mapTrackRow(trackRow, albumSlug, releaseTypeFolder) {
     stream_path: trackRow.stream_path || null,
     preview: previewDiscoveryUrl(preview_path),
     duration_seconds: trackRow.duration_seconds || null,
+    lyrics: trackRow.lyrics ?? meta.lyrics ?? null,
     credits: publicCredits(trackRow),
     metadata: { ...meta, ...(meta.credits ? { credits: publicCredits({ credits: meta.credits }) } : {}) },
   };
@@ -306,7 +307,7 @@ async function fetchTracksForProducts(admin, products, { strict = false } = {}) 
   try {
     const { data, error } = await admin
       .from("catalog_tracks")
-      .select("id, track_id, product_id, slug, title, position, storage_path, preview_path, stream_path, duration_seconds, credits, metadata")
+      .select("id, track_id, product_id, slug, title, position, storage_path, preview_path, stream_path, duration_seconds, lyrics, credits, metadata")
       .in("product_id", productIds)
       .is("removed_from_release_at", null)
       .order("position", { ascending: true });
@@ -506,15 +507,15 @@ export async function getCatalogReleaseDetailFromDB(slug) {
   if (release.availability ? !release.availability.visible : !row.active) return null;
   const tracks = await fetchTracksForProducts(admin, [{ id: row.id, slug: row.slug, releaseTypeFolder: row.release_type }], { strict: true });
   const { data: recordings, error: recordingError } = row.release_id
-    ? await admin.from("tracks").select("id,title,written_by,produced_by,featured_artists,mixing_engineer,mastering_engineer,executive_producer,position,draft_data").eq("release_id", row.release_id).is("removed_from_release_at", null).order("position", { ascending: true })
+    ? await admin.from("tracks").select("id,title,written_by,produced_by,featured_artists,mixing_engineer,mastering_engineer,executive_producer,position,lyrics,draft_data").eq("release_id", row.release_id).is("removed_from_release_at", null).order("position", { ascending: true })
     : { data: [] };
   if (recordingError) throw recordingError;
   const scopedTracks = (tracks.get(row.id) || []).map(t => {
     const original = (recordings || []).find(recording => recording.id === t.track_id);
-    return { id: t.track_id || t.id, catalog_track_id: t.id, slug: t.slug, title: t.title, attribution_present: t.credit_payload_present || original?.draft_data?.public_credits != null || !!original && ["written_by", "produced_by", "featured_artists"].some(key => original[key] != null), credits: t.credit_payload_present ? t.credits : publicCredits(original?.draft_data?.public_credits != null ? { credits: original.draft_data.public_credits } : original) };
+    return { id: t.track_id || t.id, catalog_track_id: t.id, slug: t.slug, title: t.title, lyrics: t.lyrics ?? original?.lyrics ?? null, attribution_present: t.credit_payload_present || original?.draft_data?.public_credits != null || !!original && ["written_by", "produced_by", "featured_artists"].some(key => original[key] != null), credits: t.credit_payload_present ? t.credits : publicCredits(original?.draft_data?.public_credits != null ? { credits: original.draft_data.public_credits } : original) };
   });
-  for (const recording of recordings || []) if (!scopedTracks.some(t => t.id === recording.id)) scopedTracks.push({ id: recording.id, slug: recording.slug, title: recording.title, attribution_present: recording.draft_data?.public_credits != null || ["written_by", "produced_by", "featured_artists"].some(key => recording[key] != null), credits: publicCredits(recording.draft_data?.public_credits != null ? { credits: recording.draft_data.public_credits } : recording) });
+  for (const recording of recordings || []) if (!scopedTracks.some(t => t.id === recording.id)) scopedTracks.push({ id: recording.id, slug: recording.slug, title: recording.title, lyrics: recording.lyrics ?? null, attribution_present: recording.draft_data?.public_credits != null || ["written_by", "produced_by", "featured_artists"].some(key => recording[key] != null), credits: publicCredits(recording.draft_data?.public_credits != null ? { credits: recording.draft_data.public_credits } : recording) });
   const isSingle = row.product_type === "single" || row.product_type === "feature";
-  const recording = isSingle ? { id: scopedTracks[0]?.id || row.id, credits: scopedTracks[0]?.attribution_present ? scopedTracks[0].credits : release.credits } : null;
+  const recording = isSingle ? { id: scopedTracks[0]?.id || row.id, lyrics: scopedTracks[0]?.lyrics ?? row.metadata?.lyrics ?? null, credits: scopedTracks[0]?.attribution_present ? scopedTracks[0].credits : release.credits } : null;
   return { slug: release.slug, credits: release.credits, recording, tracks: scopedTracks.map(({ attribution_present: _presence, ...track }) => track) };
 }

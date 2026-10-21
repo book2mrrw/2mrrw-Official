@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
+import { useEffect, useMemo, useRef, useCallback, memo } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { parseLrc, getActiveLrcIndex } from "@/lib/lrc";
 import { usePlaybackProgress } from "@/context/AudioContext";
@@ -101,20 +102,15 @@ function shareLyricCard({ lineText, albumTitle, artist, accentColor = "#9b5de5" 
 }
 
 function GlyphLyricsPanel({
-  open, lrcText, onClose, onSeek, isMobile = false,
+  open, lrcText, onClose, onSeek, isMobile = false, status = "ready", onRetry,
   fullscreen = false, onFullscreenChange,
   albumTitle, artist, accentColor,
 }) {
   const { currentTime } = usePlaybackProgress();
   const lines = useMemo(() => parseLrc(lrcText), [lrcText]);
-  const [activeIndex, setActiveIndex] = useState(-1);
+  const activeIndex = open ? getActiveLrcIndex(lines, currentTime) : -1;
   const scrollRef = useRef(null);
   const lineRefs = useRef([]);
-
-  useEffect(() => {
-    if (!open || !lines.length) return;
-    setActiveIndex(getActiveLrcIndex(lines, currentTime));
-  }, [open, lines, currentTime]);
 
   useEffect(() => {
     if (!open || activeIndex < 0) return;
@@ -135,7 +131,7 @@ function GlyphLyricsPanel({
     ? { position: "fixed", inset: 0, zIndex: 10000 }
     : { position: "absolute", inset: 0, zIndex: 6 };
 
-  return (
+  const panel = (
     <AnimatePresence>
       {open ? (
         <motion.div
@@ -144,6 +140,9 @@ function GlyphLyricsPanel({
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: fullscreen ? 0 : 16 }}
           transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+          role="region"
+          aria-label="Lyrics"
+          data-artwork-gesture-ignore
           onClick={(e) => e.stopPropagation()}
           style={{
             ...posStyle,
@@ -224,6 +223,8 @@ function GlyphLyricsPanel({
             </div>
           </div>
 
+          {!lines.length && status === "loading" ? <p role="status">Loading lyrics…</p> : null}
+          {!lines.length && status === "error" ? <p role="alert">Lyrics could not be loaded. {onRetry ? <button type="button" onClick={onRetry}>Retry</button> : null}</p> : null}
           {fullscreen && albumTitle ? (
             <div style={{ textAlign: "center", padding: "0 20px 10px", flexShrink: 0 }}>
               <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: 16, fontWeight: 400, color: "rgba(255,255,255,.6)" }}>{albumTitle}</div>
@@ -255,7 +256,7 @@ function GlyphLyricsPanel({
                       fontSize: fullscreen ? (active ? 20 : 16) : (active ? 15 : 13),
                       lineHeight: 1.65,
                       textAlign: "center",
-                      color: active ? "#fff" : "rgba(255,255,255,0.28)",
+                      color: line.time == null ? "rgba(255,255,255,0.8)" : active ? "#fff" : "rgba(255,255,255,0.28)",
                       transition: "color 0.25s, font-size 0.25s",
                       fontWeight: active ? 700 : 400,
                       cursor: onSeek && line.time != null ? "pointer" : "default",
@@ -265,16 +266,17 @@ function GlyphLyricsPanel({
                   </p>
                 );
               })
-            ) : (
+            ) : status === "ready" ? (
               <p style={{ textAlign: "center", color: "rgba(255,255,255,0.45)", fontSize: 13, lineHeight: 1.7, marginTop: "28%", letterSpacing: 0.3, fontStyle: "italic" }}>
-                Glyphs summon when lyrics are inscribed.
+                No lyrics have been added yet.
               </p>
-            )}
+            ) : null}
           </div>
         </motion.div>
       ) : null}
     </AnimatePresence>
   );
+  return fullscreen && typeof document !== "undefined" ? createPortal(panel, document.body) : panel;
 }
 
 export default memo(GlyphLyricsPanel);

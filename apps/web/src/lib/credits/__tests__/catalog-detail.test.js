@@ -28,3 +28,14 @@ test('catalog track explicit clear remains separate from stale source writer fie
 test('database failure rejects rather than masquerading as empty credits',async()=>{
   db={from:()=>{throw new Error('offline')}};await assert.rejects(()=>getCatalogReleaseDetailFromDB('single'),/offline/);
 });
+
+test('fresh single lyrics come from the saved source recording',async()=>{
+ seed();db.rows.tracks[0].lyrics='Saved plain lyrics';const result=await getCatalogReleaseDetailFromDB('single');assert.equal(result.recording.lyrics,'Saved plain lyrics');
+});
+test('album catalog lyrics remain paired with their canonical recording identity',async()=>{
+ seed({product_type:'album'});db.rows.catalog_tracks.push({id:'catalog-track',track_id:'track',product_id:'product',slug:'song',title:'Song',position:1,lyrics:'Saved catalog lyrics',credits:{},removed_from_release_at:null});
+ const result=await getCatalogReleaseDetailFromDB('single');assert.equal(result.tracks[0].id,'track');assert.equal(result.tracks[0].catalog_track_id,'catalog-track');assert.equal(result.tracks[0].lyrics,'Saved catalog lyrics');
+});
+test('an explicit recording lyric clear suppresses older product text',async()=>{
+ seed({metadata:{lyrics:'Old product lyric'}});db.rows.tracks[0].lyrics='';const result=await getCatalogReleaseDetailFromDB('single');assert.equal(result.recording.lyrics,'');
+});

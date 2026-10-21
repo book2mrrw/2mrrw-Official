@@ -11,7 +11,7 @@ import { useReducedMotion } from "framer-motion";
 import { useCoverPalette } from "@/hooks/useCoverPalette";
 import { useMediaEngine } from "@/media/useMediaEngine";
 import { catalogCoverDisplay } from "@/components/home/catalogMedia";
-import { getReleaseEditorial, getCreditsDisplayRows } from "@/components/preview/releaseMetadata";
+import { getReleaseEditorial, getCreditsDisplayRows, lyricsFromSource, recordingEditorial } from "@/components/preview/releaseMetadata";
 import { usePlayerBodyState } from "@/lib/player/usePlayerBodyState";
 import { registerModal, unregisterModal } from "@/state/ui/modalStackStore";
 import { useEntitlementAccountState } from "@/context/AuthContext";
@@ -1164,6 +1164,7 @@ export function SingleModal({
   const beat = useBeat(open && isPlaying);
   const [sheet, setSheet] = useState(null);
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  useEffect(() => { setSheet(null); setLyricsOpen(false); }, [track?.slug, open]);
   const [coverVideoFailed, setCoverVideoFailed] = useState(false);
   const closeTimerRef = useRef(null);
 
@@ -1189,7 +1190,7 @@ export function SingleModal({
 
   const creditRequest = useReleaseCredits(track?.slug, open);
   const release = releaseDetail || track;
-  const lyricsText = releaseDetail?.lyrics || track?.lyrics || "";
+  const lyricsText = lyricsFromSource(creditRequest.release?.recording) ?? lyricsFromSource(releaseDetail) ?? lyricsFromSource(track) ?? "";
   const editorial = useMemo(() => getReleaseEditorial(creditRequest.release?.recording || creditRequest.release), [creditRequest.release]);
   const creditRows = useMemo(() => getCreditsDisplayRows(editorial), [editorial]);
   const viewMoreRows = useMemo(() => creditRows.map(row => [row.label, row.value]), [creditRows]);
@@ -1197,6 +1198,7 @@ export function SingleModal({
   const close = useCallback(() => {
     if (closing || !renderedOpen) return;
     setSheet(null);
+    setLyricsOpen(false);
     if (persistent) {
       onClose?.();
       return;
@@ -1246,6 +1248,11 @@ export function SingleModal({
             ? "visibility 0s"
             : `visibility 0s linear ${prefersReducedMotion ? 0 : 340}ms`
           : undefined,
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== "Escape") return;
+        e.stopPropagation();
+        if (lyricsOpen) { setLyricsOpen(false); } else if (sheet) setSheet(null); else close();
       }}
       onClick={(e) => e.target === e.currentTarget && close()}
     >
@@ -1369,6 +1376,7 @@ export function SingleModal({
           <div style={{ position: "absolute", bottom: 108, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center", gap: 10 }}>
             <button
               type="button"
+              aria-expanded={sheet === "credits"}
               onClick={() => { setLyricsOpen(false); setSheet("credits"); }}
               style={{
                 background: "rgba(0,0,0,.58)",
@@ -1389,6 +1397,7 @@ export function SingleModal({
             </button>
             <button
               type="button"
+              aria-expanded={lyricsOpen}
               onClick={() => { setSheet(null); setLyricsOpen(true); }}
               style={{
                 background: "rgba(0,0,0,.58)",
@@ -1428,7 +1437,7 @@ export function SingleModal({
           />
           {/* Lyrics overlay — sits above cover art, below controls */}
           <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen ? "auto" : "none" }}>
-            <GlyphLyricsPanel open={lyricsOpen} lrcText={lyricsText} onClose={() => setLyricsOpen(false)} isMobile />
+            <GlyphLyricsPanel open={lyricsOpen} status={creditRequest.status} onRetry={creditRequest.retry} lrcText={lyricsText} onClose={() => setLyricsOpen(false)} isMobile />
           </div>
         </div>
 
@@ -1673,7 +1682,8 @@ function AlbumModalView({
   const creditRequest = useReleaseCredits(album?.slug, open);
   const creditTracks = creditRequest.release?.tracks || [];
   const [creditScope, setCreditScope] = useState("release");
-  useEffect(() => setCreditScope("release"), [album?.slug]);
+  useEffect(() => { setCreditScope("release"); setSheet(null); setLyricsOpen(false); setLyricsFullscreen(false); }, [album?.slug, open]);
+  const lyricsText = lyricsFromSource(recordingEditorial(creditRequest.release, activeTrack)) ?? lyricsFromSource(activeTrack) ?? "";
   const [albumCoverVideoFailed, setAlbumCoverVideoFailed] = useState(false);
   const [playbackNotice, setPlaybackNotice] = useState(null);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
@@ -1754,6 +1764,7 @@ function AlbumModalView({
   const close = useCallback(() => {
     if (closing || !renderedOpen) return;
     setSheet(null);
+    setLyricsOpen(false);
     if (persistent) {
       onClose?.();
       return;
@@ -2030,6 +2041,11 @@ function AlbumModalView({
             : `visibility 0s linear ${prefersReducedMotion ? 0 : 340}ms`
           : undefined,
       }}
+      onKeyDown={(e) => {
+        if (e.key !== "Escape") return;
+        e.stopPropagation();
+        if (lyricsOpen) { setLyricsOpen(false); setLyricsFullscreen(false); } else if (sheet) setSheet(null); else close();
+      }}
       onClick={(e) => e.target === e.currentTarget && close()}
     >
       <div
@@ -2155,6 +2171,7 @@ function AlbumModalView({
           <div style={{ position: "absolute", bottom: 108, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center", gap: 10 }}>
             <button
               type="button"
+              aria-expanded={sheet === "credits"}
               onClick={() => { setLyricsOpen(false); setSheet("credits"); }}
               style={{ background: "rgba(0,0,0,.58)", border: `1px solid ${t.p1}50`, color: t.accent, fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".22em", textTransform: "uppercase", padding: "7px 20px", borderRadius: 20, cursor: "pointer", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}
             >
@@ -2162,6 +2179,7 @@ function AlbumModalView({
             </button>
             <button
               type="button"
+              aria-expanded={lyricsOpen}
               onClick={() => { setSheet(null); setLyricsOpen(true); }}
               style={{ background: "rgba(0,0,0,.58)", border: `1px solid ${t.p1}50`, color: t.accent, fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".22em", textTransform: "uppercase", padding: "7px 20px", borderRadius: 20, cursor: "pointer", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}
             >
@@ -2190,7 +2208,8 @@ function AlbumModalView({
           <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen && !lyricsFullscreen ? "auto" : "none" }}>
             <GlyphLyricsPanel
               open={lyricsOpen}
-              lrcText={activeTrack?.lyrics || album?.lyrics || ""}
+              lrcText={lyricsText}
+              status={creditRequest.status} onRetry={creditRequest.retry}
               onClose={() => { setLyricsOpen(false); setLyricsFullscreen(false); }}
               onSeek={isPreview && activeTrack && !activeTrack?.free ? undefined : seek}
               isMobile
