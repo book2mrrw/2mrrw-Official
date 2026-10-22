@@ -13,6 +13,9 @@ for(const table of tables){
 }
 for(const c of schema.constraints.filter(c=>c.contype!=='f'))await db.exec(`ALTER TABLE public."${c.table_name}" ADD CONSTRAINT "${c.conname}" ${c.definition}`);
 for(const c of schema.constraints.filter(c=>c.contype==='f'))await db.exec(`ALTER TABLE public."${c.table_name}" ADD CONSTRAINT "${c.conname}" ${c.definition}`);
+// The captured credit schema predates lyric reads of the existing replacement pipeline.
+// Only the columns read by the resolver are needed here; promotion itself is not simulated.
+await db.exec('CREATE TABLE IF NOT EXISTS public.audio_master_revisions(entity_kind text,entity_id uuid,staged_master_key text,status text,hls_prefix text); CREATE TABLE IF NOT EXISTS public.hls_manifests(hls_prefix text,duration_seconds numeric);');
 await db.exec(await fs.readFile('supabase/migrations/20261021010000_release_credit_contract.sql','utf8'));
 await db.exec(await fs.readFile('supabase/migrations/20261021020000_atomic_credit_publication.sql','utf8'));
 

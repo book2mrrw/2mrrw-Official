@@ -10,11 +10,11 @@ export default function LyricTimingEditor({value='',onChange,releaseId,recording
  const [text,setText]=useState(()=>displayText(value));
  const uid=useId();const model=useMemo(()=>editorModel(value),[value]);const latest=useRef(value);const history=useRef({past:[],future:[]});
  const [tab,setTab]=useState('text'),[mode,setMode]=useState('line'),[lineIndex,setLineIndex]=useState(0),[wordIndex,setWordIndex]=useState(0);
- const [source,setSource]=useState({status:'idle'}),[notice,setNotice]=useState(''),[reviewed,setReviewed]=useState(false),[current,setCurrent]=useState(0),[offset,setOffset]=useState('0');
+ const [source,setSource]=useState({status:'idle'}),[notice,setNotice]=useState(''),[reviewed,setReviewed]=useState(false),[current,setCurrent]=useState(0),[offset,setOffset]=useState('0'),[rate,setRate]=useState(1);
  const [historyCounts,setHistoryCounts]=useState({past:0,future:0});const audio=useRef(null),held=useRef(null),abort=useRef(null),alive=useRef(true);
  useEffect(()=>{if(value!==latest.current)setText(displayText(value));latest.current=value;},[value]);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;abort.current?.abort();};},[]);
- useEffect(()=>{const el=audio.current;return()=>{el?.pause();};},[source.fingerprint]);
+ useEffect(()=>{const el=audio.current;return()=>{held.current=null;el?.pause();};},[source.fingerprint,tab]);
  const emit=(next,remember=true)=>{if(disabled)return;if(remember){history.current.past=[...history.current.past,latest.current].slice(-100);history.current.future=[];}latest.current=next;onChange(next);setHistoryCounts({past:history.current.past.length,future:history.current.future.length});};
  const mutate=fn=>{try{const next=fn(editorModel(latest.current));emit(encodeDraft(next));setNotice('Timing draft retained. Apply timings before saving or publishing.');}catch(e){setNotice(e.message);}};
  const moveHistory=direction=>{const from=history.current[direction];if(!from.length)return;const next=from.pop();history.current[direction==='past'?'future':'past'].push(latest.current);setText(displayText(next));emit(next,false);};
@@ -26,7 +26,7 @@ export default function LyricTimingEditor({value='',onChange,releaseId,recording
  };
  const loadReference=async()=>{
   if(!releaseId||!recordingId){setNotice('Upload the recording audio before synchronizing.');return;}
-  abort.current?.abort();const request=new AbortController();abort.current=request;setSource({status:'loading'});setNotice('');setReviewed(false);
+  abort.current?.abort();const request=new AbortController();abort.current=request;setSource({status:'loading'});setCurrent(0);setNotice('');setReviewed(false);
   const endpoint=`/api/admin/releases/${encodeURIComponent(releaseId)}/tracks/${encodeURIComponent(recordingId)}/lyrics-audio`;
   try{const res=await fetch(endpoint+'?metadata=1',{signal:request.signal,cache:'no-store'});const body=await res.json();if(!res.ok)throw Error(body.error||'Reference could not be loaded.');if(alive.current&&!request.signal.aborted)setSource({status:'ready',...body,url:endpoint+'?revision='+body.fingerprint});}
   catch(e){if(e.name!=='AbortError'&&alive.current){setSource({status:'error'});setNotice(e.message);}}
@@ -53,7 +53,7 @@ export default function LyricTimingEditor({value='',onChange,releaseId,recording
  };
  const download=()=>{const blob=new Blob([value],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${title.replace(/[^\p{L}\p{N} _-]/gu,'')||'lyrics'}.lrc`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
  const selected=model.lines[lineIndex];const changed=source.fingerprint&&model.reference&&model.reference!==source.fingerprint;
- return <fieldset disabled={disabled} aria-label={`${title} lyric editor`} onKeyDown={e=>{
+ return <fieldset disabled={disabled} aria-label={`${title} lyric editor`} onBlur={()=>{held.current=null;}} onKeyDown={e=>{
   if(e.code!=='Space'||e.repeat||tab!=='timing'||/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName))return;e.preventDefault();if(mode==='line')markLine();else startWord();
  }} onKeyUp={e=>{if(e.code==='Space'&&held.current){e.preventDefault();endWord();}}} style={{border:'1px solid #444',borderRadius:10,padding:14,color:'#eee',marginBottom:16,minWidth:0}}>
   <legend>{title} lyrics</legend>
@@ -71,16 +71,16 @@ export default function LyricTimingEditor({value='',onChange,releaseId,recording
    <p>Mark each line when its first word is sung. For word timing, hold the capture button while a word is sung and release at its end. Space works while this workspace has focus.</p>
    <button type="button" style={control} disabled={source.status==='loading'} onClick={loadReference}>{source.status==='loading'?'Loading reference…':source.status==='ready'?'Reload recording reference':'Load recording reference'}</button>
    {source.url?<audio data-lyric-reference key={source.fingerprint} ref={audio} controls preload="metadata" src={source.url} style={{width:'100%',margin:'12px 0'}}
-    onLoadedMetadata={e=>{const duration=e.currentTarget.duration;if(Number.isFinite(duration)&&duration>0)setSource(p=>({...p,duration}));}}
+    onLoadedMetadata={e=>{e.currentTarget.playbackRate=rate;setCurrent(e.currentTarget.currentTime);const duration=e.currentTarget.duration;if(Number.isFinite(duration)&&duration>0)setSource(p=>({...p,duration}));}}
     onTimeUpdate={e=>setCurrent(e.currentTarget.currentTime)} onSeeked={e=>setCurrent(e.currentTarget.currentTime)}
     onError={()=>setNotice('Reference playback failed. Reload it or use a browser that supports this audio format.')} onPlay={e=>{document.querySelectorAll('audio[data-lyric-reference]').forEach(el=>{if(el!==e.currentTarget)el.pause();});}}/>:null}
    <p role="status">Reference time: {Number.isFinite(current)?current.toFixed(3):'0.000'}s</p>
-   <label>Playback speed <select aria-label="Reference playback speed" style={input} defaultValue="1" onChange={e=>{if(audio.current)audio.current.playbackRate=Number(e.target.value);}}>{[0.5,0.75,1,1.25].map(n=><option key={n} value={n}>{n}×</option>)}</select></label>
+   <label>Playback speed <select aria-label="Reference playback speed" style={input} value={rate} onChange={e=>{const next=Number(e.target.value);setRate(next);if(audio.current)audio.current.playbackRate=next;}}>{[0.5,0.75,1,1.25].map(n=><option key={n} value={n}>{n}×</option>)}</select></label>
    <label>Timing mode <select aria-label="Timing mode" style={input} value={mode} onChange={e=>{setMode(e.target.value);setWordIndex(0);}}><option value="line">Lines</option><option value="word">Words</option></select></label>
    <div style={{display:'flex',gap:8,flexWrap:'wrap',margin:'12px 0'}}>
     <button type="button" style={control} disabled={source.status!=='ready'||!selected} onClick={mode==='line'?markLine:undefined}
      onPointerDown={mode==='word'?e=>{e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);startWord();}:undefined}
-     onPointerUp={mode==='word'?endWord:undefined} onPointerCancel={()=>{held.current=null;}}
+     onPointerUp={mode==='word'?endWord:undefined} onPointerCancel={()=>{held.current=null;}} onLostPointerCapture={()=>{held.current=null;}}
      onKeyDown={mode==='word'?e=>{if(e.code==='Space'&&!e.repeat){e.preventDefault();e.stopPropagation();startWord();}}:undefined}
      onKeyUp={mode==='word'?e=>{if(e.code==='Space'){e.preventDefault();e.stopPropagation();endWord();}}:undefined}>{mode==='line'?'Mark selected line':'Hold to time selected word'}</button>
     <button type="button" style={control} onClick={()=>mutate(m=>({...m,lines:m.lines.map(l=>({...l,time:null,words:wordsFor(l.text)}))}))}>Clear timings</button>

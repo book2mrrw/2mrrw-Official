@@ -1,4 +1,5 @@
 "use client";
+import { validateLyricText } from "@/lib/lyrics/timing";
 import LyricTimingEditor from "@/components/admin/lyrics/LyricTimingEditor";
 import { createDraftSaveQueue } from "@/lib/credits/draft-save-queue";
 import CreditsEditor from "@/components/admin/CreditsEditor";
@@ -182,7 +183,7 @@ function Btn({ onClick, children, variant = "primary", disabled = false, style =
     ghost:     { background: "none",     color: C.muted, border: `1px solid ${C.border}` },
   };
   return (
-    <button onClick={disabled ? undefined : onClick} style={{ ...base, ...variants[variant] }}>
+    <button type="button" disabled={disabled} onClick={disabled ? undefined : onClick} style={{ ...base, ...variants[variant] }}>
       {children}
     </button>
   );
@@ -1550,7 +1551,7 @@ export function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, d
 }
 
 // ── Step 5/6: Review + Publish ───────────────────────────────────────────────────
-function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete, onUploadAnother, onPreparePublish, onPublishSettled }) {
+export function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete, onUploadAnother, onPreparePublish, onPublishSettled }) {
   const [publishing, setPublishing] = useState(false);
   const [result,     setResult]     = useState(null);
   const [error,      setError]      = useState(null);
@@ -1614,6 +1615,12 @@ function ReviewStep({ data, tracks, releaseId, isMultiTrack, onBack, onComplete,
   }
 
   for (const message of [data, ...tracks.filter(t => t.inherit_credits === false)].flatMap(value => value.credit_groups ? validateCreditGroups(value.credit_groups) : [])) checks.push({ label: message, ok: false, blocking: true });
+  const lyricInputs = isMultiTrack ? readyTracks : [data];
+  for (const [index, recording] of lyricInputs.entries()) {
+    for (const message of validateLyricText(recording.lyrics ?? "")) {
+      checks.push({ label: `${isMultiTrack ? recording.title || `Track ${index + 1}` : "Lyrics"}: ${message}`, ok: false, blocking: true });
+    }
+  }
   const hasBlocker = checks.some((c) => c.blocking && !c.ok);
 
   const publish = async () => {

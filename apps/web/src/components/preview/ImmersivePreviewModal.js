@@ -2183,7 +2183,7 @@ function AlbumModalView({
               lrcText={lyricsText}
               status={creditRequest.status} onRetry={creditRequest.retry}
               onClose={() => { setLyricsOpen(false); setLyricsFullscreen(false); }}
-              onSeek={isPreview && activeTrack && !activeTrack?.free ? undefined : seek}
+              onSeek={(isPreview && activeTrack && !activeTrack?.free) || engineTrack?.metadata?.access?.previewOnly === true ? undefined : seek}
               isMobile
               fullscreen={lyricsFullscreen}
               onFullscreenChange={setLyricsFullscreen}

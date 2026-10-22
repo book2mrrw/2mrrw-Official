@@ -108,6 +108,7 @@ function GlyphLyricsPanel({
   albumTitle, artist, accentColor, playbackTime = null, syncStatus = "legacy",
 }) {
   const currentTime = playbackTime;
+  const canSeek = typeof onSeek === "function" && Number.isFinite(currentTime);
   const reducedMotion = useReducedMotion();
   const [follow, setFollow] = useState(true);
   const lines = useMemo(() => parseLrc((decodeLyrics(lrcText).draft || (decodeLyrics(lrcText).reference && syncStatus !== 'verified')) ? plainLyrics(lrcText) : lrcText), [lrcText, syncStatus]);
@@ -259,10 +260,10 @@ function GlyphLyricsPanel({
                     ref={(el) => { lineRefs.current[i] = el; }}
                     data-lyric-line
                     aria-current={active ? "true" : undefined}
-                    role={onSeek && line.time != null ? "button" : undefined}
-                    tabIndex={onSeek && line.time != null ? 0 : undefined}
-                    onKeyDown={e => { if (onSeek && line.time != null && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSeek(line.time); } }}
-                    onClick={() => line.time != null && onSeek?.(line.time)}
+                    role={canSeek && line.time != null ? "button" : undefined}
+                    tabIndex={canSeek && line.time != null ? 0 : undefined}
+                    onKeyDown={e => { if (canSeek && line.time != null && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSeek(line.time); } }}
+                    onClick={() => canSeek && line.time != null && onSeek(line.time)}
                     style={{
                       margin: "0 0 22px",
                       fontSize: fullscreen ? "clamp(28px, 4vw, 44px)" : "clamp(22px, 3.4vw, 30px)",
@@ -272,7 +273,7 @@ function GlyphLyricsPanel({
                       textShadow: "0 2px 12px rgba(0,0,0,0.8)",
                       transition: "color 0.2s ease",
                       fontWeight: 800,
-                      cursor: onSeek && line.time != null ? "pointer" : "default",
+                      cursor: canSeek && line.time != null ? "pointer" : "default",
                     }}
                   >
                     {line.words?.length ? <TimedLyricWords words={line.words} currentTime={currentTime} /> : line.text}
