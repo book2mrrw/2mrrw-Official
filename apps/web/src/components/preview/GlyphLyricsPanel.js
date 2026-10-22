@@ -150,8 +150,9 @@ function GlyphLyricsPanel({
             flexDirection: "column",
             background: fullscreen
               ? "rgba(0,0,0,0.97)"
-              : "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.72) 38%, rgba(0,0,0,0.92) 100%)",
-            backdropFilter: "blur(6px)",
+              : "linear-gradient(to bottom, rgba(0,0,0,0.76) 0%, rgba(0,0,0,0.84) 45%, rgba(0,0,0,0.94) 100%)",
+            backdropFilter: "blur(12px) saturate(0.55)",
+            WebkitBackdropFilter: "blur(12px) saturate(0.55)",
             pointerEvents: "auto",
           }}
         >
@@ -236,10 +237,11 @@ function GlyphLyricsPanel({
             ref={scrollRef}
             style={{
               flex: 1,
+              minHeight: 0,
               overflowY: "auto",
-              padding: "8px 22px 28px",
+              padding: fullscreen ? "24px max(24px, env(safe-area-inset-left)) 48px" : "18px 24px 32px",
               WebkitOverflowScrolling: "touch",
-              maskImage: "linear-gradient(to bottom, transparent 0%, #000 14%, #000 86%, transparent 100%)",
+              maskImage: "linear-gradient(to bottom, #000 0%, #000 92%, transparent 100%)",
             }}
           >
             {lines.length ? (
@@ -249,16 +251,18 @@ function GlyphLyricsPanel({
                   <p
                     key={`${line.time}-${i}`}
                     ref={(el) => { lineRefs.current[i] = el; }}
-                    className={active ? "hero-title-glow" : undefined}
+                    data-lyric-line
+                    aria-current={active ? "true" : undefined}
                     onClick={() => line.time != null && onSeek?.(line.time)}
                     style={{
-                      margin: "0 0 14px",
-                      fontSize: fullscreen ? (active ? 20 : 16) : (active ? 15 : 13),
-                      lineHeight: 1.65,
-                      textAlign: "center",
-                      color: line.time == null ? "rgba(255,255,255,0.8)" : active ? "#fff" : "rgba(255,255,255,0.28)",
-                      transition: "color 0.25s, font-size 0.25s",
-                      fontWeight: active ? 700 : 400,
+                      margin: "0 0 22px",
+                      fontSize: fullscreen ? "clamp(28px, 4vw, 44px)" : "clamp(22px, 3.4vw, 30px)",
+                      lineHeight: 1.45,
+                      textAlign: "left",
+                      color: line.time == null || active ? "#fff" : i < activeIndex ? "rgba(255,255,255,0.52)" : "rgba(255,255,255,0.72)",
+                      textShadow: "0 2px 12px rgba(0,0,0,0.8)",
+                      transition: "color 0.2s ease",
+                      fontWeight: 800,
                       cursor: onSeek && line.time != null ? "pointer" : "default",
                     }}
                   >

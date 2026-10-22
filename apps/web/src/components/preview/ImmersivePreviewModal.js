@@ -608,8 +608,21 @@ function ScrubBar({ pct, t, onSeekRatio, isPreview }) {
   );
 }
 
+function EditorialActions({ t, sheet, lyricsOpen, onCredits, onLyrics }) {
+  const style = {
+    minHeight: 44, minWidth: 110, padding: "8px 20px", borderRadius: 24,
+    background: "rgba(0,0,0,.68)", border: `1px solid ${t.p1}70`, color: t.accent,
+    fontFamily: "'DM Mono',monospace", fontSize: 10, letterSpacing: ".18em",
+    textTransform: "uppercase", cursor: "pointer", touchAction: "manipulation",
+  };
+  return <div data-modal-editorial-actions style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 10, marginBottom: 12 }}>
+    <button type="button" aria-expanded={sheet === "credits"} onClick={onCredits} style={style}>Credits</button>
+    <button type="button" aria-expanded={lyricsOpen} onClick={onLyrics} style={style}>Lyrics</button>
+  </div>;
+}
+
 function FloatingPlayer({
-  t, playing, current, duration, isPreview, beat,
+  t, playing, current, duration, isPreview, beat, children,
   onPlay, onSeekRatio, onPrev, onNext,
   onSkipBack, onSkipFwd,
   onToggleShuffle, shuffleOn,
@@ -623,6 +636,8 @@ function FloatingPlayer({
   const repeatActive = repeatMode && repeatMode !== "off";
   return (
     <div
+      data-modal-control-stack
+      data-artwork-gesture-ignore
       style={{
         position: "absolute",
         bottom: 0,
@@ -630,10 +645,14 @@ function FloatingPlayer({
         right: 0,
         zIndex: 10,
         padding: "10px 20px 16px",
+        maxHeight: "100%",
+        overflowY: "auto",
         background: "linear-gradient(to top,rgba(0,0,0,.92) 0%,rgba(0,0,0,.55) 60%,transparent 100%)",
         ...vars,
       }}
     >
+      {children}
+      <div data-modal-playback-controls style={{ position: "relative" }}>
       <Waveform playing={playing} t={t} bars={26} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, paddingRight: 18 }}>
         <span style={{ fontFamily: "'DM Mono',monospace", fontSize: 10, color: "rgba(255,255,255,.38)", flexShrink: 0, minWidth: 28 }}>
@@ -704,6 +723,7 @@ function FloatingPlayer({
         >
           <RepeatIcon />
         </button>
+      </div>
       </div>
     </div>
   );
@@ -1365,58 +1385,6 @@ export function SingleModal({
               onClose={() => setFullscreenVideo(null)}
             />
           )}
-          {isPreview ? (
-            <div style={{ position: "absolute", bottom: 118, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center" }}>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".22em", padding: "4px 12px", borderRadius: 20, background: "rgba(0,0,0,.65)", border: "1px solid rgba(255,255,255,.12)", color: "rgba(255,255,255,.45)" }}>
-                30 SEC PREVIEW
-              </div>
-            </div>
-          ) : null}
-          {/* Credits + Lyrics pills */}
-          <div style={{ position: "absolute", bottom: 108, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center", gap: 10 }}>
-            <button
-              type="button"
-              aria-expanded={sheet === "credits"}
-              onClick={() => { setLyricsOpen(false); setSheet("credits"); }}
-              style={{
-                background: "rgba(0,0,0,.58)",
-                border: `1px solid ${t.p1}50`,
-                color: t.accent,
-                fontFamily: "'DM Mono',monospace",
-                fontSize: 9,
-                letterSpacing: ".22em",
-                textTransform: "uppercase",
-                padding: "7px 20px",
-                borderRadius: 20,
-                cursor: "pointer",
-                backdropFilter: "blur(14px)",
-                WebkitBackdropFilter: "blur(14px)",
-              }}
-            >
-              Credits
-            </button>
-            <button
-              type="button"
-              aria-expanded={lyricsOpen}
-              onClick={() => { setSheet(null); setLyricsOpen(true); }}
-              style={{
-                background: "rgba(0,0,0,.58)",
-                border: `1px solid ${t.p1}50`,
-                color: t.accent,
-                fontFamily: "'DM Mono',monospace",
-                fontSize: 9,
-                letterSpacing: ".22em",
-                textTransform: "uppercase",
-                padding: "7px 20px",
-                borderRadius: 20,
-                cursor: "pointer",
-                backdropFilter: "blur(14px)",
-                WebkitBackdropFilter: "blur(14px)",
-              }}
-            >
-              Lyrics
-            </button>
-          </div>
           <FloatingPlayer
             t={t}
             playing={isPlaying}
@@ -1434,8 +1402,19 @@ export function SingleModal({
             shuffleOn={shuffle}
             onToggleRepeat={toggleRepeat}
             repeatMode={repeatMode}
-          />
-          {/* Lyrics overlay — sits above cover art, below controls */}
+          >
+          {isPreview ? (
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".22em", padding: "4px 12px", borderRadius: 20, background: "rgba(0,0,0,.65)", border: "1px solid rgba(255,255,255,.12)", color: "rgba(255,255,255,.45)" }}>
+                30 SEC PREVIEW
+              </div>
+            </div>
+          ) : null}
+            <EditorialActions t={t} sheet={sheet} lyricsOpen={lyricsOpen}
+              onCredits={() => { setLyricsOpen(false); setSheet("credits"); }}
+              onLyrics={() => { setSheet(null); setLyricsOpen(true); }} />
+          </FloatingPlayer>
+          {/* Lyrics overlay — takes priority inside the artwork area */}
           <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen ? "auto" : "none" }}>
             <GlyphLyricsPanel open={lyricsOpen} status={creditRequest.status} onRetry={creditRequest.retry} lrcText={lyricsText} onClose={() => setLyricsOpen(false)} isMobile />
           </div>
@@ -2149,43 +2128,6 @@ function AlbumModalView({
               onClose={() => setFullscreenVideo(null)}
             />
           )}
-          {/* Now playing track title — overlaid on art, above pills */}
-          {activeTrack && (
-            <div style={{ position: "absolute", bottom: 152, left: 0, right: 0, zIndex: 10, padding: "0 22px", pointerEvents: "none" }}>
-              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".22em", textTransform: "uppercase", color: t.accent, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>
-                {isPlaying ? (
-                  <div style={{ display: "flex", gap: 2, alignItems: "flex-end" }}>
-                    <div className="eq-b" style={{ background: t.accent }} />
-                    <div className="eq-b" style={{ background: t.accent }} />
-                    <div className="eq-b" style={{ background: t.accent }} />
-                  </div>
-                ) : null}
-                {isPlaying ? "Now Playing" : "Selected"}
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textShadow: "0 1px 8px rgba(0,0,0,.9)" }}>
-                {activeTrack.title}
-              </div>
-            </div>
-          )}
-          {/* Credits + Lyrics pills */}
-          <div style={{ position: "absolute", bottom: 108, left: 0, right: 0, zIndex: 10, display: "flex", justifyContent: "center", gap: 10 }}>
-            <button
-              type="button"
-              aria-expanded={sheet === "credits"}
-              onClick={() => { setLyricsOpen(false); setSheet("credits"); }}
-              style={{ background: "rgba(0,0,0,.58)", border: `1px solid ${t.p1}50`, color: t.accent, fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".22em", textTransform: "uppercase", padding: "7px 20px", borderRadius: 20, cursor: "pointer", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}
-            >
-              Credits
-            </button>
-            <button
-              type="button"
-              aria-expanded={lyricsOpen}
-              onClick={() => { setSheet(null); setLyricsOpen(true); }}
-              style={{ background: "rgba(0,0,0,.58)", border: `1px solid ${t.p1}50`, color: t.accent, fontFamily: "'DM Mono',monospace", fontSize: 9, letterSpacing: ".22em", textTransform: "uppercase", padding: "7px 20px", borderRadius: 20, cursor: "pointer", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)" }}
-            >
-              Lyrics
-            </button>
-          </div>
           <FloatingPlayer
             t={t}
             playing={isPlaying}
@@ -2203,7 +2145,29 @@ function AlbumModalView({
             shuffleOn={shuffle}
             onToggleRepeat={toggleRepeat}
             repeatMode={repeatMode}
-          />
+          >
+          {/* Now playing track title — overlaid on art, above pills */}
+          {activeTrack && (
+            <div style={{ marginBottom: 12, pointerEvents: "none" }}>
+              <div style={{ fontFamily: "'DM Mono',monospace", fontSize: 8, letterSpacing: ".22em", textTransform: "uppercase", color: t.accent, marginBottom: 3, display: "flex", alignItems: "center", gap: 6 }}>
+                {isPlaying ? (
+                  <div style={{ display: "flex", gap: 2, alignItems: "flex-end" }}>
+                    <div className="eq-b" style={{ background: t.accent }} />
+                    <div className="eq-b" style={{ background: t.accent }} />
+                    <div className="eq-b" style={{ background: t.accent }} />
+                  </div>
+                ) : null}
+                {isPlaying ? "Now Playing" : "Selected"}
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "white", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", textShadow: "0 1px 8px rgba(0,0,0,.9)" }}>
+                {activeTrack.title}
+              </div>
+            </div>
+          )}
+            <EditorialActions t={t} sheet={sheet} lyricsOpen={lyricsOpen}
+              onCredits={() => { setLyricsOpen(false); setSheet("credits"); }}
+              onLyrics={() => { setSheet(null); setLyricsOpen(true); }} />
+          </FloatingPlayer>
           {/* Lyrics overlay — fullscreen version portals to fixed overlay via GlyphLyricsPanel */}
           <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen && !lyricsFullscreen ? "auto" : "none" }}>
             <GlyphLyricsPanel
