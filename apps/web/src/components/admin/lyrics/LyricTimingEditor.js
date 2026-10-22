@@ -1,106 +1,303 @@
 "use client";
-import TimedLyricWords from "@/components/lyrics/TimedLyricWords";
-import {useEffect,useId,useMemo,useRef,useState} from 'react';
-import {plainLyrics,editorModel,encodeDraft,encodeLyrics,shiftTiming,timingErrors,wordsFor,MAX_LYRIC_LENGTH} from '@/lib/lyrics/timing';
-const input={background:'#15151b',color:'#fff',border:'1px solid #555',borderRadius:6,padding:'8px',maxWidth:'100%'};
-const control={...input,cursor:'pointer',minHeight:40};
+
+import {useCallback,useEffect,useId,useMemo,useRef,useState} from 'react';
+import TimedLyricWords from '@/components/lyrics/TimedLyricWords';
+import {useAudioPlayer} from '@/context/AudioContext';
+import {plainLyrics,editorModel,encodeDraft,encodeLyrics,shiftTiming,timingErrors,wordsFor,isTime,formatCue,lyricStatus,MAX_LYRIC_LENGTH} from '@/lib/lyrics/timing';
+import styles from './LyricTimingEditor.module.css';
+
 const numeric=value=>value===''?null:Number(value);
-export default function LyricTimingEditor({value='',onChange,releaseId,recordingId,title='Recording',disabled=false}){
- const displayText=v=>{const m=editorModel(v);return m.draft||m.lines.some(l=>l.time!=null)?m.plainText??m.lines.map(l=>l.text).join('\n'):v;};
+const clock=value=>isTime(value)?formatCue(value):'00:00.000';
+const displayText=value=>{const model=editorModel(value);return model.draft||model.lines.some(line=>line.time!=null)?model.plainText??model.lines.map(line=>line.text).join('\n'):value;};
+const editable=target=>target?.closest?.('input,textarea,select,audio,video,[contenteditable="true"]');
+
+function Icon({name}) {
+ const shapes={
+  play:<path d="m9 5 10 7-10 7Z" fill="currentColor"/>,pause:<><path d="M8 5v14M16 5v14" strokeWidth="4"/></>,
+  undo:<><path d="m8 4-5 5 5 5M3 9h10a7 7 0 0 1 7 7v3"/></>,redo:<><path d="m16 4 5 5-5 5M21 9H11a7 7 0 0 0-7 7v3"/></>,
+  tap:<><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M1 12h2M21 12h2"/></>,
+  audio:<><path d="M5 9v6M9 5v14M13 2v20M17 6v12M21 9v6"/></>,
+  check:<path d="m5 12 4 4L19 6"/>,download:<><path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/></>,
+  upload:<><path d="M12 16V4m-5 5 5-5 5 5M4 17v4h16v-4"/></>,
+  left:<path d="m14 6-6 6 6 6"/>,right:<path d="m10 6 6 6-6 6"/>,loop:<><path d="m17 2 4 4-4 4M21 6H7a4 4 0 0 0-4 4m4 12-4-4 4-4M3 18h14a4 4 0 0 0 4-4"/></>,
+ };
+ return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">{shapes[name]||shapes.tap}</svg>;
+}
+
+export default function LyricTimingEditor({value='',onChange,releaseId,recordingId,title='Recording',disabled=false,coverUrl=null,saveContext='release'}) {
+ const uid=useId();
+ const background=useAudioPlayer();
+ const model=useMemo(()=>editorModel(value),[value]);
  const [text,setText]=useState(()=>displayText(value));
- const uid=useId();const model=useMemo(()=>editorModel(value),[value]);const latest=useRef(value);const history=useRef({past:[],future:[]});
- const [tab,setTab]=useState('text'),[mode,setMode]=useState('line'),[lineIndex,setLineIndex]=useState(0),[wordIndex,setWordIndex]=useState(0);
- const [source,setSource]=useState({status:'idle'}),[notice,setNotice]=useState(''),[reviewed,setReviewed]=useState(false),[current,setCurrent]=useState(0),[offset,setOffset]=useState('0'),[rate,setRate]=useState(1);
- const [historyCounts,setHistoryCounts]=useState({past:0,future:0});const audio=useRef(null),held=useRef(null),abort=useRef(null),alive=useRef(true);
+ const [tab,setTab]=useState('text'),[mode,setMode]=useState('line');
+ const [lineIndex,setLineIndex]=useState(0),[wordIndex,setWordIndex]=useState(0);
+ const [source,setSource]=useState({status:'idle'}),[mediaReady,setMediaReady]=useState(false);
+ const [notice,setNotice]=useState(''),[noticeError,setNoticeError]=useState(false);
+ const [reviewed,setReviewed]=useState(false),[current,setCurrent]=useState(0),[rate,setRate]=useState(1);
+ const [offset,setOffset]=useState('0'),[playing,setPlaying]=useState(false),[loop,setLoop]=useState(false),[capturing,setCapturing]=useState(false);
+ const [historyCounts,setHistoryCounts]=useState({past:0,future:0});
+ const latest=useRef(value),history=useRef({past:[],future:[]}),audio=useRef(null),held=useRef(null),gesture=useRef(null);
+ const abort=useRef(null),alive=useRef(true),enabled=useRef(!disabled),importer=useRef(null),lineRefs=useRef([]),previewRefs=useRef([]);
+ const selectedIndex=Math.max(0,Math.min(lineIndex,model.lines.length-1));
+ const selected=model.lines[selectedIndex];
+ const selectedWord=Math.max(0,Math.min(wordIndex,(selected?.words.length||1)-1));
+ const ready=source.status==='ready'&&mediaReady;
+ const hasAudioWorkspace=tab!=='text';
+ const changed=!!(source.fingerprint&&model.reference&&model.reference!==source.fingerprint);
+ const documentStatus=useMemo(()=>lyricStatus(value),[value]);
+ const applied=documentStatus==='Timing applied'&&!changed;
+ const timedLines=model.lines.filter(line=>isTime(line.time)).length;
+ const totalWords=model.lines.reduce((n,line)=>n+line.words.length,0);
+ const hasTiming=model.draft||!!model.reference||model.lines.some(line=>isTime(line.time)||line.words.some(word=>word.time!=null||word.end!=null));
+ const timedWords=model.lines.reduce((n,line)=>n+line.words.filter(word=>isTime(word.time)&&isTime(word.end)&&word.end>word.time).length,0);
+ const progress=mode==='word'?timedWords:timedLines,progressTotal=mode==='word'?totalWords:model.lines.length;
+ const errors=timingErrors({...model,reference:source.fingerprint||model.reference,duration:source.duration||model.duration},{requireReference:true});
+ const activeLine=model.lines.reduce((active,line,index)=>isTime(line.time)&&line.time<=current?index:active,-1);
+ const saveHint=saveContext==='upload'?'Continue to Review, then publish your release.':'Use Save Lyrics below to save this song.';
+ const message=(text,error=false)=>{setNotice(text);setNoticeError(error);};
+ const cancelCapture=useCallback(()=>{const pending=!!held.current;held.current=null;gesture.current=null;setCapturing(false);if(pending){setNotice('Capture canceled. Your previous timings are unchanged.');setNoticeError(false);}},[]);
+
  useEffect(()=>{if(value!==latest.current)setText(displayText(value));latest.current=value;},[value]);
+ useEffect(()=>{enabled.current=!disabled;},[disabled]);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;abort.current?.abort();};},[]);
- useEffect(()=>{const el=audio.current;return()=>{held.current=null;el?.pause();};},[source.fingerprint,tab]);
- const emit=(next,remember=true)=>{if(disabled)return;if(remember){history.current.past=[...history.current.past,latest.current].slice(-100);history.current.future=[];}latest.current=next;onChange(next);setHistoryCounts({past:history.current.past.length,future:history.current.future.length});};
- const mutate=fn=>{try{const next=fn(editorModel(latest.current));emit(encodeDraft(next));setNotice('Timing draft retained. Apply timings before saving or publishing.');}catch(e){setNotice(e.message);}};
- const moveHistory=direction=>{const from=history.current[direction];if(!from.length)return;const next=from.pop();history.current[direction==='past'?'future':'past'].push(latest.current);setText(displayText(next));emit(next,false);};
- const changeText=text=>{
-  setText(text);
-  const old=editorModel(latest.current);const next=editorModel(text);
-  next.lines=next.lines.map((line,i)=>old.lines[i]?.text===line.text?{...old.lines[i],gapBefore:line.gapBefore}:line);
-  if(old.lines.some(l=>l.time!=null)){mutate(()=>({...old,lines:next.lines,plainText:text}));}else emit(text);
+ useEffect(()=>{
+  const element=audio.current;
+  const cancel=()=>cancelCapture();
+  const hidden=()=>{if(document.hidden){cancelCapture();element?.pause();}};
+  window.addEventListener('blur',cancel);document.addEventListener('visibilitychange',hidden);
+  return()=>{cancelCapture();element?.pause();window.removeEventListener('blur',cancel);document.removeEventListener('visibilitychange',hidden);};
+ },[source.fingerprint,hasAudioWorkspace,disabled,cancelCapture]);
+ useEffect(()=>{
+  const element=tab==='preview'?previewRefs.current[activeLine]:lineRefs.current[selectedIndex];
+  const container=element?.parentElement;
+  if(element&&container)container.scrollTo?.({top:Math.max(0,element.offsetTop-container.clientHeight*.4),behavior:'auto'});
+ },[selectedIndex,activeLine,tab]);
+
+ const emit=(next,remember=true)=>{
+  if(!enabled.current)return;
+  if(remember){history.current.past=[...history.current.past,latest.current].slice(-100);history.current.future=[];}
+  latest.current=next;onChange(next);setHistoryCounts({past:history.current.past.length,future:history.current.future.length});
+ };
+ const mutate=fn=>{
+  try{emit(encodeDraft(fn(editorModel(latest.current))));message('Timing captured in your draft. Preview it, then apply when it feels right.');return true;}
+  catch(error){message(error.message,true);return false;}
+ };
+ const moveHistory=direction=>{
+  cancelCapture();const from=history.current[direction];if(!from.length)return;
+  const next=from.pop();history.current[direction==='past'?'future':'past'].push(latest.current);
+  setText(displayText(next));emit(next,false);message(direction==='past'?'Last edit undone.':'Edit restored.');
+ };
+ const changeText=nextText=>{
+  setText(nextText);const old=editorModel(latest.current),next=editorModel(nextText);
+  next.lines=next.lines.map((line,index)=>old.lines[index]?.text===line.text?{...old.lines[index],gapBefore:line.gapBefore}:line);
+  if(!next.lines.length)emit(nextText);else if(old.lines.some(line=>line.time!=null||line.words.some(word=>word.time!=null)))mutate(()=>({...old,lines:next.lines,plainText:nextText}));else emit(nextText);
+  setLineIndex(index=>Math.max(0,Math.min(index,next.lines.length-1)));cancelCapture();
+ };
+ const selectLine=index=>{cancelCapture();message('');setLineIndex(Math.max(0,Math.min(index,model.lines.length-1)));setWordIndex(0);};
+ const navigate=delta=>{
+  cancelCapture();message('');
+  if(mode==='word'&&selected){
+   const next=selectedWord+delta;
+   if(next>=0&&next<selected.words.length){setWordIndex(next);return;}
+   const line=selectedIndex+delta;
+   if(line>=0&&line<model.lines.length){setLineIndex(line);setWordIndex(delta<0?model.lines[line].words.length-1:0);}
+  }else selectLine(selectedIndex+delta);
  };
  const loadReference=async()=>{
-  if(!releaseId||!recordingId){setNotice('Upload the recording audio before synchronizing.');return;}
-  abort.current?.abort();const request=new AbortController();abort.current=request;setSource({status:'loading'});setCurrent(0);setNotice('');setReviewed(false);
+  if(!releaseId||!recordingId){message('Upload the audio for this recording first. Then return here to add timing.',true);return;}
+  abort.current?.abort();cancelCapture();const request=new AbortController();abort.current=request;
+  setSource({status:'loading'});setMediaReady(false);setPlaying(false);setCurrent(0);setReviewed(false);setLoop(false);message('');
   const endpoint=`/api/admin/releases/${encodeURIComponent(releaseId)}/tracks/${encodeURIComponent(recordingId)}/lyrics-audio`;
-  try{const res=await fetch(endpoint+'?metadata=1',{signal:request.signal,cache:'no-store'});const body=await res.json();if(!res.ok)throw Error(body.error||'Reference could not be loaded.');if(alive.current&&!request.signal.aborted)setSource({status:'ready',...body,url:endpoint+'?revision='+body.fingerprint});}
-  catch(e){if(e.name!=='AbortError'&&alive.current){setSource({status:'error'});setNotice(e.message);}}
+  try{
+   const response=await fetch(endpoint+'?metadata=1',{signal:request.signal,cache:'no-store'});const body=await response.json();
+   if(!response.ok)throw Error(body.error||'Your recording could not be loaded.');
+   if(alive.current&&!request.signal.aborted)setSource({status:'ready',...body,url:endpoint+'?revision='+body.fingerprint});
+  }catch(error){if(error.name!=='AbortError'&&alive.current){setSource({status:'error'});message(error.message,true);}}
  };
- const markLine=()=>{
-  const time=audio.current?.currentTime;if(!Number.isFinite(time)){setNotice('Load the recording reference first.');return;}
-  mutate(m=>({...m,lines:m.lines.map((l,i)=>i===lineIndex?{...l,time,words:wordsFor(l.text)}:l)}));setLineIndex(i=>Math.min(i+1,model.lines.length-1));setWordIndex(0);
+ const readClock=()=>enabled.current&&ready&&Number.isFinite(audio.current?.currentTime)?audio.current.currentTime:null;
+ const markLine=at=>{
+  const time=typeof at==='number'?at:readClock();if(!enabled.current||!ready||time==null||!selected)return;
+  if(mutate(state=>({...state,lines:state.lines.map((line,index)=>{
+   if(index!==selectedIndex)return line;
+   if(isTime(line.time)&&line.words.some(word=>word.time!=null||word.end!=null))return shiftTiming({...state,lines:[line]},time-line.time).lines[0];
+   return {...line,time,words:wordsFor(line.text)};
+  })}))){
+   message(`Line ${selectedIndex+1} marked at ${clock(time)}.${selectedIndex+1<model.lines.length?' Next line is ready.':' All lines reached. Preview your timing.'}`);
+   setLineIndex(index=>Math.min(index+1,model.lines.length-1));setWordIndex(0);
+  }
  };
  const startWord=()=>{
-  const time=audio.current?.currentTime;const row=model.lines[lineIndex];if(!Number.isFinite(time)||!row?.words[wordIndex]){setNotice('Load the reference and select a word first.');return;}
-  held.current={time,line:lineIndex,word:wordIndex};setNotice('Release when this word finishes.');
+  const time=readClock();if(time==null||!selected?.words[selectedWord])return;
+  held.current={time,line:selectedIndex,word:selectedWord};setCapturing(true);message('Keep holding while this word is sung. Release when it ends.');
  };
  const endWord=()=>{
-  const capture=held.current;held.current=null;if(!capture)return;const end=audio.current?.currentTime;
-  if(!Number.isFinite(end)||end<=capture.time){setNotice('Play the reference while holding, or enter start/end times manually.');return;}
-  mutate(m=>({...m,lines:m.lines.map((l,i)=>i!==capture.line?l:{...l,time:capture.word===0?capture.time:l.time,words:l.words.map((w,j)=>j===capture.word?{...w,time:capture.time,end}:w)})}));
-  if(capture.word+1<model.lines[capture.line].words.length)setWordIndex(capture.word+1);else{setWordIndex(0);setLineIndex(i=>Math.min(i+1,model.lines.length-1));}
+  const capture=held.current;held.current=null;setCapturing(false);if(!capture)return;
+  const end=readClock();if(end==null||end<=capture.time){message('Play the recording while holding, or fine-tune the timestamps below.',true);return;}
+  const state=editorModel(latest.current);if(!state.lines[capture.line]?.words[capture.word])return;
+  if(mutate(state=>({...state,lines:state.lines.map((line,index)=>index!==capture.line?line:{...line,time:capture.word===0?capture.time:line.time,words:line.words.map((word,j)=>j===capture.word?{...word,time:capture.time,end}:word)})}))){
+   if(capture.word+1<state.lines[capture.line].words.length)setWordIndex(capture.word+1);
+   else{setWordIndex(0);setLineIndex(Math.min(capture.line+1,state.lines.length-1));}
+   message(`Word captured: ${clock(capture.time)} → ${clock(end)}. The next word is ready.`);
+  }
+ };
+ const seek=time=>{
+  if(!enabled.current||!ready||!audio.current)return;cancelCapture();audio.current.currentTime=Math.max(0,Math.min(time,source.duration));setCurrent(audio.current.currentTime);
+ };
+ const play=()=>{
+  if(!enabled.current||!ready||!audio.current)return;
+  audio.current.playbackRate=rate;
+  const promise=audio.current.play();promise?.catch(()=>{setPlaying(false);message('Playback could not start. Try the native audio controls or reload your recording.',true);});
+ };
+ const referenceStarted=()=>{
+  const element=audio.current;
+  if(!enabled.current){element?.pause();return;}
+  setPlaying(true);
+  document.querySelectorAll('audio[data-lyric-reference]').forEach(other=>{if(other!==element)other.pause();});
+  if(background?.getIsAudiblyPlaying?.()||background?.isPlaying){
+   const failed=()=>{if(alive.current&&audio.current===element){element?.pause();message('Pause the main player before starting your lyric recording, so you hear only one song.',true);}};
+   try{const pending=background.pause?.();pending?.catch?.(failed);}catch{failed();}
+  }
+ };
+ const togglePlayback=()=>{if(playing)audio.current?.pause();else play();};
+ const rehearse=()=>{if(isTime(selected?.time)){seek(Math.max(0,selected.time-2));play();}};
+ const nudge=delta=>{
+  if(!selected||!isTime(mode==='line'?selected.time:selected.words[selectedWord]?.time))return;cancelCapture();
+  mutate(state=>({...state,lines:state.lines.map((line,index)=>{
+   if(index!==selectedIndex)return line;
+   if(mode==='line')return shiftTiming({...state,lines:[line]},delta).lines[0];
+   return {...line,time:selectedWord===0&&isTime(line.time)?line.time+delta:line.time,words:line.words.map((word,j)=>j!==selectedWord?word:{...word,time:isTime(word.time)?word.time+delta:null,end:isTime(word.end)?word.end+delta:null})};
+  })}));
  };
  const apply=()=>{
-  const next={...model,reference:source.fingerprint,duration:source.duration};const errors=timingErrors(next,{requireReference:true});
-  if(model.reference&&model.reference!==source.fingerprint&&!reviewed)errors.push('Review the timings against the changed reference and confirm below.');
-  if(errors.length){setNotice(errors.join(' '));return;}
-  emit(encodeLyrics(next));setNotice('Timings applied. Save the release or continue the upload to persist them.');
+  const next={...editorModel(latest.current),reference:source.fingerprint,duration:source.duration};const issues=timingErrors(next,{requireReference:true});
+  if(changed&&!reviewed)issues.push('Review these timings against the changed recording, then confirm the review.');
+  if(!ready)issues.unshift('Load your recording and wait for the audio to be ready.');
+  if(issues.length){message(issues.join(' '),true);return;}
+  try{emit(encodeLyrics(next));message(`Timings applied. ${saveHint}`);}catch(error){message(error.message,true);}
  };
- const download=()=>{const blob=new Blob([value],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`${title.replace(/[^\p{L}\p{N} _-]/gu,'')||'lyrics'}.lrc`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
- const selected=model.lines[lineIndex];const changed=source.fingerprint&&model.reference&&model.reference!==source.fingerprint;
- return <fieldset disabled={disabled} aria-label={`${title} lyric editor`} onBlur={()=>{held.current=null;}} onKeyDown={e=>{
-  if(e.code!=='Space'||e.repeat||tab!=='timing'||/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(e.target.tagName))return;e.preventDefault();if(mode==='line')markLine();else startWord();
- }} onKeyUp={e=>{if(e.code==='Space'&&held.current){e.preventDefault();endWord();}}} style={{border:'1px solid #444',borderRadius:10,padding:14,color:'#eee',marginBottom:16,minWidth:0}}>
-  <legend>{title} lyrics</legend>
-  <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:12}}>
-   <button type="button" style={control} aria-pressed={tab==='text'} onClick={()=>setTab('text')}>Text</button>
-   <button type="button" style={control} aria-pressed={tab==='timing'} onClick={()=>setTab('timing')}>Synchronize</button>
-   <button type="button" style={control} disabled={!historyCounts.past} onClick={()=>moveHistory('past')}>Undo</button>
-   <button type="button" style={control} disabled={!historyCounts.future} onClick={()=>moveHistory('future')}>Redo</button>
-   <label style={control}>Import LRC<input aria-label="Import lyrics" type="file" accept=".lrc,.txt,text/plain" style={{display:'block',maxWidth:200}} onChange={async e=>{
-    const file=e.target.files?.[0];e.target.value='';if(!file)return;if(file.size>MAX_LYRIC_LENGTH*4){setNotice('The lyric file is too large.');return;}const text=await file.text();if(alive.current){setText(displayText(text));emit(text);}
-   }}/></label>
-   <button type="button" style={control} disabled={model.draft||!value} onClick={download}>Export LRC</button>
-  </div>
-  {tab==='text'?<label htmlFor={uid}>Lyrics text<textarea id={uid} aria-label={`${title} lyrics text`} value={text} rows={10} onChange={e=>changeText(e.target.value)} style={{...input,display:'block',width:'100%',boxSizing:'border-box',lineHeight:1.7}}/></label>:<div tabIndex={0} aria-label="Lyric synchronization workspace">
-   <p>Mark each line when its first word is sung. For word timing, hold the capture button while a word is sung and release at its end. Space works while this workspace has focus.</p>
-   <button type="button" style={control} disabled={source.status==='loading'} onClick={loadReference}>{source.status==='loading'?'Loading reference…':source.status==='ready'?'Reload recording reference':'Load recording reference'}</button>
-   {source.url?<audio data-lyric-reference key={source.fingerprint} ref={audio} controls preload="metadata" src={source.url} style={{width:'100%',margin:'12px 0'}}
-    onLoadedMetadata={e=>{e.currentTarget.playbackRate=rate;setCurrent(e.currentTarget.currentTime);const duration=e.currentTarget.duration;if(Number.isFinite(duration)&&duration>0)setSource(p=>({...p,duration}));}}
-    onTimeUpdate={e=>setCurrent(e.currentTarget.currentTime)} onSeeked={e=>setCurrent(e.currentTarget.currentTime)}
-    onError={()=>setNotice('Reference playback failed. Reload it or use a browser that supports this audio format.')} onPlay={e=>{document.querySelectorAll('audio[data-lyric-reference]').forEach(el=>{if(el!==e.currentTarget)el.pause();});}}/>:null}
-   <p role="status">Reference time: {Number.isFinite(current)?current.toFixed(3):'0.000'}s</p>
-   <label>Playback speed <select aria-label="Reference playback speed" style={input} value={rate} onChange={e=>{const next=Number(e.target.value);setRate(next);if(audio.current)audio.current.playbackRate=next;}}>{[0.5,0.75,1,1.25].map(n=><option key={n} value={n}>{n}×</option>)}</select></label>
-   <label>Timing mode <select aria-label="Timing mode" style={input} value={mode} onChange={e=>{setMode(e.target.value);setWordIndex(0);}}><option value="line">Lines</option><option value="word">Words</option></select></label>
-   <div style={{display:'flex',gap:8,flexWrap:'wrap',margin:'12px 0'}}>
-    <button type="button" style={control} disabled={source.status!=='ready'||!selected} onClick={mode==='line'?markLine:undefined}
-     onPointerDown={mode==='word'?e=>{e.preventDefault();e.currentTarget.setPointerCapture?.(e.pointerId);startWord();}:undefined}
-     onPointerUp={mode==='word'?endWord:undefined} onPointerCancel={()=>{held.current=null;}} onLostPointerCapture={()=>{held.current=null;}}
-     onKeyDown={mode==='word'?e=>{if(e.code==='Space'&&!e.repeat){e.preventDefault();e.stopPropagation();startWord();}}:undefined}
-     onKeyUp={mode==='word'?e=>{if(e.code==='Space'){e.preventDefault();e.stopPropagation();endWord();}}:undefined}>{mode==='line'?'Mark selected line':'Hold to time selected word'}</button>
-    <button type="button" style={control} onClick={()=>mutate(m=>({...m,lines:m.lines.map(l=>({...l,time:null,words:wordsFor(l.text)}))}))}>Clear timings</button>
-    <label>Shift all (seconds)<input aria-label="Shift all timings" style={{...input,width:85}} inputMode="decimal" value={offset} onChange={e=>setOffset(e.target.value)}/></label>
-    <button type="button" style={control} onClick={()=>{try{mutate(m=>shiftTiming(m,Number(offset)));}catch(e){setNotice(e.message);}}}>Shift timings</button>
+ const importFile=async event=>{
+  const file=event.target.files?.[0];event.target.value='';if(!file)return;
+  try{
+   if(file.size>MAX_LYRIC_LENGTH*4)throw Error('The lyric file is too large.');
+   const imported=await file.text();if(imported.length>MAX_LYRIC_LENGTH)throw Error('The lyric file is too large.');
+   const parsed=editorModel(imported);if(parsed.error)throw Error(parsed.error);
+   if(alive.current&&enabled.current){cancelCapture();setText(displayText(imported));emit(imported);setLineIndex(0);setWordIndex(0);message('Lyrics imported. Load the recording to review their timing.');}
+  }catch(error){if(alive.current)message(error.message,true);}
+ };
+ const download=()=>{
+  const blob=new Blob([value],{type:'text/plain;charset=utf-8'}),url=URL.createObjectURL(blob),anchor=document.createElement('a');
+  anchor.href=url;anchor.download=`${title.replace(/[^\p{L}\p{N} _-]/gu,'')||'lyrics'}.lrc`;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ };
+ const onKeyDown=event=>{
+  if(disabled||editable(event.target))return;
+  if((event.metaKey||event.ctrlKey)&&event.key.toLowerCase()==='z'){event.preventDefault();moveHistory(event.shiftKey?'future':'past');return;}
+  if(tab==='text')return;
+  if(event.code==='Space'){
+   if(event.target.tagName==='BUTTON')return;
+   event.preventDefault();if(event.repeat||tab!=='timing')return;
+   if(mode==='line')markLine();else startWord();return;
+  }
+  if(event.key==='Escape'){cancelCapture();audio.current?.pause();return;}
+  if(event.repeat)return;
+  if(event.key.toLowerCase()==='p'){event.preventDefault();togglePlayback();}
+  if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();const delta=event.key==='ArrowLeft'?-1:1;if(event.shiftKey&&tab==='timing')nudge(delta*.05);else seek((audio.current?.currentTime||0)+delta*3);}
+  if(tab==='timing'&&(event.key==='ArrowUp'||event.key==='ArrowDown')){event.preventDefault();navigate(event.key==='ArrowUp'?-1:1);}
+ };
+ const pointerDown=event=>{
+  if(!enabled.current||!ready||!selected||event.isPrimary===false||event.button>0)return;
+  event.preventDefault();event.currentTarget.focus({preventScroll:true});event.currentTarget.setPointerCapture?.(event.pointerId);
+  gesture.current={id:event.pointerId,x:event.clientX,y:event.clientY,time:audio.current.currentTime};if(mode==='word')startWord();
+ };
+ const pointerMove=event=>{
+  const start=gesture.current;if(!start||start.id!==event.pointerId)return;
+  if(Math.max(Math.abs(event.clientX-start.x),Math.abs(event.clientY-start.y))>14){held.current=null;setCapturing(false);}
+ };
+ const pointerUp=event=>{
+  const start=gesture.current;gesture.current=null;if(!start||start.id!==event.pointerId)return;
+  const dx=event.clientX-start.x,dy=event.clientY-start.y;
+  if(Math.abs(dx)>=50&&Math.abs(dx)>Math.abs(dy)*1.3){cancelCapture();navigate(dx<0?-1:1);return;}
+  if(Math.max(Math.abs(dx),Math.abs(dy))>14){cancelCapture();return;}
+  if(mode==='line')markLine(start.time);else endWord();
+ };
+ const onTimeUpdate=event=>{
+  const element=event.currentTarget;const start=isTime(selected?.time)?Math.max(0,selected.time-2):null;
+  const next=model.lines[selectedIndex+1]?.time;const end=isTime(next)&&next>selected?.time?next:source.duration;
+  if(loop&&start!=null&&end>start&&element.currentTime>=end){cancelCapture();element.currentTime=start;}
+  setCurrent(element.currentTime);
+ };
+ const changeTab=next=>{cancelCapture();if(next==='text')setMediaReady(false);setTab(next);};
+ const issueLine=issue=>{const match=issue.match(/^Line (\d+)/);if(match){selectLine(Number(match[1])-1);changeTab('timing');}};
+ const timingStatus=changed?'Review recording':documentStatus==='No lyrics'?'Start here':documentStatus;
+
+ return <fieldset disabled={disabled} className={styles.studio} aria-label={`${title} lyric editor`} onBlur={cancelCapture} onKeyDown={onKeyDown}
+  onKeyUp={event=>{if(event.code==='Space'&&held.current){event.preventDefault();endWord();}}}>
+  <legend className={styles.srOnly}>{title} lyrics</legend>
+  <header className={styles.header}><div><div className={styles.eyebrow}>2MRRW / GLYPHS</div><h3 className={styles.heading}>Lyrics studio</h3><p className={styles.recording}>{title}</p></div><span className={styles.badge} data-state={applied?'ready':model.draft||changed?'draft':''}>{applied?<Icon name="check"/>:null}{timingStatus}</span></header>
+  <nav className={styles.steps} aria-label="Lyric workflow">{[['text','Text','Write'],['timing','Synchronize','Time'],['preview','Preview','Preview']].map(([key,label,visible],index)=><button key={key} type="button" className={styles.step} aria-label={label} aria-pressed={tab===key} disabled={key!=='text'&&!model.lines.length} onClick={()=>changeTab(key)}><span className={styles.stepNumber}>{index+1}</span>{visible}</button>)}</nav>
+  <div className={styles.body}>
+   <div className={styles.tools}>
+    <button type="button" className={styles.iconButton} aria-label="Undo" title="Undo · ⌘/Ctrl Z" disabled={!historyCounts.past} onClick={()=>moveHistory('past')}><Icon name="undo"/></button>
+    <button type="button" className={styles.iconButton} aria-label="Redo" title="Redo · ⌘/Ctrl Shift Z" disabled={!historyCounts.future} onClick={()=>moveHistory('future')}><Icon name="redo"/></button>
+    <button type="button" className={styles.button} onClick={()=>importer.current?.click()}><Icon name="upload"/>Import LRC</button><input ref={importer} className={styles.srOnly} tabIndex={-1} aria-label="Import lyrics" type="file" accept=".lrc,.txt,text/plain" onChange={importFile}/>
+    <button type="button" className={styles.button} disabled={model.draft||!value} onClick={download}><Icon name="download"/>Export LRC</button>
    </div>
-   <div aria-label="Timed lyric lines" style={{maxHeight:450,overflowY:'auto'}}>{model.lines.map((line,i)=><section key={i} style={{padding:12,border:'1px solid #555',marginBottom:8,background:i===lineIndex?'#24243b':'#111'}}>
-    <button type="button" style={control} aria-pressed={i===lineIndex} onClick={()=>{setLineIndex(i);setWordIndex(0);}}>Select line {i+1}</button> <strong>{line.text}</strong>
-    <label>Line {i+1} start<input aria-label={`Line ${i+1} start`} type="number" min="0" step="0.001" style={{...input,width:100}} value={line.time??''} onChange={e=>{const time=numeric(e.target.value);mutate(m=>({...m,lines:m.lines.map((l,j)=>j===i?{...l,time}:l)}));}}/></label>
-    {mode==='word'?line.words.map((word,j)=><div key={j} style={{display:'flex',gap:6,flexWrap:'wrap',paddingTop:8}}>
-     <button type="button" style={control} aria-label={`Select line ${i+1} word ${j+1}`} aria-pressed={i===lineIndex&&j===wordIndex} onClick={()=>{setLineIndex(i);setWordIndex(j);}}>{word.text}</button>
-     {['time','end'].map(field=><label key={field}>{field==='time'?'Start':'End'}<input aria-label={`Line ${i+1} word ${j+1} ${field==='time'?'start':'end'}`} type="number" min="0" step="0.001" style={{...input,width:95}} value={word[field]??''} onChange={e=>{const number=numeric(e.target.value);mutate(m=>({...m,lines:m.lines.map((l,k)=>k===i?{...l,...(j===0&&field==='time'?{time:number}:{}),words:l.words.map((w,n)=>n===j?{...w,[field]:number}:w)}:l)}));}}/></label>)}
-    </div>):null}
-    <div aria-label={`Line ${i+1} timing preview`} style={{fontSize:22,fontWeight:800,paddingTop:10}}>{line.words.some(w=>w.time!=null)?<TimedLyricWords words={line.words} currentTime={current}/>:line.text}</div>
-   </section>)}</div>
-   {changed?<label><input type="checkbox" checked={reviewed} onChange={e=>setReviewed(e.target.checked)}/>I reviewed these timings against the changed recording.</label>:null}
-   <button type="button" style={{...control,marginTop:12}} disabled={source.status!=='ready'} onClick={apply}>Apply timings</button>
-   <button type="button" style={{...control,margin:12}} onClick={()=>{emit(plainLyrics(value));setText(plainLyrics(value));setNotice('Timing removed; lyric text retained.');}}>Keep text only</button>
-  </div>}
-  {model.draft?<p role="status">Unfinished timing is retained locally and in upload drafts. Apply it before saving a released song or publishing.</p>:null}
-  {notice?<p role="status" style={{lineHeight:1.6,overflowWrap:'anywhere'}}>{notice}</p>:null}
+   {tab==='text'?<>
+    <p className={styles.description}>Start with your words. Add timing when you’re ready.</p>
+    <label className={styles.label} htmlFor={uid}>Your lyrics</label><textarea id={uid} aria-label={`${title} lyrics text`} className={styles.textArea} value={text} rows={10} maxLength={MAX_LYRIC_LENGTH} onChange={event=>changeText(event.target.value)} placeholder={'One sung line at a time.\nLeave a blank line between sections.\n\nYour words. Your timing.'}/>
+    <div className={styles.textMeta}><span>{model.lines.length} lines · {totalWords} words</span><span>Line breaks stay with your lyrics</span></div>
+    <div className={styles.guide}><div className={styles.guideItem}><span>01</span><div><strong>Write it as it’s sung</strong><p>One lyric line per row. Write repeated choruses in full.</p></div></div><div className={styles.guideItem}><span>02</span><div><strong>Listen. Tap. Follow.</strong><p>Tap each line’s first sung word. Add word timing for more detail.</p></div></div><div className={styles.guideItem}><span>03</span><div><strong>Hear it, then apply</strong><p>Preview against your recording before saving the release.</p></div></div></div>
+    <div className={styles.nextRow}><span className={styles.note}>You can also save plain lyrics without timing.</span><button type="button" className={styles.primary} disabled={!model.lines.length} onClick={()=>changeTab('timing')}>Continue to timing <Icon name="right"/></button></div>
+   </>:<div tabIndex={0} aria-label="Lyric synchronization workspace">
+    {!source.url?<div className={styles.connect}><Icon name="audio"/><h4>Bring your recording into the room.</h4><p>Use the audio already uploaded for this song. Listen while you capture each lyric’s place in the music.</p><button type="button" className={styles.primary} aria-label="Load recording reference" disabled={source.status==='loading'} onClick={loadReference}>{source.status==='loading'?'Connecting…':'Load your recording'}</button><p className={styles.note}>No audio yet? Finish the audio upload first.</p></div>:<div className={styles.transport} aria-label="Recording transport">
+     <div className={styles.transportTop}><span className={styles.label}>{ready?'Recording connected':source.status==='error'?'Recording needs attention':'Loading audio…'}</span><span className={styles.clock}>{clock(current)} <small>/ {clock(source.duration)}</small></span></div>
+     <div className={styles.transportControls}><button type="button" className={styles.iconButton} aria-label="Back 3 seconds" disabled={!ready} onClick={()=>seek((audio.current?.currentTime||0)-3)}><Icon name="left"/></button><button type="button" className={styles.playButton} aria-label={playing?'Pause reference':'Play reference'} disabled={!ready} onClick={togglePlayback}><Icon name={playing?'pause':'play'}/></button><button type="button" className={styles.iconButton} aria-label="Forward 3 seconds" disabled={!ready} onClick={()=>seek((audio.current?.currentTime||0)+3)}><Icon name="right"/></button><label className={styles.srOnly} htmlFor={`${uid}-speed`}>Playback speed</label><select id={`${uid}-speed`} className={styles.select} aria-label="Reference playback speed" value={rate} onChange={event=>{const next=Number(event.target.value);setRate(next);if(audio.current)audio.current.playbackRate=next;}}>{[0.5,0.75,1,1.25].map(speed=><option key={speed} value={speed}>{speed}× speed</option>)}</select></div>
+     <div className={styles.seekWrap}><input className={styles.seek} aria-label="Recording position" aria-valuetext={`${clock(current)} of ${clock(source.duration)}`} type="range" min="0" max={source.duration||1} step="0.01" value={Math.min(current,source.duration||1)} disabled={!ready} onChange={event=>seek(Number(event.target.value))}/><div className={styles.cueMarks} aria-hidden="true">{model.lines.map((line,index)=>isTime(line.time)&&source.duration>0?<span key={index} className={styles.cueMark} style={{left:`${Math.min(100,line.time/source.duration*100)}%`}}/>:null)}</div></div><div className={styles.timelineCaption}><span>Scrub to any moment</span><span>Violet ticks = your lyric cues</span></div>
+     <details className={styles.nativePlayer}><summary>Native audio controls</summary><audio data-lyric-reference key={source.fingerprint} ref={audio} controls={!disabled} preload="metadata" src={source.url}
+      onLoadedMetadata={event=>{const element=event.currentTarget;const duration=Number.isFinite(element.duration)&&element.duration>0?element.duration:source.duration;element.playbackRate=rate;setCurrent(element.currentTime);if(isTime(duration)&&duration>0){setSource(previous=>({...previous,duration}));setMediaReady(true);}else message('The recording duration could not be read. Reload the recording.',true);}}
+      onTimeUpdate={onTimeUpdate} onSeeked={event=>{cancelCapture();setCurrent(event.currentTarget.currentTime);}}
+      onPlay={referenceStarted}
+      onPause={()=>{setPlaying(false);cancelCapture();}} onEnded={()=>{setPlaying(false);cancelCapture();}}
+      onError={()=>{cancelCapture();setPlaying(false);setMediaReady(false);setSource(previous=>({...previous,status:'error'}));message('The recording could not play. Reload it, or use a browser that supports its audio format.',true);}}/></details>
+     <button type="button" className={styles.button} aria-label="Reload recording reference" disabled={source.status==='loading'} onClick={loadReference}>Reload recording</button>
+    </div>}
+    {tab==='timing'?<>
+     <div className={styles.timingGrid}><section className={styles.focusCard} aria-label="Capture lyrics">
+      <div className={styles.focusTop}><span className={styles.lineCount}>LINE {selectedIndex+1} / {model.lines.length}</span><select className={styles.select} aria-label="Timing mode" value={mode} onChange={event=>{cancelCapture();setMode(event.target.value);setWordIndex(0);}}><option value="line">Line timing</option><option value="word">Word timing</option></select></div>
+      <div className={styles.focusLyric} aria-label="Selected lyric">{selected?.text}</div>
+      {mode==='word'&&selected?<div className={styles.wordChips} aria-label="Words in selected line">{selected.words.map((word,index)=><button key={index} type="button" className={styles.wordChip} aria-label={`Select line ${selectedIndex+1} word ${index+1}`} aria-pressed={index===selectedWord} data-complete={isTime(word.time)&&isTime(word.end)&&word.end>word.time} onClick={()=>{cancelCapture();setWordIndex(index);}}>{word.text}</button>)}</div>:null}
+      <button type="button" className={styles.capturePad} data-capturing={capturing} aria-label={mode==='line'?'Mark selected line':'Hold to time selected word'} aria-describedby={`${uid}-capture-hint`} disabled={!ready||!selected}
+       onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={cancelCapture} onLostPointerCapture={cancelCapture}
+       onClick={event=>{if(event.detail===0&&mode==='line')markLine();}}
+       onKeyDown={event=>{if(event.code==='Space'){event.preventDefault();event.stopPropagation();if(!event.repeat){if(mode==='line')markLine();else startWord();}}}}
+       onKeyUp={event=>{if(event.code==='Space'){event.preventDefault();event.stopPropagation();endWord();}}}>
+       <Icon name="tap"/><span className={styles.captureTitle}>{capturing?'Release when the word ends':mode==='line'?'Tap when this line begins':`Hold for “${selected?.words[selectedWord]?.text.trim()||'this word'}”`}</span><span id={`${uid}-capture-hint`} className={styles.captureHint}>{mode==='line'?'Play, then tap or press Space on the first sung word.':'Play, then hold Space or touch. Release at the word’s end.'}<br/>The next {mode==='line'?'line':'word'} advances automatically.</span>
+      </button>
+      <div className={styles.padFooter}><button type="button" aria-label="Previous lyric" onClick={()=>navigate(-1)} disabled={selectedIndex===0&&(mode==='line'||selectedWord===0)}><Icon name="left"/></button><span>Swipe left / right to move through {mode==='line'?'lines':'words'}</span><button type="button" aria-label="Next lyric" onClick={()=>navigate(1)} disabled={selectedIndex===model.lines.length-1&&(mode==='line'||selectedWord===selected?.words.length-1)}><Icon name="right"/></button></div>
+      <div className={styles.rehearsal}><button type="button" className={styles.button} aria-label="Rehearse selected line" disabled={!ready||!isTime(selected?.time)} onClick={rehearse}><Icon name="play"/>Rehearse line</button><label><input type="checkbox" aria-label="Loop selected line" checked={loop} disabled={!ready||!isTime(selected?.time)} onChange={event=>{cancelCapture();setLoop(event.target.checked);}}/>Loop line</label></div>
+     </section><aside className={styles.queue} aria-label="Lyric cue list"><div className={styles.queueHeader}><span>Your lyrics</span><span>{timedLines}/{model.lines.length} timed</span></div><div className={styles.queueList}>{model.lines.map((line,index)=><button key={index} ref={element=>{lineRefs.current[index]=element;}} type="button" className={styles.queueRow} aria-label={`Select line ${index+1}`} aria-pressed={index===selectedIndex} onClick={()=>selectLine(index)}><span className={styles.cueNumber}>{String(index+1).padStart(2,'0')}</span><span>{line.text}</span><span className={styles.cueTime} data-complete={isTime(line.time)}>{isTime(line.time)?clock(line.time).slice(0,5):'—'}</span></button>)}</div></aside></div>
+     <progress className={styles.progressBar} value={progress} max={progressTotal||1} aria-label="Timing progress"/><p className={styles.note}>{progress} of {progressTotal} {mode==='word'?'words':'lines'} captured. {mode==='line'?'Start with lines; add word timing when you want a closer follow.':'Hold each word for its actual sung length.'}</p>
+     <details className={styles.adjust}><summary>Fine-tune selected {mode==='word'?'word':'line'}</summary><div className={styles.adjustBody}>
+      <div className={styles.adjustRow}><button type="button" className={styles.button} aria-label="Nudge selected cue earlier" disabled={!isTime(mode==='line'?selected?.time:selected?.words[selectedWord]?.time)} onClick={()=>nudge(-.05)}>−50 ms</button><button type="button" className={styles.button} aria-label="Nudge selected cue later" disabled={!isTime(mode==='line'?selected?.time:selected?.words[selectedWord]?.time)} onClick={()=>nudge(.05)}>+50 ms</button><span className={styles.note}>Shift + ← / →</span></div>
+      {selected?<label className={styles.label}>Line {selectedIndex+1} start<input className={styles.number} aria-label={`Line ${selectedIndex+1} start`} type="number" min="0" step="0.001" value={selected.time??''} onChange={event=>{const time=numeric(event.target.value);mutate(state=>({...state,lines:state.lines.map((line,index)=>index===selectedIndex?{...line,time}:line)}));}}/></label>:null}
+      {mode==='word'&&selected?selected.words.map((word,index)=><div key={index} className={styles.wordEdit}><span>{word.text}</span>{['time','end'].map(field=><label key={field} className={styles.label}>{field==='time'?'Start':'End'}<input className={styles.number} aria-label={`Line ${selectedIndex+1} word ${index+1} ${field==='time'?'start':'end'}`} type="number" min="0" step="0.001" value={word[field]??''} onChange={event=>{const number=numeric(event.target.value);mutate(state=>({...state,lines:state.lines.map((line,i)=>i!==selectedIndex?line:{...line,...(index===0&&field==='time'?{time:number}:{}),words:line.words.map((word,j)=>j===index?{...word,[field]:number}:word)})}));}}/></label>)}</div>):null}
+      <div className={styles.adjustRow}><label className={styles.label}>Shift every cue (seconds)<input className={styles.number} aria-label="Shift all timings" inputMode="decimal" value={offset} onChange={event=>setOffset(event.target.value)}/></label><button type="button" className={styles.button} onClick={()=>mutate(state=>shiftTiming(state,Number(offset)))}>Shift timings</button></div>
+      <button type="button" className={styles.secondary} onClick={()=>mutate(state=>({...state,lines:state.lines.map(line=>({...line,time:null,words:wordsFor(line.text)}))}))}>Clear timings</button>
+     </div></details>
+     <div className={styles.nextRow}><span className={styles.note}>Listen back before you apply.</span><button type="button" className={styles.primary} onClick={()=>changeTab('preview')}>Preview lyrics <Icon name="right"/></button></div>
+    </>:<>
+     <p className={styles.description}>Hear the words in place. Violet cues come from your timing; the preview follows the recording.</p>
+     <div className={styles.reviewArt}>{coverUrl?<div className={styles.coverImage} style={{backgroundImage:`url(${JSON.stringify(coverUrl)})`}} aria-hidden="true"/>:null}<div className={styles.artScrim}/><div className={styles.reviewHeader}>GLYPHS / LISTENER PREVIEW</div><div className={styles.previewScroll} aria-label="Lyric playback preview">{model.lines.map((line,index)=><p key={index} ref={element=>{previewRefs.current[index]=element;}} className={styles.previewLine} aria-current={index===activeLine?'true':undefined} data-preview-lyric>{line.words.some(word=>isTime(word.time)&&isTime(word.end))?<TimedLyricWords words={line.words} currentTime={current}/>:line.text}</p>)}</div></div>
+     <div className={styles.checkList}><div className={styles.check} data-complete={!!model.lines.length}><Icon name="check"/>Lyrics added</div><div className={styles.check} data-complete={timedLines===model.lines.length&&!!model.lines.length}><Icon name="check"/>{timedLines} of {model.lines.length} lines timed</div><div className={styles.check} data-complete={ready&&!changed}><Icon name="audio"/>{ready?changed?'Recording changed — review needed':'Current recording ready':'Load the recording to check your timing'}</div></div>
+     {!hasTiming?<div className={styles.tip}><strong>Plain lyrics are ready.</strong> Timing is optional. {saveHint} Return to Time whenever you want to add synchronization.</div>:errors.length?<div className={styles.issues}><strong>A little more timing to finish</strong><ul>{errors.slice(0,6).map((issue,index)=><li key={index}>{/^Line \d+/.test(issue)?<button type="button" onClick={()=>issueLine(issue)}>{issue}</button>:issue}</li>)}</ul>{errors.length>6?<span>And {errors.length-6} more. Work through the remaining lines in Time.</span>:null}</div>:<div className={styles.tip}><strong>Your cues are ready to review.</strong> Play the recording and listen for every line’s first sung word. Rehearse any line that needs another pass.</div>}
+    </>}
+    <details className={styles.gestureGuide}><summary>Gesture & keyboard guide</summary><div className={styles.gestureList}>
+     <div className={styles.gestureItem}><strong>Mark a line</strong><span>Tap capture pad / <kbd className={styles.kbd}>Space</kbd></span></div><div className={styles.gestureItem}><strong>Time a word</strong><span>Hold, then release / hold <kbd className={styles.kbd}>Space</kbd></span></div><div className={styles.gestureItem}><strong>Previous / next lyric</strong><span>Swipe left / right on pad · <kbd className={styles.kbd}>↑ ↓</kbd></span></div><div className={styles.gestureItem}><strong>Play / pause</strong><kbd className={styles.kbd}>P</kbd></div><div className={styles.gestureItem}><strong>Scrub 3 seconds</strong><kbd className={styles.kbd}>← →</kbd></div><div className={styles.gestureItem}><strong>Nudge 50 milliseconds</strong><kbd className={styles.kbd}>Shift + ← →</kbd></div><div className={styles.gestureItem}><strong>Undo / redo</strong><kbd className={styles.kbd}>⌘/Ctrl Z · ⌘/Ctrl Shift Z</kbd></div><div className={styles.gestureItem}><strong>Pause & cancel capture</strong><kbd className={styles.kbd}>Esc</kbd></div>
+    </div><p className={styles.note}>Shortcuts work while this studio has focus. Typing in a text field keeps its normal behavior. Swipe on the capture pad; scroll anywhere else.</p></details>
+   </div>}
+   {changed?<label className={styles.reviewed}><input type="checkbox" aria-label="Reviewed changed recording" checked={reviewed} onChange={event=>setReviewed(event.target.checked)}/>I reviewed these timings against the changed recording.</label>:null}
+   {model.draft?<p className={styles.note} role="status">Unfinished timing is retained in your draft. Apply it before saving a released song or publishing.</p>:null}
+   {notice?<p className={styles.notice} data-error={noticeError} role={noticeError?'alert':'status'}>{notice}</p>:null}
+  </div>
+  <footer className={styles.footer}><div className={styles.footerTop}><div className={styles.footerText}><strong>{applied?'Timings applied. One more step.':tab==='text'?'Your words, with room to move.':tab==='preview'&&!hasTiming?'Plain lyrics are ready.':'Capture → preview → apply'}</strong><span>{applied||tab==='preview'&&!hasTiming?saveHint:tab==='text'?'Plain lyrics work too. Timing is optional.':`${saveHint} Timing stays editable later.`}</span></div><div className={styles.footerButtons}>{tab!=='text'?<><button type="button" className={styles.secondary} onClick={()=>{cancelCapture();const plain=plainLyrics(value);emit(plain);setText(plain);message('Timing removed. Your lyric text is retained.');}}>Keep text only</button><button type="button" className={styles.primary} disabled={!ready||!model.lines.length} onClick={apply}>Apply timings <Icon name="check"/></button></>:null}</div></div></footer>
  </fieldset>;
 }

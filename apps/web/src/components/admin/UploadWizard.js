@@ -1,5 +1,5 @@
 "use client";
-import { validateLyricText } from "@/lib/lyrics/timing";
+import { lyricStatus, validateLyricText } from "@/lib/lyrics/timing";
 import LyricTimingEditor from "@/components/admin/lyrics/LyricTimingEditor";
 import { createDraftSaveQueue } from "@/lib/credits/draft-save-queue";
 import CreditsEditor from "@/components/admin/CreditsEditor";
@@ -1515,22 +1515,22 @@ export function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, d
           <Label>Lyrics (Per Track)</Label>
           <p style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Optional — lyric text and applied timings appear in the release player.</p>
           {tracks.map((track) => (
-            <div key={track.tempId} style={{ marginBottom: 6, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
-              <div
+            <div key={track.tempId} style={{ marginBottom: 6, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "clip" }}>
+              <button type="button" aria-expanded={openLyricsId === track.tempId} aria-controls={`lyrics-${track.tempId}`}
                 onClick={() => setOpenLyricsId((prev) => prev === track.tempId ? null : track.tempId)}
-                style={{ padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                style={{ width: "100%", border: 0, minHeight: 48, background: "transparent", textAlign: "left", color: C.text, padding: "12px 14px", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }}
               >
                 <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>
                   {track.position}. {track.title || `Track ${track.position}`}
                 </span>
                 <span style={{ fontSize: 11, color: track.lyrics ? C.success : C.muted2 }}>
-                  {track.lyrics ? "Lyrics added ✓" : "No lyrics"} {openLyricsId === track.tempId ? "▲" : "▼"}
+                  {lyricStatus(track.lyrics || "")} {openLyricsId === track.tempId ? "▲" : "▼"}
                 </span>
-              </div>
+              </button>
               {openLyricsId === track.tempId && (
-                <div style={{ padding: "0 14px 14px", borderTop: `1px solid ${C.border}` }}>
+                <div id={`lyrics-${track.tempId}`} style={{ padding: "0 14px 14px", borderTop: `1px solid ${C.border}` }}>
                   <div style={{ height: 10 }} />
-                  <LyricTimingEditor value={track.lyrics || ""} onChange={lyrics => updateTrackLyrics(track.tempId, lyrics)} releaseId={releaseId} recordingId={track.track_id || track.id} title={track.title || `Track ${track.position}`} />
+                  <LyricTimingEditor value={track.lyrics || ""} onChange={lyrics => updateTrackLyrics(track.tempId, lyrics)} releaseId={releaseId} recordingId={track.track_id || track.id} title={track.title || `Track ${track.position}`} coverUrl={data.cover_preview_url || null} saveContext="upload" />
                 </div>
               )}
             </div>
@@ -1538,7 +1538,7 @@ export function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, d
         </div>
       ) : (
         <Field label="Lyrics" hint="Optional — preserves line breaks and verse structure.">
-          <LyricTimingEditor value={data.lyrics || ""} onChange={lyrics => onChange("lyrics", lyrics)} releaseId={releaseId} recordingId={data.track_id} title={data.title || "Recording"} />
+          <LyricTimingEditor value={data.lyrics || ""} onChange={lyrics => onChange("lyrics", lyrics)} releaseId={releaseId} recordingId={data.track_id} title={data.title || "Recording"} coverUrl={data.cover_preview_url || null} saveContext="upload" />
         </Field>
       )}
 

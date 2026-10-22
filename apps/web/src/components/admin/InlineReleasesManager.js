@@ -1,4 +1,5 @@
 "use client";
+import { lyricStatus } from "@/lib/lyrics/timing";
 import LyricTimingEditor from "@/components/admin/lyrics/LyricTimingEditor";
 import { getDeletedReleaseSnapshot } from "@/lib/releases/deletion-store";
 import DeleteReleaseButton from "@/components/admin/DeleteReleaseButton";
@@ -522,6 +523,7 @@ export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
 
   // Lyrics (keyed by track id)
   const [trackLyrics, setTrackLyrics] = useState({});
+  const [lyricRecordingId, setLyricRecordingId] = useState(null);
 
   // Static cover upload state — seeded "done" when the release already has a
   // cover, so reopening never implies a re-upload is required.
@@ -908,6 +910,9 @@ export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
     );
   }
 
+  const lyricRecordings = detail.lyric_recordings || detail.tracks;
+  const lyricTrack = lyricRecordings.find(track => track.id === lyricRecordingId) || lyricRecordings[0];
+
   const sectionDefs = [
     { id: "metadata", label: "Info" },
     { id: "credits",  label: "Credits & IDs" },
@@ -1241,11 +1246,20 @@ export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
               <div style={{ color: C.muted2, fontSize: 13 }}>No tracks found.</div>
             )}
 
-            {(detail.lyric_recordings || detail.tracks).map(track => <LyricTimingEditor
-              key={track.id} value={trackLyrics[track.id] || ""}
-              onChange={lyrics => setTrackLyrics(previous => ({ ...previous, [track.id]: lyrics }))}
-              releaseId={detail.release.id} recordingId={track.id} title={track.title || "Recording"} disabled={saving}
-            />)}
+            {lyricRecordings.length > 1 ? <div style={{ marginBottom: 18 }}>
+              <label htmlFor="lyric-recording-select" style={{ color: C.muted, fontSize: 12 }}>Recording to edit</label>
+              <select id="lyric-recording-select" aria-label="Lyric recording" value={lyricTrack?.id || ""} disabled={saving}
+                onChange={event => setLyricRecordingId(event.target.value)}
+                style={{ display: "block", width: "100%", minHeight: 48, padding: "10px 12px", marginTop: 7, background: C.surface2, color: C.text, border: `1px solid ${C.border2}`, borderRadius: 9 }}>
+                {lyricRecordings.map(track => <option key={track.id} value={track.id}>{track.position}. {track.title || "Recording"} - {lyricStatus(trackLyrics[track.id] || "")}</option>)}
+              </select>
+              <p style={{ color: C.muted, fontSize: 12, lineHeight: 1.7, marginTop: 8 }}>Your edits stay with each recording when you switch. Save Lyrics saves the release; apply or remove any timing drafts first.</p>
+            </div> : null}
+            {lyricTrack ? <LyricTimingEditor
+              key={lyricTrack.id} value={trackLyrics[lyricTrack.id] || ""}
+              onChange={lyrics => setTrackLyrics(previous => ({ ...previous, [lyricTrack.id]: lyrics }))}
+              releaseId={detail.release.id} recordingId={lyricTrack.id} title={lyricTrack.title || "Recording"} disabled={saving} coverUrl={coverPreview}
+            /> : null}
 
             {(detail.lyric_recordings || detail.tracks).length > 0 && (
               <Btn onClick={saveLyrics} disabled={saving}>{saving ? "Saving…" : "Save Lyrics"}</Btn>

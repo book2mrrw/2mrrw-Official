@@ -109,3 +109,13 @@ export function lyricClock({currentTrack,releaseSlug,recording,isPreview,current
   if(preview && !isTime(previewStartSeconds))return null;
   return currentTime+(preview?previewStartSeconds:0);
 }
+
+/** Shared authoring labels. Applied timing is not a claim that the release was saved. */
+export function lyricStatus(value) {
+  const model=decodeLyrics(value);
+  if(model.error)return 'Needs attention';
+  if(model.draft)return 'Timing draft';
+  if(model.reference)return timingErrors(model,{requireReference:true}).length?'Needs attention':'Timing applied';
+  if(model.lines.some(line=>line.time!=null||line.words?.some(word=>word.time!=null)))return 'Timing imported';
+  return model.lines.length?'Text added':'No lyrics';
+}
