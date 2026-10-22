@@ -2,32 +2,12 @@
  * Minimal LRC parser — [mm:ss.xx] or [mm:ss] lyric lines.
  */
 
-const LRC_TIME = /\[(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?\]/g;
+import { decodeLyrics } from './lyrics/timing.js';
 
 export function parseLrc(text) {
-  if (!text || typeof text !== "string") return [];
-  const lines = [];
-  const plainLines = [];
-  for (const raw of text.split(/\r?\n/)) {
-    const trimmed = raw.trim();
-    if (!trimmed || /^\[(?:ar|ti|al|by|offset|length):.*\]$/i.test(trimmed)) continue;
-    const times = [];
-    let match;
-    LRC_TIME.lastIndex = 0;
-    while ((match = LRC_TIME.exec(trimmed)) !== null) {
-      const min = Number(match[1]);
-      const sec = Number(match[2]);
-      const frac = match[3] ? Number(match[3]) / (10 ** match[3].length) : 0;
-      times.push(min * 60 + sec + frac);
-    }
-    const lyric = trimmed.replace(LRC_TIME, "").trim();
-    if (!lyric) continue;
-    if (times.length === 0) { plainLines.push({ time: null, text: lyric }); continue; }
-    for (const time of times) {
-      lines.push({ time, text: lyric });
-    }
-  }
-  return lines.length ? lines.sort((a, b) => a.time - b.time) : plainLines;
+  const {lines} = decodeLyrics(text);
+  const timed = lines.filter(l => l.time != null);
+  return (timed.length ? timed.sort((a,b)=>a.time-b.time) : lines).map(({time,text,words})=>({time,text,...(words?{words}:{})}));
 }
 
 export function getActiveLrcIndex(lines, currentTime) {

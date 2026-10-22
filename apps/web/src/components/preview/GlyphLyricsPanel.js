@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useCallback, memo } from "react";
+import { useEffect, useMemo, useRef, useCallback, useState, memo } from "react";
+import TimedLyricWords from "@/components/lyrics/TimedLyricWords";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { parseLrc, getActiveLrcIndex } from "@/lib/lrc";
-import { usePlaybackProgress } from "@/context/AudioContext";
+import {decodeLyrics,plainLyrics} from "@/lib/lyrics/timing";
 
 const ExpandIcon = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -104,22 +105,24 @@ function shareLyricCard({ lineText, albumTitle, artist, accentColor = "#9b5de5" 
 function GlyphLyricsPanel({
   open, lrcText, onClose, onSeek, isMobile = false, status = "ready", onRetry,
   fullscreen = false, onFullscreenChange,
-  albumTitle, artist, accentColor,
+  albumTitle, artist, accentColor, playbackTime = null, syncStatus = "legacy",
 }) {
-  const { currentTime } = usePlaybackProgress();
-  const lines = useMemo(() => parseLrc(lrcText), [lrcText]);
+  const currentTime = playbackTime;
+  const reducedMotion = useReducedMotion();
+  const [follow, setFollow] = useState(true);
+  const lines = useMemo(() => parseLrc((decodeLyrics(lrcText).draft || (decodeLyrics(lrcText).reference && syncStatus !== 'verified')) ? plainLyrics(lrcText) : lrcText), [lrcText, syncStatus]);
   const activeIndex = open ? getActiveLrcIndex(lines, currentTime) : -1;
   const scrollRef = useRef(null);
   const lineRefs = useRef([]);
 
   useEffect(() => {
-    if (!open || activeIndex < 0) return;
+    if (!open || !follow || activeIndex < 0) return;
     const el = lineRefs.current[activeIndex];
     const container = scrollRef.current;
     if (!el || !container) return;
     const top = el.offsetTop - container.clientHeight * 0.38;
-    container.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-  }, [activeIndex, open]);
+    container.scrollTo({ top: Math.max(0, top), behavior: reducedMotion ? "auto" : "smooth" });
+  }, [activeIndex, open, follow, reducedMotion]);
 
   const handleShareLyric = useCallback(() => {
     const activeLine = lines[activeIndex];
@@ -224,6 +227,8 @@ function GlyphLyricsPanel({
             </div>
           </div>
 
+          {!follow && activeIndex >= 0 ? <button type="button" onClick={() => setFollow(true)}>Back to current lyric</button> : null}
+          {['audio_changed','unavailable','invalid'].includes(syncStatus) ? <p role="status">{syncStatus === 'audio_changed' ? 'The recording changed; lyric timing needs review.' : 'Timing could not be verified. Showing lyric text.'}</p> : null}
           {!lines.length && status === "loading" ? <p role="status">Loading lyrics…</p> : null}
           {!lines.length && status === "error" ? <p role="alert">Lyrics could not be loaded. {onRetry ? <button type="button" onClick={onRetry}>Retry</button> : null}</p> : null}
           {fullscreen && albumTitle ? (
@@ -235,6 +240,7 @@ function GlyphLyricsPanel({
 
           <div
             ref={scrollRef}
+            onWheel={() => setFollow(false)} onTouchMove={() => setFollow(false)}
             style={{
               flex: 1,
               minHeight: 0,
@@ -253,6 +259,9 @@ function GlyphLyricsPanel({
                     ref={(el) => { lineRefs.current[i] = el; }}
                     data-lyric-line
                     aria-current={active ? "true" : undefined}
+                    role={onSeek && line.time != null ? "button" : undefined}
+                    tabIndex={onSeek && line.time != null ? 0 : undefined}
+                    onKeyDown={e => { if (onSeek && line.time != null && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onSeek(line.time); } }}
                     onClick={() => line.time != null && onSeek?.(line.time)}
                     style={{
                       margin: "0 0 22px",
@@ -266,7 +275,7 @@ function GlyphLyricsPanel({
                       cursor: onSeek && line.time != null ? "pointer" : "default",
                     }}
                   >
-                    {line.text}
+                    {line.words?.length ? <TimedLyricWords words={line.words} currentTime={currentTime} /> : line.text}
                   </p>
                 );
               })

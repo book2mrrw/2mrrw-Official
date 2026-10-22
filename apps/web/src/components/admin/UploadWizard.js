@@ -1,4 +1,5 @@
 "use client";
+import LyricTimingEditor from "@/components/admin/lyrics/LyricTimingEditor";
 import { createDraftSaveQueue } from "@/lib/credits/draft-save-queue";
 import CreditsEditor from "@/components/admin/CreditsEditor";
 import { editableCreditGroups, validateCreditGroups } from "@/lib/credits/contract";
@@ -1300,7 +1301,7 @@ function TrackDetailsStep({ data, tracks, setTracks, onNext, onBack }) {
 }
 
 // ── Step 4/5: Artwork + Lyrics ───────────────────────────────────────────────────
-function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlug, isMultiTrack, tracks, setTracks }) {
+export function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlug, isMultiTrack, tracks, setTracks }) {
   const [coverState, setCoverState] = useState({ status: data.cover_key ? "ready" : "idle", error: null });
   const [videoState, setVideoState] = useState({ status: data.cover_video_key ? "ready" : "idle", error: null });
   const [openLyricsId, setOpenLyricsId] = useState(null);
@@ -1410,7 +1411,7 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
   return (
     <div>
       <h2 style={{ fontSize: 22, fontWeight: 800, color: C.text, marginBottom: 6 }}>Artwork & Lyrics</h2>
-      <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>Cover art is required to publish. Lyrics are optional and stored internally.</p>
+      <p style={{ color: C.muted, fontSize: 13, marginBottom: 28 }}>Cover art is required to publish. Lyrics are optional. Add text or synchronize it to each recording.</p>
 
       <style>{`
         @keyframes cover-orbit { to { transform: rotate(360deg); } }
@@ -1511,7 +1512,7 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
       {isMultiTrack ? (
         <div>
           <Label>Lyrics (Per Track)</Label>
-          <p style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Optional — stored internally, not displayed publicly.</p>
+          <p style={{ fontSize: 12, color: C.muted, marginBottom: 12 }}>Optional — lyric text and applied timings appear in the release player.</p>
           {tracks.map((track) => (
             <div key={track.tempId} style={{ marginBottom: 6, background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>
               <div
@@ -1528,12 +1529,7 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
               {openLyricsId === track.tempId && (
                 <div style={{ padding: "0 14px 14px", borderTop: `1px solid ${C.border}` }}>
                   <div style={{ height: 10 }} />
-                  <Textarea
-                    value={track.lyrics || ""}
-                    onChange={(v) => updateTrackLyrics(track.tempId, v)}
-                    placeholder={"[Verse 1]\n...\n\n[Chorus]\n..."}
-                    rows={8}
-                  />
+                  <LyricTimingEditor value={track.lyrics || ""} onChange={lyrics => updateTrackLyrics(track.tempId, lyrics)} releaseId={releaseId} recordingId={track.track_id || track.id} title={track.title || `Track ${track.position}`} />
                 </div>
               )}
             </div>
@@ -1541,12 +1537,7 @@ function ArtworkLyricsStep({ data, onChange, onNext, onBack, releaseId, draftSlu
         </div>
       ) : (
         <Field label="Lyrics" hint="Optional — preserves line breaks and verse structure.">
-          <Textarea
-            value={data.lyrics}
-            onChange={(v) => onChange("lyrics", v)}
-            placeholder={"[Verse 1]\n...\n\n[Chorus]\n..."}
-            rows={10}
-          />
+          <LyricTimingEditor value={data.lyrics || ""} onChange={lyrics => onChange("lyrics", lyrics)} releaseId={releaseId} recordingId={data.track_id} title={data.title || "Recording"} />
         </Field>
       )}
 
@@ -1923,7 +1914,7 @@ export function UploadWizard({ onComplete, onDismiss, initialReleaseId = null, c
           const payload = snapshot?.draft_payload || {};
           draftQueue.current.restoreRevision(snapshot?.saved_at);
           setSavedDraftRevision(snapshot?.saved_at || null);
-          const restoredData = { ...DEFAULT_DATA, ...(detail ? { title: detail.product.title, primary_artist: detail.release.artist, genre: detail.product.genre, release_date: detail.release.release_date, upc: detail.release.upc, credit_groups: detail.release.credit_groups, release_type: detail.release.release_type, cover_key: detail.release.cover_art_r2_key } : {}), ...(payload.data || {}), contributor_directory_available: detail?.capabilities?.ready === true, cover_preview_url: "", cover_video_preview_url: "" };
+          const restoredData = { ...DEFAULT_DATA, ...(detail ? { title: detail.product.title, primary_artist: detail.release.artist, genre: detail.product.genre, release_date: detail.release.release_date, upc: detail.release.upc, credit_groups: detail.release.credit_groups, release_type: detail.release.release_type, cover_key: detail.release.cover_art_r2_key } : {}), ...(!['album','ep','mixtape'].includes(detail?.release?.release_type) && detail?.tracks?.[0] ? { lyrics: detail.tracks[0].lyrics || '', track_id: detail.tracks[0].id, audio_key: detail.tracks[0].audio_r2_key || '', upload_status: detail.tracks[0].upload_status, isrc: detail.tracks[0].isrc || '' } : {}), ...(payload.data || {}), contributor_directory_available: detail?.capabilities?.ready === true, cover_preview_url: "", cover_video_preview_url: "" };
           const publicBase = (process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "").replace(/\/$/, "");
           if (restoredData.cover_key && publicBase) restoredData.cover_preview_url = `${publicBase}/${restoredData.cover_key}`;
           if (restoredData.cover_video_key && publicBase) restoredData.cover_video_preview_url = `${publicBase}/${restoredData.cover_video_key}`;

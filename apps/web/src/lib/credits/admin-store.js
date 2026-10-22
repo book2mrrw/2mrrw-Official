@@ -1,3 +1,4 @@
+import {verifyLyricInput} from '../lyrics/audio-source';
 import { editableCreditGroups, validateCreditGroups, optionalIdentifier } from './contract';
 
 /** Fail closed until the reviewed database contract reports its own capabilities. */
@@ -14,6 +15,7 @@ export async function loadEditableRelease(admin, id) {
   const query = admin.from('products').select('*');
   const { data: product, error: productError } = await (release ? query.eq('release_id', id).is('deleted_at', null) : query.eq('id', id).is('deleted_at', null)).maybeSingle();
   if (productError) throw productError;
+  if (!release && product?.release_id) return loadEditableRelease(admin, product.release_id);
   if (!release && !product) return null;
   const source = release ? 'releases' : 'catalog';
   const [{ data: tracks, error: tracksError }, { data: catalogTracks, error: catalogError }] = await Promise.all([
@@ -60,6 +62,7 @@ export async function loadEditableRelease(admin, id) {
     },
     product: { title: product?.title || release?.title || rmeta.draft_title || '', display_title: product?.display_title || product?.title || '', price_cents: product?.price_cents ?? null, genre: meta.genre || '' },
     tracks: rows,
+    lyric_recordings: rows.length ? rows : !release && ['single','feature'].includes(product?.product_type) ? [{id:product.id,title:product.title,position:1,lyrics:product.metadata?.lyrics ?? '',virtual:true}] : [],
   };
 }
 
@@ -83,6 +86,11 @@ export function validateCreditEdit(body) {
 export async function commitCreditEdit(admin, id, body) {
   const errors = validateCreditEdit(body);
   if (errors.length) return { status: 422, body: { error: errors.join(' '), errors } };
+  try {
+    for (const recording of [...(body.track_lyrics || []), ...(body.recordings || [])]) {
+      if (Object.hasOwn(recording, 'lyrics')) await verifyLyricInput(admin, id, recording.id, recording.lyrics);
+    }
+  } catch (error) { return {status:error.status || 503,body:{error:error.status ? error.message : 'Recording timing could not be verified.'}}; }
   const capability = await creditStorageCapabilities(admin);
   if (!capability.ready) return { status: 503, body: { error: capability.reason } };
   const { data, error } = await admin.rpc('commit_release_credit_edit', { p_release_ref_id: id, p_expected_revision: body.revision, p_patch: body });

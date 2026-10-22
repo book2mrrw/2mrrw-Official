@@ -1,3 +1,4 @@
+import { commitLyricEdit } from "@/lib/lyrics/admin-store";
 import { loadEditableRelease, commitCreditEdit } from "@/lib/credits/admin-store";
 import { NextResponse } from "next/server";
 import { getAdminSessionUser, requireAdminActor } from "@/lib/auth/admin-api-guard";
@@ -79,6 +80,12 @@ export async function PATCH(req, { params }) {
   ];
 
   const admin = getAdminClient();
+  if (Object.hasOwn(body, "track_lyrics") && !body.revision) return NextResponse.json({error:"Reload the release before saving lyrics: a saved revision is required."},{status:409});
+  if (body.lyric_edit_version === 1) {
+    const outcome = await commitLyricEdit(admin, id, body);
+    if (outcome.status === 200 && outcome.result?.status !== "draft") revalidateStorefront(outcome.result?.slug, outcome.result?.release_type);
+    return NextResponse.json(outcome.body, { status: outcome.status });
+  }
   if (["revision", "credit_groups", "recordings", "upc", "artist", "release_type"].some(key => Object.hasOwn(body, key))) {
     const outcome = await commitCreditEdit(admin, id, body);
     if (outcome.status === 200 && outcome.result?.status !== "draft") revalidateStorefront(outcome.result?.slug, outcome.result?.release_type);

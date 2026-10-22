@@ -1,3 +1,4 @@
+import {verifyLyricInput,rebindCopiedLyrics} from "@/lib/lyrics/audio-source";
 import { publicationCredits, metadataPatch } from "@/lib/credits/publication";
 import { validateCreditGroups, optionalIdentifier, publicCredits } from "@/lib/credits/contract";
 import { creditStorageCapabilities } from "@/lib/credits/admin-store";
@@ -198,7 +199,7 @@ export async function POST(req, { params }) {
       slug:             stableSlug,
       title:            bodyTrack.title    || dbTrack.title,
       position:         bodyTrack.position ?? dbTrack.position,
-      lyrics:           bodyTrack.lyrics   || dbTrack.lyrics,
+      lyrics:           Object.hasOwn(bodyTrack, "lyrics") ? bodyTrack.lyrics : dbTrack.lyrics,
       preview_key:            previewKey,
       preview_start_seconds:  previewStartSeconds,
       featured_artists: bodyTrack.featured_artists !== undefined ? bodyTrack.featured_artists : null,
@@ -229,6 +230,16 @@ export async function POST(req, { params }) {
   }
 
   const readyTracks = (tracks || []).filter((t) => t.audio_r2_key && t.upload_status === "ready");
+  try {
+    for (const track of readyTracks) {
+      if (!isMultiTrack && Object.hasOwn(creditInput, "lyrics")) track.lyrics = creditInput.lyrics;
+      track.lyrics ??= "";
+      await verifyLyricInput(admin, releaseId, track.id, track.lyrics);
+    }
+  } catch (error) {
+    return NextResponse.json({error: error.status ? error.message : "Lyric timing could not be verified before publication."}, {status:error.status || 503});
+  }
+
 
   // A completed upload must have a durable track identity before publication.
   const hasAudioFromDB   = readyTracks.length > 0;
@@ -357,6 +368,12 @@ export async function POST(req, { params }) {
     // Deletion belongs to a separate reference-aware retention process.
 
   }
+
+  try {
+    for (const track of readyTracks) if (canonicalTrackUpdates.has(track.id)) {
+      track.lyrics = await rebindCopiedLyrics(track.lyrics, track.id, track.audio_r2_key);
+    }
+  } catch { return NextResponse.json({error:"Copied recording timing could not be verified; publication was not committed."},{status:503}); }
 
   // ── 5b2. Canonicalize preview clip path(s) ────────────────────────────────
   // Preview clips (browser-derived from the master, see PreviewTrimPicker in
@@ -632,7 +649,7 @@ export async function POST(req, { params }) {
         // preview we generated ourselves is stored as the exact key so
         // resolvePreviewKey never has to fall back to R2 discovery for it.
         preview_path:     canonicalTrackPreviewKeys.get(t.slug) || resolvePreviewPath(typeFolder, t.slug, releaseSlug),
-        lyrics:           t.lyrics || null,
+        lyrics:           t.lyrics ?? null,
         credits:          tCredits,
         featured_artists: tFeatured,
         metadata:         { ...(priorTrack?.metadata || {}), audio_key: t.audio_r2_key, ...(t.preview_key ? { preview_start_seconds: Number(t.preview_start_seconds) || 0 } : {}) },
@@ -682,7 +699,7 @@ export async function POST(req, { params }) {
       id: track.id, ...(canonicalTrackUpdates.get(track.id) || {}),
       title: !isMultiTrack ? title.trim() : track.title,
       position: track.position || 1,
-      ...(Object.hasOwn(requested, "lyrics") ? { lyrics: requested.lyrics } : !isMultiTrack && Object.hasOwn(creditInput, "lyrics") ? { lyrics: creditInput.lyrics } : {}),
+      lyrics: track.lyrics,
       ...(Object.hasOwn(requested, "isrc") ? { isrc: requested.isrc } : !isMultiTrack && Object.hasOwn(creditInput, "isrc") ? { isrc: creditInput.isrc } : {}),
       ...(Object.hasOwn(requested, "credit_groups") ? { credit_groups: requested.credit_groups } : {}),
       ...(!isMultiTrack && isFirstPublish && !requested.credit_groups ? { inherit_credits: true } : {}),

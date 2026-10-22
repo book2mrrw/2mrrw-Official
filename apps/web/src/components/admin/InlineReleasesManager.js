@@ -1,4 +1,5 @@
 "use client";
+import LyricTimingEditor from "@/components/admin/lyrics/LyricTimingEditor";
 import { getDeletedReleaseSnapshot } from "@/lib/releases/deletion-store";
 import DeleteReleaseButton from "@/components/admin/DeleteReleaseButton";
 import CreditsEditor from "@/components/admin/CreditsEditor";
@@ -578,7 +579,7 @@ export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
         setEditGenre(d.product?.genre  || "");
         setEditDate(d.release?.release_date || "");
         const lMap = {};
-        for (const t of (d.tracks || [])) lMap[t.id] = t.lyrics || "";
+        for (const t of (d.lyric_recordings || d.tracks || [])) lMap[t.id] = t.lyrics || "";
         setTrackLyrics(lMap);
         // The detail response is authoritative; the list stub may predate
         // canonical artwork metadata resolution.
@@ -608,7 +609,7 @@ export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
       const fields = { title: [editTitle, detail.product.title], price: [editPrice, Number.isFinite(detail.product.price_cents) ? (detail.product.price_cents / 100).toFixed(2) : ""], genre: [editGenre, detail.product.genre || ""], release_date: [editDate, detail.release.release_date || ""], upc: [editUpc, detail.release.upc || ""], artist: [editArtist, baselineArtist], release_type: [editType, detail.release.release_type] };
       for (const [key, [next, previous]] of Object.entries(fields)) if (next !== previous) patch[key] = next;
       for (const [key, value] of Object.entries(editLifecycle)) if (value !== detail.release[key]) patch[key] = value;
-      const res  = await fetch(`/api/admin/releases/${relStub.id}`, {
+      const res  = await fetch(`/api/admin/releases/${detail.release.id}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify(patch),
@@ -632,7 +633,7 @@ export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
   const saveCredits = async () => {
     setSaving(true);
     try {
-      const response = await fetch(`/api/admin/releases/${relStub.id}`, {
+      const response = await fetch(`/api/admin/releases/${detail.release.id}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ revision: detail.revision, credit_groups: creditGroups, upc: editUpc,
           recordings: recordings.map(t => ({ id: t.id, title: t.title, credit_groups: t.credit_groups, isrc: t.isrc, inherit_credits: t.inherit_credits })) }),
@@ -653,10 +654,10 @@ export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
     setSaving(true);
     try {
       const track_lyrics = Object.entries(trackLyrics).map(([id, lyrics]) => ({ id, lyrics }));
-      const res  = await fetch(`/api/admin/releases/${relStub.id}`, {
+      const res  = await fetch(`/api/admin/releases/${detail.release.id}`, {
         method:  "PATCH",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ revision: detail.revision, track_lyrics }),
+        body:    JSON.stringify({ lyric_edit_version: 1, revision: detail.revision, track_lyrics }),
       });
       const json = await res.json();
       if (!res.ok || json.ok === false) throw new Error(json.error || json.errors?.[0] || "Save failed");
@@ -1234,31 +1235,19 @@ export function ReleaseEditorPanel({ release: relStub, onBack, onSaved }) {
         {section === "lyrics" && (
           <div>
             <h3 style={{ fontSize: 15, fontWeight: 900, color: C.text, marginBottom: 6, marginTop: 0 }}>Lyrics</h3>
-            <p style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Preserves verse/chorus structure.</p>
+            <p style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Edit lyric text or synchronize each line and word to the recording. Apply timings, then save.</p>
 
-            {detail.tracks.length === 0 && (
+            {(detail.lyric_recordings || detail.tracks).length === 0 && (
               <div style={{ color: C.muted2, fontSize: 13 }}>No tracks found.</div>
             )}
 
-            {detail.tracks.map((track) => (
-              <div key={track.id} style={{ marginBottom: 20 }}>
-                {detail.tracks.length > 1 && <Label>{track.position}. {track.title || track.slug}</Label>}
-                <textarea
-                  value={trackLyrics[track.id] || ""}
-                  onChange={(e) => setTrackLyrics((p) => ({ ...p, [track.id]: e.target.value }))}
-                  placeholder={"[Verse 1]\n...\n\n[Chorus]\n..."}
-                  rows={detail.tracks.length > 1 ? 8 : 14}
-                  style={{
-                    width: "100%", background: C.surface2, border: `1px solid ${C.border2}`,
-                    borderRadius: 8, color: C.text, fontSize: 13, padding: "12px 14px",
-                    outline: "none", boxSizing: "border-box", fontFamily: "inherit",
-                    resize: "vertical", lineHeight: 1.7,
-                  }}
-                />
-              </div>
-            ))}
+            {(detail.lyric_recordings || detail.tracks).map(track => <LyricTimingEditor
+              key={track.id} value={trackLyrics[track.id] || ""}
+              onChange={lyrics => setTrackLyrics(previous => ({ ...previous, [track.id]: lyrics }))}
+              releaseId={detail.release.id} recordingId={track.id} title={track.title || "Recording"} disabled={saving}
+            />)}
 
-            {detail.tracks.length > 0 && (
+            {(detail.lyric_recordings || detail.tracks).length > 0 && (
               <Btn onClick={saveLyrics} disabled={saving}>{saving ? "Saving…" : "Save Lyrics"}</Btn>
             )}
           </div>

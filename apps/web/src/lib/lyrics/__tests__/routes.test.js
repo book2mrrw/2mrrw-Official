@@ -1,0 +1,17 @@
+import test,{mock,beforeEach} from 'node:test';import assert from 'node:assert/strict';import {register} from 'node:module';
+register('data:text/javascript,'+encodeURIComponent('export function resolve(s,c,next){return next(s==="next/server"?"next/server.js":s,c);}'),import.meta.url);
+mock.module('next/server',{namedExports:{NextResponse:Response}});
+let user,allowed,resolutions,signs,proxied,failure;const fingerprint='a'.repeat(64);
+mock.module('@/lib/auth/admin-api-guard',{namedExports:{getAdminSessionUser:async()=>user}});mock.module('@/lib/auth/constants',{namedExports:{isAdminUser:u=>u?.isAdmin}});mock.module('@/lib/supabase/admin',{namedExports:{getAdminClient:()=>({})}});
+mock.module('@/lib/server/rate-limit',{namedExports:{checkRateLimit:async()=>({allowed,retryAfterSeconds:30}),rateLimitResponse:()=>new Response(null,{status:429})}});
+mock.module('@/lib/lyrics/audio-source',{namedExports:{resolveLyricAudio:async()=>{resolutions++;if(failure)throw failure;return {fingerprint,duration:10,key:'private-master.wav',metadata:{etag:'"original"',contentLength:100,contentType:'audio/wav'}};}}});
+mock.module('@/lib/storage/r2',{namedExports:{createR2SignedGetUrl:async()=>{signs++;return 'https://fixture.invalid/internal-signed-reference';}}});
+mock.module('@/lib/server/r2-stream-proxy',{namedExports:{proxySignedR2Get:async(req,url,options)=>{proxied={range:req.headers.get('range'),options};return new Response('audio',{status:206,headers:{'Cache-Control':options.cacheControl}});}}});
+const {GET}=await import('../../../app/api/admin/releases/[id]/tracks/[trackId]/lyrics-audio/route.js');
+const params={params:Promise.resolve({id:'11111111-1111-4111-8111-111111111111',trackId:'22222222-2222-4222-8222-222222222222'})};
+beforeEach(()=>{user={isAdmin:true};allowed=true;resolutions=0;signs=0;proxied=null;failure=null;});
+test('non-admin callers cannot resolve, sign or fetch recording reference audio',async()=>{for(const value of [null,{isAdmin:false}]){user=value;assert.equal((await GET(new Request('https://site.invalid/audio?metadata=1'),params)).status,401);}assert.equal(resolutions,0);assert.equal(signs,0);});
+test('metadata exposes no object key or external media URL',async()=>{const res=await GET(new Request('https://site.invalid/audio?metadata=1'),params);assert.equal(res.status,200);const value=await res.json();assert.deepEqual(Object.keys(value).sort(),['duration','fingerprint']);assert.equal(signs,0);});
+test('reference changes and invalid memberships fail before signing bytes',async()=>{assert.equal((await GET(new Request('https://site.invalid/audio?revision=old'),params)).status,409);failure=Object.assign(new Error('Not found'),{status:404});assert.equal((await GET(new Request('https://site.invalid/audio?revision='+fingerprint),params)).status,404);assert.equal(signs,0);});
+test('every audio request retains range, current authorization, no-store and an object precondition',async()=>{const req=new Request('https://site.invalid/audio?revision='+fingerprint,{headers:{range:'bytes=0-99'}});const res=await GET(req,params);assert.equal(res.status,206);assert.equal(proxied.range,'bytes=0-99');assert.equal(proxied.options.cacheControl,'private, no-store');assert.equal(proxied.options.upstreamHeaders['If-Match'],'"original"');assert.equal(resolutions,1);});
+test('rate limits are enforced before resolving the recording',async()=>{allowed=false;assert.equal((await GET(new Request('https://site.invalid/audio?metadata=1'),params)).status,429);assert.equal(resolutions,0);});

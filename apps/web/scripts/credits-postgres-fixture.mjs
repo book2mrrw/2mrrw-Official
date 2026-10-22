@@ -16,5 +16,6 @@ for(const c of schema.constraints.filter(c=>c.contype==='f'))await db.exec(`ALTE
 await db.exec(await fs.readFile('supabase/migrations/20261021010000_release_credit_contract.sql','utf8'));
 await db.exec(await fs.readFile('supabase/migrations/20261021020000_atomic_credit_publication.sql','utf8'));
 
+await db.exec(await fs.readFile('supabase/migrations/20261022010000_atomic_lyric_timing_edits.sql','utf8'));
 return db;
 }

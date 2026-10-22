@@ -1,4 +1,5 @@
 "use client";
+import { lyricClock } from "@/lib/lyrics/timing";
 import ViewMoreSheet from "@/components/preview/CreditsSheet";
 import { useReleaseCredits } from "@/lib/credits/useReleaseCredits";
 
@@ -1167,7 +1168,7 @@ export function SingleModal({
   const duration = isPreview ? PREVIEW_CAP_SEC : fullDur || 222;
 
   const {
-    state: { isPlaying, currentTime, duration: engineDuration, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack },
+    state: { isPlaying, currentTime, duration: engineDuration, currentTrack: engineTrack, shuffle, repeatMode, sleepTimerEndsAt, sleepAfterCurrentTrack },
     toggle,
     seek,
     playNext,
@@ -1209,6 +1210,9 @@ export function SingleModal({
   const displayCurrent = isPreview ? Math.min(currentTime, PREVIEW_CAP_SEC) : currentTime;
 
   const creditRequest = useReleaseCredits(track?.slug, open);
+  const lyricRecording = creditRequest.release?.recording;
+  const lyricTime = lyricClock({ currentTrack: engineTrack, releaseSlug: track?.slug, recording: lyricRecording,
+    isPreview, currentTime, previewStartSeconds: lyricRecording?.preview_start_seconds });
   const release = releaseDetail || track;
   const lyricsText = lyricsFromSource(creditRequest.release?.recording) ?? lyricsFromSource(releaseDetail) ?? lyricsFromSource(track) ?? "";
   const editorial = useMemo(() => getReleaseEditorial(creditRequest.release?.recording || creditRequest.release), [creditRequest.release]);
@@ -1416,7 +1420,7 @@ export function SingleModal({
           </FloatingPlayer>
           {/* Lyrics overlay — takes priority inside the artwork area */}
           <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen ? "auto" : "none" }}>
-            <GlyphLyricsPanel open={lyricsOpen} status={creditRequest.status} onRetry={creditRequest.retry} lrcText={lyricsText} onClose={() => setLyricsOpen(false)} isMobile />
+            <GlyphLyricsPanel playbackTime={lyricTime} syncStatus={lyricRecording?.sync_status} open={lyricsOpen} status={creditRequest.status} onRetry={creditRequest.retry} lrcText={lyricsText} onClose={() => setLyricsOpen(false)} isMobile />
           </div>
         </div>
 
@@ -1662,7 +1666,8 @@ function AlbumModalView({
   const creditTracks = creditRequest.release?.tracks || [];
   const [creditScope, setCreditScope] = useState("release");
   useEffect(() => { setCreditScope("release"); setSheet(null); setLyricsOpen(false); setLyricsFullscreen(false); }, [album?.slug, open]);
-  const lyricsText = lyricsFromSource(recordingEditorial(creditRequest.release, activeTrack)) ?? lyricsFromSource(activeTrack) ?? "";
+  const lyricRecording = recordingEditorial(creditRequest.release, activeTrack);
+  const lyricsText = lyricsFromSource(lyricRecording) ?? lyricsFromSource(activeTrack) ?? "";
   const [albumCoverVideoFailed, setAlbumCoverVideoFailed] = useState(false);
   const [playbackNotice, setPlaybackNotice] = useState(null);
   const [savedToLibrary, setSavedToLibrary] = useState(false);
@@ -1735,6 +1740,8 @@ function AlbumModalView({
   const isPreview = access !== "full";
   const trackLocked = useCallback((tr) => isPreview && !tr?.free, [isPreview]);
   const trackDur = (tr) => (isPreview && !tr?.free ? PREVIEW_CAP_SEC : parseDurSec(tr) || 180);
+  const lyricTime = lyricClock({ currentTrack: engineTrack, releaseSlug: album?.slug, recording: lyricRecording,
+    isPreview: isPreview && !activeTrack?.free, currentTime, previewStartSeconds: lyricRecording?.preview_start_seconds });
   const activeDur = activeTrack ? trackDur(activeTrack) : PREVIEW_CAP_SEC;
   const engineDur = engineDuration > 0 ? engineDuration : activeDur;
   const displayDuration = isPreview && activeTrack && !activeTrack?.free ? PREVIEW_CAP_SEC : engineDur;
@@ -2171,6 +2178,7 @@ function AlbumModalView({
           {/* Lyrics overlay — fullscreen version portals to fixed overlay via GlyphLyricsPanel */}
           <div style={{ position: "absolute", inset: 0, zIndex: 20, pointerEvents: lyricsOpen && !lyricsFullscreen ? "auto" : "none" }}>
             <GlyphLyricsPanel
+              playbackTime={lyricTime} syncStatus={lyricRecording?.sync_status}
               open={lyricsOpen}
               lrcText={lyricsText}
               status={creditRequest.status} onRetry={creditRequest.retry}

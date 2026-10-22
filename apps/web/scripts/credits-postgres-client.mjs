@@ -17,6 +17,6 @@ export function creditFixtureClient(db){return {
    if(single&&rows.length>1)throw new Error('Multiple fixture records');
    return {data:single?rows[0]||null:rows,error:null};
   }catch(error){return {data:null,error};}};
-  const q={select(value='*'){columns=value==='*'?'*':value.split(',').map(identifier).join(',');return q;},eq(key,value){filters.push({key,value});return q;},is(key,value){filters.push({key,value});return q;},order(key,options={}){orders.push({key,asc:options.ascending!==false});return q;},limit(value){limit=value;return q;},insert(value){insert=value;return q;},single:()=>result(true),maybeSingle:()=>result(true),then(resolve,reject){return result().then(resolve,reject);}};return q;
+  const q={select(value='*'){columns=value==='*'?'*':value.split(',').map(v=>identifier(v.trim())).join(',');return q;},eq(key,value){filters.push({key,value});return q;},is(key,value){filters.push({key,value});return q;},order(key,options={}){orders.push({key,asc:options.ascending!==false});return q;},limit(value){limit=value;return q;},insert(value){insert=value;return q;},single:()=>result(true),maybeSingle:()=>result(true),then(resolve,reject){return result().then(resolve,reject);}};return q;
  }
 };}

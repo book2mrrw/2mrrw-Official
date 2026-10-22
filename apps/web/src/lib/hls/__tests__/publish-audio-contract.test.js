@@ -36,7 +36,7 @@ const admin = { async rpc(name,args) {
 mock.module('@/lib/auth/admin-api-guard', { namedExports: { getAdminSessionUser: async () => ({ id: 'admin' }) } });
 mock.module('@/lib/auth/constants', { namedExports: { isAdminUser: () => true } });
 mock.module('@/lib/supabase/admin', { namedExports: { getAdminClient: () => admin } });
-mock.module('@/lib/storage/r2', { namedExports: { getPublicR2Url: key => `https://cdn.example.test/${key}`, headR2ObjectKey: async () => true, copyR2Object: async (...args) => copies.push(args), deleteR2Object: async key => deletions.push(key) } });
+mock.module('@/lib/storage/r2', { namedExports: { listR2Objects:async()=>[], getR2ObjectMetadata:async()=>({etag:'fixture',contentLength:100}), discoverFileByExtensions:async()=>null, getPublicR2Url: key => `https://cdn.example.test/${key}`, headR2ObjectKey: async () => true, copyR2Object: async (...args) => copies.push(args), deleteR2Object: async key => deletions.push(key) } });
 mock.module('@/lib/server/rate-limit', { namedExports: { checkRateLimit: async () => ({ allowed: true }), rateLimitResponse: () => new Response() } });
 mock.module('@/lib/media/revalidate-storefront', { namedExports: { revalidateStorefront: () => {} } });
 mock.module('@/lib/media/entity-resolver', { namedExports: { clearEntityResolverCaches: () => {} } });

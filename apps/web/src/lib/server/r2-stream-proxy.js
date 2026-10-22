@@ -8,9 +8,9 @@ import { applyMediaCors } from "@/lib/server/media-cors";
  * @param {string} signedUrl
  * @param {{ timing?: ReturnType<import("@/lib/server/server-timing").createServerTiming> }} [options]
  */
-export async function proxySignedR2Get(req, signedUrl, { timing, cacheControl = "private, max-age=3300", opaqueErrors = false } = {}) {
+export async function proxySignedR2Get(req, signedUrl, { timing, cacheControl = "private, max-age=3300", opaqueErrors = false, upstreamHeaders = {} } = {}) {
   const rangeHeader = req.headers.get("range") || req.headers.get("Range");
-  const fetchHeaders = rangeHeader ? { Range: rangeHeader } : {};
+  const fetchHeaders = { ...upstreamHeaders, ...(rangeHeader ? { Range: rangeHeader } : {}) };
   const method = req.method === "HEAD" ? "HEAD" : "GET";
 
   let r2Response;

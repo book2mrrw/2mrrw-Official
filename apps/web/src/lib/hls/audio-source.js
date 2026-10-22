@@ -1,16 +1,8 @@
 import { headR2ObjectKey, listR2Objects } from "@/lib/storage/r2";
 import { normalizePlaybackR2Key } from "@/lib/playback/normalize-r2-key";
 
-export const MASTER_AUDIO_EXTENSION = /\.(wav|wave|aif|aiff|flac|m4a|mp3)$/i;
-
-export function validateAudioSourceKey(value) {
-  const key = String(value || "").replace(/^\/+/, "");
-  if (!key || key.includes("..") || key.includes("://") || !MASTER_AUDIO_EXTENSION.test(key) ||
-      /(^|\/)(streaming|hls|previews?|waveforms?)(\/|$)/i.test(key)) {
-    throw new Error("A full original audio object is required; streaming renditions and previews cannot be encoding sources");
-  }
-  return key;
-}
+import {MASTER_AUDIO_EXTENSION, validateAudioSourceKey} from '@/lib/media/audio-source-key';
+export {MASTER_AUDIO_EXTENSION, validateAudioSourceKey};
 
 /** Encoding source authority is deliberately independent of listening caches. */
 export async function resolveAudioSource(admin, { slug, trackSlug = null, releaseType, sourceKey = null }) {
