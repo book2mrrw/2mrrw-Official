@@ -4,10 +4,10 @@ const CACHE_NAME = '2mrrw-encrypted-audio-v1';
 const MAX_BYTES = 64 * 1024 * 1024;
 const MAX_ENTRIES = 1024;
 
-function storageRead(run, fallback) {
+function storageRead(run, fallback, timeoutMs = 200) {
   return new Promise(resolve => {
     const finish = value => { clearTimeout(timer); resolve(value); };
-    const timer = setTimeout(() => resolve(fallback), 200);
+    const timer = setTimeout(() => resolve(fallback), timeoutMs);
     Promise.resolve().then(run).then(finish, () => finish(fallback));
   });
 }
@@ -35,12 +35,34 @@ export class EncryptedSegmentStore {
     this.protectedUrls = new Set();
     this.writes = Promise.resolve();
     this.catalog = new Map();
+    this.inventory = null;
+    this.inventoryAt = 0;
+    this.preparing = null;
   }
 
   protect(urls = []) { this.protectedUrls = new Set(urls); }
 
   async cache() {
     try { return await this.storage?.open(CACHE_NAME); } catch { return null; }
+  }
+
+  // Prewarm only an address inventory. Playback never waits for this scan.
+  prepare() {
+    if (this.preparing) return this.preparing;
+    if (this.inventory && Date.now() - this.inventoryAt < 2000) return Promise.resolve();
+    const started = Date.now();
+    this.preparing = storageRead(async () => {
+      const cache = await this.cache();
+      if (!cache) return;
+      const keys = await cache.keys();
+      this.inventory = new Set(keys.map(key => key.url));
+      this.inventoryAt = started;
+    }, undefined).finally(() => { this.preparing = null; });
+    return this.preparing;
+  }
+
+  knownMissing(url) {
+    return Boolean(this.inventory && Date.now() - this.inventoryAt < 2000 && !this.inventory.has(url));
   }
 
   async has(url) {
@@ -51,7 +73,7 @@ export class EncryptedSegmentStore {
     }, false);
   }
 
-  async get(url) {
+  async get(url, { timeoutMs = 200 } = {}) {
     const memory = getSegment(url);
     if (memory) return memory;
     return storageRead(async () => {
@@ -62,7 +84,7 @@ export class EncryptedSegmentStore {
       setSegment(url, bytes);
       if (this.entries?.has(url)) this.entries.get(url).at = Date.now();
       return bytes;
-    }, null);
+    }, null, timeoutMs);
   }
 
   async put(url, bytes, { descriptor = false } = {}) {
@@ -103,6 +125,7 @@ export class EncryptedSegmentStore {
           'Content-Type': descriptor ? 'application/json' : 'application/octet-stream',
           'x-2mrrw-bytes': String(owned.byteLength), 'x-2mrrw-at': String(at),
         } }));
+        this.inventory?.add(url);
         this.entries.set(url, { size: owned.byteLength, at });
         return true;
       } catch { this.entries = null; return false; }
@@ -143,10 +166,17 @@ export class EncryptedSegmentStore {
     }
     if (!Array.isArray(urls) || !urls.length || urls.length >= this.maxEntries ||
         urls.some(url => typeof url !== 'string' || !renditionCacheKey(url))) return false;
-    for (const url of urls) {
-      if (Date.now() - started > 400 || !await this.has(url)) return false;
-    }
-    return true;
+    // Check bounded groups concurrently, with one deadline for the whole
+    // readiness pass. Every segment is still checked; an inventory alone is
+    // never proof that the complete rendition remains readable.
+    return storageRead(async () => {
+      for (let i = 0; i < urls.length; i += 8) {
+        if (Date.now() - started >= 400) return false;
+        const present = await Promise.all(urls.slice(i, i + 8).map(url => this.has(url)));
+        if (present.some(value => !value)) return false;
+      }
+      return true;
+    }, false, Math.max(0, 400 - (Date.now() - started)));
   }
 }
 

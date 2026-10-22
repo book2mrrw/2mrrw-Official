@@ -138,6 +138,7 @@ export class HLSEngine {
     if (_version >= 0 && this._manifestVersion !== _version) return false;
 
     const version = _version >= 0 ? _version : this._manifestVersion;
+    void encryptedSegmentStore.prepare();
     const Hls = await importHls();
     if (this._destroyed || version !== this._manifestVersion) return false;
 
@@ -619,5 +620,6 @@ export function isHlsJsActive() {
  * Safe to call many times — importHls() caches the module after first load.
  */
 export function prewarmHLS() {
+  void encryptedSegmentStore.prepare();
   importHls().catch(() => {});
 }

@@ -38,12 +38,16 @@ export function createPrefetchLoaderClass(DefaultLoaderClass) {
 
     load(context, config, callbacks) {
       const generation = ++this._deliveryGeneration;
+      this._endForeground?.();
       const memory = getSegment(context.url);
       if (memory) { this._deliverCached(memory, context, callbacks, generation); return; }
-      this._endForeground?.();
       const owner = Symbol('decoder-fragment');
-      hlsDownloadManager.foregroundStart(owner);
-      const end = () => hlsDownloadManager.foregroundEnd(owner);
+      const shared = hlsDownloadManager.foregroundStart(owner, context.url);
+      let sharedTimer;
+      const end = () => {
+        clearTimeout(sharedTimer);
+        hlsDownloadManager.foregroundEnd(owner);
+      };
       this._endForeground = end;
       const network = () => {
         if (generation !== this._deliveryGeneration) { end(); return; }
@@ -61,12 +65,35 @@ export function createPrefetchLoaderClass(DefaultLoaderClass) {
           onAbort: (...args) => { end(); callbacks.onAbort?.(...args); },
         });
       };
-      if (!encryptedSegmentStore.storage) { network(); return; }
-      encryptedSegmentStore.get(context.url).then(buf => {
+      const lookup = () => {
         if (generation !== this._deliveryGeneration) { end(); return; }
-        if (buf) { end(); this._deliverCached(buf, context, callbacks, generation); }
-        else network();
-      }).catch(network);
+        if (!encryptedSegmentStore.storage || encryptedSegmentStore.knownMissing(context.url)) { network(); return; }
+        void encryptedSegmentStore.prepare();
+        encryptedSegmentStore.get(context.url, { timeoutMs: hlsDownloadManager.deliveryBudget() }).then(buf => {
+          if (generation !== this._deliveryGeneration) { end(); return; }
+          if (buf) { end(); this._deliverCached(buf, context, callbacks, generation); }
+          else network();
+        }).catch(network);
+      };
+      if (!shared) { lookup(); return; }
+      let waiting = true;
+      const fallback = () => {
+        if (!waiting) return;
+        waiting = false;
+        clearTimeout(sharedTimer);
+        hlsDownloadManager.abandonShared(owner);
+        // A shared-transfer deadline must not buy another storage wait.
+        network();
+      };
+      sharedTimer = setTimeout(fallback, hlsDownloadManager.deliveryBudget());
+      shared.then(buf => {
+        if (!waiting) return;
+        waiting = false;
+        clearTimeout(sharedTimer);
+        if (generation !== this._deliveryGeneration) { end(); return; }
+        end();
+        this._deliverCached(buf, context, callbacks, generation);
+      }, fallback);
     }
 
     _deliverCached(buf, context, callbacks, generation) {

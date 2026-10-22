@@ -57,7 +57,7 @@ export class HlsDownloadManager {
     this.session = { audio, selected: selectedJob,
       high: highest && highest !== selected ? { url: highest, priority: 2 } : null };
     const wake = () => {
-      if (!this.healthy()) this.pending?.controller.abort();
+      if (!this.healthy()) this.abortSpeculation();
       this.schedule();
     };
     const events = ['timeupdate', 'progress', 'playing', 'waiting', 'stalled', 'pause', 'ended'];
@@ -77,22 +77,44 @@ export class HlsDownloadManager {
     return bufferedAhead(audio) >= Math.min(15, Number.isFinite(remaining) && remaining > 0 ? remaining : 15);
   }
 
-  foregroundStart(owner) {
+  foregroundStart(owner, url) {
     this.foreground.add(owner);
-    this.pending?.controller.abort();
+    const pending = this.pending;
+    if (pending?.segment && pending.segment.url === url && !pending.controller.signal.aborted) {
+      pending.borrowers.add(owner);
+      // Each consumer owns its bytes; decoder transfer cannot detach the warm copy.
+      return pending.segment.promise.then(result => result.bytes.slice(0));
+    }
+    this.abortSpeculation();
+    return null;
   }
-  foregroundEnd(owner) { this.foreground.delete(owner); this.schedule(); }
+  abandonShared(owner) {
+    const pending = this.pending;
+    if (pending?.borrowers.delete(owner) && !pending.borrowers.size) pending.controller.abort();
+  }
+  foregroundEnd(owner) {
+    this.foreground.delete(owner);
+    this.pending?.borrowers.delete(owner);
+    if (!this.healthy()) this.abortSpeculation();
+    this.schedule();
+  }
+  abortSpeculation() {
+    if (!this.pending?.borrowers.size) this.pending?.controller.abort();
+  }
+  deliveryBudget() {
+    return bufferedAhead(this.session?.audio) >= 3 ? 100 : 40;
+  }
 
   queueNext(masterUrl) {
     if (this.next?.masterUrl === masterUrl) return;
     this.next = { masterUrl, priority: 1, limit: 3 };
-    if (this.pending?.job.priority === 2) this.pending.controller.abort();
+    if (this.pending?.job.priority === 2) this.abortSpeculation();
     this.schedule();
   }
 
   cancelSpeculation() {
     this.next = null;
-    this.pending?.controller.abort();
+    this.abortSpeculation();
     this.schedule();
   }
 
@@ -131,7 +153,8 @@ export class HlsDownloadManager {
     if (!job) return;
     const controller = new AbortController();
     this.running = true;
-    this.pending = { job, controller };
+    const pending = { job, controller, borrowers: new Set(), segment: null };
+    this.pending = pending;
     const current = () => this.session === session && !controller.signal.aborted;
     try {
       if (!job.url) {
@@ -157,7 +180,10 @@ export class HlsDownloadManager {
           job.done = true;
         }
         else {
-          const result = await this.request(missing, controller);
+          if (!current()) return;
+          const promise = this.request(missing, controller);
+          pending.segment = { url: missing, promise };
+          const result = await promise;
           if (!current()) return;
           const retained = await this.store.put(missing, result.bytes);
           // With no persistent storage, the bounded memory layer still helps.

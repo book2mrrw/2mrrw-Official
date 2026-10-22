@@ -7,14 +7,15 @@ import { hlsDownloadManager } from '../../audio/hls-download-manager.js';
 
 test('a network decoder load retains encrypted bytes before transfer; a later loader reads persistent storage', async t => {
   clearSegmentCache();
-  const old = { storage: store.storage, entries: store.entries, writes: store.writes };
+  const old = { storage: store.storage, entries: store.entries, writes: store.writes,
+    inventory: store.inventory, inventoryAt: store.inventoryAt };
   const values = new Map();
-  store.storage = { open: async () => ({ keys: async () => [],
+  store.storage = { open: async () => ({ keys: async () => [...values.keys()].map(url => ({ url })),
     match: async url => values.get(url)?.clone(),
     put: async (url, response) => values.set(url, response.clone()), delete: async url => values.delete(url),
   }) };
   store.entries = null;
-  t.after(() => { Object.assign(store, old); clearSegmentCache(); hlsDownloadManager.stop(); });
+  t.after(async () => { await store.preparing; Object.assign(store, old); clearSegmentCache(); hlsDownloadManager.stop(); });
   let loads = 0;
   class NetworkLoader {
     constructor() { this.stats = {}; }
@@ -43,10 +44,11 @@ test('a network decoder load retains encrypted bytes before transfer; a later lo
 
 test('aborting during persistent lookup prevents late cache delivery and network fallback', async t => {
   clearSegmentCache();
-  const storage = store.storage;
+  const old = { storage: store.storage, inventory: store.inventory, inventoryAt: store.inventoryAt };
+  store.inventory = null;
   let release;
   store.storage = { open: async () => ({ match: () => new Promise(resolve => { release = resolve; }) }) };
-  t.after(() => { store.storage = storage; hlsDownloadManager.stop(); });
+  t.after(async () => { await store.preparing; Object.assign(store, old); hlsDownloadManager.stop(); });
   let delivered = false; let network = false;
   class NetworkLoader { load() { network = true; } abort() {} }
   const Loader = createPrefetchLoaderClass(NetworkLoader);
