@@ -74,6 +74,7 @@ export const DEFAULT_AUTH_CONTEXT = {
   markAdmin: noop,
   loading: true,
   sessionHydrated: false,
+  commerceReady: false,
   authStatus: "checking",
 
   signOut: noopAsync,
@@ -126,6 +127,7 @@ export function AuthProvider({ children }) {
   const [accountState, setAccountState] = useState(EMPTY_ACCOUNT_STATE);
   const [isAdmin, setIsAdmin] = useState(readAdminFromStorage);
   const [loading, setLoading] = useState(true);
+  const [commerceReady, setCommerceReady] = useState(false);
   const [sessionHydrated, setSessionHydrated] = useState(false);
   const [entitlementSnapshotVersion, setEntitlementSnapshotVersion] = useState(0);
 
@@ -187,6 +189,7 @@ export function AuthProvider({ children }) {
       };
       return accountStateShallowEqual(prev, next) ? prev : next;
     });
+    setCommerceReady(true);
   }, []);
 
   const commitEntitlementSnapshot = useCallback((data, userId) => {
@@ -368,6 +371,7 @@ export function AuthProvider({ children }) {
               setLibrary([]);
               setOwnedSlugs(new Set());
               setAccountState(EMPTY_ACCOUNT_STATE);
+              setCommerceReady(true);
               clearEntitlementSnapshot();
               // Explicit: the server says there is no session. Distinct from a failed
               // request (null), which must never be read as a sign-out.
@@ -417,6 +421,7 @@ export function AuthProvider({ children }) {
       setLibrary([]);
       setOwnedSlugs(new Set());
       setAccountState(EMPTY_ACCOUNT_STATE);
+      setCommerceReady(false);
       clearEntitlementSnapshot();
       return null;
     }
@@ -430,6 +435,7 @@ export function AuthProvider({ children }) {
       setLibrary([]);
       setOwnedSlugs(new Set());
       setAccountState(EMPTY_ACCOUNT_STATE);
+      setCommerceReady(true);
       clearEntitlementSnapshot();
     }
     return data.user || null;
@@ -439,6 +445,7 @@ export function AuthProvider({ children }) {
     async (session) => {
       const resolved = resolveUserFromSession(session);
       if (!resolved) return null;
+      setCommerceReady(false);
       signedInUserIdRef.current = resolved.user.id;
       setUser(resolved.user);
       setIsAdmin(resolved.isAdmin);
@@ -472,6 +479,7 @@ export function AuthProvider({ children }) {
       setLibrary([]);
       setOwnedSlugs(new Set());
       setAccountState(EMPTY_ACCOUNT_STATE);
+      setCommerceReady(true);
       clearEntitlementSnapshot();
     };
 
@@ -611,6 +619,7 @@ export function AuthProvider({ children }) {
     setLibrary([]);
     setOwnedSlugs(new Set());
     setAccountState(EMPTY_ACCOUNT_STATE);
+    setCommerceReady(true);
     clearEntitlementSnapshot();
   }, [clearEntitlementSnapshot]);
 
@@ -665,6 +674,7 @@ export function AuthProvider({ children }) {
     markAdmin,
     loading,
     sessionHydrated,
+    commerceReady,
     authStatus,
 
     signOut,
@@ -686,6 +696,7 @@ export function AuthProvider({ children }) {
     markAdmin,
     loading,
     sessionHydrated,
+    commerceReady,
     authStatus,
 
     signOut,
@@ -722,12 +733,14 @@ function mergeSnapshotIntoAccountState(accountState, snapshot) {
 
 /** Empty entitlements while session bootstrap runs — avoids stale guest/partial state. */
 export function useEntitlementAccountState() {
-  const { accountState, sessionHydrated, getEntitlementSnapshot, entitlementSnapshotVersion } = useAuth();
+  const { accountState, currentUser, sessionHydrated, commerceReady, getEntitlementSnapshot, entitlementSnapshotVersion } = useAuth();
   return useMemo(() => {
-    if (!sessionHydrated) return EMPTY_ACCOUNT_STATE;
-    const base = accountState ?? EMPTY_ACCOUNT_STATE;
-    const snapshot = getEntitlementSnapshot?.();
-    if (!snapshot || snapshot.version < 1) return base;
-    return mergeSnapshotIntoAccountState(base, snapshot);
-  }, [sessionHydrated, accountState, getEntitlementSnapshot, entitlementSnapshotVersion]);
+    const ready = Boolean(sessionHydrated && commerceReady &&
+      (!currentUser || currentUser.isGuest || accountState?.user?.id === currentUser.id));
+    const base = sessionHydrated ? accountState ?? EMPTY_ACCOUNT_STATE : EMPTY_ACCOUNT_STATE;
+    const snapshot = sessionHydrated ? getEntitlementSnapshot?.() : null;
+    const merged = snapshot?.version >= 1 ? mergeSnapshotIntoAccountState(base, snapshot) : base;
+    // Presentation only: pending access must never be interpreted as a purchase decision.
+    return { ...merged, commerceReady: ready };
+  }, [sessionHydrated, commerceReady, currentUser, accountState, getEntitlementSnapshot, entitlementSnapshotVersion]);
 }

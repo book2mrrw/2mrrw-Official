@@ -440,8 +440,8 @@ export function resolveContentAccess(item, accountState = {}) {
     canOffline:
       trackAccess.canStream &&
       (tier === "subscriber" || tier === "collector" || trackAccess.owned),
-    showPrice: lifecycleCanBuy,
-    showCart: lifecycleCanBuy,
+    showPrice: accountState.commerceReady !== false && lifecycleCanBuy,
+    showCart: accountState.commerceReady !== false && lifecycleCanBuy,
     lifecycle: lifecycleAccess,
     lifecycleMessage,
     badges: trackAccess.badge ? [trackAccess.badge] : [],

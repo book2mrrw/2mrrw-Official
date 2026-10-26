@@ -8,6 +8,7 @@ import { accountStateShallowEqual } from "@/lib/auth/state-equality";
  */
 
 const EMPTY_ENTITLEMENT_ACCOUNT_STATE = {
+  commerceReady: false,
   library: [],
   ownedSlugs: [],
   subscriberActive: false,
@@ -42,6 +43,7 @@ export function commitStorefrontCardChrome(next) {
   const isAdminStable = Boolean(next?.isAdminStable);
 
   if (
+    chrome.entitlementAccountState.commerceReady === entitlementAccountState.commerceReady &&
     chrome.userId === userId &&
     chrome.isAdminStable === isAdminStable &&
     accountStateShallowEqual(chrome.entitlementAccountState, entitlementAccountState)

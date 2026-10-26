@@ -17,11 +17,11 @@ const EntitlementSurfaceIsland = memo(function EntitlementSurfaceIsland({
   const entitlementAccountState = useEntitlementAccountState();
 
   const showSubscribeCta = useMemo(
-    () => resolveSubscriptionEntitlements(entitlementAccountState, membership).showSubscribe,
+    () => entitlementAccountState.commerceReady && resolveSubscriptionEntitlements(entitlementAccountState, membership).showSubscribe,
     [entitlementAccountState, membership]
   );
 
-  const accountStateReady = !authLoading;
+  const accountStateReady = !authLoading && entitlementAccountState.commerceReady;
   const showOwnTrackConversion =
     accountStateReady && !isAdminAccount(entitlementAccountState);
 
